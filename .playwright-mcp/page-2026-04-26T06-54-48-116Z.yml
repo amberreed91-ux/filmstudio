@@ -1,0 +1,73 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Project Workspace" [ref=e6] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e7]
+        - generic [ref=e9]: Project Workspace
+      - generic [ref=e10]: This project could not be loaded from the backend.
+    - navigation [ref=e11]:
+      - link "Studio Dashboard" [ref=e12] [cursor=pointer]:
+        - /url: /studio
+      - link "Script Ingestion" [ref=e13] [cursor=pointer]:
+        - /url: /studio/ingest
+      - link "Project Slate" [ref=e14] [cursor=pointer]:
+        - /url: /studio/slate
+      - link "Approval Room" [ref=e15] [cursor=pointer]:
+        - /url: /studio/dashboard
+      - link "Study Room" [ref=e16] [cursor=pointer]:
+        - /url: /studio/study
+      - link "Crew Ops" [ref=e17] [cursor=pointer]:
+        - /url: /studio/scheduler
+      - link "Cost Manager" [ref=e18] [cursor=pointer]:
+        - /url: /studio/cost
+    - generic [ref=e19]:
+      - generic [ref=e22]: Backend unavailable
+      - generic [ref=e23]:
+        - img [ref=e24]
+        - generic [ref=e27]: Admin | FilmOS
+  - generic [ref=e28]:
+    - link "Home" [ref=e29] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e30]
+      - text: Home
+    - generic [ref=e33]:
+      - img [ref=e34]
+      - link "Studio Dashboard" [ref=e36] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e37]:
+      - img [ref=e38]
+      - generic [ref=e40]: Project Workspace
+  - generic [ref=e41]:
+    - generic [ref=e42]:
+      - generic [ref=e43]: Project Workspace
+      - generic [ref=e44]: This project could not be loaded from the backend.
+    - generic [ref=e45]:
+      - button "Back" [ref=e46] [cursor=pointer]:
+        - img [ref=e47]
+        - text: Back
+      - link "Studio Home" [ref=e49] [cursor=pointer]:
+        - /url: /studio
+      - link "Back to Slate" [ref=e50] [cursor=pointer]:
+        - /url: /studio/slate
+        - text: Back to Slate
+        - img [ref=e51]
+      - link "Approval Room" [ref=e53] [cursor=pointer]:
+        - /url: /studio/dashboard
+        - text: Approval Room
+        - img [ref=e54]
+  - generic [ref=e57]:
+    - generic [ref=e59]:
+      - heading "Project not found" [level=2] [ref=e60]
+      - paragraph [ref=e61]: The backend returned 404 for project id "phase80_full_test".
+    - generic [ref=e62]:
+      - generic [ref=e63]: Choose an existing project from the slate, or ingest a script to create one.
+      - generic [ref=e64]:
+        - link "Open Project Slate" [ref=e65] [cursor=pointer]:
+          - /url: /studio/slate
+        - link "Ingest Script" [ref=e66] [cursor=pointer]:
+          - /url: /studio/ingest
+      - generic [ref=e67]:
+        - text: "Backend:"
+        - link "API docs" [ref=e68] [cursor=pointer]:
+          - /url: http://localhost:8010/docs

@@ -1,0 +1,17 @@
+[     177ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5003/node_modules/.vite/deps/react-dom_client.js?v=c2beffaf:14336
+[   13101ms] [LOG] PREVIS COMPONENT MOUNTED @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:284
+[   13102ms] [LOG] PREVIS DATA {scenes: Array(3), scene_index: Object, character_presence: Object, location_presence: Object, time_of_day_presence: Object} @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:285
+[   13102ms] [LOG] ITERATIONS: [] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:848
+[   13102ms] [LOG] SUGGESTIONS: [Object] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:849
+[   13102ms] [LOG] SELECTED ITERATION: original @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:850
+[   13102ms] [LOG] SUGGESTIONS RAW: [Object] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:851
+[   13103ms] [LOG] PREVIS COMPONENT MOUNTED @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:284
+[   13103ms] [LOG] PREVIS DATA {scenes: Array(3), scene_index: Object, character_presence: Object, location_presence: Object, time_of_day_presence: Object} @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:285
+[   13103ms] [LOG] ITERATIONS: [] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:848
+[   13103ms] [LOG] SUGGESTIONS: [Object] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:849
+[   13104ms] [LOG] SELECTED ITERATION: original @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:850
+[   13104ms] [LOG] SUGGESTIONS RAW: [Object] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:851
+[   13138ms] [LOG] ITERATIONS: [] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:848
+[   13139ms] [LOG] SUGGESTIONS: [Object] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:849
+[   13139ms] [LOG] SELECTED ITERATION: original @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:850
+[   13139ms] [LOG] SUGGESTIONS RAW: [Object] @ http://localhost:5003/src/pages/PrevisRoom.tsx?t=1777404128062:851

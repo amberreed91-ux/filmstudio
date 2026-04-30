@@ -1,0 +1,21 @@
+[    2184ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/static/js/bundle.js:83102
+[    2426ms] [WARNING] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @ http://localhost:3000/static/js/bundle.js:127752
+[    2429ms] [WARNING] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @ http://localhost:3000/static/js/bundle.js:127752
+[   32889ms] [ERROR] Access to XMLHttpRequest at 'http://127.0.0.1:8000/api/settings/auth-bypass' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[   32890ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://127.0.0.1:8000/api/settings/auth-bypass:0
+[   32931ms] [ERROR] Access to XMLHttpRequest at 'http://127.0.0.1:8000/api/dashboard/stats' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[   32931ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://127.0.0.1:8000/api/dashboard/stats:0
+[   32932ms] [ERROR] Access to XMLHttpRequest at 'http://127.0.0.1:8000/api/backtests/' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[   32932ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://127.0.0.1:8000/api/backtests/:0
+[   32932ms] [ERROR] Access to XMLHttpRequest at 'http://127.0.0.1:8000/api/robustness/promotions' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[   32932ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://127.0.0.1:8000/api/robustness/promotions:0
+[   32932ms] [ERROR] Access to XMLHttpRequest at 'http://127.0.0.1:8000/api/strategies/' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[   32932ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://127.0.0.1:8000/api/strategies/:0
+[   32945ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://localhost:3000/static/js/bundle.js:109223
+[   32945ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://localhost:3000/static/js/bundle.js:109223

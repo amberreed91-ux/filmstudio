@@ -1,0 +1,231 @@
+[     155ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:14336
+[     249ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/render/providers' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     249ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/render/providers:0
+[     250ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getRenderProviders (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:151:9)
+    at loadProviders (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:207:29)
+    at http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:317:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5) @ http://127.0.0.1:5001/studio/@vite/client:509
+[     257ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     257ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     302ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     343ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/overview' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     343ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/overview:0
+[     344ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/render/providers' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     344ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/render/providers:0
+[     344ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getRenderProviders (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:151:9)
+    at loadProviders (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:207:29)
+    at http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:317:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7687:5) @ http://127.0.0.1:5001/studio/@vite/client:509
+[     349ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     349ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     405ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7687:5)
+[     389ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/overview' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     389ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/overview:0
+[     396ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     396ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     413ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     440ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/overview' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     440ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/overview:0
+[     441ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     441ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     458ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     463ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/overview' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     463ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/overview:0
+[     468ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     468ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     508ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     505ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     506ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     506ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     506ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     506ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     506ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     512ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     512ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     517ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     518ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     520ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     521ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     524ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     524ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     530ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     548ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     548ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     557ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     565ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     565ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     572ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     583ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     583ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     595ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     593ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     593ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     601ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[     599ms] [ERROR] Access to fetch at 'http://localhost:8010/api/f51/studio/projects/phase80_full_test' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/project/phase80_full_test:0
+[     599ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:8010/api/f51/studio/projects/phase80_full_test:0
+[     628ms] TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:20:26)
+    at getStudioProject (http://127.0.0.1:5001/studio/src/lib/studioApi.ts:69:9)
+    at loadProject (http://127.0.0.1:5001/studio/src/context/StudioContext.tsx:91:26)
+    at http://127.0.0.1:5001/studio/src/pages/ProjectWorkspace.tsx:424:9
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:7605:5)
+[   10921ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:5001/studio/@vite/client:968

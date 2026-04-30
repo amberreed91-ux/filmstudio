@@ -1,0 +1,223 @@
+- generic [ref=e9]:
+  - banner [ref=e10]:
+    - generic [ref=e11]:
+      - link "Studio Overview" [ref=e12] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e13]
+        - generic [ref=e15]: Studio Overview
+      - generic [ref=e16]: Your film at a glance. What’s working. What needs attention.
+    - navigation [ref=e17]:
+      - link "Lobby" [ref=e18] [cursor=pointer]:
+        - /url: /studio/lobby
+      - link "Studio Dashboard" [ref=e19] [cursor=pointer]:
+        - /url: /studio/overview
+      - link "Writer's Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/writers-room
+      - link "Production Board" [ref=e21] [cursor=pointer]:
+        - /url: /studio/production-board
+      - link "Screening Room" [ref=e22] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - link "Archive" [ref=e23] [cursor=pointer]:
+        - /url: /studio/archive
+      - link "Script Ingestion" [ref=e24] [cursor=pointer]:
+        - /url: /studio/ingest
+      - link "Project Slate" [ref=e25] [cursor=pointer]:
+        - /url: /studio/slate
+      - link "Approval Room" [ref=e26] [cursor=pointer]:
+        - /url: /studio/dashboard
+      - link "Study Room" [ref=e27] [cursor=pointer]:
+        - /url: /studio/study-room
+      - link "Crew Ops" [ref=e28] [cursor=pointer]:
+        - /url: /studio/scheduler
+      - link "Cost Manager" [ref=e29] [cursor=pointer]:
+        - /url: /studio/cost
+      - link "Workspace" [ref=e30] [cursor=pointer]:
+        - /url: /studio/project/phase80_full_test
+    - generic [ref=e31]:
+      - generic [ref=e34]: Studio connected
+      - generic [ref=e35]:
+        - img [ref=e36]
+        - generic [ref=e39]: Admin | FilmOS
+  - generic [ref=e40]:
+    - link "Home" [ref=e41] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e42]
+      - text: Home
+    - generic [ref=e45]:
+      - img [ref=e46]
+      - link "Home" [ref=e48] [cursor=pointer]:
+        - /url: /
+    - generic [ref=e49]:
+      - img [ref=e50]
+      - link "Studio" [ref=e52] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e53]:
+      - img [ref=e54]
+      - generic [ref=e56]: Overview
+  - generic [ref=e57]:
+    - generic [ref=e58]:
+      - generic [ref=e59]: Studio Overview
+      - generic [ref=e60]: Your film at a glance. What’s working. What needs attention.
+    - generic [ref=e61]:
+      - button "Back" [ref=e62] [cursor=pointer]:
+        - img [ref=e63]
+        - text: Back
+      - link "Studio Home" [ref=e65] [cursor=pointer]:
+        - /url: /studio
+      - link "Open Lobby" [ref=e66] [cursor=pointer]:
+        - /url: /studio/lobby
+        - text: Open Lobby
+        - img [ref=e67]
+      - link "Open Writer's Room" [ref=e69] [cursor=pointer]:
+        - /url: /studio/writers-room
+        - text: Open Writer's Room
+        - img [ref=e70]
+  - generic [ref=e72]:
+    - link "Overview" [ref=e73] [cursor=pointer]:
+      - /url: /studio/overview
+      - text: Overview
+    - link "Writer's Room" [ref=e75] [cursor=pointer]:
+      - /url: /studio/writers-room
+      - text: Writer's Room
+    - link "Study Room" [ref=e77] [cursor=pointer]:
+      - /url: /studio/study-room
+      - text: Study Room
+    - link "Previs Room" [ref=e79] [cursor=pointer]:
+      - /url: /studio/previs
+      - text: Previs Room
+    - link "Production Board" [ref=e81] [cursor=pointer]:
+      - /url: /studio/production-board
+      - text: Production Board
+    - link "Screening Room" [ref=e83] [cursor=pointer]:
+      - /url: /studio/screening-room
+      - text: Screening Room
+    - link "Archive" [ref=e85] [cursor=pointer]:
+      - /url: /studio/archive
+      - text: Archive
+  - generic [ref=e87]:
+    - generic [ref=e88]: Script
+    - generic [ref=e89]: Scenes
+    - generic [ref=e90]: Previs
+    - generic [ref=e91]: Review
+    - generic [ref=e92]: Cut
+    - generic [ref=e93]: Archive
+  - generic [ref=e94]:
+    - generic [ref=e95]: Next Step
+    - generic [ref=e96]: Add your script to begin
+    - generic [ref=e97]:
+      - link "Go to Writer's Room" [ref=e98] [cursor=pointer]:
+        - /url: /studio/writers-room
+      - generic [ref=e99]: "approved scenes: 0"
+  - main [ref=e100]:
+    - generic [ref=e102]:
+      - generic [ref=e106]:
+        - generic [ref=e107]:
+          - generic [ref=e108]: Home Base
+          - heading "STUDIO OVERVIEW" [level=2] [ref=e109]
+          - paragraph [ref=e110]: Your film at a glance. What's working. What needs attention.
+        - generic [ref=e111]:
+          - generic [ref=e112]: Current Project
+          - button "The Hollow Mark - Feature Proof" [ref=e113]
+      - generic [ref=e114]:
+        - generic [ref=e115]: What To Do Next
+        - generic [ref=e116]: Start in Writer's Room
+        - link "Continue" [ref=e117] [cursor=pointer]:
+          - /url: /studio/writers-room
+      - generic [ref=e118]:
+        - article [ref=e119]:
+          - generic [ref=e120]: Story Health
+          - generic [ref=e121]:
+            - generic [ref=e122]: "86"
+            - generic [ref=e123]: Stable
+        - article [ref=e126]:
+          - generic [ref=e127]: Continuity Health
+          - generic [ref=e128]:
+            - generic [ref=e129]: "74"
+            - generic [ref=e130]: Watch
+        - article [ref=e133]:
+          - generic [ref=e134]: Cinematic Health
+          - generic [ref=e135]:
+            - generic [ref=e136]: "81"
+            - generic [ref=e137]: Strong
+        - article [ref=e140]:
+          - generic [ref=e141]: Production Status
+          - generic [ref=e142]:
+            - generic [ref=e143]: "67"
+            - generic [ref=e144]: In Progress
+      - generic [ref=e147]:
+        - article [ref=e148]:
+          - heading "Current Project Panel" [level=3] [ref=e149]
+          - generic [ref=e150]:
+            - generic [ref=e151]:
+              - generic [ref=e152]: "Title: The Hollow Mark"
+              - generic [ref=e153]: "Format: Short Film"
+              - generic [ref=e154]: "Runtime Est.: 14 min"
+              - generic [ref=e155]: "Phase: Previs + Cut Review"
+            - generic [ref=e158]: 67%
+        - article [ref=e159]:
+          - heading "Next Best Action" [level=3] [ref=e160]
+          - generic [ref=e161]: Scene 12 needs your review
+          - paragraph [ref=e162]: Continuity and emotional pacing diverge from motif escalation target.
+          - button "Review Scene" [ref=e163]
+        - article [ref=e164]:
+          - heading "Co-Director Note" [level=3] [ref=e165]
+          - blockquote [ref=e166]: “The emotional beat at the end of the scene feels rushed. Hold the transition for one more breath.”
+      - generic [ref=e167]:
+        - article [ref=e168]:
+          - heading "Open Issues" [level=3] [ref=e169]
+          - generic [ref=e170]:
+            - generic [ref=e171]: Continuity risk in Scene 12 prop handoff
+            - generic [ref=e172]: Pacing dip in middle sequence transition
+            - generic [ref=e173]: Motif payoff overdue before final beat
+        - article [ref=e174]:
+          - heading "Recent Activity" [level=3] [ref=e175]
+          - generic [ref=e176]:
+            - generic [ref=e177]: "Render approved: scene_010_shot_003"
+            - generic [ref=e178]: "Scene packaged: scene_011"
+            - generic [ref=e179]: Co-director review completed on scene_012
+            - generic [ref=e180]: Continuity check flagged timeline drift
+      - generic [ref=e181]:
+        - heading "Room Preview Grid" [level=3] [ref=e182]
+        - generic [ref=e183]:
+          - article [ref=e184]:
+            - generic [ref=e186]:
+              - generic [ref=e187]: Development Room
+              - generic [ref=e188]: Story map ready
+            - generic [ref=e190]: 3 active tracks
+            - link "Open" [ref=e191] [cursor=pointer]:
+              - /url: /studio/lobby
+          - article [ref=e192]:
+            - generic [ref=e194]:
+              - generic [ref=e195]: Writer's Room
+              - generic [ref=e196]: Draft in revision
+            - generic [ref=e198]: Act 2 under pass
+            - link "Open" [ref=e199] [cursor=pointer]:
+              - /url: /studio/writers-room
+          - article [ref=e200]:
+            - generic [ref=e202]:
+              - generic [ref=e203]: Previs Room
+              - generic [ref=e204]: Shot strip active
+            - generic [ref=e206]: 12 scenes mapped
+            - link "Open" [ref=e207] [cursor=pointer]:
+              - /url: /studio/previs
+          - article [ref=e208]:
+            - generic [ref=e210]:
+              - generic [ref=e211]: Production Board
+              - generic [ref=e212]: Queue moving
+            - generic [ref=e214]: 4 scenes in review
+            - link "Open" [ref=e215] [cursor=pointer]:
+              - /url: /studio/production-board
+          - article [ref=e216]:
+            - generic [ref=e218]:
+              - generic [ref=e219]: Screening Room
+              - generic [ref=e220]: Playback ready
+            - generic [ref=e222]: Flow score 0.78
+            - link "Open" [ref=e223] [cursor=pointer]:
+              - /url: /studio/screening-room
+          - article [ref=e224]:
+            - generic [ref=e226]:
+              - generic [ref=e227]: Archive
+              - generic [ref=e228]: Snapshots synced
+            - generic [ref=e230]: 3 latest freezes
+            - link "Open" [ref=e231] [cursor=pointer]:
+              - /url: /studio/archive

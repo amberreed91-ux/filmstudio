@@ -1,0 +1,136 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Archive Room" [ref=e6] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e7]
+        - generic [ref=e9]: Archive Room
+      - generic [ref=e10]: Memory vault for film snapshots, scene versions, and best-cut lineage.
+    - navigation [ref=e11]:
+      - link "Lobby" [ref=e12] [cursor=pointer]:
+        - /url: /studio/lobby
+      - link "Studio Dashboard" [ref=e13] [cursor=pointer]:
+        - /url: /studio/overview
+      - link "Writer's Room" [ref=e14] [cursor=pointer]:
+        - /url: /studio/writers-room
+      - link "Production Board" [ref=e15] [cursor=pointer]:
+        - /url: /studio/production-board
+      - link "Screening Room" [ref=e16] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - link "Archive" [ref=e17] [cursor=pointer]:
+        - /url: /studio/archive
+      - link "Script Ingestion" [ref=e18] [cursor=pointer]:
+        - /url: /studio/ingest
+      - link "Project Slate" [ref=e19] [cursor=pointer]:
+        - /url: /studio/slate
+      - link "Approval Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/dashboard
+      - link "Study Room" [ref=e21] [cursor=pointer]:
+        - /url: /studio/study-room
+      - link "Crew Ops" [ref=e22] [cursor=pointer]:
+        - /url: /studio/scheduler
+      - link "Cost Manager" [ref=e23] [cursor=pointer]:
+        - /url: /studio/cost
+    - generic [ref=e24]:
+      - generic [ref=e27]: Syncing studio...
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: Admin | FilmOS
+  - generic [ref=e33]:
+    - link "Home" [ref=e34] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e35]
+      - text: Home
+    - generic [ref=e38]:
+      - img [ref=e39]
+      - link "Studio Lobby" [ref=e41] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e42]:
+      - img [ref=e43]
+      - generic [ref=e45]: Archive
+  - generic [ref=e46]:
+    - generic [ref=e47]:
+      - generic [ref=e48]: Archive Room
+      - generic [ref=e49]: Memory vault for film snapshots, scene versions, and best-cut lineage.
+    - generic [ref=e50]:
+      - button "Back" [ref=e51] [cursor=pointer]:
+        - img [ref=e52]
+        - text: Back
+      - link "Studio Home" [ref=e54] [cursor=pointer]:
+        - /url: /studio
+      - link "Return to Lobby" [ref=e55] [cursor=pointer]:
+        - /url: /studio/lobby
+        - text: Return to Lobby
+        - img [ref=e56]
+      - link "Open Previs Room" [ref=e58] [cursor=pointer]:
+        - /url: /studio/previs
+        - text: Open Previs Room
+        - img [ref=e59]
+  - generic [ref=e61]:
+    - link "Overview" [ref=e62] [cursor=pointer]:
+      - /url: /studio/overview
+      - text: Overview
+    - link "Writer's Room" [ref=e64] [cursor=pointer]:
+      - /url: /studio/writers-room
+      - text: Writer's Room
+    - link "Study Room" [ref=e66] [cursor=pointer]:
+      - /url: /studio/study-room
+      - text: Study Room
+    - link "Previs Room" [ref=e68] [cursor=pointer]:
+      - /url: /studio/previs
+      - text: Previs Room
+    - link "Production Board" [ref=e70] [cursor=pointer]:
+      - /url: /studio/production-board
+      - text: Production Board
+    - link "Screening Room" [ref=e72] [cursor=pointer]:
+      - /url: /studio/screening-room
+      - text: Screening Room
+    - link "Archive" [ref=e74] [cursor=pointer]:
+      - /url: /studio/archive
+      - text: Archive
+  - generic [ref=e76]:
+    - generic [ref=e77]: Script
+    - generic [ref=e78]: Scenes
+    - generic [ref=e79]: Previs
+    - generic [ref=e80]: Review
+    - generic [ref=e81]: Cut
+    - generic [ref=e82]: Archive
+  - generic [ref=e83]:
+    - generic [ref=e84]: Next Step
+    - generic [ref=e85]: Watch your film
+    - generic [ref=e86]:
+      - link "Open Screening Room" [ref=e87] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - generic [ref=e88]: "approved scenes: 1"
+  - main [ref=e89]:
+    - generic [ref=e91]:
+      - generic [ref=e92]:
+        - heading "Archive Snapshots" [level=2] [ref=e93]
+        - 'button "snap_001 2026-01-01T00:00:00Z Completion: 0.00% Tone: none Best Cut: original" [ref=e95]':
+          - generic [ref=e96]: snap_001
+          - generic [ref=e97]: 2026-01-01T00:00:00Z
+          - generic [ref=e98]: "Completion: 0.00%"
+          - generic [ref=e99]: "Tone: none"
+          - generic [ref=e100]: "Best Cut: original"
+      - generic [ref=e101]:
+        - article [ref=e102]:
+          - heading "Scene Version Panel" [level=3] [ref=e103]
+          - generic [ref=e105]: No scene version history found.
+        - complementary [ref=e106]:
+          - generic [ref=e107]:
+            - heading "Archive Summary" [level=3] [ref=e108]
+            - generic [ref=e109]:
+              - generic [ref=e110]: "Total Snapshots: 1"
+              - generic [ref=e111]:
+                - text: "Latest Completion:"
+                - generic [ref=e112]: 0.00%
+              - generic [ref=e113]: "Best Quality Scene: none"
+          - generic [ref=e114]:
+            - heading "Best Cut" [level=3] [ref=e115]
+            - generic [ref=e116]:
+              - generic [ref=e117]: "Selected: original"
+              - generic [ref=e118]: "Reason: No reason available"
+              - generic [ref=e119]: "Confidence: 0.000"
+          - generic [ref=e120]:
+            - heading "Selected Snapshot Notes" [level=3] [ref=e121]
+            - generic [ref=e122]: No archive snapshots available yet.

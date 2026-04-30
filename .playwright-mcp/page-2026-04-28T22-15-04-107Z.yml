@@ -1,0 +1,207 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Study Room" [ref=e6] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e7]
+        - generic [ref=e9]: Study Room
+      - generic [ref=e10]: Upload scripts, scenes, films, references, and notes for the studio to study.
+    - navigation [ref=e11]:
+      - link "Lobby" [ref=e12] [cursor=pointer]:
+        - /url: /studio/lobby
+      - link "Studio Dashboard" [ref=e13] [cursor=pointer]:
+        - /url: /studio/overview
+      - link "Writer's Room" [ref=e14] [cursor=pointer]:
+        - /url: /studio/writers-room
+      - link "Production Board" [ref=e15] [cursor=pointer]:
+        - /url: /studio/production-board
+      - link "Screening Room" [ref=e16] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - link "Archive" [ref=e17] [cursor=pointer]:
+        - /url: /studio/archive
+      - link "Script Ingestion" [ref=e18] [cursor=pointer]:
+        - /url: /studio/ingest
+      - link "Project Slate" [ref=e19] [cursor=pointer]:
+        - /url: /studio/slate
+      - link "Approval Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/dashboard
+      - link "Study Room" [ref=e21] [cursor=pointer]:
+        - /url: /studio/study-room
+      - link "Crew Ops" [ref=e22] [cursor=pointer]:
+        - /url: /studio/scheduler
+      - link "Cost Manager" [ref=e23] [cursor=pointer]:
+        - /url: /studio/cost
+      - link "Workspace" [ref=e177] [cursor=pointer]:
+        - /url: /studio/project/phase80_full_test
+    - generic [ref=e24]:
+      - generic [ref=e27]: Studio connected
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: Admin | FilmOS
+  - generic [ref=e33]:
+    - link "Home" [ref=e34] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e35]
+      - text: Home
+    - generic [ref=e38]:
+      - img [ref=e39]
+      - link "Studio Dashboard" [ref=e41] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e42]:
+      - img [ref=e43]
+      - generic [ref=e45]: Study Room
+  - generic [ref=e46]:
+    - generic [ref=e47]:
+      - generic [ref=e48]: Study Room
+      - generic [ref=e49]: Upload scripts, scenes, films, references, and notes for the studio to study.
+    - generic [ref=e50]:
+      - button "Back" [ref=e51] [cursor=pointer]:
+        - img [ref=e52]
+        - text: Back
+      - link "Studio Home" [ref=e54] [cursor=pointer]:
+        - /url: /studio
+      - link "Choose Project Workspace" [ref=e55] [cursor=pointer]:
+        - /url: /studio/slate
+        - text: Choose Project Workspace
+        - img [ref=e56]
+      - link "Plan in Crew Ops" [ref=e58] [cursor=pointer]:
+        - /url: /studio/scheduler
+        - text: Plan in Crew Ops
+        - img [ref=e59]
+  - generic [ref=e61]:
+    - link "Overview" [ref=e62] [cursor=pointer]:
+      - /url: /studio/overview
+      - text: Overview
+    - link "Writer's Room" [ref=e64] [cursor=pointer]:
+      - /url: /studio/writers-room
+      - text: Writer's Room
+    - link "Study Room" [ref=e66] [cursor=pointer]:
+      - /url: /studio/study-room
+      - text: Study Room
+    - link "Previs Room" [ref=e68] [cursor=pointer]:
+      - /url: /studio/previs
+      - text: Previs Room
+    - link "Production Board" [ref=e70] [cursor=pointer]:
+      - /url: /studio/production-board
+      - text: Production Board
+    - link "Screening Room" [ref=e72] [cursor=pointer]:
+      - /url: /studio/screening-room
+      - text: Screening Room
+    - link "Archive" [ref=e74] [cursor=pointer]:
+      - /url: /studio/archive
+      - text: Archive
+  - generic [ref=e76]:
+    - generic [ref=e77]: Script
+    - generic [ref=e78]: Scenes
+    - generic [ref=e79]: Previs
+    - generic [ref=e80]: Review
+    - generic [ref=e81]: Cut
+    - generic [ref=e82]: Archive
+  - generic [ref=e83]:
+    - generic [ref=e84]: Next Step
+    - generic [ref=e85]: Watch your film
+    - generic [ref=e86]:
+      - link "Open Screening Room" [ref=e87] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - generic [ref=e88]: "approved scenes: 1"
+  - main [ref=e89]:
+    - generic [ref=e91]:
+      - generic [ref=e93]: "Local interpretation mode: this does not yet perform true video understanding. It stages your prompt, preview, and analysis notes for future memory ingestion."
+      - generic [ref=e94]:
+        - heading "Study Room" [level=2] [ref=e95]
+        - paragraph [ref=e96]: Upload scripts, scenes, films, references, and notes for the studio to study.
+      - generic [ref=e97]:
+        - article [ref=e98]:
+          - heading "Study a Reference" [level=3] [ref=e99]
+          - button "Upload Reference" [ref=e100]
+          - generic [ref=e101]: Drop scripts, scenes, visual references, or film clips here
+          - generic [ref=e102]: What should the studio study about this reference?
+          - 'textbox "Example: Study how this scene builds dread through framing, silence, and delayed reveal." [ref=e103]': Study how this scene builds tension through framing, silence, and delayed reveal.
+          - generic [ref=e104]:
+            - generic [ref=e105]:
+              - checkbox "tone" [checked] [active] [ref=e106]
+              - generic [ref=e107]: tone
+            - generic [ref=e108]:
+              - checkbox "pacing" [ref=e109]
+              - generic [ref=e110]: pacing
+            - generic [ref=e111]:
+              - checkbox "lighting" [ref=e112]
+              - generic [ref=e113]: lighting
+            - generic [ref=e114]:
+              - checkbox "camera" [ref=e115]
+              - generic [ref=e116]: camera
+            - generic [ref=e117]:
+              - checkbox "motif" [ref=e118]
+              - generic [ref=e119]: motif
+            - generic [ref=e120]:
+              - checkbox "editing rhythm" [ref=e121]
+              - generic [ref=e122]: editing rhythm
+            - generic [ref=e123]:
+              - checkbox "character behavior" [ref=e124]
+              - generic [ref=e125]: character behavior
+            - generic [ref=e126]:
+              - checkbox "sound design" [ref=e127]
+              - generic [ref=e128]: sound design
+          - generic [ref=e129]:
+            - button "Analyze Reference" [ref=e130]
+            - button "Stage for Studio Memory" [ref=e131]
+          - generic [ref=e178]: 3 references staged for study.
+        - article [ref=e132]:
+          - heading "Reference Preview" [level=3] [ref=e133]
+          - generic [ref=e134]:
+            - generic [ref=e179]:
+              - generic [ref=e180]: mara_scene.txt
+              - generic [ref=e181]: text/plain • 70 B • notes
+            - generic [ref=e182]: INT. FARMHOUSE KITCHEN - LATE AFTERNOON Mara unpacks while Eli draws.
+            - generic [ref=e183]:
+              - button "Remove" [ref=e184]
+              - button "Replace" [ref=e185]
+        - article [ref=e135]:
+          - heading "Prompt Alignment" [level=3] [ref=e136]
+          - generic [ref=e137]:
+            - generic [ref=e138]: "alignment_score: 0.33"
+            - generic [ref=e139]: "matched_intent:"
+            - generic [ref=e140]: none
+            - generic [ref=e141]: "missing_context:"
+            - generic [ref=e142]: prompt does not mention tone
+          - heading "Reference Analysis" [level=3] [ref=e143]
+          - generic [ref=e144]: Analyze Reference to generate a local interpretation card.
+      - generic [ref=e145]:
+        - heading "Reference Library" [level=3] [ref=e146]
+        - generic [ref=e147]:
+          - generic [ref=e149]:
+            - generic [ref=e150]: Scripts / Scenes
+            - generic [ref=e152]: No items
+          - generic [ref=e154]:
+            - generic [ref=e155]: Visual References
+            - 'button "ref_image.png type: image/png size: 8 B status: staged for study" [ref=e186]':
+              - generic [ref=e187]: ref_image.png
+              - generic [ref=e188]: "type: image/png"
+              - generic [ref=e189]: "size: 8 B"
+              - generic [ref=e190]: "status: staged for study"
+          - generic [ref=e159]:
+            - generic [ref=e160]: Video References
+            - 'button "ref_clip.mp4 type: video/mp4 size: 9 B status: staged for study" [ref=e191]':
+              - generic [ref=e192]: ref_clip.mp4
+              - generic [ref=e193]: "type: video/mp4"
+              - generic [ref=e194]: "size: 9 B"
+              - generic [ref=e195]: "status: staged for study"
+          - generic [ref=e164]:
+            - generic [ref=e165]: Notes
+            - 'button "mara_scene.txt type: text/plain size: 70 B status: staged for study" [ref=e196]':
+              - generic [ref=e197]: mara_scene.txt
+              - generic [ref=e198]: "type: text/plain"
+              - generic [ref=e199]: "size: 70 B"
+              - generic [ref=e200]: "status: staged for study"
+      - generic [ref=e168]:
+        - heading "Memory Library" [level=3] [ref=e169]
+        - generic [ref=e170]: No memory-staged analyses yet.
+      - generic [ref=e171]:
+        - heading "Open Rooms" [level=3] [ref=e172]
+        - generic [ref=e173]:
+          - link "Open Writer's Room" [ref=e174] [cursor=pointer]:
+            - /url: /studio/writers-room
+          - link "Open Previs Room" [ref=e175] [cursor=pointer]:
+            - /url: /studio/previs
+          - link "Open Screening Room" [ref=e176] [cursor=pointer]:
+            - /url: /studio/screening-room
