@@ -607,7 +607,7 @@ export default function ScreeningRoom() {
       return { label: 'PLACEHOLDER', reason: fallbackReason ? `Using fallback: ${fallbackReason}` : 'Using fallback mode' }
     }
     return { label: 'LOCAL PREVIS', reason: '' }
-  }, [activeScene, activeSceneAsset, activeSceneVideoUrl])
+  }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene])
   const activeMotionStatus = activeScene?.scene_id ? motionStatusByScene.get(activeScene.scene_id) : null
 
   async function handleExportCutManifest() {

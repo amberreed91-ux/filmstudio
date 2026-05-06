@@ -141,7 +141,7 @@ function buildBundleFromScript(script: string) {
     }
   })
 
-  const image_render_assets = scenes.map((scene: any) => {
+  const image_render_assets = scenes.map((scene) => {
     const shot = scene.multi_shot_execution_ledger[0]
     return {
       asset_id: `image_${scene.scene_id}_${shot.shot_id}`,
@@ -169,7 +169,7 @@ function buildBundleFromScript(script: string) {
       failed_assets: 0,
       providers: ['local_image'],
     },
-    screening_playlist: scenes.map((scene: any) => ({
+    screening_playlist: scenes.map((scene) => ({
       scene_id: scene.scene_id,
       cut: 'original',
       render_ids: scene.scene_playback_preview.render_ids,

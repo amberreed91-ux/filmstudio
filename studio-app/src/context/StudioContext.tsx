@@ -404,11 +404,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    const currentPollingIntervals = pollingIntervals.current
     void refreshOverview()
     void loadProviders()
     return () => {
-      pollingIntervals.current.forEach(interval => clearInterval(interval))
-      pollingIntervals.current.clear()
+      currentPollingIntervals.forEach(interval => clearInterval(interval))
+      currentPollingIntervals.clear()
     }
   }, [])
 

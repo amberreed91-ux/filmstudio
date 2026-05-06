@@ -407,11 +407,12 @@ export default function StudyRoom() {
   }, [logSceneIntelligence])
 
   useEffect(() => {
+    const referenceUrlMap = referenceUrlMapRef.current
     return () => {
-      for (const url of referenceUrlMapRef.current.values()) {
+      for (const url of referenceUrlMap.values()) {
         URL.revokeObjectURL(url)
       }
-      referenceUrlMapRef.current.clear()
+      referenceUrlMap.clear()
     }
   }, [])
 
