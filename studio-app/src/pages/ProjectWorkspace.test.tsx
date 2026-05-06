@@ -2,21 +2,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import StudioPanel from '../components/StudioPanel'
 import {
-  ExecutionStatusStrip,
-  IntentSignalStrip,
-  MemorySnapshotStrip,
-  MemoryVisibilityStrip,
-  PrevisStrip,
-  ProductionSignalStrip,
-  ProviderStatusStrip,
-  RenderStatusStrip,
-  SceneStatusStrip,
-  ReviewStateStrip,
-  ShotPlanStrip,
-  ShotPipelineStrip,
-  TakePipelineStrip,
-  ValidationStatusStrip,
-  VisualBoardStrip,
   extractExecutionStatusStripMessage,
   extractMemorySnapshotMessage,
   extractMemoryVisibilityMessage,
@@ -33,7 +18,24 @@ import {
   extractValidationStatusStripMessage,
   extractVisualBoardMessage,
   getProductionSignalSeverity,
-} from './ProjectWorkspace'
+} from './ProjectWorkspaceSignals'
+import {
+  ExecutionStatusStrip,
+  IntentSignalStrip,
+  MemorySnapshotStrip,
+  MemoryVisibilityStrip,
+  PrevisStrip,
+  ProductionSignalStrip,
+  ProviderStatusStrip,
+  RenderStatusStrip,
+  SceneStatusStrip,
+  ReviewStateStrip,
+  ShotPlanStrip,
+  ShotPipelineStrip,
+  TakePipelineStrip,
+  ValidationStatusStrip,
+  VisualBoardStrip,
+} from './ProjectWorkspaceStrips'
 
 describe('ProjectWorkspace QA Selectors', () => {
   describe('StudioPanel data-testid support', () => {
