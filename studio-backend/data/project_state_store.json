@@ -70111,6 +70111,3974 @@
       },
       "archive_snapshots": [],
       "memory_context": {}
+    },
+    "project_bb6b2772065e": {
+      "project_id": "project_bb6b2772065e",
+      "title": "Persistence Test",
+      "created_at": "2026-05-06T19:16:14.502534+00:00",
+      "updated_at": "2026-05-06T19:16:14.502554+00:00",
+      "script_text": "",
+      "execution_summary": {},
+      "approved_scenes": [],
+      "reviewed_scenes": [],
+      "scene_review_status": {},
+      "film_cut": {
+        "cut_id": "default",
+        "scene_order": [],
+        "included_scenes": [],
+        "excluded_scenes": [],
+        "created_at": "2026-05-06T19:16:14.502534+00:00"
+      },
+      "archive_snapshots": [],
+      "memory_context": {}
+    },
+    "project_b14df5ffeea2": {
+      "project_id": "project_b14df5ffeea2",
+      "title": "Film",
+      "created_at": "2026-05-06T19:16:14.617537+00:00",
+      "updated_at": "2026-05-06T19:16:14.663289+00:00",
+      "script_text": "\nINT. KITCHEN - NIGHT\nMara watches Eli draw.\n\nINT. HALLWAY - NIGHT\nA scratching sound comes from inside the wall.\n",
+      "execution_summary": {
+        "scenes": [
+          {
+            "scene_id": "scene_001",
+            "heading": "INT. KITCHEN - NIGHT",
+            "location": "KITCHEN",
+            "time_of_day": "NIGHT",
+            "characters": [],
+            "text": "Mara watches Eli draw.",
+            "scene_motif_state": {
+              "form": "drawn",
+              "intensity": 0.0
+            },
+            "multi_shot_execution_ledger": [
+              {
+                "shot_id": "shot_001",
+                "status": "complete",
+                "meta": {
+                  "file_path": "https://picsum.photos/seed/scene_001_chalk_symbol_early/800/450"
+                },
+                "shot_intent": {
+                  "framing": "wide framing",
+                  "camera": "static",
+                  "lighting": "soft natural light",
+                  "mood": "quiet unease",
+                  "motif_instruction": "subtle background presence"
+                },
+                "prompt_pack": {
+                  "base_prompt": "location KITCHEN, time NIGHT, characters no named characters visible, action Eli drawing, key objects Eli drawing, supernatural elements subtle unseen pressure, emotional tone quiet supernatural unease, lighting soft natural light, camera static, motif state drawn, cinematic dark farmhouse realism",
+                  "style_tags": [
+                    "cinematic",
+                    "dark",
+                    "grain",
+                    "natural light"
+                  ],
+                  "negative_prompt": [
+                    "low quality",
+                    "blurry",
+                    "deformed",
+                    "extra limbs",
+                    "bad anatomy",
+                    "distorted face",
+                    "oversaturated"
+                  ],
+                  "memory_influence": {
+                    "used": false,
+                    "patterns": [],
+                    "source_references": []
+                  },
+                  "camera_directive": "static",
+                  "lighting_directive": "soft natural light",
+                  "composition_directive": "empty negative space with restrained blocking",
+                  "motif_directive": "subtle background presence",
+                  "script_faithfulness": {
+                    "score": 0.857,
+                    "matched_elements": [
+                      "location",
+                      "time_of_day",
+                      "key_objects",
+                      "supernatural_elements",
+                      "motif_state",
+                      "emotional_intent"
+                    ],
+                    "missing_elements": [
+                      "characters"
+                    ],
+                    "risk": "low"
+                  }
+                },
+                "shot_phase": "early",
+                "prompt_quality": {
+                  "score": 0.85,
+                  "issues": []
+                },
+                "prompt_consistency": {
+                  "aligned": true,
+                  "drift_reason": null
+                },
+                "motif_consistency": {
+                  "present": true,
+                  "correct_form": false
+                },
+                "scene_visual_brief": {
+                  "scene_id": "scene_001",
+                  "location": "KITCHEN",
+                  "time_of_day": "NIGHT",
+                  "characters": [],
+                  "key_actions": [
+                    "Eli drawing"
+                  ],
+                  "supernatural_elements": [
+                    "subtle unseen pressure"
+                  ],
+                  "motifs": [
+                    "chalk symbol"
+                  ],
+                  "emotional_intent": "quiet supernatural unease",
+                  "visual_must_haves": [
+                    "Eli drawing"
+                  ]
+                },
+                "previs_accuracy": {
+                  "score": 1.0,
+                  "missing_script_elements": [],
+                  "matched_script_elements": [
+                    "eli drawing"
+                  ]
+                }
+              },
+              {
+                "shot_id": "shot_002",
+                "status": "failed",
+                "meta": {
+                  "file_path": "https://picsum.photos/seed/scene_001_chalk_symbol_early/800/450"
+                },
+                "shot_intent": {
+                  "framing": "wide framing",
+                  "camera": "static",
+                  "lighting": "soft natural light",
+                  "mood": "quiet unease",
+                  "motif_instruction": "subtle background presence"
+                },
+                "prompt_pack": {
+                  "base_prompt": "location KITCHEN, time NIGHT, characters no named characters visible, action Eli drawing, key objects Eli drawing, supernatural elements subtle unseen pressure, emotional tone quiet supernatural unease, lighting soft natural light, camera static, motif state drawn, cinematic dark farmhouse realism",
+                  "style_tags": [
+                    "cinematic",
+                    "dark",
+                    "grain",
+                    "natural light"
+                  ],
+                  "negative_prompt": [
+                    "low quality",
+                    "blurry",
+                    "deformed",
+                    "extra limbs",
+                    "bad anatomy",
+                    "distorted face",
+                    "oversaturated"
+                  ],
+                  "memory_influence": {
+                    "used": false,
+                    "patterns": [],
+                    "source_references": []
+                  },
+                  "camera_directive": "static",
+                  "lighting_directive": "soft natural light",
+                  "composition_directive": "empty negative space with restrained blocking",
+                  "motif_directive": "subtle background presence",
+                  "script_faithfulness": {
+                    "score": 0.857,
+                    "matched_elements": [
+                      "location",
+                      "time_of_day",
+                      "key_objects",
+                      "supernatural_elements",
+                      "motif_state",
+                      "emotional_intent"
+                    ],
+                    "missing_elements": [
+                      "characters"
+                    ],
+                    "risk": "low"
+                  }
+                },
+                "shot_phase": "early",
+                "prompt_quality": {
+                  "score": 0.85,
+                  "issues": []
+                },
+                "prompt_consistency": {
+                  "aligned": true,
+                  "drift_reason": null
+                },
+                "motif_consistency": {
+                  "present": true,
+                  "correct_form": false
+                },
+                "scene_visual_brief": {
+                  "scene_id": "scene_001",
+                  "location": "KITCHEN",
+                  "time_of_day": "NIGHT",
+                  "characters": [],
+                  "key_actions": [
+                    "Eli drawing"
+                  ],
+                  "supernatural_elements": [
+                    "subtle unseen pressure"
+                  ],
+                  "motifs": [
+                    "chalk symbol"
+                  ],
+                  "emotional_intent": "quiet supernatural unease",
+                  "visual_must_haves": [
+                    "Eli drawing"
+                  ]
+                },
+                "previs_accuracy": {
+                  "score": 1.0,
+                  "missing_script_elements": [],
+                  "matched_script_elements": [
+                    "eli drawing"
+                  ]
+                }
+              }
+            ],
+            "scene_playback_preview": {
+              "available": true,
+              "render_ids": [
+                "render_001",
+                "render_002"
+              ]
+            },
+            "co_director_suggestions": [
+              {
+                "id": "suggest_1",
+                "type": "tension",
+                "title": "Increase visual tension",
+                "description": "Shift lighting to high contrast shadows",
+                "rationale": "Scene lacks escalation",
+                "confidence": 0.85
+              },
+              {
+                "id": "suggest_2",
+                "type": "continuity",
+                "title": "Fix continuity gap",
+                "description": "Align prop positioning across shots",
+                "rationale": "Continuity inconsistency detected",
+                "confidence": 0.75
+              }
+            ],
+            "director_notes": {
+              "what_works": [
+                "Baseline composition support is visible."
+              ],
+              "what_breaks": [
+                "Escalation continuity can be improved."
+              ],
+              "suggested_changes": [
+                "Add a high-contrast transition beat."
+              ]
+            },
+            "scene_visual_brief": {
+              "scene_id": "scene_001",
+              "location": "KITCHEN",
+              "time_of_day": "NIGHT",
+              "characters": [],
+              "key_actions": [
+                "Eli drawing"
+              ],
+              "supernatural_elements": [
+                "subtle unseen pressure"
+              ],
+              "motifs": [
+                "chalk symbol"
+              ],
+              "emotional_intent": "quiet supernatural unease",
+              "visual_must_haves": [
+                "Eli drawing"
+              ]
+            },
+            "style_conflict": {
+              "conflict": false,
+              "reason": ""
+            },
+            "agent_disagreements": [
+              {
+                "agent": "director",
+                "severity": "high",
+                "issue": "Emotional beat is not landing cleanly",
+                "recommendation": "Refocus the central emotional turn and hold one tension beat longer",
+                "conflict_with": "narrative_flow"
+              }
+            ],
+            "script_faithfulness": {
+              "score": 0.857,
+              "matched_elements": [
+                "location",
+                "time_of_day",
+                "key_objects",
+                "supernatural_elements",
+                "motif_state",
+                "emotional_intent"
+              ],
+              "missing_elements": [
+                "characters"
+              ],
+              "risk": "low"
+            },
+            "render_quality_warnings": [
+              "Prompt missing required element: characters"
+            ],
+            "previs_accuracy": {
+              "score": 1.0,
+              "missing_script_elements": [],
+              "matched_script_elements": [
+                "eli drawing"
+              ]
+            },
+            "scene_iterations": [
+              {
+                "iteration_id": "scene_001_iter_1",
+                "based_on_scene": "scene_001",
+                "intervention_type": "tension",
+                "shots": [
+                  {
+                    "shot_id": "shot_001_iter",
+                    "status": "complete",
+                    "meta": {
+                      "file_path": "https://picsum.photos/800/450?random=2"
+                    }
+                  }
+                ],
+                "summary": {
+                  "improvement": "Increased contrast and pacing shift",
+                  "score_delta": 0.15
+                }
+              }
+            ],
+            "sound_profile": {
+              "ambience": "quiet room tone with distant house creaks",
+              "sound_motifs": [
+                "sub-bass drone",
+                "distant house creaks"
+              ],
+              "silence_strategy": "restrained silence around dialogue beats",
+              "score_direction": "low bowed-string bed with sparse pulses",
+              "audio_tension": "low"
+            },
+            "scene_health": {
+              "score": 0.412,
+              "issues": [
+                "Scene quality verdict requires revision"
+              ]
+            },
+            "scene_versions": [
+              {
+                "version_id": "scene_001_v1_original",
+                "type": "original",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "quality_score": 0.362
+              },
+              {
+                "version_id": "scene_001_v2_iteration",
+                "type": "iteration",
+                "timestamp": "2026-01-02T00:00:00Z",
+                "quality_score": 0.452
+              }
+            ],
+            "production_status": {
+              "state": "review",
+              "has_iterations": true,
+              "selected_cut": "original",
+              "blockers": [
+                "Scene quality verdict requires revision"
+              ]
+            }
+          },
+          {
+            "scene_id": "scene_002",
+            "heading": "INT. HALLWAY - NIGHT",
+            "location": "HALLWAY",
+            "time_of_day": "NIGHT",
+            "characters": [],
+            "text": "A scratching sound comes from inside the wall.",
+            "scene_motif_state": {
+              "form": "transferred",
+              "intensity": 1.0
+            },
+            "multi_shot_execution_ledger": [
+              {
+                "shot_id": "shot_001",
+                "status": "complete",
+                "meta": {
+                  "file_path": "https://picsum.photos/seed/scene_002_chalk_symbol_late/800/450"
+                },
+                "shot_intent": {
+                  "framing": "close-up or locked frame",
+                  "camera": "locked frame",
+                  "lighting": "harsh directional",
+                  "mood": "oppressive dread",
+                  "motif_instruction": "motif near body or face"
+                },
+                "prompt_pack": {
+                  "base_prompt": "location HALLWAY, time NIGHT, characters no named characters visible, action scratching inside wall, key objects scratching inside wall, supernatural elements scratching inside wall, emotional tone oppressive supernatural dread, lighting harsh directional, camera locked frame, motif state embedded, cinematic dark farmhouse realism",
+                  "style_tags": [
+                    "cinematic",
+                    "dark",
+                    "grain",
+                    "natural light"
+                  ],
+                  "negative_prompt": [
+                    "low quality",
+                    "blurry",
+                    "deformed",
+                    "extra limbs",
+                    "bad anatomy",
+                    "distorted face",
+                    "oversaturated"
+                  ],
+                  "memory_influence": {
+                    "used": false,
+                    "patterns": [],
+                    "source_references": []
+                  },
+                  "camera_directive": "locked frame",
+                  "lighting_directive": "harsh directional",
+                  "composition_directive": "oppressive negative space with motif pressure near face",
+                  "motif_directive": "motif near body or face",
+                  "script_faithfulness": {
+                    "score": 0.857,
+                    "matched_elements": [
+                      "location",
+                      "time_of_day",
+                      "key_objects",
+                      "supernatural_elements",
+                      "motif_state",
+                      "emotional_intent"
+                    ],
+                    "missing_elements": [
+                      "characters"
+                    ],
+                    "risk": "low"
+                  }
+                },
+                "shot_phase": "late",
+                "prompt_quality": {
+                  "score": 0.85,
+                  "issues": []
+                },
+                "prompt_consistency": {
+                  "aligned": true,
+                  "drift_reason": null
+                },
+                "motif_consistency": {
+                  "present": true,
+                  "correct_form": false
+                },
+                "scene_visual_brief": {
+                  "scene_id": "scene_002",
+                  "location": "HALLWAY",
+                  "time_of_day": "NIGHT",
+                  "characters": [],
+                  "key_actions": [
+                    "scratching inside wall"
+                  ],
+                  "supernatural_elements": [
+                    "scratching inside wall"
+                  ],
+                  "motifs": [
+                    "chalk symbol"
+                  ],
+                  "emotional_intent": "oppressive supernatural dread",
+                  "visual_must_haves": [
+                    "scratching inside wall"
+                  ]
+                },
+                "previs_accuracy": {
+                  "score": 1.0,
+                  "missing_script_elements": [],
+                  "matched_script_elements": [
+                    "scratching inside wall"
+                  ]
+                }
+              },
+              {
+                "shot_id": "shot_002",
+                "status": "failed",
+                "meta": {
+                  "file_path": "https://picsum.photos/seed/scene_002_chalk_symbol_late/800/450"
+                },
+                "shot_intent": {
+                  "framing": "close-up or locked frame",
+                  "camera": "locked frame",
+                  "lighting": "harsh directional",
+                  "mood": "oppressive dread",
+                  "motif_instruction": "motif near body or face"
+                },
+                "prompt_pack": {
+                  "base_prompt": "location HALLWAY, time NIGHT, characters no named characters visible, action scratching inside wall, key objects scratching inside wall, supernatural elements scratching inside wall, emotional tone oppressive supernatural dread, lighting harsh directional, camera locked frame, motif state embedded, cinematic dark farmhouse realism",
+                  "style_tags": [
+                    "cinematic",
+                    "dark",
+                    "grain",
+                    "natural light"
+                  ],
+                  "negative_prompt": [
+                    "low quality",
+                    "blurry",
+                    "deformed",
+                    "extra limbs",
+                    "bad anatomy",
+                    "distorted face",
+                    "oversaturated"
+                  ],
+                  "memory_influence": {
+                    "used": false,
+                    "patterns": [],
+                    "source_references": []
+                  },
+                  "camera_directive": "locked frame",
+                  "lighting_directive": "harsh directional",
+                  "composition_directive": "oppressive negative space with motif pressure near face",
+                  "motif_directive": "motif near body or face",
+                  "script_faithfulness": {
+                    "score": 0.857,
+                    "matched_elements": [
+                      "location",
+                      "time_of_day",
+                      "key_objects",
+                      "supernatural_elements",
+                      "motif_state",
+                      "emotional_intent"
+                    ],
+                    "missing_elements": [
+                      "characters"
+                    ],
+                    "risk": "low"
+                  }
+                },
+                "shot_phase": "late",
+                "prompt_quality": {
+                  "score": 0.85,
+                  "issues": []
+                },
+                "prompt_consistency": {
+                  "aligned": true,
+                  "drift_reason": null
+                },
+                "motif_consistency": {
+                  "present": true,
+                  "correct_form": false
+                },
+                "scene_visual_brief": {
+                  "scene_id": "scene_002",
+                  "location": "HALLWAY",
+                  "time_of_day": "NIGHT",
+                  "characters": [],
+                  "key_actions": [
+                    "scratching inside wall"
+                  ],
+                  "supernatural_elements": [
+                    "scratching inside wall"
+                  ],
+                  "motifs": [
+                    "chalk symbol"
+                  ],
+                  "emotional_intent": "oppressive supernatural dread",
+                  "visual_must_haves": [
+                    "scratching inside wall"
+                  ]
+                },
+                "previs_accuracy": {
+                  "score": 1.0,
+                  "missing_script_elements": [],
+                  "matched_script_elements": [
+                    "scratching inside wall"
+                  ]
+                }
+              }
+            ],
+            "scene_playback_preview": {
+              "available": true,
+              "render_ids": [
+                "render_001",
+                "render_002"
+              ]
+            },
+            "co_director_suggestions": [
+              {
+                "id": "suggest_1",
+                "type": "tension",
+                "title": "Increase visual tension",
+                "description": "Shift lighting to high contrast shadows",
+                "rationale": "Scene lacks escalation",
+                "confidence": 0.85
+              },
+              {
+                "id": "suggest_2",
+                "type": "continuity",
+                "title": "Fix continuity gap",
+                "description": "Align prop positioning across shots",
+                "rationale": "Continuity inconsistency detected",
+                "confidence": 0.75
+              }
+            ],
+            "director_notes": {
+              "what_works": [
+                "Baseline composition support is visible."
+              ],
+              "what_breaks": [
+                "Escalation continuity can be improved."
+              ],
+              "suggested_changes": [
+                "Add a high-contrast transition beat."
+              ]
+            },
+            "scene_visual_brief": {
+              "scene_id": "scene_002",
+              "location": "HALLWAY",
+              "time_of_day": "NIGHT",
+              "characters": [],
+              "key_actions": [
+                "scratching inside wall"
+              ],
+              "supernatural_elements": [
+                "scratching inside wall"
+              ],
+              "motifs": [
+                "chalk symbol"
+              ],
+              "emotional_intent": "oppressive supernatural dread",
+              "visual_must_haves": [
+                "scratching inside wall"
+              ]
+            },
+            "style_conflict": {
+              "conflict": false,
+              "reason": ""
+            },
+            "agent_disagreements": [
+              {
+                "agent": "director",
+                "severity": "high",
+                "issue": "Emotional beat is not landing cleanly",
+                "recommendation": "Refocus the central emotional turn and hold one tension beat longer",
+                "conflict_with": "narrative_flow"
+              }
+            ],
+            "script_faithfulness": {
+              "score": 0.857,
+              "matched_elements": [
+                "location",
+                "time_of_day",
+                "key_objects",
+                "supernatural_elements",
+                "motif_state",
+                "emotional_intent"
+              ],
+              "missing_elements": [
+                "characters"
+              ],
+              "risk": "low"
+            },
+            "render_quality_warnings": [
+              "Prompt missing required element: characters"
+            ],
+            "previs_accuracy": {
+              "score": 1.0,
+              "missing_script_elements": [],
+              "matched_script_elements": [
+                "scratching inside wall"
+              ]
+            },
+            "scene_iterations": [
+              {
+                "iteration_id": "scene_002_iter_1",
+                "based_on_scene": "scene_002",
+                "intervention_type": "tension",
+                "shots": [
+                  {
+                    "shot_id": "shot_001_iter",
+                    "status": "complete",
+                    "meta": {
+                      "file_path": "https://picsum.photos/800/450?random=2"
+                    }
+                  }
+                ],
+                "summary": {
+                  "improvement": "Increased contrast and pacing shift",
+                  "score_delta": 0.15
+                }
+              }
+            ],
+            "sound_profile": {
+              "ambience": "oppressive near-silence with sharp transient hits",
+              "sound_motifs": [
+                "motif distortion",
+                "sharp impacts",
+                "reversed breath motif"
+              ],
+              "silence_strategy": "oppressive silence holds before impact",
+              "score_direction": "harsh bowed strings over deep sub-bass swell",
+              "audio_tension": "high"
+            },
+            "scene_health": {
+              "score": 0.412,
+              "issues": [
+                "Scene quality verdict requires revision",
+                "Scene execution status is incomplete"
+              ]
+            },
+            "scene_versions": [
+              {
+                "version_id": "scene_002_v1_original",
+                "type": "original",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "quality_score": 0.362
+              },
+              {
+                "version_id": "scene_002_v2_iteration",
+                "type": "iteration",
+                "timestamp": "2026-01-02T00:00:00Z",
+                "quality_score": 0.452
+              }
+            ],
+            "production_status": {
+              "state": "review",
+              "has_iterations": true,
+              "selected_cut": "original",
+              "blockers": [
+                "Scene quality verdict requires revision",
+                "Scene execution status is incomplete"
+              ]
+            }
+          }
+        ],
+        "scene_index": {
+          "scene_001": {
+            "scene_id": "scene_001",
+            "heading": "INT. KITCHEN - NIGHT",
+            "location": "KITCHEN",
+            "time_of_day": "NIGHT",
+            "characters": [],
+            "text": "Mara watches Eli draw."
+          },
+          "scene_002": {
+            "scene_id": "scene_002",
+            "heading": "INT. HALLWAY - NIGHT",
+            "location": "HALLWAY",
+            "time_of_day": "NIGHT",
+            "characters": [],
+            "text": "A scratching sound comes from inside the wall."
+          }
+        },
+        "character_presence": {},
+        "location_presence": {
+          "KITCHEN": [
+            "scene_001"
+          ],
+          "HALLWAY": [
+            "scene_002"
+          ]
+        },
+        "time_of_day_presence": {
+          "NIGHT": [
+            "scene_001",
+            "scene_002"
+          ]
+        },
+        "summary": {
+          "scene_count": 2,
+          "character_count": 0,
+          "location_count": 2,
+          "time_of_day_count": 1
+        },
+        "continuity": {
+          "character_continuity": {},
+          "location_continuity": {
+            "KITCHEN": {
+              "scene_count": 1,
+              "first_scene": "scene_001",
+              "last_scene": "scene_001"
+            },
+            "HALLWAY": {
+              "scene_count": 1,
+              "first_scene": "scene_002",
+              "last_scene": "scene_002"
+            }
+          },
+          "time_of_day_continuity": {
+            "NIGHT": {
+              "scene_count": 2,
+              "first_scene": "scene_001",
+              "last_scene": "scene_002"
+            }
+          }
+        },
+        "relationships": {
+          "character_copresence": {},
+          "character_copresence_summary": {}
+        },
+        "patterns": {
+          "recurring_character_pairs": {},
+          "recurring_locations": {},
+          "recurring_time_of_day": {
+            "NIGHT": {
+              "scene_count": 2,
+              "scenes": [
+                "scene_001",
+                "scene_002"
+              ]
+            }
+          }
+        },
+        "pattern_observations": {
+          "recurring_time_of_day": "Recurring time-of-day patterns detected"
+        },
+        "top_pattern_observation": "Recurring time-of-day patterns detected",
+        "memory_pattern_note": {
+          "type": "time_of_day",
+          "message": "Recurring time-of-day patterns detected across scenes"
+        },
+        "memory_candidates": {
+          "character_pairs": [],
+          "locations": [],
+          "time_of_day": [
+            "NIGHT"
+          ]
+        },
+        "memory_category_presence": {
+          "character_pairs": false,
+          "locations": false,
+          "time_of_day": true
+        },
+        "memory_snapshot_summary": {
+          "candidate_count": 1,
+          "record_count": 1,
+          "aggregate_count": 1,
+          "advisory_status": "available",
+          "influence_mode": "disabled"
+        },
+        "memory_state_rollup": {
+          "status": "available",
+          "candidate_count": 1,
+          "influence_mode": "disabled",
+          "advisory_status": "available"
+        },
+        "memory_consistency": {
+          "is_consistent": true,
+          "has_required_fields": true,
+          "gate_disabled": true,
+          "authority_none": true
+        },
+        "memory_candidate_observations": {
+          "time_of_day": "Recurring time-of-day patterns are memory candidates"
+        },
+        "top_memory_candidate_observation": "Recurring time-of-day patterns are memory candidates",
+        "memory_records": {
+          "memory_records": [
+            {
+              "id": "time_of_day:NIGHT",
+              "type": "time_of_day",
+              "key": "NIGHT",
+              "scene_count": 2,
+              "scenes": [
+                "scene_001",
+                "scene_002"
+              ],
+              "source": "recurring_time_of_day"
+            }
+          ]
+        },
+        "memory_aggregate": {
+          "memory_aggregate": [
+            {
+              "id": "time_of_day:NIGHT",
+              "type": "time_of_day",
+              "key": "NIGHT",
+              "scene_count": 2,
+              "scenes": [
+                "scene_001",
+                "scene_002"
+              ]
+            }
+          ]
+        },
+        "director_reference_memory": {
+          "datasets": [],
+          "learned_patterns": {},
+          "reusable_rules": []
+        },
+        "memory_influence_gate": {
+          "mode": "disabled",
+          "reason": "Memory influence not enabled"
+        },
+        "memory_output_influence_contract": {
+          "permitted": false,
+          "scope": "none",
+          "reason": "Memory output influence is disabled"
+        },
+        "memory_advisory_projection": {
+          "status": "available",
+          "message": "Memory candidates available for future review"
+        },
+        "co_director_memory_visibility": {
+          "has_memory_candidates": true,
+          "has_memory_records": true,
+          "has_memory_aggregate": true,
+          "influence_mode": "disabled",
+          "advisory_status": "available"
+        },
+        "co_director_memory_advisory": {
+          "status": "informational",
+          "message": "Memory candidates visible for review; influence remains disabled."
+        },
+        "co_director_memory_bridge": {
+          "visibility": {
+            "has_memory_candidates": true,
+            "has_memory_records": true,
+            "has_memory_aggregate": true,
+            "influence_mode": "disabled",
+            "advisory_status": "available"
+          },
+          "advisory": {
+            "status": "informational",
+            "message": "Memory candidates visible for review; influence remains disabled."
+          },
+          "influence_gate": {
+            "mode": "disabled",
+            "reason": "Memory influence not enabled"
+          }
+        },
+        "co_director_memory_contract": {
+          "mode": "advisory_read_only",
+          "authority": "none",
+          "memory_influence": "disabled",
+          "reason": "Co-Director memory access is read-only and non-authoritative"
+        },
+        "co_director_visual_contract": {
+          "mode": "advisory_read_only",
+          "authority": "none",
+          "visual_influence": "disabled",
+          "reason": "Co-Director visual input is advisory only"
+        },
+        "co_director_visual_feed": {
+          "reference_summary": {
+            "reference_count": 0,
+            "linked_scene_count": 0,
+            "type_count": 0
+          },
+          "frame_snapshot": {
+            "frame_metadata": [],
+            "frame_stats": {
+              "frame_count": 0,
+              "artifact_count": 0
+            }
+          },
+          "linkage": {
+            "linked_scenes": 0,
+            "total_scenes": 2
+          },
+          "alignment": {
+            "state": "none",
+            "note": ""
+          },
+          "mode": "read_only"
+        },
+        "co_director_visual_observation": {
+          "note": "Visual style is consistent across all scenes"
+        },
+        "co_director_shot_observation": {
+          "note": "Shot variety is minimal"
+        },
+        "co_director_observation_summary": {
+          "notes": [
+            "Visual style is consistent across all scenes",
+            "Shot variety is minimal"
+          ]
+        },
+        "co_director_observation_contract": {
+          "mode": "read_only",
+          "authority": "none",
+          "influence": "disabled"
+        },
+        "co_director_memory_authority_boundary": {
+          "authority": "none",
+          "memory_influence": "disabled",
+          "reason": "Read-only visibility only"
+        },
+        "output_influence_guard_v2": {
+          "output_influence": false,
+          "reason": "No system component is permitted to influence output"
+        },
+        "visual_decision_boundary": {
+          "visual_decision_authority": "none",
+          "reason": "Visual decisions are not enabled"
+        },
+        "shot_execution_lock": {
+          "shot_execution_enabled": false,
+          "reason": "Shot execution is disabled"
+        },
+        "boundary_audit": {
+          "memory_safe": true,
+          "visual_safe": true,
+          "shot_safe": true,
+          "render_safe": true,
+          "co_director_safe": true,
+          "overall_safe": true
+        },
+        "studio_safety_state": {
+          "studio_state": "safe_for_control_phase"
+        },
+        "prompt_influence_gate_v1": {
+          "prompt_influence_enabled": true,
+          "scope": "advisory_only",
+          "reason": "Prompt influence enabled in advisory mode"
+        },
+        "visual_prompt_tokens": [],
+        "shot_prompt_tokens": [
+          "wide establishing shot"
+        ],
+        "prompt_envelope": {
+          "base_intent": "Mara watches Eli draw.",
+          "visual_tokens": [],
+          "shot_tokens": [
+            "wide establishing shot"
+          ]
+        },
+        "prompt_safety_contract": {
+          "prompt_override": false,
+          "structure_locked": true,
+          "token_injection_only": true,
+          "reason": "Prompt structure is protected"
+        },
+        "render_activation_gate_v1": {
+          "render_enabled": true,
+          "mode": "single_shot",
+          "reason": "Render activation allowed in controlled single-shot mode"
+        },
+        "render_request": {
+          "shot_id": "shot_scene_001_001",
+          "scene_id": "scene_001",
+          "prompt": {
+            "base_intent": "Mara watches Eli draw.",
+            "visual_tokens": [],
+            "shot_tokens": [
+              "wide establishing shot"
+            ]
+          }
+        },
+        "render_output": {
+          "render_id": "mock_shot_scene_001_001",
+          "shot_id": "shot_scene_001_001",
+          "status": "success",
+          "prompt_snapshot": {
+            "base_intent": "Mara watches Eli draw.",
+            "visual_tokens": [],
+            "shot_tokens": [
+              "wide establishing shot"
+            ]
+          },
+          "provider": "mock",
+          "has_output": true,
+          "file_path": null,
+          "url": null
+        },
+        "output_review": {
+          "render_id": "render_stub_shot_scene_001_001",
+          "alignment": "none",
+          "coverage": "2/2",
+          "status": "pending"
+        },
+        "output_evaluation": {
+          "has_output": true,
+          "valid_structure": true,
+          "render_id_present": true,
+          "status": "valid"
+        },
+        "retry_gate": {
+          "retry_allowed": false,
+          "reason": "Valid output achieved"
+        },
+        "execution_snapshot": {
+          "iteration": 1,
+          "max_iterations": 3,
+          "status": "complete",
+          "render_attempted": true,
+          "retry_allowed": false,
+          "finalized": true
+        },
+        "iteration_record": {
+          "iteration": 1,
+          "status": "complete",
+          "render_id": "render_stub_shot_scene_001_001",
+          "coverage": "2/2",
+          "alignment": "none"
+        },
+        "take_history": {
+          "takes": [
+            {
+              "iteration": 1,
+              "status": "complete",
+              "render_id": "render_stub_shot_scene_001_001",
+              "coverage": "2/2",
+              "alignment": "none"
+            }
+          ]
+        },
+        "take_artifacts": [
+          {
+            "iteration": 1,
+            "render_id": "mock_shot_scene_001_001",
+            "status": "success",
+            "meta": {
+              "file_path": null,
+              "url": null
+            }
+          }
+        ],
+        "retry_snapshot": {
+          "allowed": false,
+          "iteration": 1,
+          "status": "complete"
+        },
+        "take_comparison": {
+          "best_take": null,
+          "comparison_ready": false
+        },
+        "take_comparison_v2": {
+          "comparable": false,
+          "differences": []
+        },
+        "take_preference_contract": {
+          "auto_select": false,
+          "authority": "manual_only"
+        },
+        "take_advisory_note": {
+          "note": "Take is usable"
+        },
+        "output_review_matrix": [
+          {
+            "take_id": 1,
+            "alignment": "none",
+            "coverage": "2/2",
+            "valid_structure": true
+          }
+        ],
+        "loop_readiness": {
+          "ready": false,
+          "reason": "Retry not allowed"
+        },
+        "next_take_preview": {
+          "next_iteration": 2,
+          "will_retry": false
+        },
+        "loop_constraint": {
+          "max_iterations": 3,
+          "remaining": 2
+        },
+        "loop_advisory": {
+          "note": ""
+        },
+        "loop_contract": {
+          "auto_loop": false,
+          "execution_mode": "manual_only",
+          "reason": "Loop execution is controlled"
+        },
+        "loop_execution_plan": {
+          "execute": false,
+          "next_iteration": 2,
+          "reason": "Retry not allowed"
+        },
+        "simulated_iteration": {
+          "iteration": 1,
+          "status": "complete"
+        },
+        "simulated_output": {
+          "render_id": "render_stub_shot_scene_001_001",
+          "status": "pending"
+        },
+        "loop_result_snapshot": {
+          "iteration": 1,
+          "output_status": "pending"
+        },
+        "loop_execution_contract": {
+          "mode": "safe_simulation",
+          "real_execution": false,
+          "reason": "Loop execution is simulated only"
+        },
+        "execution_permission": {
+          "allowed": false,
+          "mode": "blocked",
+          "reason": "Retry not allowed"
+        },
+        "handoff_gate": {
+          "handoff_allowed": true,
+          "mode": "single_shot",
+          "reason": "Mock provider handoff allowed"
+        },
+        "provider_payload_v2": {
+          "provider": "mock",
+          "shot_id": "shot_scene_001_001",
+          "prompt": {
+            "base_intent": "Mara watches Eli draw.",
+            "visual_tokens": [],
+            "shot_tokens": [
+              "wide establishing shot"
+            ]
+          }
+        },
+        "handoff_envelope": {
+          "request_id": "handoff_mock_shot_scene_001_001",
+          "provider": "mock",
+          "enabled": true
+        },
+        "handoff_audit": {
+          "requested": true,
+          "allowed": true,
+          "blocked_reason": "",
+          "timestamp": null
+        },
+        "execution_unlock_state": {
+          "execution_enabled": true,
+          "mode": "unlocked",
+          "reason": "Execution enabled for mock provider"
+        },
+        "execution_intent": {
+          "intent_present": true,
+          "provider": "mock",
+          "shot_id": "shot_scene_001_001",
+          "reason": "Execution intent present"
+        },
+        "execution_eligibility": {
+          "eligible": true,
+          "reason": "Execution eligible"
+        },
+        "execution_request_envelope": {
+          "request_valid": true,
+          "provider": "mock",
+          "shot_id": "shot_scene_001_001",
+          "blocked": false,
+          "reason": "Execution request valid"
+        },
+        "execution_trigger": {
+          "should_execute": true,
+          "reason": "Execution trigger allowed"
+        },
+        "real_execution_trigger": {
+          "should_execute": false,
+          "provider": "real_stub",
+          "reason": "Provider is not real_stub"
+        },
+        "execution_control_contract": {
+          "real_execution_enabled": false,
+          "manual_trigger_required": true,
+          "auto_execution": false,
+          "safe_mode": true,
+          "single_shot_only": true,
+          "reason": "Execution requires explicit manual enablement"
+        },
+        "request_schema_validation": {
+          "valid": true,
+          "missing_fields": [],
+          "reason": "Valid request schema"
+        },
+        "provider_validation": {
+          "valid": true,
+          "provider": "mock",
+          "reason": "Provider allowed"
+        },
+        "payload_sanitization": {
+          "sanitized": true,
+          "provider": "mock",
+          "shot_id": "shot_scene_001_001",
+          "prompt_safe": false
+        },
+        "request_validation_summary": {
+          "request_valid": false,
+          "reason": "Payload unsafe"
+        },
+        "request_validation_contract": {
+          "validated_only": true,
+          "execution_allowed": false,
+          "reason": "Validation does not permit execution"
+        },
+        "provider_adapter_identity": {
+          "provider": "mock",
+          "supports_render": true,
+          "network_required": false
+        },
+        "provider_adapter_status": {
+          "provider": "mock",
+          "enabled": true,
+          "can_execute": false,
+          "reason": "Execution not enabled"
+        },
+        "provider_adapter_requirements": {
+          "provider": "mock",
+          "requires_credentials": false,
+          "credential_present": true
+        },
+        "provider_adapter_readiness_gate": {
+          "ready": false,
+          "reason": "Execution disabled by safety boundary"
+        },
+        "provider_adapter_contract": {
+          "adapter_execution_enabled": false,
+          "mode": "inspection_only",
+          "reason": "Provider adapter execution is disabled"
+        },
+        "debug_control_state": {
+          "safe_mode": true
+        },
+        "execution_request": {
+          "enabled": true,
+          "shot_id": "shot_scene_001_001",
+          "prompt": {
+            "base_intent": "Mara watches Eli draw.",
+            "visual_tokens": [],
+            "shot_tokens": [
+              "wide establishing shot"
+            ]
+          }
+        },
+        "execution_status": {
+          "state": "ready",
+          "reason": "Execution request ready"
+        },
+        "execution_result": {
+          "executed": true,
+          "render_id": "mock_shot_scene_001_001",
+          "status": "success"
+        },
+        "execution_contract": {
+          "mode": "single_shot_only",
+          "auto_execution": false,
+          "looping": false,
+          "reason": "Execution is manually controlled"
+        },
+        "execution_log": {
+          "executed": true,
+          "provider": "mock",
+          "provider_type": "mock",
+          "shot_id": "shot_scene_001_001",
+          "timestamp": null
+        },
+        "provider_payload": {
+          "provider": "mock",
+          "shot_id": "shot_scene_001_001",
+          "prompt": {
+            "base_intent": "Mara watches Eli draw.",
+            "visual_tokens": [],
+            "shot_tokens": [
+              "wide establishing shot"
+            ]
+          }
+        },
+        "execution_result_v2": {
+          "executed": true,
+          "render_id": "mock_shot_scene_001_001",
+          "status": "success"
+        },
+        "output_sync": {
+          "synced": true,
+          "render_id": "mock_shot_scene_001_001"
+        },
+        "execution_monitor": {
+          "state": "ready",
+          "result": "success"
+        },
+        "provider_config_snapshot": {
+          "default_provider": "mock",
+          "enabled_providers": [
+            "mock"
+          ],
+          "quality_priority": "cinematic_quality",
+          "real_providers_enabled": false
+        },
+        "provider_credential_state": {
+          "provider": "mock",
+          "enabled": true,
+          "credential_present": true,
+          "credential_source": "none",
+          "reason": "Mock provider does not require credentials"
+        },
+        "provider_selection_state": {
+          "requested_provider": null,
+          "selected_provider": "mock",
+          "allowed": true,
+          "fallback_used": false,
+          "reason": "Default provider selected"
+        },
+        "selection_boundary_guard": {
+          "selection_applied": true,
+          "execution_triggered": true,
+          "reason": "Execution triggered through controlled mock path"
+        },
+        "provider_readiness_summary": {
+          "provider": "mock",
+          "enabled": true,
+          "credential_present": true,
+          "can_execute": false,
+          "reason": "Execution not enabled"
+        },
+        "provider_capability": {
+          "provider": "mock",
+          "enabled": true,
+          "network_required": false,
+          "supports_render": true,
+          "supports_streaming": false,
+          "supports_sync": true,
+          "supports_multi_shot": false,
+          "requires_credentials": false
+        },
+        "provider_control_contract": {
+          "selection_mode": "manual_only",
+          "auto_execution": false,
+          "execution_on_select": false,
+          "reason": "Provider selection does not trigger execution"
+        },
+        "provider_safety_contract": {
+          "real_provider_execution_enabled": false,
+          "reason": "Real provider execution is disabled by safety boundary"
+        },
+        "provider_registry_snapshot": {
+          "available_providers": [
+            "mock",
+            "real_stub"
+          ],
+          "default_provider": "mock",
+          "real_providers_present": true
+        },
+        "provider_activation_state": {
+          "active_provider": "mock",
+          "real_enabled": false,
+          "real_provider_runtime_flag": false,
+          "reason": "Real providers disabled by default"
+        },
+        "provider_config_validation": {
+          "valid": true,
+          "issues": [],
+          "reason": "Provider config valid"
+        },
+        "credential_validation_summary": {
+          "provider": "mock",
+          "valid": true,
+          "reason": "Credential available"
+        },
+        "provider_enablement_gate": {
+          "enabled": false,
+          "reason": "Real providers disabled by safety policy"
+        },
+        "provider_intent_signal": {
+          "requested": null,
+          "intended": "mock",
+          "allowed": true
+        },
+        "provider_activation_contract": {
+          "real_execution_enabled": false,
+          "manual_enable_required": true,
+          "safe_mode": true,
+          "reason": "Provider activation requires explicit unlock"
+        },
+        "provider_safety_summary": {
+          "safe": true,
+          "execution_allowed": false,
+          "mode": "locked"
+        },
+        "local_render_capability": {
+          "provider": "local_image",
+          "available": true,
+          "network_required": false,
+          "artifact_type": "text_preview"
+        },
+        "local_render_gate": {
+          "allowed": true,
+          "reason": "Local render gate open"
+        },
+        "local_execution_trigger": {
+          "should_execute": true,
+          "reason": "Local execution allowed"
+        },
+        "local_execution_result": {
+          "executed": true,
+          "render_id": "local_shot_scene_001_001",
+          "status": "success",
+          "provider": "local_image",
+          "error": null,
+          "error_code": null,
+          "meta": {
+            "file_path": "output/renders/local_shot_scene_001_001.txt",
+            "url": null,
+            "artifact_type": "text_preview"
+          }
+        },
+        "local_render_output": {
+          "has_output": true,
+          "render_id": "local_shot_scene_001_001",
+          "file_path": "output/renders/local_shot_scene_001_001.txt",
+          "artifact_type": "text_preview",
+          "status": "success"
+        },
+        "local_artifact_log": {
+          "executed": true,
+          "shot_id": "shot_scene_001_001",
+          "file_path": "output/renders/local_shot_scene_001_001.txt",
+          "timestamp": null
+        },
+        "local_single_shot_guard": {
+          "single_shot_only": true,
+          "max_outputs": 1,
+          "reason": "Local artifact render is limited to one shot"
+        },
+        "local_render_contract": {
+          "mode": "local_stub",
+          "network": false,
+          "external_provider": false,
+          "safe_mode": true
+        },
+        "visual_references": [],
+        "visual_reference_indexes": {
+          "by_reference_id": {},
+          "by_scene_id": {},
+          "by_type": {}
+        },
+        "visual_reference_summary": {
+          "reference_count": 0,
+          "linked_scene_count": 0,
+          "type_count": 0
+        },
+        "visual_pattern_summary": {
+          "dominant_types": [],
+          "type_counts": {}
+        },
+        "frame_metadata": [],
+        "frame_stats": {
+          "frame_count": 0,
+          "artifact_count": 0
+        },
+        "frame_analysis_snapshot": {
+          "frame_metadata": [],
+          "frame_stats": {
+            "frame_count": 0,
+            "artifact_count": 0
+          }
+        },
+        "scene_visual_links": {},
+        "scene_visual_identity": {},
+        "visual_consistency": {
+          "consistent": false,
+          "variance_level": "none"
+        },
+        "visual_tension": {
+          "tension_scenes": []
+        },
+        "link_completeness": {
+          "linked_scenes": 0,
+          "total_scenes": 2
+        },
+        "alignment_status": {
+          "state": "none",
+          "message": "No scenes linked to visual references"
+        },
+        "top_alignment_note": "",
+        "shot_candidates": [
+          {
+            "scene_id": "scene_001",
+            "shot_id": "shot_scene_001_001",
+            "source_refs": []
+          },
+          {
+            "scene_id": "scene_002",
+            "shot_id": "shot_scene_002_001",
+            "source_refs": []
+          }
+        ],
+        "shot_coverage": {
+          "scene_001": {
+            "candidate_count": 1
+          },
+          "scene_002": {
+            "candidate_count": 1
+          }
+        },
+        "shot_plan_bundle": {
+          "shot_candidates": [
+            {
+              "scene_id": "scene_001",
+              "shot_id": "shot_scene_001_001",
+              "source_refs": []
+            },
+            {
+              "scene_id": "scene_002",
+              "shot_id": "shot_scene_002_001",
+              "source_refs": []
+            }
+          ],
+          "shot_coverage": {
+            "scene_001": {
+              "candidate_count": 1
+            },
+            "scene_002": {
+              "candidate_count": 1
+            }
+          },
+          "influence_mode": "disabled"
+        },
+        "shot_queue": [
+          {
+            "shot_id": "shot_scene_001_001",
+            "scene_id": "scene_001",
+            "index": 0
+          },
+          {
+            "shot_id": "shot_scene_002_001",
+            "scene_id": "scene_002",
+            "index": 1
+          }
+        ],
+        "dispatch_pointer": {
+          "current_index": 0,
+          "total": 2
+        },
+        "multi_shot_guard": {
+          "auto_dispatch": false,
+          "looping": false,
+          "reason": "Multi-shot execution is disabled"
+        },
+        "shot_execution_ledger": [
+          {
+            "shot_id": "shot_scene_001_001",
+            "status": "complete",
+            "render_id": "mock_shot_scene_001_001",
+            "meta": {
+              "file_path": null,
+              "url": null
+            }
+          },
+          {
+            "shot_id": "shot_scene_002_001",
+            "status": "not_executed",
+            "render_id": null,
+            "meta": {
+              "file_path": null,
+              "url": null
+            }
+          }
+        ],
+        "multi_shot_readiness": {
+          "queue_size": 2,
+          "ready_count": 0,
+          "can_run": false
+        },
+        "multi_shot_execution_unlock": {
+          "enabled": true,
+          "provider": "mock",
+          "reason": "Mock multi-shot execution enabled"
+        },
+        "shot_batch_plan": [
+          {
+            "shot_id": "shot_scene_001_001",
+            "scene_id": "scene_001",
+            "batch_index": 0
+          },
+          {
+            "shot_id": "shot_scene_002_001",
+            "scene_id": "scene_002",
+            "batch_index": 1
+          }
+        ],
+        "batch_execution_limit": {
+          "max_shots": 3,
+          "planned_shots": 2,
+          "allowed_shots": 2
+        },
+        "multi_shot_execution_trigger": {
+          "should_execute": true,
+          "allowed_shots": 2,
+          "reason": "Multi-shot mock execution allowed"
+        },
+        "multi_shot_results": [
+          {
+            "shot_id": "shot_scene_001_001",
+            "scene_id": "scene_001",
+            "render_id": "mock_shot_scene_001_001",
+            "status": "success",
+            "provider": "mock"
+          },
+          {
+            "shot_id": "shot_scene_002_001",
+            "scene_id": "scene_002",
+            "render_id": "mock_shot_scene_002_001",
+            "status": "success",
+            "provider": "mock"
+          }
+        ],
+        "multi_shot_execution_ledger": [
+          {
+            "shot_id": "shot_scene_001_001",
+            "status": "complete",
+            "render_id": "mock_shot_scene_001_001"
+          },
+          {
+            "shot_id": "shot_scene_002_001",
+            "status": "complete",
+            "render_id": "mock_shot_scene_002_001"
+          }
+        ],
+        "multi_shot_take_artifacts": [
+          {
+            "iteration": 1,
+            "shot_id": "shot_scene_001_001",
+            "render_id": "mock_shot_scene_001_001",
+            "status": "success"
+          },
+          {
+            "iteration": 2,
+            "shot_id": "shot_scene_002_001",
+            "render_id": "mock_shot_scene_002_001",
+            "status": "success"
+          }
+        ],
+        "scene_generation_summary": {
+          "planned_shots": 2,
+          "completed_shots": 2,
+          "provider": "mock",
+          "status": "complete"
+        },
+        "scene_playback_preview": {
+          "available": true,
+          "shot_count": 2,
+          "render_ids": [
+            "mock_shot_scene_001_001",
+            "mock_shot_scene_002_001"
+          ],
+          "status": "complete"
+        },
+        "scene_visual_brief": [
+          {
+            "scene_id": "scene_001",
+            "location": "KITCHEN",
+            "time_of_day": "NIGHT",
+            "characters": [],
+            "key_actions": [
+              "Eli drawing"
+            ],
+            "supernatural_elements": [
+              "subtle unseen pressure"
+            ],
+            "motifs": [
+              "chalk symbol"
+            ],
+            "emotional_intent": "quiet supernatural unease",
+            "visual_must_haves": [
+              "Eli drawing"
+            ]
+          },
+          {
+            "scene_id": "scene_002",
+            "location": "HALLWAY",
+            "time_of_day": "NIGHT",
+            "characters": [],
+            "key_actions": [
+              "scratching inside wall"
+            ],
+            "supernatural_elements": [
+              "scratching inside wall"
+            ],
+            "motifs": [
+              "chalk symbol"
+            ],
+            "emotional_intent": "oppressive supernatural dread",
+            "visual_must_haves": [
+              "scratching inside wall"
+            ]
+          }
+        ],
+        "previs_accuracy": {
+          "score": 1.0,
+          "missing_script_elements": [],
+          "matched_script_elements": [
+            "eli drawing",
+            "scratching inside wall"
+          ]
+        },
+        "project_id": "default_project",
+        "memory_reuse_context": {
+          "project_id": "default_project",
+          "available": true,
+          "context": {
+            "scene_count": 2,
+            "committed_only": true,
+            "scene_ids": [
+              "scene_001",
+              "scene_002"
+            ]
+          },
+          "visual_patterns": [],
+          "pacing_patterns": [],
+          "motif_patterns": [],
+          "tone_patterns": [],
+          "visual_pattern_records": [],
+          "pacing_pattern_records": [],
+          "motif_pattern_records": [],
+          "tone_pattern_records": [],
+          "references": [],
+          "studio_intelligence": {
+            "visual": [],
+            "pacing": [],
+            "motif": [],
+            "tone": [],
+            "studio_intelligence_score": 0.0
+          }
+        },
+        "scene_coherence_report": {
+          "coherence_score": 0.8,
+          "issues": [
+            "lack of progression across shots"
+          ],
+          "confidence": "high"
+        },
+        "scene_emotional_flow": {
+          "flow_score": 0.45,
+          "pattern": "flat"
+        },
+        "scene_quality_verdict": {
+          "verdict": "needs_revision",
+          "reason": "Scene lacks progression despite technical success"
+        },
+        "director_notes": {
+          "what_works": [
+            "Shot consistency maintained"
+          ],
+          "what_breaks": [
+            "lack of progression across shots",
+            "No emotional progression",
+            "Tone is too uniform, risks feeling flat"
+          ],
+          "suggested_changes": [
+            "Introduce contrast between shots",
+            "Add tension shift or visual escalation",
+            "Scene lacks escalation, introduce a shift in intensity"
+          ]
+        },
+        "scene_intervention_plan": {
+          "target_scene_id": "scene_002",
+          "problem_shot_ids": [],
+          "before": {
+            "verdict": "needs_revision",
+            "status": "complete"
+          },
+          "suggested_fix_shot_ids": [
+            "shot_scene_001_001",
+            "shot_scene_002_001"
+          ],
+          "suggested_changes": [
+            "Introduce contrast between shots",
+            "Add tension shift or visual escalation",
+            "Scene lacks escalation, introduce a shift in intensity"
+          ],
+          "mode": "read_only"
+        },
+        "next_iteration_strategy": {
+          "recommended_action": "increase_tension",
+          "priority": "normal",
+          "focus_scene_id": "scene_002",
+          "mode": "read_only_preview",
+          "notes": [
+            "Introduce contrast between shots",
+            "Add tension shift or visual escalation"
+          ]
+        },
+        "scene_iterations": [
+          {
+            "iteration_id": "scene_001_iter_1",
+            "based_on_scene": "scene_001",
+            "intervention_type": "tension",
+            "shots": [
+              {
+                "shot_id": "shot_001_iter",
+                "status": "complete",
+                "meta": {
+                  "file_path": "https://picsum.photos/800/450?random=2"
+                }
+              }
+            ],
+            "summary": {
+              "improvement": "Increased contrast and pacing shift",
+              "score_delta": 0.15
+            }
+          }
+        ],
+        "agent_disagreements": [
+          {
+            "scene_id": "scene_001",
+            "agent": "director",
+            "severity": "high",
+            "issue": "Emotional beat is not landing cleanly",
+            "recommendation": "Refocus the central emotional turn and hold one tension beat longer",
+            "conflict_with": "narrative_flow"
+          },
+          {
+            "scene_id": "scene_002",
+            "agent": "director",
+            "severity": "high",
+            "issue": "Emotional beat is not landing cleanly",
+            "recommendation": "Refocus the central emotional turn and hold one tension beat longer",
+            "conflict_with": "narrative_flow"
+          }
+        ],
+        "ignored_agent_decisions": [],
+        "creative_tension_score": {
+          "score": 0.5,
+          "total_conflicts": 2,
+          "high_conflicts": 2
+        },
+        "selected_iteration": "original",
+        "iteration_history": [],
+        "active_cut_summary": {
+          "source": "original",
+          "reason": "",
+          "timestamp": null
+        },
+        "iteration_comparison": {
+          "improvements": [
+            "Improved visual contrast",
+            "Stronger framing"
+          ],
+          "regressions": [
+            "Possible continuity drift"
+          ]
+        },
+        "iteration_impact": {
+          "tone_shift": "none",
+          "pacing_shift": "none",
+          "continuity_pressure": "normal",
+          "motif_strength": "stable"
+        },
+        "story_direction": {
+          "current_tone": "none",
+          "current_pacing": "none",
+          "continuity_mode": "normal"
+        },
+        "score_map": {
+          "dominant_instrumentation": [
+            "bowed strings",
+            "sub-bass drone",
+            "distant house creaks"
+          ],
+          "recurring_audio_motif": "reversed breath motif",
+          "dynamic_arc": "restrained low-end opening, layered mid pressure, sharp late impact surges",
+          "silence_usage": "silence compresses over time and lands just before threat beats"
+        },
+        "audio_cues": [
+          {
+            "scene_id": "scene_001",
+            "cue_type": "ambience",
+            "description": "quiet room tone with distant house creaks",
+            "timing": "scene_start",
+            "intensity": 0.35
+          },
+          {
+            "scene_id": "scene_001",
+            "cue_type": "motif",
+            "description": "sub-bass drone",
+            "timing": "mid_scene",
+            "intensity": 0.4
+          },
+          {
+            "scene_id": "scene_001",
+            "cue_type": "silence",
+            "description": "restrained silence around dialogue beats",
+            "timing": "pre_reveal",
+            "intensity": 0.45
+          },
+          {
+            "scene_id": "scene_002",
+            "cue_type": "ambience",
+            "description": "oppressive near-silence with sharp transient hits",
+            "timing": "scene_start",
+            "intensity": 0.82
+          },
+          {
+            "scene_id": "scene_002",
+            "cue_type": "motif",
+            "description": "motif distortion",
+            "timing": "mid_scene",
+            "intensity": 0.9
+          },
+          {
+            "scene_id": "scene_002",
+            "cue_type": "silence",
+            "description": "oppressive silence holds before impact",
+            "timing": "pre_reveal",
+            "intensity": 0.94
+          }
+        ],
+        "audio_asset_plan": [
+          {
+            "scene_id": "scene_001",
+            "cue_id": "scene_001_cue_001",
+            "asset_type": "ambience",
+            "status": "planned",
+            "provider": "none",
+            "prompt": "ambience cue for scene_001, quiet room tone with distant house creaks, timing scene_start, intensity 0.35"
+          },
+          {
+            "scene_id": "scene_001",
+            "cue_id": "scene_001_cue_002",
+            "asset_type": "motif",
+            "status": "planned",
+            "provider": "none",
+            "prompt": "motif cue for scene_001, sub-bass drone, timing mid_scene, intensity 0.40"
+          },
+          {
+            "scene_id": "scene_001",
+            "cue_id": "scene_001_cue_003",
+            "asset_type": "motif",
+            "status": "planned",
+            "provider": "none",
+            "prompt": "silence cue for scene_001, restrained silence around dialogue beats, timing pre_reveal, intensity 0.45"
+          },
+          {
+            "scene_id": "scene_002",
+            "cue_id": "scene_002_cue_004",
+            "asset_type": "ambience",
+            "status": "planned",
+            "provider": "none",
+            "prompt": "ambience cue for scene_002, oppressive near-silence with sharp transient hits, timing scene_start, intensity 0.82"
+          },
+          {
+            "scene_id": "scene_002",
+            "cue_id": "scene_002_cue_005",
+            "asset_type": "motif",
+            "status": "planned",
+            "provider": "none",
+            "prompt": "motif cue for scene_002, motif distortion, timing mid_scene, intensity 0.90"
+          },
+          {
+            "scene_id": "scene_002",
+            "cue_id": "scene_002_cue_006",
+            "asset_type": "motif",
+            "status": "planned",
+            "provider": "none",
+            "prompt": "silence cue for scene_002, oppressive silence holds before impact, timing pre_reveal, intensity 0.94"
+          }
+        ],
+        "audio_summary": {
+          "total_cues": 6,
+          "planned_assets": 6,
+          "high_tension_scenes": 1,
+          "needs_audio_design": true
+        },
+        "screening_playlist": [
+          {
+            "scene_id": "scene_001",
+            "cut": "original",
+            "render_ids": [
+              "render_001",
+              "render_002"
+            ],
+            "status": "partial",
+            "verdict": "needs_revision",
+            "duration_estimate": 5,
+            "scene_health_score": 0.412,
+            "production_state": "review"
+          },
+          {
+            "scene_id": "scene_002",
+            "cut": "original",
+            "render_ids": [
+              "render_001",
+              "render_002"
+            ],
+            "status": "failed",
+            "verdict": "needs_revision",
+            "duration_estimate": 2,
+            "scene_health_score": 0.412,
+            "production_state": "review"
+          }
+        ],
+        "screening_summary": {
+          "total_scenes": 2,
+          "playable_scenes": 2,
+          "average_quality": 0.8,
+          "dominant_tone": "none"
+        },
+        "production_summary": {
+          "total_scenes": 2,
+          "locked_scenes": 0,
+          "scenes_in_progress": 0,
+          "blocked_scenes": 2
+        },
+        "cut_analysis": {
+          "weak_moments": [
+            "scene_001",
+            "scene_002"
+          ],
+          "strong_moments": []
+        },
+        "visual_bible": {
+          "color_palette": [
+            "charcoal",
+            "slate blue",
+            "muted amber"
+          ],
+          "lighting_style": "soft natural light",
+          "camera_language": "static with measured escalation",
+          "tone_keywords": [
+            "unease",
+            "dread"
+          ]
+        },
+        "image_render_assets": [
+          {
+            "asset_id": "image_scene_001_shot_001",
+            "scene_id": "scene_001",
+            "shot_id": "shot_001",
+            "provider": "local_image",
+            "status": "success",
+            "file_path": "https://picsum.photos/seed/scene_001_chalk_symbol_early/800/450",
+            "url": "https://picsum.photos/seed/scene_001_chalk_symbol_early/800/450",
+            "preview_label": "scene_001:shot_001",
+            "meta": {
+              "prompt_used": "location KITCHEN, time NIGHT, characters no named characters visible, action Eli drawing, key objects Eli drawing, supernatural elements subtle unseen pressure, emotional tone quiet supernatural unease, lighting soft natural light, camera static, motif state drawn, cinematic dark farmhouse realism",
+              "negative_prompt": "low quality, blurry, deformed, extra limbs, bad anatomy, distorted face, oversaturated",
+              "source": "script",
+              "fallback_reason": "comfyui_disabled"
+            },
+            "shot_intent": {
+              "framing": "wide framing",
+              "camera": "static",
+              "lighting": "soft natural light",
+              "mood": "quiet unease",
+              "motif_instruction": "subtle background presence"
+            },
+            "prompt_pack": {
+              "base_prompt": "location KITCHEN, time NIGHT, characters no named characters visible, action Eli drawing, key objects Eli drawing, supernatural elements subtle unseen pressure, emotional tone quiet supernatural unease, lighting soft natural light, camera static, motif state drawn, cinematic dark farmhouse realism",
+              "style_tags": [
+                "cinematic",
+                "dark",
+                "grain",
+                "natural light"
+              ],
+              "negative_prompt": [
+                "low quality",
+                "blurry",
+                "deformed",
+                "extra limbs",
+                "bad anatomy",
+                "distorted face",
+                "oversaturated"
+              ],
+              "camera_directive": "static",
+              "lighting_directive": "soft natural light",
+              "composition_directive": "empty negative space with restrained blocking",
+              "motif_directive": "subtle background presence",
+              "script_faithfulness": {
+                "score": 0.857,
+                "matched_elements": [
+                  "location",
+                  "time_of_day",
+                  "key_objects",
+                  "supernatural_elements",
+                  "motif_state",
+                  "emotional_intent"
+                ],
+                "missing_elements": [
+                  "characters"
+                ],
+                "risk": "low"
+              },
+              "memory_influence": {
+                "used": false,
+                "patterns": [],
+                "source_references": []
+              }
+            },
+            "prompt_quality": {
+              "score": 0.85,
+              "issues": []
+            },
+            "prompt_consistency": {
+              "aligned": true,
+              "drift_reason": null
+            },
+            "motif_consistency": {
+              "present": true,
+              "correct_form": false
+            }
+          },
+          {
+            "asset_id": "image_scene_001_shot_002",
+            "scene_id": "scene_001",
+            "shot_id": "shot_002",
+            "provider": "local_image",
+            "status": "failed",
+            "file_path": "https://picsum.photos/seed/scene_001_chalk_symbol_early/800/450",
+            "url": "https://picsum.photos/seed/image_scene_001_shot_002/800/450",
+            "preview_label": "scene_001:shot_002",
+            "meta": {
+              "prompt_used": "location KITCHEN, time NIGHT, characters no named characters visible, action Eli drawing, key objects Eli drawing, supernatural elements subtle unseen pressure, emotional tone quiet supernatural unease, lighting soft natural light, camera static, motif state drawn, cinematic dark farmhouse realism",
+              "negative_prompt": "low quality, blurry, deformed, extra limbs, bad anatomy, distorted face, oversaturated",
+              "source": "script",
+              "fallback_reason": "comfyui_disabled"
+            },
+            "shot_intent": {
+              "framing": "wide framing",
+              "camera": "static",
+              "lighting": "soft natural light",
+              "mood": "quiet unease",
+              "motif_instruction": "subtle background presence"
+            },
+            "prompt_pack": {
+              "base_prompt": "location KITCHEN, time NIGHT, characters no named characters visible, action Eli drawing, key objects Eli drawing, supernatural elements subtle unseen pressure, emotional tone quiet supernatural unease, lighting soft natural light, camera static, motif state drawn, cinematic dark farmhouse realism",
+              "style_tags": [
+                "cinematic",
+                "dark",
+                "grain",
+                "natural light"
+              ],
+              "negative_prompt": [
+                "low quality",
+                "blurry",
+                "deformed",
+                "extra limbs",
+                "bad anatomy",
+                "distorted face",
+                "oversaturated"
+              ],
+              "camera_directive": "static",
+              "lighting_directive": "soft natural light",
+              "composition_directive": "empty negative space with restrained blocking",
+              "motif_directive": "subtle background presence",
+              "script_faithfulness": {
+                "score": 0.857,
+                "matched_elements": [
+                  "location",
+                  "time_of_day",
+                  "key_objects",
+                  "supernatural_elements",
+                  "motif_state",
+                  "emotional_intent"
+                ],
+                "missing_elements": [
+                  "characters"
+                ],
+                "risk": "low"
+              },
+              "memory_influence": {
+                "used": false,
+                "patterns": [],
+                "source_references": []
+              }
+            },
+            "prompt_quality": {
+              "score": 0.85,
+              "issues": []
+            },
+            "prompt_consistency": {
+              "aligned": true,
+              "drift_reason": null
+            },
+            "motif_consistency": {
+              "present": true,
+              "correct_form": false
+            }
+          },
+          {
+            "asset_id": "image_scene_002_shot_001",
+            "scene_id": "scene_002",
+            "shot_id": "shot_001",
+            "provider": "local_image",
+            "status": "success",
+            "file_path": "https://picsum.photos/seed/scene_002_chalk_symbol_late/800/450",
+            "url": "https://picsum.photos/seed/scene_002_chalk_symbol_late/800/450",
+            "preview_label": "scene_002:shot_001",
+            "meta": {
+              "prompt_used": "location HALLWAY, time NIGHT, characters no named characters visible, action scratching inside wall, key objects scratching inside wall, supernatural elements scratching inside wall, emotional tone oppressive supernatural dread, lighting harsh directional, camera locked frame, motif state embedded, cinematic dark farmhouse realism",
+              "negative_prompt": "low quality, blurry, deformed, extra limbs, bad anatomy, distorted face, oversaturated",
+              "source": "script",
+              "fallback_reason": "comfyui_disabled"
+            },
+            "shot_intent": {
+              "framing": "close-up or locked frame",
+              "camera": "locked frame",
+              "lighting": "harsh directional",
+              "mood": "oppressive dread",
+              "motif_instruction": "motif near body or face"
+            },
+            "prompt_pack": {
+              "base_prompt": "location HALLWAY, time NIGHT, characters no named characters visible, action scratching inside wall, key objects scratching inside wall, supernatural elements scratching inside wall, emotional tone oppressive supernatural dread, lighting harsh directional, camera locked frame, motif state embedded, cinematic dark farmhouse realism",
+              "style_tags": [
+                "cinematic",
+                "dark",
+                "grain",
+                "natural light"
+              ],
+              "negative_prompt": [
+                "low quality",
+                "blurry",
+                "deformed",
+                "extra limbs",
+                "bad anatomy",
+                "distorted face",
+                "oversaturated"
+              ],
+              "camera_directive": "locked frame",
+              "lighting_directive": "harsh directional",
+              "composition_directive": "oppressive negative space with motif pressure near face",
+              "motif_directive": "motif near body or face",
+              "script_faithfulness": {
+                "score": 0.857,
+                "matched_elements": [
+                  "location",
+                  "time_of_day",
+                  "key_objects",
+                  "supernatural_elements",
+                  "motif_state",
+                  "emotional_intent"
+                ],
+                "missing_elements": [
+                  "characters"
+                ],
+                "risk": "low"
+              },
+              "memory_influence": {
+                "used": false,
+                "patterns": [],
+                "source_references": []
+              }
+            },
+            "prompt_quality": {
+              "score": 0.85,
+              "issues": []
+            },
+            "prompt_consistency": {
+              "aligned": true,
+              "drift_reason": null
+            },
+            "motif_consistency": {
+              "present": true,
+              "correct_form": false
+            }
+          },
+          {
+            "asset_id": "image_scene_002_shot_002",
+            "scene_id": "scene_002",
+            "shot_id": "shot_002",
+            "provider": "local_image",
+            "status": "failed",
+            "file_path": "https://picsum.photos/seed/scene_002_chalk_symbol_late/800/450",
+            "url": "https://picsum.photos/seed/image_scene_002_shot_002/800/450",
+            "preview_label": "scene_002:shot_002",
+            "meta": {
+              "prompt_used": "location HALLWAY, time NIGHT, characters no named characters visible, action scratching inside wall, key objects scratching inside wall, supernatural elements scratching inside wall, emotional tone oppressive supernatural dread, lighting harsh directional, camera locked frame, motif state embedded, cinematic dark farmhouse realism",
+              "negative_prompt": "low quality, blurry, deformed, extra limbs, bad anatomy, distorted face, oversaturated",
+              "source": "script",
+              "fallback_reason": "comfyui_disabled"
+            },
+            "shot_intent": {
+              "framing": "close-up or locked frame",
+              "camera": "locked frame",
+              "lighting": "harsh directional",
+              "mood": "oppressive dread",
+              "motif_instruction": "motif near body or face"
+            },
+            "prompt_pack": {
+              "base_prompt": "location HALLWAY, time NIGHT, characters no named characters visible, action scratching inside wall, key objects scratching inside wall, supernatural elements scratching inside wall, emotional tone oppressive supernatural dread, lighting harsh directional, camera locked frame, motif state embedded, cinematic dark farmhouse realism",
+              "style_tags": [
+                "cinematic",
+                "dark",
+                "grain",
+                "natural light"
+              ],
+              "negative_prompt": [
+                "low quality",
+                "blurry",
+                "deformed",
+                "extra limbs",
+                "bad anatomy",
+                "distorted face",
+                "oversaturated"
+              ],
+              "camera_directive": "locked frame",
+              "lighting_directive": "harsh directional",
+              "composition_directive": "oppressive negative space with motif pressure near face",
+              "motif_directive": "motif near body or face",
+              "script_faithfulness": {
+                "score": 0.857,
+                "matched_elements": [
+                  "location",
+                  "time_of_day",
+                  "key_objects",
+                  "supernatural_elements",
+                  "motif_state",
+                  "emotional_intent"
+                ],
+                "missing_elements": [
+                  "characters"
+                ],
+                "risk": "low"
+              },
+              "memory_influence": {
+                "used": false,
+                "patterns": [],
+                "source_references": []
+              }
+            },
+            "prompt_quality": {
+              "score": 0.85,
+              "issues": []
+            },
+            "prompt_consistency": {
+              "aligned": true,
+              "drift_reason": null
+            },
+            "motif_consistency": {
+              "present": true,
+              "correct_form": false
+            }
+          }
+        ],
+        "render_asset_summary": {
+          "total_assets": 4,
+          "successful_assets": 2,
+          "failed_assets": 2,
+          "providers": [
+            "local_image"
+          ]
+        },
+        "video_render_assets": [],
+        "video_render_summary": {
+          "total_videos": 0,
+          "successful_videos": 0,
+          "failed_videos": 0,
+          "provider": "disabled"
+        },
+        "prompt_warnings": [],
+        "render_quality_warnings": [
+          {
+            "scene_id": "scene_001",
+            "warnings": [
+              "Prompt missing required element: characters"
+            ]
+          },
+          {
+            "scene_id": "scene_002",
+            "warnings": [
+              "Prompt missing required element: characters"
+            ]
+          }
+        ],
+        "scene_variance_profile": [
+          {
+            "scene_id": "scene_001",
+            "shot_count": 1,
+            "render_ids": [
+              "render_001",
+              "render_002"
+            ],
+            "status": "partial",
+            "duration_estimate": 5
+          },
+          {
+            "scene_id": "scene_002",
+            "shot_count": 2,
+            "render_ids": [
+              "render_001",
+              "render_002"
+            ],
+            "status": "failed",
+            "duration_estimate": 2
+          }
+        ],
+        "scene_transitions": [
+          {
+            "scene_id": "scene_001",
+            "transition": "cut",
+            "duration": 5
+          },
+          {
+            "scene_id": "scene_002",
+            "transition": "hold",
+            "duration": 2
+          }
+        ],
+        "sequence_flow": {
+          "flow_score": 0.8,
+          "issues": [
+            "Inconsistent pacing across scene durations",
+            "Render pattern repetition reduces visual progression"
+          ]
+        },
+        "ending_impact": {
+          "ending_zone_scene_ids": [
+            "scene_001",
+            "scene_002"
+          ],
+          "dominant_feeling": "disturbing",
+          "impact_score": 0.25,
+          "emotional_implication": "The ending leaves unresolved dread with visible collapse pressure."
+        },
+        "dread_curve": [
+          {
+            "scene_id": "scene_001",
+            "dread_score": 0.45,
+            "phase": "ending"
+          },
+          {
+            "scene_id": "scene_002",
+            "dread_score": 1.0,
+            "phase": "ending"
+          }
+        ],
+        "motif_state": {
+          "intensity": 1.0,
+          "forms": [
+            "drawn",
+            "appearing",
+            "embedded",
+            "transferred"
+          ],
+          "current_form": "transferred"
+        },
+        "film_structure": {
+          "acts": [
+            {
+              "act": 1,
+              "scene_ids": [],
+              "scene_count": 0
+            },
+            {
+              "act": 2,
+              "scene_ids": [
+                "scene_001"
+              ],
+              "scene_count": 1
+            },
+            {
+              "act": 3,
+              "scene_ids": [
+                "scene_002"
+              ],
+              "scene_count": 1
+            }
+          ],
+          "sequences": [
+            {
+              "sequence_id": "seq_001",
+              "scene_ids": [
+                "scene_001",
+                "scene_002"
+              ],
+              "length": 2
+            }
+          ],
+          "total_scenes": 2
+        },
+        "film_progress": {
+          "completion_percent": 100.0,
+          "ready_to_screen": true
+        },
+        "film_validation": {
+          "issues": [
+            "Too many weak scenes in sequence"
+          ],
+          "strengths": []
+        },
+        "archive_snapshots": [
+          {
+            "snapshot_id": "snap_001",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "scene_count": 2,
+            "completion_percent": 84.0,
+            "dominant_tone": "none",
+            "best_cut": "original",
+            "notes": "Baseline pass captured"
+          },
+          {
+            "snapshot_id": "snap_002",
+            "timestamp": "2026-01-02T00:00:00Z",
+            "scene_count": 2,
+            "completion_percent": 92.0,
+            "dominant_tone": "none",
+            "best_cut": "iteration",
+            "notes": "Continuity iteration checkpoint"
+          },
+          {
+            "snapshot_id": "snap_003",
+            "timestamp": "2026-01-03T00:00:00Z",
+            "scene_count": 2,
+            "completion_percent": 100.0,
+            "dominant_tone": "none",
+            "best_cut": "iteration",
+            "notes": "Latest archive freeze"
+          }
+        ],
+        "best_cut_summary": {
+          "selected_cut": "iteration",
+          "reason": "Iteration passes show stronger aggregate scene health",
+          "confidence": 0.78
+        },
+        "archive_summary": {
+          "total_snapshots": 3,
+          "latest_completion": 100.0,
+          "best_quality_scene": "scene_001"
+        },
+        "co_director_suggestions": [
+          {
+            "id": "co_dir_suggestion_conservative_01",
+            "type": "continuity",
+            "title": "Stabilize continuity before experimentation",
+            "description": "Resolve the highest-friction continuity break and re-run a bounded single revision pass. Scene focus: A scratching sound comes from inside the wall.",
+            "rationale": "Continuity drift and failed shots are increasing revision risk. Motif form: transferred.",
+            "confidence": 0.86
+          },
+          {
+            "id": "co_dir_suggestion_bold_01",
+            "type": "visual",
+            "title": "Introduce a bold visual escalation beat",
+            "description": "Add one intentionally higher-contrast shot to force a stronger emotional turn and reset scene momentum. Use a direct escalation from the scene motif (transferred).",
+            "rationale": "Current flow appears flat or broken; a deliberate visual shift can recover escalation from: A scratching sound comes from inside the wall.",
+            "confidence": 0.72
+          },
+          {
+            "id": "co_dir_suggestion_pacing_01",
+            "type": "pacing",
+            "title": "Re-time the middle beat for momentum",
+            "description": "Shorten one transitional beat and intensify the next shot to produce clearer pacing lift.",
+            "rationale": "Flow score indicates momentum loss between beats.",
+            "confidence": 0.74
+          }
+        ],
+        "scene_continuity_report": {
+          "continuity_score": 1.0,
+          "issues": []
+        },
+        "motif_evolution_report": {
+          "motifs": []
+        },
+        "narrative_progression_score": {
+          "progression_score": 0.6,
+          "status": "plateauing"
+        },
+        "film_memory_snapshot": {
+          "motifs": [],
+          "emotional_arcs": [
+            {
+              "scene_id": "scene_001",
+              "dominant_emotion": "neutral",
+              "intensity": 0.5
+            },
+            {
+              "scene_id": "scene_002",
+              "dominant_emotion": "neutral",
+              "intensity": 0.5
+            }
+          ],
+          "unresolved_tensions": [],
+          "motif_state": {
+            "intensity": 1.0,
+            "forms": [
+              "drawn",
+              "appearing",
+              "embedded",
+              "transferred"
+            ],
+            "current_form": "transferred"
+          }
+        },
+        "multi_shot_execution_contract": {
+          "provider": "mock_only",
+          "max_shots_per_run": 3,
+          "real_providers_enabled": false,
+          "retries_enabled": false,
+          "async_enabled": false,
+          "reason": "Multi-shot execution is mock-only and bounded"
+        },
+        "real_multi_shot_capability": {
+          "supported": true,
+          "max_shots_supported": 3,
+          "mode": "multi_ready",
+          "reason": "Mock provider supports bounded multi-shot planning"
+        },
+        "real_multi_shot_plan": {
+          "planned_shots": 2,
+          "ordered_shots": [
+            "shot_scene_001_001",
+            "shot_scene_002_001"
+          ],
+          "batch_groups": [
+            [
+              "shot_scene_001_001"
+            ],
+            [
+              "shot_scene_002_001"
+            ]
+          ],
+          "mode": "sequential"
+        },
+        "real_multi_shot_intent": {
+          "intent_present": true,
+          "target_shots": 2,
+          "mode": "multi",
+          "reason": "Multi-shot plan prepared"
+        },
+        "real_multi_shot_gate": {
+          "allowed": false,
+          "reason": "Multi-shot real execution disabled"
+        },
+        "real_multi_shot_request_envelope": {
+          "request_valid": false,
+          "blocked": true,
+          "reason": "Multi-shot real execution disabled"
+        },
+        "real_multi_shot_dry_run": {
+          "simulated": true,
+          "shots": [
+            {
+              "shot_id": "shot_scene_001_001",
+              "status": "planned"
+            },
+            {
+              "shot_id": "shot_scene_002_001",
+              "status": "planned"
+            }
+          ]
+        },
+        "real_multi_shot_contract": {
+          "real_multi_shot_enabled": true,
+          "max_shots_per_run": 3,
+          "adaptive_cap": true,
+          "safe_mode": true,
+          "reason": "Real multi-shot execution enabled with adaptive cap"
+        },
+        "real_multi_shot_summary": {
+          "planned": 2,
+          "allowed": false,
+          "mode": "locked",
+          "provider": "mock"
+        },
+        "previs_scene_board": [
+          {
+            "scene_id": "scene_001",
+            "intent": "Mara watches Eli draw.",
+            "linked_refs": [],
+            "shot_count": 1
+          },
+          {
+            "scene_id": "scene_002",
+            "intent": "A scratching sound comes from inside the wall.",
+            "linked_refs": [],
+            "shot_count": 1
+          }
+        ],
+        "previs_beat_shot_map": {
+          "scene_001": [
+            {
+              "beat_index": 0,
+              "shot_id": "shot_scene_001_001"
+            }
+          ],
+          "scene_002": [
+            {
+              "beat_index": 0,
+              "shot_id": "shot_scene_002_001"
+            }
+          ]
+        },
+        "previs_continuity_map": {
+          "scene_001": {
+            "in_refs": [],
+            "out_refs": [],
+            "coverage": "1"
+          },
+          "scene_002": {
+            "in_refs": [],
+            "out_refs": [],
+            "coverage": "1"
+          }
+        },
+        "previs_asset_map": {
+          "scene_001": {
+            "reference_ids": [],
+            "frame_ids": []
+          },
+          "scene_002": {
+            "reference_ids": [],
+            "frame_ids": []
+          }
+        },
+        "previs_contract": {
+          "mode": "read_only",
+          "authority": "none",
+          "execution": false
+        },
+        "shot_intent": {
+          "shot_scene_001_001": "establishing",
+          "shot_scene_002_001": "establishing"
+        },
+        "shot_variety": {
+          "diversity": "none"
+        },
+        "scene_coverage": {
+          "scene_001": "covered",
+          "scene_002": "covered"
+        },
+        "shot_planning_summary": {
+          "covered_scenes": 2,
+          "total_scenes": 2,
+          "variety": "none"
+        },
+        "shot_advisory_note": {
+          "note": "Shot variety is minimal"
+        },
+        "scene_sequence": [
+          {
+            "scene_id": "scene_001",
+            "shots": [
+              "shot_scene_001_001"
+            ]
+          },
+          {
+            "scene_id": "scene_002",
+            "shots": [
+              "shot_scene_002_001"
+            ]
+          }
+        ],
+        "scene_assembly": {
+          "scene_count": 2,
+          "assembled": true,
+          "shots_available": 2
+        },
+        "sequence_status": {
+          "scenes": 2,
+          "shots": 2,
+          "assembled": true
+        },
+        "scene_continuity_check": {
+          "visual_consistency": "none",
+          "shot_variety": "none",
+          "assembled": false,
+          "status": "incomplete"
+        },
+        "scene_playback_status": {
+          "playback_ready": false,
+          "scene_count": 2,
+          "shots_available": 2,
+          "status": "incomplete"
+        },
+        "render_envelope_stub": {
+          "request_id": "render_stub_2",
+          "shots": [
+            {
+              "shot_id": "shot_scene_001_001",
+              "scene_id": "scene_001",
+              "source_refs": []
+            },
+            {
+              "shot_id": "shot_scene_002_001",
+              "scene_id": "scene_002",
+              "source_refs": []
+            }
+          ],
+          "execution": "disabled"
+        },
+        "orchestration_state_stub": {
+          "request_id": "render_stub_2",
+          "status": "idle",
+          "total_shots": 2,
+          "completed_shots": 0,
+          "progress": 0
+        },
+        "render_orchestration_contract": {
+          "orchestration_enabled": false,
+          "execution_enabled": false,
+          "dispatch_mode": "none",
+          "reason": "Render orchestration is disabled"
+        }
+      },
+      "approved_scenes": [],
+      "reviewed_scenes": [],
+      "scene_review_status": {
+        "scene_001": "not_reviewed",
+        "scene_002": "not_reviewed"
+      },
+      "film_cut": {
+        "cut_id": "default",
+        "scene_order": [
+          "scene_001",
+          "scene_002"
+        ],
+        "included_scenes": [
+          "scene_001",
+          "scene_002"
+        ],
+        "excluded_scenes": [],
+        "created_at": "2026-05-06T19:16:14.617537+00:00"
+      },
+      "archive_snapshots": [],
+      "memory_context": {}
+    },
+    "project_dd48d50aab52": {
+      "project_id": "project_dd48d50aab52",
+      "title": "Film",
+      "created_at": "2026-05-06T19:16:14.707471+00:00",
+      "updated_at": "2026-05-06T19:16:14.775638+00:00",
+      "script_text": "",
+      "execution_summary": {},
+      "approved_scenes": [
+        "scene_001"
+      ],
+      "reviewed_scenes": [
+        "scene_001",
+        "scene_002"
+      ],
+      "scene_review_status": {
+        "scene_001": "approved",
+        "scene_002": "needs_work"
+      },
+      "film_cut": {
+        "cut_id": "default",
+        "scene_order": [
+          "scene_001",
+          "scene_002"
+        ],
+        "included_scenes": [
+          "scene_001"
+        ],
+        "excluded_scenes": [
+          "scene_002"
+        ],
+        "created_at": "2026-01-01T00:00:00Z"
+      },
+      "archive_snapshots": [],
+      "memory_context": {}
+    },
+    "project_ea1d81a9bfe2": {
+      "project_id": "project_ea1d81a9bfe2",
+      "title": "Film",
+      "created_at": "2026-05-06T19:16:14.815165+00:00",
+      "updated_at": "2026-05-06T19:16:14.872889+00:00",
+      "script_text": "",
+      "execution_summary": {
+        "scenes": [],
+        "scene_index": {},
+        "character_presence": {},
+        "location_presence": {},
+        "time_of_day_presence": {},
+        "summary": {
+          "scene_count": 0,
+          "character_count": 0,
+          "location_count": 0,
+          "time_of_day_count": 0
+        },
+        "continuity": {
+          "character_continuity": {},
+          "location_continuity": {},
+          "time_of_day_continuity": {}
+        },
+        "relationships": {
+          "character_copresence": {},
+          "character_copresence_summary": {}
+        },
+        "patterns": {
+          "recurring_character_pairs": {},
+          "recurring_locations": {},
+          "recurring_time_of_day": {}
+        },
+        "pattern_observations": {},
+        "top_pattern_observation": null,
+        "memory_pattern_note": {
+          "type": null,
+          "message": ""
+        },
+        "memory_candidates": {
+          "character_pairs": [],
+          "locations": [],
+          "time_of_day": []
+        },
+        "memory_category_presence": {
+          "character_pairs": false,
+          "locations": false,
+          "time_of_day": false
+        },
+        "memory_snapshot_summary": {
+          "candidate_count": 0,
+          "record_count": 0,
+          "aggregate_count": 0,
+          "advisory_status": "unavailable",
+          "influence_mode": "disabled"
+        },
+        "memory_state_rollup": {
+          "status": "unavailable",
+          "candidate_count": 0,
+          "influence_mode": "disabled",
+          "advisory_status": "unavailable"
+        },
+        "memory_consistency": {
+          "is_consistent": false,
+          "has_required_fields": false,
+          "gate_disabled": false,
+          "authority_none": false
+        },
+        "memory_candidate_observations": {},
+        "top_memory_candidate_observation": null,
+        "memory_records": {
+          "memory_records": []
+        },
+        "memory_aggregate": {
+          "memory_aggregate": []
+        },
+        "director_reference_memory": {
+          "datasets": [],
+          "learned_patterns": {},
+          "reusable_rules": []
+        },
+        "memory_influence_gate": {
+          "mode": "disabled",
+          "reason": "Memory influence not enabled"
+        },
+        "memory_output_influence_contract": {
+          "permitted": false,
+          "scope": "none",
+          "reason": "Memory output influence is disabled"
+        },
+        "memory_advisory_projection": {
+          "status": "unavailable",
+          "message": "No memory candidates available"
+        },
+        "co_director_memory_visibility": {
+          "has_memory_candidates": false,
+          "has_memory_records": false,
+          "has_memory_aggregate": false,
+          "influence_mode": "disabled",
+          "advisory_status": "unavailable"
+        },
+        "co_director_memory_advisory": {
+          "status": "informational",
+          "message": "Memory candidates visible for review; influence remains disabled."
+        },
+        "co_director_memory_bridge": {
+          "visibility": {
+            "has_memory_candidates": false,
+            "has_memory_records": false,
+            "has_memory_aggregate": false,
+            "influence_mode": "disabled",
+            "advisory_status": "unavailable"
+          },
+          "advisory": {
+            "status": "informational",
+            "message": "Memory candidates visible for review; influence remains disabled."
+          },
+          "influence_gate": {
+            "mode": "disabled",
+            "reason": "Memory influence not enabled"
+          }
+        },
+        "co_director_memory_contract": {
+          "mode": "advisory_read_only",
+          "authority": "none",
+          "memory_influence": "disabled",
+          "reason": "Co-Director memory access is read-only and non-authoritative"
+        },
+        "co_director_visual_contract": {
+          "mode": "advisory_read_only",
+          "authority": "none",
+          "visual_influence": "disabled",
+          "reason": "Co-Director visual input is advisory only"
+        },
+        "co_director_visual_feed": {
+          "reference_summary": {
+            "reference_count": 0,
+            "linked_scene_count": 0,
+            "type_count": 0
+          },
+          "frame_snapshot": {
+            "frame_metadata": [],
+            "frame_stats": {
+              "frame_count": 0,
+              "artifact_count": 0
+            }
+          },
+          "linkage": {
+            "linked_scenes": 0,
+            "total_scenes": 0
+          },
+          "alignment": {
+            "state": "none",
+            "note": ""
+          },
+          "mode": "read_only"
+        },
+        "co_director_visual_observation": {
+          "note": ""
+        },
+        "co_director_shot_observation": {
+          "note": ""
+        },
+        "co_director_observation_summary": {
+          "notes": []
+        },
+        "co_director_observation_contract": {
+          "mode": "read_only",
+          "authority": "none",
+          "influence": "disabled"
+        },
+        "co_director_memory_authority_boundary": {
+          "authority": "none",
+          "memory_influence": "disabled",
+          "reason": "Read-only visibility only"
+        },
+        "output_influence_guard_v2": {
+          "output_influence": false,
+          "reason": "No system component is permitted to influence output"
+        },
+        "visual_decision_boundary": {
+          "visual_decision_authority": "none",
+          "reason": "Visual decisions are not enabled"
+        },
+        "shot_execution_lock": {
+          "shot_execution_enabled": false,
+          "reason": "Shot execution is disabled"
+        },
+        "boundary_audit": {
+          "memory_safe": true,
+          "visual_safe": true,
+          "shot_safe": true,
+          "render_safe": true,
+          "co_director_safe": true,
+          "overall_safe": true
+        },
+        "studio_safety_state": {
+          "studio_state": "safe_for_control_phase"
+        },
+        "prompt_influence_gate_v1": {
+          "prompt_influence_enabled": true,
+          "scope": "advisory_only",
+          "reason": "Prompt influence enabled in advisory mode"
+        },
+        "visual_prompt_tokens": [],
+        "shot_prompt_tokens": [],
+        "prompt_envelope": {
+          "base_intent": "",
+          "visual_tokens": [],
+          "shot_tokens": []
+        },
+        "prompt_safety_contract": {
+          "prompt_override": false,
+          "structure_locked": true,
+          "token_injection_only": true,
+          "reason": "Prompt structure is protected"
+        },
+        "render_activation_gate_v1": {
+          "render_enabled": false,
+          "mode": "single_shot",
+          "reason": "Render activation not allowed"
+        },
+        "render_request": null,
+        "render_output": null,
+        "output_review": null,
+        "output_evaluation": {
+          "has_output": false,
+          "valid_structure": false,
+          "render_id_present": false,
+          "status": "none"
+        },
+        "retry_gate": {
+          "retry_allowed": false,
+          "reason": "Execution not ready"
+        },
+        "execution_snapshot": {
+          "iteration": 0,
+          "max_iterations": 3,
+          "status": "idle",
+          "render_attempted": false,
+          "retry_allowed": false,
+          "finalized": false
+        },
+        "iteration_record": {
+          "iteration": 0,
+          "status": "idle",
+          "render_id": null,
+          "coverage": "",
+          "alignment": ""
+        },
+        "take_history": {
+          "takes": [
+            {
+              "iteration": 0,
+              "status": "idle",
+              "render_id": null,
+              "coverage": "",
+              "alignment": ""
+            }
+          ]
+        },
+        "take_artifacts": [],
+        "retry_snapshot": {
+          "allowed": false,
+          "iteration": 0,
+          "status": "idle"
+        },
+        "take_comparison": {
+          "best_take": null,
+          "comparison_ready": false
+        },
+        "take_comparison_v2": {
+          "comparable": false,
+          "differences": []
+        },
+        "take_preference_contract": {
+          "auto_select": false,
+          "authority": "manual_only"
+        },
+        "take_advisory_note": {
+          "note": ""
+        },
+        "output_review_matrix": [],
+        "loop_readiness": {
+          "ready": false,
+          "reason": "Retry not allowed"
+        },
+        "next_take_preview": {
+          "next_iteration": 1,
+          "will_retry": false
+        },
+        "loop_constraint": {
+          "max_iterations": 3,
+          "remaining": 3
+        },
+        "loop_advisory": {
+          "note": ""
+        },
+        "loop_contract": {
+          "auto_loop": false,
+          "execution_mode": "manual_only",
+          "reason": "Loop execution is controlled"
+        },
+        "loop_execution_plan": {
+          "execute": false,
+          "next_iteration": 1,
+          "reason": "Retry not allowed"
+        },
+        "simulated_iteration": {
+          "iteration": 0,
+          "status": "idle"
+        },
+        "simulated_output": {
+          "render_id": null,
+          "status": "none"
+        },
+        "loop_result_snapshot": {
+          "iteration": 0,
+          "output_status": "none"
+        },
+        "loop_execution_contract": {
+          "mode": "safe_simulation",
+          "real_execution": false,
+          "reason": "Loop execution is simulated only"
+        },
+        "execution_permission": {
+          "allowed": false,
+          "mode": "blocked",
+          "reason": "Retry not allowed"
+        },
+        "handoff_gate": {
+          "handoff_allowed": true,
+          "mode": "single_shot",
+          "reason": "Mock provider handoff allowed"
+        },
+        "provider_payload_v2": {
+          "provider": "mock",
+          "shot_id": null,
+          "prompt": null
+        },
+        "handoff_envelope": {
+          "request_id": "handoff_mock_none",
+          "provider": "mock",
+          "enabled": true
+        },
+        "handoff_audit": {
+          "requested": true,
+          "allowed": true,
+          "blocked_reason": "",
+          "timestamp": null
+        },
+        "execution_unlock_state": {
+          "execution_enabled": true,
+          "mode": "unlocked",
+          "reason": "Execution enabled for mock provider"
+        },
+        "execution_intent": {
+          "intent_present": true,
+          "provider": "mock",
+          "shot_id": null,
+          "reason": "Execution intent present"
+        },
+        "execution_eligibility": {
+          "eligible": true,
+          "reason": "Execution eligible"
+        },
+        "execution_request_envelope": {
+          "request_valid": true,
+          "provider": "mock",
+          "shot_id": null,
+          "blocked": false,
+          "reason": "Execution request valid"
+        },
+        "execution_trigger": {
+          "should_execute": true,
+          "reason": "Execution trigger allowed"
+        },
+        "real_execution_trigger": {
+          "should_execute": false,
+          "provider": "real_stub",
+          "reason": "Provider is not real_stub"
+        },
+        "execution_control_contract": {
+          "real_execution_enabled": false,
+          "manual_trigger_required": true,
+          "auto_execution": false,
+          "safe_mode": true,
+          "single_shot_only": true,
+          "reason": "Execution requires explicit manual enablement"
+        },
+        "request_schema_validation": {
+          "valid": false,
+          "missing_fields": [
+            "shot_id",
+            "prompt"
+          ],
+          "reason": "Missing required fields"
+        },
+        "provider_validation": {
+          "valid": true,
+          "provider": "mock",
+          "reason": "Provider allowed"
+        },
+        "payload_sanitization": {
+          "sanitized": true,
+          "provider": "mock",
+          "shot_id": null,
+          "prompt_safe": false
+        },
+        "request_validation_summary": {
+          "request_valid": false,
+          "reason": "Request schema invalid"
+        },
+        "request_validation_contract": {
+          "validated_only": true,
+          "execution_allowed": false,
+          "reason": "Validation does not permit execution"
+        },
+        "provider_adapter_identity": {
+          "provider": "mock",
+          "supports_render": true,
+          "network_required": false
+        },
+        "provider_adapter_status": {
+          "provider": "mock",
+          "enabled": true,
+          "can_execute": false,
+          "reason": "Execution not enabled"
+        },
+        "provider_adapter_requirements": {
+          "provider": "mock",
+          "requires_credentials": false,
+          "credential_present": true
+        },
+        "provider_adapter_readiness_gate": {
+          "ready": false,
+          "reason": "Execution disabled by safety boundary"
+        },
+        "provider_adapter_contract": {
+          "adapter_execution_enabled": false,
+          "mode": "inspection_only",
+          "reason": "Provider adapter execution is disabled"
+        },
+        "debug_control_state": {
+          "safe_mode": true
+        },
+        "execution_request": {
+          "enabled": false,
+          "shot_id": null,
+          "prompt": null
+        },
+        "execution_status": {
+          "state": "blocked",
+          "reason": "Execution not enabled"
+        },
+        "execution_result": {
+          "executed": false,
+          "render_id": null,
+          "status": "not_executed"
+        },
+        "execution_contract": {
+          "mode": "single_shot_only",
+          "auto_execution": false,
+          "looping": false,
+          "reason": "Execution is manually controlled"
+        },
+        "execution_log": {
+          "executed": false,
+          "provider": "mock",
+          "provider_type": "mock",
+          "shot_id": null,
+          "timestamp": null
+        },
+        "provider_payload": {
+          "provider": "mock",
+          "shot_id": null,
+          "prompt": null
+        },
+        "execution_result_v2": {
+          "executed": false,
+          "render_id": null,
+          "status": "not_executed"
+        },
+        "output_sync": {
+          "synced": false,
+          "render_id": null
+        },
+        "execution_monitor": {
+          "state": "blocked",
+          "result": "not_executed"
+        },
+        "provider_config_snapshot": {
+          "default_provider": "mock",
+          "enabled_providers": [
+            "mock"
+          ],
+          "quality_priority": "cinematic_quality",
+          "real_providers_enabled": false
+        },
+        "provider_credential_state": {
+          "provider": "mock",
+          "enabled": true,
+          "credential_present": true,
+          "credential_source": "none",
+          "reason": "Mock provider does not require credentials"
+        },
+        "provider_selection_state": {
+          "requested_provider": null,
+          "selected_provider": "mock",
+          "allowed": true,
+          "fallback_used": false,
+          "reason": "Default provider selected"
+        },
+        "selection_boundary_guard": {
+          "selection_applied": true,
+          "execution_triggered": false,
+          "reason": "Provider selection is metadata only"
+        },
+        "provider_readiness_summary": {
+          "provider": "mock",
+          "enabled": true,
+          "credential_present": true,
+          "can_execute": false,
+          "reason": "Execution not enabled"
+        },
+        "provider_capability": {
+          "provider": "mock",
+          "enabled": true,
+          "network_required": false,
+          "supports_render": true,
+          "supports_streaming": false,
+          "supports_sync": true,
+          "supports_multi_shot": false,
+          "requires_credentials": false
+        },
+        "provider_control_contract": {
+          "selection_mode": "manual_only",
+          "auto_execution": false,
+          "execution_on_select": false,
+          "reason": "Provider selection does not trigger execution"
+        },
+        "provider_safety_contract": {
+          "real_provider_execution_enabled": false,
+          "reason": "Real provider execution is disabled by safety boundary"
+        },
+        "provider_registry_snapshot": {
+          "available_providers": [
+            "mock",
+            "real_stub"
+          ],
+          "default_provider": "mock",
+          "real_providers_present": true
+        },
+        "provider_activation_state": {
+          "active_provider": "mock",
+          "real_enabled": false,
+          "real_provider_runtime_flag": false,
+          "reason": "Real providers disabled by default"
+        },
+        "provider_config_validation": {
+          "valid": true,
+          "issues": [],
+          "reason": "Provider config valid"
+        },
+        "credential_validation_summary": {
+          "provider": "mock",
+          "valid": true,
+          "reason": "Credential available"
+        },
+        "provider_enablement_gate": {
+          "enabled": false,
+          "reason": "Real providers disabled by safety policy"
+        },
+        "provider_intent_signal": {
+          "requested": null,
+          "intended": "mock",
+          "allowed": true
+        },
+        "provider_activation_contract": {
+          "real_execution_enabled": false,
+          "manual_enable_required": true,
+          "safe_mode": true,
+          "reason": "Provider activation requires explicit unlock"
+        },
+        "provider_safety_summary": {
+          "safe": true,
+          "execution_allowed": false,
+          "mode": "locked"
+        },
+        "local_render_capability": {
+          "provider": "local_image",
+          "available": true,
+          "network_required": false,
+          "artifact_type": "text_preview"
+        },
+        "local_render_gate": {
+          "allowed": true,
+          "reason": "Local render gate open"
+        },
+        "local_execution_trigger": {
+          "should_execute": true,
+          "reason": "Local execution allowed"
+        },
+        "local_execution_result": {
+          "executed": false,
+          "render_id": null,
+          "status": "not_executed",
+          "provider": "local_image",
+          "error": null,
+          "error_code": null,
+          "meta": {
+            "file_path": null,
+            "url": null
+          }
+        },
+        "local_render_output": {
+          "has_output": false,
+          "render_id": null,
+          "file_path": null,
+          "artifact_type": null,
+          "status": "not_executed"
+        },
+        "local_artifact_log": {
+          "executed": false,
+          "shot_id": null,
+          "file_path": null,
+          "timestamp": null
+        },
+        "local_single_shot_guard": {
+          "single_shot_only": true,
+          "max_outputs": 1,
+          "reason": "Local artifact render is limited to one shot"
+        },
+        "local_render_contract": {
+          "mode": "local_stub",
+          "network": false,
+          "external_provider": false,
+          "safe_mode": true
+        },
+        "visual_references": [],
+        "visual_reference_indexes": {
+          "by_reference_id": {},
+          "by_scene_id": {},
+          "by_type": {}
+        },
+        "visual_reference_summary": {
+          "reference_count": 0,
+          "linked_scene_count": 0,
+          "type_count": 0
+        },
+        "visual_pattern_summary": {
+          "dominant_types": [],
+          "type_counts": {}
+        },
+        "frame_metadata": [],
+        "frame_stats": {
+          "frame_count": 0,
+          "artifact_count": 0
+        },
+        "frame_analysis_snapshot": {
+          "frame_metadata": [],
+          "frame_stats": {
+            "frame_count": 0,
+            "artifact_count": 0
+          }
+        },
+        "scene_visual_links": {},
+        "scene_visual_identity": {},
+        "visual_consistency": {
+          "consistent": false,
+          "variance_level": "none"
+        },
+        "visual_tension": {
+          "tension_scenes": []
+        },
+        "link_completeness": {
+          "linked_scenes": 0,
+          "total_scenes": 0
+        },
+        "alignment_status": {
+          "state": "none",
+          "message": ""
+        },
+        "top_alignment_note": "",
+        "shot_candidates": [],
+        "shot_coverage": {},
+        "shot_plan_bundle": {
+          "shot_candidates": [],
+          "shot_coverage": {},
+          "influence_mode": "disabled"
+        },
+        "shot_queue": [],
+        "dispatch_pointer": {
+          "current_index": 0,
+          "total": 0
+        },
+        "multi_shot_guard": {
+          "auto_dispatch": false,
+          "looping": false,
+          "reason": "Multi-shot execution is disabled"
+        },
+        "shot_execution_ledger": [],
+        "multi_shot_readiness": {
+          "queue_size": 0,
+          "ready_count": 0,
+          "can_run": false
+        },
+        "multi_shot_execution_unlock": {
+          "enabled": false,
+          "provider": "mock",
+          "reason": "Multi-shot execution locked"
+        },
+        "shot_batch_plan": [],
+        "batch_execution_limit": {
+          "max_shots": 3,
+          "planned_shots": 0,
+          "allowed_shots": 0
+        },
+        "multi_shot_execution_trigger": {
+          "should_execute": false,
+          "allowed_shots": 0,
+          "reason": "Multi-shot execution blocked"
+        },
+        "multi_shot_results": [],
+        "multi_shot_execution_ledger": [],
+        "multi_shot_take_artifacts": [],
+        "scene_generation_summary": {
+          "planned_shots": 0,
+          "completed_shots": 0,
+          "provider": "mock",
+          "status": "not_started"
+        },
+        "scene_playback_preview": {
+          "available": false,
+          "shot_count": 0,
+          "render_ids": [],
+          "status": "not_started"
+        },
+        "scene_visual_brief": [],
+        "previs_accuracy": {
+          "score": 0.0,
+          "missing_script_elements": [],
+          "matched_script_elements": []
+        },
+        "render_quality_warnings": [],
+        "project_id": "default_project",
+        "memory_reuse_context": {
+          "project_id": "default_project",
+          "available": false,
+          "context": {},
+          "visual_patterns": [],
+          "pacing_patterns": [],
+          "motif_patterns": [],
+          "tone_patterns": [],
+          "references": []
+        },
+        "scene_coherence_report": {
+          "coherence_score": 0.0,
+          "issues": [
+            "No multi-shot results available"
+          ],
+          "confidence": "low"
+        },
+        "scene_emotional_flow": {
+          "flow_score": 0.0,
+          "pattern": "broken"
+        },
+        "scene_quality_verdict": {
+          "verdict": "failed",
+          "reason": "Low scene coherence"
+        },
+        "director_notes": {
+          "what_works": [
+            "Baseline shot plan is present"
+          ],
+          "what_breaks": [
+            "No major continuity breaks detected"
+          ],
+          "suggested_changes": [
+            "Preserve current rhythm and visual continuity"
+          ]
+        },
+        "scene_intervention_plan": {},
+        "next_iteration_strategy": {},
+        "scene_iterations": [],
+        "agent_disagreements": [],
+        "ignored_agent_decisions": [],
+        "creative_tension_score": {
+          "score": 0.0,
+          "total_conflicts": 0,
+          "high_conflicts": 0
+        },
+        "selected_iteration": "original",
+        "iteration_history": [],
+        "active_cut_summary": {
+          "source": "original",
+          "reason": "",
+          "timestamp": null
+        },
+        "iteration_comparison": {
+          "improvements": [],
+          "regressions": []
+        },
+        "iteration_impact": {
+          "tone_shift": "none",
+          "pacing_shift": "none",
+          "continuity_pressure": "normal",
+          "motif_strength": "stable"
+        },
+        "story_direction": {
+          "current_tone": "none",
+          "current_pacing": "none",
+          "continuity_mode": "normal"
+        },
+        "score_map": {
+          "dominant_instrumentation": [],
+          "recurring_audio_motif": "",
+          "dynamic_arc": "",
+          "silence_usage": ""
+        },
+        "audio_cues": [],
+        "audio_asset_plan": [],
+        "audio_summary": {
+          "total_cues": 0,
+          "planned_assets": 0,
+          "high_tension_scenes": 0,
+          "needs_audio_design": false
+        },
+        "screening_playlist": [],
+        "screening_summary": {
+          "total_scenes": 0,
+          "playable_scenes": 0,
+          "average_quality": 0.0,
+          "dominant_tone": "none"
+        },
+        "production_summary": {
+          "total_scenes": 0,
+          "locked_scenes": 0,
+          "scenes_in_progress": 0,
+          "blocked_scenes": 0
+        },
+        "cut_analysis": {
+          "weak_moments": [],
+          "strong_moments": []
+        },
+        "visual_bible": {
+          "color_palette": [],
+          "lighting_style": "none",
+          "camera_language": "none",
+          "tone_keywords": []
+        },
+        "image_render_assets": [],
+        "render_asset_summary": {
+          "total_assets": 0,
+          "successful_assets": 0,
+          "failed_assets": 0,
+          "providers": []
+        },
+        "video_render_assets": [],
+        "video_render_summary": {
+          "total_videos": 0,
+          "successful_videos": 0,
+          "failed_videos": 0,
+          "provider": "disabled"
+        },
+        "prompt_warnings": [],
+        "scene_transitions": [],
+        "sequence_flow": {
+          "flow_score": 1.0,
+          "issues": []
+        },
+        "ending_impact": {
+          "ending_zone_scene_ids": [],
+          "dominant_feeling": "none",
+          "impact_score": 0.0,
+          "emotional_implication": "No ending impact available."
+        },
+        "dread_curve": [],
+        "scene_variance_profile": [],
+        "motif_state": {
+          "intensity": 0.0,
+          "forms": [
+            "drawn",
+            "appearing",
+            "embedded",
+            "transferred"
+          ],
+          "current_form": "drawn"
+        },
+        "film_structure": {
+          "acts": [],
+          "sequences": [],
+          "total_scenes": 0
+        },
+        "film_progress": {
+          "completion_percent": 0.0,
+          "ready_to_screen": false
+        },
+        "film_validation": {
+          "issues": [],
+          "strengths": []
+        },
+        "archive_snapshots": [],
+        "best_cut_summary": {
+          "selected_cut": "original",
+          "reason": "No scenes available",
+          "confidence": 0.0
+        },
+        "archive_summary": {
+          "total_snapshots": 0,
+          "latest_completion": 0.0,
+          "best_quality_scene": ""
+        },
+        "co_director_suggestions": [],
+        "scene_continuity_report": {},
+        "motif_evolution_report": {},
+        "narrative_progression_score": {},
+        "film_memory_snapshot": {},
+        "multi_shot_execution_contract": {
+          "provider": "mock_only",
+          "max_shots_per_run": 3,
+          "real_providers_enabled": false,
+          "retries_enabled": false,
+          "async_enabled": false,
+          "reason": "Multi-shot execution is mock-only and bounded"
+        },
+        "real_multi_shot_capability": {
+          "supported": true,
+          "max_shots_supported": 3,
+          "mode": "multi_ready",
+          "reason": "Mock provider supports bounded multi-shot planning"
+        },
+        "real_multi_shot_plan": {
+          "planned_shots": 0,
+          "ordered_shots": [],
+          "batch_groups": [],
+          "mode": "sequential"
+        },
+        "real_multi_shot_intent": {
+          "intent_present": false,
+          "target_shots": 0,
+          "mode": "single",
+          "reason": "No target shots"
+        },
+        "real_multi_shot_gate": {
+          "allowed": false,
+          "reason": "Multi-shot real execution disabled"
+        },
+        "real_multi_shot_request_envelope": {
+          "request_valid": false,
+          "blocked": true,
+          "reason": "Multi-shot real execution disabled"
+        },
+        "real_multi_shot_dry_run": {
+          "simulated": true,
+          "shots": []
+        },
+        "real_multi_shot_contract": {
+          "real_multi_shot_enabled": true,
+          "max_shots_per_run": 3,
+          "adaptive_cap": true,
+          "safe_mode": true,
+          "reason": "Real multi-shot execution enabled with adaptive cap"
+        },
+        "real_multi_shot_summary": {
+          "planned": 0,
+          "allowed": false,
+          "mode": "locked",
+          "provider": "mock"
+        },
+        "previs_scene_board": [],
+        "previs_beat_shot_map": {},
+        "previs_continuity_map": {},
+        "previs_asset_map": {},
+        "previs_contract": {
+          "mode": "read_only",
+          "authority": "none",
+          "execution": false
+        },
+        "shot_intent": {},
+        "shot_variety": {
+          "diversity": "none"
+        },
+        "scene_coverage": {},
+        "shot_planning_summary": {
+          "covered_scenes": 0,
+          "total_scenes": 0,
+          "variety": "none"
+        },
+        "shot_advisory_note": {
+          "note": ""
+        },
+        "render_envelope_stub": {
+          "request_id": "render_stub_0",
+          "shots": [],
+          "execution": "disabled"
+        },
+        "orchestration_state_stub": {
+          "request_id": "render_stub_0",
+          "status": "idle",
+          "total_shots": 0,
+          "completed_shots": 0,
+          "progress": 0
+        },
+        "render_orchestration_contract": {
+          "orchestration_enabled": false,
+          "execution_enabled": false,
+          "dispatch_mode": "none",
+          "reason": "Render orchestration is disabled"
+        }
+      },
+      "approved_scenes": [],
+      "reviewed_scenes": [],
+      "scene_review_status": {},
+      "film_cut": {
+        "cut_id": "default",
+        "scene_order": [],
+        "included_scenes": [],
+        "excluded_scenes": [],
+        "created_at": "2026-05-06T19:16:14.815165+00:00"
+      },
+      "archive_snapshots": [],
+      "memory_context": {}
     }
   }
 }
