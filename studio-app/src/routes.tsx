@@ -90,7 +90,7 @@ export const APP_ROUTES: AppRoute[] = [
     breadcrumbs: [{ label: 'Home', to: '/' }, { label: 'Studio', to: '/studio' }, { label: 'Overview' }],
     contextualLinks: [
       { to: '/studio/lobby', label: 'Open Lobby' },
-      { to: '/studio/writers-room', label: "Open Writer\'s Room" },
+      { to: '/studio/writers-room', label: "Open Writer's Room" },
     ],
     icon: <LayoutDashboard size={14} />,
     element: <StudioOverview />,

@@ -20,7 +20,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
     return { hasError: true, error }
   }
 
-  componentDidCatch(_error: Error, _info: { componentStack?: string }) {
+  componentDidCatch() {
     // Error handled in render - no action needed
   }
 

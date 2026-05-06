@@ -5,6 +5,7 @@ import Breadcrumbs from './Breadcrumbs'
 import TopNav from './TopNav'
 import { getRouteByPath, getRouteLabel } from '../routes'
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const AGENTS = {
   director: {
     name: 'Director',

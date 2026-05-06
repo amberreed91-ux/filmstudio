@@ -302,3 +302,290 @@
     at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
     at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
 [ 4350692ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4727450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4727450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4727450ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4727451ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4727454ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4727454ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4727454ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4727463ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4731996ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4731999ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4731999ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4732010ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4732011ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4732011ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4732011ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4732012ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4738946ms] [INFO] [hmr] /src/pages/ProjectWorkspace.tsx failed to apply HMR as it's within a circular import. Reloading page to reset the execution order. To debug and break the circular import, you can run `vite --debug hmr` to log the circular dependency path if a file change triggered it. @ http://127.0.0.1:4173/@vite/client:920
+[ 4738946ms] [ERROR] [vite] ReferenceError: Cannot access 'AGENTS' before initialization
+    at http://127.0.0.1:4173/src/pages/StudioOverview.tsx?t=1778094286773:28:23 @ http://127.0.0.1:4173/@vite/client:509
+[ 4738947ms] [ERROR] [vite] Failed to reload /src/pages/ProjectWorkspace.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 4739112ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:14336
+[ 4739160ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4739160ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4739160ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4739161ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4739164ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4739164ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4739164ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4739165ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4753817ms] [INFO] [hmr] /src/components/StudioShell.tsx failed to apply HMR as it's within a circular import. Reloading page to reset the execution order. To debug and break the circular import, you can run `vite --debug hmr` to log the circular dependency path if a file change triggered it. @ http://127.0.0.1:4173/@vite/client:920
+[ 4753817ms] [ERROR] [vite] ReferenceError: Cannot access 'AGENTS' before initialization
+    at http://127.0.0.1:4173/src/pages/StudioOverview.tsx?t=1778094301707:28:23 @ http://127.0.0.1:4173/@vite/client:509
+[ 4753817ms] [ERROR] [vite] Failed to reload /src/components/StudioShell.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 4754027ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:14336
+[ 4754058ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4754058ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4754058ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4754058ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4754058ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4754058ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4754058ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4754061ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4758206ms] [INFO] [hmr] /src/pages/ProjectWorkspace.tsx failed to apply HMR as it's within a circular import. Reloading page to reset the execution order. To debug and break the circular import, you can run `vite --debug hmr` to log the circular dependency path if a file change triggered it. @ http://127.0.0.1:4173/@vite/client:920
+[ 4758206ms] [ERROR] [vite] ReferenceError: Cannot access 'AGENTS' before initialization
+    at http://127.0.0.1:4173/src/pages/StudioOverview.tsx?t=1778094306073:28:23 @ http://127.0.0.1:4173/@vite/client:509
+[ 4758206ms] [ERROR] [vite] Failed to reload /src/pages/ProjectWorkspace.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 4758319ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:14336
+[ 4758348ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4758351ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4758351ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4758351ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4758351ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4758351ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4758351ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4758353ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4769243ms] [INFO] [hmr] /src/pages/PrevisRoom.tsx failed to apply HMR as it's within a circular import. Reloading page to reset the execution order. To debug and break the circular import, you can run `vite --debug hmr` to log the circular dependency path if a file change triggered it. @ http://127.0.0.1:4173/@vite/client:920
+[ 4769243ms] [ERROR] [vite] ReferenceError: Cannot access 'AGENTS' before initialization
+    at http://127.0.0.1:4173/src/pages/StudioOverview.tsx?t=1778094317069:28:23 @ http://127.0.0.1:4173/@vite/client:509
+[ 4769243ms] [ERROR] [vite] Failed to reload /src/pages/PrevisRoom.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 4769454ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:14336
+[ 4769485ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4769488ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4769488ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4769488ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4769488ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4769488ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4769488ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4769488ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4835028ms] [INFO] [hmr] /src/pages/ProjectWorkspace.tsx failed to apply HMR as it's within a circular import. Reloading page to reset the execution order. To debug and break the circular import, you can run `vite --debug hmr` to log the circular dependency path if a file change triggered it. @ http://127.0.0.1:4173/@vite/client:920
+[ 4835028ms] [ERROR] [vite] ReferenceError: Cannot access 'AGENTS' before initialization
+    at http://127.0.0.1:4173/src/pages/StudioOverview.tsx?t=1778094382838:28:23 @ http://127.0.0.1:4173/@vite/client:509
+[ 4835028ms] [ERROR] [vite] Failed to reload /src/pages/ProjectWorkspace.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 4835242ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:14336
+[ 4835280ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4835280ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4835280ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4835283ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4835283ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4835283ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4835283ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4835283ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4840001ms] [INFO] [hmr] /src/pages/ProjectWorkspace.tsx failed to apply HMR as it's within a circular import. Reloading page to reset the execution order. To debug and break the circular import, you can run `vite --debug hmr` to log the circular dependency path if a file change triggered it. @ http://127.0.0.1:4173/@vite/client:920
+[ 4840001ms] [ERROR] [vite] ReferenceError: Cannot access 'AGENTS' before initialization
+    at http://127.0.0.1:4173/src/pages/StudioOverview.tsx?t=1778094387886:28:23 @ http://127.0.0.1:4173/@vite/client:509
+[ 4840001ms] [ERROR] [vite] Failed to reload /src/pages/ProjectWorkspace.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 4840109ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:14336
+[ 4840138ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4840141ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4840141ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4840141ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4840141ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4840141ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4840142ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4840143ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4846487ms] [INFO] [hmr] /src/pages/ProjectWorkspace.tsx failed to apply HMR as it's within a circular import. Reloading page to reset the execution order. To debug and break the circular import, you can run `vite --debug hmr` to log the circular dependency path if a file change triggered it. @ http://127.0.0.1:4173/@vite/client:920
+[ 4846487ms] [ERROR] [vite] ReferenceError: Cannot access 'AGENTS' before initialization
+    at http://127.0.0.1:4173/src/pages/StudioOverview.tsx?t=1778094394350:28:23 @ http://127.0.0.1:4173/@vite/client:509
+[ 4846487ms] [ERROR] [vite] Failed to reload /src/pages/ProjectWorkspace.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 4846631ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:14336
+[ 4846661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4846663ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4846663ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4846663ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at commitPassiveMountOnFiber (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7617:22)
+    at recursivelyTraversePassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7605:5) @ http://127.0.0.1:4173/@vite/client:509
+[ 4846663ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4846664ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/overview:0
+[ 4846664ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:8012/api/f51/studio/render/providers:0
+[ 4846664ms] [ERROR] Failed to load providers: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:20:26)
+    at getRenderProviders (http://127.0.0.1:4173/src/lib/studioApi.ts?t=1778093800925:365:9)
+    at loadProviders (http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:207:29)
+    at http://127.0.0.1:4173/src/context/StudioContext.tsx?t=1778093893931:318:8
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:12903:13)
+    at runWithFiberInDEV (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:850:66)
+    at commitHookEffectListMount (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6616:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:6651:55)
+    at reconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7700:6)
+    at recursivelyTraverseReconnectPassiveEffects (http://127.0.0.1:4173/node_modules/.vite/deps/react-dom_client.js?v=e8bd51dc:7687:5) @ http://127.0.0.1:4173/@vite/client:509

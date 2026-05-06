@@ -803,7 +803,7 @@ export default function PrevisRoom() {
         },
       }
     })
-  }, [populatedShots, selectedSceneIdSafe, imageAssetBySceneAndShot, videoAssetBySceneAndShot])
+  }, [populatedShots, selectedSceneIdSafe, imageAssetBySceneAndShot, videoAssetBySceneAndShot, resolveAssetImage])
 
   useEffect(() => {
     const bestShot = normalizedShots.find((shot) => shot.status === 'success') || normalizedShots[0]
@@ -1878,7 +1878,7 @@ export default function PrevisRoom() {
               </section>
               <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/6 p-3 shadow-xl">
                 <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Studio Memory Influence</h3>
-                {Boolean(selectedShot?.promptPack?.memory_influence?.used) ? (
+                {selectedShot?.promptPack?.memory_influence?.used ? (
                   <div className="mt-2 space-y-1 text-xs text-zinc-200">
                     <div>used: <span className="text-emerald-300">yes</span></div>
                     <div>patterns: <span className="text-zinc-100">{asArray(selectedShot?.promptPack?.memory_influence?.patterns).map((tag) => asString(tag)).filter(Boolean).join(' | ') || 'none'}</span></div>

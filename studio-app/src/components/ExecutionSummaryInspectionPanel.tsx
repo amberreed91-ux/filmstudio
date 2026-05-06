@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import type { StudioProject } from '../lib/studioApi'
 import { extractExecutionSummaryInspection, resolveRenderSource } from '../lib/executionSummaryInspection'
 
@@ -6,6 +5,7 @@ function displayText(value: string | null): string {
   return value || 'Unavailable'
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function safeImageSrc(filePath: string | null | undefined): string | null {
   if (typeof filePath !== 'string') {
     return null
@@ -48,6 +48,7 @@ function displayValidationState(value: boolean, validLabel: string, invalidLabel
   return value ? validLabel : invalidLabel
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export async function safeReadFile(filePath: string | null): Promise<string | null> {
   if (!filePath) {
     return null
@@ -420,7 +421,7 @@ export default function ExecutionSummaryInspectionPanel({ project }: { project: 
       previewType: getPreviewType(filePath, url),
     }
   })
-  const localArtifactCount = useMemo(() => {
+  const localArtifactCount = (() => {
     const paths = new Set<string>()
     if (localRenderOutput.filePath) {
       paths.add(localRenderOutput.filePath)
@@ -439,7 +440,7 @@ export default function ExecutionSummaryInspectionPanel({ project }: { project: 
       }
     }
     return paths.size
-  }, [localArtifactLog.filePath, localRenderOutput.filePath, shotRowsWithFilePath, takeRowsWithFilePath])
+  })()
   const firstRealScenePreviewPath =
     shotRowsWithFilePath.find((row) => row.previewType === 'real')?.filePath ??
     takeRowsWithFilePath.find((row) => row.previewType === 'real')?.filePath ??

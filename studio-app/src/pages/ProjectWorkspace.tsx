@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, GitBranch, Lock, Save } from 'lucide-react'
@@ -241,7 +242,7 @@ export function extractPrevisStripMessage(project: StudioProject | null): string
   return `Previs · Scenes ${validSceneCount} · Shots ${totalShots} · References ${uniqueRefs.size}`
 }
 
-function buildInspection(project: StudioProject | null) {
+export function buildInspection(project: StudioProject | null) {
   return extractExecutionSummaryInspection(project)
 }
 
@@ -574,7 +575,7 @@ export default function ProjectWorkspace() {
   )
 }
 
-function ProjectWorkspaceBody({
+export function ProjectWorkspaceBody({
   projectId,
   sourceProject,
   variantId,
