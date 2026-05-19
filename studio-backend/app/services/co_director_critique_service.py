@@ -34,6 +34,7 @@ class CoDirectorCritiqueService:
         director_result: Optional[Dict[str, Any]],
         scene_id: Optional[str] = None,
         film_id: Optional[str] = None,
+        vision_awareness: Optional[Dict[str, Any]] = None,
     ) -> CoDirectorCritiqueReport:
         sources_consulted = [CoDirectorCritiqueSource.DIRECTOR_EVALUATOR]
 
@@ -68,6 +69,7 @@ class CoDirectorCritiqueService:
                 director_result=director_result,
                 rejection_reasons=rejection_reasons,
                 scene_id=scene_id,
+                vision_awareness=vision_awareness,
             )
             return self._build_report(
                 critique=critique,
@@ -87,6 +89,7 @@ class CoDirectorCritiqueService:
                 director_result=director_result,
                 low_pillar_signals=low_pillar_signals,
                 scene_id=scene_id,
+                vision_awareness=vision_awareness,
             )
             return self._build_report(
                 critique=critique,
@@ -131,9 +134,13 @@ class CoDirectorCritiqueService:
         director_result: Dict[str, Any],
         rejection_reasons: List[str],
         scene_id: Optional[str],
+        vision_awareness: Optional[Dict[str, Any]] = None,
     ) -> CoDirectorCritique:
         revision_notes = self._as_str_list(director_result.get("revision_notes"))
         grounded_signals = [f"rejection_reason:{reason}" for reason in rejection_reasons]
+        if isinstance(vision_awareness, dict):
+            grounded_signals.append(f"vision_memory_count:{int(vision_awareness.get('scene_memory_count', 0))}")
+            grounded_signals.append(f"vision_continuity_issues:{int(vision_awareness.get('continuity_issue_count', 0))}")
         heuristic_signals = [f"revision_note:{note}" for note in revision_notes]
         affected_elements = self._extract_affected_elements(rejection_reasons, [])
 
@@ -164,9 +171,13 @@ class CoDirectorCritiqueService:
         director_result: Dict[str, Any],
         low_pillar_signals: List[str],
         scene_id: Optional[str],
+        vision_awareness: Optional[Dict[str, Any]] = None,
     ) -> CoDirectorCritique:
         revision_notes = self._as_str_list(director_result.get("revision_notes"))
         grounded_signals = [f"low_pillar:{signal}" for signal in low_pillar_signals]
+        if isinstance(vision_awareness, dict):
+            grounded_signals.append(f"vision_memory_count:{int(vision_awareness.get('scene_memory_count', 0))}")
+            grounded_signals.append(f"vision_continuity_issues:{int(vision_awareness.get('continuity_issue_count', 0))}")
         heuristic_signals = [f"revision_note:{note}" for note in revision_notes]
         affected_elements = self._extract_affected_elements([], low_pillar_signals)
 

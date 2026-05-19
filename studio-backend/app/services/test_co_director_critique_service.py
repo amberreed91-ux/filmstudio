@@ -206,3 +206,27 @@ def test_missing_pillars_but_rejection_reasons_still_produces_rejection_critique
     )
     assert report.critique is not None
     assert report.critique.category == CoDirectorCritiqueCategory.DIRECTOR_INSTANT_REJECTION
+
+
+def test_vision_awareness_is_additive_and_advisory_in_critique():
+    service = CoDirectorCritiqueService()
+    session = _make_session(SessionMode.ADVISORY)
+    report = service.generate_critique(
+        session=session,
+        director_result={
+            "decision": Decision.REVISE,
+            "score": 0.58,
+            "requires_revision": True,
+            "pillars": {"visual_coherence": 0.39},
+        },
+        vision_awareness={
+            "advisory_only": True,
+            "cannot_auto_regenerate": True,
+            "cannot_override_user_intent": True,
+            "scene_memory_count": 4,
+            "continuity_issue_count": 2,
+        },
+    )
+    assert report.critique is not None
+    assert any(signal == "vision_memory_count:4" for signal in report.critique.grounded_signals)
+    assert any(signal == "vision_continuity_issues:2" for signal in report.critique.grounded_signals)

@@ -133,4 +133,33 @@ def test_collaboration_report_assembles_dominant_focus_and_notes():
     )
     assert report.dominant_focus == CoDirectorCritiqueCategory.DIRECTOR_INSTANT_REJECTION.value
     assert len(report.advisory_notes) >= 1
+    assert report.advisory_only is True
+    assert len(report.creative_disagreements) >= 1
     assert CoDirectorCritiqueSource.DIRECTOR_EVALUATOR in report.sources_consulted
+
+
+def test_collaboration_report_includes_vision_awareness_advisory_suggestions():
+    service = CoDirectorCollaborationService()
+    session = _session(SessionMode.COLLABORATIVE)
+    critique_report, proposal_report, comparison_report, intensity_report = _reports(SessionMode.COLLABORATIVE)
+    report = service.build_collaboration_report(
+        session=session,
+        critique_report=critique_report,
+        proposal_report=proposal_report,
+        comparison_report=comparison_report,
+        intensity_report=intensity_report,
+        vision_awareness={
+            "advisory_only": True,
+            "cannot_auto_regenerate": True,
+            "cannot_override_user_intent": True,
+            "visual_consistency_suggestions": ["Keep lighting continuity tight."],
+            "pacing_suggestions": ["Smooth mood transition between cuts."],
+            "composition_observations": ["Recurring wide static compositions."],
+        },
+    )
+    assert report.advisory_only is True
+    assert any("lighting continuity" in item.lower() for item in report.visual_experiments)
+    assert any("mood transition" in item.lower() for item in report.alternate_scene_suggestions)
+    assert any("wide static" in item.lower() for item in report.thematic_proposals)
+    assert report.provenance["vision_awareness"]["cannot_auto_regenerate"] is True
+    assert report.provenance["vision_awareness"]["cannot_override_user_intent"] is True

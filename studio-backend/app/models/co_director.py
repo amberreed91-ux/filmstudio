@@ -19,6 +19,7 @@ class SessionMode(str, Enum):
     PASSIVE = "passive"
     ADVISORY = "advisory"
     COLLABORATIVE = "collaborative"
+    EXPERIMENTAL = "experimental"
 
 
 def _utc_now() -> datetime:
@@ -162,6 +163,10 @@ class CoDirectorProposalCategory(str, Enum):
 
     DIRECTOR_REJECTION_RECOVERY = "director_rejection_recovery"
     DIRECTOR_PILLAR_RECOVERY = "director_pillar_recovery"
+    CREATIVE_DISAGREEMENT = "creative_disagreement"
+    ALTERNATE_SCENE_SUGGESTION = "alternate_scene_suggestion"
+    VISUAL_EXPERIMENTATION = "visual_experimentation"
+    THEMATIC_PROPOSAL = "thematic_proposal"
 
 
 @dataclass
@@ -192,6 +197,7 @@ class CoDirectorProposal:
     created_at: datetime = field(default_factory=_utc_now)
     session_id: Optional[str] = None
     mode: SessionMode = SessionMode.PASSIVE
+    advisory_only: bool = True
 
 
 @dataclass
@@ -316,6 +322,11 @@ class CoDirectorCollaborationReport:
     intensity_profile: Optional[CoDirectorIntensityProfile] = None
     dominant_focus: Optional[str] = None
     advisory_notes: List[str] = field(default_factory=list)
+    creative_disagreements: List[str] = field(default_factory=list)
+    alternate_scene_suggestions: List[str] = field(default_factory=list)
+    visual_experiments: List[str] = field(default_factory=list)
+    thematic_proposals: List[str] = field(default_factory=list)
+    advisory_only: bool = True
     sources_consulted: List[CoDirectorCritiqueSource] = field(default_factory=list)
     created_at: datetime = field(default_factory=_utc_now)
     provenance: Dict[str, Any] = field(default_factory=dict)

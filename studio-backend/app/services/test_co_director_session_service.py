@@ -54,6 +54,12 @@ class TestCoDirectorSessionService:
         )
         
         assert session.current_mode == SessionMode.ADVISORY
+
+    def test_experimental_mode_on_creation(self):
+        project_id = uuid4()
+        film_id = uuid4()
+        session = self.service.create_session(project_id, film_id, mode=SessionMode.EXPERIMENTAL)
+        assert session.current_mode == SessionMode.EXPERIMENTAL
     
     def test_active_scene_update_through_service(self):
         """Test setting active scene through service."""

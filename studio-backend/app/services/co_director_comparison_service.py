@@ -34,6 +34,7 @@ class CoDirectorComparisonService:
         proposal_report: Optional[CoDirectorProposalReport],
         scene_id: Optional[str] = None,
         film_id: Optional[str] = None,
+        vision_awareness: Optional[Dict[str, Any]] = None,
     ) -> CoDirectorComparisonReport:
         sources_consulted = [CoDirectorCritiqueSource.DIRECTOR_EVALUATOR]
 
@@ -65,6 +66,7 @@ class CoDirectorComparisonService:
                 critique=critique,
                 proposal=proposal,
                 scene_id=scene_id,
+                vision_awareness=vision_awareness,
             )
             return self._build_report(
                 comparison=comparison,
@@ -83,6 +85,7 @@ class CoDirectorComparisonService:
                 critique=critique,
                 proposal=proposal,
                 scene_id=scene_id,
+                vision_awareness=vision_awareness,
             )
             return self._build_report(
                 comparison=comparison,
@@ -120,8 +123,12 @@ class CoDirectorComparisonService:
         critique: Any,
         proposal: Any,
         scene_id: Optional[str],
+        vision_awareness: Optional[Dict[str, Any]] = None,
     ) -> CoDirectorComparison:
         grounded = list(critique.grounded_signals) + [f"proposal_category:{proposal.category.value}"]
+        if isinstance(vision_awareness, dict):
+            grounded.append(f"vision_memory_count:{int(vision_awareness.get('scene_memory_count', 0))}")
+            grounded.append(f"vision_continuity_issues:{int(vision_awareness.get('continuity_issue_count', 0))}")
         heuristic = list(proposal.heuristic_signals)
         score = self._coerce_float((director_result or {}).get("score"))
         if score is not None:
@@ -160,8 +167,12 @@ class CoDirectorComparisonService:
         critique: Any,
         proposal: Any,
         scene_id: Optional[str],
+        vision_awareness: Optional[Dict[str, Any]] = None,
     ) -> CoDirectorComparison:
         grounded = list(critique.grounded_signals) + [f"proposal_category:{proposal.category.value}"]
+        if isinstance(vision_awareness, dict):
+            grounded.append(f"vision_memory_count:{int(vision_awareness.get('scene_memory_count', 0))}")
+            grounded.append(f"vision_continuity_issues:{int(vision_awareness.get('continuity_issue_count', 0))}")
         heuristic = list(proposal.heuristic_signals)
         pillars = director_result.get("pillars")
         if isinstance(pillars, dict):

@@ -94,6 +94,57 @@ class CoDirectorProposalService:
                 },
             )
 
+        if session.current_mode == SessionMode.COLLABORATIVE:
+            proposal = self._build_alternate_scene_suggestion(
+                session=session,
+                critique_report=critique_report,
+                scene_id=scene_id,
+            )
+            return self._build_report(
+                proposal=proposal,
+                session=session,
+                sources_consulted=sources_consulted,
+                provenance={
+                    "source": "co_director_critique_report",
+                    "reason": "collaborative_alternate_scene_suggestion",
+                    "film_id": str(film_id) if film_id else None,
+                },
+            )
+
+        if session.current_mode == SessionMode.EXPERIMENTAL:
+            proposal = self._build_visual_experimentation_proposal(
+                session=session,
+                critique_report=critique_report,
+                scene_id=scene_id,
+            )
+            return self._build_report(
+                proposal=proposal,
+                session=session,
+                sources_consulted=sources_consulted,
+                provenance={
+                    "source": "co_director_critique_report",
+                    "reason": "experimental_visual_experimentation",
+                    "film_id": str(film_id) if film_id else None,
+                },
+            )
+
+        if session.current_mode == SessionMode.ADVISORY:
+            proposal = self._build_thematic_proposal(
+                session=session,
+                critique_report=critique_report,
+                scene_id=scene_id,
+            )
+            return self._build_report(
+                proposal=proposal,
+                session=session,
+                sources_consulted=sources_consulted,
+                provenance={
+                    "source": "co_director_critique_report",
+                    "reason": "advisory_thematic_proposal",
+                    "film_id": str(film_id) if film_id else None,
+                },
+            )
+
         return self._build_report(
             proposal=None,
             session=session,
@@ -195,6 +246,99 @@ class CoDirectorProposalService:
         if session.active_scene_id:
             return [str(session.active_scene_id)]
         return []
+
+    def _build_alternate_scene_suggestion(
+        self,
+        session: CoDirectorSession,
+        critique_report: CoDirectorCritiqueReport,
+        scene_id: Optional[str],
+    ) -> CoDirectorProposal:
+        critique = critique_report.critique
+        assert critique is not None
+        return CoDirectorProposal(
+            proposal_id=f"proposal_{uuid4().hex}",
+            category=CoDirectorProposalCategory.ALTERNATE_SCENE_SUGGESTION,
+            priority=critique.priority,
+            title="Offer an alternate scene path for creative comparison",
+            description="Propose one alternate scene direction to compare against the current choice.",
+            recommendation="Advisory only: stage one alternate scene variation and compare emotional clarity before deciding.",
+            critique_id=critique.critique_id,
+            grounded_signals=list(critique.grounded_signals),
+            heuristic_signals=list(critique.heuristic_signals),
+            source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
+            overall_confidence=0.74,
+            grounded_confidence=0.81,
+            heuristic_confidence=0.34 if critique.heuristic_signals else 0.0,
+            provenance=["critique_report.critique", "critique.recommendation"],
+            canonical_sources={"critique_report.critique": False},
+            affected_scene_ids=self._resolve_affected_scene_ids(session, critique.affected_scene_ids, scene_id),
+            affected_elements=list(critique.affected_elements),
+            session_id=str(session.session_id),
+            mode=session.current_mode,
+            advisory_only=True,
+        )
+
+    def _build_visual_experimentation_proposal(
+        self,
+        session: CoDirectorSession,
+        critique_report: CoDirectorCritiqueReport,
+        scene_id: Optional[str],
+    ) -> CoDirectorProposal:
+        critique = critique_report.critique
+        assert critique is not None
+        return CoDirectorProposal(
+            proposal_id=f"proposal_{uuid4().hex}",
+            category=CoDirectorProposalCategory.VISUAL_EXPERIMENTATION,
+            priority=critique.priority,
+            title="Run a bounded visual experiment pass",
+            description="Explore one stylized visual treatment while preserving canonical scene intent.",
+            recommendation="Advisory only: test one experimental lighting/framing variation and keep current cut as authority.",
+            critique_id=critique.critique_id,
+            grounded_signals=list(critique.grounded_signals),
+            heuristic_signals=list(critique.heuristic_signals),
+            source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
+            overall_confidence=0.71,
+            grounded_confidence=0.77,
+            heuristic_confidence=0.39 if critique.heuristic_signals else 0.0,
+            provenance=["critique_report.critique", "critique.affected_elements"],
+            canonical_sources={"critique_report.critique": False},
+            affected_scene_ids=self._resolve_affected_scene_ids(session, critique.affected_scene_ids, scene_id),
+            affected_elements=list(critique.affected_elements),
+            session_id=str(session.session_id),
+            mode=session.current_mode,
+            advisory_only=True,
+        )
+
+    def _build_thematic_proposal(
+        self,
+        session: CoDirectorSession,
+        critique_report: CoDirectorCritiqueReport,
+        scene_id: Optional[str],
+    ) -> CoDirectorProposal:
+        critique = critique_report.critique
+        assert critique is not None
+        return CoDirectorProposal(
+            proposal_id=f"proposal_{uuid4().hex}",
+            category=CoDirectorProposalCategory.THEMATIC_PROPOSAL,
+            priority=critique.priority,
+            title="Propose a thematic refinement for narrative coherence",
+            description="Suggest a thematic through-line adjustment to improve scene meaning continuity.",
+            recommendation="Advisory only: reinforce one theme callback in staging or dialogue, then re-evaluate.",
+            critique_id=critique.critique_id,
+            grounded_signals=list(critique.grounded_signals),
+            heuristic_signals=list(critique.heuristic_signals),
+            source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
+            overall_confidence=0.72,
+            grounded_confidence=0.8,
+            heuristic_confidence=0.31 if critique.heuristic_signals else 0.0,
+            provenance=["critique_report.critique", "critique.category"],
+            canonical_sources={"critique_report.critique": False},
+            affected_scene_ids=self._resolve_affected_scene_ids(session, critique.affected_scene_ids, scene_id),
+            affected_elements=list(critique.affected_elements),
+            session_id=str(session.session_id),
+            mode=session.current_mode,
+            advisory_only=True,
+        )
 
 
 # Singleton instance

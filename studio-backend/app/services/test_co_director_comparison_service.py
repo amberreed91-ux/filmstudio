@@ -174,3 +174,21 @@ def test_comparison_does_not_label_derived_artifacts_as_canonical_truth():
     assert comparison_report.comparison is not None
     assert comparison_report.comparison.canonical_sources.get("critique_report.critique", False) is False
     assert comparison_report.comparison.canonical_sources.get("proposal_report.proposal", False) is False
+
+
+def test_vision_awareness_adds_grounded_signals_without_changing_alignment_category():
+    service = CoDirectorComparisonService()
+    session = _session(SessionMode.ADVISORY)
+    critique = _critique(CoDirectorCritiqueCategory.DIRECTOR_INSTANT_REJECTION)
+    proposal = _proposal(CoDirectorProposalCategory.DIRECTOR_REJECTION_RECOVERY, critique.critique_id)
+    comparison_report = service.generate_comparison(
+        session=session,
+        director_result={"score": 0.42},
+        critique_report=CoDirectorCritiqueReport(critique=critique, mode=SessionMode.ADVISORY),
+        proposal_report=CoDirectorProposalReport(proposal=proposal, mode=SessionMode.ADVISORY),
+        vision_awareness={"scene_memory_count": 3, "continuity_issue_count": 1, "advisory_only": True},
+    )
+    assert comparison_report.comparison is not None
+    assert comparison_report.comparison.category == CoDirectorComparisonCategory.DIRECTOR_REJECTION_RECOVERY_ALIGNMENT
+    assert "vision_memory_count:3" in comparison_report.comparison.grounded_signals
+    assert "vision_continuity_issues:1" in comparison_report.comparison.grounded_signals

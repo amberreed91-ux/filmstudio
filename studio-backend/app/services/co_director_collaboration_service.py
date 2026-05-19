@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from app.models.co_director import (
+    CoDirectorProposalCategory,
     CoDirectorCollaborationReport,
     CoDirectorComparisonReport,
     CoDirectorCritiqueReport,
@@ -31,6 +32,7 @@ class CoDirectorCollaborationService:
         comparison_report: Optional[CoDirectorComparisonReport],
         intensity_report: Optional[CoDirectorIntensityReport],
         film_id: Optional[str] = None,
+        vision_awareness: Optional[Dict[str, object]] = None,
     ) -> CoDirectorCollaborationReport:
         sources_consulted = self._collect_sources(
             critique_report=critique_report,
@@ -69,7 +71,37 @@ class CoDirectorCollaborationService:
             advisory_notes.append(comparison.recommendation)
         if intensity_profile:
             advisory_notes.append(intensity_profile.rationale)
+        if isinstance(vision_awareness, dict):
+            advisory_notes.extend((vision_awareness.get("visual_consistency_suggestions") or [])[:1])
+            advisory_notes.extend((vision_awareness.get("pacing_suggestions") or [])[:1])
+            advisory_notes.extend((vision_awareness.get("composition_observations") or [])[:1])
         advisory_notes = advisory_notes[:3]
+        creative_disagreements: List[str] = []
+        alternate_scene_suggestions: List[str] = []
+        visual_experiments: List[str] = []
+        thematic_proposals: List[str] = []
+
+        if critique:
+            creative_disagreements.append(
+                f"{critique.title}: {critique.recommendation} (advisory only)"
+            )
+        if proposal:
+            if proposal.category == CoDirectorProposalCategory.ALTERNATE_SCENE_SUGGESTION:
+                alternate_scene_suggestions.append(proposal.recommendation)
+            elif proposal.category == CoDirectorProposalCategory.VISUAL_EXPERIMENTATION:
+                visual_experiments.append(proposal.recommendation)
+            elif proposal.category == CoDirectorProposalCategory.THEMATIC_PROPOSAL:
+                thematic_proposals.append(proposal.recommendation)
+            elif proposal.category in {
+                CoDirectorProposalCategory.DIRECTOR_REJECTION_RECOVERY,
+                CoDirectorProposalCategory.DIRECTOR_PILLAR_RECOVERY,
+                CoDirectorProposalCategory.CREATIVE_DISAGREEMENT,
+            }:
+                creative_disagreements.append(proposal.recommendation)
+        if isinstance(vision_awareness, dict):
+            visual_experiments.extend((vision_awareness.get("visual_consistency_suggestions") or [])[:2])
+            alternate_scene_suggestions.extend((vision_awareness.get("pacing_suggestions") or [])[:2])
+            thematic_proposals.extend((vision_awareness.get("composition_observations") or [])[:2])
 
         return CoDirectorCollaborationReport(
             session_id=str(session.session_id),
@@ -80,8 +112,21 @@ class CoDirectorCollaborationService:
             intensity_profile=intensity_profile,
             dominant_focus=dominant_focus,
             advisory_notes=advisory_notes,
+            creative_disagreements=creative_disagreements[:2],
+            alternate_scene_suggestions=alternate_scene_suggestions[:2],
+            visual_experiments=visual_experiments[:2],
+            thematic_proposals=thematic_proposals[:2],
+            advisory_only=True,
             sources_consulted=sources_consulted,
-            provenance={"reason": "bounded_orchestration", "film_id": str(film_id) if film_id else None},
+            provenance={
+                "reason": "bounded_orchestration",
+                "film_id": str(film_id) if film_id else None,
+                "vision_awareness": {
+                    "advisory_only": bool((vision_awareness or {}).get("advisory_only", True)),
+                    "cannot_auto_regenerate": bool((vision_awareness or {}).get("cannot_auto_regenerate", True)),
+                    "cannot_override_user_intent": bool((vision_awareness or {}).get("cannot_override_user_intent", True)),
+                } if isinstance(vision_awareness, dict) else None,
+            },
         )
 
     def _collect_sources(

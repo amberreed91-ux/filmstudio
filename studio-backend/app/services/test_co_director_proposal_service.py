@@ -152,8 +152,9 @@ def test_unsupported_critique_category_returns_no_proposal():
 
     proposal_report = service.generate_proposal(session=session, critique_report=report)
 
-    assert proposal_report.proposal is None
-    assert proposal_report.provenance.get("reason") == "unsupported_critique_category_for_phase_10_5"
+    assert proposal_report.proposal is not None
+    assert proposal_report.proposal.category == CoDirectorProposalCategory.THEMATIC_PROPOSAL
+    assert proposal_report.provenance.get("reason") == "advisory_thematic_proposal"
 
 
 def test_proposal_does_not_label_derived_artifact_as_canonical_truth():
@@ -172,3 +173,39 @@ def test_proposal_does_not_label_derived_artifact_as_canonical_truth():
     assert proposal_report.proposal is not None
     # Derived artifacts must not self-label as canonical truth.
     assert proposal_report.proposal.canonical_sources.get("critique_report.critique", False) is False
+
+
+def test_collaborative_mode_generates_alternate_scene_suggestion_for_non_core_critique():
+    service = CoDirectorProposalService()
+    session = _make_session(SessionMode.COLLABORATIVE)
+    critique = _make_critique(CoDirectorCritiqueCategory.CONTINUITY_ALERT)
+    report = CoDirectorCritiqueReport(
+        critique=critique,
+        session_id=str(session.session_id),
+        mode=SessionMode.COLLABORATIVE,
+        sources_consulted=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
+    )
+
+    proposal_report = service.generate_proposal(session=session, critique_report=report)
+
+    assert proposal_report.proposal is not None
+    assert proposal_report.proposal.category == CoDirectorProposalCategory.ALTERNATE_SCENE_SUGGESTION
+    assert proposal_report.proposal.advisory_only is True
+
+
+def test_experimental_mode_generates_visual_experimentation_proposal():
+    service = CoDirectorProposalService()
+    session = _make_session(SessionMode.EXPERIMENTAL)
+    critique = _make_critique(CoDirectorCritiqueCategory.CONTINUITY_ALERT)
+    report = CoDirectorCritiqueReport(
+        critique=critique,
+        session_id=str(session.session_id),
+        mode=SessionMode.EXPERIMENTAL,
+        sources_consulted=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
+    )
+
+    proposal_report = service.generate_proposal(session=session, critique_report=report)
+
+    assert proposal_report.proposal is not None
+    assert proposal_report.proposal.category == CoDirectorProposalCategory.VISUAL_EXPERIMENTATION
+    assert proposal_report.proposal.advisory_only is True
