@@ -277,6 +277,18 @@ class RenderJobOutput(BaseModel):
     metadata: dict = {}
 
 
+class StudioDecisionGate(BaseModel):
+    project_id: str
+    gate_status: Literal["blocked", "needs_review", "ready", "insufficient_data"] = "insufficient_data"
+    current_stage: Literal["intake", "study", "previs", "production", "screening", "package", "archived"] = "intake"
+    blockers: List[str] = []
+    warnings: List[str] = []
+    ready_signals: List[str] = []
+    recommended_next_action: str = ""
+    evidence: Dict[str, Any] = {}
+    created_at: str = ""
+    metadata: dict = {}
+
 class RenderJobModel(BaseModel):
     id: str
     project_id: str
@@ -381,5 +393,6 @@ __all__ = [
     'MemoryEntry',
     'MemoryEntryVersion',
     'MemoryUpdate',
+    'StudioDecisionGate',
     'ContradictionCheck',
 ]

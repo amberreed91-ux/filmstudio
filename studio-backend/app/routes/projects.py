@@ -164,3 +164,28 @@ def generate_motion(project_id: str, payload: MotionPreviewPayload):
         "project": updated,
         "motion_assets": video_assets,
     }
+
+
+@router.get("/projects/{project_id}/decision-gate")
+def get_project_decision_gate(project_id: str):
+    """Read-only advisory studio decision gate for project progression."""
+    current = project_store.get_project(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.services.studio_decision_gate_service import studio_decision_gate_service
+
+    gate = studio_decision_gate_service.evaluate_project_gate(project_id)
+    return {
+        "project_id": gate.project_id,
+        "gate_status": gate.gate_status,
+        "current_stage": gate.current_stage,
+        "blockers": gate.blockers,
+        "warnings": gate.warnings,
+        "ready_signals": gate.ready_signals,
+        "recommended_next_action": gate.recommended_next_action,
+        "evidence": gate.evidence,
+        "advisory_only": True,
+        "auto_approval_triggered": False,
+        "auto_regeneration_triggered": False,
+    }
