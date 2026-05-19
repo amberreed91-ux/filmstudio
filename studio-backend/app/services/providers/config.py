@@ -49,9 +49,18 @@ DEFAULT_PROVIDER_CONFIG: Dict[str, Any] = {
         "/Users/amberreed/ComfyUI/workflows/animate_diff_basic.json",
     ).strip(),
     "video_provider_enabled": _env_bool("VIDEO_PROVIDER_ENABLED", "false"),
-    "video_provider_name": os.getenv("VIDEO_PROVIDER_NAME", "").strip(),
-    "video_provider_api_key": os.getenv("VIDEO_PROVIDER_API_KEY", "").strip(),
-    "video_provider_base_url": os.getenv("VIDEO_PROVIDER_BASE_URL", "").strip(),
+    "video_provider_name": os.getenv("VIDEO_PROVIDER_NAME", "runway").strip(),
+    "video_provider_api_key": (
+        os.getenv("RUNWAYML_API_SECRET", "").strip()
+        or os.getenv("RUNWAY_API_KEY", "").strip()
+        or os.getenv("VIDEO_PROVIDER_API_KEY", "").strip()
+    ),
+    "video_provider_base_url": (
+        os.getenv("RUNWAY_API_BASE_URL", "").strip()
+        or os.getenv("VIDEO_PROVIDER_BASE_URL", "").strip()
+        or "https://api.dev.runwayml.com"
+    ),
+    "runway_timeout_seconds": _env_int("RUNWAY_TIMEOUT_SECONDS", 60),
 }
 
 
@@ -75,9 +84,18 @@ def get_provider_config() -> Dict[str, Any]:
         "/Users/amberreed/ComfyUI/workflows/animate_diff_basic.json",
     ).strip()
     config["video_provider_enabled"] = _env_bool("VIDEO_PROVIDER_ENABLED", "false")
-    config["video_provider_name"] = os.getenv("VIDEO_PROVIDER_NAME", "").strip()
-    config["video_provider_api_key"] = os.getenv("VIDEO_PROVIDER_API_KEY", "").strip()
-    config["video_provider_base_url"] = os.getenv("VIDEO_PROVIDER_BASE_URL", "").strip()
+    config["video_provider_name"] = os.getenv("VIDEO_PROVIDER_NAME", "runway").strip()
+    config["video_provider_api_key"] = (
+        os.getenv("RUNWAYML_API_SECRET", "").strip()
+        or os.getenv("RUNWAY_API_KEY", "").strip()
+        or os.getenv("VIDEO_PROVIDER_API_KEY", "").strip()
+    )
+    config["video_provider_base_url"] = (
+        os.getenv("RUNWAY_API_BASE_URL", "").strip()
+        or os.getenv("VIDEO_PROVIDER_BASE_URL", "").strip()
+        or "https://api.dev.runwayml.com"
+    )
+    config["runway_timeout_seconds"] = _env_int("RUNWAY_TIMEOUT_SECONDS", 60)
     return config
 
 

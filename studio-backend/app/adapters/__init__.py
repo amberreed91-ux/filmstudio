@@ -3,8 +3,25 @@ from datetime import datetime
 from typing import Optional
 import asyncio
 import aiohttp
+import logging
+import os
+import ssl
+from pathlib import Path
 from app.models import RenderJobModel, RenderJobInput, RenderJobOutput, RenderAsset, ProviderConfig, ProviderStatus
+import certifi
 
+logger = logging.getLogger("studio-render")
+
+
+class RunwayAPIError(Exception):
+    """Runway HTTP error with response context for diagnostics and classification."""
+
+    def __init__(self, status_code: int, endpoint: str, response_headers: dict, response_body: str):
+        super().__init__(f"Runway API error {status_code} on {endpoint}")
+        self.status_code = status_code
+        self.endpoint = endpoint
+        self.response_headers = response_headers
+        self.response_body = response_body
 
 class RenderProviderAdapter(ABC):
     """Abstract base class for render provider adapters"""
@@ -90,6 +107,37 @@ class RenderProviderAdapter(ABC):
             thumbnail_url=provider_response.get("thumbnail_url", ""),
             metadata=provider_response.get("metadata", {})
         )
+
+
+def normalize_video_provider_response(
+    provider_response: dict,
+    *,
+    provider: str,
+    task: str = "video_generation",
+) -> dict:
+    """Normalize provider video responses to a stable contract."""
+    response = provider_response if isinstance(provider_response, dict) else {}
+    status_raw = str(response.get("status", "")).strip().lower()
+    status = status_raw if status_raw in {"pending", "processing", "rendering", "complete", "completed", "failed", "error"} else "failed"
+
+    video_url = response.get("video_url") or response.get("asset_url")
+    preview_url = response.get("preview_url") or response.get("thumbnail") or response.get("thumbnail_url")
+    message = response.get("message")
+    if message is None and status in {"failed", "error"}:
+        message = response.get("error") or "Provider returned failure"
+    if message is None and status == "failed":
+        message = "Malformed provider response"
+
+    metadata = response.get("metadata") if isinstance(response.get("metadata"), dict) else {}
+    return {
+        "provider": provider,
+        "task": task,
+        "status": status,
+        "message": str(message) if message is not None else "",
+        "video_url": video_url if isinstance(video_url, str) and video_url else None,
+        "preview_url": preview_url if isinstance(preview_url, str) and preview_url else None,
+        "metadata": metadata,
+    }
 
 
 class SimulatedProviderAdapter(RenderProviderAdapter):
@@ -410,10 +458,618 @@ class GenericVideoProviderAdapter(RenderProviderAdapter):
             )
 
 
+class RunwayAdapter(RenderProviderAdapter):
+    """Runway adapter using the generic provider contract with hardened error paths."""
+    RUNWAY_API_VERSION = "2024-11-06"
+
+    def _runway_headers(self) -> dict:
+        return {"X-Runway-Version": self.RUNWAY_API_VERSION}
+
+    @staticmethod
+    def _app_env() -> str:
+        return str(os.getenv("APP_ENV", "production")).strip().lower()
+
+    @classmethod
+    def _is_local_or_test_env(cls) -> bool:
+        return cls._app_env() in {"local", "test", "dev", "development"}
+
+    @staticmethod
+    def _job_mock_success_requested(job: RenderJobModel) -> bool:
+        params = getattr(job.input_payload, "parameters", None)
+        if not isinstance(params, dict):
+            return False
+        return str(params.get("use_mock_success") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+    @staticmethod
+    def _is_truthy(value: str) -> bool:
+        return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _runway_test_mode(self) -> str:
+        return str(os.getenv("RENDER_PROVIDER_TEST_MODE", "")).strip().lower()
+
+    @staticmethod
+    def _local_mock_media_url() -> str:
+        url = str(os.getenv("RUNWAY_MOCK_VIDEO_URL", "/outputs/mock-video/sample.mp4")).strip()
+        return url or "/outputs/mock-video/sample.mp4"
+
+    def _ssl_error_type(self, exc: Exception) -> str:
+        text = str(exc).lower()
+        if isinstance(exc, ssl.SSLCertVerificationError):
+            return "ssl_verification_error"
+        if "certificate verify failed" in text or "sslcertverificationerror" in text:
+            return "ssl_verification_error"
+        return "request_error"
+
+    def _resolve_ssl_option(self):
+        allow_insecure = self._is_truthy(os.getenv("RUNWAY_ALLOW_INSECURE_SSL", "false"))
+        if allow_insecure:
+            if not self._is_local_or_test_env():
+                raise ValueError("RUNWAY_ALLOW_INSECURE_SSL is only allowed when APP_ENV is local or test")
+            logger.warning("RUNWAY_ALLOW_INSECURE_SSL enabled in %s environment. SSL verification is disabled.", self._app_env())
+            return False
+
+        ca_bundle = str(os.getenv("RUNWAY_CA_BUNDLE", "")).strip() or str(os.getenv("REQUESTS_CA_BUNDLE", "")).strip()
+        if ca_bundle:
+            if not Path(ca_bundle).exists():
+                raise ValueError(f"Runway CA bundle not found: {ca_bundle}")
+            return ssl.create_default_context(cafile=ca_bundle)
+
+        return ssl.create_default_context(cafile=certifi.where())
+
+    async def _runway_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: Optional[dict] = None,
+        params: Optional[dict] = None,
+    ) -> dict:
+        if not self.config.api_endpoint:
+            raise ValueError("Runway API endpoint is not configured")
+        if not self.config.api_key:
+            raise ValueError("Runway API key is not configured")
+        url = f"{self.config.api_endpoint}{path}"
+        headers = {
+            "Authorization": f"Bearer {self.config.api_key}",
+            "X-Runway-Version": self.RUNWAY_API_VERSION,
+            "Content-Type": "application/json",
+        }
+        session = await self._get_session()
+        ssl_option = self._resolve_ssl_option()
+        async with session.request(method, url, headers=headers, json=payload, params=params, ssl=ssl_option) as response:
+            body_text = await response.text()
+            if response.status >= 400:
+                logger.warning(
+                    "TEMP_RUNWAY_DEBUG response_error status=%s endpoint=%s headers=%s body=%s",
+                    response.status,
+                    path,
+                    dict(response.headers),
+                    body_text,
+                )
+                raise RunwayAPIError(
+                    status_code=response.status,
+                    endpoint=path,
+                    response_headers=dict(response.headers),
+                    response_body=body_text,
+                )
+            if not body_text.strip():
+                return {}
+            try:
+                return await response.json()
+            except Exception:
+                logger.warning(
+                    "TEMP_RUNWAY_DEBUG non_json_response endpoint=%s body=%s",
+                    path,
+                    body_text,
+                )
+                return {"raw_body": body_text}
+
+    def _runway_model(self) -> str:
+        return os.getenv("RUNWAY_MODEL", "gen4_turbo").strip() or "gen4_turbo"
+
+    def _runway_timeout_seconds(self) -> int:
+        raw = os.getenv("RUNWAY_TIMEOUT_SECONDS", "60").strip()
+        try:
+            timeout = int(float(raw))
+            return timeout if timeout > 0 else 60
+        except Exception:
+            return 60
+
+    @staticmethod
+    def _normalize_ratio(raw_ratio: Optional[str]) -> str:
+        supported = {"1280:720", "720:1280"}
+        ratio = str(raw_ratio or "").strip()
+        return ratio if ratio in supported else "1280:720"
+
+    @staticmethod
+    def _extract_task_id(response: dict) -> Optional[str]:
+        if not isinstance(response, dict):
+            return None
+        for key in ("id", "task_id", "job_id"):
+            value = response.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
+    @staticmethod
+    def _extract_video_url(response: dict) -> Optional[str]:
+        if not isinstance(response, dict):
+            return None
+        for key in ("video_url", "output_url", "url"):
+            value = response.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        output = response.get("output")
+        if isinstance(output, list):
+            for item in output:
+                if isinstance(item, str) and item.strip():
+                    return item.strip()
+                if isinstance(item, dict):
+                    value = item.get("video_url") or item.get("url")
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+        return None
+
+    @staticmethod
+    def _error_metadata(
+        error_type: str,
+        message: str,
+        *,
+        status_code: Optional[int] = None,
+        raw_response: Optional[dict] = None,
+    ) -> dict:
+        payload = {"error_type": error_type, "message": message}
+        if status_code is not None:
+            payload["status_code"] = status_code
+        if raw_response is not None:
+            payload["raw_response"] = raw_response
+        return payload
+
+    @staticmethod
+    def _classify_runway_error(status_code: int, body: str) -> str:
+        text = (body or "").lower()
+        if status_code == 401:
+            if "revoked" in text:
+                return "revoked_key"
+            if "credit" in text or "billing" in text or "payment" in text:
+                return "missing_credits"
+            if "organization" in text or "org" in text or "project" in text:
+                return "missing_org_access"
+            if "invalid api key" in text or "invalid key" in text or "unauthorized" in text:
+                return "invalid_api_key"
+            return "unknown_401"
+        if status_code == 400:
+            if "model" in text and ("unsupported" in text or "invalid" in text):
+                return "unsupported_model"
+            return "invalid_payload"
+        return "unknown_401" if status_code == 401 else "request_error"
+
+    async def submit_job(self, job: RenderJobModel) -> RenderJobModel:
+        try:
+            test_mode = self._runway_test_mode()
+            request_mock_success = self._job_mock_success_requested(job)
+            if request_mock_success:
+                test_mode = "mock_success"
+            if test_mode == "mock_success":
+                if not self._is_local_or_test_env():
+                    job.status = "failed"
+                    job.error_message = "RENDER_PROVIDER_TEST_MODE=mock_success is not allowed outside local/test"
+                    job.output_payload = RenderJobOutput(
+                        asset_url="",
+                        thumbnail_url="",
+                        metadata={
+                            "provider_response_normalized": {
+                                "provider": "runway",
+                                "task": "video_generation",
+                                "status": "failed",
+                                "output": {"video_url": None, "status": "failed"},
+                                "metadata": {
+                                    "task_id": None,
+                                    "model": self._runway_model(),
+                                    "provider_mode": "test_mode",
+                                    "error": self._error_metadata("test_mode_not_allowed", job.error_message),
+                                },
+                            }
+                        },
+                    )
+                    job.updated_at = datetime.now().isoformat()
+                    return job
+                job.provider_job_id = f"mock-task-{job.id}"
+                video_url = self._local_mock_media_url()
+                preview_url = self._local_mock_media_url()
+                normalized = {
+                    "provider": "runway",
+                    "task": "video_generation",
+                    "status": "completed",
+                    "output": {"video_url": video_url, "status": "completed"},
+                    "metadata": {
+                        "task_id": job.provider_job_id,
+                        "model": self._runway_model(),
+                        "provider_mode": "mock_success",
+                        "mock_video_blocker": "non_video_placeholder",
+                    },
+                }
+                job.status = "complete"
+                job.progress = 100
+                job.error_message = None
+                job.updated_at = datetime.now().isoformat()
+                job.completed_at = datetime.now().isoformat()
+                logger.info("Runway mock_success used for job=%s provider_job_id=%s", job.id, job.provider_job_id)
+                job.output_payload = RenderJobOutput(
+                    asset_url=video_url,
+                    thumbnail_url=preview_url,
+                    metadata={"provider_response_normalized": normalized},
+                )
+                return job
+
+            if not self.config.api_key:
+                job.status = "failed"
+                job.error_message = "Missing Runway API key"
+                job.output_payload = RenderJobOutput(
+                    asset_url="",
+                    thumbnail_url="",
+                    metadata={
+                        "provider_response_normalized": {
+                            "provider": "runway",
+                            "task": "video_generation",
+                            "status": "failed",
+                            "output": {"video_url": None, "status": "failed"},
+                            "metadata": {
+                                "task_id": None,
+                                "model": self._runway_model(),
+                                "provider_mode": "hosted_api",
+                                "error": self._error_metadata("missing_api_key", "Missing Runway API key"),
+                            },
+                        }
+                    },
+                )
+                job.updated_at = datetime.now().isoformat()
+                return job
+
+            model = self._runway_model()
+            timeout_seconds = self._runway_timeout_seconds()
+            started = asyncio.get_running_loop().time()
+            prompt_image = job.input_payload.referenceAssets[0] if job.input_payload.referenceAssets else None
+            ratio = self._normalize_ratio(job.input_payload.parameters.get("ratio"))
+            duration = int(job.input_payload.parameters.get("duration") or 5)
+            if prompt_image:
+                endpoint = "/v1/image_to_video"
+                payload = {
+                    "model": model,
+                    "promptText": str(job.input_payload.prompt),
+                    "promptImage": prompt_image,
+                    "duration": duration,
+                    "ratio": ratio,
+                }
+            else:
+                endpoint = "/v1/text_to_video"
+                payload = {
+                    "model": model,
+                    "promptText": str(job.input_payload.prompt),
+                    "duration": duration,
+                    "ratio": ratio,
+                }
+            logger.info(
+                "TEMP_RUNWAY_DEBUG request endpoint=%s model=%s payload=%s payload_schema=%s",
+                endpoint,
+                model,
+                payload,
+                {k: type(v).__name__ for k, v in payload.items()},
+            )
+            auth_probe = await self._runway_request("GET", "/v1/organization")
+            logger.info("TEMP_RUNWAY_DEBUG auth_probe endpoint=/v1/organization body=%s", auth_probe)
+            submit_response = await self._runway_request("POST", endpoint, payload=payload)
+            task_id = self._extract_task_id(submit_response)
+            if not task_id:
+                job.status = "failed"
+                job.error_message = "Runway submission failed: missing task id"
+                normalized = {
+                    "provider": "runway",
+                    "task": "video_generation",
+                    "status": "failed",
+                    "output": {"video_url": None, "status": "failed"},
+                    "metadata": {
+                        "task_id": None,
+                        "model": model,
+                        "provider_mode": "hosted_api",
+                        "error": self._error_metadata(
+                            "missing_task_id",
+                            "Runway submission failed: missing task id",
+                            raw_response=submit_response if isinstance(submit_response, dict) else None,
+                        ),
+                    },
+                }
+                job.output_payload = RenderJobOutput(asset_url="", thumbnail_url="", metadata={"provider_response_normalized": normalized})
+                job.updated_at = datetime.now().isoformat()
+                return job
+
+            job.provider_job_id = task_id
+            logger.info("Runway task_id captured: job_id=%s task_id=%s", job.id, task_id)
+
+            poll_response: dict = {}
+            poll_status = "pending"
+            while True:
+                poll_response = await self._runway_request("GET", f"/v1/tasks/{task_id}")
+                poll_status = str(poll_response.get("status", "")).strip().lower()
+                logger.info("Runway polling status: task_id=%s status=%s", task_id, poll_status or "unknown")
+                if poll_status in {"completed", "succeeded", "failed", "error", "cancelled"}:
+                    break
+                if asyncio.get_running_loop().time() - started >= timeout_seconds:
+                    job.status = "failed"
+                    timeout_message = f"Runway task polling timed out after {timeout_seconds}s"
+                    job.error_message = timeout_message
+                    normalized = {
+                        "provider": "runway",
+                        "task": "video_generation",
+                        "status": "failed",
+                        "output": {"video_url": None, "status": "failed"},
+                        "metadata": {
+                            "task_id": task_id,
+                            "model": model,
+                            "provider_mode": "hosted_api",
+                            "error": self._error_metadata("timeout", timeout_message, raw_response=poll_response),
+                        },
+                    }
+                    job.output_payload = RenderJobOutput(asset_url="", thumbnail_url="", metadata={"provider_response_normalized": normalized})
+                    job.updated_at = datetime.now().isoformat()
+                    return job
+                await asyncio.sleep(1)
+
+            terminal_failed = poll_status in {"failed", "error", "cancelled"}
+            if terminal_failed:
+                message = str(poll_response.get("error") or poll_response.get("message") or "Runway task failed")
+                job.status = "failed"
+                job.error_message = message
+                normalized = {
+                    "provider": "runway",
+                    "task": "video_generation",
+                    "status": "failed",
+                    "output": {"video_url": None, "status": "failed"},
+                    "metadata": {
+                        "task_id": task_id,
+                        "model": model,
+                        "provider_mode": "hosted_api",
+                        "error": self._error_metadata("task_failed", message, raw_response=poll_response),
+                    },
+                }
+                job.output_payload = RenderJobOutput(asset_url="", thumbnail_url="", metadata={"provider_response_normalized": normalized})
+                job.updated_at = datetime.now().isoformat()
+                return job
+
+            video_url = self._extract_video_url(poll_response)
+            logger.info("Runway extracted video_url: task_id=%s found=%s", task_id, bool(video_url))
+            if not video_url:
+                job.status = "failed"
+                job.error_message = "Runway task completed without video_url"
+                normalized = {
+                    "provider": "runway",
+                    "task": "video_generation",
+                    "status": "failed",
+                    "output": {"video_url": None, "status": "failed"},
+                    "metadata": {
+                        "task_id": task_id,
+                        "model": model,
+                        "provider_mode": "hosted_api",
+                        "error": self._error_metadata(
+                            "missing_video_url",
+                            "Runway task completed without video_url",
+                            raw_response=poll_response,
+                        ),
+                    },
+                }
+                job.output_payload = RenderJobOutput(asset_url="", thumbnail_url="", metadata={"provider_response_normalized": normalized})
+                job.updated_at = datetime.now().isoformat()
+                return job
+
+            normalized = {
+                "provider": "runway",
+                "task": "video_generation",
+                "status": "completed",
+                "output": {"video_url": video_url, "status": "completed"},
+                "metadata": {"task_id": task_id, "model": model, "provider_mode": "hosted_api"},
+            }
+            job.status = "complete"
+            job.updated_at = datetime.now().isoformat()
+            job.output_payload = RenderJobOutput(
+                asset_url=video_url,
+                thumbnail_url=None,
+                metadata={"provider_response_normalized": normalized},
+            )
+            job.completed_at = datetime.now().isoformat()
+            return job
+        except RunwayAPIError as exc:
+            classification = self._classify_runway_error(exc.status_code, exc.response_body)
+            error_message = "Runway API unauthorized" if exc.status_code == 401 else f"Runway API error {exc.status_code}"
+            error = self._error_metadata(
+                classification,
+                error_message,
+                status_code=exc.status_code,
+                raw_response={
+                    "endpoint": exc.endpoint,
+                    "headers": exc.response_headers,
+                    "body": exc.response_body,
+                    "model": self._runway_model(),
+                },
+            )
+            job.status = "failed"
+            job.error_message = error_message
+            job.updated_at = datetime.now().isoformat()
+            job.output_payload = RenderJobOutput(
+                asset_url="",
+                thumbnail_url="",
+                metadata={
+                    "provider_response_normalized": {
+                        "provider": "runway",
+                        "task": "video_generation",
+                        "status": "failed",
+                        "output": {"video_url": None, "status": "failed"},
+                        "metadata": {
+                            "task_id": job.provider_job_id,
+                            "model": self._runway_model(),
+                            "provider_mode": "hosted_api",
+                            "error": error,
+                        },
+                    }
+                },
+            )
+            return job
+        except (ValueError, aiohttp.ClientError, asyncio.TimeoutError, ssl.SSLError, OSError) as exc:
+            error_type = self._ssl_error_type(exc)
+            job.status = "failed"
+            job.error_message = f"Runway API error: {str(exc)}"
+            job.updated_at = datetime.now().isoformat()
+            job.output_payload = RenderJobOutput(
+                asset_url="",
+                thumbnail_url="",
+                metadata={
+                    "provider_response_normalized": {
+                        "provider": "runway",
+                        "task": "video_generation",
+                        "status": "failed",
+                        "output": {"video_url": None, "status": "failed"},
+                        "metadata": {
+                            "task_id": job.provider_job_id,
+                            "model": self._runway_model(),
+                            "provider_mode": "hosted_api",
+                            "error": self._error_metadata(error_type, job.error_message),
+                        },
+                    }
+                },
+            )
+            return job
+
+    async def get_job_status(self, job: RenderJobModel) -> RenderJobModel:
+        if self._runway_test_mode() == "mock_success" and isinstance(job.provider_job_id, str) and job.provider_job_id.startswith("mock-task-"):
+            if not job.output_payload:
+                video_url = self._local_mock_media_url()
+                preview_url = self._local_mock_media_url()
+                job.output_payload = RenderJobOutput(
+                    asset_url=video_url,
+                    thumbnail_url=preview_url,
+                    metadata={
+                        "provider_response_normalized": {
+                            "provider": "runway",
+                            "task": "video_generation",
+                            "status": "completed",
+                            "output": {"video_url": video_url, "status": "completed"},
+                            "metadata": {"task_id": job.provider_job_id, "model": self._runway_model(), "provider_mode": "mock_success"},
+                        }
+                    },
+                )
+            job.status = "complete"
+            job.progress = 100
+            job.error_message = None
+            job.updated_at = datetime.now().isoformat()
+            job.completed_at = job.completed_at or datetime.now().isoformat()
+            return job
+
+        if not job.provider_job_id:
+            return job
+        try:
+            response = await self._runway_request("GET", f"/v1/tasks/{job.provider_job_id}")
+            raw_status = str(response.get("status", "")).strip().lower()
+            status_map = {
+                "pending": "pending",
+                "running": "rendering",
+                "processing": "rendering",
+                "rendering": "rendering",
+                "succeeded": "complete",
+                "complete": "complete",
+                "completed": "complete",
+                "failed": "failed",
+                "error": "failed",
+                "canceled": "failed",
+                "cancelled": "failed",
+            }
+            job.status = status_map.get(raw_status, "failed")
+            job.updated_at = datetime.now().isoformat()
+            if job.status == "complete":
+                video_url = self._extract_video_url(response)
+                preview_url = response.get("preview_url") if isinstance(response.get("preview_url"), str) else None
+                job.error_message = None
+                job.output_payload = RenderJobOutput(
+                    asset_url=video_url,
+                    thumbnail_url=preview_url,
+                    metadata={
+                        "provider_response_normalized": {
+                            "provider": "runway",
+                            "task": "video_generation",
+                            "status": "completed",
+                            "output": {"video_url": video_url, "status": "completed"},
+                            "metadata": {
+                                "task_id": job.provider_job_id,
+                                "model": self._runway_model(),
+                                "provider_mode": "hosted_api",
+                                "raw_response": response,
+                            },
+                        }
+                    },
+                )
+                job.completed_at = datetime.now().isoformat()
+            elif job.status == "failed":
+                job.error_message = str(response.get("error") or response.get("message") or "Runway status check failed")
+        except (ValueError, aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            job.error_message = f"Runway status check failed: {str(exc)}"
+            job.status = "failed"
+            job.updated_at = datetime.now().isoformat()
+        return job
+
+    async def cancel_job(self, job: RenderJobModel) -> bool:
+        if not job.provider_job_id:
+            return False
+        try:
+            await self._runway_request("POST", f"/v1/tasks/{job.provider_job_id}/cancel")
+            job.status = "cancelled"
+            job.updated_at = datetime.now().isoformat()
+            return True
+        except (ValueError, aiohttp.ClientError, asyncio.TimeoutError):
+            return False
+
+    async def fetch_outputs(self, job: RenderJobModel) -> list[RenderAsset]:
+        if job.status != "complete" or not job.output_payload:
+            return []
+        return [RenderAsset(
+            id=f"runway-asset-{job.id}",
+            job_id=job.id,
+            project_id=job.project_id,
+            shot_id=job.shot_id,
+            provider="runway",
+            asset_type="video",
+            url=job.output_payload.asset_url or "",
+            thumbnail_url=job.output_payload.thumbnail_url,
+            metadata=job.output_payload.metadata,
+            created_at=job.completed_at or datetime.now().isoformat(),
+        )]
+
+    async def get_status(self) -> ProviderStatus:
+        try:
+            response = await self._runway_request("GET", "/v1/organization")
+            return ProviderStatus(
+                provider_id="runway",
+                name="Runway",
+                status="available",
+                is_simulated=False,
+                capabilities=["video_generation", "image_to_video"],
+                active_jobs=0,
+                queued_jobs=0,
+            )
+        except (ValueError, aiohttp.ClientError, asyncio.TimeoutError, RunwayAPIError):
+            return ProviderStatus(
+                provider_id="runway",
+                name="Runway",
+                status="unavailable",
+                is_simulated=False,
+                capabilities=["video_generation", "image_to_video"],
+                active_jobs=0,
+                queued_jobs=0,
+            )
+
+
 # Provider registry
 ADAPTER_REGISTRY: dict[str, type[RenderProviderAdapter]] = {
     "simulated": SimulatedProviderAdapter,
     "higgsfield": HiggsfieldAdapter,
+    "runway": RunwayAdapter,
     "generic": GenericVideoProviderAdapter,
 }
 

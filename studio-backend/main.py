@@ -3,10 +3,17 @@ import logging
 import time
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Ensure .env values are available before importing modules that construct runtime singletons.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from typing import Dict, Set
 import asyncio
 
@@ -18,6 +25,8 @@ from app.routes.crew import router as crew_router
 from app.routes.memory import router as memory_router
 from app.routes.scene_intelligence import router as scene_intelligence_router
 from app.routes.projects import router as projects_persistence_router
+from app.routes.workflows import router as workflows_router
+from app.routes.production_recovery import router as production_recovery_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
 from app.auth import AuthService, demo_login
@@ -39,6 +48,7 @@ auth_service = AuthService(storage)
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     logger.info("Starting Studio API")
+    logger.info("Runway API configured: %s", bool(os.getenv("RUNWAY_API_KEY", "").strip()))
     
     # Initialize storage
     set_storage(storage)
@@ -46,19 +56,70 @@ async def lifespan(app: FastAPI):
     # Initialize render service with storage
     from app.services.render import render_service
     
-    # Load existing jobs from database
+    # Load existing jobs from canonical render_jobs storage
     try:
-        existing_jobs = storage.list_jobs(limit=1000)
-        for job in existing_jobs:
-            render_service._jobs[job.id] = job
-        logger.info(f"Loaded {len(existing_jobs)} jobs from database")
+        from app.services.render_job_backfill import hydrate_render_service_from_storage
+
+        loaded_count = hydrate_render_service_from_storage(render_service, storage)
+        logger.info(f"Loaded {loaded_count} jobs from database")
+        recovery = await render_service.recover_jobs_after_restart()
+        logger.info("Render recovery summary: %s", recovery)
     except Exception as e:
         logger.warning(f"Could not load jobs from database: {e}")
     
     # Initialize memory service with storage for persistence
     from app.services.memory import memory_service
     memory_service.storage = storage
+    from app.services.video_asset_service import video_asset_service
+    from app.services.keyframe_extraction_service import keyframe_extraction_service
+    from app.services.shot_detection_service import shot_detection_service
+    from app.services.semantic_memory_service import semantic_memory_service
+    from app.services.continuity_intelligence_service import continuity_intelligence_service
+    from app.services.director_commentary_service import director_commentary_service
+    from app.services.semantic_search_service import semantic_search_service
+    video_asset_service._storage = storage
+    keyframe_extraction_service._storage = storage
+    keyframe_extraction_service._video_asset_service = video_asset_service
+    shot_detection_service._storage = storage
+    shot_detection_service._video_asset_service = video_asset_service
+    shot_detection_service._keyframe_service = keyframe_extraction_service
+    semantic_memory_service._storage = storage
+    semantic_memory_service._video_asset_service = video_asset_service
+    semantic_memory_service._shot_detection_service = shot_detection_service
+    continuity_intelligence_service._storage = storage
+    continuity_intelligence_service._video_asset_service = video_asset_service
+    continuity_intelligence_service._semantic_memory_service = semantic_memory_service
+    director_commentary_service._storage = storage
+    director_commentary_service._video_asset_service = video_asset_service
+    director_commentary_service._keyframe_service = keyframe_extraction_service
+    director_commentary_service._shot_detection_service = shot_detection_service
+    director_commentary_service._semantic_memory_service = semantic_memory_service
+    semantic_search_service._storage = storage
+    semantic_search_service._semantic_memory_service = semantic_memory_service
     logger.info("Memory service initialized with storage")
+    
+    # Initialize short film review service with storage
+    from app.services.short_film_review_service import short_film_review_service
+    short_film_review_service._storage = storage
+    logger.info("Short film review service initialized with storage")
+    
+    # Initialize clip revision service with storage and render service
+    from app.services.clip_revision_service import clip_revision_service
+    clip_revision_service._storage = storage
+    clip_revision_service._render_service = render_service
+    logger.info("Clip revision service initialized with storage and render service")
+    
+    # Initialize final short film package service with storage and other services
+    from app.services.final_short_film_package_service import final_short_film_package_service
+    from app.services.short_film_review_service import short_film_review_service
+    from app.services.video_asset_service import video_asset_service
+    final_short_film_package_service._storage = storage
+    final_short_film_package_service._render_service = render_service
+    final_short_film_package_service._review_service = short_film_review_service
+    final_short_film_package_service._revision_service = clip_revision_service
+    final_short_film_package_service._video_asset_service = video_asset_service
+    video_asset_service._storage = storage
+    logger.info("Final short film package service initialized with storage and other services")
     
     yield
     
@@ -89,6 +150,16 @@ CORS_ORIGINS = os.getenv(
             "http://127.0.0.1:5000",
             "http://localhost:8010",
             "http://127.0.0.1:8010",
+            "http://localhost:8012",
+            "http://127.0.0.1:8012",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+            "http://localhost:4173",
+            "http://127.0.0.1:4173",
+            "http://localhost:4174",
+            "http://127.0.0.1:4174",
         ]
     ),
 ).split(",")
@@ -97,7 +168,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Session-Token", "X-Request-ID"],
 )
 
@@ -136,6 +207,34 @@ app.include_router(agents_router)
 app.include_router(crew_router)
 app.include_router(memory_router)
 app.include_router(scene_intelligence_router)
+app.include_router(workflows_router)
+app.include_router(production_recovery_router)
+
+OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
+OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@app.get("/outputs/mock-video/sample.mp4")
+def mock_video_sample():
+    sample_path = OUTPUTS_DIR / "mock-video" / "sample.mp4"
+    if sample_path.exists():
+        return PlainTextResponse(
+            "mock video placeholder unavailable",
+            media_type="text/plain",
+            headers={"X-Mock-Video-Blocker": "non_video_placeholder"},
+        ) if sample_path.stat().st_size < 32 else Response(
+            content=sample_path.read_bytes(),
+            media_type="video/mp4",
+            headers={"Cache-Control": "no-store"},
+        )
+    return PlainTextResponse(
+        "mock video placeholder unavailable",
+        media_type="text/plain",
+        headers={"X-Mock-Video-Blocker": "missing_sample"},
+    )
+
+
+app.mount("/outputs", StaticFiles(directory=str(OUTPUTS_DIR)), name="outputs")
 
 # WebSocket Connection Manager
 class ConnectionManager:
