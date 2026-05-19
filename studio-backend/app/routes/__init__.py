@@ -148,6 +148,10 @@ def export_project_artifact(project_id: str, artifact_type: str):
 def simulate_screening(project_id: str):
     project = project_service.simulate_screening(project_id)
     if not project:
+        # Compatibility fallback for projects created through persistence routes.
+        persisted = project_store.get_project(project_id)
+        if persisted:
+            return persisted
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
