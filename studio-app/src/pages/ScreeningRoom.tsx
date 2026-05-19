@@ -4,12 +4,13 @@ import { MonitorPlay } from 'lucide-react'
 import StudioShell, { TabGroup } from '../components/StudioShell'
 import RenderActivityPanel from '../components/RenderActivityPanel'
 import FilmMemoryPanel from '../components/FilmMemoryPanel'
+import DecisionGateCard from '../components/DecisionGateCard'
 import CoDirectorCollaborationPanel from '../components/CoDirectorCollaborationPanel'
 import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
 import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
 import ScreeningIntelligencePanel from '../components/ScreeningIntelligencePanel'
 import { useStudio } from '../context/StudioContext'
-import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StyleDriftIssue } from '../lib/studioApi'
+import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, getProjectDecisionGate, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue } from '../lib/studioApi'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
 import { useProjectHydration } from '../hooks/useProjectHydration'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
@@ -100,6 +101,24 @@ function isBrowserSafePath(path: string): boolean {
   return lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('data:image/')
 }
 
+function isMockExternalAssetUrl(url: string): boolean {
+  const value = url.trim()
+  if (!value) return false
+  try {
+    const parsed = new URL(value)
+    return parsed.hostname === 'storage.example.com'
+  } catch {
+    return false
+  }
+}
+
+function normalizePlayableVideoUrl(url: string): string {
+  const value = url.trim()
+  if (!value) return ''
+  if (isMockExternalAssetUrl(value)) return '/outputs/mock-video/sample.mp4'
+  return value
+}
+
 function statusTone(status: string): string {
   if (status === 'complete' || status === 'success') return 'text-emerald-300'
   if (status === 'partial') return 'text-amber-300'
@@ -160,6 +179,9 @@ export default function ScreeningRoom() {
   const [continuityIssues, setContinuityIssues] = useState<ContinuityIssue[]>([])
   const [directorSignature, setDirectorSignature] = useState<DirectorSignature | null>(null)
   const [styleDriftIssues, setStyleDriftIssues] = useState<StyleDriftIssue[]>([])
+  const [decisionGate, setDecisionGate] = useState<StudioDecisionGate | null>(null)
+  const [decisionGateLoading, setDecisionGateLoading] = useState(false)
+  const [decisionGateError, setDecisionGateError] = useState('')
   const playbackTimerRef = useRef<number | null>(null)
   const theaterViewportRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -188,6 +210,38 @@ export default function ScreeningRoom() {
 
   useEffect(() => {
     if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setDecisionGate(null)
+      setDecisionGateError('')
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadDecisionGate() {
+      setDecisionGateLoading(true)
+      try {
+        const gate = await getProjectDecisionGate(activeProjectId, { signal: controller.signal })
+        if (!cancelled) {
+          setDecisionGate(gate)
+          setDecisionGateError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDecisionGate(null)
+          setDecisionGateError(error instanceof Error ? error.message : 'Failed to load decision gate.')
+        }
+      } finally {
+        setDecisionGateLoading(false)
+      }
+    }
+    void loadDecisionGate()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [activeProjectId])
 
   useEffect(() => {
@@ -716,7 +770,9 @@ export default function ScreeningRoom() {
     activeSceneAsset?.url
     || (activeSceneAsset?.file_path && isBrowserSafePath(activeSceneAsset.file_path) ? activeSceneAsset.file_path : '')
     || getViewerImage(activeRenderId)
-  const activeSceneVideoUrl = activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.video_url || '') : ''
+  const activeSceneVideoUrl = activeScene?.scene_id
+    ? normalizePlayableVideoUrl(firstVideoAssetByScene.get(activeScene.scene_id)?.video_url || '')
+    : ''
   const activeSoundProfile = useMemo(() => {
     if (!activeScene?.scene_id) return {}
     const source = asArray(executionSummary.scenes).find((entry) => {
@@ -841,6 +897,9 @@ export default function ScreeningRoom() {
 
   return (
     <StudioShell title="Screening Room" subtitle="Playback and review of scene cuts and iteration outcomes.">
+      <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+        <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
+      </div>
       <RenderActivityPanel roomName="Screening Room" />
       <CollaboratorPresenceIndicators collaboration={collaboration || null} />
       <div className={`w-full overflow-visible ${isTheaterMode ? 'screening-theater-mode' : ''}`}>
@@ -1429,19 +1488,26 @@ export default function ScreeningRoom() {
                       {renderJobs
                         .filter((job) => typeof job.output_payload?.asset_url === 'string' && job.output_payload?.asset_url)
                         .slice(0, 3)
-                        .map((job) => (
+                        .map((job) => {
+                          const rawAssetUrl = job.output_payload?.asset_url || ''
+                          const assetUrl = normalizePlayableVideoUrl(rawAssetUrl)
+                          const isExternalMock = isMockExternalAssetUrl(rawAssetUrl)
+                          return (
                           <div key={job.id} className="rounded border border-white/10 bg-black/30 p-1.5">
-                            <a href={job.output_payload?.asset_url} target="_blank" rel="noreferrer" className="block text-cyan-300 break-all">
+                            <a href={assetUrl} target="_blank" rel="noreferrer" className="block text-cyan-300 break-all">
                               {job.shot_id} ({job.status})
                             </a>
+                            {isExternalMock ? (
+                              <div className="mt-1 text-[10px] text-amber-200">Mock external asset unavailable locally.</div>
+                            ) : null}
                             <video
                               controls
                               preload="metadata"
                               className="mt-1 aspect-video w-full rounded border border-white/10 bg-black"
-                              src={job.output_payload?.asset_url || ''}
+                              src={assetUrl}
                             />
                           </div>
-                        ))}
+                        )})}
                     </div>
                   ) : <div className="mt-1 text-[11px] text-zinc-300">No completed clips yet.</div>}
                 </div>

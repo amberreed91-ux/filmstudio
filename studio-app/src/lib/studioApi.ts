@@ -1105,35 +1105,29 @@ export type AgentContext = {
 }
 
 export async function getProjectMemory(projectId: string): Promise<MemoryData> {
-  const response = await fetch(`/api/f51/studio/memory/${projectId}`)
-  if (!response.ok) throw new Error('Failed to fetch memory')
-  return response.json()
+  return fetchJson<MemoryData>(`/api/f51/studio/memory/${encodeURIComponent(projectId)}`)
 }
 
 export async function initProjectMemory(projectId: string, data: { tone: string; genre: string; visual_style: string[]; color_grade: string }) {
-  const response = await fetch(`/api/f51/studio/memory/${projectId}/init`, {
+  return fetchJson<Record<string, unknown>>(`/api/f51/studio/memory/${encodeURIComponent(projectId)}/init`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  if (!response.ok) throw new Error('Failed to init memory')
-  return response.json()
 }
 
 export async function updateSceneMemory(projectId: string, data: { scene_id: string; location_name?: string; time_of_day?: string; camera_choice?: string }) {
-  const response = await fetch(`/api/f51/studio/memory/${projectId}/scene`, {
+  return fetchJson<Record<string, unknown>>(`/api/f51/studio/memory/${encodeURIComponent(projectId)}/scene`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  if (!response.ok) throw new Error('Failed to update scene memory')
-  return response.json()
 }
 
 export async function getAgentContext(projectId: string, agentRole: string): Promise<AgentContext> {
-  const response = await fetch(`/api/f51/studio/memory/${projectId}/agent-context?agent_role=${encodeURIComponent(agentRole)}`)
-  if (!response.ok) throw new Error('Failed to fetch agent context')
-  return response.json()
+  return fetchJson<AgentContext>(
+    `/api/f51/studio/memory/${encodeURIComponent(projectId)}/agent-context?agent_role=${encodeURIComponent(agentRole)}`,
+  )
 }
 
 // Short Film Review API
@@ -1225,61 +1219,47 @@ export type RestitchWithRevisionPayload = {
 }
 
 export async function createClipRevision(projectId: string, payload: CreateClipRevisionPayload): Promise<{ revision: ClipRevision }> {
-  const response = await fetch(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/clip-revisions`, {
+  return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/clip-revisions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) throw new Error('Failed to create clip revision')
-  return response.json()
 }
 
 export async function listClipRevisionsForProject(projectId: string): Promise<{ revisions: ClipRevision[] }> {
-  const response = await fetch(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/clip-revisions`)
-  if (!response.ok) throw new Error('Failed to list clip revisions')
-  return response.json()
+  return fetchJson<{ revisions: ClipRevision[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/clip-revisions`)
 }
 
 export async function getClipRevision(revisionId: string): Promise<{ revision: ClipRevision }> {
-  const response = await fetch(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}`)
-  if (!response.ok) throw new Error('Failed to get clip revision')
-  return response.json()
+  return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}`)
 }
 
 export async function submitClipRevisionRender(revisionId: string, payload: SubmitClipRevisionPayload): Promise<{ revision: ClipRevision }> {
-  const response = await fetch(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/submit`, {
+  return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) throw new Error('Failed to submit clip revision render')
-  return response.json()
 }
 
 export async function cancelClipRevision(revisionId: string): Promise<{ revision: ClipRevision }> {
-  const response = await fetch(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/cancel`, {
+  return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/cancel`, {
     method: 'POST',
   })
-  if (!response.ok) throw new Error('Failed to cancel clip revision')
-  return response.json()
 }
 
 export async function completeClipRevisionFromJob(revisionId: string): Promise<{ revision: ClipRevision }> {
-  const response = await fetch(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/complete-from-job`, {
+  return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/complete-from-job`, {
     method: 'POST',
   })
-  if (!response.ok) throw new Error('Failed to complete clip revision')
-  return response.json()
 }
 
 export async function restitchProjectWithRevisions(projectId: string, payload: RestitchWithRevisionPayload): Promise<ShortFilmStitchResult> {
-  const response = await fetch(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/restitch-with-revisions`, {
+  return fetchJson<ShortFilmStitchResult>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/restitch-with-revisions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) throw new Error('Failed to restitch project with revisions')
-  return response.json()
 }
 
 // Final Short Film Package API
@@ -1584,6 +1564,45 @@ export type StyleDriftIssue = {
   compared_against_signature_id: string
   created_at: string
   metadata: Record<string, unknown>
+}
+
+export type StudioDecisionGate = {
+  project_id: string
+  gate_status: 'blocked' | 'needs_review' | 'ready' | 'insufficient_data'
+  current_stage: 'intake' | 'study' | 'previs' | 'production' | 'screening' | 'package' | 'archived'
+  blockers: string[]
+  warnings: string[]
+  ready_signals: string[]
+  recommended_next_action: string
+  evidence: Record<string, unknown>
+  advisory_only: boolean
+  auto_approval_triggered: boolean
+  auto_regeneration_triggered: boolean
+}
+
+function isStudioDecisionGateShape(value: unknown): value is StudioDecisionGate {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const row = value as Record<string, unknown>
+  return (
+    typeof row.project_id === 'string' &&
+    typeof row.gate_status === 'string' &&
+    typeof row.current_stage === 'string' &&
+    Array.isArray(row.blockers) &&
+    Array.isArray(row.warnings) &&
+    Array.isArray(row.ready_signals) &&
+    typeof row.recommended_next_action === 'string'
+  )
+}
+
+function normalizeDecisionGatePayload(payload: unknown): StudioDecisionGate {
+  if (isStudioDecisionGateShape(payload)) return payload
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Decision gate unavailable for this project.')
+  }
+  const row = payload as Record<string, unknown>
+  const wrapped = row.decision_gate ?? row.gate ?? row.data ?? row.result
+  if (isStudioDecisionGateShape(wrapped)) return wrapped
+  throw new Error('Decision gate unavailable for this project.')
 }
 
 export type VideoUnderstandingStatus = {
@@ -2096,6 +2115,14 @@ export async function listProjectStyleDriftIssues(projectId: string, init?: Requ
     auto_regeneration_triggered: boolean
     count: number
   }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-drift-issues`, init)
+}
+
+export async function getProjectDecisionGate(projectId: string, init?: RequestInit): Promise<StudioDecisionGate> {
+  const payload = await fetchJson<StudioDecisionGate | Record<string, unknown>>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/decision-gate`,
+    init,
+  )
+  return normalizeDecisionGatePayload(payload)
 }
 
 export async function compareStyleSignatures(

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getStudioProject } from './studioApi'
+import { createClipRevision, getProjectDecisionGate, getStudioProject } from './studioApi'
 
 describe('getStudioProject', () => {
   afterEach(() => {
@@ -50,5 +50,61 @@ describe('getStudioProject', () => {
       type: 'intent_label',
       label: 'quiet emotional moment',
     })
+  })
+})
+
+describe('getProjectDecisionGate', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('normalizes wrapped decision gate payloads', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          gate: {
+            project_id: 'proj-wrap',
+            gate_status: 'ready',
+            current_stage: 'package',
+            blockers: [],
+            warnings: [],
+            ready_signals: ['Package is ready'],
+            recommended_next_action: 'Ready: approved cut can be packaged.',
+            evidence: {},
+            advisory_only: true,
+            auto_approval_triggered: false,
+            auto_regeneration_triggered: false,
+          },
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const gate = await getProjectDecisionGate('proj-wrap')
+    expect(gate.gate_status).toBe('ready')
+    expect(gate.recommended_next_action).toContain('approved cut')
+  })
+})
+
+describe('clip revision API helpers', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('uses centralized API base for clip revision calls', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ revision: { revision_id: 'rev-1' } }), { status: 200 }),
+    )
+
+    await createClipRevision('proj-clip', {
+      review_id: 'review-1',
+      original_job_id: 'job-1',
+      provider: 'mock_success',
+      revision_prompt: 'tighten pacing',
+      revision_reason: 'continuity',
+    })
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('http://127.0.0.1:8010/api/f51/studio/projects/proj-clip/clip-revisions')
   })
 })

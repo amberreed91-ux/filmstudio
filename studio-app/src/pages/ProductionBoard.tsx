@@ -5,11 +5,12 @@ import StudioShell, { AGENTS, CollapsibleSection, DropdownMenu } from '../compon
 import RenderActivityPanel from '../components/RenderActivityPanel'
 import ProductionTimeline, { type ProductionStage } from '../components/ProductionTimeline'
 import FilmMemoryPanel from '../components/FilmMemoryPanel'
+import DecisionGateCard from '../components/DecisionGateCard'
 import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
 import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
 import { useStudio } from '../context/StudioContext'
 import { useRenderActivity } from '../context/RenderActivityContext'
-import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getProject, listProjectContinuityIssues, listRenderJobs, reconcileRenderJob, retryRenderJobById, type ContinuityIssue, type RenderJob, updateFilmCut } from '../lib/studioApi'
+import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getProject, getProjectDecisionGate, listProjectContinuityIssues, listRenderJobs, reconcileRenderJob, retryRenderJobById, type ContinuityIssue, type RenderJob, type StudioDecisionGate, updateFilmCut } from '../lib/studioApi'
 import { useProjectHydration } from '../hooks/useProjectHydration'
 import { useProductionRecovery } from '../hooks/useProductionRecovery'
 import ProductionRecoveryIndicator from '../components/ProductionRecoveryIndicator'
@@ -91,6 +92,9 @@ export default function ProductionBoard() {
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
   const [loadingJobs, setLoadingJobs] = useState(false)
   const [continuityIssues, setContinuityIssues] = useState<ContinuityIssue[]>([])
+  const [decisionGate, setDecisionGate] = useState<StudioDecisionGate | null>(null)
+  const [decisionGateLoading, setDecisionGateLoading] = useState(false)
+  const [decisionGateError, setDecisionGateError] = useState('')
 
   useEffect(() => {
     if (!actionFeedback) return
@@ -118,6 +122,38 @@ export default function ProductionBoard() {
 
   useEffect(() => {
     if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setDecisionGate(null)
+      setDecisionGateError('')
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadDecisionGate() {
+      setDecisionGateLoading(true)
+      try {
+        const gate = await getProjectDecisionGate(activeProjectId, { signal: controller.signal })
+        if (!cancelled) {
+          setDecisionGate(gate)
+          setDecisionGateError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDecisionGate(null)
+          setDecisionGateError(error instanceof Error ? error.message : 'Failed to load decision gate.')
+        }
+      } finally {
+        setDecisionGateLoading(false)
+      }
+    }
+    void loadDecisionGate()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [activeProjectId])
 
   useEffect(() => {
@@ -487,6 +523,7 @@ export default function ProductionBoard() {
       <CollaboratorPresenceIndicators collaboration={collaboration || null} />
       <div className="w-full overflow-visible">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 space-y-5 text-zinc-100">
+          <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
           <section className="cinematic-panel studio-fade-in p-5">
             <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 3: TRACK PROGRESS</div>
             <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100"><ClipboardList size={18} />Production Board</h2>

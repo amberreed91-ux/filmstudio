@@ -5,6 +5,7 @@ import StudioShell, { AGENTS, TabGroup } from '../components/StudioShell'
 import DirectorConsole from '../components/DirectorConsole'
 import CinematicLoading from '../components/CinematicLoading'
 import PrevisIntelligencePanel from '../components/PrevisIntelligencePanel'
+import DecisionGateCard from '../components/DecisionGateCard'
 import { useStudio } from '../context/StudioContext'
 import {
   generateMotionPreview,
@@ -19,6 +20,7 @@ import {
   listVideoAssetsForProject,
   getLatestDirectorSignature,
   listProjectStyleDriftIssues,
+  getProjectDecisionGate,
   updateFilmCut,
   updateSceneReview,
   type ContinuityIssue,
@@ -29,6 +31,7 @@ import {
   type SemanticMemorySearchResult,
   type VideoAsset,
   type VideoKeyframe,
+  type StudioDecisionGate,
 } from '../lib/studioApi'
 import { resolveVisualForSceneAndShot } from '../lib/previsVisualResolver'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
@@ -256,6 +259,9 @@ export default function PrevisRoom() {
   const [projectContinuityIssues, setProjectContinuityIssues] = useState<ContinuityIssue[]>([])
   const [directorSignature, setDirectorSignature] = useState<DirectorSignature | null>(null)
   const [styleDriftIssues, setStyleDriftIssues] = useState<StyleDriftIssue[]>([])
+  const [decisionGate, setDecisionGate] = useState<StudioDecisionGate | null>(null)
+  const [decisionGateLoading, setDecisionGateLoading] = useState(false)
+  const [decisionGateError, setDecisionGateError] = useState('')
   const [controlState, setControlState] = useState<{
     lastAction: InterventionAction | null
     active_intervention: ActiveIntervention | null
@@ -316,6 +322,38 @@ export default function PrevisRoom() {
 
   useEffect(() => {
     if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setDecisionGate(null)
+      setDecisionGateError('')
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadDecisionGate() {
+      setDecisionGateLoading(true)
+      try {
+        const gate = await getProjectDecisionGate(activeProjectId, { signal: controller.signal })
+        if (!cancelled) {
+          setDecisionGate(gate)
+          setDecisionGateError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDecisionGate(null)
+          setDecisionGateError(error instanceof Error ? error.message : 'Failed to load decision gate.')
+        }
+      } finally {
+        setDecisionGateLoading(false)
+      }
+    }
+    void loadDecisionGate()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [activeProjectId])
 
   useEffect(() => {
@@ -1668,6 +1706,7 @@ export default function PrevisRoom() {
     <StudioShell title="Rough Previs Room" subtitle="Read-only continuity and scene-previs inspection over the current execution bundle.">
       <div className="w-full overflow-visible">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
+          <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
           <section className="cinematic-panel p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 2: REVIEW YOUR SCENES</div>
             <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100"><Film size={18} />Previs Room</h2>

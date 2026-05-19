@@ -4,6 +4,7 @@ import { AlertCircle, Brain, CheckCircle2, Database, RefreshCw, UploadCloud } fr
 import StudioShell, { TabGroup } from '../components/StudioShell'
 import CinematicLoading from '../components/CinematicLoading'
 import AssetIntelligenceCard from '../components/AssetIntelligenceCard'
+import DecisionGateCard from '../components/DecisionGateCard'
 import { useStudio } from '../context/StudioContext'
 import {
   analyzeProjectContinuity,
@@ -22,6 +23,7 @@ import {
   linkSceneIntelligenceVideo,
   listProjectVideoUnderstandingStatus,
   detectStyleDrift,
+  getProjectDecisionGate,
   getLatestDirectorSignature,
   listProjectStyleDriftIssues,
   listProjectEmbeddings,
@@ -47,6 +49,7 @@ import {
   type VideoUnderstandingStatus,
   type VisualEmbedding,
   type CinematicMemoryRecord,
+  type StudioDecisionGate,
 } from '../lib/studioApi'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import { resolveVideoUnderstandingBanner } from '../lib/videoUnderstanding'
@@ -432,6 +435,9 @@ export default function StudyRoom() {
   const [continuityLoading, setContinuityLoading] = useState(false)
   const [directorSignature, setDirectorSignature] = useState<DirectorSignature | null>(null)
   const [styleDriftIssues, setStyleDriftIssues] = useState<StyleDriftIssue[]>([])
+  const [decisionGate, setDecisionGate] = useState<StudioDecisionGate | null>(null)
+  const [decisionGateLoading, setDecisionGateLoading] = useState(false)
+  const [decisionGateError, setDecisionGateError] = useState('')
   const [styleIntelLoading, setStyleIntelLoading] = useState(false)
   const [projectVideoAssets, setProjectVideoAssets] = useState<VideoAsset[]>([])
   const [allUploadedVideoAssets, setAllUploadedVideoAssets] = useState<VideoAsset[]>([])
@@ -651,6 +657,38 @@ export default function StudyRoom() {
       controller.abort()
     }
   }, [loadContinuityIssues])
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setDecisionGate(null)
+      setDecisionGateError('')
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadDecisionGate() {
+      setDecisionGateLoading(true)
+      try {
+        const gate = await getProjectDecisionGate(activeProjectId, { signal: controller.signal })
+        if (!cancelled) {
+          setDecisionGate(gate)
+          setDecisionGateError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDecisionGate(null)
+          setDecisionGateError(error instanceof Error ? error.message : 'Failed to load decision gate.')
+        }
+      } finally {
+        setDecisionGateLoading(false)
+      }
+    }
+    void loadDecisionGate()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [activeProjectId])
 
   const analyzeContinuity = useCallback(async () => {
     if (!activeProjectId) return
@@ -1476,6 +1514,9 @@ export default function StudyRoom() {
 
   return (
     <StudioShell title="Study Room" subtitle="Upload scripts, scenes, films, references, and notes for the studio to study.">
+      <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+        <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
+      </div>
       <input ref={fileInputRef} type="file" accept={ACCEPT_ALL} multiple className="hidden" onChange={handleInputChange} />
       <div className="mx-auto w-full max-w-7xl px-4 py-8 text-zinc-100 sm:px-6 lg:px-8">
           <div className="space-y-6">
