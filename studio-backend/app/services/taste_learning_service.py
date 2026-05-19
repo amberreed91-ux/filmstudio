@@ -11,6 +11,7 @@ from app.models.taste_learning import (
     TasteSignalType,
     utc_now_iso,
 )
+from app.models.director_taste_profile import DirectorTasteProfile
 
 
 class TasteLearningService:
@@ -55,6 +56,18 @@ class TasteLearningService:
     def __init__(self, storage: Optional[Any] = None) -> None:
         self.storage = storage
         self._traces: List[TasteFeedbackTrace] = []
+        self._director_taste_state: Dict[str, Any] = {
+            "accepted_shots": 0,
+            "regenerated_shots": 0,
+            "emotional_arcs": defaultdict(int),
+            "visual_styles": defaultdict(int),
+            "providers": defaultdict(int),
+            "pacing_votes": defaultdict(int),
+            "framing_votes": defaultdict(int),
+            "lighting_votes": defaultdict(int),
+            "transition_votes": defaultdict(int),
+            "dialogue_density_votes": defaultdict(int),
+        }
 
     def record_feedback_trace(
         self,
@@ -286,6 +299,142 @@ class TasteLearningService:
             "calibration_context": calibration,
             "sample_traces": traces[: self.MAX_SUPPORTING_TRACE_IDS],
         }
+
+    def learn_from_approvals(
+        self,
+        approved_shots: Optional[List[Dict[str, Any] | str]] = None,
+        preferred_emotional_arcs: Optional[List[str]] = None,
+        preferred_visual_styles: Optional[List[str]] = None,
+        favorite_providers: Optional[List[str]] = None,
+        creator_override: bool = False,
+    ) -> Dict[str, Any]:
+        shot_count = len(approved_shots or [])
+        self._director_taste_state["accepted_shots"] += max(0, shot_count)
+        self._vote_many(self._director_taste_state["emotional_arcs"], preferred_emotional_arcs)
+        self._vote_many(self._director_taste_state["visual_styles"], preferred_visual_styles)
+        self._vote_many(self._director_taste_state["providers"], favorite_providers)
+        self._vote_many(self._director_taste_state["pacing_votes"], ["measured", "cinematic"])
+        self._vote_many(self._director_taste_state["framing_votes"], ["close-medium mix"])
+        self._vote_many(self._director_taste_state["transition_votes"], ["fade", "cut"])
+        return self._director_taste_result(creator_override=creator_override)
+
+    def learn_from_rejections(
+        self,
+        regenerated_shots: Optional[List[Dict[str, Any] | str]] = None,
+        preferred_emotional_arcs: Optional[List[str]] = None,
+        preferred_visual_styles: Optional[List[str]] = None,
+        creator_override: bool = False,
+    ) -> Dict[str, Any]:
+        shot_count = len(regenerated_shots or [])
+        self._director_taste_state["regenerated_shots"] += max(0, shot_count)
+        self._vote_many(self._director_taste_state["emotional_arcs"], preferred_emotional_arcs)
+        self._vote_many(self._director_taste_state["visual_styles"], preferred_visual_styles)
+        self._vote_many(self._director_taste_state["pacing_votes"], ["tighter"])
+        self._vote_many(self._director_taste_state["lighting_votes"], ["moody contrast"])
+        return self._director_taste_result(creator_override=creator_override)
+
+    def learn_from_manual_edits(
+        self,
+        manual_edits: Optional[Dict[str, Any]] = None,
+        creator_override: bool = True,
+    ) -> Dict[str, Any]:
+        edits = manual_edits if isinstance(manual_edits, dict) else {}
+        self._vote_many(
+            self._director_taste_state["pacing_votes"],
+            [str(edits.get("pacing"))] if edits.get("pacing") else None,
+        )
+        self._vote_many(
+            self._director_taste_state["framing_votes"],
+            [str(edits.get("framing"))] if edits.get("framing") else None,
+        )
+        self._vote_many(
+            self._director_taste_state["dialogue_density_votes"],
+            [str(edits.get("dialogue_density"))] if edits.get("dialogue_density") else None,
+        )
+        self._vote_many(
+            self._director_taste_state["lighting_votes"],
+            [str(edits.get("lighting"))] if edits.get("lighting") else None,
+        )
+        self._vote_many(
+            self._director_taste_state["transition_votes"],
+            [str(edits.get("transitions"))] if edits.get("transitions") else None,
+        )
+        self._vote_many(
+            self._director_taste_state["providers"],
+            [str(edits.get("provider"))] if edits.get("provider") else None,
+        )
+        return self._director_taste_result(creator_override=creator_override)
+
+    def generate_adaptive_creative_recommendations(
+        self,
+        creator_override: bool = False,
+    ) -> Dict[str, Any]:
+        return self._director_taste_result(creator_override=creator_override)
+
+    def _vote_many(self, target: Dict[str, int], values: Optional[List[str]]) -> None:
+        for value in values or []:
+            text = str(value).strip()
+            if not text:
+                continue
+            target[text] = int(target.get(text, 0)) + 1
+
+    def _top_list(self, votes: Dict[str, int], limit: int = 3) -> List[str]:
+        ranked = sorted(votes.items(), key=lambda item: (-item[1], item[0]))
+        return [name for name, _count in ranked[:limit]]
+
+    def _top_one(self, votes: Dict[str, int], fallback: str) -> str:
+        ranked = self._top_list(votes, limit=1)
+        return ranked[0] if ranked else fallback
+
+    def _director_taste_result(self, creator_override: bool = False) -> Dict[str, Any]:
+        state = self._director_taste_state
+        profile = DirectorTasteProfile(
+            preferred_pacing=self._top_one(state["pacing_votes"], "balanced"),
+            preferred_framing=self._top_one(state["framing_votes"], "mixed"),
+            emotional_tendencies=self._top_list(state["emotional_arcs"]),
+            dialogue_density=self._top_one(state["dialogue_density_votes"], "medium"),
+            lighting_tendencies=self._top_list(state["lighting_votes"]),
+            transition_preferences=self._top_list(state["transition_votes"]),
+            favorite_providers=self._top_list(state["providers"]),
+            accepted_shots=int(state["accepted_shots"]),
+            regenerated_shots=int(state["regenerated_shots"]),
+            preferred_emotional_arcs=self._top_list(state["emotional_arcs"]),
+            preferred_visual_styles=self._top_list(state["visual_styles"]),
+            creator_override_authority="preserved",
+            recommendations=[
+                {
+                    "type": "pacing",
+                    "guidance": f"Bias pacing toward {self._top_one(state['pacing_votes'], 'balanced')} rhythm.",
+                    "advisory_only": "true",
+                },
+                {
+                    "type": "visual_style",
+                    "guidance": (
+                        f"Prioritize visual language: {', '.join(self._top_list(state['visual_styles']))}"
+                        if self._top_list(state["visual_styles"])
+                        else "No strong style lock yet; keep broad exploration."
+                    ),
+                    "advisory_only": "true",
+                },
+                {
+                    "type": "provider",
+                    "guidance": (
+                        f"Default provider suggestion: {self._top_one(state['providers'], 'runway')}"
+                    ),
+                    "advisory_only": "true",
+                },
+            ],
+        )
+        if creator_override:
+            profile.recommendations.insert(
+                0,
+                {
+                    "type": "authority",
+                    "guidance": "Creator override is active; recommendations remain non-blocking.",
+                    "advisory_only": "true",
+                },
+            )
+        return {"director_taste_profile": profile.model_dump()}
 
     def _get_traces_for_project(
         self,

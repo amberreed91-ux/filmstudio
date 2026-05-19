@@ -421,3 +421,65 @@ def test_existing_memory_archivist_still_works():
     evaluator = MemoryArchivistEvaluator()
     assert evaluator is not None
     print("✓ test_existing_memory_archivist_still_works passed")
+
+
+def test_director_taste_profile_learns_from_approvals_and_rejections():
+    service = TasteLearningService()
+
+    service.learn_from_approvals(
+        approved_shots=["shot_001", "shot_002"],
+        preferred_emotional_arcs=["slow_burn", "catharsis"],
+        preferred_visual_styles=["noir"],
+        favorite_providers=["runway"],
+    )
+    result = service.learn_from_rejections(
+        regenerated_shots=["shot_003"],
+        preferred_emotional_arcs=["slow_burn"],
+        preferred_visual_styles=["noir"],
+    )
+    profile = result["director_taste_profile"]
+
+    assert profile["accepted_shots"] == 2
+    assert profile["regenerated_shots"] == 1
+    assert "slow_burn" in profile["preferred_emotional_arcs"]
+    assert "noir" in profile["preferred_visual_styles"]
+    assert "runway" in profile["favorite_providers"]
+
+
+def test_director_taste_profile_learns_from_manual_edits_and_preserves_override_authority():
+    service = TasteLearningService()
+    result = service.learn_from_manual_edits(
+        manual_edits={
+            "pacing": "measured",
+            "framing": "wide",
+            "dialogue_density": "low",
+            "lighting": "chiaroscuro",
+            "transitions": "fade",
+            "provider": "runway",
+        },
+        creator_override=True,
+    )
+    profile = result["director_taste_profile"]
+
+    assert profile["preferred_pacing"] == "measured"
+    assert profile["preferred_framing"] == "wide"
+    assert profile["dialogue_density"] == "low"
+    assert "chiaroscuro" in profile["lighting_tendencies"]
+    assert "fade" in profile["transition_preferences"]
+    assert profile["creator_override_authority"] == "preserved"
+    assert profile["recommendations"][0]["type"] == "authority"
+
+
+def test_generate_adaptive_creative_recommendations_is_advisory_only():
+    service = TasteLearningService()
+    service.learn_from_approvals(
+        approved_shots=["shot_001"],
+        preferred_visual_styles=["a24_atmospheric"],
+        favorite_providers=["runway"],
+    )
+    result = service.generate_adaptive_creative_recommendations()
+    profile = result["director_taste_profile"]
+
+    assert isinstance(profile["recommendations"], list)
+    assert len(profile["recommendations"]) >= 1
+    assert all(row.get("advisory_only") == "true" for row in profile["recommendations"])
