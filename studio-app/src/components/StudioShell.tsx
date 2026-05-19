@@ -1,9 +1,18 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { Link, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import Breadcrumbs from './Breadcrumbs'
 import TopNav from './TopNav'
+import { lazyLoad } from './LazyLoad'
+import { useRenderActivity } from '../context/RenderActivityContext'
+import { useAudioUX } from '../context/AudioUXContext'
 import { getRouteByPath, getRouteLabel } from '../routes'
+import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
+
+const LazyAICrewPresence = lazyLoad(
+  () => import('./AICrewPresence'),
+  <div className="animate-pulse bg-zinc-800/50 h-24 rounded-lg mb-4" />,
+)
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const AGENTS = {
@@ -175,6 +184,10 @@ export function EmptyStateCard({
 export default function StudioShell({ title, subtitle, children }: StudioShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { activity } = useRenderActivity()
+  const { emitAudioEvent } = useAudioUX()
+  const prevPathRef = useRef(location.pathname)
+  const prevRenderStatusRef = useRef(activity?.status || null)
   const route = getRouteByPath(location.pathname)
   const breadcrumbs = (route?.breadcrumbs || [{ label: 'Studio Home' }]).filter((item, index, list) => {
     if (index === 0) return true
@@ -192,19 +205,28 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
   }))
   const projectMatch = matchPath({ path: '/studio/project/:projectId/*' }, location.pathname)
   const projectId = projectMatch?.params?.projectId
+  const activeProjectId = resolveActiveProjectId({
+    queryProjectId: new URLSearchParams(location.search).get('project_id'),
+    routeProjectId: projectId,
+    locationState: location.state,
+    persistedProjectId: readPersistedActiveProjectId(),
+  })
+  useEffect(() => {
+    if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
   const previsTo = projectId ? `/studio/project/${projectId}/previs` : '/studio/previs'
   const isPrevisRoute =
     Boolean(matchPath({ path: '/studio/previs', end: true }, location.pathname)) ||
     Boolean(matchPath({ path: '/studio/project/:projectId/previs', end: true }, location.pathname))
   const roomNav = [
-    { label: 'Overview', to: '/studio/overview' },
-    { label: 'Approval Room', to: '/studio/approval' },
-    { label: "Writer's Room", to: '/studio/writers-room' },
-    { label: 'Study Room', to: '/studio/study-room' },
-    { label: 'Previs Room', to: previsTo },
-    { label: 'Production Board', to: '/studio/production-board' },
-    { label: 'Screening Room', to: '/studio/screening-room' },
-    { label: 'Archive', to: '/studio/archive' },
+    { key: 'lobby', label: 'Lobby', to: '/studio/lobby' },
+    { key: 'workspace', label: 'Workspace', to: '/studio/workspace' },
+    { key: 'development-room', label: 'Development Room', to: '/studio/development-room' },
+    { key: 'writers-room', label: "Writer's Room", to: '/studio/writers-room' },
+    { key: 'study-room', label: 'Study Room', to: '/studio/study-room' },
+    { key: 'production-board', label: 'Production Board', to: '/studio/production-board' },
+    { key: 'screening-room', label: 'Screening Room', to: '/studio/screening-room' },
+    { key: 'archive', label: 'Archive', to: '/studio/archive' },
   ]
   const [studioStatusOpen, setStudioStatusOpen] = useState(false)
   const hasGeneratedScenesFlag = localStorage.getItem('studio_scenes_generated') === '1'
@@ -272,13 +294,14 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
       : !hasApprovedScenes
         ? { text: 'Review and approve scenes in Previs', cta: 'Go to Previs', to: previsTo }
         : { text: 'Watch your film in Screening Room', cta: 'Go to Screening', to: '/studio/screening-room' }
+  const nextStepWithProject = { ...nextStep, to: withProjectQuery(nextStep.to, activeProjectId) }
 
   function handleBack() {
     if (window.history.length > 1) {
       navigate(-1)
       return
     }
-    navigate('/studio')
+    navigate(withProjectQuery('/studio', activeProjectId))
   }
 
   const roomVisualClass =
@@ -298,19 +321,54 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
                   ? 'shell-study'
                   : 'shell-default'
 
+  const productionStateClass = (() => {
+    if (activity?.status === 'failed') return 'studio-bg-failed'
+    if (activity?.status === 'completed') return 'studio-bg-completed'
+    if (activity?.status === 'generating' || activity?.status === 'polling' || activity?.status === 'preparing' || activity?.status === 'queued') return 'studio-bg-generating'
+    if (location.pathname.includes('/screening-room') || location.pathname.includes('/production-board')) return 'studio-bg-reviewing'
+    return 'studio-bg-idle'
+  })()
+
+  useEffect(() => {
+    if (prevPathRef.current !== location.pathname) {
+      if (import.meta.env.DEV) {
+        console.log('[RouteDebug] location changed', {
+          from: prevPathRef.current,
+          to: location.pathname,
+        })
+      }
+      emitAudioEvent('room_transition', { from: prevPathRef.current, to: location.pathname })
+      prevPathRef.current = location.pathname
+    }
+  }, [emitAudioEvent, location.pathname])
+
+  useEffect(() => {
+    const prev = prevRenderStatusRef.current
+    const next = activity?.status || null
+    if (prev === next) return
+    if (next === 'generating' || next === 'queued' || next === 'preparing' || next === 'polling') {
+      emitAudioEvent('render_started', { status: next })
+    } else if (next === 'completed') {
+      emitAudioEvent('render_completed', { status: next })
+    } else if (next === 'failed') {
+      emitAudioEvent('render_failed', { status: next })
+    }
+    prevRenderStatusRef.current = next
+  }, [activity?.status, emitAudioEvent])
+
   const currentStepLabel = flowSteps[activeStepIndex]?.label || 'Script'
 
   return (
-    <div className={`studio-room-shell ${roomVisualClass} relative flex min-h-screen flex-col overflow-visible`} style={{ background: 'var(--bg-deep)' }}>
+    <div className={`studio-room-shell ${roomVisualClass} ${productionStateClass} relative flex min-h-screen flex-col overflow-visible`} style={{ background: 'var(--bg-deep)' }}>
       <TopNav title={activeTitle} subtitle={subtitle || route?.purpose} />
       {showBreadcrumbs ? <Breadcrumbs items={breadcrumbs} /> : null}
 
       <div className="cinematic-panel mx-4 mt-3 px-3 py-2">
         <div className="flex min-h-[48px] flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.12em]">
-          <span className="rounded border border-white/15 bg-black/25 px-2 py-1 text-zinc-100">Room: {activeTitle}</span>
-          <span className="rounded border border-amber-300/35 bg-amber-500/10 px-2 py-1 text-amber-100">Current Step: {currentStepLabel}</span>
-          <span className="rounded border border-cyan-300/35 bg-cyan-500/10 px-2 py-1 text-cyan-100">Next: {nextStep.text}</span>
-          <span className="rounded border border-zinc-500/40 bg-zinc-700/25 px-2 py-1 text-zinc-200">Approved: {approvedSceneCount}</span>
+          <span className="studio-status-chip text-zinc-100">Room: {activeTitle}</span>
+          <span className="studio-status-chip text-amber-100">Current Step: {currentStepLabel}</span>
+          <span className="studio-status-chip text-cyan-100">Next: {nextStep.text}</span>
+          <span className="studio-status-chip text-zinc-200">Approved: {approvedSceneCount}</span>
           <button
             type="button"
             onClick={() => setStudioStatusOpen((prev) => !prev)}
@@ -358,7 +416,7 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
                 Studio Home
               </Link>
               <Link
-                to={nextStep.to}
+                to={nextStepWithProject.to}
                 className="rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline"
               >
                 {nextStep.cta}
@@ -366,7 +424,7 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
               {contextualLinks.map((link) => (
                 <Link
                   key={link.to}
-                  to={link.to}
+                  to={withProjectQuery(link.to, activeProjectId)}
                   className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] no-underline transition-all duration-200 hover:scale-[1.02]"
                   style={{ background: 'rgba(214,169,92,0.08)', color: 'var(--accent-amber)', border: '1px solid rgba(214,169,92,0.3)' }}
                 >
@@ -378,17 +436,28 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
 
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
               {roomNav.map((item) => {
-                const isActive = item.label === 'Previs Room'
-                  ? isPrevisRoute
-                  : Boolean(matchPath({ path: item.to, end: true }, location.pathname))
+                const isActive = Boolean(matchPath({ path: item.to, end: true }, location.pathname))
                 return (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    className={`rounded-md border px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] no-underline ${isActive ? 'border-cyan-300/55 bg-cyan-500/14 text-cyan-100' : 'border-white/10 bg-black/20 text-zinc-300'}`}
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      if (import.meta.env.DEV) {
+                        console.log('[NavDebug] clicked room', {
+                          key: item.key,
+                          path: item.to,
+                          before: location.pathname,
+                        })
+                      }
+                      navigate(withProjectQuery(item.to, activeProjectId))
+                      if (import.meta.env.DEV) {
+                        console.log('[NavDebug] navigate called', { afterTarget: item.to })
+                      }
+                    }}
+                    className={`rounded-md border px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] ${isActive ? 'border-cyan-300/55 bg-cyan-500/14 text-cyan-100' : 'border-white/10 bg-black/20 text-zinc-300'}`}
                   >
                     {item.label}
-                  </Link>
+                  </button>
                 )
               })}
             </div>
@@ -407,9 +476,18 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
         ) : null}
       </div>
 
-      <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-6">
-        {children}
+      <main className="w-full" style={{ background: 'linear-gradient(180deg, var(--bg-deep) 0%, #030306 40%, #010104 100%), radial-gradient(ellipse 80% 50% at 50% -10%, rgba(214,169,92,0.07) 0%, transparent 70%)', isolation: 'isolate' }}>
+        <div className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            background: 'radial-gradient(ellipse 60% 40% at 15% 5%, rgba(122,214,209,0.05) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 15%, rgba(214,169,92,0.05) 0%, transparent 60%)',
+            mixBlendMode: 'screen',
+          }}
+        />
+        <div className="relative z-10 min-h-full">
+          {children}
+        </div>
       </main>
+      <LazyAICrewPresence />
     </div>
   )
 }

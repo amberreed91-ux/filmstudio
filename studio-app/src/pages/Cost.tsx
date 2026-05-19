@@ -185,7 +185,7 @@ export default function Cost() {
                   {activeProject ? `${activeProject.title} cost controls` : 'Studio cost controls'}
                 </div>
                 <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {activeProject?.render_provider?.provider_name || 'demo_realtime'} | Studio X
+                  {(activeProject?.render_provider?.provider_name || 'No active provider')} | Studio X
                 </div>
               </div>
             </div>

@@ -26,7 +26,7 @@ function buildStudioProject(overrides: Record<string, unknown> = {}): Record<str
       source_filename: 'neon_afterglow_v2.4.fountain',
     },
     render_provider: {
-      provider_name: 'AWS GPU Fleet',
+      provider_name: 'Runway',
       provider_model: 'Deco GPUS',
       status: 'running',
       mode: 'batch',
@@ -37,7 +37,7 @@ function buildStudioProject(overrides: Record<string, unknown> = {}): Record<str
     },
     render_provider_integrations: [
       {
-        provider: 'AWS',
+        provider: 'Runway',
         selected: true,
         status: 'active',
         live_generation: 'enabled',
@@ -93,7 +93,7 @@ function buildStudioProject(overrides: Record<string, unknown> = {}): Record<str
       eta: r.eta,
       cost_per_minute: r.cost,
       priority: r.priority,
-      provider: i % 2 === 0 ? 'AWS' : 'RunPod',
+      provider: i % 2 === 0 ? 'Runway' : 'RunPod',
     })),
     rights_safety_clearance_board: {
       overall_status: 'cleared',
@@ -385,7 +385,7 @@ export const handlers = [
       buildStudioProject({
         project_id: String(projectId),
         render_provider: {
-          provider_name: body.provider_name || 'AWS GPU Fleet',
+          provider_name: body.provider_name || 'Runway',
           status: body.live_mode ? 'running' : 'standby',
           mode: body.live_mode ? 'live' : 'batch',
         },

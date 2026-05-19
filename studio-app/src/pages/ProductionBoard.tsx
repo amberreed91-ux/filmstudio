@@ -1,9 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ClipboardList } from 'lucide-react'
 import StudioShell, { AGENTS, CollapsibleSection, DropdownMenu } from '../components/StudioShell'
+import RenderActivityPanel from '../components/RenderActivityPanel'
+import ProductionTimeline, { type ProductionStage } from '../components/ProductionTimeline'
+import FilmMemoryPanel from '../components/FilmMemoryPanel'
+import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
+import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
 import { useStudio } from '../context/StudioContext'
-import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getProject, updateFilmCut } from '../lib/studioApi'
+import { useRenderActivity } from '../context/RenderActivityContext'
+import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getProject, listProjectContinuityIssues, listRenderJobs, reconcileRenderJob, retryRenderJobById, type ContinuityIssue, type RenderJob, updateFilmCut } from '../lib/studioApi'
+import { useProjectHydration } from '../hooks/useProjectHydration'
+import { useProductionRecovery } from '../hooks/useProductionRecovery'
+import ProductionRecoveryIndicator from '../components/ProductionRecoveryIndicator'
+import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 
 type AnyRecord = Record<string, unknown>
 type FilmCut = {
@@ -68,44 +78,113 @@ export default function ProductionBoard() {
   const { projectId } = useParams()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session_id')
+  const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
   const navigate = useNavigate()
   const { project, loadProject } = useStudio()
-  const loadRequestKeyRef = useRef<string | null>(null)
+  const { activity } = useRenderActivity()
   const [editCutMode, setEditCutMode] = useState(false)
   const [exportMessage, setExportMessage] = useState('')
   const [actionFeedback, setActionFeedback] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'planned' | 'review' | 'locked' | 'blocked'>('all')
   const [sortBy, setSortBy] = useState<'scene_order' | 'health_score' | 'blockers'>('scene_order')
-  const [persistedSummary, setPersistedSummary] = useState<AnyRecord | null>(null)
+  const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
+  const [loadingJobs, setLoadingJobs] = useState(false)
+  const [continuityIssues, setContinuityIssues] = useState<ContinuityIssue[]>([])
+
   useEffect(() => {
     if (!actionFeedback) return
     const timer = window.setTimeout(() => setActionFeedback(''), 2600)
     return () => window.clearTimeout(timer)
   }, [actionFeedback])
 
-  useEffect(() => {
-    if (!projectId) return
-    const loadRequestKey = `${projectId}:${sessionId ?? ''}`
-    if (loadRequestKeyRef.current === loadRequestKey) return
-    loadRequestKeyRef.current = loadRequestKey
-    void loadProject(projectId, { sessionId })
-  }, [loadProject, projectId, sessionId])
+  const hydration = useProjectHydration({
+    projectId,
+    sessionId,
+    locationState: location.state,
+    projectExecutionSummary: project?.execution_summary,
+    loadProject,
+    getProject,
+    resolveExecutionSummary: getExecutionSummary,
+  })
+  const executionSummary = hydration.executionSummary
+  const activeProjectId = resolveActiveProjectId({
+    queryProjectId,
+    routeProjectId: projectId || '',
+    locationState: location.state,
+    persistedProjectId: readPersistedActiveProjectId(),
+    contextProjectId: project?.project_id || '',
+  })
 
   useEffect(() => {
-    const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
-    if (!activeProjectId || projectId) return
-    void (async () => {
-      const response = await getProject(activeProjectId)
-      const summary = asRecord(response.project?.execution_summary)
-      if (summary) setPersistedSummary(summary)
-    })()
-  }, [projectId])
+    if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
 
-  const executionSummary = useMemo(
-    () => getExecutionSummary(location.state, project?.execution_summary || persistedSummary),
-    [location.state, project?.execution_summary, persistedSummary],
-  )
+  useEffect(() => {
+    if (!activeProjectId) {
+      setRenderJobs([])
+      return
+    }
+    let cancelled = false
+    let controller: AbortController | null = null
+    async function loadJobs() {
+      controller?.abort()
+      controller = new AbortController()
+      setLoadingJobs(true)
+      try {
+        const jobs = await listRenderJobs(activeProjectId, { signal: controller.signal })
+        if (!cancelled) setRenderJobs(Array.isArray(jobs) ? jobs : [])
+      } catch {
+        if (!cancelled) setRenderJobs([])
+      } finally {
+        if (!cancelled) setLoadingJobs(false)
+      }
+    }
+    void loadJobs()
+    const timer = window.setInterval(loadJobs, 8000)
+    return () => {
+      cancelled = true
+      controller?.abort()
+      window.clearInterval(timer)
+    }
+  }, [activeProjectId])
+
+  // Load continuity issues
+  useEffect(() => {
+    if (!activeProjectId) {
+      setContinuityIssues([])
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadContinuity() {
+      try {
+        const result = await listProjectContinuityIssues(activeProjectId, { signal: controller.signal })
+        if (!cancelled) setContinuityIssues(result.issues || [])
+      } catch {
+        if (!cancelled) setContinuityIssues([])
+      }
+    }
+    void loadContinuity()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [activeProjectId])
+
+  // Production recovery hook
+  const recovery = useProductionRecovery({
+    projectId,
+    autoRecover: true,
+    onRecoveryComplete: (result) => {
+      console.log('Production recovery completed:', result)
+      setActionFeedback('Production board recovered successfully')
+    },
+    onRecoveryError: (error) => {
+      console.error('Production recovery failed:', error)
+      setActionFeedback('Production board recovery failed')
+    }
+  })
 
   const sceneRows = useMemo(() => {
     return asArray(executionSummary.scenes)
@@ -150,7 +229,6 @@ export default function ProductionBoard() {
         }
       })
   }, [executionSummary.scenes])
-  const hasSceneRows = sceneRows.length > 0
   const sceneIdsInOrder = useMemo(() => sceneRows.map((row) => row.scene_id), [sceneRows])
 
   const productionSummary = useMemo(() => {
@@ -257,14 +335,30 @@ export default function ProductionBoard() {
         ? 'Watch Current Cut'
         : 'Review Scene Queue'
 
-  useEffect(() => {
-    if (hasSceneRows) return
-    if (projectId) return
-    navigate('/studio/writers-room', {
-      replace: true,
-      state: { notice: 'No scenes available yet. Generate scenes in Writer’s Room first.' },
-    })
-  }, [hasSceneRows, navigate, projectId])
+  const timelineRows = useMemo(() => {
+    const renderingSceneId = (activity?.scene || '').trim()
+    const toStage = (row: { state: string; scene_id: string }): ProductionStage => {
+      if (sceneReviewStatusMap[row.scene_id] === 'approved' || approvedSceneMap[row.scene_id]) return 'archive'
+      if (row.state === 'locked') return 'edit'
+      if (sceneReviewStatusMap[row.scene_id] === 'reviewed' || row.state === 'review') return 'review'
+      if (row.state === 'in_progress') return 'generation'
+      if (hasGeneratedScenes) return 'previs'
+      return 'script'
+    }
+    return sceneRows.slice(0, 8).map((row) => ({
+      sceneId: row.scene_id,
+      currentStage: toStage(row),
+      isRendering: Boolean(renderingSceneId) && renderingSceneId === row.scene_id,
+    }))
+  }, [activity?.scene, approvedSceneMap, hasGeneratedScenes, sceneReviewStatusMap, sceneRows])
+  const filmMemoryData = useMemo(() => ({
+    themes: [asString(asRecord(executionSummary.screening_summary)?.dominant_tone).trim() || 'psychological tension'],
+    motifs: asArray(asRecord(executionSummary.score_map)?.dominant_instrumentation).map((v) => asString(v).trim()).filter(Boolean).slice(0, 4),
+    emotionalArcs: sceneRows.slice(0, 5).map((row) => `${row.scene_id}:${row.state}`),
+    callbacks: asArray(asRecord(executionSummary.ending_impact)?.ending_zone_scene_ids).map((v) => `callback:${asString(v).trim()}`).filter(Boolean),
+    continuityReferences: sceneRows.filter((row) => row.blocked).slice(0, 4).map((row) => `${row.scene_id}:${row.blockers[0] || 'continuity check'}`),
+  }), [executionSummary.ending_impact, executionSummary.score_map, executionSummary.screening_summary, sceneRows])
+  const collaboration = asRecord(project?.collaboration) || asRecord(executionSummary.collaboration)
 
   useEffect(() => {
     if (sceneIdsInOrder.length === 0) return
@@ -315,7 +409,6 @@ export default function ProductionBoard() {
     setFilmCut(next)
     localStorage.setItem('studio:filmCut', JSON.stringify(next))
     setActionFeedback('Cut updated')
-    const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
     if (activeProjectId) {
       void updateFilmCut(activeProjectId, { film_cut: next as unknown as Record<string, unknown> })
     }
@@ -390,9 +483,11 @@ export default function ProductionBoard() {
 
   return (
     <StudioShell title="Production Board" subtitle="Track execution readiness, dependencies, and queue health across active scenes.">
+      <RenderActivityPanel roomName="Production Board" />
+      <CollaboratorPresenceIndicators collaboration={collaboration || null} />
       <div className="w-full overflow-visible">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
-          <section className="cinematic-panel p-6">
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 space-y-5 text-zinc-100">
+          <section className="cinematic-panel studio-fade-in p-5">
             <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 3: TRACK PROGRESS</div>
             <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100"><ClipboardList size={18} />Production Board</h2>
             <p className="mt-2 text-sm text-zinc-300">Live scene control surface for cut health, blockers, and lock readiness.</p>
@@ -409,6 +504,17 @@ export default function ProductionBoard() {
                 Crew lead: {firstNeedsAttention ? `${AGENTS.continuity.icon} ${AGENTS.continuity.name}` : `${AGENTS.director.icon} ${AGENTS.director.name}`}
               </div>
             </div>
+
+            {/* Production Recovery Indicator */}
+            <ProductionRecoveryIndicator
+              isRecovering={recovery.isRecovering}
+              recoveryStatus={recovery.recoveryStatus}
+              recoveryMessage={recovery.recoveryMessage}
+              recoveryError={recovery.recoveryError}
+              recoveredItems={recovery.recoveredItems}
+              onSafeRefresh={recovery.safeRefresh}
+              onDismiss={recovery.resetRecovery}
+            />
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
               <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Total Scenes</div>
@@ -425,6 +531,17 @@ export default function ProductionBoard() {
               <div className="rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-[0.1em] text-rose-200">Blocked</div>
                 <div className="font-semibold text-rose-100">{productionSummary.blocked_scenes}</div>
+              </div>
+              <div className={`rounded-lg border px-3 py-2 ${continuityIssues.length > 0 ? 'border-amber-400/35 bg-amber-500/10' : 'border-emerald-400/35 bg-emerald-500/10'}`}>
+                <div className={`text-[10px] uppercase tracking-[0.1em] ${continuityIssues.length > 0 ? 'text-amber-200' : 'text-emerald-200'}`}>Continuity Issues</div>
+                <div className="font-semibold text-zinc-100">{continuityIssues.length}</div>
+                {continuityIssues.length > 0 && (
+                  <div className="mt-1 flex gap-2">
+                    <span className="text-[9px] text-red-300">{continuityIssues.filter(i => i.severity === 'high').length} high</span>
+                    <span className="text-[9px] text-amber-300">{continuityIssues.filter(i => i.severity === 'medium').length} med</span>
+                    <span className="text-[9px] text-blue-300">{continuityIssues.filter(i => i.severity === 'low').length} low</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -466,9 +583,92 @@ export default function ProductionBoard() {
             {actionFeedback ? <div className="mt-2 text-[11px] text-cyan-200">{actionFeedback}</div> : null}
             {exportMessage ? <div className="mt-2 text-[11px] text-zinc-300">{exportMessage}</div> : null}
           </section>
+          <section className="cinematic-panel studio-fade-in p-4">
+            <ProductionTimeline
+              title="Production Pipeline Timeline"
+              scenes={timelineRows.length > 0 ? timelineRows : [{ sceneId: 'scene_001', currentStage: 'script', isRendering: false }]}
+            />
+          </section>
+        </div>
+        <div>
+          <section className="cinematic-panel studio-fade-in p-4">
+            <MultiUserCollaborationPanel
+              projectId={projectId || project?.project_id || ''}
+              room="production-board"
+              sceneId={sceneRows[0]?.scene_id}
+            />
+          </section>
+          <FilmMemoryPanel
+            data={filmMemoryData}
+            archivistStatus={localStorage.getItem('studio:lastAgentAction') || 'Memory Archivist checking continuity...'}
+          />
 
-          <section className="cinematic-panel p-4">
+          <section className="cinematic-panel studio-fade-in p-4">
             <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Scene Queue</h3>
+            <div className="mb-4 rounded-xl border border-cyan-300/30 bg-cyan-500/8 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-200">Render Jobs (Source of Truth)</div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!activeProjectId) return
+                    setLoadingJobs(true)
+                    try {
+                      const jobs = await listRenderJobs(activeProjectId)
+                      setRenderJobs(Array.isArray(jobs) ? jobs : [])
+                    } finally {
+                      setLoadingJobs(false)
+                    }
+                  }}
+                  className="rounded border border-cyan-300/45 bg-cyan-500/12 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-cyan-100"
+                >
+                  Refresh Status
+                </button>
+              </div>
+              {loadingJobs ? <div className="text-[11px] text-zinc-300">Loading render jobs...</div> : null}
+              {!loadingJobs && renderJobs.length === 0 ? (
+                <div className="text-[11px] text-zinc-300">No render jobs yet. Generate a scene or send shots from Previs.</div>
+              ) : null}
+              {!loadingJobs && renderJobs.length > 0 ? (
+                <div className="space-y-2">
+                  {renderJobs.slice(0, 12).map((job) => (
+                    <div key={job.id} className="rounded border border-white/10 bg-black/25 px-2 py-2 text-[11px] text-zinc-200">
+                      <div>job_id: {job.id} • project_id: {job.project_id} • shot_id: {job.shot_id}</div>
+                      <div>provider: {job.provider} • task_id: {job.provider_job_id || 'n/a'} • status: {job.status}</div>
+                      <div>created_at: {job.created_at} • updated_at: {job.updated_at}</div>
+                      {job.output_payload?.asset_url ? (
+                        <div className="mt-1 flex items-center gap-2">
+                          <a href={job.output_payload.asset_url} target="_blank" rel="noreferrer" className="text-cyan-300 break-all">Open Output</a>
+                          <Link to={withProjectQuery('/studio/screening-room', activeProjectId)} className="rounded border border-cyan-300/35 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-cyan-100 no-underline">Send to Screening Room</Link>
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-zinc-400">output_url not ready</div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const updated = await reconcileRenderJob(job.id)
+                          setRenderJobs((prev) => prev.map((row) => (row.id === updated.id ? updated : row)))
+                        }}
+                        className="mt-1 rounded border border-zinc-500/40 bg-zinc-700/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-zinc-200"
+                      >
+                        Recover/Reconcile
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const updated = await retryRenderJobById(job.id)
+                          setRenderJobs((prev) => prev.map((row) => (row.id === updated.id ? updated : row)))
+                        }}
+                        className="ml-2 mt-1 rounded border border-amber-400/40 bg-amber-500/12 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-amber-100"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="mb-3 flex flex-wrap gap-2 text-[11px]">
               <DropdownMenu
                 label="Filter by status"
@@ -630,7 +830,7 @@ export default function ProductionBoard() {
               ))}
 
               {sceneRows.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-zinc-700 px-4 py-4 text-sm text-zinc-400">
+                <div className="studio-empty-state text-sm text-zinc-400">
                   <div>No scenes yet. Generate your script in Writer&apos;s Room to begin.</div>
                   <Link
                     to={projectId ? `/studio/project/${projectId}/previs` : '/studio/previs'}

@@ -4,6 +4,7 @@ import { Archive } from 'lucide-react'
 import StudioShell, { TabGroup } from '../components/StudioShell'
 import { useStudio } from '../context/StudioContext'
 import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getProject, type ExportPackageType } from '../lib/studioApi'
+import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 
 type AnyRecord = Record<string, unknown>
 
@@ -62,6 +63,7 @@ export default function ArchiveRoom() {
   const { projectId } = useParams()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session_id')
+  const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
   const { project, loadProject } = useStudio()
   const loadRequestKeyRef = useRef<string | null>(null)
@@ -69,16 +71,31 @@ export default function ArchiveRoom() {
   const [archiveTab, setArchiveTab] = useState<'snapshots' | 'versions' | 'best_cuts' | 'memory'>('snapshots')
   const [exportMessage, setExportMessage] = useState('')
   const [persistedSummary, setPersistedSummary] = useState<AnyRecord | null>(null)
+  const activeProjectId = resolveActiveProjectId({
+    queryProjectId,
+    routeProjectId: projectId || '',
+    locationState: location.state,
+    persistedProjectId: readPersistedActiveProjectId(),
+    contextProjectId: project?.project_id || '',
+  })
+  useEffect(() => {
+    if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
   const exportCards: Array<{ type: ExportPackageType; title: string; description: string }> = [
     { type: 'pitch-pack', title: 'Pitch Pack', description: 'Story, structure, direction, and ending payload.' },
     { type: 'shot-list', title: 'Shot List', description: 'Scene/shot intent with render references.' },
     { type: 'prompt-pack', title: 'Prompt Pack', description: 'Visual briefs, prompt packs, and memory influence.' },
     { type: 'cut-manifest', title: 'Cut Manifest', description: 'Cut order, inclusion list, runtime and transitions.' },
+    { type: 'festival-export', title: 'Festival Export', description: 'Submission-ready package with delivery metadata and presets.' },
+    { type: 'youtube-export', title: 'YouTube Export', description: 'Channel-ready delivery with runtime, poster, and subtitle metadata.' },
+    { type: 'trailer-export', title: 'Trailer Export', description: '90-second promotional export preset with source-cut references.' },
+    { type: 'teaser-export', title: 'Teaser Export', description: '30-second teaser preset for social promotion workflows.' },
+    { type: 'subtitle-packages', title: 'Subtitle Packages', description: 'SRT/VTT subtitle bundle for distribution channels.' },
     { type: 'archive-snapshot', title: 'Archive Snapshot', description: 'Snapshots, versions, best cut, production summary.' },
   ]
 
   async function handleExportPackage(type: ExportPackageType) {
-    const safeProjectId = projectId || project?.project_id || 'local_project'
+    const safeProjectId = activeProjectId || 'local_project'
     try {
       const payload = await fetchExportPackage(safeProjectId, type)
       downloadJson(`${safeProjectId}-${type}.json`, payload)
@@ -99,14 +116,13 @@ export default function ArchiveRoom() {
   }, [loadProject, projectId, sessionId])
 
   useEffect(() => {
-    const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
     if (!activeProjectId || projectId) return
     void (async () => {
       const response = await getProject(activeProjectId)
       const summary = asRecord(response.project?.execution_summary)
       if (summary) setPersistedSummary(summary)
     })()
-  }, [projectId])
+  }, [activeProjectId, projectId])
 
   const executionSummary = useMemo(
     () => getExecutionSummary(location.state, project?.execution_summary || persistedSummary),
@@ -198,8 +214,8 @@ export default function ArchiveRoom() {
 
   return (
     <StudioShell title="Archive Room" subtitle="Memory vault for film snapshots, scene versions, and best-cut lineage.">
-      <div className="w-full overflow-visible bg-background">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 bg-gradient-to-b from-zinc-950 via-slate-950 to-black text-zinc-100">
+      <div className="w-full overflow-visible">
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
           <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/45 p-5 shadow-2xl backdrop-blur-md">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-xl font-semibold tracking-wide text-zinc-100"><Archive size={18} />Archive Snapshots</h2>
@@ -215,7 +231,7 @@ export default function ArchiveRoom() {
               <div className="mt-3 rounded-lg border border-dashed border-zinc-700 px-3 py-3 text-xs text-zinc-300">
                 <div>No saved versions yet.</div>
                 <Link
-                  to="/studio/writers-room"
+                  to={withProjectQuery('/studio/writers-room', activeProjectId)}
                   className="mt-2 inline-flex rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline"
                 >
                   Generate a film

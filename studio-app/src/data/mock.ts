@@ -93,14 +93,14 @@ export const LIVE_DAILIES = [
 
 export const PROVIDERS = [
   {
-    id: 'aws',
-    name: 'AWS GPU Fleet',
+    id: 'runway',
+    name: 'Runway',
     type: 'Cloud',
-    instance: 'G5 Instances (32x)',
-    load: 85,
-    jobs: 45,
-    costHr: 12.5,
-    realtimeCost: 14.2,
+    instance: 'Gen-4 Cluster',
+    load: 70,
+    jobs: 21,
+    costHr: 11.4,
+    realtimeCost: 11.4,
     color: '#f97316',
   },
   {
@@ -146,7 +146,7 @@ export const STYLE_TRAITS = [
 ]
 
 export const ROUTING_LOG = [
-  { time: '10:45 AM', msg: 'Switched SCN_C_005 to AWS for speed.' },
+  { time: '10:45 AM', msg: 'Switched SCN_C_005 to Runway for speed.' },
   { time: '10:30 AM', msg: 'Rerouted SCN_A_001 to RunPod for cost efficiency.' },
   { time: '10:15 AM', msg: 'Local servers idling, shifting low-priority jobs.' },
 ]

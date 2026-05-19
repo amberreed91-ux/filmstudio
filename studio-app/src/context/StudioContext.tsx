@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react'
 import type { ReactNode } from 'react'
 import {
   createDemoProject,
@@ -33,6 +33,8 @@ type StudioContextValue = {
   providers: ProviderStatus[]
   renderJobs: RenderJob[]
   pollingJobs: Set<string>
+  selectedRenderProvider: string | null
+  setSelectedRenderProvider: (provider: string | null) => void
   refreshOverview: () => Promise<void>
   loadProject: (projectId: string, options?: { sessionId?: string | null }) => Promise<void>
   loadDemo: (demoId?: string) => Promise<void>
@@ -109,6 +111,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [providers, setProviders] = useState<ProviderStatus[]>([])
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
   const [pollingJobs, setPollingJobs] = useState<Set<string>>(new Set())
+  const [selectedRenderProvider, setSelectedRenderProvider] = useState<string | null>(null)
   const pollingIntervals = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   async function refreshOverview() {
@@ -286,14 +289,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function loadProviders() {
+  const loadProviders = useCallback(async () => {
     try {
       const statusList = await getRenderProviders()
       setProviders(statusList)
     } catch (err) {
       console.error('Failed to load providers:', err)
     }
-  }
+  }, [])
 
   async function createJob(shotId: string, provider?: string, prompt?: string, referenceAssets?: string[]) {
     if (!project?.project_id) throw new Error('No project loaded')
@@ -384,6 +387,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     providers,
     renderJobs,
     pollingJobs,
+    selectedRenderProvider,
+    setSelectedRenderProvider,
     refreshOverview,
     loadProject,
     loadDemo,

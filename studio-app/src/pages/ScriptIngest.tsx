@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { FileText, Upload, CheckCircle, AlertCircle, File } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
 import StudioPanel from '../components/StudioPanel'
+import CinematicLoading from '../components/CinematicLoading'
 import { ingestScript, getRenderProviders } from '../lib/studioApi'
 
 interface RenderProvider {
@@ -13,6 +14,7 @@ interface RenderProvider {
 }
 
 const DEFAULT_PROVIDERS: RenderProvider[] = [
+  { provider_id: 'runway', name: 'Runway', status: 'available', is_simulated: false },
   { provider_id: 'simulation', name: 'Simulation (Demo)', status: 'available', is_simulated: true },
   { provider_id: 'openai', name: 'OpenAI', status: 'available', is_simulated: false },
   { provider_id: 'replicate', name: 'Replicate', status: 'available', is_simulated: false },
@@ -32,7 +34,7 @@ export default function ScriptIngest() {
   const [formData, setFormData] = useState({
     title: '',
     creative_intent: '',
-    render_provider: 'simulation',
+    render_provider: 'runway',
     script_text: '',
   })
 
@@ -43,6 +45,12 @@ export default function ScriptIngest() {
         const data = await getRenderProviders()
         if (data && data.length > 0) {
           setProviders(data)
+          const runway = data.find((provider) => provider.provider_id === 'runway')
+          if (runway) {
+            setFormData((prev) => ({ ...prev, render_provider: 'runway' }))
+          } else if (data[0]?.provider_id) {
+            setFormData((prev) => ({ ...prev, render_provider: data[0].provider_id }))
+          }
         }
       } catch {
         // Keep defaults if API fails
@@ -373,8 +381,17 @@ She looks up, making eye contact with a STRANGER across the room...`}
                 >
                   {loading ? (
                     <>
-                      <span className="animate-spin">&#9696;</span>
-                      Processing...
+                      <span className="inline-block w-full min-w-[260px]">
+                        <CinematicLoading
+                          compact
+                          title="Generation Progress Atmosphere"
+                          lines={[
+                            'Analyzing scene composition...',
+                            'Preparing cinematic lighting...',
+                            'Rendering motion frames...',
+                          ]}
+                        />
+                      </span>
                     </>
                   ) : success ? (
                     <>

@@ -2,6 +2,10 @@ import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'rea
 import { useLocation, useNavigate } from 'react-router-dom'
 import { FileText } from 'lucide-react'
 import StudioShell, { TabGroup } from '../components/StudioShell'
+import CinematicLoading from '../components/CinematicLoading'
+import CoDirectorCollaborationPanel from '../components/CoDirectorCollaborationPanel'
+import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
+import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
 import { createProject, generateScenes } from '../lib/studioApi'
 
 type ActRow = { act: number; scene_ids: string[]; scene_count: number }
@@ -235,6 +239,18 @@ export default function WritersRoom() {
   const sequences = useMemo(() => buildSequences(sceneIds), [sceneIds])
   const scriptCharCount = scriptInput.length
   const scriptLineCount = scriptInput.length > 0 ? scriptInput.split('\n').length : 0
+  const coDirectorWorkflow = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('studio:lastBundle')
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      const workflow = parsed?.co_director_workflow
+      return workflow && typeof workflow === 'object' && !Array.isArray(workflow) ? workflow : null
+    } catch {
+      return null
+    }
+  }, [flowMessage, isGenerating])
+  const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
 
   const allowedExtensions = ['txt', 'md', 'fountain', 'screenplay']
 
@@ -324,7 +340,7 @@ export default function WritersRoom() {
     localStorage.setItem('studio_script_exists', '1')
     localStorage.setItem('studio_scenes_generated', (persistedMode ? (JSON.parse(localStorage.getItem('studio:lastBundle') || '{}') as { scenes?: unknown[] }).scenes?.length : bundle.scenes.length) ? '1' : '0')
     localStorage.setItem('studio_last_script_lines', String(scriptLineCount))
-    setFlowMessage(persistedMode ? 'Scenes generated and saved to project' : 'Scenes generated (local fallback mode)')
+    setFlowMessage(persistedMode ? 'Scenes generated and saved to project.' : 'Scenes generated locally. Connect backend persistence for shared project visibility.')
     setIsGenerating(false)
     navigate('/studio/previs', {
       state: {
@@ -337,6 +353,7 @@ export default function WritersRoom() {
 
   return (
     <StudioShell title="Writer's Room" subtitle="Write, upload, revise, and prepare your script.">
+      <CollaboratorPresenceIndicators />
       <div className="w-full overflow-visible">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
           {routeNotice ? (
@@ -421,13 +438,32 @@ export default function WritersRoom() {
                 disabled={isGenerating}
                 className="mt-3 w-full rounded-lg border border-cyan-300/60 bg-cyan-500/22 px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-cyan-50 shadow-[0_0_26px_rgba(34,211,238,0.22)] transition-all duration-200 hover:scale-[1.01]"
               >
-                {isGenerating ? 'Processing script...' : 'Generate Scenes'}
+                {isGenerating ? 'Rendering motion frames...' : 'Generate Scenes'}
               </button>
+            {isGenerating ? (
+              <div className="mt-2">
+                <CinematicLoading
+                  compact
+                  title="Generation Progress Atmosphere"
+                  lines={[
+                    'Analyzing scene composition...',
+                    'Preparing cinematic lighting...',
+                    'Rendering motion frames...',
+                  ]}
+                />
+              </div>
+            ) : null}
             {flowMessage ? (
               <div className="mt-2 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
                 {flowMessage}
               </div>
             ) : null}
+            <div className="mt-4">
+              <CoDirectorCollaborationPanel room="writer" workflow={coDirectorWorkflow} />
+            </div>
+            <div className="mt-4">
+              <MultiUserCollaborationPanel projectId={activeProjectId} room="writers-room" sceneId={sceneIds[0]} />
+            </div>
           </section>
 
           <section className="cinematic-panel p-4">

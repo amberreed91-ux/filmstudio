@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Film, Play, CheckCircle, AlertTriangle, Clock, FolderOpen, LayoutDashboard, BookOpen, Clapperboard, DollarSign, ArrowRight, FileText } from 'lucide-react'
 import { useStudio } from '../context/StudioContext'
-import { APPROVAL_GATES, RENDER_QUEUE, PROJECT } from '../data/mock'
 import StudioPanel from '../components/StudioPanel'
+import CinematicLoading from '../components/CinematicLoading'
+import { STUDIO_API_BASE } from '../lib/studioApi'
 
-const APPROVAL_URL = 'http://127.0.0.1:8012/api/approval'
+const APPROVAL_URL = `${STUDIO_API_BASE}/api/approval`
 
 const STATUS_COLORS = {
   passed: { bg: 'bg-green-500/20', border: 'border-green-500/30', text: 'text-green-400' },
@@ -15,7 +16,7 @@ const STATUS_COLORS = {
 }
 
 const Dashboard: React.FC = () => {
-  const { overview, isDemoMode } = useStudio()
+  const { overview } = useStudio()
   const [approvalLoading, setApprovalLoading] = useState(true)
   const [approvalError, setApprovalError] = useState<Error | null>(null)
   const [approvals, setApprovals] = useState<Array<Record<string, unknown>>>([])
@@ -63,20 +64,21 @@ const Dashboard: React.FC = () => {
 
   if (approvalLoading) {
     return (
-      <div className="relative isolate min-h-screen overflow-hidden rounded-[2rem] bg-[radial-gradient(circle_at_18%_0%,rgba(245,158,11,0.16),transparent_32%),radial-gradient(circle_at_86%_12%,rgba(56,189,248,0.12),transparent_30%),linear-gradient(145deg,#030305,#090a10_50%,#020203)] p-6">
+      <div className="relative isolate min-h-full overflow-x-hidden rounded-[2rem] bg-[radial-gradient(circle_at_18%_0%,rgba(245,158,11,0.16),transparent_32%),radial-gradient(circle_at_86%_12%,rgba(56,189,248,0.12),transparent_30%),linear-gradient(145deg,#030305,#090a10_50%,#020203)] p-6">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/50 to-transparent" />
         <div className="mx-auto max-w-7xl">
         <div className="relative overflow-hidden rounded-[1.75rem] border border-white/12 bg-white/[0.045] p-8 text-zinc-200 shadow-[0_32px_110px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
           <div className="pointer-events-none absolute right-0 top-0 h-56 w-56 rounded-full bg-amber-400/10 blur-3xl" />
           <div className="relative z-10">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl border border-amber-300/35 bg-amber-400/15 text-amber-100 shadow-[0_0_34px_rgba(245,158,11,0.18)]">
-            <Clock size={20} className="animate-pulse" />
-          </div>
-          <div className="mt-5 text-2xl font-semibold tracking-[0.04em]">Loading Approval Room…</div>
-          <div className="mt-2 text-sm text-zinc-400">Fetching approval gates from {APPROVAL_URL}</div>
-          <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full w-1/3 animate-pulse rounded-full bg-gradient-to-r from-amber-300 via-cyan-200 to-amber-300" />
-          </div>
+            <CinematicLoading
+              title="Loading Approval Room"
+              lines={[
+                'Analyzing scene composition...',
+                'Preparing cinematic lighting...',
+                'Rendering motion frames...',
+              ]}
+            />
+            <div className="mt-3 text-sm text-zinc-400">Fetching approval gates from {APPROVAL_URL}</div>
           </div>
         </div>
         </div>
@@ -86,7 +88,7 @@ const Dashboard: React.FC = () => {
 
   if (approvalError) {
     return (
-      <div className="relative isolate min-h-screen overflow-hidden rounded-[2rem] bg-[radial-gradient(circle_at_18%_0%,rgba(244,63,94,0.14),transparent_30%),radial-gradient(circle_at_88%_10%,rgba(245,158,11,0.1),transparent_32%),linear-gradient(145deg,#030305,#090a10_50%,#020203)] p-6 text-zinc-100">
+      <div className="relative isolate min-h-full overflow-x-hidden rounded-[2rem] bg-[radial-gradient(circle_at_18%_0%,rgba(244,63,94,0.14),transparent_30%),radial-gradient(circle_at_88%_10%,rgba(245,158,11,0.1),transparent_32%),linear-gradient(145deg,#030305,#090a10_50%,#020203)] p-6 text-zinc-100">
         <div className="pointer-events-none absolute -left-20 top-20 h-72 w-72 rounded-full bg-rose-400/10 blur-3xl" />
         <div className="mx-auto max-w-7xl space-y-4">
         <div className="relative overflow-hidden rounded-[1.75rem] border border-rose-300/25 bg-white/[0.045] p-7 shadow-[0_32px_110px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
@@ -122,12 +124,22 @@ const Dashboard: React.FC = () => {
   const projects = overview?.projects || []
   const latest = overview?.latest_project
 
-  const pendingGates = APPROVAL_GATES.filter(g => g.status === 'pending' || g.status === 'warning')
-  const renderQueue = RENDER_QUEUE || []
+  const approvalGates = approvals.map((row, index) => ({
+    id: String((row as Record<string, unknown>).scene_id || `scene_${index + 1}`),
+    label: String((row as Record<string, unknown>).scene_id || `scene_${index + 1}`),
+    detail: String((row as Record<string, unknown>).notes || 'No notes'),
+    status: String((row as Record<string, unknown>).status || 'pending').toLowerCase(),
+  }))
+  const pendingGates = approvalGates.filter((g) => g.status === 'pending' || g.status === 'warning')
+  const renderQueue = ((latest?.render_queue as Array<Record<string, unknown>> | undefined) || []).map((job) => ({
+    id: String(job.render_id || job.job_id || job.shot_id || 'job'),
+    status: String(job.status || 'unknown'),
+    progress: Number(job.progress || 0),
+  }))
   const pendingRenders = renderQueue.filter(r => r.status === 'pending' || r.status === 'rendering')
 
   return (
-    <div className="relative isolate min-h-screen overflow-hidden rounded-[2rem] bg-[radial-gradient(circle_at_16%_4%,rgba(245,158,11,0.17),transparent_32%),radial-gradient(circle_at_86%_10%,rgba(34,211,238,0.12),transparent_34%),radial-gradient(circle_at_50%_100%,rgba(99,102,241,0.08),transparent_38%),linear-gradient(145deg,#030305_0%,#090a10_50%,#020203_100%)] p-6 text-zinc-100">
+    <div className="relative isolate min-h-full overflow-x-hidden rounded-[2rem] bg-[radial-gradient(circle_at_16%_4%,rgba(245,158,11,0.17),transparent_32%),radial-gradient(circle_at_86%_10%,rgba(34,211,238,0.12),transparent_34%),radial-gradient(circle_at_50%_100%,rgba(99,102,241,0.08),transparent_38%),linear-gradient(145deg,#030305_0%,#090a10_50%,#020203_100%)] p-6 text-zinc-100">
       <div className="pointer-events-none absolute -left-20 top-32 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
       <div className="pointer-events-none absolute right-0 top-0 h-96 w-96 rounded-full bg-cyan-400/10 blur-3xl" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/50 to-transparent" />
@@ -150,11 +162,6 @@ const Dashboard: React.FC = () => {
             <div className="mt-3 inline-flex rounded-full border border-emerald-300/35 bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-100 shadow-[0_0_24px_rgba(52,211,153,0.12)]">
               Loaded approvals: {approvals.length}
             </div>
-          )}
-          {isDemoMode && (
-            <span className="text-xs px-2 py-1 rounded" style={{ background: 'var(--bg-elevated)', color: 'var(--accent)' }}>
-              Demo Mode - Simulated Data
-            </span>
           )}
         </div>
         
@@ -192,7 +199,7 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="rounded-2xl border border-violet-300/25 bg-violet-400/10 p-4 shadow-[0_20px_70px_rgba(139,92,246,0.08)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-violet-200/45">
           <div className="mb-1 text-xs uppercase tracking-[0.14em] text-violet-200/80">Scenes</div>
-          <div className="text-2xl font-semibold">{latest?.source_stats?.scene_count || PROJECT.scenes}</div>
+          <div className="text-2xl font-semibold">{latest?.source_stats?.scene_count || 0}</div>
         </div>
       </div>
 
@@ -239,7 +246,7 @@ const Dashboard: React.FC = () => {
         {/* Approval Gates */}
         <StudioPanel title="Approval Gates" subtitle="Quality control checkpoints">
           <div className="space-y-3">
-            {APPROVAL_GATES.map((gate) => {
+            {approvalGates.length > 0 ? approvalGates.map((gate) => {
               const colors = STATUS_COLORS[gate.status as keyof typeof STATUS_COLORS] || STATUS_COLORS.pending
               return (
                 <div key={gate.id} className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--bg-elevated)', border: `1px solid ${gate.status === 'passed' ? 'var(--success)' : gate.status === 'warning' ? 'var(--warning)' : 'var(--border)'}` }}>
@@ -255,7 +262,9 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
               )
-            })}
+            }) : (
+              <div className="text-sm" style={{ color: 'var(--text-muted)' }}>No approval gates yet.</div>
+            )}
           </div>
         </StudioPanel>
 
@@ -333,21 +342,21 @@ const Dashboard: React.FC = () => {
           <div className="space-y-3">
             <div className="flex justify-between p-3 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
               <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Project</span>
-              <span className="text-sm font-medium">{PROJECT.name}</span>
+              <span className="text-sm font-medium">{latest?.title || 'No active project'}</span>
             </div>
             <div className="flex justify-between p-3 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
               <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Status</span>
-              <span className="text-sm text-green-400">{PROJECT.status}</span>
+              <span className="text-sm text-green-400">{(latest?.updated_at && 'Active') || 'Idle'}</span>
             </div>
             <div className="flex justify-between p-3 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
               <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Scenes</span>
-              <span className="text-sm">{PROJECT.scenes}</span>
+              <span className="text-sm">{latest?.source_stats?.scene_count || 0}</span>
             </div>
             <div className="flex justify-between p-3 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
               <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Shots</span>
-              <span className="text-sm">{PROJECT.shots}</span>
+              <span className="text-sm">{latest?.source_stats?.shot_count || 0}</span>
             </div>
-            <Link to={`/studio/project/${PROJECT.id}`} className="flex items-center justify-center gap-2 w-full p-3 rounded-lg mt-2" style={{ background: 'var(--accent)', color: 'var(--bg-primary)' }}>
+            <Link to={`/studio/project/${latest?.project_id || projects[0]?.project_id || ''}`} className="flex items-center justify-center gap-2 w-full p-3 rounded-lg mt-2" style={{ background: 'var(--accent)', color: 'var(--bg-primary)' }}>
               <Play size={14} />
               Open Workspace
             </Link>

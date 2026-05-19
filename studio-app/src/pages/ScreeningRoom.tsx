@@ -2,8 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { MonitorPlay } from 'lucide-react'
 import StudioShell, { TabGroup } from '../components/StudioShell'
+import RenderActivityPanel from '../components/RenderActivityPanel'
+import FilmMemoryPanel from '../components/FilmMemoryPanel'
+import CoDirectorCollaborationPanel from '../components/CoDirectorCollaborationPanel'
+import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
+import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
+import ScreeningIntelligencePanel from '../components/ScreeningIntelligencePanel'
 import { useStudio } from '../context/StudioContext'
-import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getProject } from '../lib/studioApi'
+import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StyleDriftIssue } from '../lib/studioApi'
+import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
+import { useProjectHydration } from '../hooks/useProjectHydration'
+import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 
 type AnyRecord = Record<string, unknown>
 type PlaylistItem = {
@@ -30,7 +39,6 @@ type FilmCut = {
   excluded_scenes?: string[]
   created_at?: string
 }
-const SCREENING_FALLBACK_IMAGE = 'https://picsum.photos/1200/675?random=31'
 
 function asRecord(value: unknown): AnyRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
@@ -84,10 +92,7 @@ function getViewerImage(renderId: string): string {
   if (renderId.startsWith('http://') || renderId.startsWith('https://')) {
     return renderId
   }
-  if (!renderId.trim()) {
-    return SCREENING_FALLBACK_IMAGE
-  }
-  return `https://picsum.photos/seed/${encodeURIComponent(renderId)}/1200/675`
+  return ''
 }
 
 function isBrowserSafePath(path: string): boolean {
@@ -138,9 +143,9 @@ export default function ScreeningRoom() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session_id')
+  const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
   const { project, loadProject } = useStudio()
-  const loadRequestKeyRef = useRef<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0)
   const [previewAllScenes, setPreviewAllScenes] = useState(false)
@@ -148,36 +153,124 @@ export default function ScreeningRoom() {
   const [currentCut, setCurrentCut] = useState<FilmCut | null>(null)
   const [exportMessage, setExportMessage] = useState('')
   const [actionFeedback, setActionFeedback] = useState('')
-  const [persistedSummary, setPersistedSummary] = useState<AnyRecord | null>(null)
+  const [isTheaterMode, setIsTheaterMode] = useState(false)
+  const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
+  const [latestPackage, setLatestPackage] = useState<FinalShortFilmPackage | null>(null)
+  const [cinematicMemory, setCinematicMemory] = useState<CinematicMemoryRecord[]>([])
+  const [continuityIssues, setContinuityIssues] = useState<ContinuityIssue[]>([])
+  const [directorSignature, setDirectorSignature] = useState<DirectorSignature | null>(null)
+  const [styleDriftIssues, setStyleDriftIssues] = useState<StyleDriftIssue[]>([])
   const playbackTimerRef = useRef<number | null>(null)
+  const theaterViewportRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     if (!actionFeedback) return
     const timer = window.setTimeout(() => setActionFeedback(''), 2600)
     return () => window.clearTimeout(timer)
   }, [actionFeedback])
 
-  useEffect(() => {
-    if (!projectId) return
-    const loadRequestKey = `${projectId}:${sessionId ?? ''}`
-    if (loadRequestKeyRef.current === loadRequestKey) return
-    loadRequestKeyRef.current = loadRequestKey
-    void loadProject(projectId, { sessionId })
-  }, [loadProject, projectId, sessionId])
+  const hydration = useProjectHydration({
+    projectId,
+    sessionId,
+    locationState: location.state,
+    projectExecutionSummary: project?.execution_summary,
+    loadProject,
+    getProject,
+    resolveExecutionSummary: getExecutionSummary,
+  })
+  const executionSummary = hydration.executionSummary
+  const activeProjectId = resolveActiveProjectId({
+    queryProjectId,
+    routeProjectId: projectId || '',
+    locationState: location.state,
+    persistedProjectId: readPersistedActiveProjectId(),
+    contextProjectId: project?.project_id || '',
+  })
 
   useEffect(() => {
-    const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
-    if (!activeProjectId || projectId) return
-    void (async () => {
-      const response = await getProject(activeProjectId)
-      const summary = asRecord(response.project?.execution_summary)
-      if (summary) setPersistedSummary(summary)
-    })()
-  }, [projectId])
+    if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
 
-  const executionSummary = useMemo(
-    () => getExecutionSummary(location.state, project?.execution_summary || persistedSummary),
-    [location.state, project?.execution_summary, persistedSummary],
-  )
+  useEffect(() => {
+    if (!activeProjectId) {
+      setRenderJobs([])
+      setLatestPackage(null)
+      return
+    }
+    let cancelled = false
+    async function loadOutputs() {
+      try {
+        const jobs = await listRenderJobs(activeProjectId)
+        if (!cancelled) setRenderJobs(Array.isArray(jobs) ? jobs : [])
+      } catch {
+        if (!cancelled) setRenderJobs([])
+      }
+      try {
+        const latest = await getLatestFinalShortFilmPackageForProject(activeProjectId)
+        if (!cancelled) setLatestPackage(latest.package || null)
+      } catch {
+        if (!cancelled) setLatestPackage(null)
+      }
+    }
+    void loadOutputs()
+  }, [activeProjectId])
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setCinematicMemory([])
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadMemory() {
+      try {
+        const payload = await listProjectCinematicMemory(activeProjectId, { signal: controller.signal })
+        if (!cancelled) setCinematicMemory(payload.memory_records || [])
+      } catch {
+        if (!cancelled) setCinematicMemory([])
+      }
+    }
+    void loadMemory()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [activeProjectId])
+
+  // Load continuity + style intelligence (advisory)
+  useEffect(() => {
+    if (!activeProjectId) {
+      setContinuityIssues([])
+      setDirectorSignature(null)
+      setStyleDriftIssues([])
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadAdvisory() {
+      try {
+        const [continuityRes, sigRes, driftRes] = await Promise.all([
+          listProjectContinuityIssues(activeProjectId, { signal: controller.signal }),
+          getLatestDirectorSignature(activeProjectId, { signal: controller.signal }),
+          listProjectStyleDriftIssues(activeProjectId, { signal: controller.signal }),
+        ])
+        if (cancelled) return
+        setContinuityIssues(continuityRes.issues || [])
+        setDirectorSignature(sigRes.signature || null)
+        setStyleDriftIssues(Array.isArray(driftRes.issues) ? driftRes.issues : [])
+      } catch {
+        if (!cancelled) {
+          setContinuityIssues([])
+          setDirectorSignature(null)
+          setStyleDriftIssues([])
+        }
+      }
+    }
+    void loadAdvisory()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [activeProjectId])
 
   const fullPlaylist = useMemo(() => {
     const raw = asArray(executionSummary.screening_playlist)
@@ -201,15 +294,17 @@ export default function ScreeningRoom() {
       }
     })
   }, [executionSummary])
+  const coDirectorWorkflow = asRecord(executionSummary.co_director_workflow) || asRecord(executionSummary.co_director)
+  const collaboration = asRecord(project?.collaboration) || asRecord(executionSummary.collaboration)
   const hasPlaylistData = fullPlaylist.length > 0
   useEffect(() => {
     if (hasPlaylistData) return
-    if (projectId) return
-    navigate('/studio/previs', {
+    if (activeProjectId) return
+    navigate(withProjectQuery('/studio/previs', activeProjectId), {
       replace: true,
       state: { notice: 'No cut available yet. Review and approve scenes in Previs first.' },
     })
-  }, [hasPlaylistData, navigate, projectId])
+  }, [activeProjectId, hasPlaylistData, navigate])
   const approvedSceneMap = useMemo(() => {
     const raw = localStorage.getItem('studio_approved_scene_map')
     if (!raw) return {} as Record<string, boolean>
@@ -289,6 +384,24 @@ export default function ScreeningRoom() {
       }
     }).filter((asset) => Boolean(asset.asset_id))
   }, [executionSummary.image_render_assets])
+  const styleDriftIssuesBySceneId = useMemo(() => {
+    const map = new Map<string, StyleDriftIssue[]>()
+    const assetToScenes = new Map<string, Set<string>>()
+    for (const asset of imageRenderAssets) {
+      if (!asset.scene_id || !asset.asset_id) continue
+      if (!assetToScenes.has(asset.asset_id)) assetToScenes.set(asset.asset_id, new Set())
+      assetToScenes.get(asset.asset_id)!.add(asset.scene_id)
+    }
+    for (const issue of styleDriftIssues) {
+      const scenes = assetToScenes.get(issue.asset_id || '')
+      if (!scenes) continue
+      for (const sid of scenes) {
+        if (!map.has(sid)) map.set(sid, [])
+        map.get(sid)!.push(issue)
+      }
+    }
+    return map
+  }, [imageRenderAssets, styleDriftIssues])
   const videoRenderAssets = useMemo(() => {
     return asArray(executionSummary.video_render_assets).map((entry) => {
       const item = asRecord(entry) || {}
@@ -388,6 +501,23 @@ export default function ScreeningRoom() {
     const issues = asArray(flow.issues).map((entry) => asString(entry).trim()).filter(Boolean)
     return { flow_score: flowScore, issues }
   }, [executionSummary.sequence_flow])
+  const editingSuggestions = useMemo(() => {
+    const editing = asRecord(executionSummary.editing_intelligence) || {}
+    const rows = asArray(editing.suggestions)
+      .map((entry) => {
+        const row = asRecord(entry) || {}
+        return {
+          suggestion_type: asString(row.suggestion_type).trim() || 'general',
+          priority: asString(row.priority).trim() || 'medium',
+          title: asString(row.title).trim() || 'Editing advisory',
+          recommendation: asString(row.recommendation).trim(),
+          rationale: asString(row.rationale).trim(),
+          advisory_only: row.advisory_only !== false,
+        }
+      })
+      .filter((row) => Boolean(row.recommendation))
+    return rows
+  }, [executionSummary.editing_intelligence])
   const scoreMap = useMemo(() => {
     const map = asRecord(executionSummary.score_map) || {}
     return {
@@ -566,6 +696,18 @@ export default function ScreeningRoom() {
   const activeRenderId = activeScene?.render_ids?.[0] || ''
   const activeSceneAsset = activeScene?.scene_id ? firstSuccessfulAssetByScene.get(activeScene.scene_id) : null
   const activeSceneDiagnostics = activeScene?.scene_id ? sceneDiagnosticsById.get(activeScene.scene_id) : null
+  const activeSceneContinuityIssues = useMemo(() => {
+    if (!activeScene?.scene_id) return []
+    return continuityIssues.filter(
+      (issue) =>
+        (issue.source_asset_id || issue.asset_id || '').includes(activeScene.scene_id) ||
+        (issue.compared_asset_id || '').includes(activeScene.scene_id),
+    )
+  }, [activeScene?.scene_id, continuityIssues])
+  const activeSceneStyleDrifts = useMemo(() => {
+    if (!activeScene?.scene_id) return [] as StyleDriftIssue[]
+    return styleDriftIssuesBySceneId.get(activeScene.scene_id) || []
+  }, [activeScene?.scene_id, styleDriftIssuesBySceneId])
   const activeCutLabel = (activeSceneDiagnostics?.selected_cut === 'iteration' || activeScene?.cut !== 'original') ? 'ITERATION CUT' : 'ORIGINAL CUT'
   const isWeakMoment = Boolean(activeScene?.scene_id && cutAnalysis.weakMoments.has(activeScene.scene_id))
   const isStrongMoment = Boolean(activeScene?.scene_id && cutAnalysis.strongMoments.has(activeScene.scene_id))
@@ -592,7 +734,7 @@ export default function ScreeningRoom() {
     [audioAssetPlan, activeScene?.scene_id],
   )
   const activeRenderStatus = useMemo(() => {
-    if (!activeScene) return { label: 'PLACEHOLDER', reason: 'No scenes available' }
+    if (!activeScene) return { label: 'NO OUTPUT', reason: 'No scenes available' }
     if (activeSceneVideoUrl) {
       const motionEntry = activeScene?.scene_id ? firstVideoAssetByScene.get(activeScene.scene_id) : null
       const motionLabel = motionEntry?.video_url ? 'Motion Preview (AI Generated)' : ''
@@ -604,11 +746,85 @@ export default function ScreeningRoom() {
     const source = (activeSceneAsset?.url || activeSceneAsset?.file_path || '').toLowerCase()
     if (!source || source.includes('picsum.photos')) {
       const fallbackReason = asString(activeSceneAsset?.fallback_reason)
-      return { label: 'PLACEHOLDER', reason: fallbackReason ? `Using fallback: ${fallbackReason}` : 'Using fallback mode' }
+      return { label: 'NO OUTPUT', reason: fallbackReason ? `No playable output: ${fallbackReason}` : 'No playable output yet' }
     }
     return { label: 'LOCAL PREVIS', reason: '' }
   }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene])
   const activeMotionStatus = activeScene?.scene_id ? motionStatusByScene.get(activeScene.scene_id) : null
+  const generationTimeLabel = activeScene?.duration_estimate ? `${activeScene.duration_estimate}s` : 'n/a'
+  const filmMemoryData = useMemo(() => {
+    const motifs = asArray(scoreMap.dominant_instrumentation).map((v) => asString(v).trim()).filter(Boolean)
+    const callbacks = asArray(endingImpact.ending_zone_scene_ids).map((v) => `callback:${asString(v).trim()}`).filter(Boolean)
+    const continuityRefs: string[] = []
+    if (activeSceneDiagnostics?.issues?.length) {
+      continuityRefs.push(...activeSceneDiagnostics.issues.slice(0, 4))
+    } else if (activeSceneContinuityIssues.length > 0) {
+      continuityRefs.push(
+        ...activeSceneContinuityIssues.slice(0, 4).map((issue) => `${issue.issue_type.replace(/_/g, ' ')}: ${issue.description}`),
+      )
+    } else {
+      continuityRefs.push(INTELLIGENCE_EMPTY.noContinuityIssues)
+    }
+    const tone = asString(screeningSummary.dominant_tone).trim()
+    const feel = asString(endingImpact.dominant_feeling).trim()
+    const themes = [tone, feel].filter(Boolean)
+    return {
+      themes,
+      motifs,
+      emotionalArcs: asArray(dreadCurve)
+        .slice(0, 4)
+        .map((item) => `${asString(asRecord(item)?.scene_id).trim()}:${(Number(asRecord(item)?.dread_score || 0) * 100).toFixed(0)}%`)
+        .filter((row) => !row.endsWith(':0%')),
+      callbacks,
+      continuityReferences: continuityRefs,
+    }
+  }, [
+    activeSceneContinuityIssues,
+    activeSceneDiagnostics?.issues,
+    dreadCurve,
+    endingImpact.dominant_feeling,
+    endingImpact.ending_zone_scene_ids,
+    scoreMap.dominant_instrumentation,
+    screeningSummary.dominant_tone,
+  ])
+
+  async function toggleFullscreenMode() {
+    if (!theaterViewportRef.current) return
+    if (!document.fullscreenElement) {
+      await theaterViewportRef.current.requestFullscreen()
+      setIsTheaterMode(true)
+      setActionFeedback('Theater fullscreen enabled')
+      return
+    }
+    await document.exitFullscreen()
+    setIsTheaterMode(false)
+    setActionFeedback('Theater fullscreen disabled')
+  }
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsTheaterMode(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
+
+  function handleReviewDecision(decision: 'approve' | 'revise' | 'regenerate') {
+    if (!activeScene?.scene_id) return
+    const raw = localStorage.getItem('studio:screeningReviewActions')
+    const existing = raw ? (JSON.parse(raw) as Record<string, string>) : {}
+    const next = { ...existing, [activeScene.scene_id]: decision }
+    localStorage.setItem('studio:screeningReviewActions', JSON.stringify(next))
+    setActionFeedback(`Scene ${activeScene.scene_id} marked: ${decision}`)
+  }
+
+  useEffect(() => {
+    if (!activeScene) return
+    console.info('[ScreeningRoom] preview_sources', {
+      scene_id: activeScene.scene_id,
+      output_url: activeSceneVideoUrl || '',
+      preview_url: firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '',
+      fallback_image: viewerImage || '',
+    })
+  }, [activeScene, activeSceneVideoUrl, firstVideoAssetByScene, viewerImage])
 
   async function handleExportCutManifest() {
     const safeProjectId = projectId || project?.project_id || 'local_project'
@@ -625,9 +841,11 @@ export default function ScreeningRoom() {
 
   return (
     <StudioShell title="Screening Room" subtitle="Playback and review of scene cuts and iteration outcomes.">
-      <div className="w-full overflow-visible">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
-          <section className="cinematic-panel p-6">
+      <RenderActivityPanel roomName="Screening Room" />
+      <CollaboratorPresenceIndicators collaboration={collaboration || null} />
+      <div className={`w-full overflow-visible ${isTheaterMode ? 'screening-theater-mode' : ''}`}>
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 space-y-5 text-zinc-100">
+          <section className="cinematic-panel studio-fade-in p-5">
             <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 4: WATCH YOUR FILM</div>
             <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100"><MonitorPlay size={18} />Screening Room</h2>
             <p className="mt-1 text-sm text-zinc-300">This is your current cut built from approved scenes.</p>
@@ -643,11 +861,11 @@ export default function ScreeningRoom() {
               <div className="mt-2 text-xs text-amber-200">This cut is built from available scenes.</div>
             ) : null}
             {currentCut && playlist.length === 0 ? (
-              <div className="mt-3 rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+              <div className="studio-empty-state mt-3 text-xs text-rose-200">
                 No scenes in current cut.
                 <div className="mt-2">
                   <Link
-                    to="/studio/production-board"
+                    to={withProjectQuery('/studio/production-board', activeProjectId)}
                     className="rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline"
                   >
                     Go to Production Board
@@ -656,7 +874,7 @@ export default function ScreeningRoom() {
               </div>
             ) : null}
             {approvedSceneIds.size === 0 && !previewAllScenes ? (
-              <div className="mt-3 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              <div className="studio-empty-state mt-3 text-xs text-amber-200">
                 No approved scenes yet. Approve scenes in Previs to build your cut.
                 <div className="mt-2">
                   <button
@@ -744,9 +962,27 @@ export default function ScreeningRoom() {
               >
                 Export Cut Manifest
               </button>
+              <button
+                type="button"
+                onClick={() => { void toggleFullscreenMode() }}
+                className="rounded-lg border border-fuchsia-300/45 bg-fuchsia-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-fuchsia-100"
+              >
+                {isTheaterMode ? 'Exit Fullscreen' : 'Fullscreen Review'}
+              </button>
               {pacingShiftDetected ? (
                 <div className="text-xs uppercase tracking-[0.12em] text-amber-300 border border-amber-400/50 rounded px-2 py-1">
                   Pacing Shift Detected
+                </div>
+              ) : null}
+              {directorSignature ? (
+                <div className="text-xs uppercase tracking-[0.12em] text-fuchsia-200 border border-fuchsia-400/45 rounded px-2 py-1">
+                  Signature {(directorSignature.confidence * 100).toFixed(0)}%
+                  {directorSignature.metadata && directorSignature.metadata.insufficient_data ? ' · thin data' : ''}
+                </div>
+              ) : null}
+              {styleDriftIssues.length > 0 ? (
+                <div className="text-xs uppercase tracking-[0.12em] text-violet-200 border border-violet-400/45 rounded px-2 py-1">
+                  Drift issues {styleDriftIssues.length}
                 </div>
               ) : null}
             </div>
@@ -758,7 +994,9 @@ export default function ScreeningRoom() {
             <div className="cinematic-panel lg:col-span-3 p-4">
               <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Playlist</h3>
               <div className="space-y-2 pr-1">
-                {playlist.map((item, index) => (
+                {playlist.map((item, index) => {
+                  const sceneStyleDrifts = styleDriftIssuesBySceneId.get(item.scene_id) || []
+                  return (
                   <button
                     key={`${item.scene_id}-${index}`}
                     type="button"
@@ -781,6 +1019,13 @@ export default function ScreeningRoom() {
                         || thumbAsset?.url
                         || (thumbAsset?.file_path && isBrowserSafePath(thumbAsset.file_path) ? thumbAsset.file_path : '')
                         || getViewerImage(item.render_ids[0] || item.scene_id)
+                      if (!thumbSrc) {
+                        return (
+                          <div className="mt-2 h-12 w-full rounded border border-zinc-700/70 bg-zinc-900/60 px-2 py-2 text-[10px] text-zinc-400">
+                            No thumbnail available
+                          </div>
+                        )
+                      }
                       return (
                         <img
                           src={thumbSrc}
@@ -800,6 +1045,15 @@ export default function ScreeningRoom() {
                           strong
                         </span>
                       ) : null}
+                      {sceneStyleDrifts.length > 0 ? (
+                        <span className="rounded-full border border-violet-400/60 bg-violet-500/15 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-violet-200">
+                          {INTELLIGENCE_LABELS.styleDrift}
+                        </span>
+                      ) : directorSignature && !directorSignature.metadata?.insufficient_data && imageRenderAssets.some((a) => a.scene_id === item.scene_id) ? (
+                        <span className="rounded-full border border-emerald-400/50 bg-emerald-500/12 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-emerald-200">
+                          fits signature
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-1 text-xs text-zinc-400">Cut: {item.cut === 'original' ? 'Original' : 'Iteration'}</div>
                     <div className={`mt-1 text-xs ${statusTone(item.status)}`}>Status: {item.status}</div>
@@ -807,7 +1061,7 @@ export default function ScreeningRoom() {
                       Transition: {sceneTransitions[index]?.transition || 'hold'}
                     </div>
                   </button>
-                ))}
+                )})}
                 {playlist.length === 0 ? (
                   <div className="text-sm text-zinc-400 border border-dashed border-zinc-700 rounded-lg px-3 py-4">
                     <div>No cut available yet.</div>
@@ -823,10 +1077,10 @@ export default function ScreeningRoom() {
             </div>
 
             <div className="lg:col-span-6 space-y-4">
-              <div className="cinematic-panel p-4">
+              <div ref={theaterViewportRef} className="cinematic-panel screening-theater-frame p-4">
                 <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Main Viewer</h3>
-                {activeScene && (activeRenderId || activeSceneVideoUrl) ? (
-                  <div className="relative overflow-hidden rounded-xl border border-white/15">
+                {activeScene && (viewerImage || activeSceneVideoUrl) ? (
+                  <div className="relative screening-cinema-screen overflow-hidden rounded-xl border border-white/15">
                     {activeSceneVideoUrl ? (
                       <video
                         src={activeSceneVideoUrl}
@@ -836,8 +1090,22 @@ export default function ScreeningRoom() {
                         controls
                         muted
                         playsInline
+                        onLoadedData={() => {
+                          console.info('[ScreeningRoom] video_load_success', {
+                            scene_id: activeScene.scene_id,
+                            output_url: activeSceneVideoUrl,
+                            preview_url: firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '',
+                          })
+                        }}
+                        onError={() => {
+                          console.warn('[ScreeningRoom] video_load_failure', {
+                            scene_id: activeScene.scene_id,
+                            output_url: activeSceneVideoUrl,
+                            preview_url: firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '',
+                          })
+                        }}
                       />
-                    ) : (
+                    ) : viewerImage ? (
                       <img
                         src={viewerImage}
                         alt={`Screening preview for ${activeScene.scene_id}`}
@@ -845,8 +1113,13 @@ export default function ScreeningRoom() {
                           isPlaying ? 'scale-[1.01] opacity-100' : 'scale-100 opacity-95'
                         }`}
                       />
+                    ) : (
+                      <div className="flex aspect-video w-full items-center justify-center bg-black/40 text-zinc-300">
+                        No rendered footage available yet.
+                      </div>
                     )}
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                    <div className="pointer-events-none absolute inset-0 screening-ambient-reflection" />
                     <div className="absolute bottom-3 left-3 rounded border border-white/20 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-100">
                       {activeScene.scene_id}
                     </div>
@@ -889,6 +1162,12 @@ export default function ScreeningRoom() {
                         Motion: {activeMotionStatus.reason}
                       </div>
                     ) : null}
+                    <div className="absolute left-3 top-3 rounded border border-white/20 bg-black/45 px-3 py-2 text-[10px] text-zinc-100">
+                      <div>Provider: <span className="text-cyan-200">{activeRenderStatus.label}</span></div>
+                      <div>Duration: <span className="text-zinc-100">{activeScene.duration_estimate || 0}s</span></div>
+                      <div>Generation Time: <span className="text-zinc-100">{generationTimeLabel}</span></div>
+                      <div>Emotional Tone: <span className="text-zinc-100">{screeningSummary.dominant_tone || 'n/a'}</span></div>
+                    </div>
                   </div>
                 ) : (
                   <div className="w-full aspect-video rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 grid place-items-center text-zinc-400">
@@ -903,6 +1182,28 @@ export default function ScreeningRoom() {
                     </div>
                   </div>
                 )}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => handleReviewDecision('approve')} className="rounded-md border border-emerald-400/45 bg-emerald-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100">
+                    Approve
+                  </button>
+                  <button type="button" onClick={() => handleReviewDecision('revise')} className="rounded-md border border-amber-400/45 bg-amber-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
+                    Revise
+                  </button>
+                  <button type="button" onClick={() => handleReviewDecision('regenerate')} className="rounded-md border border-cyan-400/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100">
+                    Regenerate
+                  </button>
+                </div>
+                {activeScene ? (
+                  <section className="mt-4 rounded-lg border border-white/10 bg-black/35 p-3 text-[11px] text-zinc-200">
+                    <ScreeningIntelligencePanel
+                      sceneId={activeScene.scene_id}
+                      sceneContinuityIssueCount={activeSceneContinuityIssues.length}
+                      sceneStyleDriftCount={activeSceneStyleDrifts.length}
+                      relatedMemoryCount={cinematicMemory.length}
+                      isPackaged={Boolean(latestPackage?.package_status === 'packaged' || latestPackage?.package_status === 'approved')}
+                    />
+                  </section>
+                ) : null}
               </div>
 
               <div className="cinematic-panel p-4">
@@ -1042,6 +1343,11 @@ export default function ScreeningRoom() {
                 </div>
               </div>
 
+              <FilmMemoryPanel
+                data={filmMemoryData}
+                archivistStatus="Linking this cut to project semantic memory and continuity notes."
+              />
+
               {!isPlaying && activeScene ? (
                 <div className="cinematic-panel p-4">
                   <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Scene Feedback</h3>
@@ -1061,12 +1367,18 @@ export default function ScreeningRoom() {
                   </div>
                   <div className="mt-3 rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-xs">
                     <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Issues</div>
-                    {activeSceneDiagnostics?.issues.length ? (
+                    {activeSceneContinuityIssues.length > 0 ? (
+                      activeSceneContinuityIssues.slice(0, 4).map((issue, idx) => (
+                        <div key={`cont-${idx}`} className={`mt-1 ${issue.severity === 'high' ? 'text-red-300' : issue.severity === 'medium' ? 'text-amber-300' : 'text-zinc-300'}`}>
+                          • <span className="uppercase text-[9px]">{issue.issue_type.replace('_', ' ')}:</span> {issue.description}
+                        </div>
+                      ))
+                    ) : activeSceneDiagnostics?.issues.length ? (
                       activeSceneDiagnostics.issues.slice(0, 4).map((issue, idx) => (
-                        <div key={`active-issue-${idx}`} className="mt-1 text-rose-200">- {issue}</div>
+                        <div key={`diag-${idx}`} className="mt-1 text-rose-200">- {issue}</div>
                       ))
                     ) : (
-                      <div className="mt-1 text-emerald-200">No active scene issues.</div>
+                      <div className="mt-1 text-emerald-200">{INTELLIGENCE_EMPTY.noContinuityIssues}</div>
                     )}
                   </div>
                 </div>
@@ -1089,8 +1401,66 @@ export default function ScreeningRoom() {
                 />
               </section>
 
+              <section className="cinematic-panel p-3">
+                <h3 className="text-[11px] uppercase tracking-[0.12em] text-zinc-300">{INTELLIGENCE_LABELS.semanticMemory} · references</h3>
+                {cinematicMemory.length === 0 ? (
+                  <div className="mt-2 text-xs text-zinc-500">{INTELLIGENCE_EMPTY.semanticSearchHint}</div>
+                ) : (
+                  <div className="mt-2 space-y-2 text-xs">
+                    <div className="rounded border border-white/10 bg-black/25 p-2 text-zinc-200">
+                      Highlights: {cinematicMemory.slice(0, 3).map((m) => m.summary || m.memory_id).join(' · ') || '—'}
+                    </div>
+                    <div className="rounded border border-white/10 bg-black/25 p-2 text-zinc-400">
+                      Linked reference assets: {Array.from(new Set(cinematicMemory.map((m) => m.asset_id))).slice(0, 6).join(', ') || '—'}
+                    </div>
+                  </div>
+                )}
+              </section>
+
               {screeningInsightTab === 'flow' ? (
-              <section className="cinematic-panel p-4">
+          <section className="cinematic-panel p-4">
+            <div className="mb-3 rounded-lg border border-cyan-300/25 bg-cyan-500/8 p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-200">Where To Watch Outputs</div>
+              <div className="mt-2 grid gap-2 md:grid-cols-3">
+                <div className="rounded border border-white/10 bg-black/25 p-2">
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Clips</div>
+                  {renderJobs.filter((job) => typeof job.output_payload?.asset_url === 'string' && job.output_payload?.asset_url).length > 0 ? (
+                    <div className="mt-1 space-y-2 text-[11px]">
+                      {renderJobs
+                        .filter((job) => typeof job.output_payload?.asset_url === 'string' && job.output_payload?.asset_url)
+                        .slice(0, 3)
+                        .map((job) => (
+                          <div key={job.id} className="rounded border border-white/10 bg-black/30 p-1.5">
+                            <a href={job.output_payload?.asset_url} target="_blank" rel="noreferrer" className="block text-cyan-300 break-all">
+                              {job.shot_id} ({job.status})
+                            </a>
+                            <video
+                              controls
+                              preload="metadata"
+                              className="mt-1 aspect-video w-full rounded border border-white/10 bg-black"
+                              src={job.output_payload?.asset_url || ''}
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  ) : <div className="mt-1 text-[11px] text-zinc-300">No completed clips yet.</div>}
+                </div>
+                <div className="rounded border border-white/10 bg-black/25 p-2">
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Stitched Film</div>
+                  {latestPackage?.final_output_url ? (
+                    <a href={latestPackage.final_output_url} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] text-cyan-300 break-all">Open latest stitched output</a>
+                  ) : <div className="mt-1 text-[11px] text-zinc-300">No stitched film available yet.</div>}
+                </div>
+                <div className="rounded border border-white/10 bg-black/25 p-2">
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Final Package</div>
+                  {latestPackage ? (
+                    <div className="mt-1 text-[11px] text-zinc-200">
+                      status: {latestPackage.package_status}
+                    </div>
+                  ) : <div className="mt-1 text-[11px] text-zinc-300">No final package yet.</div>}
+                </div>
+              </div>
+            </div>
                 <details open={false}>
                   <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-zinc-300">Flow</summary>
                   <div className="mt-3 text-sm text-zinc-200">
@@ -1108,7 +1478,32 @@ export default function ScreeningRoom() {
                     )}
                   </div>
                 </details>
-              </section>
+                <div className="mt-4 rounded-lg border border-fuchsia-300/20 bg-fuchsia-500/8 p-3">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-fuchsia-200">AI Editing Intelligence (Advisory)</div>
+                  <div className="mt-2 space-y-2">
+                    {editingSuggestions.length > 0 ? (
+                      editingSuggestions.slice(0, 4).map((item, idx) => (
+                        <div key={`${item.suggestion_type}-${idx}`} className="rounded border border-white/10 bg-black/30 px-2 py-2 text-xs text-zinc-200">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-zinc-100">{item.title}</span>
+                            <span className="uppercase tracking-[0.12em] text-zinc-400">{item.priority}</span>
+                          </div>
+                          <div className="mt-1 text-zinc-200">{item.recommendation}</div>
+                          {item.rationale ? <div className="mt-1 text-zinc-400">{item.rationale}</div> : null}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-zinc-400">No editing recommendations available yet.</div>
+                    )}
+                  </div>
+            </div>
+            <div className="mt-4">
+              <CoDirectorCollaborationPanel room="screening" workflow={coDirectorWorkflow} />
+            </div>
+            <div className="mt-4">
+              <MultiUserCollaborationPanel projectId={projectId || project?.project_id || ''} room="screening-room" sceneId={activeScene?.scene_id} />
+            </div>
+          </section>
               ) : null}
 
               {screeningInsightTab === 'ending' ? (

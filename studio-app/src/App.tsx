@@ -1,9 +1,20 @@
 import { Component, type ReactNode } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { StudioProvider } from './context/StudioContext'
+import { RenderActivityProvider } from './context/RenderActivityContext'
+import { AudioUXProvider } from './context/AudioUXContext'
 import { APP_ROUTES } from './routes'
 import NotFound from './pages/NotFound'
+import StudioLayout from './components/StudioLayout'
+import { disableStudioDevMode, enableStudioDevMode } from './lib/devMode'
 import './index.css'
+
+declare global {
+  interface Window {
+    enableStudioDevMode?: () => void
+    disableStudioDevMode?: () => void
+  }
+}
 
 interface ErrorBoundaryState {
   hasError: boolean
@@ -51,18 +62,38 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
 }
 
 export default function App() {
+  if (typeof window !== 'undefined') {
+    window.enableStudioDevMode = enableStudioDevMode
+    window.disableStudioDevMode = disableStudioDevMode
+  }
+  
   return (
     <AppErrorBoundary>
       <StudioProvider>
-        <BrowserRouter>
-          <Routes>
-            {APP_ROUTES.map((route) => (
-              <Route key={route.path} path={route.path} element={route.element} />
-            ))}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <AudioUXProvider>
+          <RenderActivityProvider>
+            <BrowserRouter>
+              <StudioLayout>
+                <StudioRoutes />
+              </StudioLayout>
+            </BrowserRouter>
+          </RenderActivityProvider>
+        </AudioUXProvider>
       </StudioProvider>
     </AppErrorBoundary>
+  )
+}
+
+function StudioRoutes() {
+  const location = useLocation()
+  const routeDebugKey = `${location.pathname}${location.search}`
+
+  return (
+    <Routes location={location} key={routeDebugKey}>
+      {APP_ROUTES.map((route) => (
+        <Route key={route.path} path={route.path} element={route.element} />
+      ))}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   )
 }

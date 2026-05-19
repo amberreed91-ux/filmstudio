@@ -1,9 +1,39 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Film } from 'lucide-react'
 import StudioShell, { AGENTS, TabGroup } from '../components/StudioShell'
+import DirectorConsole from '../components/DirectorConsole'
+import CinematicLoading from '../components/CinematicLoading'
+import PrevisIntelligencePanel from '../components/PrevisIntelligencePanel'
 import { useStudio } from '../context/StudioContext'
-import { generateMotionPreview, getProject, updateFilmCut, updateSceneReview } from '../lib/studioApi'
+import {
+  generateMotionPreview,
+  extractVideoAssetKeyframes,
+  findSimilarKeyframes,
+  getProject,
+  listRelatedMemoryForKeyframe,
+  listProjectFrameAnalyses,
+  listProjectContinuityIssues,
+  listRenderJobs,
+  listVideoAssetKeyframes,
+  listVideoAssetsForProject,
+  getLatestDirectorSignature,
+  listProjectStyleDriftIssues,
+  updateFilmCut,
+  updateSceneReview,
+  type ContinuityIssue,
+  type DirectorSignature,
+  type StyleDriftIssue,
+  type RenderJob,
+  type FrameAnalysis,
+  type SemanticMemorySearchResult,
+  type VideoAsset,
+  type VideoKeyframe,
+} from '../lib/studioApi'
+import { resolveVisualForSceneAndShot } from '../lib/previsVisualResolver'
+import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import { mapContinuityIssuesToScene, summarizeContinuityIssues } from '../lib/continuityIntelligence'
+import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
 
 type AnyRecord = Record<string, unknown>
 type InterventionAction = 'increase_tension' | 'fix_continuity' | 'improve_flow' | 'improve_visuals' | 'regenerate_scene'
@@ -39,7 +69,7 @@ type ConflictDecision = {
   reason: string
   timestamp: string
 }
-const PREVIS_PLACEHOLDER_IMAGE = 'https://picsum.photos/800/450?random=1'
+const PREVIS_PLACEHOLDER_IMAGE = ''
 
 function asRecord(value: unknown): AnyRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -172,113 +202,14 @@ function pickExecutionSummary(locationState: unknown, projectSummary: unknown): 
   return { summary: {}, hasRealData: false }
 }
 
-const PREVIS_MOCK_BUNDLE: AnyRecord = {
-  scenes: [
-    {
-      scene_id: 'scene_001',
-      multi_shot_execution_ledger: [
-        { shot_id: 'shot_scene_001_001', status: 'success', render_id: 'render_scene_001_001', meta: {} },
-        { shot_id: 'shot_scene_001_002', status: 'failed', render_id: '', meta: {} },
-      ],
-      scene_generation_summary: { status: 'partial' },
-      scene_quality_verdict: { verdict: 'needs_revision', reason: 'Mock fallback verdict' },
-      scene_coherence_report: { coherence_score: 0.58, issues: ['Mock: mixed shot outcomes'] },
-      scene_continuity_report: { continuity_score: 0.61, issues: ['Mock: continuity drift between cuts'] },
-      narrative_progression_score: { progression_score: 0.62, status: 'plateauing' },
-      director_notes: {
-        what_works: ['Mock: baseline coverage exists'],
-        what_breaks: ['Mock: pacing dip in second beat'],
-        suggested_changes: ['Mock: tighten transition and increase contrast'],
-      },
-      scene_playback_preview: { render_ids: ['render_scene_001_001'] },
-      co_director_suggestions: [
-        {
-          id: 'mock_suggestion_1',
-          type: 'continuity',
-          title: 'Stabilize cut continuity',
-          description: 'Re-align visual anchors between the two shots.',
-          rationale: 'Mock fallback detected continuity gap.',
-          confidence: 0.81,
-        },
-        {
-          id: 'mock_suggestion_2',
-          type: 'visual',
-          title: 'Add one bold contrast frame',
-          description: 'Inject one high-contrast frame to restore escalation.',
-          rationale: 'Mock fallback detected flat progression.',
-          confidence: 0.72,
-        },
-      ],
-      scene_intervention_plan: {
-        target_scene_id: 'scene_001',
-        problem_shot_ids: ['shot_scene_001_002'],
-        suggested_fix_shot_ids: ['shot_scene_001_001'],
-        before: { verdict: 'needs_revision', status: 'partial' },
-        suggested_changes: ['Mock: replace failed shot with continuity-safe variant'],
-      },
-      next_iteration_strategy: {
-        recommended_action: 'fix_continuity',
-        priority: 'high',
-        mode: 'read_only_preview',
-        notes: ['Mock: resolve failed shot before further stylization'],
-      },
-    },
-  ],
-  scene_generation_summary: { status: 'partial' },
-  scene_quality_verdict: { verdict: 'needs_revision', reason: 'Mock fallback verdict' },
-  multi_shot_execution_ledger: [
-    { shot_id: 'shot_scene_001_001', status: 'success', render_id: 'render_scene_001_001', meta: {} },
-    { shot_id: 'shot_scene_001_002', status: 'failed', render_id: '', meta: {} },
-  ],
-  scene_coherence_report: { coherence_score: 0.58, issues: ['Mock: mixed shot outcomes'] },
-  narrative_progression_score: { progression_score: 0.62, status: 'plateauing' },
-  scene_continuity_report: { continuity_score: 0.61, issues: ['Mock: continuity drift between cuts'] },
-  director_notes: {
-    what_works: ['Mock: baseline coverage exists'],
-    what_breaks: ['Mock: pacing dip in second beat'],
-    suggested_changes: ['Mock: tighten transition and increase contrast'],
-  },
-  scene_playback_preview: { render_ids: ['render_scene_001_001'] },
-  co_director_suggestions: [
-    {
-      id: 'mock_suggestion_1',
-      type: 'continuity',
-      title: 'Stabilize cut continuity',
-      description: 'Re-align visual anchors between the two shots.',
-      rationale: 'Mock fallback detected continuity gap.',
-      confidence: 0.81,
-    },
-    {
-      id: 'mock_suggestion_2',
-      type: 'visual',
-      title: 'Add one bold contrast frame',
-      description: 'Inject one high-contrast frame to restore escalation.',
-      rationale: 'Mock fallback detected flat progression.',
-      confidence: 0.72,
-    },
-  ],
-  scene_intervention_plan: {
-    target_scene_id: 'scene_001',
-    problem_shot_ids: ['shot_scene_001_002'],
-    suggested_fix_shot_ids: ['shot_scene_001_001'],
-    before: { verdict: 'needs_revision', status: 'partial' },
-    suggested_changes: ['Mock: replace failed shot with continuity-safe variant'],
-  },
-  next_iteration_strategy: {
-    recommended_action: 'fix_continuity',
-    priority: 'high',
-    mode: 'read_only_preview',
-    notes: ['Mock: resolve failed shot before further stylization'],
-  },
-}
-
 export default function PrevisRoom() {
   const { projectId } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session_id')
+  const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
-  const { project, loadProject, loading } = useStudio()
+  const { project, loadProject, loading, providers, loadProviders, createJob, submitJob } = useStudio()
   const loadRequestKeyRef = useRef<string | null>(null)
   const activeSceneRef = useRef<HTMLButtonElement | null>(null)
   const [selectedSceneId, setSelectedSceneId] = useState<string>('')
@@ -321,6 +252,10 @@ export default function PrevisRoom() {
       return {}
     }
   })
+  const [sceneContinuityIssues, setSceneContinuityIssues] = useState<Record<string, ContinuityIssue[]>>({})
+  const [projectContinuityIssues, setProjectContinuityIssues] = useState<ContinuityIssue[]>([])
+  const [directorSignature, setDirectorSignature] = useState<DirectorSignature | null>(null)
+  const [styleDriftIssues, setStyleDriftIssues] = useState<StyleDriftIssue[]>([])
   const [controlState, setControlState] = useState<{
     lastAction: InterventionAction | null
     active_intervention: ActiveIntervention | null
@@ -345,6 +280,7 @@ export default function PrevisRoom() {
     }
   })
   const [scenePromptOverrides, setScenePromptOverrides] = useState<Record<string, string>>({})
+  const [isGeneratingScene, setIsGeneratingScene] = useState(false)
   const [ignoredConflictDecisions, setIgnoredConflictDecisions] = useState<ConflictDecision[]>(() => {
     try {
       const raw = localStorage.getItem('studio:ignoredAgentDecisions')
@@ -358,6 +294,20 @@ export default function PrevisRoom() {
   const [filmCut, setFilmCut] = useState<FilmCut | null>(null)
   const [persistedSummary, setPersistedSummary] = useState<AnyRecord | null>(null)
   const [executionSummaryOverride, setExecutionSummaryOverride] = useState<AnyRecord | null>(null)
+  const [projectRenderJobs, setProjectRenderJobs] = useState<RenderJob[]>([])
+  const [projectVideoAssets, setProjectVideoAssets] = useState<VideoAsset[]>([])
+  const [keyframesByAssetId, setKeyframesByAssetId] = useState<Record<string, VideoKeyframe[]>>({})
+  const [frameAnalysesByKeyframeId, setFrameAnalysesByKeyframeId] = useState<Record<string, FrameAnalysis[]>>({})
+  const [isExtractingKeyframes, setIsExtractingKeyframes] = useState(false)
+  const [embeddingFallbackUrl, setEmbeddingFallbackUrl] = useState('')
+  const [relatedMemory, setRelatedMemory] = useState<SemanticMemorySearchResult[]>([])
+  const activeProjectId = resolveActiveProjectId({
+    queryProjectId,
+    routeProjectId: projectId || '',
+    locationState: location.state,
+    persistedProjectId: readPersistedActiveProjectId(),
+    contextProjectId: project?.project_id || '',
+  })
   useEffect(() => {
     if (!uiFeedback) return
     const timer = window.setTimeout(() => setUiFeedback(''), 2600)
@@ -365,8 +315,11 @@ export default function PrevisRoom() {
   }, [uiFeedback])
 
   useEffect(() => {
+    if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
+
+  useEffect(() => {
     if (!projectId) return
-    localStorage.setItem('studio:activeProjectId', projectId)
     const loadRequestKey = `${projectId}:${sessionId ?? ''}`
     if (loadRequestKeyRef.current === loadRequestKey) return
     loadRequestKeyRef.current = loadRequestKey
@@ -374,21 +327,109 @@ export default function PrevisRoom() {
   }, [loadProject, projectId, sessionId])
 
   useEffect(() => {
-    const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
     if (!activeProjectId || projectId) return
     void (async () => {
       const response = await getProject(activeProjectId)
       const summary = asRecord(response.project?.execution_summary)
       if (summary) setPersistedSummary(summary)
     })()
-  }, [projectId])
+  }, [activeProjectId, projectId])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadEmbeddingFallback() {
+      if (!activeProjectId) {
+        setEmbeddingFallbackUrl('')
+        return
+      }
+      const assets = projectVideoAssets
+      for (const asset of assets) {
+        const frames = keyframesByAssetId[asset.asset_id] || []
+        if (frames.length === 0) continue
+        try {
+          const anchor = frames[0]
+          const result = await findSimilarKeyframes(anchor.keyframe_id, { project_id: activeProjectId, top_k: 1 })
+          if (cancelled) return
+          const url = asString(result.results?.[0]?.image_url).trim()
+          if (url) {
+            setEmbeddingFallbackUrl(url)
+            return
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if (!cancelled) setEmbeddingFallbackUrl('')
+    }
+    void loadEmbeddingFallback()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, projectVideoAssets, keyframesByAssetId])
+
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setProjectRenderJobs([])
+      setProjectVideoAssets([])
+      setKeyframesByAssetId({})
+      setFrameAnalysesByKeyframeId({})
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadVisualSources() {
+      const [jobsRes, assetsRes] = await Promise.allSettled([
+        listRenderJobs(activeProjectId, { signal: controller.signal }),
+        listVideoAssetsForProject(activeProjectId, { signal: controller.signal }),
+      ])
+      if (cancelled) return
+      const jobs = jobsRes.status === 'fulfilled' && Array.isArray(jobsRes.value) ? jobsRes.value : []
+      const assets = assetsRes.status === 'fulfilled' ? (assetsRes.value.assets || []) : []
+      setProjectRenderJobs(jobs)
+      setProjectVideoAssets(assets)
+
+      const keyframePairs = await Promise.all(
+        assets.map(async (asset) => {
+          try {
+            const keyframePayload = await listVideoAssetKeyframes(asset.asset_id, { signal: controller.signal })
+            return [asset.asset_id, (keyframePayload.keyframes || []) as VideoKeyframe[]] as const
+          } catch {
+            return [asset.asset_id, [] as VideoKeyframe[]] as const
+          }
+        }),
+      )
+      if (cancelled) return
+      const next: Record<string, VideoKeyframe[]> = {}
+      for (const [assetId, keyframes] of keyframePairs) next[assetId] = keyframes
+      setKeyframesByAssetId(next)
+      try {
+        const analysisPayload = await listProjectFrameAnalyses(activeProjectId, { signal: controller.signal })
+        const map: Record<string, FrameAnalysis[]> = {}
+        for (const analysis of analysisPayload.analyses || []) {
+          const key = analysis.keyframe_id || ''
+          if (!key) continue
+          if (!map[key]) map[key] = []
+          map[key].push(analysis)
+        }
+        setFrameAnalysesByKeyframeId(map)
+      } catch {
+        setFrameAnalysesByKeyframeId({})
+      }
+    }
+    void loadVisualSources()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [activeProjectId])
 
   const executionSummarySelection = useMemo(
     () => pickExecutionSummary(location.state, project?.execution_summary || persistedSummary),
     [location.state, project?.execution_summary, persistedSummary],
   )
   const hasRealData = Boolean(executionSummaryOverride) || executionSummarySelection.hasRealData
-  const executionSummary = executionSummaryOverride || (executionSummarySelection.hasRealData ? executionSummarySelection.summary : PREVIS_MOCK_BUNDLE)
+  const executionSummary = executionSummaryOverride || (executionSummarySelection.hasRealData ? executionSummarySelection.summary : {})
   const data = executionSummary
 
   useEffect(() => {
@@ -414,11 +455,11 @@ export default function PrevisRoom() {
     if (loading) return
     if (hasUsableScenes) return
     if (projectId) return
-    navigate('/studio/writers-room', {
+    navigate(withProjectQuery('/studio/writers-room', activeProjectId), {
       replace: true,
       state: { notice: 'No scenes loaded. Add a script and generate scenes first.' },
     })
-  }, [hasUsableScenes, loading, navigate, projectId])
+  }, [activeProjectId, hasUsableScenes, loading, navigate, projectId])
 
   useEffect(() => {
     if (scenes.length === 0) return
@@ -533,7 +574,6 @@ export default function PrevisRoom() {
     setFilmCut(next)
     localStorage.setItem('studio:filmCut', JSON.stringify(next))
     setUiFeedback(included.has(selectedSceneIdSafe) ? 'Scene included in cut' : 'Scene excluded from cut')
-    const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
     if (activeProjectId) {
       void updateFilmCut(activeProjectId, { film_cut: next as unknown as Record<string, unknown> })
     }
@@ -572,6 +612,23 @@ export default function PrevisRoom() {
       })
       .filter((asset) => Boolean(asset.asset_id))
   }, [executionSummary.image_render_assets])
+  const styleRelevantAssetIdsForSelectedScene = useMemo(() => {
+    const ids = new Set<string>()
+    if (!selectedSceneIdSafe) return ids
+    for (const asset of imageRenderAssets) {
+      if (asset.scene_id === selectedSceneIdSafe && asset.asset_id) ids.add(asset.asset_id)
+    }
+    for (const a of projectVideoAssets) {
+      const meta = asRecord(a.metadata) || {}
+      if (asString(meta.scene_id).trim() === selectedSceneIdSafe) ids.add(a.asset_id)
+    }
+    return ids
+  }, [imageRenderAssets, projectVideoAssets, selectedSceneIdSafe])
+  const selectedSceneStyleDriftIssues = useMemo(() => {
+    if (!styleDriftIssues.length) return []
+    return styleDriftIssues.filter((issue) => issue.asset_id && styleRelevantAssetIdsForSelectedScene.has(issue.asset_id))
+  }, [styleDriftIssues, styleRelevantAssetIdsForSelectedScene])
+  const showProjectLevelStyleDrift = selectedSceneStyleDriftIssues.length === 0 && styleDriftIssues.length > 0
   const renderAssetSummary = useMemo(() => {
     const summary = asRecord(executionSummary.render_asset_summary) || {}
     return {
@@ -682,26 +739,34 @@ export default function PrevisRoom() {
     : asArray(executionSummary.take_artifacts)
 
   const shots = shotLedger.length ? shotLedger : takeArtifacts
-  const resolveAssetImage = (sceneId: string, shotId: string, shotFilePath: string, fallbackKey: string): string => {
+  const resolveAssetImage = (sceneId: string, shotId: string, shotFilePath: string): string => {
     const match = imageAssetBySceneAndShot.get(`${sceneId}::${shotId}`)
     if (match?.url) return match.url
     if (match?.file_path && isBrowserSafePath(match.file_path)) return match.file_path
-    if (shotFilePath) return shotFilePath
-    return `https://picsum.photos/seed/${encodeURIComponent(fallbackKey)}/800/450`
+    if (shotFilePath && isBrowserSafePath(shotFilePath)) return shotFilePath
+    return ''
   }
+  const completedRenderJobsByShot = useMemo(() => {
+    const map = new Map<string, RenderJob>()
+    for (const job of projectRenderJobs) {
+      const status = asString(job.status).trim().toLowerCase()
+      const url = asString(job.output_payload?.asset_url).trim()
+      if (!job.shot_id || !url) continue
+      if (status !== 'complete' && status !== 'success') continue
+      if (!map.has(job.shot_id)) map.set(job.shot_id, job)
+    }
+    return map
+  }, [projectRenderJobs])
+  const firstKeyframeByAssetId = useMemo(() => {
+    const map = new Map<string, VideoKeyframe>()
+    for (const asset of projectVideoAssets) {
+      const keyframes = keyframesByAssetId[asset.asset_id] || []
+      if (keyframes.length > 0) map.set(asset.asset_id, keyframes[0])
+    }
+    return map
+  }, [projectVideoAssets, keyframesByAssetId])
   const populatedShots = useMemo(() => {
-    const withFallback = shots.length
-      ? shots
-      : [
-          {
-            shot_id: 'shot_001',
-            status: 'complete',
-            render_id: 'render_001',
-            meta: {
-              file_path: PREVIS_PLACEHOLDER_IMAGE,
-            },
-          },
-        ]
+    const withFallback = shots.length ? shots : []
 
     const hasSuccessfulShot = withFallback.some((entry) => {
       const shot = asRecord(entry) || {}
@@ -709,21 +774,8 @@ export default function PrevisRoom() {
       return status === 'success' || status === 'complete'
     })
 
-    if (hasSuccessfulShot) {
-      return withFallback
-    }
-
-    return [
-      {
-        shot_id: 'shot_001',
-        status: 'complete',
-        render_id: 'render_001',
-        meta: {
-          file_path: PREVIS_PLACEHOLDER_IMAGE,
-        },
-      },
-      ...withFallback,
-    ]
+    if (hasSuccessfulShot) return withFallback
+    return withFallback
   }, [shots])
 
   const normalizedShots = useMemo(() => {
@@ -741,25 +793,51 @@ export default function PrevisRoom() {
       const promptQuality = asRecord(shot.prompt_quality) || {}
       const promptConsistency = asRecord(shot.prompt_consistency) || {}
       const motifConsistency = asRecord(shot.motif_consistency) || {}
-      const displayPath = resolveAssetImage(
-        selectedSceneIdSafe || 'scene_001',
-        shotId,
-        filePath,
-        `image_${selectedSceneIdSafe || 'scene_001'}_${shotId}`,
-      )
+      const displayPath = resolveAssetImage(selectedSceneIdSafe || 'scene_001', shotId, filePath)
       const videoAsset = videoAssetBySceneAndShot.get(`${selectedSceneIdSafe || 'scene_001'}::${shotId}`)
-      const videoUrl = videoAsset?.video_url || ''
+      const completedJob = completedRenderJobsByShot.get(shotId)
       const thumbnailUrl = videoAsset?.thumbnail_url || ''
       const matchedAsset = imageAssetBySceneAndShot.get(`${selectedSceneIdSafe || 'scene_001'}::${shotId}`)
+      const projectAsset = projectVideoAssets[0]
+      const firstKeyframe = projectAsset ? firstKeyframeByAssetId.get(projectAsset.asset_id) : undefined
+      const keyframeUrl = asString(firstKeyframe?.frame_url).trim()
+      const keyframePath = asString(firstKeyframe?.frame_path).trim()
+      const projectIdForMatch = activeProjectId
+      const visualMatch = resolveVisualForSceneAndShot(
+        projectIdForMatch,
+        selectedScene,
+        shot,
+        projectRenderJobs,
+        projectVideoAssets,
+        keyframesByAssetId,
+      )
+      const matchedVisualUrl = asString(visualMatch.visual_url).trim()
+      const videoUrl =
+        visualMatch.source_type === 'runway_render' || visualMatch.source_type === 'project_level_fallback'
+          ? matchedVisualUrl
+          : asString(completedJob?.output_payload?.asset_url).trim() || videoAsset?.video_url || ''
+      const resolvedImage =
+        visualMatch.source_type === 'uploaded_video_keyframe'
+          ? matchedVisualUrl
+          : displayPath || keyframeUrl || (isBrowserSafePath(keyframePath) ? keyframePath : '')
+      let previewSourceType = visualMatch.source_type
+      if (previewSourceType === 'none' && displayPath) previewSourceType = 'uploaded_video_keyframe'
       return {
         key: `${shotId}-${index}`,
         shotId,
         status: shotStatus,
         filePath,
         renderId,
-        displayPath,
+        displayPath: resolvedImage,
         videoUrl,
         thumbnailUrl,
+        previewSourceType,
+        previewJobId: visualMatch.job_id || completedJob?.id || '',
+        previewAssetId: visualMatch.asset_id || projectAsset?.asset_id || '',
+        previewKeyframeId: visualMatch.keyframe_id || '',
+        previewMatchReason: visualMatch.match_reason || '',
+        previewConfidence: visualMatch.confidence ?? 0,
+        previewTimestamp: firstKeyframe?.timestamp_seconds ?? null,
         provider: asString(matchedAsset?.provider).trim() || 'local_image',
         fallbackReason: asString(matchedAsset?.fallback_reason).trim(),
         shotIntent: {
@@ -803,7 +881,16 @@ export default function PrevisRoom() {
         },
       }
     })
-  }, [populatedShots, selectedSceneIdSafe, imageAssetBySceneAndShot, videoAssetBySceneAndShot, resolveAssetImage])
+  }, [
+    populatedShots,
+    selectedSceneIdSafe,
+    imageAssetBySceneAndShot,
+    videoAssetBySceneAndShot,
+    resolveAssetImage,
+    completedRenderJobsByShot,
+    projectVideoAssets,
+    firstKeyframeByAssetId,
+  ])
 
   useEffect(() => {
     const bestShot = normalizedShots.find((shot) => shot.status === 'success') || normalizedShots[0]
@@ -819,7 +906,6 @@ export default function PrevisRoom() {
   const sceneIterationsSource = asArray(asRecord(selectedScene)?.scene_iterations).length
     ? asArray(asRecord(selectedScene)?.scene_iterations)
     : asArray(executionSummary.scene_iterations)
-  const scene_iterations = sceneIterationsSource
   const selectedIterationFromBundle = asString(executionSummary.selected_iteration).trim() || 'original'
   const iterationHistoryFromBundle = asArray(executionSummary.iteration_history)
   const activeCutSummaryFromBundle = asRecord(executionSummary.active_cut_summary) || {
@@ -847,55 +933,7 @@ export default function PrevisRoom() {
       ? asArray(asRecord(selectedScene)?.co_director_suggestions)
       : asArray(executionSummary.co_director_suggestions)
 
-    const verdict = asString(asRecord(asRecord(selectedScene)?.scene_quality_verdict)?.verdict).trim().toLowerCase()
-    const coherenceScore = asNumber(asRecord(asRecord(selectedScene)?.scene_coherence_report)?.coherence_score)
-    const continuityScore = asNumber(asRecord(asRecord(selectedScene)?.scene_continuity_report)?.continuity_score)
-    const flowScore = asNumber(asRecord(asRecord(selectedScene)?.scene_emotional_flow)?.flow_score)
-    const hasIssueSignals =
-      verdict === 'failed' ||
-      verdict === 'needs_revision' ||
-      (typeof coherenceScore === 'number' && coherenceScore < 0.75) ||
-      (typeof continuityScore === 'number' && continuityScore < 0.75) ||
-      (typeof flowScore === 'number' && flowScore < 0.65)
-
-    const fallbackSuggestions = hasIssueSignals
-      ? [
-          {
-            id: 'ui_fallback_suggestion_1',
-            type: 'continuity',
-            title: 'Stabilize continuity before next pass',
-            description: 'Address the biggest mismatch first, then re-evaluate the scene rhythm.',
-            rationale: 'Continuity/alignment signals indicate revision pressure.',
-            confidence: 0.82,
-          },
-          {
-            id: 'ui_fallback_suggestion_2',
-            type: 'visual',
-            title: 'Add one bold escalation beat',
-            description: 'Introduce a high-contrast shot to recover scene momentum.',
-            rationale: 'Escalation appears weak or uneven across shots.',
-            confidence: 0.74,
-          },
-        ]
-      : [
-          {
-            id: 'ui_fallback_suggestion_steady_1',
-            type: 'visual',
-            title: 'Optional polish variation',
-            description: 'Try one alternate visual framing while preserving current continuity.',
-            rationale: 'Scene appears stable; this is a low-risk creative enhancement.',
-            confidence: 0.65,
-          },
-        ]
-
-    const sourceOrFallback = source.length > 0 ? source : fallbackSuggestions
-    const minimumCount = hasIssueSignals ? 2 : 1
-    const paddedSuggestions = [...sourceOrFallback]
-    for (let index = paddedSuggestions.length; index < minimumCount; index += 1) {
-      paddedSuggestions.push(fallbackSuggestions[index % fallbackSuggestions.length])
-    }
-
-    return paddedSuggestions.map((entry, index) => {
+    return source.map((entry, index) => {
       const item = asRecord(entry) || {}
       const id = asString(item.id).trim() || `co_dir_suggestion_${index + 1}`
       const type = asString(item.type).trim().toLowerCase() as SuggestionType
@@ -992,7 +1030,7 @@ export default function PrevisRoom() {
         const shots = asArray(item.shots)
         const firstShot = asRecord(shots[0])
         const firstShotMeta = asRecord(firstShot?.meta)
-        const imagePath = asString(firstShotMeta?.file_path).trim() || `https://picsum.photos/800/450?random=${index + 2}`
+        const imagePath = asString(firstShotMeta?.file_path).trim()
         return {
           iterationId,
           interventionType,
@@ -1019,20 +1057,7 @@ export default function PrevisRoom() {
     }
 
     const cards: IterationCard[] = [originalCard]
-    const sourceIterations = normalizedSceneIterations.length
-      ? normalizedSceneIterations
-      : [
-          {
-            iterationId: 'scene_001_iter_1',
-            interventionType: 'tension',
-            imagePath: 'https://picsum.photos/800/450?random=2',
-          },
-          {
-            iterationId: 'scene_001_iter_2',
-            interventionType: 'flow',
-            imagePath: 'https://picsum.photos/800/450?random=3',
-          },
-        ]
+    const sourceIterations = normalizedSceneIterations.length ? normalizedSceneIterations : []
 
     for (let index = 0; index < sourceIterations.length && cards.length < 3; index += 1) {
       const item = sourceIterations[index]
@@ -1044,18 +1069,6 @@ export default function PrevisRoom() {
         passLabel: `ITERATION: ${pass} PASS`,
         thumbnail: item.imagePath || PREVIS_PLACEHOLDER_IMAGE,
         heroPath: item.imagePath || PREVIS_PLACEHOLDER_IMAGE,
-      })
-    }
-
-    while (cards.length < 3) {
-      const iterIndex = cards.length
-      cards.push({
-        id: `scene_fallback_iter_${iterIndex}`,
-        label: `ITERATION ${iterIndex}`,
-        mode: 'iteration',
-        passLabel: 'ITERATION: FLOW PASS',
-        thumbnail: `https://picsum.photos/800/450?random=${iterIndex + 2}`,
-        heroPath: `https://picsum.photos/800/450?random=${iterIndex + 2}`,
       })
     }
 
@@ -1198,7 +1211,6 @@ export default function PrevisRoom() {
       logAgentActivity(message)
       return next
     })
-    const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
     if (activeProjectId) {
       const nextApproved = { ...approvedScenes, [selectedSceneIdSafe]: true }
       const approvedSceneIds = Object.entries(nextApproved).filter(([, ok]) => Boolean(ok)).map(([id]) => id)
@@ -1233,7 +1245,6 @@ export default function PrevisRoom() {
     const message = `${AGENTS.editor.icon} ${AGENTS.editor.name}: Scene marked needs work`
     setUiFeedback(message)
     logAgentActivity(message)
-    const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
     if (activeProjectId) {
       const nextApproved = { ...approvedScenes, [selectedSceneIdSafe]: false }
       const approvedSceneIds = Object.entries(nextApproved).filter(([, ok]) => Boolean(ok)).map(([id]) => id)
@@ -1283,12 +1294,41 @@ export default function PrevisRoom() {
     if (selectedShot?.displayPath) return selectedShot
     return normalizedShots[0] || selectedShot
   }, [normalizedShots, selectedShot])
+
+  const heroStyleDriftHints = useMemo(() => {
+    const aid = asString(heroShot?.previewAssetId).trim()
+    const kid = asString(heroShot?.previewKeyframeId).trim()
+    if (!aid && !kid) return []
+    const pool = selectedSceneStyleDriftIssues.length > 0 ? selectedSceneStyleDriftIssues : styleDriftIssues
+    return pool.filter((i) => (aid && i.asset_id === aid) || (kid && i.keyframe_id === kid))
+  }, [heroShot?.previewAssetId, heroShot?.previewKeyframeId, selectedSceneStyleDriftIssues, styleDriftIssues])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadRelatedMemory() {
+      const keyframeId = asString(heroShot?.previewKeyframeId).trim()
+      if (!keyframeId) {
+        setRelatedMemory([])
+        return
+      }
+      try {
+        const payload = await listRelatedMemoryForKeyframe(keyframeId)
+        if (!cancelled) setRelatedMemory(payload.results || [])
+      } catch {
+        if (!cancelled) setRelatedMemory([])
+      }
+    }
+    void loadRelatedMemory()
+    return () => {
+      cancelled = true
+    }
+  }, [heroShot?.previewKeyframeId])
   const originalHeroFramePath = heroShot?.displayPath || PREVIS_PLACEHOLDER_IMAGE
   const heroVideoUrl = asString(heroShot?.videoUrl).trim()
   const sceneMotionPreviewUrl = motionPreviewByScene[selectedSceneIdSafe] || motionAssetByScene.get(selectedSceneIdSafe || '') || ''
   const sceneMotionStatus = motionStatusByScene.get(selectedSceneIdSafe || '')
-  const iteration1HeroPath = iterationCards[1]?.heroPath || 'https://picsum.photos/800/450?random=2'
-  const iteration2HeroPath = iterationCards[2]?.heroPath || 'https://picsum.photos/800/450?random=3'
+  const iteration1HeroPath = iterationCards[1]?.heroPath || ''
+  const iteration2HeroPath = iterationCards[2]?.heroPath || ''
   const heroFramePath =
     selectedIteration === 'iteration_1' ? iteration1HeroPath : selectedIteration === 'iteration_2' ? iteration2HeroPath : originalHeroFramePath
   const heroLabel =
@@ -1298,32 +1338,46 @@ export default function PrevisRoom() {
   const isRealProviderRender = Boolean(heroVideoUrl)
   const hasComfyProvider = renderAssetSummary.providers.some((p) => p.toLowerCase() === 'comfyui')
   const heroRenderSourceLabel = hasComfyProvider || isRealProviderRender ? 'COMFYUI RENDER' : 'LOCAL PREVIS'
+  const heroFrameAnalysis = useMemo(() => {
+    const keyframeId = asString(heroShot?.previewKeyframeId).trim()
+    if (!keyframeId) return null
+    const rows = frameAnalysesByKeyframeId[keyframeId] || []
+    return rows[0] || null
+  }, [frameAnalysesByKeyframeId, heroShot?.previewKeyframeId])
+  const previewSourceDisplay = heroShot?.previewSourceType
+    ? heroShot.previewSourceType.replace(/_/g, ' ')
+    : asString(heroShot?.previewMatchReason).trim() || 'Visual source unavailable'
+  const completeAnalysisCount = heroShot?.previewKeyframeId ? (frameAnalysesByKeyframeId[heroShot.previewKeyframeId]?.length || 0) : 0
   const heroRenderStatus = useMemo(() => {
     if (!heroShot) return { label: 'PLACEHOLDER', reason: 'No scenes available' }
     const shotStatus = asString(heroShot.status).toLowerCase()
     if (shotStatus === 'failed') return { label: 'FAILED', reason: 'Render failed' }
-    if (heroShot.videoUrl || asString(heroShot.provider).toLowerCase() === 'comfyui') {
-      return { label: 'COMFYUI RENDER', reason: '' }
+    if (heroShot.videoUrl || heroShot.previewSourceType === 'runway_render') {
+      return { label: 'Matched completed Runway render', reason: '' }
     }
-    const looksPlaceholder = asString(heroShot.displayPath).toLowerCase().includes('picsum.photos')
-    if (looksPlaceholder) {
+    if (heroShot.previewSourceType === 'uploaded_video_keyframe') {
+      return { label: 'Matched uploaded video keyframe', reason: '' }
+    }
+    if (embeddingFallbackUrl) {
+      return { label: 'Embedding similarity fallback', reason: 'Matched by visual similarity from project keyframes.' }
+    }
+    if (!asString(heroShot.displayPath).trim()) {
       return {
-        label: 'PLACEHOLDER',
-        reason: heroShot.fallbackReason ? `Using fallback: ${heroShot.fallbackReason}` : 'Using fallback mode',
+        label: 'NO VISUAL',
+        reason: 'No visual render yet. Send this shot to Production Board.',
       }
     }
     return {
       label: heroRenderSourceLabel || 'LOCAL PREVIS',
       reason: heroShot.fallbackReason ? `Using fallback: ${heroShot.fallbackReason}` : '',
     }
-  }, [heroShot, heroRenderSourceLabel])
+  }, [heroShot, heroRenderSourceLabel, embeddingFallbackUrl])
   const isIterationSelected = selectedIteration !== 'original'
   const handleGenerateMotionPreview = async () => {
     if (!selectedSceneIdSafe) {
       setUiFeedback('No scenes available')
       return
     }
-    const activeProjectId = projectId || localStorage.getItem('studio:activeProjectId') || ''
     if (activeProjectId) {
       setUiFeedback('Requesting motion preview from backend...')
       const response = await generateMotionPreview(activeProjectId, selectedSceneIdSafe)
@@ -1368,6 +1422,79 @@ export default function PrevisRoom() {
       what_breaks: ['Escalation opportunities remain'],
       suggested_changes: ['Introduce one clearer intensity shift between shots'],
     }
+
+  // Load continuity issues when scene changes
+  const loadSceneContinuityIssues = useCallback(async (init?: RequestInit) => {
+    if (!activeProjectId || !selectedSceneIdSafe) return
+    try {
+      const result = await listProjectContinuityIssues(activeProjectId, init)
+      const shotIds = normalizedShots.map((shot) => shot.shotId).filter(Boolean)
+      const { projectIssues, sceneIssues } = mapContinuityIssuesToScene({
+        issues: result.issues || [],
+        projectId: activeProjectId,
+        sceneId: selectedSceneIdSafe,
+        shotIds,
+      })
+      setProjectContinuityIssues(projectIssues)
+      setSceneContinuityIssues((prev) => ({ ...prev, [selectedSceneIdSafe]: sceneIssues }))
+    } catch {
+      // silently ignore
+    }
+  }, [activeProjectId, selectedSceneIdSafe, normalizedShots])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadSceneContinuityIssues({ signal: controller.signal })
+    return () => {
+      controller.abort()
+    }
+  }, [loadSceneContinuityIssues])
+
+  const loadStyleIntelligence = useCallback(async (init?: RequestInit) => {
+    if (!activeProjectId) return
+    try {
+      const [sigPayload, driftPayload] = await Promise.all([
+        getLatestDirectorSignature(activeProjectId, init),
+        listProjectStyleDriftIssues(activeProjectId, init),
+      ])
+      setDirectorSignature(sigPayload.signature || null)
+      setStyleDriftIssues(Array.isArray(driftPayload.issues) ? driftPayload.issues : [])
+    } catch {
+      setDirectorSignature(null)
+      setStyleDriftIssues([])
+    }
+  }, [activeProjectId])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadStyleIntelligence({ signal: controller.signal })
+    return () => {
+      controller.abort()
+    }
+  }, [loadStyleIntelligence])
+
+  const selectedSceneContinuityIssues = sceneContinuityIssues[selectedSceneIdSafe] || []
+  const projectContinuitySummary = useMemo(() => summarizeContinuityIssues(projectContinuityIssues), [projectContinuityIssues])
+  const showProjectLevelContinuityFallback =
+    totalScenes > 0 && selectedSceneContinuityIssues.length === 0 && projectContinuitySummary.total > 0
+
+  const handleExtractKeyframes = async () => {
+    const asset = projectVideoAssets[0]
+    if (!asset) {
+      setUiFeedback('No attached video assets to extract keyframes from.')
+      return
+    }
+    setIsExtractingKeyframes(true)
+    try {
+      const result = await extractVideoAssetKeyframes(asset.asset_id, { overwrite: false, interval_seconds: 5, max_frames: 20 })
+      setKeyframesByAssetId((prev) => ({ ...prev, [asset.asset_id]: result.keyframes || [] }))
+      setUiFeedback(`Extracted ${result.keyframes?.length || 0} keyframes from ${asset.title}.`)
+    } catch (error) {
+      setUiFeedback(error instanceof Error ? error.message : 'Keyframe extraction failed.')
+    } finally {
+      setIsExtractingKeyframes(false)
+    }
+  }
   const interventionProblemShotIds = useMemo(() => {
     return new Set(
       asArray(sceneInterventionPlan.problem_shot_ids)
@@ -1411,6 +1538,47 @@ export default function PrevisRoom() {
   const styleConflict = asRecord(asRecord(selectedScene)?.style_conflict) || asRecord(executionSummary.style_conflict)
   const hasStyleConflict = styleConflict?.conflict === true
   const styleConflictReason = asString(styleConflict?.reason).trim() || 'This scene breaks your usual pacing style.'
+
+  useEffect(() => {
+    void loadProviders()
+  }, [loadProviders])
+
+  async function handleDirectorGenerate(payload: {
+    sceneGoal: string
+    emotionalTone: string
+    pacing: string
+    cameraStyle: string
+    provider: string
+    collaborationMode: 'passive' | 'advisory' | 'collaborative' | 'experimental'
+  }) {
+    if (!project?.project_id) {
+      setUiFeedback('No active project loaded for generation.')
+      return
+    }
+    const targetShotId = selectedShot?.shotId || normalizedShots[0]?.shotId
+    if (!targetShotId) {
+      setUiFeedback('No shot is available for generation.')
+      return
+    }
+    setIsGeneratingScene(true)
+    try {
+      const directionPrompt = [
+        payload.sceneGoal || `Regenerate ${selectedSceneIdSafe || 'scene'} with stronger cinematic intent.`,
+        `Tone: ${payload.emotionalTone}.`,
+        `Pacing: ${payload.pacing}.`,
+        `Camera style: ${payload.cameraStyle}.`,
+        `Co-Director mode: ${payload.collaborationMode} (advisory only).`,
+      ].join(' ')
+      const job = await createJob(targetShotId, payload.provider, directionPrompt, [])
+      const submitted = await submitJob(job.id)
+      setUiFeedback(`Director console queued ${submitted.id} on ${payload.provider}.`)
+      handleTopControlAction('regenerate_scene')
+    } catch (error) {
+      setUiFeedback(error instanceof Error ? error.message : 'Failed to generate scene.')
+    } finally {
+      setIsGeneratingScene(false)
+    }
+  }
   const creativeConflicts = useMemo(() => {
     const raw =
       asArray(asRecord(selectedScene)?.agent_disagreements).length > 0
@@ -1491,11 +1659,10 @@ export default function PrevisRoom() {
   }, [normalizedShots])
 
   useEffect(() => {
-    console.log('ITERATIONS:', scene_iterations)
-    console.log('SUGGESTIONS:', co_director_suggestions)
-    console.log('SELECTED ITERATION:', selectedIteration)
-    console.log('SUGGESTIONS RAW:', co_director_suggestions)
-  }, [scene_iterations, co_director_suggestions, selectedIteration])
+    if (!import.meta.env.DEV) return
+    console.log('[Previs] selectedSceneId', selectedSceneIdSafe)
+    console.log('[Previs] suggestionCount', co_director_suggestions.length)
+  }, [selectedSceneIdSafe, co_director_suggestions.length])
 
   return (
     <StudioShell title="Rough Previs Room" subtitle="Read-only continuity and scene-previs inspection over the current execution bundle.">
@@ -1507,7 +1674,7 @@ export default function PrevisRoom() {
             <div className="mt-1 text-sm text-zinc-300">Improve scenes and approve the ones you want in your film.</div>
             {!hasRealData ? (
               <div className="mt-2 rounded border border-amber-300/35 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
-                Using fallback mode. Try generating scenes first.
+                No scenes yet. Start in Writer&apos;s Room or generate a short film first.
               </div>
             ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1542,6 +1709,14 @@ export default function PrevisRoom() {
               <span className="rounded border border-emerald-400/40 bg-emerald-500/10 px-2 py-1 text-emerald-200">Approved Scenes: {approvedCount} / {totalScenes}</span>
               <span className="rounded border border-amber-400/40 bg-amber-500/10 px-2 py-1 text-amber-200">Needs Work: {needsWorkCount}</span>
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Link to={withProjectQuery('/studio/writers-room', activeProjectId)} className="rounded-md border border-zinc-500/35 bg-zinc-700/15 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-200 no-underline">
+                Back to Writer&apos;s Room
+              </Link>
+              <Link to={withProjectQuery('/studio/production-board', activeProjectId)} className="rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline">
+                Send Approved Shots to Production Board
+              </Link>
+            </div>
             {uiFeedback ? (
               <div className="mt-2 inline-flex rounded border border-cyan-300/40 bg-cyan-500/12 px-2 py-1 text-[11px] text-cyan-100">
                 {uiFeedback}
@@ -1575,7 +1750,7 @@ export default function PrevisRoom() {
               <div className="text-xs font-semibold uppercase tracking-[0.16em]">PREVIS ROOM IS LOADING</div>
               <div className="mt-1 text-sm">No scenes yet. Generate your script in Writer&apos;s Room to begin.</div>
               <Link
-                to="/studio/writers-room"
+                to={withProjectQuery('/studio/writers-room', activeProjectId)}
                 className="mt-2 inline-flex rounded-md border border-amber-300/45 bg-amber-500/15 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100 no-underline"
               >
                 Open Writer&apos;s Room
@@ -1586,8 +1761,21 @@ export default function PrevisRoom() {
           <section className="cinematic-panel p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-100">Cinematic Timeline</h2>
-              <div className="text-xs text-zinc-400">{loading ? 'Loading project bundle…' : `${scenes.length} scenes`}</div>
+              <div className="text-xs text-zinc-400">{loading ? 'Preparing cinematic lighting...' : `${scenes.length} scenes`}</div>
             </div>
+            {loading ? (
+              <div className="mb-3">
+                <CinematicLoading
+                  compact
+                  title="Room Loading Atmosphere"
+                  lines={[
+                    'Analyzing scene composition...',
+                    'Preparing cinematic lighting...',
+                    'Rendering motion frames...',
+                  ]}
+                />
+              </div>
+            ) : null}
             <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1">
               {!hasUsableScenes ? (
                 <div className="rounded-xl border border-dashed border-zinc-700 px-4 py-3 text-xs text-zinc-400">
@@ -1612,7 +1800,7 @@ export default function PrevisRoom() {
                     sceneAsset?.url
                     || (sceneAsset?.file_path && isBrowserSafePath(sceneAsset.file_path) ? sceneAsset.file_path : '')
                     || sceneThumbnailFromLedger
-                    || `https://picsum.photos/seed/${encodeURIComponent(`scene_thumb_${sceneId}`)}/800/450`
+                    || ''
 
                   return (
                     <button
@@ -1627,7 +1815,13 @@ export default function PrevisRoom() {
                       } ${isFocused ? 'ring-4 ring-cyan-300/80 shadow-[0_0_28px_rgba(34,211,238,0.55)]' : ''} ${shouldHighlightIssue ? 'border-rose-400/80 ring-2 ring-rose-300/80' : ''}`}
                     >
                       <div className="h-24 w-44 overflow-hidden bg-zinc-950">
-                        <img src={sceneThumbnail || PREVIS_PLACEHOLDER_IMAGE} alt={sceneId} className="h-full w-full object-cover" />
+                        {sceneThumbnail ? (
+                          <img src={sceneThumbnail} alt={sceneId} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="grid h-full w-full place-items-center text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                            No Visual Yet
+                          </div>
+                        )}
                       </div>
                       <div className="px-3 py-2 text-left">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-200">{sceneId}</div>
@@ -1675,6 +1869,17 @@ export default function PrevisRoom() {
           </section>
 
           <section className="cinematic-panel p-3">
+            <DirectorConsole
+              sceneId={selectedSceneIdSafe || 'scene_001'}
+              providers={
+                providers.length > 0
+                  ? providers.map((provider) => ({ id: provider.provider_id, label: provider.name }))
+                  : [{ id: 'mock', label: 'Mock Provider' }]
+              }
+              defaultProvider={project?.render_provider?.provider_name || providers[0]?.provider_id || 'mock'}
+              busy={isGeneratingScene}
+              onGenerate={handleDirectorGenerate}
+            />
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => handleTopControlAction('regenerate_scene')} className="rounded-md border border-zinc-500/40 bg-zinc-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-200">
                 Regenerate Scene
@@ -1718,7 +1923,7 @@ export default function PrevisRoom() {
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {hasAnyApprovedScene ? (
                 <Link
-                  to="/studio/screening-room"
+                  to={withProjectQuery('/studio/screening-room', activeProjectId)}
                   className="rounded-md border border-emerald-400/45 bg-emerald-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100 no-underline"
                 >
                   Go to Screening Room
@@ -1775,11 +1980,17 @@ export default function PrevisRoom() {
                     playsInline
                   />
                 ) : (
-                  <img
-                    src={heroFramePath}
-                    alt={heroShot?.shotId || 'previs-hero-frame'}
-                    className={`h-full min-h-[320px] w-full object-cover transition-all duration-500 ${isIterationSelected ? 'brightness-110 contrast-110' : ''}`}
-                  />
+                  (heroFramePath || embeddingFallbackUrl) ? (
+                    <img
+                      src={heroFramePath || embeddingFallbackUrl}
+                      alt={heroShot?.shotId || 'previs-hero-frame'}
+                      className={`h-full min-h-[320px] w-full object-cover transition-all duration-500 ${isIterationSelected ? 'brightness-110 contrast-110' : ''}`}
+                    />
+                  ) : (
+                    <div className="grid h-full min-h-[320px] w-full place-items-center bg-zinc-950 text-center text-xs uppercase tracking-[0.14em] text-zinc-500">
+                      No visual render yet. Send this shot to Production Board.
+                    </div>
+                  )
                 )}
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-5 py-4">
@@ -1797,11 +2008,28 @@ export default function PrevisRoom() {
                     <div title="Render status" className="mt-1 inline-flex rounded border border-cyan-300/45 bg-cyan-500/14 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100">
                       {heroRenderStatus.label}
                     </div>
+                    {import.meta.env.DEV && heroShot?.previewMatchReason ? (
+                      <div className="mt-1 text-[10px] text-zinc-300">
+                        Match reason: {heroShot.previewMatchReason} ({Math.round((heroShot.previewConfidence || 0) * 100)}%) · source: {heroShot.previewSourceType || 'none'} · job: {heroShot.previewJobId || 'n/a'} · asset: {heroShot.previewAssetId || 'n/a'} · keyframe: {heroShot.previewKeyframeId || 'n/a'}
+                      </div>
+                    ) : null}
                     <div className="mt-1 inline-flex rounded border border-fuchsia-300/45 bg-fuchsia-500/14 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-fuchsia-100">
                       {sceneMotionPreviewUrl
                         ? 'MOTION READY'
                         : (sceneMotionStatus?.status || 'MOTION NOT GENERATED')}
                     </div>
+                    {heroStyleDriftHints.length > 0 ? (
+                      <div className="mt-1 inline-flex rounded border border-violet-400/50 bg-violet-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-100">
+                        {INTELLIGENCE_LABELS.styleDrift} (this shot)
+                      </div>
+                    ) : directorSignature &&
+                      !directorSignature.metadata?.insufficient_data &&
+                      selectedSceneStyleDriftIssues.length === 0 &&
+                      styleDriftIssues.length === 0 ? (
+                      <div className="mt-1 inline-flex rounded border border-emerald-400/45 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100">
+                        Aligns with director signature
+                      </div>
+                    ) : null}
                     {!sceneMotionPreviewUrl ? (
                       <div className="mt-1 inline-flex rounded border border-zinc-400/45 bg-zinc-700/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-200">
                         STILL IMAGE FALLBACK
@@ -1822,6 +2050,70 @@ export default function PrevisRoom() {
                     {heroRenderStatus.reason ? (
                       <div className="mt-1 text-[10px] text-amber-200">{heroRenderStatus.reason}</div>
                     ) : null}
+                    <PrevisIntelligencePanel
+                      sceneId={selectedSceneIdSafe}
+                      matchedSourceName={previewSourceDisplay}
+                      relatedMemoryCount={relatedMemory.length}
+                      sceneContinuityIssueCount={selectedSceneContinuityIssues.length}
+                      projectHasDirectorSignature={Boolean(directorSignature)}
+                      completeAnalysisCount={completeAnalysisCount}
+                      sceneStyleDriftCount={selectedSceneStyleDriftIssues.length}
+                    />
+                    {heroFrameAnalysis ? (
+                      <div className="mt-2 rounded border border-emerald-300/35 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-100">
+                        <div className="font-semibold uppercase tracking-[0.12em] text-emerald-200">{INTELLIGENCE_LABELS.frameAnalysis}</div>
+                        <div>{heroFrameAnalysis.caption || heroFrameAnalysis.visual_summary || 'No caption'}</div>
+                        <div className="text-emerald-200/90">mood: {heroFrameAnalysis.mood_tags.join(', ') || 'n/a'}</div>
+                        <div className="text-emerald-200/90">lighting: {heroFrameAnalysis.lighting_tags.join(', ') || 'n/a'}</div>
+                        <div className="text-emerald-200/90">composition: {heroFrameAnalysis.composition_tags.join(', ') || 'n/a'}</div>
+                        <div className="text-emerald-200/90">palette: {heroFrameAnalysis.color_palette.join(', ') || 'n/a'}</div>
+                      </div>
+                    ) : heroShot?.previewKeyframeId ? (
+                      <div className="mt-2 rounded border border-dashed border-zinc-700/80 bg-zinc-950/40 px-2 py-2 text-[10px] text-zinc-400">
+                        No {INTELLIGENCE_LABELS.frameAnalysis.toLowerCase()} for this keyframe yet. Run analysis in Study Room after extracting keyframes.
+                      </div>
+                    ) : null}
+                    {relatedMemory.length > 0 ? (
+                      <div className="mt-2 rounded border border-cyan-300/35 bg-cyan-500/8 p-2 text-[10px] text-cyan-100">
+                        <div className="font-semibold uppercase tracking-[0.12em]">Matched visual source · related references</div>
+                        <div>{relatedMemory.slice(0, 3).map((m) => m.memory?.summary || 'Related moment').join(' | ')}</div>
+                        <div className="mt-1 font-semibold uppercase tracking-[0.12em]">Emotionally Similar Moments</div>
+                        <div>{relatedMemory.slice(0, 3).map((m) => (m.memory?.emotional_tags || []).join(', ') || 'n/a').join(' | ')}</div>
+                        <div className="mt-1 font-semibold uppercase tracking-[0.12em]">Composition Matches</div>
+                        <div>{relatedMemory.slice(0, 3).map((m) => (m.memory?.composition_tags || []).join(', ') || 'n/a').join(' | ')}</div>
+                        <div className="mt-1 text-cyan-200/90">confidence: {relatedMemory.slice(0, 3).map((m) => `${(m.confidence * 100).toFixed(1)}%`).join(', ')}</div>
+                      </div>
+                    ) : heroShot?.previewKeyframeId ? (
+                      <div className="mt-2 rounded border border-dashed border-zinc-700/80 bg-zinc-950/40 px-2 py-2 text-[10px] text-zinc-400">
+                        No {INTELLIGENCE_LABELS.semanticMemory.toLowerCase()} matches for this keyframe yet. Build cinematic memory in Study Room to surface related references.
+                      </div>
+                    ) : (
+                      <div className="mt-2 rounded border border-dashed border-zinc-700/80 bg-zinc-950/40 px-2 py-2 text-[10px] text-zinc-400">
+                        Select a shot with a matched reference keyframe to see {INTELLIGENCE_LABELS.semanticSearch.toLowerCase()} results.
+                      </div>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Link
+                        to={withProjectQuery('/studio/production-board', activeProjectId)}
+                        className="rounded border border-cyan-300/45 bg-cyan-500/15 px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-cyan-100 no-underline"
+                      >
+                        Open in Production Board
+                      </Link>
+                      <Link
+                        to={withProjectQuery('/studio/screening-room', activeProjectId)}
+                        className="rounded border border-emerald-300/45 bg-emerald-500/15 px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-emerald-100 no-underline"
+                      >
+                        Open in Screening Room
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={projectVideoAssets.length === 0 || isExtractingKeyframes}
+                        onClick={() => void handleExtractKeyframes()}
+                        className="rounded border border-zinc-600/60 bg-zinc-700/20 px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-zinc-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isExtractingKeyframes ? 'Extracting Keyframes...' : 'Extract Keyframes'}
+                      </button>
+                    </div>
                   </div>
                   <div className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${getVerdictTone(asString(selectedVerdict?.verdict)).panel} ${getVerdictTone(asString(selectedVerdict?.verdict)).text}`}>
                     {getSceneStatus(selectedScene, fallbackGenerationSummary) || 'not available'}
@@ -2025,11 +2317,17 @@ export default function PrevisRoom() {
                           } ${isFailed ? 'border-rose-500/90' : ''} ${isBeforeProblem ? 'border-rose-400/80 ring-1 ring-rose-300/80' : ''} ${isSuggestedFix ? 'border-emerald-400/80 ring-1 ring-emerald-300/70' : ''}`}
                         >
                           <div className="h-20 w-full overflow-hidden bg-zinc-950">
-                            <img
-                              src={shot.thumbnailUrl || shot.displayPath || PREVIS_PLACEHOLDER_IMAGE}
-                              alt={shot.shotId}
-                              className={`h-full w-full object-cover transition duration-300 ${isFailed ? 'grayscale saturate-0' : ''}`}
-                            />
+                            {shot.thumbnailUrl || shot.displayPath ? (
+                              <img
+                                src={shot.thumbnailUrl || shot.displayPath}
+                                alt={shot.shotId}
+                                className={`h-full w-full object-cover transition duration-300 ${isFailed ? 'grayscale saturate-0' : ''}`}
+                              />
+                            ) : (
+                              <div className="grid h-full w-full place-items-center text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                                No Visual Render Yet
+                              </div>
+                            )}
                             {isFailed ? <div className="absolute inset-x-0 top-0 h-20 bg-rose-900/25" /> : null}
                             {isBeforeProblem ? (
                               <div className="absolute left-1 top-1 rounded bg-rose-500/85 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-rose-50">
@@ -2171,6 +2469,12 @@ export default function PrevisRoom() {
               <div className="mt-4 text-xs leading-tight">
                 {activeRightTab === 'director' ? (
                   <div className="space-y-3">
+                    <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/8 p-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200">Scene vs film</div>
+                      <p className="mt-1 text-[11px] leading-snug text-zinc-300">
+                        How this scene visually relates to the film: matched reference footage, {INTELLIGENCE_LABELS.semanticSearch.toLowerCase()}, {INTELLIGENCE_LABELS.continuityNotes.toLowerCase()}, {INTELLIGENCE_LABELS.directorSignature.toLowerCase()} alignment, and {INTELLIGENCE_LABELS.styleDrift.toLowerCase()} advisories.
+                      </p>
+                    </div>
                     <div className="rounded-xl border border-zinc-700/70 bg-zinc-900/70 p-3">
                       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">Director Verdict</div>
                       <div className="text-zinc-200">Verdict: {asString(selectedVerdict?.verdict) || 'not available'}</div>
@@ -2189,12 +2493,73 @@ export default function PrevisRoom() {
                         {whatBreaks.length ? whatBreaks.map((item, index) => <li key={`breaks-${index}`}>• {asString(item) || String(item)}</li>) : <li className="text-zinc-500">No notes</li>}
                       </ul>
                     </div>
+                    {selectedSceneContinuityIssues.length > 0 && (
+                      <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">Continuity Notes</div>
+                        <ul className="space-y-1 text-zinc-300">
+                          {selectedSceneContinuityIssues.slice(0, 5).map((issue) => (
+                            <li key={issue.issue_id} className={`text-[10px] ${issue.severity === 'high' ? 'text-red-300' : issue.severity === 'medium' ? 'text-amber-300' : 'text-blue-300'}`}>
+                              • <span className="uppercase">{issue.issue_type.replace('_', ' ')}:</span> {issue.description}
+                              {issue.recommendation && <span className="ml-1 text-cyan-200">→ {issue.recommendation}</span>}
+                            </li>
+                          ))}
+                          {selectedSceneContinuityIssues.length > 5 && (
+                            <li className="text-zinc-500">+{selectedSceneContinuityIssues.length - 5} more issues</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/5 p-3">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-fuchsia-200">Director Signature</div>
+                      {directorSignature ? (
+                        <>
+                          <div className="text-[10px] text-zinc-300">
+                            Confidence <span className="text-zinc-100">{(directorSignature.confidence * 100).toFixed(0)}%</span>
+                            {directorSignature.metadata && directorSignature.metadata.insufficient_data ? (
+                              <span className="text-amber-200"> · limited evidence</span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1 line-clamp-4 text-[10px] text-zinc-200">{directorSignature.visual_language_summary}</div>
+                        </>
+                      ) : (
+                        <div className="text-[10px] text-zinc-500">
+                          No director signature yet. Run {INTELLIGENCE_LABELS.frameAnalysis.toLowerCase()} in Study Room, then build {INTELLIGENCE_LABELS.directorSignature.toLowerCase()}.
+                        </div>
+                      )}
+                    </div>
+                    {selectedSceneStyleDriftIssues.length > 0 || showProjectLevelStyleDrift ? (
+                      <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
+                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200">{INTELLIGENCE_LABELS.styleDrift} (advisory)</div>
+                        {showProjectLevelStyleDrift ? (
+                          <div className="mb-1 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                            {INTELLIGENCE_EMPTY.projectFindingsSceneNeedsLinks}
+                          </div>
+                        ) : null}
+                        <ul className="space-y-1 text-[10px] text-zinc-300">
+                          {(showProjectLevelStyleDrift ? styleDriftIssues : selectedSceneStyleDriftIssues).slice(0, 6).map((issue) => (
+                            <li key={issue.drift_id}>
+                              <span className="font-semibold text-violet-200">{issue.drift_type.replace(/_/g, ' ')}</span>
+                              <span className="text-zinc-400"> · </span>
+                              {issue.description}
+                              <div className="text-zinc-500">
+                                asset {issue.asset_id ? `${issue.asset_id.slice(0, 10)}…` : '—'} · keyframe{' '}
+                                {issue.keyframe_id ? `${issue.keyframe_id.slice(0, 10)}…` : '—'}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
                 {activeRightTab === 'suggestions' ? (
                   <div className="space-y-2">
-                    {(co_director_suggestions || []).length === 0 && <div className="text-red-400">NO SUGGESTIONS FOUND</div>}
+                    {(co_director_suggestions || []).length === 0 && (
+                      <div className="rounded border border-zinc-700/60 bg-zinc-900/60 px-3 py-2 text-[11px] text-zinc-300">
+                        No scene-specific recommendations available yet for this scene.
+                      </div>
+                    )}
                     {coDirectorSuggestions.map((suggestion) => {
                       const tone = suggestionTypeTone[suggestion.type] || 'border-zinc-700 bg-zinc-900/70 text-zinc-200'
                       const isSelected = suggestion.id === selectedSuggestionId
@@ -2296,6 +2661,23 @@ export default function PrevisRoom() {
                         <div>Continuity Score: <span className="text-zinc-100">{asNumber(selectedContinuity?.continuity_score)?.toFixed(2) ?? 'n/a'}</span></div>
                         <div>Continuity Issues: <span className="text-zinc-100 break-words">{asArray(selectedContinuity?.issues).map((item) => asString(item)).filter(Boolean).join(', ') || 'none reported'}</span></div>
                         <div>Motif Status: <span className="text-zinc-100">{asArray(selectedMotifEvolution?.motifs).length ? `${asArray(selectedMotifEvolution?.motifs).length} motifs tracked` : 'no motif evolution data'}</span></div>
+                      </div>
+                      <div className="mt-3 space-y-2 border-t border-violet-400/20 pt-2 text-[11px]">
+                        <div className="font-semibold uppercase tracking-[0.12em] text-violet-200">{INTELLIGENCE_LABELS.continuityNotes}</div>
+                        {selectedSceneContinuityIssues.length > 0 ? (
+                          selectedSceneContinuityIssues.slice(0, 6).map((issue) => (
+                            <div key={issue.issue_id} className="rounded border border-violet-400/30 bg-black/25 p-2">
+                              <div className="text-zinc-100">{issue.issue_type} · {issue.severity}</div>
+                              <div className="text-zinc-300">{issue.evidence || issue.description}</div>
+                            </div>
+                          ))
+                        ) : showProjectLevelContinuityFallback ? (
+                          <div className="rounded border border-amber-400/30 bg-amber-500/10 p-2 text-amber-100">
+                            {INTELLIGENCE_EMPTY.projectFindingsSceneNeedsLinks}
+                          </div>
+                        ) : (
+                          <div className="text-zinc-400">No continuity issues linked to this scene.</div>
+                        )}
                       </div>
                     </div>
                     <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">

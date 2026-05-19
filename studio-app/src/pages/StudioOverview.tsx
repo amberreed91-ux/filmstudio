@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Clapperboard } from 'lucide-react'
 import StudioShell, { AGENTS, CollapsibleSection, EmptyStateCard, MetricCard, TabGroup } from '../components/StudioShell'
+import StudioBrainOrchestrationPanel from '../components/StudioBrainOrchestrationPanel'
 import { useStudio } from '../context/StudioContext'
 import {
   buildLocalFallbackExport,
@@ -452,6 +453,7 @@ export default function StudioOverview() {
               />
             ))}
           </section>
+          <StudioBrainOrchestrationPanel executionSummary={executionSummary} />
           <section className="rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-4 shadow-[0_20px_70px_rgba(34,211,238,0.08)] backdrop-blur-xl">
             <div className="text-[11px] uppercase tracking-[0.14em] text-cyan-200">Render QA Snapshot</div>
             <div className="mt-2 text-sm text-zinc-100">Average Script Faithfulness: {renderQaSnapshot.avg.toFixed(3)}</div>

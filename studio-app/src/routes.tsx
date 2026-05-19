@@ -16,6 +16,7 @@ import WritersRoom from './pages/WritersRoom'
 import ProductionBoard from './pages/ProductionBoard'
 import ScreeningRoom from './pages/ScreeningRoom'
 import ArchiveRoom from './pages/ArchiveRoom'
+import StudioDevTools from './pages/StudioDevTools'
 
 export type NavigationPlacement =
   | 'primary'
@@ -152,6 +153,48 @@ export const APP_ROUTES: AppRoute[] = [
     element: <ArchiveRoom />,
   },
   {
+    path: '/studio/devtools',
+    label: 'Dev Tools',
+    title: 'Studio Dev Tools',
+    purpose: 'Hidden developer sandbox for diagnostics, mock toggles, and render recovery workflows.',
+    placement: 'hidden-system',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Dev Tools' }],
+    contextualLinks: [
+      { to: '/studio/lobby', label: 'Return to Lobby' },
+      { to: '/studio/production-board', label: 'Open Production Board' },
+    ],
+    icon: <Clapperboard size={14} />,
+    element: <StudioDevTools />,
+  },
+  {
+    path: '/studio/workspace',
+    label: 'Workspace',
+    title: 'Project Workspace',
+    purpose: 'Workspace entry route for project slate and production workspace access.',
+    placement: 'hidden-system',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Workspace' }],
+    contextualLinks: [
+      { to: '/studio/slate', label: 'Open Project Slate' },
+      { to: '/studio/production-board', label: 'Open Production Board' },
+    ],
+    icon: <Film size={14} />,
+    element: <ProjectSlate />,
+  },
+  {
+    path: '/studio/development-room',
+    label: 'Development Room',
+    title: 'Development Room',
+    purpose: 'Development room for scene shaping, previs, and iterative planning.',
+    placement: 'hidden-system',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Development Room' }],
+    contextualLinks: [
+      { to: '/studio/writers-room', label: "Open Writer's Room" },
+      { to: '/studio/previs', label: 'Open Previs Room' },
+    ],
+    icon: <Film size={14} />,
+    element: <PrevisRoom />,
+  },
+  {
     path: '/studio/ingest',
     label: 'Script Processing',
     title: 'Script Processing',
@@ -209,10 +252,10 @@ export const APP_ROUTES: AppRoute[] = [
   },
   {
     path: '/studio/previs',
-    label: 'Rough Previs Room',
-    title: 'Rough Previs Room',
-    purpose: 'Read-only previs review space for scene strip, shot ledger, continuity, and director evaluations.',
-    placement: 'contextual',
+    label: 'Previs Room',
+    title: 'Previs Room',
+    purpose: 'Review generated scenes, shot recommendations, and approvals before rendering.',
+    placement: 'primary',
     breadcrumbs: [{ label: 'Studio Dashboard', to: '/studio' }, { label: 'Rough Previs Room' }],
     contextualLinks: [
       { to: '/studio/slate', label: 'Back to Slate' },
@@ -223,9 +266,9 @@ export const APP_ROUTES: AppRoute[] = [
   },
   {
     path: '/studio/project/:projectId/previs',
-    label: 'Rough Previs Room',
-    title: 'Rough Previs Room',
-    purpose: 'Read-only previs review space for scene strip, shot ledger, continuity, and director evaluations.',
+    label: 'Previs Room',
+    title: 'Previs Room',
+    purpose: 'Review generated scenes, shot recommendations, and approvals before rendering.',
     placement: 'contextual',
     breadcrumbs: [{ label: 'Studio Dashboard', to: '/studio' }, { label: 'Project Workspace', to: '/studio/slate' }, { label: 'Rough Previs Room' }],
     contextualLinks: [
@@ -240,7 +283,7 @@ export const APP_ROUTES: AppRoute[] = [
     label: 'Approval Room',
     title: 'Approval Intelligence & QC',
     purpose: 'Quality control, approval gates, reference comparison, and benchmark take review.',
-    placement: 'primary',
+    placement: 'hidden-system',
     breadcrumbs: [{ label: 'Studio Dashboard', to: '/studio' }, { label: 'Approval Room' }],
     contextualLinks: [
       { to: '/studio/slate', label: 'Choose Project Workspace' },
@@ -251,6 +294,20 @@ export const APP_ROUTES: AppRoute[] = [
   },
   {
     path: '/studio/approval',
+    label: 'Approval Room',
+    title: 'Approval Intelligence & QC',
+    purpose: 'Quality control, approval gates, reference comparison, and benchmark take review.',
+    placement: 'hidden-system',
+    breadcrumbs: [{ label: 'Studio Dashboard', to: '/studio' }, { label: 'Approval Room' }],
+    contextualLinks: [
+      { to: '/studio/slate', label: 'Choose Project Workspace' },
+      { to: '/studio/study-room', label: 'Open Study Room' },
+    ],
+    icon: <LayoutDashboard size={14} />,
+    element: <Dashboard />,
+  },
+  {
+    path: '/studio/approval-room',
     label: 'Approval Room',
     title: 'Approval Intelligence & QC',
     purpose: 'Quality control, approval gates, reference comparison, and benchmark take review.',
