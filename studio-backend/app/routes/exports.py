@@ -35,6 +35,9 @@ def build_export_package_payload(
     video_assets = _as_list(summary.get("video_render_assets"))
     transitions = _as_list(summary.get("scene_transitions"))
     cut_analysis = _as_dict(summary.get("cut_analysis"))
+    delivery_metadata = _build_distribution_metadata(project_id=project_id, summary=summary)
+    export_presets = _build_export_presets()
+    original_masters = _build_original_master_refs(summary)
 
     if export_type == "pitch-pack":
         key_scenes = []
@@ -134,6 +137,85 @@ def build_export_package_payload(
             "strong_markers": _as_list(cut_analysis.get("strong_moments")),
         }
 
+    if export_type == "festival-export":
+        return {
+            "project_id": project_id,
+            "package_type": "festival-export",
+            "delivery_metadata": delivery_metadata,
+            "export_preset": export_presets["festival"],
+            "assets": {
+                "film_master_mp4": _as_dict(summary.get("film_export_pipeline")).get("mp4_export", {}),
+                "archive_package": _as_dict(summary.get("film_export_pipeline")).get("archive_package", {}),
+                "subtitle_package": _build_subtitle_package(summary),
+                "poster_metadata": delivery_metadata.get("poster_metadata", {}),
+            },
+            "original_masters_preserved": True,
+            "original_master_refs": original_masters,
+        }
+
+    if export_type == "youtube-export":
+        return {
+            "project_id": project_id,
+            "package_type": "youtube-export",
+            "delivery_metadata": delivery_metadata,
+            "export_preset": export_presets["youtube"],
+            "assets": {
+                "upload_master": _as_dict(summary.get("film_export_pipeline")).get("mp4_export", {}),
+                "thumbnail_suggestions": delivery_metadata.get("poster_metadata", {}),
+                "subtitle_package": _build_subtitle_package(summary),
+            },
+            "original_masters_preserved": True,
+            "original_master_refs": original_masters,
+        }
+
+    if export_type == "trailer-export":
+        return {
+            "project_id": project_id,
+            "package_type": "trailer-export",
+            "delivery_metadata": delivery_metadata,
+            "export_preset": export_presets["trailer"],
+            "assets": {
+                "source_cut_manifest": {
+                    "scene_order": [row.get("scene_id") for row in _as_list(summary.get("screening_playlist")) if isinstance(row, dict)],
+                    "target_duration_seconds": 90,
+                },
+                "subtitle_package": _build_subtitle_package(summary),
+            },
+            "original_masters_preserved": True,
+            "original_master_refs": original_masters,
+        }
+
+    if export_type == "teaser-export":
+        return {
+            "project_id": project_id,
+            "package_type": "teaser-export",
+            "delivery_metadata": delivery_metadata,
+            "export_preset": export_presets["teaser"],
+            "assets": {
+                "source_cut_manifest": {
+                    "scene_order": [row.get("scene_id") for row in _as_list(summary.get("screening_playlist")) if isinstance(row, dict)],
+                    "target_duration_seconds": 30,
+                },
+                "subtitle_package": _build_subtitle_package(summary),
+            },
+            "original_masters_preserved": True,
+            "original_master_refs": original_masters,
+        }
+
+    if export_type == "subtitle-packages":
+        return {
+            "project_id": project_id,
+            "package_type": "subtitle-packages",
+            "delivery_metadata": delivery_metadata,
+            "export_presets": {
+                "festival": export_presets["festival"],
+                "youtube": export_presets["youtube"],
+            },
+            "subtitle_package": _build_subtitle_package(summary),
+            "original_masters_preserved": True,
+            "original_master_refs": original_masters,
+        }
+
     return {
         "project_id": project_id,
         "package_type": "archive-snapshot",
@@ -147,6 +229,101 @@ def build_export_package_payload(
         ],
         "best_cut_summary": summary.get("best_cut_summary", {}),
         "production_summary": summary.get("production_summary", {}),
+        "delivery_metadata": delivery_metadata,
+        "export_presets": export_presets,
+        "original_masters_preserved": True,
+        "original_master_refs": original_masters,
+    }
+
+
+def _build_distribution_metadata(project_id: str, summary: Dict[str, Any]) -> Dict[str, Any]:
+    scenes = _as_list(summary.get("scenes"))
+    runtime_meta = _as_dict(summary.get("film_runtime_metadata"))
+    runtime_minutes = runtime_meta.get("runtime_minutes")
+    if not isinstance(runtime_minutes, (int, float)):
+        runtime_minutes = max(1, len(scenes) * 3)
+    title = str(summary.get("title") or f"Project {project_id}")
+    dominant_tone = str(_as_dict(summary.get("screening_summary")).get("dominant_tone") or "cinematic tension")
+    scene_names = [str(_as_dict(scene).get("heading") or _as_dict(scene).get("scene_id") or "") for scene in scenes[:3]]
+    scene_names = [name for name in scene_names if name]
+    synopsis = (
+        f"{title} follows escalating cinematic pressure across {len(scenes)} scenes, "
+        f"anchored in {dominant_tone}. Key beats: {', '.join(scene_names) if scene_names else 'core emotional movement'}."
+    )
+    credits = {
+        "director": "AI Studio Director",
+        "editor": "AI Studio Editorial",
+        "producer": "AI Studio Producer",
+        "review_team": "Director, Editor, Reviewer, Producer",
+    }
+    poster_metadata = {
+        "title": title,
+        "tagline": f"{dominant_tone.title()} in Motion",
+        "aspect_ratio": "2:3",
+        "palette": ["#0b1220", "#20314f", "#f6c86a"],
+    }
+    return {
+        "synopsis": synopsis,
+        "credits": credits,
+        "runtime_minutes": runtime_minutes,
+        "poster_metadata": poster_metadata,
+    }
+
+
+def _build_export_presets() -> Dict[str, Dict[str, Any]]:
+    return {
+        "festival": {
+            "container": "mp4",
+            "resolution": "3840x2160",
+            "video_codec": "h264",
+            "audio_codec": "aac",
+            "frame_rate": 24,
+        },
+        "youtube": {
+            "container": "mp4",
+            "resolution": "1920x1080",
+            "video_codec": "h264",
+            "audio_codec": "aac",
+            "frame_rate": 24,
+        },
+        "trailer": {
+            "container": "mp4",
+            "resolution": "1920x1080",
+            "video_codec": "h264",
+            "audio_codec": "aac",
+            "target_duration_seconds": 90,
+        },
+        "teaser": {
+            "container": "mp4",
+            "resolution": "1080x1920",
+            "video_codec": "h264",
+            "audio_codec": "aac",
+            "target_duration_seconds": 30,
+        },
+    }
+
+
+def _build_original_master_refs(summary: Dict[str, Any]) -> Dict[str, Any]:
+    pipeline = _as_dict(summary.get("film_export_pipeline"))
+    stitched = _as_dict(summary.get("stitched_export"))
+    return {
+        "film_master": _as_dict(pipeline.get("mp4_export")),
+        "archive_master": _as_dict(pipeline.get("archive_package")),
+        "scene_stitched_master": stitched,
+    }
+
+
+def _build_subtitle_package(summary: Dict[str, Any]) -> Dict[str, Any]:
+    subtitles = _as_list(summary.get("subtitles"))
+    if not subtitles:
+        subtitles = [
+            {"start": 0.0, "end": 2.0, "text": "Opening cinematic beat."},
+            {"start": 2.0, "end": 4.0, "text": "Escalating emotional pressure."},
+        ]
+    return {
+        "formats": ["srt", "vtt"],
+        "default_language": "en",
+        "entries": subtitles,
     }
 
 
@@ -186,3 +363,27 @@ def export_cut_manifest(project_id: str):
 def export_archive_snapshot(project_id: str):
     return JSONResponse(_build_payload_for_project(project_id, "archive-snapshot"))
 
+
+@router.get("/{project_id}/festival-export")
+def export_festival(project_id: str):
+    return JSONResponse(_build_payload_for_project(project_id, "festival-export"))
+
+
+@router.get("/{project_id}/youtube-export")
+def export_youtube(project_id: str):
+    return JSONResponse(_build_payload_for_project(project_id, "youtube-export"))
+
+
+@router.get("/{project_id}/trailer-export")
+def export_trailer(project_id: str):
+    return JSONResponse(_build_payload_for_project(project_id, "trailer-export"))
+
+
+@router.get("/{project_id}/teaser-export")
+def export_teaser(project_id: str):
+    return JSONResponse(_build_payload_for_project(project_id, "teaser-export"))
+
+
+@router.get("/{project_id}/subtitle-packages")
+def export_subtitles(project_id: str):
+    return JSONResponse(_build_payload_for_project(project_id, "subtitle-packages"))
