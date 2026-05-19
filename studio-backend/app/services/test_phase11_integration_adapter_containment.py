@@ -50,8 +50,8 @@ def test_render_service_provider_selection_is_unaffected_by_codirector_stack():
     """
     service = RenderService()
 
-    # Baseline: no enabled real providers defaults to simulated.
-    assert service.get_default_provider() == "simulated"
+    # Baseline: Runway is the primary active video provider path.
+    assert service.get_default_provider() == "runway"
 
     # Disable simulated, then enable a real provider and ensure default follows
     # provider config only (not any co-director metadata).
@@ -59,6 +59,10 @@ def test_render_service_provider_selection_is_unaffected_by_codirector_stack():
     assert simulated is not None
     simulated.enabled = False
     service.set_provider_config(simulated)
+    runway = service.get_provider_config("runway")
+    assert runway is not None
+    runway.enabled = False
+    service.set_provider_config(runway)
 
     config = service.get_provider_config("generic")
     assert config is not None

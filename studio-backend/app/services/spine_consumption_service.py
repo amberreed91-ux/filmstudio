@@ -295,6 +295,8 @@ class SpineConsumptionService:
                 metrics["engagement_level"] = "advisory"
             elif mode == SessionMode.COLLABORATIVE:
                 metrics["engagement_level"] = "highly_engaged"
+            elif mode == SessionMode.EXPERIMENTAL:
+                metrics["engagement_level"] = "experimental"
 
             # Collaboration depth based on revision count
             if session.revision_count == 0:
