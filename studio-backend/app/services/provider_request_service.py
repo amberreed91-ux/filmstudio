@@ -29,6 +29,10 @@ from app.models.production_intelligence import (
     ProviderRequestProvenance,
     SceneProductionPackage,
 )
+from app.services.character_consistency_service import character_consistency_service
+from app.services.scene_continuity_service import scene_continuity_service
+from app.services.style_consistency_service import style_consistency_service
+from app.services.emotional_arc_service import emotional_arc_service
 
 
 class ProviderRequestService:
@@ -810,6 +814,60 @@ class ProviderRequestService:
         # Never replaces canonical prompt content; only appends at the end.
         components.extend(self._derive_scene_intent_prompt_appendix(safe_pkg))
 
+        # Additive character continuity prompt shaping.
+        character_context = character_consistency_service.build_character_reference_context(
+            safe_pkg.get("character_profiles"),
+            safe_pkg,
+        )
+        shaped_prompt = character_consistency_service.inject_character_visual_traits(
+            "",
+            character_context,
+        )
+        if shaped_prompt and shaped_prompt.strip():
+            components.append(shaped_prompt)
+            provenance.prompt_sources.append("character_profiles")
+            provenance.advisory_sources.append("character_consistency_service.inject_character_visual_traits")
+
+        # Additive film visual style locking prompt shaping.
+        style_profile = safe_pkg.get("film_visual_style_profile")
+        if not isinstance(style_profile, dict):
+            style_profile = style_consistency_service.build_film_visual_style_profile(
+                safe_pkg.get("visual_style") or safe_pkg.get("style") or safe_pkg.get("genre")
+            ).model_dump()
+        style_context = style_consistency_service.build_style_reference_context(style_profile)
+        styled_prompt = style_consistency_service.inject_style_guidance(
+            "",
+            style_context,
+        )
+        if styled_prompt and styled_prompt.strip():
+            components.append(styled_prompt)
+            provenance.prompt_sources.append("film_visual_style_profile")
+            provenance.advisory_sources.append("style_consistency_service.inject_style_guidance")
+
+        # Additive adjacent-scene continuity transition guidance.
+        transition_context = safe_pkg.get("director_continuity_context")
+        if isinstance(transition_context, dict):
+            transition_context = transition_context.get("transition_context", transition_context)
+        continuity_warnings = safe_pkg.get("continuity_warnings") or []
+        continuity_lines = scene_continuity_service.build_prompt_continuity_lines(
+            transition_context,
+            continuity_warnings,
+        )
+        if continuity_lines:
+            components.extend(continuity_lines)
+            provenance.prompt_sources.append("director_continuity_context")
+            provenance.advisory_sources.append("scene_continuity_service.build_prompt_continuity_lines")
+
+        emotional_lines = emotional_arc_service.build_scene_generation_lines(
+            safe_pkg.get("emotional_continuity_score"),
+            safe_pkg.get("emotional_pacing_balance"),
+            safe_pkg.get("emotional_climax_buildup"),
+        )
+        if emotional_lines:
+            components.extend(emotional_lines)
+            provenance.prompt_sources.append("emotional_arc")
+            provenance.advisory_sources.append("emotional_arc_service.build_scene_generation_lines")
+
         if not provenance.prompt_sources:
             provenance.notes.append("No canonical prompt sources available; request is sparse.")
 
@@ -996,6 +1054,51 @@ class ProviderRequestService:
                 if constraint and str(constraint).strip():
                     notes.append(str(constraint).strip())
                     provenance.execution_notes_sources.append("continuity_constraints")
+
+        character_context = character_consistency_service.build_character_reference_context(
+            safe_pkg.get("character_profiles"),
+            safe_pkg,
+        )
+        notes.extend(
+            character_consistency_service.maintain_scene_consistency(
+                safe_pkg,
+                character_context,
+            )
+        )
+        if character_context.get("characters"):
+            provenance.execution_notes_sources.append("character_profiles")
+
+        style_profile = safe_pkg.get("film_visual_style_profile")
+        if not isinstance(style_profile, dict):
+            style_profile = style_consistency_service.build_film_visual_style_profile(
+                safe_pkg.get("visual_style") or safe_pkg.get("style") or safe_pkg.get("genre")
+            ).model_dump()
+        style_context = style_consistency_service.build_style_reference_context(style_profile)
+        notes.extend(style_consistency_service.maintain_scene_style_consistency(style_context))
+        if style_context.get("style_profile"):
+            provenance.execution_notes_sources.append("film_visual_style_profile")
+
+        transition_context = safe_pkg.get("director_continuity_context")
+        if isinstance(transition_context, dict):
+            transition_context = transition_context.get("transition_context", transition_context)
+        continuity_warnings = safe_pkg.get("continuity_warnings") or []
+        notes.extend(
+            scene_continuity_service.build_prompt_continuity_lines(
+                transition_context,
+                continuity_warnings,
+            )
+        )
+        if transition_context or continuity_warnings:
+            provenance.execution_notes_sources.append("scene_continuity")
+        notes.extend(
+            emotional_arc_service.build_scene_generation_lines(
+                safe_pkg.get("emotional_continuity_score"),
+                safe_pkg.get("emotional_pacing_balance"),
+                safe_pkg.get("emotional_climax_buildup"),
+            )
+        )
+        if safe_pkg.get("emotional_continuity_score") or safe_pkg.get("emotional_pacing_balance"):
+            provenance.execution_notes_sources.append("emotional_arc")
 
         if not provenance.execution_notes_sources:
             provenance.notes.append(

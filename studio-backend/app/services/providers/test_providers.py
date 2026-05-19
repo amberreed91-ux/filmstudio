@@ -432,9 +432,10 @@ def test_provider_config_deterministic():
         "comfyui_motion_enabled": False,
         "comfyui_motion_workflow_path": "/Users/amberreed/ComfyUI/workflows/animate_diff_basic.json",
         "video_provider_enabled": False,
-        "video_provider_name": "",
+        "video_provider_name": "runway",
         "video_provider_api_key": "",
-        "video_provider_base_url": "",
+        "video_provider_base_url": "https://api.dev.runwayml.com",
+        "runway_timeout_seconds": 60,
     }
 
 

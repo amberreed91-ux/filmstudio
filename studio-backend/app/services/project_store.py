@@ -50,6 +50,18 @@ class ProjectStore:
             },
             "archive_snapshots": [],
             "memory_context": {},
+            "collaboration": {
+                "owner_user_id": "owner",
+                "session_id": "",
+                "shared_room": "lobby",
+                "shared_screening_scene_id": "",
+                "members": [],
+                "presence": [],
+                "live_comments": [],
+                "approval_votes": [],
+                "co_direction_notes": [],
+                "updated_at": now,
+            },
         }
 
     @classmethod
@@ -69,6 +81,19 @@ class ProjectStore:
         merged["scene_review_status"] = merged.get("scene_review_status") if isinstance(merged.get("scene_review_status"), dict) else {}
         merged["archive_snapshots"] = merged.get("archive_snapshots") if isinstance(merged.get("archive_snapshots"), list) else []
         merged["memory_context"] = merged.get("memory_context") if isinstance(merged.get("memory_context"), dict) else {}
+        collaboration = merged.get("collaboration") if isinstance(merged.get("collaboration"), dict) else {}
+        merged["collaboration"] = {
+            "owner_user_id": str(collaboration.get("owner_user_id") or "owner"),
+            "session_id": str(collaboration.get("session_id") or ""),
+            "shared_room": str(collaboration.get("shared_room") or "lobby"),
+            "shared_screening_scene_id": str(collaboration.get("shared_screening_scene_id") or ""),
+            "members": collaboration.get("members") if isinstance(collaboration.get("members"), list) else [],
+            "presence": collaboration.get("presence") if isinstance(collaboration.get("presence"), list) else [],
+            "live_comments": collaboration.get("live_comments") if isinstance(collaboration.get("live_comments"), list) else [],
+            "approval_votes": collaboration.get("approval_votes") if isinstance(collaboration.get("approval_votes"), list) else [],
+            "co_direction_notes": collaboration.get("co_direction_notes") if isinstance(collaboration.get("co_direction_notes"), list) else [],
+            "updated_at": str(collaboration.get("updated_at") or merged["updated_at"]),
+        }
 
         film_cut = merged.get("film_cut") if isinstance(merged.get("film_cut"), dict) else {}
         merged["film_cut"] = {

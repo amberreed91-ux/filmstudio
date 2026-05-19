@@ -1,7 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
+from datetime import datetime, timezone
+import shutil
 
 from app.services import render_service
+from app.services import render as render_module
+from app.services.render_job_backfill import backfill_render_jobs_from_project_state
 from app.models import ProviderConfig, RenderJobModel
 
 router = APIRouter()
@@ -113,6 +117,16 @@ async def retry_render_job(job_id: str):
     return job
 
 
+@router.post("/jobs/{job_id}/reconcile")
+async def reconcile_render_job(job_id: str):
+    """Reconcile historical failed runway job against upstream task status."""
+    try:
+        job = await render_service.reconcile_completed_runway_task(job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return job
+
+
 @router.get("/jobs/{job_id}/outputs")
 async def get_render_job_outputs(job_id: str):
     """Get generated assets for a job"""
@@ -122,4 +136,99 @@ async def get_render_job_outputs(job_id: str):
 @router.get("/jobs")
 def list_render_jobs(project_id: Optional[str] = None):
     """List all render jobs, optionally filtered by project"""
-    return render_service.list_jobs(project_id)
+    rows = []
+    for job in render_service.list_jobs(project_id):
+        payload = job.model_dump()
+        output_payload = payload.get("output_payload") if isinstance(payload.get("output_payload"), dict) else {}
+        output_url = payload.get("output_url") or output_payload.get("asset_url")
+        preview_url = payload.get("preview_url") or output_payload.get("thumbnail_url")
+        rows.append(
+            {
+                **payload,
+                "job_id": payload.get("id"),
+                "output_url": output_url,
+                "preview_url": preview_url,
+            }
+        )
+    return rows
+
+
+@router.get("/diagnostics")
+def get_render_diagnostics(project_id: Optional[str] = None):
+    """Internal diagnostics snapshot for DevTools."""
+    jobs = render_service.list_jobs(project_id)
+    status_counts: dict[str, int] = {}
+    for job in jobs:
+        status_counts[job.status] = status_counts.get(job.status, 0) + 1
+
+    storage_health = "uninitialized"
+    storage_detail = "storage_not_set"
+    if render_module._storage is not None:
+        try:
+            _ = render_module._storage.list_jobs(limit=1)
+            storage_health = "ok"
+            storage_detail = "query_ok"
+        except Exception as exc:  # pragma: no cover - defensive
+            storage_health = "degraded"
+            storage_detail = str(exc)
+
+    persistence_path = ""
+    if render_module._storage is not None and hasattr(render_module._storage, "db_path"):
+        persistence_path = str(getattr(render_module._storage, "db_path"))
+
+    provider_status = render_service.list_providers()
+    provider_snapshot = [
+        {
+            "provider_id": p.provider_id,
+            "name": p.name,
+            "status": p.status,
+            "is_simulated": p.is_simulated,
+            "active_jobs": p.active_jobs,
+            "queued_jobs": p.queued_jobs,
+        }
+        for p in provider_status
+    ]
+    provider_available = {
+        row["provider_id"]: row["status"] == "available"
+        for row in provider_snapshot
+    }
+
+    ffmpeg_path = shutil.which("ffmpeg")
+    ffprobe_path = shutil.which("ffprobe")
+    return {
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "project_id": project_id or "",
+        "provider_status": provider_snapshot,
+        "provider_availability": provider_available,
+        "render_queue": {
+            "total": len(jobs),
+            "status_counts": status_counts,
+            "recent_jobs": [job.model_dump() for job in jobs[:10]],
+        },
+        "hydration_state": {
+            "in_memory_job_count": len(getattr(render_service, "_jobs", {})),
+            "storage_initialized": render_module._storage is not None,
+        },
+        "persistence_health": {
+            "status": storage_health,
+            "detail": storage_detail,
+            "db_path": persistence_path,
+        },
+        "environment": {
+            "ffmpeg_available": bool(ffmpeg_path),
+            "ffmpeg_path": ffmpeg_path or "",
+            "ffprobe_available": bool(ffprobe_path),
+            "ffprobe_path": ffprobe_path or "",
+        },
+    }
+
+
+@router.post("/backfill-project-state")
+def backfill_project_state_render_jobs():
+    """Backfill canonical render_jobs rows from project_state_store.json."""
+    if render_module._storage is None:
+        raise HTTPException(status_code=503, detail="Render job storage is not initialized")
+    return backfill_render_jobs_from_project_state(
+        storage=render_module._storage,
+        render_service=render_service,
+    )
