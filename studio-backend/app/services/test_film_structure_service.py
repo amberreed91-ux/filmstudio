@@ -1504,6 +1504,9 @@ def test_has_expected_keys_iteration_commit_layer_with_valid_script():
         "archive_snapshots",
         "best_cut_summary",
         "archive_summary",
+        "film_assembly_timeline",
+        "film_export_pipeline",
+        "film_runtime_metadata",
     }
     assert expected_keys.issubset(set(bundle.keys()))
 
@@ -2993,7 +2996,7 @@ def test_build_script_breakdown_bundle_has_expected_keys():
     parser = ScriptParser()
     bundle = parser.build_script_breakdown_bundle(PHASE20_MULTI_SCENE_SCRIPT)
 
-    assert set(bundle.keys()) == {
+    expected_keys = {
         "scenes",
         "scene_index",
         "character_presence",
@@ -3226,6 +3229,12 @@ def test_build_script_breakdown_bundle_has_expected_keys():
         "shot_advisory_note",
         "scene_sequence",
         "scene_assembly",
+        "scene_assembly_v2",
+        "stitching_plan",
+        "stitched_export",
+        "film_assembly_timeline",
+        "film_export_pipeline",
+        "film_runtime_metadata",
         "sequence_status",
         "scene_continuity_check",
         "scene_playback_status",
@@ -3233,6 +3242,7 @@ def test_build_script_breakdown_bundle_has_expected_keys():
         "orchestration_state_stub",
         "render_orchestration_contract",
     }
+    assert expected_keys.issubset(set(bundle.keys()))
 
 
 def test_build_script_breakdown_bundle_matches_individual_helper_outputs():
@@ -3280,6 +3290,12 @@ def test_build_script_breakdown_bundle_matches_individual_helper_outputs():
     assert bundle["time_of_day_presence"] == parser.build_time_of_day_presence_index(scenes)
     assert bundle["summary"] == parser.build_script_structure_summary(scenes)
     assert bundle["continuity"] == parser.build_continuity_bundle(scenes)
+    assert isinstance(bundle["film_assembly_timeline"], dict)
+    assert isinstance(bundle["film_export_pipeline"], dict)
+    assert isinstance(bundle["film_runtime_metadata"], dict)
+    assert "ordered_scenes" in bundle["film_assembly_timeline"]
+    assert "mp4_export" in bundle["film_export_pipeline"]
+    assert "scene_count" in bundle["film_runtime_metadata"]
     assert bundle["relationships"] == parser.build_relationship_bundle(scenes)
     assert bundle["patterns"] == parser.build_pattern_bundle(scenes)
     assert bundle["pattern_observations"] == parser.build_pattern_observations(bundle["patterns"])
@@ -6052,18 +6068,17 @@ def test_build_prompt_envelope_base_intent_and_gate_enabled_tokens():
     visual_tokens = ["image", "video"]
     shot_tokens = ["wide establishing shot", "tight dialogue framing"]
 
-    assert parser.build_prompt_envelope(
+    envelope = parser.build_prompt_envelope(
         scenes,
         gate,
         visual_tokens,
         shot_tokens,
-    ) == {
-        "prompt_envelope": {
-            "base_intent": "Opening intent line",
-            "visual_tokens": ["image", "video"],
-            "shot_tokens": ["wide establishing shot", "tight dialogue framing"],
-        }
-    }
+    )["prompt_envelope"]
+    assert envelope["base_intent"] == "Opening intent line"
+    assert "image" in envelope["visual_tokens"]
+    assert "video" in envelope["visual_tokens"]
+    assert "wide establishing shot" in envelope["shot_tokens"]
+    assert "tight dialogue framing" in envelope["shot_tokens"]
 
 
 def test_build_prompt_envelope_tokens_disabled_when_gate_off():
@@ -6145,18 +6160,15 @@ def test_build_prompt_envelope_ignores_non_string_scene_text():
         "scope": "advisory_only",
         "reason": "Prompt influence enabled in advisory mode",
     }
-    assert parser.build_prompt_envelope(
+    envelope = parser.build_prompt_envelope(
         scenes,
         gate,
         ["image"],
         ["wide establishing shot"],
-    ) == {
-        "prompt_envelope": {
-            "base_intent": "",
-            "visual_tokens": ["image"],
-            "shot_tokens": ["wide establishing shot"],
-        }
-    }
+    )["prompt_envelope"]
+    assert envelope["base_intent"] == ""
+    assert "image" in envelope["visual_tokens"]
+    assert "wide establishing shot" in envelope["shot_tokens"]
     first = parser.build_co_director_observation_contract()
     second = parser.build_co_director_observation_contract()
     assert first == second

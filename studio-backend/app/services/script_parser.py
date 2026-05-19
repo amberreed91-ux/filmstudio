@@ -61,6 +61,20 @@ from .continuity_evaluator import (
     evaluate_narrative_progression,
 )
 from .director_evaluator import build_agent_disagreements
+from .character_consistency_service import character_consistency_service
+from .scene_continuity_service import scene_continuity_service
+from .cinematic_scene_stitching_service import cinematic_scene_stitching_service
+from .dialogue_voice_service import dialogue_voice_service
+from .ambient_audio_service import ambient_audio_service
+from .emotional_arc_service import emotional_arc_service
+from .full_film_assembly_service import full_film_assembly_service
+from .shot_sequence_service import shot_sequence_service
+from .style_consistency_service import style_consistency_service
+from .symbolism_graph_service import symbolism_graph_service
+from .editing_intelligence_service import editing_intelligence_service
+from .character_identity_memory_service import character_identity_memory_service
+from .voice_direction_interpreter_service import voice_direction_interpreter_service
+from .studio_brain_service import studio_brain_service
 
 
 @dataclass
@@ -153,6 +167,7 @@ class ScriptParser:
         project_id_input = "default_project"
         staged_reference_analysis_input = None
         ignored_agent_decisions_input: List[Dict[str, Any]] = []
+        voice_direction_commands_input: List[str] = []
         if isinstance(script_text, dict):
             active_cut_summary_input = (
                 script_text.get("active_cut_summary")
@@ -171,6 +186,11 @@ class ScriptParser:
                 ignored_agent_decisions_input = [
                     row for row in raw_ignored_decisions if isinstance(row, dict)
                 ][:50]
+            raw_voice_commands = script_text.get("voice_direction_commands")
+            if isinstance(raw_voice_commands, list):
+                voice_direction_commands_input = [
+                    str(row).strip() for row in raw_voice_commands if str(row).strip()
+                ][:20]
             script_text = script_text.get("script_text", "")
 
         if not isinstance(script_text, str) or not script_text.strip():
@@ -1690,6 +1710,25 @@ class ScriptParser:
                 "location_continuity": {},
                 "time_of_day_continuity": {},
             },
+            "voice_direction_commands": [],
+            "voice_direction_guidance": {
+                "advisory_only": True,
+                "requires_creator_approval": True,
+                "emotional_changes": [],
+                "pacing_changes": [],
+                "visual_style_updates": [],
+                "guidance_lines": [],
+            },
+            "symbolism_nodes": [],
+            "recurring_imagery": [],
+            "recurring_phrases": [],
+            "emotional_callbacks": [],
+            "environmental_symbolism": [],
+            "symbolism_connections": [],
+            "symbolism_graph_visualization": {"nodes": [], "edges": [], "layout": "force", "legend": ""},
+            "memory_archivist_symbolism_context": {"nodes": [], "environmental_symbolism": []},
+            "emotional_arc_symbolism_context": {"emotional_callbacks": [], "recurring_phrases": []},
+            "director_symbolism_context": {"recurring_imagery": [], "symbolism_connections": []},
             "relationships": {
                 "character_copresence": {},
                 "character_copresence_summary": {},
@@ -2205,6 +2244,37 @@ class ScriptParser:
             "shot_advisory_note": {
                 "note": "",
             },
+            "editing_intelligence": {
+                "advisory_only": True,
+                "suggestions": [],
+                "suggestion_count": 0,
+            },
+            "editing_suggestions": [],
+            "film_assembly_editing_context": {"advisory_only": True, "suggestions": []},
+            "director_evaluator_editing_context": {"advisory_only": True, "suggestions": []},
+            "film_assembly_timeline": {
+                "timeline_id": "film_timeline_000",
+                "ordered_scenes": [],
+                "audio_tracks": [],
+                "subtitles": [],
+                "transitions": [],
+                "title_cards": [],
+                "credits": [],
+            },
+            "film_export_pipeline": {
+                "mp4_export": {"path": "output/renders/full_film_film_timeline_000.mp4", "ready": False},
+                "archive_package": {"path": "output/archives/film_timeline_000.zip", "ready": False},
+                "preview_render": {"path": "output/previews/film_timeline_000_preview.mp4", "ready": False},
+            },
+            "film_runtime_metadata": {
+                "scene_count": 0,
+                "ambient_track_count": 0,
+                "dialogue_track_count": 0,
+                "subtitle_count": 0,
+                "transition_count": 0,
+                "title_card_count": 0,
+                "credits_count": 0,
+            },
             "render_envelope_stub": render_envelope_stub,
             "orchestration_state_stub": {
                 "request_id": "render_stub_0",
@@ -2219,6 +2289,7 @@ class ScriptParser:
         project_id_input = "default_project"
         staged_reference_analysis_input = None
         ignored_agent_decisions_input: List[Dict[str, Any]] = []
+        voice_direction_commands_input: List[str] = []
         if isinstance(script_text, dict):
             active_cut_summary_input = (
                 script_text.get("active_cut_summary")
@@ -2237,6 +2308,11 @@ class ScriptParser:
                 ignored_agent_decisions_input = [
                     row for row in raw_ignored_decisions if isinstance(row, dict)
                 ][:50]
+            raw_voice_commands = script_text.get("voice_direction_commands")
+            if isinstance(raw_voice_commands, list):
+                voice_direction_commands_input = [
+                    str(row).strip() for row in raw_voice_commands if str(row).strip()
+                ][:20]
             script_text = script_text.get("script_text", "")
 
         if not isinstance(script_text, str) or not script_text.strip():
@@ -2279,6 +2355,90 @@ class ScriptParser:
         memory_patterns_used_for_prompt: List[str] = []
         memory_patterns_used_for_codirector: List[str] = []
         continuity = self.build_continuity_bundle(scenes)
+        character_profiles = character_consistency_service.build_character_profiles_from_scenes(scenes)
+        character_reference_context = character_consistency_service.build_character_reference_context(
+            character_profiles,
+            scenes[0] if scenes and isinstance(scenes[0], dict) else {},
+        )
+        character_consistency_notes = character_consistency_service.maintain_scene_consistency(
+            scenes[0] if scenes and isinstance(scenes[0], dict) else {},
+            character_reference_context,
+        )
+        character_identity_memory = character_identity_memory_service.persist_reference_images(
+            character_profiles
+        )
+        provider_identity_context = character_identity_memory_service.build_provider_identity_context(
+            character_profiles,
+            scenes[0] if scenes and isinstance(scenes[0], dict) else {},
+        )
+        emotional_identity_continuity = character_identity_memory_service.build_emotional_memory_continuity(
+            character_profiles,
+            scenes[0] if scenes and isinstance(scenes[0], dict) else {},
+        )
+        identity_drift_warnings = character_identity_memory_service.detect_identity_drift_warnings(
+            character_profiles,
+            scenes[0] if scenes and isinstance(scenes[0], dict) else {},
+        )
+        dialogue_lines = dialogue_voice_service.build_dialogue_lines(
+            scenes,
+            [profile.model_dump() for profile in character_profiles],
+        )
+        voice_provider_plan = dialogue_voice_service.build_voice_provider_plan("local_tts")
+        dialogue_timing_metadata = dialogue_voice_service.build_dialogue_timing_metadata(
+            dialogue_lines
+        )
+        audio_dialogue_timeline = dialogue_voice_service.build_audio_timeline(
+            dialogue_lines,
+            dialogue_timing_metadata,
+            voice_provider_plan,
+        )
+        emotional_arc_profiles = emotional_arc_service.build_emotional_arc_profiles(scenes)
+        emotional_arc_movement = emotional_arc_service.track_scene_to_scene_movement(emotional_arc_profiles)
+        emotional_pacing_balance = emotional_arc_service.build_pacing_balance(emotional_arc_profiles)
+        emotional_climax_buildup = emotional_arc_service.build_climax_buildup(emotional_arc_profiles)
+        emotional_continuity = emotional_arc_service.emotional_continuity_score(emotional_arc_profiles)
+        emotional_scene_generation_lines = emotional_arc_service.build_scene_generation_lines(
+            emotional_continuity,
+            emotional_pacing_balance,
+            emotional_climax_buildup,
+        )
+        voice_direction_result = voice_direction_interpreter_service.interpret_commands(
+            voice_direction_commands_input
+        )
+        voice_direction_guidance = voice_direction_result.get("voice_direction_guidance", {})
+        if isinstance(voice_direction_guidance, dict):
+            guidance_lines = voice_direction_guidance.get("guidance_lines")
+            if isinstance(guidance_lines, list):
+                for line in guidance_lines:
+                    if isinstance(line, str) and line.strip():
+                        emotional_scene_generation_lines.append(line.strip())
+        symbolism_result = symbolism_graph_service.build_symbolism_graph(
+            scenes,
+            emotional_arc_profiles,
+            {},
+        )
+        scene_continuity = scene_continuity_service.track_scene_continuity(scenes)
+        if not isinstance(scene_continuity, dict):
+            scene_continuity = {"scene_states": [], "transitions": [], "warnings": [], "status": "ok"}
+        transition_context = {}
+        if isinstance(scene_continuity.get("transitions"), list) and scene_continuity.get("transitions"):
+            transition_context = scene_continuity["transitions"][0]
+        continuity_prompt_lines = scene_continuity_service.build_prompt_continuity_lines(
+            transition_context,
+            scene_continuity.get("warnings"),
+        )
+        visual_style_name = self._derive_project_genre(script_text)
+        film_visual_style_profile = style_consistency_service.build_film_visual_style_profile(visual_style_name)
+        style_reference_context = style_consistency_service.build_style_reference_context(
+            film_visual_style_profile
+        )
+        style_consistency_notes = style_consistency_service.maintain_scene_style_consistency(
+            style_reference_context
+        )
+        visual_continuity_score = style_consistency_service.score_visual_continuity(
+            scenes,
+            style_reference_context,
+        )
         relationships = self.build_relationship_bundle(scenes)
         patterns = self.build_pattern_bundle(scenes)
         pattern_observations = self.build_pattern_observations(patterns)
@@ -2420,6 +2580,13 @@ class ScriptParser:
             scene_index,
             scene_visual_links,
         )
+        scene_render_jobs = self.build_scene_render_jobs(
+            shot_candidates,
+            selected_provider if isinstance(selected_provider, str) else "mock",
+        ).get("scene_render_jobs", [])
+        scene_render_job_summary = self.build_scene_render_job_summary(
+            scene_render_jobs
+        ).get("scene_render_job_summary", {"total_jobs": 0, "jobs_per_scene": {}})
         shot_coverage = self.build_shot_coverage(
             scene_index,
             shot_candidates,
@@ -4167,6 +4334,50 @@ class ScriptParser:
         scene_assembly_result = self.build_scene_assembly(
             scene_sequence,
             render_output,
+            audio_dialogue_timeline,
+        )
+        ambient_tracks = ambient_audio_service.build_layered_ambient_tracks(
+            scene_sequence,
+            float(scene_assembly_result.get("scene_assembly_v2", {}).get("runtime", 0.0))
+            if isinstance(scene_assembly_result.get("scene_assembly_v2"), dict)
+            else 0.0,
+        )
+        ambient_audio_timeline = ambient_audio_service.build_ambient_timeline_sync(
+            ambient_tracks,
+            audio_dialogue_timeline,
+        )
+        final_film_audio_render_plan = ambient_audio_service.build_final_film_audio_render_plan(
+            scene_assembly_result.get("stitched_export", {}),
+            ambient_audio_timeline,
+        ).get("final_audio_mix", {})
+        scene_assembly_result = self.build_scene_assembly(
+            scene_sequence,
+            render_output,
+            audio_dialogue_timeline,
+            ambient_audio_timeline,
+        )
+        stitching_transition_timing = (
+            scene_assembly_result.get("stitching_plan", {}).get("transition_timing", {})
+            if isinstance(scene_assembly_result.get("stitching_plan"), dict)
+            else {}
+        )
+        film_transitions_input = []
+        if isinstance(stitching_transition_timing, dict):
+            for scene_id, transition_value in stitching_transition_timing.items():
+                if isinstance(scene_id, str) and isinstance(transition_value, str):
+                    film_transitions_input.append(
+                        {
+                            "scene_id": scene_id,
+                            "transition": transition_value,
+                            "duration": 0.0,
+                        }
+                    )
+        film_assembly_result = full_film_assembly_service.build_film_assembly_timeline(
+            scenes,
+            film_transitions_input,
+            ambient_audio_timeline,
+            audio_dialogue_timeline,
+            scene_assembly_result.get("stitched_export", {}),
         )
         scene_assembly = scene_assembly_result.get(
             "scene_assembly",
@@ -5238,10 +5449,10 @@ class ScriptParser:
                     if isinstance(raw_scene_flow_score, (int, float)):
                         scene_flow_score = float(raw_scene_flow_score)
 
-                scene_continuity = screening_scene.get("scene_continuity_report")
+                scene_continuity_report_row = screening_scene.get("scene_continuity_report")
                 scene_continuity_score = 0.0
-                if isinstance(scene_continuity, dict):
-                    raw_scene_continuity_score = scene_continuity.get("continuity_score")
+                if isinstance(scene_continuity_report_row, dict):
+                    raw_scene_continuity_score = scene_continuity_report_row.get("continuity_score")
                     if isinstance(raw_scene_continuity_score, (int, float)):
                         scene_continuity_score = float(raw_scene_continuity_score)
 
@@ -5642,6 +5853,12 @@ class ScriptParser:
             "flow_score": flow_score,
             "issues": flow_issues,
         }
+        editing_intelligence_result = editing_intelligence_service.build_editing_intelligence(
+            screening_playlist,
+            scene_transitions,
+            emotional_continuity,
+            sequence_flow,
+        )
         ending_zone_scene_ids = [
             row.get("scene_id")
             for row in screening_playlist[-2:]
@@ -5825,6 +6042,80 @@ class ScriptParser:
             "total_conflicts": len(aggregate_agent_disagreements),
             "high_conflicts": high_conflict_count,
         }
+        studio_brain_orchestration = studio_brain_service.build_orchestration_bundle(
+            director_context={
+                "decision": (
+                    scene_quality_verdict.get("verdict")
+                    if isinstance(scene_quality_verdict, dict)
+                    else None
+                ),
+                "tone": (
+                    story_direction.get("current_tone")
+                    if isinstance(story_direction, dict)
+                    else None
+                ),
+            },
+            writer_context={
+                "scene_count": len(scenes) if isinstance(scenes, list) else 0,
+                "intent": (
+                    story_direction.get("current_intent")
+                    if isinstance(story_direction, dict)
+                    else None
+                ),
+            },
+            memory_archivist_context={
+                "memory_status": (
+                    memory_state_rollup.get("status")
+                    if isinstance(memory_state_rollup, dict)
+                    else None
+                ),
+                "motif_state": (
+                    film_memory_snapshot.get("motif_state")
+                    if isinstance(film_memory_snapshot, dict)
+                    else None
+                ),
+            },
+            evaluator_context={
+                "verdict": (
+                    scene_quality_verdict.get("verdict")
+                    if isinstance(scene_quality_verdict, dict)
+                    else None
+                ),
+                "status": (
+                    film_validation.get("issues")
+                    if isinstance(film_validation, dict)
+                    else None
+                ),
+            },
+            co_director_context={
+                "suggestion_count": len(co_director_suggestions) if isinstance(co_director_suggestions, list) else 0,
+                "mode": "advisory",
+            },
+            provider_router_context={
+                "selected_provider": (
+                    provider_selection_state.get("selected_provider")
+                    if isinstance(provider_selection_state, dict)
+                    else None
+                ),
+                "provider": (
+                    provider_selection_state.get("requested_provider")
+                    if isinstance(provider_selection_state, dict)
+                    else None
+                ),
+            },
+            emotional_arc_context={
+                "continuity_status": (
+                    emotional_continuity.get("status")
+                    if isinstance(emotional_continuity, dict)
+                    else None
+                ),
+                "score": (
+                    emotional_continuity.get("score")
+                    if isinstance(emotional_continuity, dict)
+                    else None
+                ),
+            },
+        )
 
         _end_section("final bundle assembly", final_assembly_timer)
 
@@ -5836,6 +6127,92 @@ class ScriptParser:
             "time_of_day_presence": self.build_time_of_day_presence_index(scenes),
             "summary": self.build_script_structure_summary(scenes),
             "continuity": continuity,
+            "voice_direction_commands": voice_direction_result.get("voice_direction_commands", []),
+            "voice_direction_guidance": voice_direction_result.get(
+                "voice_direction_guidance",
+                {
+                    "advisory_only": True,
+                    "requires_creator_approval": True,
+                    "emotional_changes": [],
+                    "pacing_changes": [],
+                    "visual_style_updates": [],
+                    "guidance_lines": [],
+                },
+            ),
+            "character_profiles": [profile.model_dump() for profile in character_profiles],
+            "character_consistency": {
+                "reference_context": character_reference_context,
+                "scene_consistency_notes": character_consistency_notes,
+            },
+            "character_identity_memory": character_identity_memory,
+            "provider_identity_context": provider_identity_context,
+            "emotional_identity_continuity": emotional_identity_continuity,
+            "identity_drift_warnings": identity_drift_warnings,
+            "dialogue_lines": [line.model_dump() for line in dialogue_lines],
+            "dialogue_timing_metadata": dialogue_timing_metadata,
+            "voice_provider_plan": voice_provider_plan,
+            "audio_dialogue_timeline": audio_dialogue_timeline,
+            "ambient_audio_tracks": [track.model_dump() for track in ambient_tracks],
+            "ambient_audio_timeline": ambient_audio_timeline,
+            "final_film_audio_render_plan": final_film_audio_render_plan,
+            "emotional_arc_profiles": [profile.model_dump() for profile in emotional_arc_profiles],
+            "emotional_arc_movement": emotional_arc_movement,
+            "emotional_pacing_balance": emotional_pacing_balance,
+            "emotional_climax_buildup": emotional_climax_buildup,
+            "emotional_continuity_score": emotional_continuity,
+            "symbolism_nodes": symbolism_result.get("symbolism_nodes", []),
+            "recurring_imagery": symbolism_result.get("recurring_imagery", []),
+            "recurring_phrases": symbolism_result.get("recurring_phrases", []),
+            "emotional_callbacks": symbolism_result.get("emotional_callbacks", []),
+            "environmental_symbolism": symbolism_result.get("environmental_symbolism", []),
+            "symbolism_connections": symbolism_result.get("symbolism_connections", []),
+            "symbolism_graph_visualization": symbolism_result.get(
+                "symbolism_graph_visualization",
+                {"nodes": [], "edges": [], "layout": "force", "legend": ""},
+            ),
+            "memory_archivist_symbolism_context": {
+                "nodes": symbolism_result.get("symbolism_nodes", []),
+                "environmental_symbolism": symbolism_result.get("environmental_symbolism", []),
+            },
+            "emotional_arc_symbolism_context": {
+                "emotional_callbacks": symbolism_result.get("emotional_callbacks", []),
+                "recurring_phrases": symbolism_result.get("recurring_phrases", []),
+            },
+            "director_symbolism_context": {
+                "recurring_imagery": symbolism_result.get("recurring_imagery", []),
+                "symbolism_connections": symbolism_result.get("symbolism_connections", []),
+            },
+            "director_emotional_arc_context": {
+                "pacing_balance": emotional_pacing_balance,
+                "climax_buildup": emotional_climax_buildup,
+            },
+            "evaluator_emotional_arc_context": {
+                "movement": emotional_arc_movement,
+                "continuity_score": emotional_continuity,
+            },
+            "scene_generation_emotional_guidance": emotional_scene_generation_lines,
+            "scene_continuity": scene_continuity,
+            "director_continuity_context": {
+                "transition_context": transition_context,
+                "warnings": [
+                    *scene_continuity.get("warnings", []),
+                    *identity_drift_warnings,
+                ],
+            },
+            "memory_archivist_continuity_context": {
+                "scene_states": scene_continuity.get("scene_states", []),
+                "unresolved_tension": transition_context.get("unresolved_tension", ""),
+            },
+            "continuity_warnings": [
+                *scene_continuity.get("warnings", []),
+                *identity_drift_warnings,
+            ],
+            "film_visual_style_profile": film_visual_style_profile.model_dump(),
+            "style_consistency": {
+                "reference_context": style_reference_context,
+                "scene_consistency_notes": style_consistency_notes,
+                "visual_continuity_score": visual_continuity_score,
+            },
             "relationships": relationships,
             "patterns": patterns,
             "pattern_observations": pattern_observations,
@@ -5978,6 +6355,8 @@ class ScriptParser:
             "alignment_status": alignment_status,
             "top_alignment_note": top_alignment_note,
             "shot_candidates": shot_candidates,
+            "scene_render_jobs": scene_render_jobs,
+            "scene_render_job_summary": scene_render_job_summary,
             "shot_coverage": shot_coverage,
             "shot_plan_bundle": shot_plan_bundle,
             "shot_queue": shot_queue,
@@ -6008,6 +6387,9 @@ class ScriptParser:
             "agent_disagreements": aggregate_agent_disagreements,
             "ignored_agent_decisions": ignored_agent_decisions,
             "creative_tension_score": creative_tension_score,
+            "studio_brain_orchestration": studio_brain_orchestration,
+            "studio_brain_timeline": studio_brain_orchestration.get("orchestration_timeline", []),
+            "studio_brain_reasoning_trace": studio_brain_orchestration.get("creative_reasoning_trace", []),
             "selected_iteration": selected_iteration,
             "iteration_history": iteration_history,
             "active_cut_summary": active_cut_summary,
@@ -6030,6 +6412,19 @@ class ScriptParser:
             "prompt_warnings": prompt_warnings,
             "render_quality_warnings": scene_render_quality_warnings,
             "scene_variance_profile": scene_variance_profile,
+            "editing_intelligence": editing_intelligence_result.get(
+                "editing_intelligence",
+                {"advisory_only": True, "suggestions": [], "suggestion_count": 0},
+            ),
+            "editing_suggestions": editing_intelligence_result.get("editing_suggestions", []),
+            "film_assembly_editing_context": {
+                "advisory_only": True,
+                "suggestions": editing_intelligence_result.get("editing_suggestions", []),
+            },
+            "director_evaluator_editing_context": {
+                "advisory_only": True,
+                "suggestions": editing_intelligence_result.get("editing_suggestions", []),
+            },
             "scene_transitions": scene_transitions,
             "sequence_flow": sequence_flow,
             "ending_impact": ending_impact,
@@ -6067,6 +6462,34 @@ class ScriptParser:
             "shot_advisory_note": shot_advisory_note,
             "scene_sequence": scene_sequence,
             "scene_assembly": scene_assembly,
+            "scene_assembly_v2": scene_assembly_result.get(
+                "scene_assembly_v2",
+                {"assembly_id": "asm_000_balanced", "ordered_shots": [], "runtime": 0.0, "transition_map": {}},
+            ),
+            "stitching_plan": scene_assembly_result.get(
+                "stitching_plan",
+                {"shot_ordering": [], "transition_timing": {}, "fade_cut_selection": {}, "pacing_aware_assembly": "balanced"},
+            ),
+            "stitched_export": scene_assembly_result.get(
+                "stitched_export",
+                {"format": "mp4", "path": "", "export_ready": False, "source_clips_preserved": True, "source_clips": []},
+            ),
+            "film_assembly_timeline": film_assembly_result.get(
+                "film_assembly_timeline",
+                {"timeline_id": "film_timeline_000", "ordered_scenes": [], "audio_tracks": [], "subtitles": [], "transitions": [], "title_cards": [], "credits": []},
+            ),
+            "film_export_pipeline": film_assembly_result.get(
+                "film_export_pipeline",
+                {
+                    "mp4_export": {"path": "output/renders/full_film_film_timeline_000.mp4", "ready": False},
+                    "archive_package": {"path": "output/archives/film_timeline_000.zip", "ready": False},
+                    "preview_render": {"path": "output/previews/film_timeline_000_preview.mp4", "ready": False},
+                },
+            ),
+            "film_runtime_metadata": film_assembly_result.get(
+                "film_runtime_metadata",
+                {"scene_count": 0, "ambient_track_count": 0, "dialogue_track_count": 0, "subtitle_count": 0, "transition_count": 0, "title_card_count": 0, "credits_count": 0},
+            ),
             "sequence_status": sequence_status,
             "scene_continuity_check": scene_continuity_check,
             "scene_playback_status": scene_playback_status,
@@ -6693,7 +7116,7 @@ class ScriptParser:
             scene_visual_links = {}
 
         shot_candidates: List[Dict[str, Any]] = []
-        for scene_id in scene_index.keys():
+        for scene_id, scene_data in scene_index.items():
             if not isinstance(scene_id, str) or not scene_id.strip():
                 continue
             clean_scene_id = scene_id.strip()
@@ -6706,15 +7129,114 @@ class ScriptParser:
                     if isinstance(ref_id, str) and ref_id.strip()
                 ]
 
-            shot_candidates.append(
-                {
-                    "scene_id": clean_scene_id,
-                    "shot_id": f"shot_{clean_scene_id}_001",
-                    "source_refs": source_refs,
-                }
+            scene_dict = scene_data if isinstance(scene_data, dict) else {}
+            multi_shot_enabled = (
+                scene_dict.get("multi_shot_enabled") is True
+                or str(scene_dict.get("shot_mode") or "").strip().lower() == "multi"
+                or str(scene_dict.get("generation_mode") or "").strip().lower() == "multi_shot"
             )
+            if multi_shot_enabled:
+                sequence_plan = shot_sequence_service.build_shot_sequence_plan(
+                    clean_scene_id,
+                    scene_dict,
+                )
+                multi_candidates = shot_sequence_service.build_shot_candidates_from_plan(
+                    clean_scene_id,
+                    source_refs,
+                    sequence_plan,
+                )
+                if multi_candidates:
+                    identity_context = scene_dict.get("provider_identity_context")
+                    drift_warnings = scene_dict.get("identity_drift_warnings")
+                    for candidate in multi_candidates:
+                        if isinstance(identity_context, dict):
+                            candidate["provider_identity_context"] = identity_context
+                        if isinstance(drift_warnings, list):
+                            candidate["identity_drift_warnings"] = [
+                                str(item).strip() for item in drift_warnings if str(item).strip()
+                            ]
+                    shot_candidates.extend(multi_candidates)
+                    continue
+
+            single_candidate = {
+                "scene_id": clean_scene_id,
+                "shot_id": f"shot_{clean_scene_id}_001",
+                "source_refs": source_refs,
+            }
+            if isinstance(scene_dict.get("provider_identity_context"), dict):
+                identity_context = scene_dict.get("provider_identity_context") or {}
+                if identity_context:
+                    single_candidate["provider_identity_context"] = identity_context
+            if isinstance(scene_dict.get("identity_drift_warnings"), list):
+                warnings = [
+                    str(item).strip()
+                    for item in scene_dict.get("identity_drift_warnings", [])
+                    if str(item).strip()
+                ]
+                if warnings:
+                    single_candidate["identity_drift_warnings"] = warnings
+            shot_candidates.append(single_candidate)
 
         return shot_candidates
+
+    def build_scene_render_jobs(
+        self,
+        shot_candidates: Any,
+        provider: Any = "mock",
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Build deterministic render-job scaffolds for all shot candidates.
+        """
+        if not isinstance(shot_candidates, list):
+            return {"scene_render_jobs": []}
+
+        provider_name = provider.strip() if isinstance(provider, str) and provider.strip() else "mock"
+        jobs: List[Dict[str, Any]] = []
+        for candidate in shot_candidates:
+            if not isinstance(candidate, dict):
+                continue
+            shot_id = candidate.get("shot_id")
+            scene_id = candidate.get("scene_id")
+            if (
+                not isinstance(shot_id, str)
+                or not shot_id.strip()
+                or not isinstance(scene_id, str)
+                or not scene_id.strip()
+            ):
+                continue
+            jobs.append(
+                {
+                    "render_id": f"queued_{shot_id.strip()}",
+                    "scene_id": scene_id.strip(),
+                    "shot_id": shot_id.strip(),
+                    "status": "queued",
+                    "provider": provider_name,
+                    "shot_type": candidate.get("shot_type") if isinstance(candidate.get("shot_type"), str) else "general",
+                }
+            )
+        return {"scene_render_jobs": jobs}
+
+    def build_scene_render_job_summary(self, scene_render_jobs: Any) -> Dict[str, Dict[str, Any]]:
+        """
+        Build summary map so each scene reports the number of queued shot jobs.
+        """
+        if not isinstance(scene_render_jobs, list):
+            return {"scene_render_job_summary": {"total_jobs": 0, "jobs_per_scene": {}}}
+        per_scene: Dict[str, int] = {}
+        for job in scene_render_jobs:
+            if not isinstance(job, dict):
+                continue
+            scene_id = job.get("scene_id")
+            if not isinstance(scene_id, str) or not scene_id.strip():
+                continue
+            clean_scene_id = scene_id.strip()
+            per_scene[clean_scene_id] = per_scene.get(clean_scene_id, 0) + 1
+        return {
+            "scene_render_job_summary": {
+                "total_jobs": sum(per_scene.values()),
+                "jobs_per_scene": per_scene,
+            }
+        }
 
     def build_shot_coverage(
         self,
@@ -8688,6 +9210,8 @@ class ScriptParser:
         self,
         scene_sequence: Any,
         render_output: Any,
+        audio_dialogue_timeline: Any = None,
+        ambient_audio_timeline: Any = None,
     ) -> Dict[str, Dict[str, Any]]:
         """
         Phase 112: Scene Assembly Stub.
@@ -8749,12 +9273,61 @@ class ScriptParser:
 
         assembled = render_output is not None
 
+        stitching_v2 = cinematic_scene_stitching_service.build_scene_assembly_v2(
+            scene_sequence,
+            render_output,
+            pacing_profile="balanced",
+        )
+        dialogue_timeline = audio_dialogue_timeline if isinstance(audio_dialogue_timeline, dict) else {
+            "voice_provider": "local_tts",
+            "clips": [],
+            "total_clips": 0,
+        }
+        ambient_timeline = ambient_audio_timeline if isinstance(ambient_audio_timeline, dict) else {
+            "tracks": [],
+            "duck_windows": [],
+            "layered": True,
+            "track_count": 0,
+        }
+
         return {
             "scene_assembly": {
                 "scene_count": scene_count,
                 "assembled": assembled,
                 "shots_available": shots_available,
-            }
+            },
+            "scene_assembly_v2": stitching_v2.get(
+                "scene_assembly_v2",
+                {
+                    "assembly_id": "asm_000_balanced",
+                    "ordered_shots": [],
+                    "runtime": 0.0,
+                    "transition_map": {},
+                },
+            ),
+            "stitching_plan": stitching_v2.get(
+                "stitching_plan",
+                {
+                    "shot_ordering": [],
+                    "transition_timing": {},
+                    "fade_cut_selection": {},
+                    "pacing_aware_assembly": "balanced",
+                },
+            ),
+            "stitched_export": stitching_v2.get(
+                "stitched_export",
+                {
+                    "format": "mp4",
+                    "path": "",
+                    "export_ready": False,
+                    "source_clips_preserved": True,
+                    "source_clips": [],
+                },
+            ),
+            "scene_dialogue_timeline": dialogue_timeline,
+            "dialogue_clip_count": dialogue_timeline.get("total_clips", 0) if isinstance(dialogue_timeline, dict) else 0,
+            "scene_ambient_timeline": ambient_timeline,
+            "ambient_track_count": ambient_timeline.get("track_count", 0) if isinstance(ambient_timeline, dict) else 0,
         }
 
     def build_sequence_status(
@@ -9301,6 +9874,63 @@ class ScriptParser:
         else:
             shot_tokens = []
 
+        # Additive character consistency context for prompt assembly.
+        character_profiles = character_consistency_service.build_character_profiles_from_scenes(scenes)
+        first_scene = scenes[0] if scenes and isinstance(scenes[0], dict) else {}
+        character_context = character_consistency_service.build_character_reference_context(
+            character_profiles,
+            first_scene,
+        )
+        consistency_prompt = character_consistency_service.inject_character_visual_traits(
+            "",
+            character_context,
+        )
+        if consistency_prompt:
+            visual_tokens.append(consistency_prompt)
+        for note in character_consistency_service.maintain_scene_consistency(first_scene, character_context):
+            if note not in shot_tokens:
+                shot_tokens.append(note)
+        envelope_continuity = scene_continuity_service.track_scene_continuity(scenes)
+        envelope_transition_context = {}
+        if isinstance(envelope_continuity.get("transitions"), list) and envelope_continuity.get("transitions"):
+            envelope_transition_context = envelope_continuity["transitions"][0]
+        continuity_prompt_lines = scene_continuity_service.build_prompt_continuity_lines(
+            envelope_transition_context,
+            envelope_continuity.get("warnings"),
+        )
+        for line in continuity_prompt_lines:
+            if line not in shot_tokens:
+                shot_tokens.append(line)
+
+        style_signal = False
+        if isinstance(first_scene, dict):
+            for key in ("visual_style", "style", "genre"):
+                value = first_scene.get(key)
+                if isinstance(value, str) and value.strip():
+                    style_signal = True
+                    break
+        if not style_signal:
+            lowered = base_intent.lower()
+            style_signal = any(
+                token in lowered for token in ("noir", "a24", "dream", "sci-fi", "horror", "realism")
+            )
+        if not style_signal and visual_tokens:
+            # Preserve legacy behavior: when visual guidance is already present,
+            # include style lock context in the envelope for downstream shaping.
+            style_signal = True
+        if style_signal:
+            style_name = self._derive_project_genre(base_intent)
+            film_visual_style_profile = style_consistency_service.build_film_visual_style_profile(style_name)
+            style_context = style_consistency_service.build_style_reference_context(
+                film_visual_style_profile
+            )
+            style_prompt = style_consistency_service.inject_style_guidance("", style_context)
+            if style_prompt:
+                visual_tokens.append(style_prompt)
+            for note in style_consistency_service.maintain_scene_style_consistency(style_context):
+                if note not in shot_tokens:
+                    shot_tokens.append(note)
+
         return {
             "prompt_envelope": {
                 "base_intent": base_intent,
@@ -9308,6 +9938,23 @@ class ScriptParser:
                 "shot_tokens": shot_tokens,
             }
         }
+
+    def _derive_project_genre(self, script_text: Any) -> str:
+        """
+        Lightweight deterministic style seed from scene/script text.
+        """
+        text = script_text.lower() if isinstance(script_text, str) else ""
+        if "noir" in text:
+            return "noir"
+        if "a24" in text or "atmospheric" in text:
+            return "a24_atmospheric"
+        if "dream" in text:
+            return "dreamlike"
+        if "sci-fi" in text or "scifi" in text or "science fiction" in text:
+            return "sci_fi"
+        if "horror" in text:
+            return "horror"
+        return "realism"
 
     def build_prompt_safety_contract(self) -> Dict[str, Any]:
         """
