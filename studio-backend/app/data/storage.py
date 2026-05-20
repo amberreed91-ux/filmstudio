@@ -329,6 +329,56 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_task_log_task ON crew_task_log(task_id);
                 CREATE INDEX IF NOT EXISTS idx_task_log_project ON crew_task_log(project_id);
             """),
+            (7, "Add visual embeddings and cinematic memory tables", """
+                CREATE TABLE IF NOT EXISTS visual_embeddings (
+                    embedding_id TEXT PRIMARY KEY,
+                    keyframe_id TEXT NOT NULL,
+                    asset_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    provider TEXT NOT NULL DEFAULT 'unavailable',
+                    model TEXT NOT NULL DEFAULT 'unconfigured',
+                    vector_dimension INTEGER NOT NULL DEFAULT 0,
+                    embedding_vector TEXT NOT NULL DEFAULT '[]',
+                    status TEXT NOT NULL DEFAULT 'unavailable',
+                    created_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (embedding_id != ''),
+                    CHECK (keyframe_id != ''),
+                    CHECK (asset_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_visual_embeddings_keyframe ON visual_embeddings(keyframe_id);
+                CREATE INDEX IF NOT EXISTS idx_visual_embeddings_asset ON visual_embeddings(asset_id);
+                CREATE INDEX IF NOT EXISTS idx_visual_embeddings_project ON visual_embeddings(project_id);
+                CREATE INDEX IF NOT EXISTS idx_visual_embeddings_status ON visual_embeddings(status);
+
+                CREATE TABLE IF NOT EXISTS cinematic_memory_records (
+                    memory_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    asset_id TEXT NOT NULL,
+                    keyframe_id TEXT NOT NULL,
+                    analysis_id TEXT NOT NULL DEFAULT '',
+                    embedding_id TEXT NOT NULL DEFAULT '',
+                    memory_type TEXT NOT NULL DEFAULT 'keyframe_memory',
+                    summary TEXT NOT NULL DEFAULT '',
+                    visual_tags TEXT NOT NULL DEFAULT '[]',
+                    emotional_tags TEXT NOT NULL DEFAULT '[]',
+                    composition_tags TEXT NOT NULL DEFAULT '[]',
+                    lighting_tags TEXT NOT NULL DEFAULT '[]',
+                    searchable_text TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (memory_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (asset_id != ''),
+                    CHECK (keyframe_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_cinematic_memory_project ON cinematic_memory_records(project_id);
+                CREATE INDEX IF NOT EXISTS idx_cinematic_memory_asset ON cinematic_memory_records(asset_id);
+                CREATE INDEX IF NOT EXISTS idx_cinematic_memory_keyframe ON cinematic_memory_records(keyframe_id);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -1166,6 +1216,213 @@ class DatabaseStorage:
                 VALUES (?, ?, ?, ?, ?)
             """, (task_id, project_id, action, agent_role, datetime.now().isoformat()))
             conn.commit()
+
+    # =========================================================================
+    # VISUAL EMBEDDINGS + CINEMATIC MEMORY PERSISTENCE
+    # =========================================================================
+
+    def save_visual_embedding(self, embedding) -> Any:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO visual_embeddings (
+                    embedding_id, keyframe_id, asset_id, project_id, provider, model,
+                    vector_dimension, embedding_vector, status, created_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    embedding.embedding_id,
+                    embedding.keyframe_id,
+                    embedding.asset_id,
+                    embedding.project_id,
+                    embedding.provider,
+                    embedding.model,
+                    embedding.vector_dimension,
+                    json.dumps(embedding.embedding_vector or []),
+                    embedding.status,
+                    embedding.created_at,
+                    json.dumps(embedding.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return embedding
+
+    def _row_to_visual_embedding(self, row: sqlite3.Row):
+        from app.models import VisualEmbedding
+
+        return VisualEmbedding(
+            embedding_id=row["embedding_id"],
+            keyframe_id=row["keyframe_id"],
+            asset_id=row["asset_id"],
+            project_id=row["project_id"],
+            provider=row["provider"] or "unavailable",
+            model=row["model"] or "unconfigured",
+            vector_dimension=int(row["vector_dimension"] or 0),
+            embedding_vector=json.loads(row["embedding_vector"] or "[]"),
+            status=row["status"] or "unavailable",
+            created_at=row["created_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def get_visual_embedding(self, embedding_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM visual_embeddings WHERE embedding_id = ?", (embedding_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_visual_embedding(row)
+            return None
+
+    def get_visual_embedding_for_keyframe(self, keyframe_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM visual_embeddings
+                WHERE keyframe_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (keyframe_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_visual_embedding(row)
+            return None
+
+    def list_visual_embeddings_for_asset(self, asset_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM visual_embeddings WHERE asset_id = ? ORDER BY created_at DESC",
+                (asset_id,),
+            )
+            return [self._row_to_visual_embedding(row) for row in cursor.fetchall()]
+
+    def list_visual_embeddings_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM visual_embeddings WHERE project_id = ? ORDER BY created_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_visual_embedding(row) for row in cursor.fetchall()]
+
+    def list_visual_embeddings(self, limit: int = 5000) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM visual_embeddings ORDER BY created_at DESC LIMIT ?",
+                (max(1, int(limit)),),
+            )
+            return [self._row_to_visual_embedding(row) for row in cursor.fetchall()]
+
+    def delete_visual_embeddings_for_asset(self, asset_id: str) -> int:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM visual_embeddings WHERE asset_id = ?", (asset_id,))
+            conn.commit()
+            return cursor.rowcount
+
+    def save_cinematic_memory_record(self, record):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO cinematic_memory_records (
+                    memory_id, project_id, asset_id, keyframe_id, analysis_id, embedding_id,
+                    memory_type, summary, visual_tags, emotional_tags, composition_tags,
+                    lighting_tags, searchable_text, created_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.memory_id,
+                    record.project_id,
+                    record.asset_id,
+                    record.keyframe_id,
+                    record.analysis_id or "",
+                    record.embedding_id or "",
+                    record.memory_type or "keyframe_memory",
+                    record.summary or "",
+                    json.dumps(record.visual_tags or []),
+                    json.dumps(record.emotional_tags or []),
+                    json.dumps(record.composition_tags or []),
+                    json.dumps(record.lighting_tags or []),
+                    record.searchable_text or "",
+                    record.created_at,
+                    json.dumps(record.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return record
+
+    def _row_to_cinematic_memory_record(self, row: sqlite3.Row):
+        from app.models import CinematicMemoryRecord
+
+        return CinematicMemoryRecord(
+            memory_id=row["memory_id"],
+            project_id=row["project_id"],
+            asset_id=row["asset_id"],
+            keyframe_id=row["keyframe_id"],
+            analysis_id=row["analysis_id"] or "",
+            embedding_id=row["embedding_id"] or "",
+            memory_type=row["memory_type"] or "keyframe_memory",
+            summary=row["summary"] or "",
+            visual_tags=json.loads(row["visual_tags"] or "[]"),
+            emotional_tags=json.loads(row["emotional_tags"] or "[]"),
+            composition_tags=json.loads(row["composition_tags"] or "[]"),
+            lighting_tags=json.loads(row["lighting_tags"] or "[]"),
+            searchable_text=row["searchable_text"] or "",
+            created_at=row["created_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def get_cinematic_memory_record(self, memory_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM cinematic_memory_records WHERE memory_id = ?", (memory_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_cinematic_memory_record(row)
+            return None
+
+    def list_cinematic_memory_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM cinematic_memory_records WHERE project_id = ? ORDER BY created_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_cinematic_memory_record(row) for row in cursor.fetchall()]
+
+    def list_cinematic_memory_records_for_project(self, project_id: str) -> List[Any]:
+        return self.list_cinematic_memory_for_project(project_id)
+
+    def list_cinematic_memory_records_for_asset(self, asset_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM cinematic_memory_records WHERE asset_id = ? ORDER BY created_at DESC",
+                (asset_id,),
+            )
+            return [self._row_to_cinematic_memory_record(row) for row in cursor.fetchall()]
+
+    def list_cinematic_memory_records(self, limit: int = 5000) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM cinematic_memory_records ORDER BY created_at DESC LIMIT ?",
+                (max(1, int(limit)),),
+            )
+            return [self._row_to_cinematic_memory_record(row) for row in cursor.fetchall()]
+
+    def delete_cinematic_memory_records_for_project(self, project_id: str) -> int:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM cinematic_memory_records WHERE project_id = ?", (project_id,))
+            conn.commit()
+            return cursor.rowcount
 
 
 class JsonFileStorage:
