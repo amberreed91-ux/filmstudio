@@ -56,7 +56,28 @@ class DatabaseStorage:
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA cache_size=-64000")
         conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA busy_timeout=30000")
         return conn
+
+    def _execute_write_with_retry(self, operation_name: str, operation):
+        """Execute a write operation with retry on transient sqlite lock errors."""
+        max_attempts = 3
+        backoff_seconds = 0.05
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return operation()
+            except sqlite3.OperationalError as exc:
+                message = str(exc).lower()
+                lock_error = "database is locked" in message or "database table is locked" in message
+                if not lock_error or attempt >= max_attempts:
+                    raise
+                logger.warning(
+                    "SQLite lock during %s (attempt %s/%s); retrying",
+                    operation_name,
+                    attempt,
+                    max_attempts,
+                )
+                time.sleep(backoff_seconds * attempt)
 
     @contextmanager
     def _get_connection(self):
@@ -772,14 +793,34 @@ class DatabaseStorage:
     def save_project(self, project: StudioProject) -> StudioProject:
         project.updated_at = datetime.now().isoformat()
         now = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """INSERT OR REPLACE INTO projects (project_id, data, created_at, updated_at) 
-                   VALUES (?, ?, COALESCE((SELECT created_at FROM projects WHERE project_id = ?), ?), ?)""",
-                (project.project_id, json.dumps(project.model_dump(mode='json')), project.project_id, now, project.updated_at)
-            )
-            conn.commit()
+        payload = json.dumps(project.model_dump(mode='json'))
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                columns = [row["name"] for row in cursor.execute("PRAGMA table_info(projects)").fetchall()]
+                has_created_at = "created_at" in columns
+                has_updated_at = "updated_at" in columns
+
+                if has_created_at and has_updated_at:
+                    cursor.execute(
+                        """INSERT OR REPLACE INTO projects (project_id, data, created_at, updated_at)
+                           VALUES (?, ?, COALESCE((SELECT created_at FROM projects WHERE project_id = ?), ?), ?)""",
+                        (project.project_id, payload, project.project_id, now, project.updated_at),
+                    )
+                elif has_updated_at:
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO projects (project_id, data, updated_at) VALUES (?, ?, ?)",
+                        (project.project_id, payload, project.updated_at),
+                    )
+                else:
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO projects (project_id, data) VALUES (?, ?)",
+                        (project.project_id, payload),
+                    )
+                conn.commit()
+
+        self._execute_write_with_retry("save_project", _write)
         return project
 
     def delete_project(self, project_id: str) -> bool:

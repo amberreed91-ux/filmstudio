@@ -34,6 +34,7 @@ from app.services.co_director_proposal_service import co_director_proposal_servi
 from app.services.co_director_comparison_service import co_director_comparison_service
 from app.services.co_director_intensity_service import co_director_intensity_service
 from app.services.co_director_collaboration_service import co_director_collaboration_service
+from app.services.co_director_vision_awareness_service import co_director_vision_awareness_service
 from app.services.director_evaluator import director_evaluator
 from app.services.memory_archivist import memory_archivist_evaluator
 from app.services.director_memory_resolver import merge_director_memory_archivist
@@ -1807,7 +1808,7 @@ class AgentExecutor:
                         director_decision=safe_director_decision,
                         quality_metrics=safe_quality_metrics,
                     )
-                    if workflow:
+                    if workflow is not None:
                         debug_metadata["co_director_context"]["workflow"] = workflow
             except Exception:
                 pass  # Co-director context is debug-only, never affects decisions
@@ -1870,12 +1871,17 @@ class AgentExecutor:
             director_decision=director_decision,
             quality_metrics=quality_metrics,
         )
+        vision_awareness = co_director_vision_awareness_service.build_awareness_context(
+            project_id=str(session.project_id),
+            scene_id=scene_id,
+        )
 
         critique_report = co_director_critique_service.generate_critique(
             session=session,
             director_result=director_result,
             scene_id=scene_id,
             film_id=film_id,
+            vision_awareness=vision_awareness,
         )
         proposal_report = co_director_proposal_service.generate_proposal(
             session=session,
@@ -1890,6 +1896,7 @@ class AgentExecutor:
             proposal_report=proposal_report,
             scene_id=scene_id,
             film_id=film_id,
+            vision_awareness=vision_awareness,
         )
         intensity_report = co_director_intensity_service.generate_intensity(
             session=session,
@@ -1905,6 +1912,7 @@ class AgentExecutor:
             comparison_report=comparison_report,
             intensity_report=intensity_report,
             film_id=film_id,
+            vision_awareness=vision_awareness,
         )
 
         return {
@@ -1914,9 +1922,15 @@ class AgentExecutor:
             "proposal": self._serialize_codirector_proposal_report(proposal_report),
             "comparison": self._serialize_codirector_comparison_report(comparison_report),
             "intensity": self._serialize_codirector_intensity_report(intensity_report),
+            "vision_awareness": vision_awareness,
             "collaboration": {
                 "dominant_focus": collaboration_report.dominant_focus,
                 "advisory_notes": collaboration_report.advisory_notes,
+                "creative_disagreements": collaboration_report.creative_disagreements,
+                "alternate_scene_suggestions": collaboration_report.alternate_scene_suggestions,
+                "visual_experiments": collaboration_report.visual_experiments,
+                "thematic_proposals": collaboration_report.thematic_proposals,
+                "advisory_only": collaboration_report.advisory_only,
                 "sources_consulted": [source.value for source in collaboration_report.sources_consulted],
                 "provenance": collaboration_report.provenance,
             },

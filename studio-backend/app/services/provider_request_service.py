@@ -807,7 +807,7 @@ class ProviderRequestService:
 
         # Provider capability: append aspect ratio or format hints if available
         preferred_format = safe_caps.get("preferred_format", "")
-        if preferred_format and isinstance(preferred_format, str):
+        if preferred_format and isinstance(preferred_format, str) and components:
             components.append(preferred_format)
 
         # Intent-aware append-only prompt shaping (Phase 19.1).
@@ -815,34 +815,33 @@ class ProviderRequestService:
         components.extend(self._derive_scene_intent_prompt_appendix(safe_pkg))
 
         # Additive character continuity prompt shaping.
-        character_context = character_consistency_service.build_character_reference_context(
-            safe_pkg.get("character_profiles"),
-            safe_pkg,
-        )
-        shaped_prompt = character_consistency_service.inject_character_visual_traits(
-            "",
-            character_context,
-        )
-        if shaped_prompt and shaped_prompt.strip():
-            components.append(shaped_prompt)
-            provenance.prompt_sources.append("character_profiles")
-            provenance.advisory_sources.append("character_consistency_service.inject_character_visual_traits")
+        character_profiles = safe_pkg.get("character_profiles")
+        if isinstance(character_profiles, list) and character_profiles:
+            character_context = character_consistency_service.build_character_reference_context(
+                character_profiles,
+                safe_pkg,
+            )
+            shaped_prompt = character_consistency_service.inject_character_visual_traits(
+                "",
+                character_context,
+            )
+            if shaped_prompt and shaped_prompt.strip():
+                components.append(shaped_prompt)
+                provenance.prompt_sources.append("character_profiles")
+                provenance.advisory_sources.append("character_consistency_service.inject_character_visual_traits")
 
         # Additive film visual style locking prompt shaping.
         style_profile = safe_pkg.get("film_visual_style_profile")
-        if not isinstance(style_profile, dict):
-            style_profile = style_consistency_service.build_film_visual_style_profile(
-                safe_pkg.get("visual_style") or safe_pkg.get("style") or safe_pkg.get("genre")
-            ).model_dump()
-        style_context = style_consistency_service.build_style_reference_context(style_profile)
-        styled_prompt = style_consistency_service.inject_style_guidance(
-            "",
-            style_context,
-        )
-        if styled_prompt and styled_prompt.strip():
-            components.append(styled_prompt)
-            provenance.prompt_sources.append("film_visual_style_profile")
-            provenance.advisory_sources.append("style_consistency_service.inject_style_guidance")
+        if isinstance(style_profile, dict) and style_profile:
+            style_context = style_consistency_service.build_style_reference_context(style_profile)
+            styled_prompt = style_consistency_service.inject_style_guidance(
+                "",
+                style_context,
+            )
+            if styled_prompt and styled_prompt.strip():
+                components.append(styled_prompt)
+                provenance.prompt_sources.append("film_visual_style_profile")
+                provenance.advisory_sources.append("style_consistency_service.inject_style_guidance")
 
         # Additive adjacent-scene continuity transition guidance.
         transition_context = safe_pkg.get("director_continuity_context")
@@ -858,15 +857,19 @@ class ProviderRequestService:
             provenance.prompt_sources.append("director_continuity_context")
             provenance.advisory_sources.append("scene_continuity_service.build_prompt_continuity_lines")
 
-        emotional_lines = emotional_arc_service.build_scene_generation_lines(
-            safe_pkg.get("emotional_continuity_score"),
-            safe_pkg.get("emotional_pacing_balance"),
-            safe_pkg.get("emotional_climax_buildup"),
-        )
-        if emotional_lines:
-            components.extend(emotional_lines)
-            provenance.prompt_sources.append("emotional_arc")
-            provenance.advisory_sources.append("emotional_arc_service.build_scene_generation_lines")
+        if any(
+            safe_pkg.get(field) is not None
+            for field in ("emotional_continuity_score", "emotional_pacing_balance", "emotional_climax_buildup")
+        ):
+            emotional_lines = emotional_arc_service.build_scene_generation_lines(
+                safe_pkg.get("emotional_continuity_score"),
+                safe_pkg.get("emotional_pacing_balance"),
+                safe_pkg.get("emotional_climax_buildup"),
+            )
+            if emotional_lines:
+                components.extend(emotional_lines)
+                provenance.prompt_sources.append("emotional_arc")
+                provenance.advisory_sources.append("emotional_arc_service.build_scene_generation_lines")
 
         if not provenance.prompt_sources:
             provenance.notes.append("No canonical prompt sources available; request is sparse.")
@@ -993,7 +996,7 @@ class ProviderRequestService:
 
         # Derive aspect ratio hint from provider capabilities if not in visual_target
         aspect_ratio = safe_caps.get("default_aspect_ratio", "")
-        if aspect_ratio and isinstance(aspect_ratio, str):
+        if aspect_ratio and isinstance(aspect_ratio, str) and visual_target:
             params["aspect_ratio"] = aspect_ratio
 
         # Derive style preset from cinematic_language if strong signal
@@ -1069,14 +1072,11 @@ class ProviderRequestService:
             provenance.execution_notes_sources.append("character_profiles")
 
         style_profile = safe_pkg.get("film_visual_style_profile")
-        if not isinstance(style_profile, dict):
-            style_profile = style_consistency_service.build_film_visual_style_profile(
-                safe_pkg.get("visual_style") or safe_pkg.get("style") or safe_pkg.get("genre")
-            ).model_dump()
-        style_context = style_consistency_service.build_style_reference_context(style_profile)
-        notes.extend(style_consistency_service.maintain_scene_style_consistency(style_context))
-        if style_context.get("style_profile"):
-            provenance.execution_notes_sources.append("film_visual_style_profile")
+        if isinstance(style_profile, dict) and style_profile:
+            style_context = style_consistency_service.build_style_reference_context(style_profile)
+            notes.extend(style_consistency_service.maintain_scene_style_consistency(style_context))
+            if style_context.get("style_profile"):
+                provenance.execution_notes_sources.append("film_visual_style_profile")
 
         transition_context = safe_pkg.get("director_continuity_context")
         if isinstance(transition_context, dict):
@@ -1090,14 +1090,17 @@ class ProviderRequestService:
         )
         if transition_context or continuity_warnings:
             provenance.execution_notes_sources.append("scene_continuity")
-        notes.extend(
-            emotional_arc_service.build_scene_generation_lines(
-                safe_pkg.get("emotional_continuity_score"),
-                safe_pkg.get("emotional_pacing_balance"),
-                safe_pkg.get("emotional_climax_buildup"),
+        if any(
+            safe_pkg.get(field) is not None
+            for field in ("emotional_continuity_score", "emotional_pacing_balance", "emotional_climax_buildup")
+        ):
+            notes.extend(
+                emotional_arc_service.build_scene_generation_lines(
+                    safe_pkg.get("emotional_continuity_score"),
+                    safe_pkg.get("emotional_pacing_balance"),
+                    safe_pkg.get("emotional_climax_buildup"),
+                )
             )
-        )
-        if safe_pkg.get("emotional_continuity_score") or safe_pkg.get("emotional_pacing_balance"):
             provenance.execution_notes_sources.append("emotional_arc")
 
         if not provenance.execution_notes_sources:

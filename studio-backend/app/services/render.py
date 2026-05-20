@@ -570,7 +570,20 @@ class RenderService:
                         stale_recovered += 1
                         continue
                     if job.provider_job_id:
-                        updated = await self.get_job_status(job.id)
+                        config = self._provider_configs.get(job.provider) or self._provider_configs.get("simulated")
+                        adapter = get_adapter(job.provider, config)
+                        updated = await adapter.get_job_status(job)
+                        updated.updated_at = datetime.now().isoformat()
+                        if updated.status == "complete" and not updated.completed_at:
+                            updated.completed_at = updated.updated_at
+                        if updated.status == "complete":
+                            updated.recovery_status = "recovered_terminal"
+                        elif updated.is_terminal():
+                            updated.recovery_status = "recovery_failed"
+                        else:
+                            updated.recovery_status = "active"
+                        self._jobs[job.id] = updated
+                        _persist_job(updated)
                         if self._is_stale(updated) and not updated.is_terminal():
                             updated.recovery_status = "stale_recovered"
                             _persist_job(updated)
