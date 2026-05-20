@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 from app.data import get_storage
 from app.models import StudioDecisionGate
+from app.services.video_asset_service import video_asset_service
 
 
 class StudioDecisionGateService:
@@ -19,7 +20,13 @@ class StudioDecisionGateService:
     def evaluate_project_gate(self, project_id: str) -> StudioDecisionGate:
         storage = self._storage_ref()
 
-        assets = storage.list_video_assets_for_project(project_id) or []
+        assets: List[Any] = []
+        if hasattr(storage, "list_video_assets_for_project"):
+            assets = storage.list_video_assets_for_project(project_id) or []
+        else:
+            # Backward-compatible fallback for runtimes where video asset persistence
+            # is provided via VideoAssetService rather than direct storage methods.
+            assets = video_asset_service.list_assets_for_project(project_id) or []
         keyframes = storage.list_video_keyframes_for_project(project_id) or []
         frame_analyses = storage.list_frame_analyses_for_project(project_id) or []
         embeddings = storage.list_visual_embeddings_for_project(project_id) or []

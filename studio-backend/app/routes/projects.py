@@ -37,6 +37,7 @@ from app.services.semantic_retrieval_service import semantic_retrieval_service
 from app.services.style_learning_service import style_learning_service
 from app.services.style_intelligence_service import style_intelligence_service
 from app.services.video_understanding_status_service import video_understanding_status_service
+from app.services.demo_seed_service import demo_seed_service
 from app.services.stability import (
     PlaybackError,
     PersistenceError,
@@ -928,6 +929,10 @@ class UpdatePackageStatusPayload(BaseModel):
     package_status: str
 
 
+class SeedDemoProjectPayload(BaseModel):
+    project_id: str = "demo_studio_cinematic_001"
+
+
 class ExtractKeyframesPayload(BaseModel):
     interval_seconds: int = 5
     max_frames: int = 20
@@ -1601,3 +1606,9 @@ def update_final_short_film_package_status(package_id: str, payload: UpdatePacka
         return {"package": package.model_dump()}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/dev/seed-demo-project")
+def seed_demo_project(payload: SeedDemoProjectPayload = SeedDemoProjectPayload()):
+    """Dev-only deterministic studio project seed for product demos."""
+    return demo_seed_service.seed_demo_project(project_id=payload.project_id)

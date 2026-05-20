@@ -686,6 +686,30 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_video_frame_analyses_project ON video_frame_analyses(project_id);
                 CREATE INDEX IF NOT EXISTS idx_video_frame_analyses_keyframe ON video_frame_analyses(keyframe_id);
             """),
+            (11, "Add video asset persistence table", """
+                CREATE TABLE IF NOT EXISTS video_assets (
+                    asset_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_url TEXT,
+                    local_path TEXT,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    duration_seconds REAL,
+                    file_size_bytes INTEGER,
+                    status TEXT NOT NULL DEFAULT 'registered',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (asset_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (source_type != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_video_assets_project ON video_assets(project_id);
+                CREATE INDEX IF NOT EXISTS idx_video_assets_source_type ON video_assets(source_type);
+                CREATE INDEX IF NOT EXISTS idx_video_assets_updated ON video_assets(updated_at);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -2538,6 +2562,88 @@ class DatabaseStorage:
                     raise
                 time.sleep(0.05 * (attempt + 1))
         return keyframe
+
+    def save_video_asset(self, asset) -> Any:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO video_assets (
+                    asset_id, project_id, source_type, source_url, local_path, title, description,
+                    duration_seconds, file_size_bytes, status, created_at, updated_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    asset.asset_id,
+                    asset.project_id,
+                    asset.source_type,
+                    asset.source_url,
+                    asset.local_path,
+                    asset.title,
+                    asset.description,
+                    asset.duration_seconds,
+                    asset.file_size_bytes,
+                    asset.status,
+                    asset.created_at,
+                    asset.updated_at,
+                    json.dumps(asset.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return asset
+
+    def update_video_asset(self, asset) -> Any:
+        return self.save_video_asset(asset)
+
+    def _row_to_video_asset(self, row: sqlite3.Row):
+        from app.models.video_assets import VideoAsset
+
+        return VideoAsset(
+            asset_id=row["asset_id"],
+            project_id=row["project_id"],
+            source_type=row["source_type"],
+            source_url=row["source_url"],
+            local_path=row["local_path"],
+            title=row["title"] or "",
+            description=row["description"],
+            duration_seconds=float(row["duration_seconds"]) if row["duration_seconds"] is not None else None,
+            file_size_bytes=int(row["file_size_bytes"]) if row["file_size_bytes"] is not None else None,
+            status=row["status"] or "registered",
+            created_at=row["created_at"] or "",
+            updated_at=row["updated_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def get_video_asset(self, asset_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM video_assets WHERE asset_id = ?", (asset_id,))
+            row = cursor.fetchone()
+            return self._row_to_video_asset(row) if row else None
+
+    def list_video_assets_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM video_assets WHERE project_id = ? ORDER BY updated_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_video_asset(row) for row in cursor.fetchall()]
+
+    def list_video_assets(self, source_type: Optional[str] = None, limit: int = 5000) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if source_type:
+                cursor.execute(
+                    "SELECT * FROM video_assets WHERE source_type = ? ORDER BY updated_at DESC LIMIT ?",
+                    (source_type, max(1, int(limit))),
+                )
+            else:
+                cursor.execute(
+                    "SELECT * FROM video_assets ORDER BY updated_at DESC LIMIT ?",
+                    (max(1, int(limit)),),
+                )
+            return [self._row_to_video_asset(row) for row in cursor.fetchall()]
 
     def _row_to_video_keyframe(self, row: sqlite3.Row):
         from app.models import VideoKeyframe
