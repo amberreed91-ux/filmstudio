@@ -25,6 +25,7 @@ from app.routes.crew import router as crew_router
 from app.routes.memory import router as memory_router
 from app.routes.scene_intelligence import router as scene_intelligence_router
 from app.routes.projects import router as projects_persistence_router
+from app.routes.video_assets import router as video_assets_router
 from app.routes.workflows import router as workflows_router
 from app.routes.production_recovery import router as production_recovery_router
 from app.services.render import set_job_update_callback, set_storage
@@ -200,6 +201,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(overview_router, prefix="/api/f51/studio")
 app.include_router(projects_router, prefix="/api/f51/studio")
 app.include_router(projects_persistence_router)
+app.include_router(video_assets_router)
 app.include_router(exports_router)
 app.include_router(render_router, prefix="/api/f51/studio/render")
 app.include_router(auth_router, prefix="/api/f51/studio/auth")
