@@ -379,6 +379,142 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_cinematic_memory_asset ON cinematic_memory_records(asset_id);
                 CREATE INDEX IF NOT EXISTS idx_cinematic_memory_keyframe ON cinematic_memory_records(keyframe_id);
             """),
+            (8, "Add continuity/style/director/shot-boundary persistence tables", """
+                CREATE TABLE IF NOT EXISTS continuity_issues (
+                    issue_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    source_keyframe_id TEXT,
+                    compared_keyframe_id TEXT,
+                    asset_id TEXT,
+                    source_asset_id TEXT,
+                    compared_asset_id TEXT,
+                    issue_type TEXT NOT NULL,
+                    severity TEXT NOT NULL DEFAULT 'medium',
+                    confidence REAL NOT NULL DEFAULT 0.0,
+                    description TEXT NOT NULL DEFAULT '',
+                    evidence TEXT NOT NULL DEFAULT '',
+                    recommendation TEXT NOT NULL DEFAULT '',
+                    notes TEXT NOT NULL DEFAULT '',
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    CHECK (issue_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (issue_type != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_continuity_issues_project ON continuity_issues(project_id);
+                CREATE INDEX IF NOT EXISTS idx_continuity_issues_type ON continuity_issues(project_id, issue_type);
+
+                CREATE TABLE IF NOT EXISTS style_signatures (
+                    signature_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    framing_tendencies TEXT NOT NULL DEFAULT '[]',
+                    pacing_patterns TEXT NOT NULL DEFAULT '[]',
+                    color_motifs TEXT NOT NULL DEFAULT '[]',
+                    camera_movement_patterns TEXT NOT NULL DEFAULT '[]',
+                    confidence REAL NOT NULL DEFAULT 0.0,
+                    advisory_only INTEGER NOT NULL DEFAULT 1 CHECK (advisory_only IN (0, 1)),
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    CHECK (signature_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_style_signatures_project ON style_signatures(project_id);
+
+                CREATE TABLE IF NOT EXISTS director_signatures (
+                    signature_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    dominant_mood_tags TEXT NOT NULL DEFAULT '[]',
+                    dominant_lighting_tags TEXT NOT NULL DEFAULT '[]',
+                    dominant_composition_tags TEXT NOT NULL DEFAULT '[]',
+                    dominant_palette TEXT NOT NULL DEFAULT '[]',
+                    pacing_notes TEXT NOT NULL DEFAULT '',
+                    visual_language_summary TEXT NOT NULL DEFAULT '',
+                    confidence REAL NOT NULL DEFAULT 0.0,
+                    evidence_keyframe_ids TEXT NOT NULL DEFAULT '[]',
+                    evidence_memory_ids TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (signature_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_director_signatures_project ON director_signatures(project_id);
+
+                CREATE TABLE IF NOT EXISTS style_drift_issues (
+                    drift_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    keyframe_id TEXT NOT NULL DEFAULT '',
+                    asset_id TEXT NOT NULL DEFAULT '',
+                    drift_type TEXT NOT NULL,
+                    severity TEXT NOT NULL DEFAULT 'medium',
+                    confidence REAL NOT NULL DEFAULT 0.0,
+                    description TEXT NOT NULL DEFAULT '',
+                    evidence TEXT NOT NULL DEFAULT '',
+                    recommendation TEXT NOT NULL DEFAULT '',
+                    compared_against_signature_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (drift_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (drift_type != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_style_drift_project ON style_drift_issues(project_id);
+                CREATE INDEX IF NOT EXISTS idx_style_drift_type ON style_drift_issues(project_id, drift_type);
+
+                CREATE TABLE IF NOT EXISTS director_commentary_records (
+                    commentary_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    scene_reference TEXT NOT NULL DEFAULT '',
+                    interpretation TEXT NOT NULL DEFAULT '',
+                    emotional_read TEXT NOT NULL DEFAULT '',
+                    visual_language_notes TEXT NOT NULL DEFAULT '',
+                    pacing_notes TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (commentary_id != ''),
+                    CHECK (asset_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_director_commentary_asset ON director_commentary_records(asset_id);
+
+                CREATE TABLE IF NOT EXISTS shot_boundaries (
+                    boundary_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    start_time REAL NOT NULL DEFAULT 0.0,
+                    end_time REAL NOT NULL DEFAULT 0.0,
+                    confidence REAL NOT NULL DEFAULT 0.0,
+                    transition_type TEXT NOT NULL DEFAULT 'hard_cut',
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (boundary_id != ''),
+                    CHECK (asset_id != ''),
+                    CHECK (end_time >= start_time)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_shot_boundaries_asset ON shot_boundaries(asset_id);
+            """),
+            (9, "Add semantic video scene memory table", """
+                CREATE TABLE IF NOT EXISTS video_scene_memories (
+                    memory_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    dominant_mood TEXT NOT NULL DEFAULT 'neutral',
+                    visual_style TEXT NOT NULL DEFAULT 'observational',
+                    lighting_style TEXT NOT NULL DEFAULT 'naturalistic',
+                    pacing_profile TEXT NOT NULL DEFAULT 'moderate',
+                    character_presence TEXT NOT NULL DEFAULT '[]',
+                    composition_patterns TEXT NOT NULL DEFAULT '[]',
+                    cinematic_notes TEXT NOT NULL DEFAULT '',
+                    embeddings TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT NOT NULL,
+                    CHECK (memory_id != ''),
+                    CHECK (asset_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_video_scene_memories_asset ON video_scene_memories(asset_id);
+                CREATE INDEX IF NOT EXISTS idx_video_scene_memories_created ON video_scene_memories(created_at);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -1423,6 +1559,463 @@ class DatabaseStorage:
             cursor.execute("DELETE FROM cinematic_memory_records WHERE project_id = ?", (project_id,))
             conn.commit()
             return cursor.rowcount
+
+    def save_continuity_issue(self, issue):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO continuity_issues (
+                    issue_id, project_id, source_keyframe_id, compared_keyframe_id, asset_id,
+                    source_asset_id, compared_asset_id, issue_type, severity, confidence,
+                    description, evidence, recommendation, notes, metadata, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    issue.issue_id,
+                    issue.project_id,
+                    issue.source_keyframe_id,
+                    issue.compared_keyframe_id,
+                    issue.asset_id,
+                    issue.source_asset_id,
+                    issue.compared_asset_id,
+                    issue.issue_type,
+                    issue.severity,
+                    issue.confidence,
+                    issue.description,
+                    issue.evidence,
+                    issue.recommendation,
+                    issue.notes,
+                    json.dumps(issue.metadata or {}),
+                    issue.created_at,
+                ),
+            )
+            conn.commit()
+        return issue
+
+    def _row_to_continuity_issue(self, row: sqlite3.Row):
+        from app.models import ContinuityIssue
+
+        return ContinuityIssue(
+            issue_id=row["issue_id"],
+            project_id=row["project_id"],
+            source_keyframe_id=row["source_keyframe_id"],
+            compared_keyframe_id=row["compared_keyframe_id"],
+            asset_id=row["asset_id"],
+            source_asset_id=row["source_asset_id"],
+            compared_asset_id=row["compared_asset_id"],
+            issue_type=row["issue_type"],
+            severity=row["severity"] or "medium",
+            confidence=float(row["confidence"] or 0.0),
+            description=row["description"] or "",
+            evidence=row["evidence"] or "",
+            recommendation=row["recommendation"] or "",
+            notes=row["notes"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+            created_at=row["created_at"] or "",
+        )
+
+    def list_continuity_issues_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM continuity_issues WHERE project_id = ? ORDER BY created_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_continuity_issue(row) for row in cursor.fetchall()]
+
+    def delete_continuity_issues_for_project(self, project_id: str) -> int:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM continuity_issues WHERE project_id = ?", (project_id,))
+            conn.commit()
+            return cursor.rowcount
+
+    def save_style_signature(self, signature):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO style_signatures (
+                    signature_id, project_id, framing_tendencies, pacing_patterns, color_motifs,
+                    camera_movement_patterns, confidence, advisory_only, metadata, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    signature.signature_id,
+                    signature.project_id,
+                    json.dumps(signature.framing_tendencies or []),
+                    json.dumps(signature.pacing_patterns or []),
+                    json.dumps(signature.color_motifs or []),
+                    json.dumps(signature.camera_movement_patterns or []),
+                    signature.confidence,
+                    1 if signature.advisory_only else 0,
+                    json.dumps(signature.metadata or {}),
+                    signature.created_at,
+                ),
+            )
+            conn.commit()
+        return signature
+
+    def _row_to_style_signature(self, row: sqlite3.Row):
+        from app.models import StyleSignature
+
+        return StyleSignature(
+            signature_id=row["signature_id"],
+            project_id=row["project_id"],
+            framing_tendencies=json.loads(row["framing_tendencies"] or "[]"),
+            pacing_patterns=json.loads(row["pacing_patterns"] or "[]"),
+            color_motifs=json.loads(row["color_motifs"] or "[]"),
+            camera_movement_patterns=json.loads(row["camera_movement_patterns"] or "[]"),
+            confidence=float(row["confidence"] or 0.0),
+            advisory_only=bool(row["advisory_only"]),
+            metadata=json.loads(row["metadata"] or "{}"),
+            created_at=row["created_at"] or "",
+        )
+
+    def list_style_signatures_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM style_signatures WHERE project_id = ? ORDER BY created_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_style_signature(row) for row in cursor.fetchall()]
+
+    def get_style_signature(self, signature_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM style_signatures WHERE signature_id = ?", (signature_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_style_signature(row)
+            return None
+
+    def get_latest_style_signature(self, project_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM style_signatures WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
+                (project_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_style_signature(row)
+            return None
+
+    def save_director_signature(self, signature):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO director_signatures (
+                    signature_id, project_id, dominant_mood_tags, dominant_lighting_tags,
+                    dominant_composition_tags, dominant_palette, pacing_notes, visual_language_summary,
+                    confidence, evidence_keyframe_ids, evidence_memory_ids, created_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    signature.signature_id,
+                    signature.project_id,
+                    json.dumps(signature.dominant_mood_tags or []),
+                    json.dumps(signature.dominant_lighting_tags or []),
+                    json.dumps(signature.dominant_composition_tags or []),
+                    json.dumps(signature.dominant_palette or []),
+                    signature.pacing_notes or "",
+                    signature.visual_language_summary or "",
+                    signature.confidence,
+                    json.dumps(signature.evidence_keyframe_ids or []),
+                    json.dumps(signature.evidence_memory_ids or []),
+                    signature.created_at,
+                    json.dumps(signature.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return signature
+
+    def _row_to_director_signature(self, row: sqlite3.Row):
+        from app.models import DirectorSignature
+
+        return DirectorSignature(
+            signature_id=row["signature_id"],
+            project_id=row["project_id"],
+            dominant_mood_tags=json.loads(row["dominant_mood_tags"] or "[]"),
+            dominant_lighting_tags=json.loads(row["dominant_lighting_tags"] or "[]"),
+            dominant_composition_tags=json.loads(row["dominant_composition_tags"] or "[]"),
+            dominant_palette=json.loads(row["dominant_palette"] or "[]"),
+            pacing_notes=row["pacing_notes"] or "",
+            visual_language_summary=row["visual_language_summary"] or "",
+            confidence=float(row["confidence"] or 0.0),
+            evidence_keyframe_ids=json.loads(row["evidence_keyframe_ids"] or "[]"),
+            evidence_memory_ids=json.loads(row["evidence_memory_ids"] or "[]"),
+            created_at=row["created_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def list_director_signatures_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM director_signatures WHERE project_id = ? ORDER BY created_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_director_signature(row) for row in cursor.fetchall()]
+
+    def get_latest_director_signature(self, project_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM director_signatures WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
+                (project_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_director_signature(row)
+            return None
+
+    def save_style_drift_issue(self, issue):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO style_drift_issues (
+                    drift_id, project_id, keyframe_id, asset_id, drift_type, severity,
+                    confidence, description, evidence, recommendation, compared_against_signature_id,
+                    created_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    issue.drift_id,
+                    issue.project_id,
+                    issue.keyframe_id or "",
+                    issue.asset_id or "",
+                    issue.drift_type,
+                    issue.severity,
+                    issue.confidence,
+                    issue.description or "",
+                    issue.evidence or "",
+                    issue.recommendation or "",
+                    issue.compared_against_signature_id or "",
+                    issue.created_at,
+                    json.dumps(issue.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return issue
+
+    def _row_to_style_drift_issue(self, row: sqlite3.Row):
+        from app.models import StyleDriftIssue
+
+        return StyleDriftIssue(
+            drift_id=row["drift_id"],
+            project_id=row["project_id"],
+            keyframe_id=row["keyframe_id"] or "",
+            asset_id=row["asset_id"] or "",
+            drift_type=row["drift_type"],
+            severity=row["severity"] or "medium",
+            confidence=float(row["confidence"] or 0.0),
+            description=row["description"] or "",
+            evidence=row["evidence"] or "",
+            recommendation=row["recommendation"] or "",
+            compared_against_signature_id=row["compared_against_signature_id"] or "",
+            created_at=row["created_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def list_style_drift_issues_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM style_drift_issues WHERE project_id = ? ORDER BY created_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_style_drift_issue(row) for row in cursor.fetchall()]
+
+    def delete_style_drift_issues_for_project(self, project_id: str) -> int:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM style_drift_issues WHERE project_id = ?", (project_id,))
+            conn.commit()
+            return cursor.rowcount
+
+    def save_director_commentary(self, commentary):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO director_commentary_records (
+                    commentary_id, asset_id, scene_reference, interpretation, emotional_read,
+                    visual_language_notes, pacing_notes, created_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    commentary.commentary_id,
+                    commentary.asset_id,
+                    commentary.scene_reference or "",
+                    commentary.interpretation or "",
+                    commentary.emotional_read or "",
+                    commentary.visual_language_notes or "",
+                    commentary.pacing_notes or "",
+                    commentary.created_at,
+                    json.dumps(commentary.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return commentary
+
+    def _row_to_director_commentary(self, row: sqlite3.Row):
+        from app.models import DirectorCommentary
+
+        return DirectorCommentary(
+            commentary_id=row["commentary_id"],
+            asset_id=row["asset_id"],
+            scene_reference=row["scene_reference"] or "",
+            interpretation=row["interpretation"] or "",
+            emotional_read=row["emotional_read"] or "",
+            visual_language_notes=row["visual_language_notes"] or "",
+            pacing_notes=row["pacing_notes"] or "",
+            created_at=row["created_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def list_director_commentary_for_asset(self, asset_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM director_commentary_records WHERE asset_id = ? ORDER BY created_at DESC",
+                (asset_id,),
+            )
+            return [self._row_to_director_commentary(row) for row in cursor.fetchall()]
+
+    def delete_director_commentary_for_asset(self, asset_id: str) -> int:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM director_commentary_records WHERE asset_id = ?", (asset_id,))
+            conn.commit()
+            return cursor.rowcount
+
+    def save_shot_boundary(self, boundary):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO shot_boundaries (
+                    boundary_id, asset_id, start_time, end_time, confidence, transition_type, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    boundary.boundary_id,
+                    boundary.asset_id,
+                    boundary.start_time,
+                    boundary.end_time,
+                    boundary.confidence,
+                    boundary.transition_type,
+                    json.dumps(boundary.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return boundary
+
+    def _row_to_shot_boundary(self, row: sqlite3.Row):
+        from app.models import ShotBoundary
+
+        return ShotBoundary(
+            boundary_id=row["boundary_id"],
+            asset_id=row["asset_id"],
+            start_time=float(row["start_time"] or 0.0),
+            end_time=float(row["end_time"] or 0.0),
+            confidence=float(row["confidence"] or 0.0),
+            transition_type=row["transition_type"] or "hard_cut",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def list_shot_boundaries_for_asset(self, asset_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM shot_boundaries WHERE asset_id = ? ORDER BY start_time ASC",
+                (asset_id,),
+            )
+            return [self._row_to_shot_boundary(row) for row in cursor.fetchall()]
+
+    def delete_shot_boundaries_for_asset(self, asset_id: str) -> int:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM shot_boundaries WHERE asset_id = ?", (asset_id,))
+            conn.commit()
+            return cursor.rowcount
+
+    def save_video_scene_memory(self, memory):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO video_scene_memories (
+                    memory_id, asset_id, dominant_mood, visual_style, lighting_style,
+                    pacing_profile, character_presence, composition_patterns,
+                    cinematic_notes, embeddings, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    memory.memory_id,
+                    memory.asset_id,
+                    memory.dominant_mood,
+                    memory.visual_style,
+                    memory.lighting_style,
+                    memory.pacing_profile,
+                    json.dumps(memory.character_presence or []),
+                    json.dumps(memory.composition_patterns or []),
+                    memory.cinematic_notes or "",
+                    json.dumps(memory.embeddings or []),
+                    memory.created_at,
+                ),
+            )
+            conn.commit()
+        return memory
+
+    def _row_to_video_scene_memory(self, row: sqlite3.Row):
+        from app.models import SceneMemoryRecord
+
+        return SceneMemoryRecord(
+            memory_id=row["memory_id"],
+            asset_id=row["asset_id"],
+            dominant_mood=row["dominant_mood"] or "neutral",
+            visual_style=row["visual_style"] or "observational",
+            lighting_style=row["lighting_style"] or "naturalistic",
+            pacing_profile=row["pacing_profile"] or "moderate",
+            character_presence=json.loads(row["character_presence"] or "[]"),
+            composition_patterns=json.loads(row["composition_patterns"] or "[]"),
+            cinematic_notes=row["cinematic_notes"] or "",
+            embeddings=json.loads(row["embeddings"] or "[]"),
+            created_at=row["created_at"] or "",
+        )
+
+    def get_video_scene_memory(self, memory_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM video_scene_memories WHERE memory_id = ?", (memory_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_video_scene_memory(row)
+            return None
+
+    def list_video_scene_memories_for_asset(self, asset_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM video_scene_memories WHERE asset_id = ? ORDER BY created_at DESC",
+                (asset_id,),
+            )
+            return [self._row_to_video_scene_memory(row) for row in cursor.fetchall()]
+
+    def list_video_scene_memories(self, limit: int = 100) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM video_scene_memories ORDER BY created_at DESC LIMIT ?",
+                (max(1, int(limit)),),
+            )
+            return [self._row_to_video_scene_memory(row) for row in cursor.fetchall()]
 
 
 class JsonFileStorage:
