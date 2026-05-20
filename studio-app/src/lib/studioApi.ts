@@ -10,6 +10,15 @@ export type StudioOverview = {
   latest_project?: StudioProject | null
 }
 
+export type DemoStudioSeedResponse = {
+  project_id: string
+  study_room_url: string
+  previs_url: string
+  production_url: string
+  screening_url: string
+  crew_ops_url: string
+}
+
 export type StudioProject = {
   project_id: string
   title?: string
@@ -230,6 +239,14 @@ export function getStudioOverview() {
     ...raw,
     latest_project: raw.latest_project ? normalizeStudioProject(raw.latest_project) : raw.latest_project,
   }))
+}
+
+export function seedDemoStudioProject(projectId = 'demo_studio_cinematic_001') {
+  return fetchJson<DemoStudioSeedResponse>('/api/f51/studio/dev/seed-demo-project', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_id: projectId }),
+  })
 }
 
 export function importSceneIntelligence(payload: Record<string, unknown>) {

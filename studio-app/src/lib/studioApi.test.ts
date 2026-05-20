@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createClipRevision, getProjectDecisionGate, getStudioProject } from './studioApi'
+import { createClipRevision, getProjectDecisionGate, getStudioProject, seedDemoStudioProject } from './studioApi'
 
 describe('getStudioProject', () => {
   afterEach(() => {
@@ -105,6 +105,36 @@ describe('clip revision API helpers', () => {
     })
 
     const [url] = fetchMock.mock.calls[0]
-    expect(String(url)).toContain('http://127.0.0.1:8010/api/f51/studio/projects/proj-clip/clip-revisions')
+    expect(String(url)).toContain('/api/f51/studio/projects/proj-clip/clip-revisions')
+  })
+})
+
+describe('seed demo studio project helper', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('posts to the demo seed endpoint with deterministic project id', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          project_id: 'demo_studio_cinematic_001',
+          study_room_url: '/studio/study-room?project_id=demo_studio_cinematic_001',
+          previs_url: '/studio/previs?project_id=demo_studio_cinematic_001',
+          production_url: '/studio/production-board?project_id=demo_studio_cinematic_001',
+          screening_url: '/studio/screening-room?project_id=demo_studio_cinematic_001',
+          crew_ops_url: '/studio/scheduler?project_id=demo_studio_cinematic_001',
+        }),
+        { status: 200 },
+      ),
+    )
+
+    await seedDemoStudioProject()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/f51/studio/dev/seed-demo-project')
+    expect((init?.method || '').toUpperCase()).toBe('POST')
+    expect(String(init?.body || '')).toContain('demo_studio_cinematic_001')
   })
 })

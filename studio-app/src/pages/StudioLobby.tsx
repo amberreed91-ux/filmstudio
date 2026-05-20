@@ -3,8 +3,9 @@ import RenderActivityPanel from '../components/RenderActivityPanel'
 import OneButtonShortFilmPanel from '../components/OneButtonShortFilmPanel'
 import ProductionTimeline, { type ProductionStage } from '../components/ProductionTimeline'
 import { lazyLoad } from '../components/LazyLoad'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMemo, useEffect, useState } from 'react'
+import { seedDemoStudioProject, type DemoStudioSeedResponse } from '../lib/studioApi'
 
 // Lazy load AICrewPresence to improve initial load performance
 const LazyAICrewPresence = lazyLoad(
@@ -33,7 +34,11 @@ const getLocalStorageState = () => {
 }
 
 export default function StudioLobby() {
+  const navigate = useNavigate()
   const [localState, setLocalState] = useState(() => getLocalStorageState())
+  const [demoSeeding, setDemoSeeding] = useState(false)
+  const [demoSeedError, setDemoSeedError] = useState('')
+  const [demoLinks, setDemoLinks] = useState<DemoStudioSeedResponse | null>(null)
   
   // Update local state when localStorage changes (minimal re-renders)
   useEffect(() => {
@@ -99,6 +104,20 @@ export default function StudioLobby() {
     ] as Array<{ sceneId: string; currentStage: ProductionStage; isRendering?: boolean }>
   }, [hasScript, hasScenes, hasApproved, approvedSceneMap])
 
+  async function handleRunDemoFlow() {
+    setDemoSeeding(true)
+    setDemoSeedError('')
+    try {
+      const seeded = await seedDemoStudioProject()
+      setDemoLinks(seeded)
+      navigate(seeded.study_room_url)
+    } catch {
+      setDemoSeedError('Could not start demo project. Check that the Studio backend is running.')
+    } finally {
+      setDemoSeeding(false)
+    }
+  }
+
   return (
     <StudioShell title="Studio Lobby" subtitle="Central room for navigating writing, previs, production, screening, and archive workflows.">
       <div className="w-full overflow-visible bg-background">
@@ -115,6 +134,28 @@ export default function StudioLobby() {
             <Link to="/studio/writers-room" className="mt-3 inline-flex rounded-lg border border-cyan-300/45 bg-cyan-500/16 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline">
               Open Writer&apos;s Room
             </Link>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleRunDemoFlow()}
+                disabled={demoSeeding}
+                className="inline-flex rounded-lg border border-emerald-300/45 bg-emerald-500/16 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {demoSeeding ? 'Starting Demo Flow...' : 'Run Demo Flow'}
+              </button>
+            </div>
+            {demoSeedError ? (
+              <p className="mt-2 text-xs text-rose-200">{demoSeedError}</p>
+            ) : null}
+            {demoLinks ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.12em]">
+                <Link to={demoLinks.study_room_url} className="rounded border border-zinc-500/50 px-2 py-1 text-zinc-200 no-underline">Study Room</Link>
+                <Link to={demoLinks.previs_url} className="rounded border border-zinc-500/50 px-2 py-1 text-zinc-200 no-underline">Previs</Link>
+                <Link to={demoLinks.production_url} className="rounded border border-zinc-500/50 px-2 py-1 text-zinc-200 no-underline">Production</Link>
+                <Link to={demoLinks.screening_url} className="rounded border border-zinc-500/50 px-2 py-1 text-zinc-200 no-underline">Screening</Link>
+                <Link to={demoLinks.crew_ops_url} className="rounded border border-zinc-500/50 px-2 py-1 text-zinc-200 no-underline">Crew Ops</Link>
+              </div>
+            ) : null}
           </section>
 
           <OneButtonShortFilmPanel />
