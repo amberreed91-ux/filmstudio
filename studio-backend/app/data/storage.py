@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import os
+import sys
 import logging
 from pathlib import Path
 from typing import Optional, Any, List, Dict
@@ -8,6 +9,7 @@ from datetime import datetime
 from contextlib import contextmanager
 from queue import Queue
 import threading
+import time
 
 from app.models import StudioProject, StudioOverview, BuildInfo, RenderJobModel
 
@@ -514,6 +516,154 @@ class DatabaseStorage:
 
                 CREATE INDEX IF NOT EXISTS idx_video_scene_memories_asset ON video_scene_memories(asset_id);
                 CREATE INDEX IF NOT EXISTS idx_video_scene_memories_created ON video_scene_memories(created_at);
+            """),
+            (10, "Add review/revision/package/workflow/keyframe-analysis persistence tables", """
+                CREATE TABLE IF NOT EXISTS short_film_reviews (
+                    review_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    output_url TEXT NOT NULL,
+                    decision TEXT NOT NULL DEFAULT 'pending',
+                    reviewer TEXT NOT NULL DEFAULT '',
+                    notes TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (review_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_short_film_reviews_project ON short_film_reviews(project_id);
+                CREATE INDEX IF NOT EXISTS idx_short_film_reviews_created ON short_film_reviews(created_at);
+
+                CREATE TABLE IF NOT EXISTS clip_revisions (
+                    revision_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    review_id TEXT NOT NULL,
+                    original_job_id TEXT NOT NULL,
+                    new_job_id TEXT,
+                    provider TEXT NOT NULL,
+                    revision_prompt TEXT NOT NULL DEFAULT '',
+                    revision_reason TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    output_url TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (revision_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (review_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_clip_revisions_project ON clip_revisions(project_id);
+                CREATE INDEX IF NOT EXISTS idx_clip_revisions_review ON clip_revisions(review_id);
+                CREATE INDEX IF NOT EXISTS idx_clip_revisions_created ON clip_revisions(created_at);
+
+                CREATE TABLE IF NOT EXISTS final_short_film_packages (
+                    package_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    film_title TEXT NOT NULL,
+                    final_output_url TEXT NOT NULL,
+                    final_output_path TEXT,
+                    review_id TEXT,
+                    review_decision TEXT NOT NULL DEFAULT 'pending',
+                    runtime_seconds REAL,
+                    scene_count INTEGER NOT NULL DEFAULT 0,
+                    shot_count INTEGER NOT NULL DEFAULT 0,
+                    render_job_ids TEXT NOT NULL DEFAULT '[]',
+                    revision_ids TEXT NOT NULL DEFAULT '[]',
+                    has_title_card INTEGER NOT NULL DEFAULT 0 CHECK (has_title_card IN (0, 1)),
+                    has_end_card INTEGER NOT NULL DEFAULT 0 CHECK (has_end_card IN (0, 1)),
+                    has_soundtrack INTEGER NOT NULL DEFAULT 0 CHECK (has_soundtrack IN (0, 1)),
+                    package_status TEXT NOT NULL DEFAULT 'draft',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (package_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_final_short_film_packages_project ON final_short_film_packages(project_id);
+                CREATE INDEX IF NOT EXISTS idx_final_short_film_packages_created ON final_short_film_packages(created_at);
+
+                CREATE TABLE IF NOT EXISTS workflow_executions (
+                    execution_id TEXT PRIMARY KEY,
+                    workflow_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    started_at TEXT,
+                    completed_at TEXT,
+                    current_step TEXT,
+                    completed_steps TEXT NOT NULL DEFAULT '[]',
+                    failed_steps TEXT NOT NULL DEFAULT '[]',
+                    step_results TEXT NOT NULL DEFAULT '{}',
+                    inputs TEXT NOT NULL DEFAULT '{}',
+                    outputs TEXT NOT NULL DEFAULT '{}',
+                    error_message TEXT,
+                    progress_percentage REAL NOT NULL DEFAULT 0.0,
+                    CHECK (execution_id != ''),
+                    CHECK (workflow_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_workflow_executions_project ON workflow_executions(project_id);
+                CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow ON workflow_executions(workflow_id);
+                CREATE INDEX IF NOT EXISTS idx_workflow_executions_status ON workflow_executions(status);
+
+                CREATE TABLE IF NOT EXISTS video_keyframes (
+                    keyframe_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    source_type TEXT NOT NULL DEFAULT 'unknown',
+                    timestamp_seconds REAL NOT NULL DEFAULT 0.0,
+                    image_path TEXT NOT NULL DEFAULT '',
+                    image_url TEXT,
+                    frame_index INTEGER NOT NULL DEFAULT 0,
+                    width INTEGER,
+                    height INTEGER,
+                    extraction_method TEXT NOT NULL DEFAULT 'interval',
+                    frame_path TEXT,
+                    frame_url TEXT,
+                    extraction_reason TEXT,
+                    created_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    CHECK (keyframe_id != ''),
+                    CHECK (asset_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_video_keyframes_asset ON video_keyframes(asset_id);
+                CREATE INDEX IF NOT EXISTS idx_video_keyframes_project ON video_keyframes(project_id);
+                CREATE INDEX IF NOT EXISTS idx_video_keyframes_timestamp ON video_keyframes(asset_id, timestamp_seconds);
+
+                CREATE TABLE IF NOT EXISTS video_frame_analyses (
+                    analysis_id TEXT PRIMARY KEY,
+                    keyframe_id TEXT NOT NULL,
+                    asset_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    caption TEXT NOT NULL DEFAULT '',
+                    visual_summary TEXT NOT NULL DEFAULT '',
+                    mood_tags TEXT NOT NULL DEFAULT '[]',
+                    lighting_tags TEXT NOT NULL DEFAULT '[]',
+                    composition_tags TEXT NOT NULL DEFAULT '[]',
+                    color_palette TEXT NOT NULL DEFAULT '[]',
+                    detected_subjects TEXT NOT NULL DEFAULT '[]',
+                    camera_notes TEXT NOT NULL DEFAULT '',
+                    confidence REAL NOT NULL DEFAULT 0.0,
+                    provider TEXT NOT NULL DEFAULT 'unavailable',
+                    model TEXT NOT NULL DEFAULT 'unconfigured',
+                    status TEXT NOT NULL DEFAULT 'unavailable',
+                    created_at TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    camera_tags TEXT NOT NULL DEFAULT '[]',
+                    embeddings TEXT,
+                    CHECK (analysis_id != ''),
+                    CHECK (asset_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_video_frame_analyses_asset ON video_frame_analyses(asset_id);
+                CREATE INDEX IF NOT EXISTS idx_video_frame_analyses_project ON video_frame_analyses(project_id);
+                CREATE INDEX IF NOT EXISTS idx_video_frame_analyses_keyframe ON video_frame_analyses(keyframe_id);
             """),
         ]
 
@@ -2017,6 +2167,496 @@ class DatabaseStorage:
             )
             return [self._row_to_video_scene_memory(row) for row in cursor.fetchall()]
 
+    # =========================================================================
+    # REVIEW / REVISION / PACKAGE / WORKFLOW + VIDEO UNDERSTANDING COMPAT
+    # =========================================================================
+
+    def save_review(self, review) -> Any:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO short_film_reviews (
+                    review_id, project_id, output_url, decision, reviewer, notes,
+                    created_at, updated_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    review.review_id,
+                    review.project_id,
+                    review.output_url,
+                    review.decision,
+                    review.reviewer or "",
+                    review.notes or "",
+                    review.created_at,
+                    review.updated_at,
+                    json.dumps(review.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return review
+
+    def _row_to_short_film_review(self, row: sqlite3.Row):
+        from app.models import ShortFilmReview
+
+        return ShortFilmReview(
+            review_id=row["review_id"],
+            project_id=row["project_id"],
+            output_url=row["output_url"],
+            decision=row["decision"] or "pending",
+            reviewer=row["reviewer"] or "",
+            notes=row["notes"] or "",
+            created_at=row["created_at"] or "",
+            updated_at=row["updated_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def get_review(self, review_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM short_film_reviews WHERE review_id = ?", (review_id,))
+            row = cursor.fetchone()
+            return self._row_to_short_film_review(row) if row else None
+
+    def list_reviews_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM short_film_reviews WHERE project_id = ? ORDER BY created_at ASC",
+                (project_id,),
+            )
+            return [self._row_to_short_film_review(row) for row in cursor.fetchall()]
+
+    def update_review(self, review) -> Any:
+        return self.save_review(review)
+
+    def save_clip_revision(self, revision) -> Any:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO clip_revisions (
+                    revision_id, project_id, review_id, original_job_id, new_job_id, provider,
+                    revision_prompt, revision_reason, status, output_url, created_at, updated_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    revision.revision_id,
+                    revision.project_id,
+                    revision.review_id,
+                    revision.original_job_id,
+                    revision.new_job_id,
+                    revision.provider,
+                    revision.revision_prompt,
+                    revision.revision_reason,
+                    revision.status,
+                    revision.output_url,
+                    revision.created_at,
+                    revision.updated_at,
+                    json.dumps(revision.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return revision
+
+    def _row_to_clip_revision(self, row: sqlite3.Row):
+        from app.models import ClipRevision
+
+        return ClipRevision(
+            revision_id=row["revision_id"],
+            project_id=row["project_id"],
+            review_id=row["review_id"],
+            original_job_id=row["original_job_id"],
+            new_job_id=row["new_job_id"],
+            provider=row["provider"],
+            revision_prompt=row["revision_prompt"] or "",
+            revision_reason=row["revision_reason"] or "",
+            status=row["status"] or "pending",
+            output_url=row["output_url"],
+            created_at=row["created_at"] or "",
+            updated_at=row["updated_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def get_clip_revision(self, revision_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM clip_revisions WHERE revision_id = ?", (revision_id,))
+            row = cursor.fetchone()
+            return self._row_to_clip_revision(row) if row else None
+
+    def list_clip_revisions_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM clip_revisions WHERE project_id = ? ORDER BY created_at ASC",
+                (project_id,),
+            )
+            return [self._row_to_clip_revision(row) for row in cursor.fetchall()]
+
+    def list_clip_revisions_for_review(self, review_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM clip_revisions WHERE review_id = ? ORDER BY created_at ASC",
+                (review_id,),
+            )
+            return [self._row_to_clip_revision(row) for row in cursor.fetchall()]
+
+    def update_clip_revision(self, revision) -> Any:
+        return self.save_clip_revision(revision)
+
+    def save_final_short_film_package(self, package) -> Any:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO final_short_film_packages (
+                    package_id, project_id, film_title, final_output_url, final_output_path,
+                    review_id, review_decision, runtime_seconds, scene_count, shot_count,
+                    render_job_ids, revision_ids, has_title_card, has_end_card, has_soundtrack,
+                    package_status, created_at, updated_at, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    package.package_id,
+                    package.project_id,
+                    package.film_title,
+                    package.final_output_url,
+                    package.final_output_path,
+                    package.review_id,
+                    package.review_decision,
+                    package.runtime_seconds,
+                    int(package.scene_count or 0),
+                    int(package.shot_count or 0),
+                    json.dumps(package.render_job_ids or []),
+                    json.dumps(package.revision_ids or []),
+                    1 if package.has_title_card else 0,
+                    1 if package.has_end_card else 0,
+                    1 if package.has_soundtrack else 0,
+                    package.package_status,
+                    package.created_at,
+                    package.updated_at,
+                    json.dumps(package.metadata or {}),
+                ),
+            )
+            conn.commit()
+        return package
+
+    def _row_to_final_short_film_package(self, row: sqlite3.Row):
+        from app.models import FinalShortFilmPackage
+
+        return FinalShortFilmPackage(
+            package_id=row["package_id"],
+            project_id=row["project_id"],
+            film_title=row["film_title"] or "",
+            final_output_url=row["final_output_url"] or "",
+            final_output_path=row["final_output_path"],
+            review_id=row["review_id"],
+            review_decision=row["review_decision"] or "pending",
+            runtime_seconds=row["runtime_seconds"],
+            scene_count=int(row["scene_count"] or 0),
+            shot_count=int(row["shot_count"] or 0),
+            render_job_ids=json.loads(row["render_job_ids"] or "[]"),
+            revision_ids=json.loads(row["revision_ids"] or "[]"),
+            has_title_card=bool(row["has_title_card"]),
+            has_end_card=bool(row["has_end_card"]),
+            has_soundtrack=bool(row["has_soundtrack"]),
+            package_status=row["package_status"] or "draft",
+            created_at=row["created_at"] or "",
+            updated_at=row["updated_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def get_final_short_film_package(self, package_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM final_short_film_packages WHERE package_id = ?", (package_id,))
+            row = cursor.fetchone()
+            return self._row_to_final_short_film_package(row) if row else None
+
+    def list_final_short_film_packages_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM final_short_film_packages WHERE project_id = ? ORDER BY created_at ASC",
+                (project_id,),
+            )
+            return [self._row_to_final_short_film_package(row) for row in cursor.fetchall()]
+
+    def update_final_short_film_package(self, package) -> Any:
+        return self.save_final_short_film_package(package)
+
+    def save_workflow_execution(self, execution) -> Any:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO workflow_executions (
+                    execution_id, workflow_id, project_id, status, started_at, completed_at,
+                    current_step, completed_steps, failed_steps, step_results, inputs, outputs,
+                    error_message, progress_percentage
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    execution.execution_id,
+                    execution.workflow_id,
+                    execution.project_id,
+                    execution.status,
+                    execution.started_at,
+                    execution.completed_at,
+                    execution.current_step,
+                    json.dumps(execution.completed_steps or []),
+                    json.dumps(execution.failed_steps or []),
+                    json.dumps(execution.step_results or {}, default=str),
+                    json.dumps(execution.inputs or {}, default=str),
+                    json.dumps(execution.outputs or {}, default=str),
+                    execution.error_message,
+                    float(execution.progress_percentage or 0.0),
+                ),
+            )
+            conn.commit()
+        return execution
+
+    def _row_to_workflow_execution(self, row: sqlite3.Row):
+        from app.models import WorkflowExecution
+
+        return WorkflowExecution(
+            execution_id=row["execution_id"],
+            workflow_id=row["workflow_id"],
+            project_id=row["project_id"],
+            status=row["status"] or "pending",
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            current_step=row["current_step"],
+            completed_steps=json.loads(row["completed_steps"] or "[]"),
+            failed_steps=json.loads(row["failed_steps"] or "[]"),
+            step_results=json.loads(row["step_results"] or "{}"),
+            inputs=json.loads(row["inputs"] or "{}"),
+            outputs=json.loads(row["outputs"] or "{}"),
+            error_message=row["error_message"],
+            progress_percentage=float(row["progress_percentage"] or 0.0),
+        )
+
+    def get_workflow_execution(self, execution_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM workflow_executions WHERE execution_id = ?", (execution_id,))
+            row = cursor.fetchone()
+            return self._row_to_workflow_execution(row) if row else None
+
+    def list_workflow_executions(self, project_id: Optional[str] = None) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if project_id:
+                cursor.execute(
+                    "SELECT * FROM workflow_executions WHERE project_id = ? ORDER BY started_at DESC",
+                    (project_id,),
+                )
+            else:
+                cursor.execute("SELECT * FROM workflow_executions ORDER BY started_at DESC")
+            return [self._row_to_workflow_execution(row) for row in cursor.fetchall()]
+
+    def save_video_keyframe(self, keyframe) -> Any:
+        params = (
+            keyframe.keyframe_id,
+            keyframe.asset_id,
+            keyframe.project_id,
+            keyframe.source_type or "unknown",
+            float(keyframe.timestamp_seconds or 0.0),
+            keyframe.image_path or keyframe.frame_path or "",
+            keyframe.image_url or keyframe.frame_url,
+            int(keyframe.frame_index or 0),
+            keyframe.width,
+            keyframe.height,
+            keyframe.extraction_method or keyframe.extraction_reason or "interval",
+            keyframe.frame_path or keyframe.image_path,
+            keyframe.frame_url or keyframe.image_url,
+            keyframe.extraction_reason or keyframe.extraction_method or "interval",
+            keyframe.created_at,
+            json.dumps(keyframe.metadata or {}),
+        )
+        for attempt in range(4):
+            try:
+                with self._get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        """
+                        INSERT OR REPLACE INTO video_keyframes (
+                            keyframe_id, asset_id, project_id, source_type, timestamp_seconds,
+                            image_path, image_url, frame_index, width, height, extraction_method,
+                            frame_path, frame_url, extraction_reason, created_at, metadata
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        params,
+                    )
+                    conn.commit()
+                break
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() or attempt == 3:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
+        return keyframe
+
+    def _row_to_video_keyframe(self, row: sqlite3.Row):
+        from app.models import VideoKeyframe
+
+        return VideoKeyframe(
+            keyframe_id=row["keyframe_id"],
+            asset_id=row["asset_id"],
+            project_id=row["project_id"],
+            source_type=row["source_type"] or "unknown",
+            timestamp_seconds=float(row["timestamp_seconds"] or 0.0),
+            image_path=row["image_path"] or "",
+            image_url=row["image_url"],
+            frame_index=int(row["frame_index"] or 0),
+            width=row["width"],
+            height=row["height"],
+            extraction_method=row["extraction_method"] or "interval",
+            frame_path=row["frame_path"] or row["image_path"] or "",
+            frame_url=row["frame_url"] or row["image_url"],
+            extraction_reason=row["extraction_reason"] or row["extraction_method"] or "interval",
+            created_at=row["created_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def get_video_keyframe(self, keyframe_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM video_keyframes WHERE keyframe_id = ?", (keyframe_id,))
+            row = cursor.fetchone()
+            return self._row_to_video_keyframe(row) if row else None
+
+    def list_video_keyframes_for_asset(self, asset_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM video_keyframes WHERE asset_id = ? ORDER BY timestamp_seconds ASC",
+                (asset_id,),
+            )
+            return [self._row_to_video_keyframe(row) for row in cursor.fetchall()]
+
+    def list_video_keyframes_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM video_keyframes WHERE project_id = ? ORDER BY created_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_video_keyframe(row) for row in cursor.fetchall()]
+
+    def delete_video_keyframes_for_asset(self, asset_id: str) -> int:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM video_keyframes WHERE asset_id = ?", (asset_id,))
+            conn.commit()
+            return cursor.rowcount
+
+    def save_video_frame_analysis(self, analysis) -> Any:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO video_frame_analyses (
+                    analysis_id, keyframe_id, asset_id, project_id, caption, visual_summary,
+                    mood_tags, lighting_tags, composition_tags, color_palette, detected_subjects,
+                    camera_notes, confidence, provider, model, status, created_at, metadata,
+                    camera_tags, embeddings
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    analysis.analysis_id,
+                    analysis.keyframe_id,
+                    analysis.asset_id,
+                    analysis.project_id,
+                    analysis.caption or "",
+                    analysis.visual_summary or "",
+                    json.dumps(analysis.mood_tags or []),
+                    json.dumps(analysis.lighting_tags or []),
+                    json.dumps(analysis.composition_tags or []),
+                    json.dumps(analysis.color_palette or []),
+                    json.dumps(analysis.detected_subjects or []),
+                    analysis.camera_notes or "",
+                    float(analysis.confidence or 0.0),
+                    analysis.provider or "unavailable",
+                    analysis.model or "unconfigured",
+                    analysis.status or "unavailable",
+                    analysis.created_at,
+                    json.dumps(analysis.metadata or {}),
+                    json.dumps(analysis.camera_tags or []),
+                    json.dumps(analysis.embeddings) if analysis.embeddings is not None else None,
+                ),
+            )
+            conn.commit()
+        return analysis
+
+    def save_frame_analysis(self, analysis) -> Any:
+        return self.save_video_frame_analysis(analysis)
+
+    def _row_to_frame_analysis_record(self, row: sqlite3.Row):
+        from app.models import FrameAnalysisRecord
+
+        embeddings_raw = row["embeddings"]
+        return FrameAnalysisRecord(
+            analysis_id=row["analysis_id"],
+            keyframe_id=row["keyframe_id"],
+            asset_id=row["asset_id"],
+            project_id=row["project_id"],
+            caption=row["caption"] or "",
+            visual_summary=row["visual_summary"] or "",
+            mood_tags=json.loads(row["mood_tags"] or "[]"),
+            lighting_tags=json.loads(row["lighting_tags"] or "[]"),
+            composition_tags=json.loads(row["composition_tags"] or "[]"),
+            color_palette=json.loads(row["color_palette"] or "[]"),
+            detected_subjects=json.loads(row["detected_subjects"] or "[]"),
+            camera_notes=row["camera_notes"] or "",
+            confidence=float(row["confidence"] or 0.0),
+            provider=row["provider"] or "unavailable",
+            model=row["model"] or "unconfigured",
+            status=row["status"] or "unavailable",
+            created_at=row["created_at"] or "",
+            metadata=json.loads(row["metadata"] or "{}"),
+            camera_tags=json.loads(row["camera_tags"] or "[]"),
+            embeddings=json.loads(embeddings_raw) if embeddings_raw else None,
+        )
+
+    def get_frame_analysis(self, analysis_id: str):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM video_frame_analyses WHERE analysis_id = ?", (analysis_id,))
+            row = cursor.fetchone()
+            return self._row_to_frame_analysis_record(row) if row else None
+
+    def list_frame_analyses_for_asset(self, asset_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM video_frame_analyses WHERE asset_id = ? ORDER BY created_at DESC",
+                (asset_id,),
+            )
+            return [self._row_to_frame_analysis_record(row) for row in cursor.fetchall()]
+
+    def list_video_frame_analyses_for_asset(self, asset_id: str) -> List[Any]:
+        return self.list_frame_analyses_for_asset(asset_id)
+
+    def list_frame_analyses_for_project(self, project_id: str) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM video_frame_analyses WHERE project_id = ? ORDER BY created_at DESC",
+                (project_id,),
+            )
+            return [self._row_to_frame_analysis_record(row) for row in cursor.fetchall()]
+
+    def list_video_frame_analyses(self, limit: int = 5000) -> List[Any]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM video_frame_analyses ORDER BY created_at DESC LIMIT ?",
+                (max(1, int(limit)),),
+            )
+            return [self._row_to_frame_analysis_record(row) for row in cursor.fetchall()]
+
 
 class JsonFileStorage:
     """Legacy file-based JSON storage - kept for backwards compatibility only"""
@@ -2111,10 +2751,16 @@ def get_storage(storage_type: str = "sqlite", **kwargs) -> Any:
         - PostgreSQL requires SQLAlchemy setup (see docs for migration)
         - JSON storage is deprecated and only for backwards compatibility
     """
+    default_storage_path = os.getenv("STUDIO_STORAGE_PATH")
+    if not default_storage_path:
+        if os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
+            default_storage_path = str(Path("/tmp") / f"studio-backend-pytest-{os.getpid()}")
+        else:
+            default_storage_path = str(Path(__file__).resolve().parents[2] / "data")
     if storage_type == "sqlite":
-        return DatabaseStorage(kwargs.get("storage_path", "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-backend/data"))
+        return DatabaseStorage(kwargs.get("storage_path", default_storage_path))
     elif storage_type == "json":
-        return JsonFileStorage(kwargs.get("storage_path", "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-backend/data"))
+        return JsonFileStorage(kwargs.get("storage_path", default_storage_path))
     elif storage_type == "postgres":
         raise NotImplementedError(
             "PostgreSQL storage requires SQLAlchemy setup. "

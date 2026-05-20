@@ -1,6 +1,7 @@
+from __future__ import annotations
+
+from typing import Optional, Any, List, Dict, Literal
 from pydantic import BaseModel
-from typing import Optional, Any
-from datetime import datetime
 
 
 # Import agent models
@@ -277,6 +278,362 @@ class RenderJobOutput(BaseModel):
     metadata: dict = {}
 
 
+class SoundtrackConfig(BaseModel):
+    """Configuration for adding a soundtrack layer to stitched films"""
+    enabled: bool = False
+    audio_source_type: str = "none"  # none, local_file, generated_placeholder
+    audio_url: Optional[str] = None
+    local_audio_path: Optional[str] = None
+    volume: float = 0.25
+    fade_in_seconds: float = 1.0
+    fade_out_seconds: float = 1.0
+    loop_to_duration: bool = True
+    style_label: Optional[str] = None
+
+
+class ShortFilmReview(BaseModel):
+    """Review model for completed stitched short films"""
+    review_id: str
+    project_id: str
+    output_url: str
+    decision: str = "pending"  # pending, approved, needs_revision, rejected
+    reviewer: str = ""
+    notes: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+    metadata: dict = {}
+
+    def is_pending(self) -> bool:
+        return self.decision == "pending"
+
+    def is_approved(self) -> bool:
+        return self.decision == "approved"
+
+    def needs_revision(self) -> bool:
+        return self.decision == "needs_revision"
+
+    def is_rejected(self) -> bool:
+        return self.decision == "rejected"
+
+
+class ClipRevision(BaseModel):
+    """Model for revising individual clips from a reviewed short film"""
+    revision_id: str
+    project_id: str
+    review_id: str
+    original_job_id: str
+    new_job_id: Optional[str] = None
+    provider: str
+    revision_prompt: str
+    revision_reason: str
+    status: str = "pending"  # pending, submitted, complete, failed, cancelled
+    output_url: Optional[str] = None
+    created_at: str = ""
+    updated_at: str = ""
+    metadata: dict = {}
+
+    def is_pending(self) -> bool:
+        return self.status == "pending"
+
+    def is_submitted(self) -> bool:
+        return self.status == "submitted"
+
+    def is_complete(self) -> bool:
+        return self.status == "complete"
+
+    def is_failed(self) -> bool:
+        return self.status == "failed"
+
+    def is_cancelled(self) -> bool:
+        return self.status == "cancelled"
+
+    def can_submit(self) -> bool:
+        return self.status == "pending"
+
+    def can_complete(self) -> bool:
+        return self.status == "submitted"
+
+
+class FinalShortFilmPackage(BaseModel):
+    """Model for final delivery package of completed short films"""
+    package_id: str
+    project_id: str
+    film_title: str
+    final_output_url: str
+    final_output_path: Optional[str] = None
+    review_id: Optional[str] = None
+    review_decision: str = "pending"  # pending, approved, needs_revision, rejected
+    runtime_seconds: Optional[float] = None
+    scene_count: int = 0
+    shot_count: int = 0
+    render_job_ids: List[str] = []
+    revision_ids: List[str] = []
+    has_title_card: bool = False
+    has_end_card: bool = False
+    has_soundtrack: bool = False
+    package_status: str = "draft"  # draft, ready_for_review, approved, packaged, archived
+    created_at: str = ""
+    updated_at: str = ""
+    metadata: dict = {}
+
+    def is_draft(self) -> bool:
+        return self.package_status == "draft"
+
+    def is_ready_for_review(self) -> bool:
+        return self.package_status == "ready_for_review"
+
+    def is_approved(self) -> bool:
+        return self.package_status == "approved"
+
+    def is_packaged(self) -> bool:
+        return self.package_status == "packaged"
+
+    def is_archived(self) -> bool:
+        return self.package_status == "archived"
+
+    def can_approve(self) -> bool:
+        return self.package_status in ["draft", "ready_for_review"] and self.review_decision == "approved"
+
+    def can_package(self) -> bool:
+        return self.package_status in ["draft", "ready_for_review", "approved"]
+
+    def can_archive(self) -> bool:
+        return self.package_status in ["approved", "packaged"]
+
+
+class VideoAsset(BaseModel):
+    asset_id: str
+    project_id: str
+    source_type: str  # uploaded_file, generated_output, external_url, local_file
+    source_url: Optional[str] = None
+    local_path: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    file_size_bytes: Optional[int] = None
+    status: str = "registered"  # registered, available, analysis_pending, analyzed, failed
+    created_at: str = ""
+    updated_at: str = ""
+    metadata: dict = {}
+
+
+class VideoKeyframe(BaseModel):
+    keyframe_id: str
+    asset_id: str
+    project_id: str
+    source_type: str = "unknown"
+    timestamp_seconds: float
+    image_path: str = ""
+    image_url: Optional[str] = None
+    frame_index: int
+    width: Optional[int] = None
+    height: Optional[int] = None
+    extraction_method: str = "interval"  # interval, shot_boundary, manual, representative
+    # Backward-compatible aliases used by existing frontend/tests.
+    frame_path: Optional[str] = None
+    frame_url: Optional[str] = None
+    extraction_reason: Optional[str] = None
+    created_at: str = ""
+    metadata: dict = {}
+
+
+class ShotBoundary(BaseModel):
+    boundary_id: str
+    asset_id: str
+    start_time: float
+    end_time: float
+    confidence: float = 0.0
+    transition_type: str = "hard_cut"  # hard_cut, fade, dissolve
+    metadata: dict = {}
+
+
+class VideoMetadataMatch(BaseModel):
+    match_id: str
+    asset_id: str
+    metadata_id: str  # scene_id from SceneIntelligenceRecord
+    project_id: Optional[str] = None
+    match_status: str = "proposed"  # proposed | confirmed | rejected | auto_confirmed
+    match_confidence: float = 0.0
+    match_reason: str = ""
+    matched_fields: List[str] = []
+    created_at: str = ""
+    updated_at: str = ""
+    metadata: dict = {}
+
+
+class SceneMemoryRecord(BaseModel):
+    memory_id: str
+    asset_id: str
+    dominant_mood: str
+    visual_style: str
+    lighting_style: str
+    pacing_profile: str
+    character_presence: List[str] = []
+    composition_patterns: List[str] = []
+    cinematic_notes: str
+    embeddings: Optional[List[float]] = None
+    created_at: str = ""
+
+
+class ContinuityIssue(BaseModel):
+    """Continuity issue detected between two keyframes or assets in a project.
+    
+    Advisory only — does not mutate canonical project state.
+    """
+    issue_id: str
+    project_id: str
+    # Source and comparison keyframes/assets
+    source_keyframe_id: Optional[str] = None
+    compared_keyframe_id: Optional[str] = None
+    asset_id: Optional[str] = None
+    source_asset_id: Optional[str] = None
+    compared_asset_id: Optional[str] = None
+    # Issue classification
+    issue_type: str  # visual_drift, lighting_mismatch, mood_shift, composition_break, palette_drift, reference_mismatch, continuity_strength
+    severity: str = "medium"  # low, medium, high
+    confidence: float = 0.0
+    # Content
+    description: str
+    evidence: str = ""  # Specific evidence supporting the issue
+    recommendation: str = ""  # Advisory recommendation
+    notes: str = ""
+    metadata: dict = {}
+    created_at: str = ""
+
+
+class DirectorCommentary(BaseModel):
+    commentary_id: str
+    asset_id: str
+    scene_reference: str
+    interpretation: str
+    emotional_read: str
+    visual_language_notes: str
+    pacing_notes: str
+    created_at: str = ""
+    metadata: dict = {}
+
+
+class FrameAnalysis(BaseModel):
+    analysis_id: str
+    keyframe_id: str
+    asset_id: str
+    project_id: str
+    caption: str = ""
+    visual_summary: str = ""
+    mood_tags: List[str] = []
+    lighting_tags: List[str] = []
+    composition_tags: List[str] = []
+    color_palette: List[str] = []
+    detected_subjects: List[str] = []
+    camera_notes: str = ""
+    confidence: float = 0.0
+    provider: str = "unavailable"
+    model: str = "unconfigured"
+    status: str = "unavailable"
+    created_at: str = ""
+    metadata: dict = {}
+
+
+class FrameAnalysisRecord(FrameAnalysis):
+    # Backward-compatible alias used across older routes/services/tests.
+    camera_tags: List[str] = []
+    embeddings: Optional[List[float]] = None
+    metadata: dict = {}
+
+
+class VisualEmbedding(BaseModel):
+    embedding_id: str
+    keyframe_id: str
+    asset_id: str
+    project_id: str
+    provider: str = "unavailable"
+    model: str = "unconfigured"
+    vector_dimension: int = 0
+    embedding_vector: List[float] = []
+    status: str = "unavailable"
+    created_at: str = ""
+    metadata: dict = {}
+
+
+class CinematicMemoryRecord(BaseModel):
+    memory_id: str
+    project_id: str
+    asset_id: str
+    keyframe_id: str
+    analysis_id: str = ""
+    embedding_id: str = ""
+    memory_type: str = "keyframe_memory"
+    summary: str = ""
+    visual_tags: List[str] = []
+    emotional_tags: List[str] = []
+    composition_tags: List[str] = []
+    lighting_tags: List[str] = []
+    searchable_text: str = ""
+    created_at: str = ""
+    metadata: dict = {}
+
+
+class StyleSignature(BaseModel):
+    signature_id: str
+    project_id: str
+    framing_tendencies: List[str] = []
+    pacing_patterns: List[str] = []
+    color_motifs: List[str] = []
+    camera_movement_patterns: List[str] = []
+    confidence: float = 0.0
+    advisory_only: bool = True
+    metadata: dict = {}
+    created_at: str = ""
+
+
+class DirectorSignature(BaseModel):
+    """Advisory aggregate of the project's emerging cinematic language from real analyses."""
+
+    signature_id: str
+    project_id: str
+    dominant_mood_tags: List[str] = []
+    dominant_lighting_tags: List[str] = []
+    dominant_composition_tags: List[str] = []
+    dominant_palette: List[str] = []
+    pacing_notes: str = ""
+    visual_language_summary: str = ""
+    confidence: float = 0.0
+    evidence_keyframe_ids: List[str] = []
+    evidence_memory_ids: List[str] = []
+    created_at: str = ""
+    metadata: dict = {}
+
+
+STYLE_DRIFT_TYPES = frozenset(
+    {
+        "mood_drift",
+        "lighting_drift",
+        "composition_drift",
+        "palette_drift",
+        "reference_style_drift",
+        "visual_language_break",
+    }
+)
+
+
+class StyleDriftIssue(BaseModel):
+    """Advisory style drift finding for a keyframe/asset vs director signature."""
+
+    drift_id: str
+    project_id: str
+    keyframe_id: str = ""
+    asset_id: str = ""
+    drift_type: str  # mood_drift | lighting_drift | composition_drift | palette_drift | reference_style_drift | visual_language_break
+    severity: str = "medium"  # low, medium, high
+    confidence: float = 0.0
+    description: str = ""
+    evidence: str = ""
+    recommendation: str = ""
+    compared_against_signature_id: str = ""
+    created_at: str = ""
+    metadata: dict = {}
+
+
 class StudioDecisionGate(BaseModel):
     project_id: str
     gate_status: Literal["blocked", "needs_review", "ready", "insufficient_data"] = "insufficient_data"
@@ -289,6 +646,16 @@ class StudioDecisionGate(BaseModel):
     created_at: str = ""
     metadata: dict = {}
 
+
+class VideoUnderstandingStatus(BaseModel):
+    asset_id: str
+    ingestion_complete: bool = False
+    keyframes_complete: bool = False
+    analysis_complete: bool = False
+    memory_complete: bool = False
+    understanding_enabled: bool = False
+
+
 class RenderJobModel(BaseModel):
     id: str
     project_id: str
@@ -300,7 +667,9 @@ class RenderJobModel(BaseModel):
     input_payload: RenderJobInput = RenderJobInput()
     output_payload: Optional[RenderJobOutput] = None
     error_message: Optional[str] = None
+    last_polled_at: Optional[str] = None
     retry_count: int = 0
+    recovery_status: str = "none"
     created_at: str = ""
     updated_at: str = ""
     completed_at: Optional[str] = None
@@ -393,6 +762,121 @@ __all__ = [
     'MemoryEntry',
     'MemoryEntryVersion',
     'MemoryUpdate',
-    'StudioDecisionGate',
     'ContradictionCheck',
+    
+    # Soundtrack models
+    'SoundtrackConfig',
+    
+    # Review models
+    'ShortFilmReview',
+    
+    # Revision models
+    'ClipRevision',
+    
+    # Package models
+    'FinalShortFilmPackage',
+
+    # Video asset models
+    'VideoAsset',
+    'VideoKeyframe',
+    'ShotBoundary',
+    'SceneMemoryRecord',
+    'ContinuityIssue',
+    'DirectorCommentary',
+    'FrameAnalysis',
+    'FrameAnalysisRecord',
+    'VisualEmbedding',
+    'CinematicMemoryRecord',
+    'DirectorSignature',
+    'StyleDriftIssue',
+    'StudioDecisionGate',
+    
+    # Workflow models
+    'WorkflowDefinition',
+    'WorkflowStep',
+    'WorkflowExecution',
 ]
+
+
+# ============================================================================
+# WORKFLOW MODELS
+# ============================================================================
+
+class WorkflowStep(BaseModel):
+    """Individual step within a workflow definition"""
+    step_id: str
+    name: str
+    description: str
+    step_type: Literal["create_project", "generate_scenes", "render_shots", "assemble_film", "create_review", "create_revision", "create_package"]
+    required_inputs: List[str] = []
+    optional_inputs: List[str] = []
+    output_mapping: Dict[str, str] = {}
+    depends_on: List[str] = []
+    timeout_seconds: int = 300
+    retry_count: int = 3
+    
+class WorkflowDefinition(BaseModel):
+    """Definition of a reusable workflow"""
+    workflow_id: str
+    title: str
+    description: str
+    version: str = "1.0.0"
+    category: Literal["quick_film", "revision", "package", "review"]
+    steps: List[WorkflowStep]
+    required_inputs: Dict[str, Any] = {}
+    optional_inputs: Dict[str, Any] = {}
+    estimated_duration_minutes: int = 30
+    status: Literal["active", "deprecated", "experimental"] = "active"
+    tags: List[str] = []
+    
+    def get_step_by_id(self, step_id: str) -> Optional[WorkflowStep]:
+        """Get a step by its ID"""
+        return next((step for step in self.steps if step.step_id == step_id), None)
+    
+    def get_dependency_order(self) -> List[str]:
+        """Get steps in dependency order"""
+        ordered_steps = []
+        remaining_steps = self.steps.copy()
+        
+        while remaining_steps:
+            # Find steps with no unmet dependencies
+            ready_steps = [
+                step for step in remaining_steps
+                if all(dep not in [s.step_id for s in remaining_steps] for dep in step.depends_on)
+            ]
+            
+            if not ready_steps:
+                raise ValueError("Circular dependency detected in workflow steps")
+            
+            ordered_steps.extend(ready_steps)
+            for step in ready_steps:
+                remaining_steps.remove(step)
+        
+        return [step.step_id for step in ordered_steps]
+
+class WorkflowExecution(BaseModel):
+    """Execution instance of a workflow"""
+    execution_id: str
+    workflow_id: str
+    project_id: str
+    status: Literal["pending", "running", "completed", "failed", "cancelled"] = "pending"
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    current_step: Optional[str] = None
+    completed_steps: List[str] = []
+    failed_steps: List[str] = []
+    step_results: Dict[str, Any] = {}
+    inputs: Dict[str, Any] = {}
+    outputs: Dict[str, Any] = {}
+    error_message: Optional[str] = None
+    progress_percentage: float = 0.0
+    
+    def get_progress(self) -> float:
+        """Calculate progress based on completed steps"""
+        if not self.completed_steps:
+            return 0.0
+        return (len(self.completed_steps) / len(self.completed_steps)) * 100.0
+    
+    def is_terminal(self) -> bool:
+        """Check if execution is in a terminal state"""
+        return self.status in {"completed", "failed", "cancelled"}
