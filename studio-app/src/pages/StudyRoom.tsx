@@ -1550,6 +1550,7 @@ export default function StudyRoom() {
             frameAnalysesCount: totalFrameAnalyses,
             memoryRecordsCount: projectMemoryRecords.length,
             embeddingsCount: projectEmbeddings.length,
+            renderJobsCount,
             continuityIssuesCount: continuityIssues.length,
             styleDriftIssuesCount: styleDriftIssues.length,
             hasDirectorSignature: Boolean(directorSignature),

@@ -6,10 +6,50 @@ export type DemoCoDirectorPanelData = {
   frameAnalysesCount: number | null
   memoryRecordsCount: number | null
   embeddingsCount: number | null
+  renderJobsCount: number | null
   continuityIssuesCount: number | null
   styleDriftIssuesCount: number | null
   hasDirectorSignature: boolean
   decisionGate: StudioDecisionGate | null
+}
+
+type NextRoomAction = {
+  href: string
+  explanation: string
+}
+
+function getNextBestRoom(projectId: string, data: DemoCoDirectorPanelData): NextRoomAction {
+  const studyHref = `/studio/study-room?project_id=${projectId}`
+  const previsHref = `/studio/previs?project_id=${projectId}`
+  const productionHref = `/studio/production-board?project_id=${projectId}`
+  const screeningHref = `/studio/screening-room?project_id=${projectId}`
+
+  const visualEvidenceIncomplete = (data.visualAssetsCount ?? 0) <= 0
+  const keyframesIncomplete = (data.frameAnalysesCount ?? 0) <= 0
+  const memoryIncomplete = (data.memoryRecordsCount ?? 0) <= 0 || (data.embeddingsCount ?? 0) <= 0
+  if (visualEvidenceIncomplete || keyframesIncomplete || memoryIncomplete) {
+    return { href: studyHref, explanation: 'The studio needs more visual evidence first.' }
+  }
+
+  const gate = data.decisionGate?.gate_status
+  if (gate === 'insufficient_data') {
+    return { href: studyHref, explanation: 'The studio needs more visual evidence first.' }
+  }
+  if (gate === 'blocked') {
+    return { href: productionHref, explanation: 'Production needs attention before screening.' }
+  }
+  if (gate === 'needs_review' || gate === 'ready') {
+    return { href: screeningHref, explanation: 'The cut is ready, review it in Screening Room.' }
+  }
+
+  const gateCounts = data.decisionGate?.evidence?.counts as Record<string, unknown> | undefined
+  const reviewCount = typeof gateCounts?.reviews === 'number' ? gateCounts.reviews : 0
+  const packageCount = typeof gateCounts?.final_packages === 'number' ? gateCounts.final_packages : 0
+  if ((data.renderJobsCount ?? 0) > 0 && (reviewCount <= 0 || packageCount <= 0)) {
+    return { href: screeningHref, explanation: 'The cut is ready, review it in Screening Room.' }
+  }
+
+  return { href: previsHref, explanation: 'Open Previs to inspect the scene plan.' }
 }
 
 function describeReadiness(gate: StudioDecisionGate | null): string {
@@ -45,6 +85,7 @@ export default function DemoCoDirectorPanel({ projectId, data }: { projectId: st
   if (projectId !== 'demo_studio_cinematic_001') return null
 
   const gateLabel = data.decisionGate ? data.decisionGate.gate_status.replace('_', ' ') : 'checking'
+  const nextRoom = getNextBestRoom(projectId, data)
 
   return (
     <section className="mt-4 rounded-xl border border-cyan-300/35 bg-cyan-500/10 p-4">
@@ -72,6 +113,12 @@ export default function DemoCoDirectorPanel({ projectId, data }: { projectId: st
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.1em]">
+        <Link
+          to={nextRoom.href}
+          className="rounded border border-violet-300/55 bg-violet-500/20 px-3 py-1 text-violet-100 no-underline"
+        >
+          Advance to Next Best Room
+        </Link>
         <Link to={`/studio/previs?project_id=${projectId}`} className="rounded border border-cyan-300/45 bg-cyan-500/15 px-2 py-1 text-cyan-100 no-underline">
           Open Previs
         </Link>
@@ -88,6 +135,7 @@ export default function DemoCoDirectorPanel({ projectId, data }: { projectId: st
           Open Screening Room
         </Link>
       </div>
+      <p className="mt-2 text-[11px] text-violet-100">{nextRoom.explanation}</p>
 
       {(data.continuityIssuesCount ?? 0) > 0 || (data.styleDriftIssuesCount ?? 0) > 0 || !data.hasDirectorSignature ? (
         <p className="mt-2 text-[11px] text-zinc-300">
