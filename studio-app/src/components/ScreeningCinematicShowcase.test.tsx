@@ -47,6 +47,8 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).toContain('Revision Timeline')
     expect(html).toContain('Approval Stack')
     expect(html).toContain('Smart Actions')
+    expect(html).toContain('Why this shot matters:')
+    expect(html).toContain('is ready because visual evidence, memory, and review state now agree.')
   })
 
   it('renders intentional empty state copy when no revisions exist', () => {
@@ -64,5 +66,10 @@ describe('ScreeningCinematicShowcase', () => {
     const html = renderComponent({ gateStatus: 'blocked' })
     expect(html).toContain('Production needs attention before screening.')
     expect(html).toContain('/studio/production-board?project_id=demo_studio_cinematic_001')
+  })
+
+  it('shows honest low-data advisory when memory evidence is missing', () => {
+    const html = renderComponent({ memoryRecordsCount: 0, activeSceneId: 'scene_001' })
+    expect(html).toContain('needs more visual evidence before trusting the cut')
   })
 })

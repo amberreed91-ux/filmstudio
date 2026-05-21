@@ -108,6 +108,20 @@ function recommendation(gateStatus: string): { label: string; href: string; mess
   }
 }
 
+function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'activeSceneId' | 'gateStatus' | 'memoryRecordsCount' | 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'hasDirectorSignature' | 'renderJobsCount' | 'reviewsCount' | 'packagesCount'>): string {
+  const subject = props.activeSceneId ? `Scene ${props.activeSceneId}` : 'This cut'
+  if (props.memoryRecordsCount < 1) {
+    return `${subject} still matters, but the Studio needs more visual evidence before trusting the cut.`
+  }
+  if (props.continuityIssuesCount > 0 || props.styleDriftIssuesCount > 0) {
+    return `${subject} connects the scene's emotional pressure to final review, but visual consistency still needs tightening.`
+  }
+  if (props.gateStatus === 'ready' && props.renderJobsCount > 0 && props.reviewsCount > 0 && props.packagesCount > 0 && props.hasDirectorSignature) {
+    return `${subject} is ready because visual evidence, memory, and review state now agree.`
+  }
+  return `${subject} carries the visual memory of the project into the cut.`
+}
+
 export default function ScreeningCinematicShowcase(props: ScreeningCinematicShowcaseProps) {
   const [selectedRevisionId, setSelectedRevisionId] = useState(props.revisions[0]?.id || '')
   const [compareLeftId, setCompareLeftId] = useState(props.revisions[0]?.id || '')
@@ -167,6 +181,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
         <div className="rounded-2xl border border-zinc-700/70 bg-zinc-950/75 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
           <div className="text-[11px] uppercase tracking-[0.16em] text-cyan-200">Co-Director Notes</div>
           <p className="mt-2 text-sm text-zinc-200">{creativeRead(props)}</p>
+          <p className="mt-2 text-sm text-zinc-200">Why this shot matters: {whyThisShotMatters(props)}</p>
           <div className="mt-3 text-sm text-zinc-300">{props.decisionGate?.recommended_next_action || nextStep.message}</div>
           <div className="mt-4 flex flex-wrap gap-2 text-xs">
             <Link className="rounded-md border border-cyan-400/45 bg-cyan-500/15 px-3 py-1.5 text-cyan-100 no-underline" to={toRoomUrl('/studio/previs', props.projectId)}>Open Previs</Link>

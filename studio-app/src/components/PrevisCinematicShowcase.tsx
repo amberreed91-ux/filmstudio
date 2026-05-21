@@ -45,6 +45,20 @@ function coDirectorNote(props: Pick<PrevisCinematicShowcaseProps, 'isDemoProject
   return 'Co-Director analysis is still gathering enough evidence to lock scene intent with confidence.'
 }
 
+function whyThisShotMatters(props: Pick<PrevisCinematicShowcaseProps, 'sceneTitle' | 'relatedMemoryCount' | 'visualEvidenceCount' | 'continuityIssueCount' | 'styleDriftIssueCount' | 'decisionGateStatus' | 'hasDirectorSignature'>): string {
+  const subject = props.sceneTitle || 'This shot'
+  if (props.visualEvidenceCount < 1 || props.relatedMemoryCount < 1) {
+    return `${subject} still matters, but the Studio needs more visual evidence before trusting the cut.`
+  }
+  if (props.continuityIssueCount > 0 || props.styleDriftIssueCount > 0) {
+    return `${subject} connects emotional pressure to the final review, but continuity and style need one more pass.`
+  }
+  if (props.decisionGateStatus === 'ready' && props.hasDirectorSignature) {
+    return `${subject} is ready because visual evidence, memory, and review state now agree.`
+  }
+  return `${subject} carries the visual memory of the project into the cut.`
+}
+
 export default function PrevisCinematicShowcase(props: PrevisCinematicShowcaseProps) {
   const confidence = shotToCutLabel(props)
 
@@ -67,6 +81,7 @@ export default function PrevisCinematicShowcase(props: PrevisCinematicShowcasePr
         <div className="rounded-xl border border-white/10 bg-zinc-950/70 p-4">
           <div className="text-[11px] uppercase tracking-[0.16em] text-fuchsia-200">Co-Director Shot Notes</div>
           <p className="mt-2 text-sm text-zinc-300">{coDirectorNote(props)}</p>
+          <p className="mt-2 text-sm text-zinc-200">Why this shot matters: {whyThisShotMatters(props)}</p>
           <div className="mt-3 space-y-2 text-xs text-zinc-300">
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Memory references: <span className="text-zinc-100">{props.relatedMemoryCount}</span></div>
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Continuity issues: <span className="text-zinc-100">{props.continuityIssueCount}</span></div>

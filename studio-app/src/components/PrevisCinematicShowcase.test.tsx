@@ -41,6 +41,8 @@ describe('PrevisCinematicShowcase', () => {
     const html = renderShowcase({ isDemoProject: true })
     expect(html).toContain('The Studio has enough visual memory to begin shaping the scene.')
     expect(html).toContain('Shot intent is aligned with the current director signature.')
+    expect(html).toContain('Why this shot matters:')
+    expect(html).toContain('is ready because visual evidence, memory, and review state now agree.')
   })
 
   it('shows low-data fallback when evidence is missing', () => {
@@ -55,6 +57,7 @@ describe('PrevisCinematicShowcase', () => {
     })
     expect(html).toContain('Needs visual evidence')
     expect(html).toContain('still gathering enough evidence')
+    expect(html).toContain('needs more visual evidence before trusting the cut')
   })
 
   it('highlights Previs stage in progression strip', () => {
