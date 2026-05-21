@@ -6,6 +6,7 @@ import shutil
 from app.services import render_service
 from app.services import render as render_module
 from app.services.render_job_backfill import backfill_render_jobs_from_project_state
+from app.services.project_store import project_store
 from app.models import ProviderConfig, RenderJobModel
 
 router = APIRouter()
@@ -150,6 +151,35 @@ def list_render_jobs(project_id: Optional[str] = None):
                 "preview_url": preview_url,
             }
         )
+
+    # Compatibility fallback for seeded demo/runtime rows that currently live in
+    # project execution summaries but are not yet hydrated into canonical job rows.
+    if project_id and not rows:
+        project = project_store.get_project(project_id)
+        execution_summary = project.get("execution_summary") if isinstance(project, dict) else None
+        summary_jobs = execution_summary.get("one_button_render_jobs") if isinstance(execution_summary, dict) else None
+        if isinstance(summary_jobs, list):
+            for summary_job in summary_jobs:
+                if not isinstance(summary_job, dict):
+                    continue
+                output_url = summary_job.get("output_url") or ""
+                preview_url = summary_job.get("preview_url") or output_url
+                rows.append(
+                    {
+                        "job_id": summary_job.get("job_id"),
+                        "id": summary_job.get("job_id"),
+                        "project_id": project_id,
+                        "shot_id": summary_job.get("shot_id"),
+                        "provider": summary_job.get("provider") or "runway",
+                        "provider_job_id": summary_job.get("task_id"),
+                        "status": summary_job.get("status") or "complete",
+                        "progress": 100,
+                        "output_url": output_url,
+                        "preview_url": preview_url,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
     return rows
 
 

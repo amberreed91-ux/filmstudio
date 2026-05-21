@@ -449,7 +449,19 @@ class RenderService:
 
     def list_jobs(self, project_id: Optional[str] = None) -> list[RenderJobModel]:
         """List all jobs, optionally filtered by project"""
-        jobs = list(self._jobs.values())
+        jobs_by_id: dict[str, RenderJobModel] = {job.id: job for job in self._jobs.values()}
+
+        # Compatibility fallback: include persisted jobs when process memory is cold,
+        # which is common for seeded demo/runtime startup flows.
+        if _storage:
+            try:
+                persisted = _storage.list_jobs(project_id=project_id, limit=5000)
+                for job in persisted:
+                    jobs_by_id[job.id] = job
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to load persisted jobs for list_jobs: %s", exc)
+
+        jobs = list(jobs_by_id.values())
         if project_id:
             jobs = [j for j in jobs if j.project_id == project_id]
         return sorted(jobs, key=lambda j: j.created_at, reverse=True)
