@@ -14,6 +14,7 @@ import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getProject,
 import { useProjectHydration } from '../hooks/useProjectHydration'
 import { useProductionRecovery } from '../hooks/useProductionRecovery'
 import ProductionRecoveryIndicator from '../components/ProductionRecoveryIndicator'
+import ProductionExecutionBay from '../components/ProductionExecutionBay'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 
 type AnyRecord = Record<string, unknown>
@@ -517,6 +518,24 @@ export default function ProductionBoard() {
     setActionFeedback(`Opening ${sceneId} in Previs`)
   }
 
+  async function handleRetryFirstFailedRender() {
+    const failed = renderJobs.find((job) => {
+      const status = (job.status || '').toLowerCase()
+      return status === 'failed' || status === 'error'
+    })
+    if (!failed) {
+      setActionFeedback('No failed render jobs to retry')
+      return
+    }
+    try {
+      const updated = await retryRenderJobById(failed.id)
+      setRenderJobs((prev) => prev.map((job) => (job.id === updated.id ? updated : job)))
+      setActionFeedback(`Retry requested for ${failed.shot_id || failed.id}`)
+    } catch {
+      setActionFeedback('Retry failed. Please use Recover/Reconcile on the job row.')
+    }
+  }
+
   return (
     <StudioShell title="Production Board" subtitle="Track execution readiness, dependencies, and queue health across active scenes.">
       <RenderActivityPanel roomName="Production Board" />
@@ -524,6 +543,15 @@ export default function ProductionBoard() {
       <div className="w-full overflow-visible">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 space-y-5 text-zinc-100">
           <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
+
+          <ProductionExecutionBay
+            projectId={activeProjectId || project?.project_id || 'demo_studio_cinematic_001'}
+            projectTitle={project?.title || project?.project_id || 'Production Execution Mission'}
+            decisionGate={decisionGate}
+            renderJobs={renderJobs}
+            onRetryFailedRender={handleRetryFirstFailedRender}
+          />
+
           <section className="cinematic-panel studio-fade-in p-5">
             <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 3: TRACK PROGRESS</div>
             <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100"><ClipboardList size={18} />Production Board</h2>
