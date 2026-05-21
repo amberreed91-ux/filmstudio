@@ -1,0 +1,28 @@
+{
+  "rooms": {
+    "lobby": {
+      "runDemoVisible": true
+    },
+    "study": {
+      "demoMission": true,
+      "coDirector": true,
+      "advanceCta": true
+    },
+    "previs": {
+      "shotIntentHero": true,
+      "shotToCut": true,
+      "progressionStrip": true
+    },
+    "production": {
+      "executionBay": true,
+      "queueTimeline": true,
+      "screeningCta": true
+    },
+    "screening": {
+      "showcase": true,
+      "notes": true,
+      "revisionTimeline": true
+    }
+  },
+  "errors": []
+}
