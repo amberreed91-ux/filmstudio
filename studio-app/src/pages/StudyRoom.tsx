@@ -5,6 +5,7 @@ import StudioShell, { TabGroup } from '../components/StudioShell'
 import CinematicLoading from '../components/CinematicLoading'
 import AssetIntelligenceCard from '../components/AssetIntelligenceCard'
 import DecisionGateCard from '../components/DecisionGateCard'
+import DemoMissionChecklist from '../components/DemoMissionChecklist'
 import { useStudio } from '../context/StudioContext'
 import {
   analyzeProjectContinuity,
@@ -1512,10 +1513,35 @@ export default function StudyRoom() {
     return values.length > 0 ? values.join(', ') : 'Metadata not provided'
   }
 
+  const totalKeyframes = useMemo(
+    () => Object.values(keyframesByAssetId).reduce((sum, rows) => sum + rows.length, 0),
+    [keyframesByAssetId],
+  )
+  const totalFrameAnalyses = useMemo(
+    () => Object.values(frameAnalysesByAssetId).reduce((sum, rows) => sum + rows.length, 0),
+    [frameAnalysesByAssetId],
+  )
+  const renderJobsCount = useMemo(() => {
+    const jobs = project?.execution_summary?.one_button_render_jobs
+    return Array.isArray(jobs) ? jobs.length : null
+  }, [project?.execution_summary])
+
   return (
     <StudioShell title="Study Room" subtitle="Upload scripts, scenes, films, references, and notes for the studio to study.">
       <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
         <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
+        <DemoMissionChecklist
+          projectId={activeProjectId}
+          data={{
+            visualAssetsCount: projectVideoAssets.length,
+            keyframesCount: totalKeyframes,
+            frameAnalysesCount: totalFrameAnalyses,
+            embeddingsCount: projectEmbeddings.length,
+            memoryRecordsCount: projectMemoryRecords.length,
+            renderJobsCount,
+            decisionGate,
+          }}
+        />
       </div>
       <input ref={fileInputRef} type="file" accept={ACCEPT_ALL} multiple className="hidden" onChange={handleInputChange} />
       <div className="mx-auto w-full max-w-7xl px-4 py-8 text-zinc-100 sm:px-6 lg:px-8">
