@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { STUDIO_API_BASE } from '../lib/studioApi'
 
 type RecoveryStatus = 'idle' | 'hydrating' | 'reconnecting' | 'recovering' | 'completed' | 'failed'
 
@@ -69,7 +70,7 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
   // Poll recovery status
   const pollRecoveryStatus = useCallback(async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/production-recovery/status`)
+      const response = await fetch(`${STUDIO_API_BASE}/api/production-recovery/status`)
       if (!response.ok) return
 
       const status = await response.json()
@@ -116,7 +117,7 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
     })
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/production-recovery/recover${projectId ? `?project_id=${projectId}` : ''}`, {
+      const response = await fetch(`${STUDIO_API_BASE}/api/production-recovery/recover${projectId ? `?project_id=${projectId}` : ''}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

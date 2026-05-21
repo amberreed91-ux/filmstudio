@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Play, Clock, Package, MessageSquare, ChevronRight, Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { STUDIO_API_BASE } from '../lib/studioApi'
 
 // Types for workflow data
 interface WorkflowDefinition {
@@ -65,7 +66,7 @@ export default function WorkflowLauncher({ projectId, onWorkflowComplete }: Work
 
   const loadWorkflows = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workflows/definitions`)
+      const response = await fetch(`${STUDIO_API_BASE}/api/workflows/definitions`)
       const data = await response.json()
       setWorkflows(data)
     } catch (err) {
@@ -75,7 +76,7 @@ export default function WorkflowLauncher({ projectId, onWorkflowComplete }: Work
 
   const loadExecutions = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workflows/executions?project_id=${projectId}`)
+      const response = await fetch(`${STUDIO_API_BASE}/api/workflows/executions?project_id=${projectId}`)
       const data = await response.json()
       setExecutions(data)
     } catch (err) {
@@ -111,7 +112,7 @@ export default function WorkflowLauncher({ projectId, onWorkflowComplete }: Work
     setError(null)
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workflows/execute`, {
+      const response = await fetch(`${STUDIO_API_BASE}/api/workflows/execute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -149,7 +150,7 @@ export default function WorkflowLauncher({ projectId, onWorkflowComplete }: Work
   const pollExecution = async (executionId: string) => {
     const poll = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workflows/executions/${executionId}`)
+        const response = await fetch(`${STUDIO_API_BASE}/api/workflows/executions/${executionId}`)
         const execution = await response.json()
         
         setExecutions(prev => prev.map(e => e.execution_id === executionId ? execution : e))

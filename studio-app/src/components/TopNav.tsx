@@ -6,6 +6,7 @@ import { useAudioUX } from '../context/AudioUXContext'
 import { PRIMARY_NAV_ROUTES } from '../routes'
 import { isStudioDevMode } from '../lib/devMode'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import { STUDIO_API_BASE } from '../lib/studioApi'
 
 interface TopNavProps {
   title?: string
@@ -14,7 +15,7 @@ interface TopNavProps {
 }
 
 export default function TopNav({ title, subtitle, showProjectPicker }: TopNavProps) {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8010'
+  const apiBaseUrl = STUDIO_API_BASE
   const [backendStatus, setBackendStatus] = useState<'checking' | 'available' | 'unavailable'>('checking')
   const location = useLocation()
   const [searchParams] = useSearchParams()

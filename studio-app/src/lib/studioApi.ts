@@ -143,8 +143,23 @@ export type SceneAnimationPromptPayload = {
   comfy_notes: string
 }
 
-export const STUDIO_API_BASE: string =
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_STUDIO_API_BASE || 'http://127.0.0.1:8010'
+export function resolveStudioApiBase(env?: { VITE_API_BASE_URL?: string; VITE_STUDIO_API_BASE?: string }): string {
+  const configured = env?.VITE_API_BASE_URL || env?.VITE_STUDIO_API_BASE || ''
+  const fallback = 'http://127.0.0.1:8010'
+  const raw = configured.trim() || fallback
+  const normalized = raw.replace(/\/+$/, '')
+
+  // Demo/runtime hardening: local preview/dev should not default to stale 8012.
+  if (/^https?:\/\/(localhost|127\.0\.0\.1):8012$/i.test(normalized)) {
+    return fallback
+  }
+  return normalized
+}
+
+export const STUDIO_API_BASE: string = resolveStudioApiBase({
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  VITE_STUDIO_API_BASE: import.meta.env.VITE_STUDIO_API_BASE,
+})
 
 function normalizeStudioProject(raw: StudioProject): StudioProject {
   const project = raw as Record<string, unknown>

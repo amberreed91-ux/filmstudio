@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createClipRevision, getProjectDecisionGate, getStudioProject, seedDemoStudioProject } from './studioApi'
+import {
+  createClipRevision,
+  getProjectDecisionGate,
+  getStudioProject,
+  resolveStudioApiBase,
+  seedDemoStudioProject,
+} from './studioApi'
 
 describe('getStudioProject', () => {
   afterEach(() => {
@@ -136,5 +142,20 @@ describe('seed demo studio project helper', () => {
     expect(String(url)).toContain('/api/f51/studio/dev/seed-demo-project')
     expect((init?.method || '').toUpperCase()).toBe('POST')
     expect(String(init?.body || '')).toContain('demo_studio_cinematic_001')
+  })
+})
+
+describe('resolveStudioApiBase', () => {
+  it('defaults to localhost 8010 when no env is provided', () => {
+    expect(resolveStudioApiBase({})).toBe('http://127.0.0.1:8010')
+  })
+
+  it('prefers configured VITE_API_BASE_URL when provided', () => {
+    expect(resolveStudioApiBase({ VITE_API_BASE_URL: 'http://10.1.2.3:9000/' })).toBe('http://10.1.2.3:9000')
+  })
+
+  it('normalizes stale local 8012 configuration to 8010', () => {
+    expect(resolveStudioApiBase({ VITE_API_BASE_URL: 'http://127.0.0.1:8012' })).toBe('http://127.0.0.1:8010')
+    expect(resolveStudioApiBase({ VITE_STUDIO_API_BASE: 'http://localhost:8012/' })).toBe('http://127.0.0.1:8010')
   })
 })
