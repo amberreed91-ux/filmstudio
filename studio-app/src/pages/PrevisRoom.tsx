@@ -365,6 +365,15 @@ export default function PrevisRoom() {
     void loadProject(projectId, { sessionId })
   }, [loadProject, projectId, sessionId])
 
+  // Query-based entry (e.g. /studio/previs?project_id=...) should still hydrate project context.
+  useEffect(() => {
+    if (projectId || !activeProjectId) return
+    const loadRequestKey = `${activeProjectId}:${sessionId ?? ''}`
+    if (loadRequestKeyRef.current === loadRequestKey) return
+    loadRequestKeyRef.current = loadRequestKey
+    void loadProject(activeProjectId, { sessionId })
+  }, [activeProjectId, loadProject, projectId, sessionId])
+
   useEffect(() => {
     if (!activeProjectId || projectId) return
     void (async () => {
@@ -493,6 +502,7 @@ export default function PrevisRoom() {
   useEffect(() => {
     if (loading) return
     if (hasUsableScenes) return
+    if (activeProjectId) return
     if (projectId) return
     navigate(withProjectQuery('/studio/writers-room', activeProjectId), {
       replace: true,
