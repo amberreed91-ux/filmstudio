@@ -5,6 +5,7 @@ import StudioShell, { TabGroup } from '../components/StudioShell'
 import CinematicLoading from '../components/CinematicLoading'
 import AssetIntelligenceCard from '../components/AssetIntelligenceCard'
 import DecisionGateCard from '../components/DecisionGateCard'
+import DemoCoDirectorPanel from '../components/DemoCoDirectorPanel'
 import DemoMissionChecklist from '../components/DemoMissionChecklist'
 import { useStudio } from '../context/StudioContext'
 import {
@@ -1539,6 +1540,19 @@ export default function StudyRoom() {
             embeddingsCount: projectEmbeddings.length,
             memoryRecordsCount: projectMemoryRecords.length,
             renderJobsCount,
+            decisionGate,
+          }}
+        />
+        <DemoCoDirectorPanel
+          projectId={activeProjectId}
+          data={{
+            visualAssetsCount: projectVideoAssets.length,
+            frameAnalysesCount: totalFrameAnalyses,
+            memoryRecordsCount: projectMemoryRecords.length,
+            embeddingsCount: projectEmbeddings.length,
+            continuityIssuesCount: continuityIssues.length,
+            styleDriftIssuesCount: styleDriftIssues.length,
+            hasDirectorSignature: Boolean(directorSignature),
             decisionGate,
           }}
         />
