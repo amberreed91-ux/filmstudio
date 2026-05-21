@@ -5,6 +5,7 @@ import StudioShell, { AGENTS, TabGroup } from '../components/StudioShell'
 import DirectorConsole from '../components/DirectorConsole'
 import CinematicLoading from '../components/CinematicLoading'
 import PrevisIntelligencePanel from '../components/PrevisIntelligencePanel'
+import PrevisCinematicShowcase from '../components/PrevisCinematicShowcase'
 import DecisionGateCard from '../components/DecisionGateCard'
 import { useStudio } from '../context/StudioContext'
 import {
@@ -1762,6 +1763,27 @@ export default function PrevisRoom() {
               </div>
             ) : null}
           </section>
+
+          <PrevisCinematicShowcase
+            projectId={activeProjectId || project?.project_id || 'demo_studio_cinematic_001'}
+            sceneId={selectedSceneIdSafe || 'scene_001'}
+            sceneTitle={asString(selectedScene.heading) || asString(selectedScene.location) || 'Scene intent in progress'}
+            cinematicIntent={asString(selectedPromptBase) || 'Cinematic intent is still being written from scene evidence.'}
+            emotionalBeat={asString(selectedEmotionalFlow.emotional_state) || asString(selectedEmotionalFlow.emotional_target) || 'Still gathering emotional read'}
+            referenceConfidenceLabel={
+              relatedMemory.length > 0
+                ? `Reference-linked (${Math.round(((relatedMemory[0]?.confidence || 0) * 100))}% confidence)`
+                : 'No linked reference yet'
+            }
+            currentStatus={getSceneStatus(selectedScene, fallbackGenerationSummary) || 'not available'}
+            hasDirectorSignature={Boolean(directorSignature && !directorSignature.metadata?.insufficient_data)}
+            relatedMemoryCount={relatedMemory.length}
+            continuityIssueCount={selectedSceneContinuityIssues.length}
+            styleDriftIssueCount={selectedSceneStyleDriftIssues.length}
+            visualEvidenceCount={completeAnalysisCount}
+            decisionGateStatus={decisionGate?.gate_status || 'insufficient_data'}
+            isDemoProject={(activeProjectId || '') === 'demo_studio_cinematic_001'}
+          />
           {hasStyleConflict ? (
             <section className="rounded-2xl border border-amber-400/45 bg-amber-500/10 px-4 py-3 text-amber-100 shadow-lg">
               <div className="text-xs font-semibold uppercase tracking-[0.16em]">Style Conflict Detected</div>
