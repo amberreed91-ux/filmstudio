@@ -9,6 +9,7 @@ import CoDirectorCollaborationPanel from '../components/CoDirectorCollaborationP
 import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
 import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
 import ScreeningIntelligencePanel from '../components/ScreeningIntelligencePanel'
+import ScreeningCinematicShowcase from '../components/ScreeningCinematicShowcase'
 import { useStudio } from '../context/StudioContext'
 import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, getProjectDecisionGate, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue } from '../lib/studioApi'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
@@ -806,6 +807,36 @@ export default function ScreeningRoom() {
     }
     return { label: 'LOCAL PREVIS', reason: '' }
   }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene])
+  const revisionTimeline = useMemo(() => {
+    const fromJobs = renderJobs.map((job, index) => {
+      const payload = asRecord(job.output_payload) || {}
+      return {
+        id: job.id || `job-${index + 1}`,
+        label: `Revision ${index + 1}`,
+        status: asString(job.status) || 'unknown',
+        runtimeSeconds: Math.max(0, asNumber(payload.duration_seconds) ?? 0),
+        previewUrl: asString(payload.preview_url) || asString(payload.thumbnail_url) || '',
+        outputUrl: normalizePlayableVideoUrl(asString(payload.output_url) || asString(payload.asset_url) || ''),
+        createdAt: asString(job.created_at) || '',
+        notes: asString(payload.revision_intent) || asString(payload.notes) || '',
+      }
+    })
+    if (fromJobs.length > 0) return fromJobs
+    return playlist.map((scene, index) => ({
+      id: `${scene.scene_id}-${index}`,
+      label: `Scene ${index + 1}`,
+      status: scene.status || 'unknown',
+      runtimeSeconds: Math.max(0, scene.duration_estimate || 0),
+      previewUrl: firstVideoAssetByScene.get(scene.scene_id)?.thumbnail_url || firstSuccessfulAssetByScene.get(scene.scene_id)?.url || '',
+      outputUrl: normalizePlayableVideoUrl(firstVideoAssetByScene.get(scene.scene_id)?.video_url || ''),
+      createdAt: '',
+      notes: cutAnalysis.weakMoments.has(scene.scene_id)
+        ? 'Continuity or pacing concerns flagged.'
+        : cutAnalysis.strongMoments.has(scene.scene_id)
+          ? 'Strong cinematic beat with stable signal.'
+          : '',
+    }))
+  }, [cutAnalysis.strongMoments, cutAnalysis.weakMoments, firstSuccessfulAssetByScene, firstVideoAssetByScene, playlist, renderJobs])
   const activeMotionStatus = activeScene?.scene_id ? motionStatusByScene.get(activeScene.scene_id) : null
   const generationTimeLabel = activeScene?.duration_estimate ? `${activeScene.duration_estimate}s` : 'n/a'
   const filmMemoryData = useMemo(() => {
@@ -1048,6 +1079,34 @@ export default function ScreeningRoom() {
             {actionFeedback ? <div className="mt-2 text-[11px] text-cyan-200">{actionFeedback}</div> : null}
             {exportMessage ? <div className="mt-2 text-[11px] text-zinc-300">{exportMessage}</div> : null}
           </section>
+
+          <ScreeningCinematicShowcase
+            projectId={activeProjectId || project?.project_id || 'demo_studio_cinematic_001'}
+            projectTitle={project?.title || project?.project_id || 'Screening Session'}
+            heroPreviewUrl={viewerImage}
+            heroVideoUrl={activeSceneVideoUrl}
+            activeSceneId={activeScene?.scene_id || ''}
+            gateStatus={decisionGate?.gate_status || 'insufficient_data'}
+            decisionGate={decisionGate}
+            renderStatusLabel={activeRenderStatus.label}
+            runtimeEstimateLabel={`${Math.max(0, playlist.length * 3)} min`}
+            revisionCount={revisionTimeline.length}
+            renderJobsCount={renderJobs.length}
+            reviewsCount={decisionGate?.evidence?.review_count && typeof decisionGate.evidence.review_count === 'number' ? decisionGate.evidence.review_count : 0}
+            packagesCount={latestPackage ? 1 : 0}
+            continuityIssuesCount={continuityIssues.length}
+            styleDriftIssuesCount={styleDriftIssues.length}
+            memoryRecordsCount={cinematicMemory.length}
+            hasDirectorSignature={Boolean(directorSignature && !directorSignature.metadata?.insufficient_data)}
+            revisions={revisionTimeline}
+            onApproveCut={() => handleReviewDecision('approve')}
+            onRequestRevision={() => handleReviewDecision('revise')}
+            onCompareRevision={() => setActionFeedback('Select two revisions in the timeline to compare.')}
+            onExportPackage={() => {
+              setActionFeedback('Preparing package export')
+              void handleExportCutManifest()
+            }}
+          />
 
           <section className="grid grid-cols-1 gap-6 md:grid-cols-6 xl:grid-cols-12">
             <div className="cinematic-panel lg:col-span-3 p-4">

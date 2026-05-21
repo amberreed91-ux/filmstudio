@@ -1,0 +1,68 @@
+import { describe, expect, it } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
+import type { ComponentProps } from 'react'
+import ScreeningCinematicShowcase from './ScreeningCinematicShowcase'
+
+function renderComponent(props: Partial<ComponentProps<typeof ScreeningCinematicShowcase>> = {}) {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <ScreeningCinematicShowcase
+        projectId="demo_studio_cinematic_001"
+        projectTitle="Demo Project"
+        heroPreviewUrl=""
+        heroVideoUrl=""
+        activeSceneId="scene_001"
+        gateStatus="ready"
+        decisionGate={null}
+        renderStatusLabel="COMFYUI RENDER"
+        runtimeEstimateLabel="3 min"
+        revisionCount={2}
+        renderJobsCount={2}
+        reviewsCount={1}
+        packagesCount={1}
+        continuityIssuesCount={0}
+        styleDriftIssuesCount={0}
+        memoryRecordsCount={3}
+        hasDirectorSignature
+        revisions={[
+          { id: 'a', label: 'Revision A', status: 'completed', runtimeSeconds: 12, notes: 'tight pacing' },
+          { id: 'b', label: 'Revision B', status: 'completed', runtimeSeconds: 14, notes: 'broader beats' },
+        ]}
+        onApproveCut={() => {}}
+        onRequestRevision={() => {}}
+        onCompareRevision={() => {}}
+        onExportPackage={() => {}}
+        {...props}
+      />
+    </MemoryRouter>,
+  )
+}
+
+describe('ScreeningCinematicShowcase', () => {
+  it('renders cinematic showcase sections', () => {
+    const html = renderComponent()
+    expect(html).toContain('Screening Showcase')
+    expect(html).toContain('Co-Director Notes')
+    expect(html).toContain('Revision Timeline')
+    expect(html).toContain('Approval Stack')
+    expect(html).toContain('Smart Actions')
+  })
+
+  it('renders intentional empty state copy when no revisions exist', () => {
+    const html = renderComponent({ revisions: [], revisionCount: 0 })
+    expect(html).toContain('The studio is preparing the next screening cut.')
+  })
+
+  it('uses needs review recommendation copy and screening link', () => {
+    const html = renderComponent({ gateStatus: 'needs_review' })
+    expect(html).toContain('The cut needs review notes before final package lock.')
+    expect(html).toContain('/studio/screening-room?project_id=demo_studio_cinematic_001')
+  })
+
+  it('routes blocked gate recommendation to production board', () => {
+    const html = renderComponent({ gateStatus: 'blocked' })
+    expect(html).toContain('Production needs attention before screening.')
+    expect(html).toContain('/studio/production-board?project_id=demo_studio_cinematic_001')
+  })
+})
