@@ -72,4 +72,41 @@ describe('ScreeningCinematicShowcase', () => {
     const html = renderComponent({ memoryRecordsCount: 0, activeSceneId: 'scene_001' })
     expect(html).toContain('needs more visual evidence before trusting the cut')
   })
+
+  it('hides disagreement by default when no tradeoff signal exists', () => {
+    const html = renderComponent({
+      continuityIssuesCount: 0,
+      styleDriftIssuesCount: 0,
+      gateStatus: 'ready',
+      revisionCount: 2,
+    })
+    expect(html).not.toContain('creative-disagreement-aside')
+  })
+
+  it('shows selective disagreement for believable tradeoff state', () => {
+    const html = renderComponent({
+      continuityIssuesCount: 1,
+      styleDriftIssuesCount: 0,
+      memoryRecordsCount: 3,
+      gateStatus: 'needs_review',
+      revisionCount: 2,
+      revisions: [
+        { id: 'a', label: 'Revision A', status: 'completed', runtimeSeconds: 12, notes: 'quieter beat' },
+        { id: 'b', label: 'Revision B', status: 'completed', runtimeSeconds: 14, notes: 'cleaner pacing' },
+      ],
+    })
+    expect(html).toContain('creative-disagreement-aside')
+    expect(html).toContain('This cut is cleaner, though it loses some emotional residue from the earlier version.')
+  })
+
+  it('keeps disagreement copy human and free of scoring jargon', () => {
+    const html = renderComponent({
+      continuityIssuesCount: 1,
+      gateStatus: 'needs_review',
+    })
+    expect(html).not.toContain('score')
+    expect(html).not.toContain('metric')
+    expect(html).not.toContain('threshold')
+    expect(html).not.toContain('objectively')
+  })
 })

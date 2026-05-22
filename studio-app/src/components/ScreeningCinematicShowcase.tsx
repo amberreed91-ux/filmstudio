@@ -122,6 +122,28 @@ function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'active
   return `${subject} carries the visual memory of the project into the cut.`
 }
 
+function creativeDisagreementAside(
+  props: Pick<ScreeningCinematicShowcaseProps, 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'memoryRecordsCount' | 'gateStatus'>,
+  compareLeftId: string,
+  compareRightId: string,
+  revisionCount: number,
+): string | null {
+  const hasComparisonContext = revisionCount > 1 && Boolean(compareLeftId) && Boolean(compareRightId) && compareLeftId !== compareRightId
+  const hasTradeoffSignal = props.continuityIssuesCount > 0 || props.styleDriftIssuesCount > 0
+  const hasEnoughContext = props.memoryRecordsCount > 0
+  const gateSuggestsNuance = props.gateStatus === 'needs_review' || props.gateStatus === 'ready'
+
+  if (!hasComparisonContext || !hasTradeoffSignal || !hasEnoughContext || !gateSuggestsNuance) return null
+
+  if (props.continuityIssuesCount > 0 && props.styleDriftIssuesCount > 0) {
+    return 'This revision sharpens the sequence structurally, though the emotional transition feels slightly colder.'
+  }
+  if (props.continuityIssuesCount > 0) {
+    return 'This cut is cleaner, though it loses some emotional residue from the earlier version.'
+  }
+  return 'Visual continuity is stronger now, though some intimacy from the earlier framing is reduced.'
+}
+
 export default function ScreeningCinematicShowcase(props: ScreeningCinematicShowcaseProps) {
   const [selectedRevisionId, setSelectedRevisionId] = useState(props.revisions[0]?.id || '')
   const [compareLeftId, setCompareLeftId] = useState(props.revisions[0]?.id || '')
@@ -134,6 +156,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const compareLeft = useMemo(() => props.revisions.find((item) => item.id === compareLeftId) || null, [props.revisions, compareLeftId])
   const compareRight = useMemo(() => props.revisions.find((item) => item.id === compareRightId) || null, [props.revisions, compareRightId])
   const nextStep = recommendation(props.gateStatus)
+  const disagreementAside = creativeDisagreementAside(props, compareLeftId, compareRightId, props.revisionCount)
 
   const heroMedia = props.heroVideoUrl || selectedRevision?.outputUrl || ''
   const heroImage = props.heroPreviewUrl || selectedRevision?.previewUrl || ''
@@ -182,6 +205,11 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
           <div className="text-[11px] uppercase tracking-[0.16em] text-cyan-200">Co-Director Notes</div>
           <p className="mt-2 text-sm text-zinc-200">{creativeRead(props)}</p>
           <p className="mt-2 text-sm text-zinc-200">Why this shot matters: {whyThisShotMatters(props)}</p>
+          {disagreementAside ? (
+            <p className="mt-2 text-xs text-zinc-400" data-testid="creative-disagreement-aside">
+              {disagreementAside}
+            </p>
+          ) : null}
           <div className="mt-3 text-sm text-zinc-300">{props.decisionGate?.recommended_next_action || nextStep.message}</div>
           <div className="mt-4 flex flex-wrap gap-2 text-xs">
             <Link className="rounded-md border border-cyan-400/45 bg-cyan-500/15 px-3 py-1.5 text-cyan-100 no-underline" to={toRoomUrl('/studio/previs', props.projectId)}>Open Previs</Link>
