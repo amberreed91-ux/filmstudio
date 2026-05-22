@@ -57,3 +57,19 @@ Moments users emotionally remember are the product moat.
 - Required signals: memory records, continuity/style drift, decision gate state, director signature, review/package readiness.
 - Difficulty: low.
 - Demo value: very high.
+
+## 9. "I can steer the interpretation without changing the cut"
+- Trigger: user switches Revision Emphasis between `Emotional Residue` and `Structural Clarity`.
+- User emotion: authorship and collaboration; the Studio responds to creative framing, not just system state.
+- Required signals: revision comparison context, continuity/style drift, memory records, gate state.
+- Difficulty: low.
+- Demo value: very high.
+
+## Taste Memory Bridge Note
+- This moment is intentionally non-persistent today.
+- It establishes the interaction pattern that can later inform taste memory:
+  - preference selections
+  - accepted tradeoffs
+  - ignored disagreements
+  - revision-choice behavior
+- Do not add scoring, persistence, or auto-rewrite behavior in this phase.

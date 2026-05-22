@@ -65,6 +65,25 @@ This roadmap intentionally extends the current green demo state without backend 
 - Smallest implementation: Reframe disagreement into "Option A vs B" with tradeoff language.
 - Do not overengineer: No autonomous arbitration loop.
 
+### Current shipped baseline
+- Revision Emphasis toggle in Screening comparison:
+  - `Emotional Residue`
+  - `Structural Clarity`
+- Selective disagreement aside is advisory-only and context-bound.
+
+### Taste Memory bridge (next phase, not implemented)
+- Capture preference tendencies from interaction patterns:
+  - selected emphasis during review decisions
+  - accepted vs ignored disagreement moments
+  - recurring revision-choice patterns
+- Keep this descriptive first; no scoring/ranking model yet.
+
+### Guardrails
+- no fake preference scoring
+- no persistence yet
+- no automated rewriting
+- no commentary spam
+
 ## 10. Film Identity Drift Detection
 - Problem: Film identity can erode across revisions without obvious warning.
 - Why users care: Brand/tone coherence is core to final quality.
