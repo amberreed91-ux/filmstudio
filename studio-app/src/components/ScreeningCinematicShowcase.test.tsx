@@ -104,12 +104,14 @@ describe('ScreeningCinematicShowcase', () => {
     expect(multiRevisionHtml).toContain('revision-emphasis-toggle')
     expect(multiRevisionHtml).toContain('Emotional Residue')
     expect(multiRevisionHtml).toContain('Structural Clarity')
+    expect(multiRevisionHtml).toContain('Emerging Taste Read')
 
     const singleRevisionHtml = renderComponent({
       revisionCount: 1,
       revisions: [{ id: 'a', label: 'Revision A', status: 'completed', runtimeSeconds: 12 }],
     })
     expect(singleRevisionHtml).not.toContain('revision-emphasis-toggle')
+    expect(singleRevisionHtml).not.toContain('Emerging Taste Read')
   })
 
   it('switches advisory interpretation with selected emphasis', () => {
@@ -121,6 +123,7 @@ describe('ScreeningCinematicShowcase', () => {
     expect(emotionalHtml).toContain('This emphasis preserves more emotional carryover between revisions.')
     expect(emotionalHtml).toContain('creative-disagreement-aside')
     expect(emotionalHtml).toContain('For this session, the Studio is reading this as a preference toward emotional residue.')
+    expect(emotionalHtml).toContain('For this session, the Studio is noticing a lean toward emotional residue.')
 
     const structuralHtml = renderComponent({
       continuityIssuesCount: 1,
@@ -131,6 +134,7 @@ describe('ScreeningCinematicShowcase', () => {
     expect(structuralHtml).toContain('Structural clarity improves pacing consistency')
     expect(structuralHtml).not.toContain('creative-disagreement-aside')
     expect(structuralHtml).toContain('For this session, the Studio is reading this as a preference toward structural clarity.')
+    expect(structuralHtml).toContain('Your current review posture favors structural clarity over lingering ambiguity.')
   })
 
   it('keeps disagreement copy human and free of scoring jargon', () => {
@@ -148,6 +152,29 @@ describe('ScreeningCinematicShowcase', () => {
     const html = renderComponent({ initialRevisionEmphasis: 'emotional_residue' })
     expect(html).toContain('For this session')
     expect(html).not.toContain('you always')
+  })
+
+  it('shows low-signal fallback taste read when evidence is thin', () => {
+    const html = renderComponent({
+      initialRevisionEmphasis: 'structural_clarity',
+      memoryRecordsCount: 0,
+      continuityIssuesCount: 0,
+      styleDriftIssuesCount: 0,
+      gateStatus: 'insufficient_data',
+    })
+    expect(html).toContain('Taste read is still emerging. The Studio needs more revision choices before saying more.')
+  })
+
+  it('keeps taste read free of permanent or scoring language', () => {
+    const html = renderComponent({
+      initialRevisionEmphasis: 'structural_clarity',
+      continuityIssuesCount: 1,
+      gateStatus: 'needs_review',
+    })
+    expect(html).not.toContain('always')
+    expect(html).not.toContain('score')
+    expect(html).not.toContain('percent')
+    expect(html).not.toContain('83%')
   })
 
   it('keeps project_id preserved in room links', () => {

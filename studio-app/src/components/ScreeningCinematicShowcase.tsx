@@ -130,6 +130,27 @@ function sessionTasteMemoryNote(emphasis: RevisionEmphasis): string {
   return 'For this session, the Studio is reading this as a preference toward emotional residue.'
 }
 
+function emergingTasteRead(
+  emphasis: RevisionEmphasis,
+  props: Pick<ScreeningCinematicShowcaseProps, 'gateStatus' | 'memoryRecordsCount' | 'continuityIssuesCount' | 'styleDriftIssuesCount'>,
+  disagreementVisible: boolean,
+): string {
+  const lowSignal = props.memoryRecordsCount < 2 || (props.continuityIssuesCount === 0 && props.styleDriftIssuesCount === 0 && !disagreementVisible)
+  if (lowSignal) {
+    return 'Taste read is still emerging. The Studio needs more revision choices before saying more.'
+  }
+  if (emphasis === 'structural_clarity') {
+    if (props.gateStatus === 'needs_review' || props.continuityIssuesCount > 0) {
+      return 'Your current review posture favors structural clarity over lingering ambiguity.'
+    }
+    return 'For this session, the Studio is noticing a lean toward structural clarity.'
+  }
+  if (disagreementVisible) {
+    return 'For this session, the Studio is noticing a lean toward emotional residue.'
+  }
+  return 'For this session, the Studio is reading this as a tentative preference toward emotional residue.'
+}
+
 function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'activeSceneId' | 'gateStatus' | 'memoryRecordsCount' | 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'hasDirectorSignature' | 'renderJobsCount' | 'reviewsCount' | 'packagesCount'>): string {
   const subject = props.activeSceneId ? `Scene ${props.activeSceneId}` : 'This cut'
   if (props.memoryRecordsCount < 1) {
@@ -187,6 +208,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const compareRight = useMemo(() => props.revisions.find((item) => item.id === compareRightId) || null, [props.revisions, compareRightId])
   const nextStep = recommendation(props.gateStatus)
   const disagreementAside = creativeDisagreementAside(props, compareLeftId, compareRightId, props.revisionCount, revisionEmphasis)
+  const tasteRead = emergingTasteRead(revisionEmphasis, props, Boolean(disagreementAside))
 
   const heroMedia = props.heroVideoUrl || selectedRevision?.outputUrl || ''
   const heroImage = props.heroPreviewUrl || selectedRevision?.previewUrl || ''
@@ -301,6 +323,10 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
             <p className="mt-2 text-[11px] text-zinc-500" data-testid="session-taste-memory-note">
               {sessionTasteMemoryNote(revisionEmphasis)}
             </p>
+            <div className="mt-2 rounded-md border border-white/10 bg-zinc-900/40 px-2 py-1.5" data-testid="emerging-taste-read">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Emerging Taste Read</div>
+              <p className="mt-1 text-[11px] text-zinc-400">{tasteRead}</p>
+            </div>
           </div>
         ) : null}
 
