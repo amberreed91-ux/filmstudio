@@ -75,9 +75,15 @@ curl -X POST http://127.0.0.1:8010/api/f51/studio/dev/seed-demo-project
   - `Structural Clarity`
 - Session Taste Memory note is shipped:
   - `For this session, the Studio is reading this as a preference toward ...`
+- Emerging Taste Read is shipped:
+  - non-persistent preview panel using current session signals only
+  - cautious copy such as: `Taste read is still emerging...`
 - No backend persistence is implemented yet.
 - This is intentionally session-only so we can validate creative UX safely before introducing preference storage behavior.
 - Warning: do not add persistent Taste Memory until explicit reset/forget UX is designed and shipped.
+
+### Demo talking point
+- The Studio can now preview the filmmaker’s emerging creative preference without storing it permanently.
 
 ### Why this is not a generic AI video generator
 - It is **workflow-native**, not just prompt-in/prompt-out.
