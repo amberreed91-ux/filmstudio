@@ -85,12 +85,20 @@ curl -X POST http://127.0.0.1:8010/api/f51/studio/dev/seed-demo-project
 ### Demo talking point
 - The Studio can now preview the filmmaker’s emerging creative preference without storing it permanently.
 
+### Crew Ops checkpoint
+- Crew Ops Production Pulse Board is shipped.
+- Crew Ops now presents a live operational pulse across Study, Previs, Production, and Screening handoff states.
+- Department cards preserve `project_id` links for guided movement through the pipeline.
+
 ### Why this is not a generic AI video generator
 - It is **workflow-native**, not just prompt-in/prompt-out.
 - It preserves **project continuity** across rooms and stages.
 - It includes **advisory intelligence** (co-director guidance, decision gate context, progression semantics).
 - It now explains **creative significance** per shot/cut, not only operational status.
 - It makes the user feel like they are operating a **film studio pipeline**, not a single render endpoint.
+
+### Full room loop path (final demo flow)
+- Lobby → Study → Previs → Production → Screening → Crew Ops
 
 ## Final Evidence
 
@@ -116,13 +124,14 @@ Browser smoke JSON:
 - `npm run build` → **success**
 
 ### Browser smoke
-- Study, Previs, Production, Screening cinematic elements verified.
+- Lobby, Study, Previs, Production, Screening, and Crew Ops cinematic elements verified.
 - No captured console/network hard failures in final smoke checks.
 
 ## What Works
 - Full seeded cinematic room flow is present and navigable.
 - Production and Screening present completed seeded outputs clearly.
 - Previs and Study demo guidance layers are visible for the seeded project.
+- Crew Ops Production Pulse Board is visible and linked to the same seeded project context.
 
 ## Still Rough (Known but acceptable for demo)
 - Bundle size warning in frontend build (`>500kB` chunks).
