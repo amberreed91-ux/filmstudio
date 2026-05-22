@@ -123,6 +123,13 @@ function revisionEmphasisGuidance(
   return 'The quieter pause can carry emotional tension once more visual evidence is available.'
 }
 
+function sessionTasteMemoryNote(emphasis: RevisionEmphasis): string {
+  if (emphasis === 'structural_clarity') {
+    return 'For this session, the Studio is reading this as a preference toward structural clarity.'
+  }
+  return 'For this session, the Studio is reading this as a preference toward emotional residue.'
+}
+
 function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'activeSceneId' | 'gateStatus' | 'memoryRecordsCount' | 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'hasDirectorSignature' | 'renderJobsCount' | 'reviewsCount' | 'packagesCount'>): string {
   const subject = props.activeSceneId ? `Scene ${props.activeSceneId}` : 'This cut'
   if (props.memoryRecordsCount < 1) {
@@ -291,6 +298,9 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                 Structural Clarity
               </button>
             </div>
+            <p className="mt-2 text-[11px] text-zinc-500" data-testid="session-taste-memory-note">
+              {sessionTasteMemoryNote(revisionEmphasis)}
+            </p>
           </div>
         ) : null}
 

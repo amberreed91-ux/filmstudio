@@ -120,6 +120,7 @@ describe('ScreeningCinematicShowcase', () => {
     })
     expect(emotionalHtml).toContain('This emphasis preserves more emotional carryover between revisions.')
     expect(emotionalHtml).toContain('creative-disagreement-aside')
+    expect(emotionalHtml).toContain('For this session, the Studio is reading this as a preference toward emotional residue.')
 
     const structuralHtml = renderComponent({
       continuityIssuesCount: 1,
@@ -129,6 +130,7 @@ describe('ScreeningCinematicShowcase', () => {
     })
     expect(structuralHtml).toContain('Structural clarity improves pacing consistency')
     expect(structuralHtml).not.toContain('creative-disagreement-aside')
+    expect(structuralHtml).toContain('For this session, the Studio is reading this as a preference toward structural clarity.')
   })
 
   it('keeps disagreement copy human and free of scoring jargon', () => {
@@ -140,6 +142,12 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).not.toContain('metric')
     expect(html).not.toContain('threshold')
     expect(html).not.toContain('objectively')
+  })
+
+  it('keeps session taste note advisory and non-permanent', () => {
+    const html = renderComponent({ initialRevisionEmphasis: 'emotional_residue' })
+    expect(html).toContain('For this session')
+    expect(html).not.toContain('you always')
   })
 
   it('keeps project_id preserved in room links', () => {
