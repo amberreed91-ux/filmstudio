@@ -53,14 +53,27 @@ curl -X POST http://127.0.0.1:8010/api/f51/studio/dev/seed-demo-project
 
 ### What each room proves
 - **Study Room**: The system understands the project state and can guide next actions.
-- **Previs Room**: Shot intent is translated into cinematic planning with confidence framing.
+- **Previs Room**: Shot intent is translated into cinematic planning with confidence framing and an emotional advisory line.
 - **Production Board**: Render execution is operationally visible (queue, status, readiness).
-- **Screening Room**: Outputs are reviewable in a polished cinematic presentation layer.
+- **Screening Room**: Outputs are reviewable in a polished cinematic presentation layer with creative rationale.
+
+### New emotional talking point
+- The Studio does not just track assets, it explains why a shot matters emotionally.
+- This appears in **Previs** and **Screening** as: `Why this shot matters: ...`
+- It proves:
+  - cinematic memory is being used in-context
+  - emotional context survives into review
+  - co-director guidance is actionable
+  - intelligence is creative and non-generic, not just workflow bookkeeping
+
+### Demo script line to call out live
+- Notice this line: Why this shot matters. This is where the Studio shifts from workflow tracker into creative collaborator.
 
 ### Why this is not a generic AI video generator
 - It is **workflow-native**, not just prompt-in/prompt-out.
 - It preserves **project continuity** across rooms and stages.
 - It includes **advisory intelligence** (co-director guidance, decision gate context, progression semantics).
+- It now explains **creative significance** per shot/cut, not only operational status.
 - It makes the user feel like they are operating a **film studio pipeline**, not a single render endpoint.
 
 ## Final Evidence

@@ -55,7 +55,7 @@ This roadmap intentionally extends the current green demo state without backend 
 - Problem: Shot cards explain what exists, not why it matters.
 - Why users care: Directors need intent clarity for decision speed.
 - Existing data: prompt packs, narrative progression, co-director notes.
-- Smallest implementation: Add one-sentence intent rationale per selected hero shot.
+- Smallest implementation: Add one-sentence intent rationale per selected hero shot/cut in Previs and Screening using existing loaded signals (memory count, continuity/style drift, gate state, director signature, review/package readiness).
 - Do not overengineer: Avoid long essay generation.
 
 ## 9. Creative Disagreement System

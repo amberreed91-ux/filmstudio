@@ -50,3 +50,10 @@ Moments users emotionally remember are the product moat.
 - Required signals: gate status + evidence counts + render/review state.
 - Difficulty: low.
 - Demo value: high.
+
+## 8. "It explained why this shot matters"
+- Trigger: user sees `Why this shot matters` in Previs and Screening for the selected shot/cut.
+- User emotion: creative trust; the system feels like a collaborator, not a tracker.
+- Required signals: memory records, continuity/style drift, decision gate state, director signature, review/package readiness.
+- Difficulty: low.
+- Demo value: very high.
