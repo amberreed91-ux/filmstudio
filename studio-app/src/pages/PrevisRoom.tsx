@@ -38,6 +38,7 @@ import { resolveVisualForSceneAndShot } from '../lib/previsVisualResolver'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import { mapContinuityIssuesToScene, summarizeContinuityIssues } from '../lib/continuityIntelligence'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
+import { resolveGenerateSceneShotId } from '../lib/shotGeneration'
 
 type AnyRecord = Record<string, unknown>
 type InterventionAction = 'increase_tension' | 'fix_continuity' | 'improve_flow' | 'improve_visuals' | 'regenerate_scene'
@@ -1604,7 +1605,12 @@ export default function PrevisRoom() {
       setUiFeedback('No active project loaded for generation.')
       return
     }
-    const targetShotId = selectedShot?.shotId || normalizedShots[0]?.shotId
+    const targetShotId = resolveGenerateSceneShotId({
+      selectedShotId: selectedShot?.shotId,
+      normalizedShotId: normalizedShots[0]?.shotId,
+      completedRenderShotIds: Array.from(completedRenderJobsByShot.keys()),
+      selectedSceneId: selectedSceneIdSafe,
+    })
     if (!targetShotId) {
       setUiFeedback('No shot is available for generation.')
       return
