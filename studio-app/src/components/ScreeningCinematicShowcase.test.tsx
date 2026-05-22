@@ -99,6 +99,38 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).toContain('This cut is cleaner, though it loses some emotional residue from the earlier version.')
   })
 
+  it('renders revision emphasis toggle only when comparison context is valid', () => {
+    const multiRevisionHtml = renderComponent({ revisionCount: 2 })
+    expect(multiRevisionHtml).toContain('revision-emphasis-toggle')
+    expect(multiRevisionHtml).toContain('Emotional Residue')
+    expect(multiRevisionHtml).toContain('Structural Clarity')
+
+    const singleRevisionHtml = renderComponent({
+      revisionCount: 1,
+      revisions: [{ id: 'a', label: 'Revision A', status: 'completed', runtimeSeconds: 12 }],
+    })
+    expect(singleRevisionHtml).not.toContain('revision-emphasis-toggle')
+  })
+
+  it('switches advisory interpretation with selected emphasis', () => {
+    const emotionalHtml = renderComponent({
+      continuityIssuesCount: 1,
+      gateStatus: 'needs_review',
+      initialRevisionEmphasis: 'emotional_residue',
+    })
+    expect(emotionalHtml).toContain('This emphasis preserves more emotional carryover between revisions.')
+    expect(emotionalHtml).toContain('creative-disagreement-aside')
+
+    const structuralHtml = renderComponent({
+      continuityIssuesCount: 1,
+      styleDriftIssuesCount: 0,
+      gateStatus: 'needs_review',
+      initialRevisionEmphasis: 'structural_clarity',
+    })
+    expect(structuralHtml).toContain('Structural clarity improves pacing consistency')
+    expect(structuralHtml).not.toContain('creative-disagreement-aside')
+  })
+
   it('keeps disagreement copy human and free of scoring jargon', () => {
     const html = renderComponent({
       continuityIssuesCount: 1,
@@ -108,5 +140,12 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).not.toContain('metric')
     expect(html).not.toContain('threshold')
     expect(html).not.toContain('objectively')
+  })
+
+  it('keeps project_id preserved in room links', () => {
+    const html = renderComponent()
+    expect(html).toContain('/studio/previs?project_id=demo_studio_cinematic_001')
+    expect(html).toContain('/studio/production-board?project_id=demo_studio_cinematic_001')
+    expect(html).toContain('/studio/screening-room?project_id=demo_studio_cinematic_001')
   })
 })

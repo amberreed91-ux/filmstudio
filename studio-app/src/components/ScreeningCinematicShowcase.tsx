@@ -13,6 +13,8 @@ type RevisionItem = {
   notes?: string
 }
 
+type RevisionEmphasis = 'emotional_residue' | 'structural_clarity'
+
 type ScreeningCinematicShowcaseProps = {
   projectId: string
   projectTitle: string
@@ -32,6 +34,7 @@ type ScreeningCinematicShowcaseProps = {
   memoryRecordsCount: number
   hasDirectorSignature: boolean
   revisions: RevisionItem[]
+  initialRevisionEmphasis?: RevisionEmphasis
   onApproveCut: () => void
   onRequestRevision: () => void
   onCompareRevision: () => void
@@ -108,6 +111,18 @@ function recommendation(gateStatus: string): { label: string; href: string; mess
   }
 }
 
+function revisionEmphasisGuidance(
+  emphasis: RevisionEmphasis,
+  props: Pick<ScreeningCinematicShowcaseProps, 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'memoryRecordsCount'>,
+): string {
+  if (emphasis === 'structural_clarity') {
+    if (props.continuityIssuesCount > 0) return 'Structural clarity improves pacing consistency, though continuity needs one more tightening pass.'
+    return 'Structural clarity improves pacing consistency and keeps the sequence easier to read.'
+  }
+  if (props.memoryRecordsCount > 0) return 'This emphasis preserves more emotional carryover between revisions.'
+  return 'The quieter pause can carry emotional tension once more visual evidence is available.'
+}
+
 function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'activeSceneId' | 'gateStatus' | 'memoryRecordsCount' | 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'hasDirectorSignature' | 'renderJobsCount' | 'reviewsCount' | 'packagesCount'>): string {
   const subject = props.activeSceneId ? `Scene ${props.activeSceneId}` : 'This cut'
   if (props.memoryRecordsCount < 1) {
@@ -127,6 +142,7 @@ function creativeDisagreementAside(
   compareLeftId: string,
   compareRightId: string,
   revisionCount: number,
+  emphasis: RevisionEmphasis,
 ): string | null {
   const hasComparisonContext = revisionCount > 1 && Boolean(compareLeftId) && Boolean(compareRightId) && compareLeftId !== compareRightId
   const hasTradeoffSignal = props.continuityIssuesCount > 0 || props.styleDriftIssuesCount > 0
@@ -135,19 +151,26 @@ function creativeDisagreementAside(
 
   if (!hasComparisonContext || !hasTradeoffSignal || !hasEnoughContext || !gateSuggestsNuance) return null
 
-  if (props.continuityIssuesCount > 0 && props.styleDriftIssuesCount > 0) {
+  if (props.continuityIssuesCount > 0 && props.styleDriftIssuesCount > 0 && emphasis === 'emotional_residue') {
     return 'This revision sharpens the sequence structurally, though the emotional transition feels slightly colder.'
   }
-  if (props.continuityIssuesCount > 0) {
+  if (props.continuityIssuesCount > 0 && emphasis === 'emotional_residue') {
     return 'This cut is cleaner, though it loses some emotional residue from the earlier version.'
   }
-  return 'Visual continuity is stronger now, though some intimacy from the earlier framing is reduced.'
+  if (props.styleDriftIssuesCount > 0 && emphasis === 'emotional_residue') {
+    return 'Visual continuity is stronger now, though some intimacy from the earlier framing is reduced.'
+  }
+  if (emphasis === 'structural_clarity' && props.continuityIssuesCount > 0 && props.styleDriftIssuesCount > 0) {
+    return 'The sequence reads cleaner, though the emotional handoff between beats remains delicate.'
+  }
+  return null
 }
 
 export default function ScreeningCinematicShowcase(props: ScreeningCinematicShowcaseProps) {
   const [selectedRevisionId, setSelectedRevisionId] = useState(props.revisions[0]?.id || '')
   const [compareLeftId, setCompareLeftId] = useState(props.revisions[0]?.id || '')
   const [compareRightId, setCompareRightId] = useState(props.revisions[1]?.id || props.revisions[0]?.id || '')
+  const [revisionEmphasis, setRevisionEmphasis] = useState<RevisionEmphasis>(props.initialRevisionEmphasis || 'emotional_residue')
 
   const selectedRevision = useMemo(
     () => props.revisions.find((item) => item.id === selectedRevisionId) || props.revisions[0] || null,
@@ -156,7 +179,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const compareLeft = useMemo(() => props.revisions.find((item) => item.id === compareLeftId) || null, [props.revisions, compareLeftId])
   const compareRight = useMemo(() => props.revisions.find((item) => item.id === compareRightId) || null, [props.revisions, compareRightId])
   const nextStep = recommendation(props.gateStatus)
-  const disagreementAside = creativeDisagreementAside(props, compareLeftId, compareRightId, props.revisionCount)
+  const disagreementAside = creativeDisagreementAside(props, compareLeftId, compareRightId, props.revisionCount, revisionEmphasis)
 
   const heroMedia = props.heroVideoUrl || selectedRevision?.outputUrl || ''
   const heroImage = props.heroPreviewUrl || selectedRevision?.previewUrl || ''
@@ -205,6 +228,9 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
           <div className="text-[11px] uppercase tracking-[0.16em] text-cyan-200">Co-Director Notes</div>
           <p className="mt-2 text-sm text-zinc-200">{creativeRead(props)}</p>
           <p className="mt-2 text-sm text-zinc-200">Why this shot matters: {whyThisShotMatters(props)}</p>
+          <p className="mt-2 text-xs text-zinc-400" data-testid="revision-emphasis-guidance">
+            {revisionEmphasisGuidance(revisionEmphasis, props)}
+          </p>
           {disagreementAside ? (
             <p className="mt-2 text-xs text-zinc-400" data-testid="creative-disagreement-aside">
               {disagreementAside}
@@ -246,6 +272,27 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
             Compare Revision
           </button>
         </div>
+        {props.revisions.length > 1 ? (
+          <div className="mt-3 rounded-lg border border-white/10 bg-black/25 p-2.5" data-testid="revision-emphasis-toggle">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Revision Emphasis</div>
+            <div className="mt-2 inline-flex rounded-md border border-zinc-700 bg-zinc-900/70 p-1">
+              <button
+                type="button"
+                onClick={() => setRevisionEmphasis('emotional_residue')}
+                className={`rounded px-2.5 py-1 text-[11px] ${revisionEmphasis === 'emotional_residue' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                Emotional Residue
+              </button>
+              <button
+                type="button"
+                onClick={() => setRevisionEmphasis('structural_clarity')}
+                className={`rounded px-2.5 py-1 text-[11px] ${revisionEmphasis === 'structural_clarity' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                Structural Clarity
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {props.revisions.length === 0 ? (
           <div className="mt-3 rounded-lg border border-dashed border-zinc-700 bg-black/30 px-3 py-6 text-center text-sm text-zinc-400">
