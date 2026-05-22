@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { RenderJob, StudioDecisionGate } from '../lib/studioApi'
+import type { ProviderStatus, RenderJob, StudioDecisionGate } from '../lib/studioApi'
+import { providerModeFromJob, providerTruthLabel } from '../lib/providerRuntime'
 
 type ProductionExecutionBayProps = {
   projectId: string
   projectTitle: string
   decisionGate: StudioDecisionGate | null
   renderJobs: RenderJob[]
+  providerStatuses?: ProviderStatus[]
   onRetryFailedRender?: () => void
 }
 
@@ -24,12 +26,12 @@ function providerLabel(provider: string): string {
   return provider.trim() || 'unknown-provider'
 }
 
-export default function ProductionExecutionBay({ projectId, projectTitle, decisionGate, renderJobs, onRetryFailedRender }: ProductionExecutionBayProps) {
+export default function ProductionExecutionBay({ projectId, projectTitle, decisionGate, renderJobs, providerStatuses = [], onRetryFailedRender }: ProductionExecutionBayProps) {
   const [selectedJobId, setSelectedJobId] = useState(renderJobs[0]?.id || '')
   const stats = useMemo(() => {
     const completed = renderJobs.filter((job) => {
       const status = normalizeStatus(job.status)
-      return status === 'completed' || status === 'success'
+      return status === 'completed' || status === 'complete' || status === 'success'
     })
     const running = renderJobs.filter((job) => ['running', 'processing', 'in_progress'].includes(normalizeStatus(job.status)))
     const failed = renderJobs.filter((job) => ['failed', 'error'].includes(normalizeStatus(job.status)))
@@ -45,6 +47,12 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
   const selectedJob = useMemo(() => {
     return renderJobs.find((job) => job.id === selectedJobId) || latestCompleted || renderJobs[0] || null
   }, [latestCompleted, renderJobs, selectedJobId])
+  const selectedProviderStatus = useMemo(() => {
+    if (!selectedJob) return providerStatuses[0] || null
+    const providerId = (selectedJob.provider || '').trim().toLowerCase()
+    return providerStatuses.find((provider) => provider.provider_id.trim().toLowerCase() === providerId) || null
+  }, [providerStatuses, selectedJob])
+  const selectedProviderMode = providerModeFromJob(selectedJob) || (selectedProviderStatus?.provider_mode || '')
 
   const opsNote = useMemo(() => {
     if (stats.failed.length > 0) return 'A failed render needs recovery before review.'
@@ -73,6 +81,7 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
           <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Gate status: <span className="text-zinc-100">{decisionGate?.gate_status || 'insufficient_data'}</span></div>
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Provider status: <span className="text-zinc-100">{selectedJob ? providerLabel(selectedJob.provider) : 'awaiting job'}</span></div>
+            <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Provider mode: <span className={selectedProviderMode === 'hosted_api' ? 'text-emerald-200' : 'text-amber-200'}>{providerTruthLabel(selectedProviderStatus)}</span></div>
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Readiness: <span className="text-zinc-100">{stats.completed.length > 0 ? 'ready for screening' : 'awaiting render output'}</span></div>
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Queue: <span className="text-zinc-100">{renderJobs.length} job(s)</span></div>
           </div>

@@ -39,6 +39,7 @@ import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProj
 import { mapContinuityIssuesToScene, summarizeContinuityIssues } from '../lib/continuityIntelligence'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
 import { resolveGenerateSceneShotId } from '../lib/shotGeneration'
+import { generateSceneOutcomeCopy, providerModeFromJob, providerModeFromStatus, providerTruthLabel } from '../lib/providerRuntime'
 
 type AnyRecord = Record<string, unknown>
 type InterventionAction = 'increase_tension' | 'fix_continuity' | 'improve_flow' | 'improve_visuals' | 'regenerate_scene'
@@ -1593,6 +1594,10 @@ export default function PrevisRoom() {
     void loadProviders()
   }, [loadProviders])
 
+  const activeProviderId = (project?.render_provider?.provider_name || providers[0]?.provider_id || 'runway').trim().toLowerCase()
+  const activeProviderStatus = providers.find((provider) => provider.provider_id.trim().toLowerCase() === activeProviderId) || providers[0] || null
+  const activeProviderMode = providerModeFromStatus(activeProviderStatus)
+
   async function handleDirectorGenerate(payload: {
     sceneGoal: string
     emotionalTone: string
@@ -1626,7 +1631,10 @@ export default function PrevisRoom() {
       ].join(' ')
       const job = await createJob(targetShotId, payload.provider, directionPrompt, [])
       const submitted = await submitJob(job.id)
-      setUiFeedback(`Director console queued ${submitted.id} on ${payload.provider}.`)
+      const submittedMode = providerModeFromJob(submitted) || providerModeFromStatus(
+        providers.find((provider) => provider.provider_id.trim().toLowerCase() === payload.provider.trim().toLowerCase()) || null,
+      )
+      setUiFeedback(`Director console queued ${submitted.id} on ${payload.provider}. ${generateSceneOutcomeCopy(submittedMode)}`)
       handleTopControlAction('regenerate_scene')
     } catch (error) {
       setUiFeedback(error instanceof Error ? error.message : 'Failed to generate scene.')
@@ -1957,6 +1965,9 @@ export default function PrevisRoom() {
               busy={isGeneratingScene}
               onGenerate={handleDirectorGenerate}
             />
+            <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
+              Provider mode: <span className={activeProviderMode === 'hosted_api' ? 'text-emerald-200' : 'text-amber-200'}>{providerTruthLabel(activeProviderStatus)}</span>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => handleTopControlAction('regenerate_scene')} className="rounded-md border border-zinc-500/40 bg-zinc-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-200">
                 Regenerate Scene

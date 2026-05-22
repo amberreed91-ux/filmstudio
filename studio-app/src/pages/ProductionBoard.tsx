@@ -83,7 +83,7 @@ export default function ProductionBoard() {
   const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
   const navigate = useNavigate()
-  const { project, loadProject } = useStudio()
+  const { project, loadProject, providers, loadProviders } = useStudio()
   const { activity } = useRenderActivity()
   const [editCutMode, setEditCutMode] = useState(false)
   const [exportMessage, setExportMessage] = useState('')
@@ -156,6 +156,10 @@ export default function ProductionBoard() {
       controller.abort()
     }
   }, [activeProjectId])
+
+  useEffect(() => {
+    void loadProviders()
+  }, [loadProviders])
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -549,6 +553,7 @@ export default function ProductionBoard() {
             projectTitle={project?.title || project?.project_id || 'Production Execution Mission'}
             decisionGate={decisionGate}
             renderJobs={renderJobs}
+            providerStatuses={providers}
             onRetryFailedRender={handleRetryFirstFailedRender}
           />
 

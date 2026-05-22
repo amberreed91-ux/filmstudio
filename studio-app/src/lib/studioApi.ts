@@ -942,10 +942,17 @@ export type ProviderConfig = {
 }
 
 export type ProviderStatus = {
+  provider_key?: string
   provider_id: string
   name: string
   status: string
   is_simulated: boolean
+  is_mock?: boolean
+  enabled?: boolean
+  ready_for_hosted_generation?: boolean
+  provider_mode?: 'mock_success' | 'hosted_api' | 'unavailable' | string
+  missing_requirements?: string[]
+  display_label?: string
   capabilities: string[]
   active_jobs: number
   queued_jobs: number

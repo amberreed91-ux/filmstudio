@@ -715,10 +715,17 @@ class ProviderConfig(BaseModel):
 
 
 class ProviderStatus(BaseModel):
+    provider_key: str = ""
     provider_id: str
     name: str
     status: str = "unavailable"
     is_simulated: bool = False
+    is_mock: bool = False
+    enabled: bool = False
+    ready_for_hosted_generation: bool = False
+    provider_mode: str = "unavailable"
+    missing_requirements: list[str] = []
+    display_label: str = ""
     capabilities: list[str] = []
     active_jobs: int = 0
     queued_jobs: int = 0

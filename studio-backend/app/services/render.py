@@ -175,29 +175,58 @@ class RenderService:
     def list_providers(self) -> list[ProviderStatus]:
         """List all available providers with status"""
         statuses = []
+        test_mode = str(os.getenv("RENDER_PROVIDER_TEST_MODE", "")).strip().lower()
         for provider_id, config in self._provider_configs.items():
-            adapter = get_adapter(provider_id, config)
-            # Use simulated status if real provider not enabled
-            if not config.enabled and not config.is_simulated:
-                statuses.append(ProviderStatus(
-                    provider_id=provider_id,
-                    name=config.name,
-                    status="disabled",
-                    is_simulated=config.is_simulated,
-                    capabilities=config.capabilities,
-                    active_jobs=0,
-                    queued_jobs=0
-                ))
+            missing_requirements: list[str] = []
+            if "api_key" in config.requires and not (config.api_key or "").strip():
+                missing_requirements.append("api_key")
+            if "api_endpoint" in config.requires and not (config.api_endpoint or "").strip():
+                missing_requirements.append("api_endpoint")
+
+            provider_mode = "hosted_api"
+            if provider_id == "runway" and test_mode == "mock_success":
+                provider_mode = "mock_success"
+            elif config.is_simulated:
+                provider_mode = "mock_success"
+            elif not config.enabled or missing_requirements:
+                provider_mode = "unavailable"
+
+            ready_for_hosted_generation = bool(
+                config.enabled
+                and not config.is_simulated
+                and not missing_requirements
+                and not (provider_id == "runway" and test_mode == "mock_success")
+            )
+            is_mock = provider_mode == "mock_success" or config.is_simulated
+
+            if provider_mode == "mock_success":
+                display_label = f"{config.name}: Mock Success Mode"
+            elif ready_for_hosted_generation:
+                display_label = f"{config.name}: Real provider mode active"
+            elif missing_requirements:
+                joined = ", ".join(missing_requirements)
+                display_label = f"{config.name}: hosted unavailable ({joined} required)"
+            elif not config.enabled:
+                display_label = f"{config.name}: disabled"
             else:
-                statuses.append(ProviderStatus(
-                    provider_id=provider_id,
-                    name=config.name,
-                    status="available" if config.enabled else "disabled",
-                    is_simulated=config.is_simulated,
-                    capabilities=config.capabilities,
-                    active_jobs=0,
-                    queued_jobs=0
-                ))
+                display_label = f"{config.name}: unavailable"
+
+            statuses.append(ProviderStatus(
+                provider_key=provider_id,
+                provider_id=provider_id,
+                name=config.name,
+                status="available" if config.enabled else "disabled",
+                is_simulated=config.is_simulated,
+                is_mock=is_mock,
+                enabled=config.enabled,
+                ready_for_hosted_generation=ready_for_hosted_generation,
+                provider_mode=provider_mode,
+                missing_requirements=missing_requirements,
+                display_label=display_label,
+                capabilities=config.capabilities,
+                active_jobs=0,
+                queued_jobs=0
+            ))
         return statuses
 
     def get_provider_config(self, provider_id: str) -> Optional[ProviderConfig]:

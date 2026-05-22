@@ -74,6 +74,45 @@ describe('ProductionExecutionBay', () => {
     expect(html).toContain('Retry Failed Render')
   })
 
+  it('labels mock provider mode honestly', () => {
+    const html = renderBay({
+      providerStatuses: [
+        {
+          provider_id: 'runway',
+          name: 'Runway',
+          status: 'available',
+          is_simulated: false,
+          capabilities: ['video_generation'],
+          active_jobs: 0,
+          queued_jobs: 0,
+          provider_mode: 'mock_success',
+          display_label: 'Runway: Mock Success Mode',
+        },
+      ],
+      renderJobs: [
+        {
+          id: 'job-mock',
+          project_id: 'demo_studio_cinematic_001',
+          shot_id: 'scene_001_shot_001',
+          provider: 'runway',
+          status: 'complete',
+          progress: 100,
+          retry_count: 0,
+          created_at: '2026-05-21T00:00:00Z',
+          updated_at: '2026-05-21T00:00:00Z',
+          output_payload: {
+            asset_url: '/outputs/mock-video/sample.mp4',
+            metadata: {
+              provider_response_normalized: { metadata: { provider_mode: 'mock_success' } },
+            },
+          },
+        },
+      ],
+    })
+    expect(html).toContain('Provider mode:')
+    expect(html).toContain('Mock Success Mode')
+  })
+
   it('preserves project id in CTAs', () => {
     const html = renderBay({
       projectId: 'proj_123',
