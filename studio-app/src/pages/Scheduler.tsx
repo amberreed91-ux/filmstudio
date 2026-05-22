@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import StudioShell from '../components/StudioShell'
 import CrewOpsDashboard from '../components/CrewOpsDashboard'
+import CrewOpsPulseBoard from '../components/CrewOpsPulseBoard'
 import DecisionGateCard from '../components/DecisionGateCard'
 import { useStudio } from '../context/StudioContext'
 import {
@@ -284,6 +285,18 @@ export default function Scheduler() {
     <StudioShell title="Crew Ops" subtitle="Operational truth across rendering, review, revision, and package stages.">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 text-zinc-100 sm:px-6 lg:px-8">
         <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
+        <section className="mt-4">
+          <CrewOpsPulseBoard
+            projectId={activeProjectId}
+            decisionGate={decisionGate}
+            renderJobsCount={jobs.length}
+            reviewsCount={reviews.length}
+            packagesCount={packages.length}
+            memoryRecordCount={cinematicMemory.length}
+            continuityIssueCount={continuityIssues.length}
+            styleDriftIssueCount={styleDriftIssues.length}
+          />
+        </section>
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
           <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">Production Pipeline</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
