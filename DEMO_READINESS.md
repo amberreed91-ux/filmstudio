@@ -69,6 +69,16 @@ curl -X POST http://127.0.0.1:8010/api/f51/studio/dev/seed-demo-project
 ### Demo script line to call out live
 - Notice this line: Why this shot matters. This is where the Studio shifts from workflow tracker into creative collaborator.
 
+### Emotional taste checkpoint (session-only)
+- Revision Emphasis toggle is shipped in Screening comparison:
+  - `Emotional Residue`
+  - `Structural Clarity`
+- Session Taste Memory note is shipped:
+  - `For this session, the Studio is reading this as a preference toward ...`
+- No backend persistence is implemented yet.
+- This is intentionally session-only so we can validate creative UX safely before introducing preference storage behavior.
+- Warning: do not add persistent Taste Memory until explicit reset/forget UX is designed and shipped.
+
 ### Why this is not a generic AI video generator
 - It is **workflow-native**, not just prompt-in/prompt-out.
 - It preserves **project continuity** across rooms and stages.
@@ -93,10 +103,10 @@ Browser smoke JSON:
 ## Validation Status
 
 ### Backend
-- `python -m pytest -q` → **1719 passed, 0 failed**
+- `python -m pytest -q` → **1719 passed, 0 failed** (runtime warning only)
 
 ### Frontend
-- `npm test -- --no-coverage` → **266 passed, 0 failed**
+- `npm test -- --no-coverage` → **274 passed, 0 failed**
 - `npm run build` → **success**
 
 ### Browser smoke
