@@ -330,6 +330,12 @@ def test_create_package_from_completed_renders_multi_clip_creates_manifest(tmp_p
     service = _make_service(storage)
     service._render_service = MockRenderService()
 
+    service._stitch_hosted_clips = lambda project_id, clips: {  # type: ignore[assignment]
+        "status": "failed",
+        "blocker": "stitch_failed",
+        "error_message": "ffmpeg failed in test",
+    }
+
     package = service.create_package_from_completed_renders(
         project_id="project-1",
         film_title="Manifest Final",
@@ -340,7 +346,9 @@ def test_create_package_from_completed_renders_multi_clip_creates_manifest(tmp_p
     assert package.metadata.get("assembly_kind") == "assembled_manifest"
     assert package.metadata.get("stitched_video_available") is False
     assert package.metadata.get("clip_count") == 2
-    assert package.metadata.get("source_render_job_ids") == ["job-2", "job-1"]
+    assert package.metadata.get("source_render_job_ids") == ["job-1", "job-2"]
+    assert package.metadata.get("stitch_status") == "failed"
+    assert package.metadata.get("stitch_error") == "ffmpeg failed in test"
 
 
 def test_create_package_from_completed_renders_requires_completed_outputs(tmp_path: Path):
@@ -379,6 +387,59 @@ def test_create_package_from_completed_renders_requires_completed_outputs(tmp_pa
         assert False, "Expected ValueError when completed render outputs are missing"
     except ValueError as exc:
         assert "No completed render outputs" in str(exc)
+
+
+def test_create_package_from_completed_renders_multi_clip_creates_stitched_film(tmp_path: Path):
+    storage = _make_storage(tmp_path)
+
+    class MockOutput:
+        def __init__(self, asset_url: str):
+            self.asset_url = asset_url
+            self.thumbnail_url = ""
+            self.metadata = {"provider_mode": "hosted_api"}
+
+    class MockRenderJob:
+        def __init__(self, job_id: str, output_url: str, completed_at: str):
+            self.id = job_id
+            self.project_id = "project-1"
+            self.shot_id = "scene_001_shot_001"
+            self.provider = "runway"
+            self.status = "complete"
+            self.output_payload = MockOutput(output_url)
+            self.created_at = completed_at
+            self.updated_at = completed_at
+            self.completed_at = completed_at
+
+    class MockRenderService:
+        def list_jobs(self, project_id: str):
+            return [
+                MockRenderJob("job-1", "https://cdn.example.com/scene-1.mp4", "2026-01-01T00:00:00Z"),
+                MockRenderJob("job-2", "https://cdn.example.com/scene-2.mp4", "2026-01-01T00:00:01Z"),
+            ]
+
+    service = _make_service(storage)
+    service._render_service = MockRenderService()
+    service._outputs_root = tmp_path / "outputs"
+
+    stitched = service._outputs_root / "final_films" / "project-1_20260101000000.mp4"
+    stitched.parent.mkdir(parents=True, exist_ok=True)
+    stitched.write_text("dummy video content")
+
+    service._stitch_hosted_clips = lambda project_id, clips: {  # type: ignore[assignment]
+        "status": "completed",
+        "output_path": str(stitched),
+        "output_url": "/outputs/final_films/project-1_20260101000000.mp4",
+    }
+
+    package = service.create_package_from_completed_renders(
+        project_id="project-1",
+        film_title="Stitched Final",
+    )
+
+    assert package.metadata.get("assembly_kind") == "stitched_film"
+    assert package.metadata.get("stitch_status") == "completed"
+    assert package.final_output_url == "/outputs/final_films/project-1_20260101000000.mp4"
+    assert package.metadata.get("clip_count") == 2
 
 
 def test_create_package_from_completed_renders_falls_back_to_execution_summary(tmp_path: Path, monkeypatch):

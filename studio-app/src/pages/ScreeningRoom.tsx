@@ -846,15 +846,19 @@ export default function ScreeningRoom() {
     ? normalizePlayableVideoUrl(firstVideoAssetByScene.get(activeScene.scene_id)?.video_url || '')
     : ''
   const primarySceneMedia = useMemo(() => {
+    const stitchedPackageUrl =
+      latestPackage && String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film'
+        ? latestPackage.final_output_url || ''
+        : ''
     return selectPrimaryStudioMedia({
       renderJobs: mediaCandidateRenderJobs,
       sceneId: activeScene?.scene_id || '',
       shotId: activeRenderId,
-      packageUrl: latestPackage?.final_output_url || '',
+      packageUrl: stitchedPackageUrl,
       reviewUrl: '',
       keyframeUrl: fallbackSceneImage,
     })
-  }, [activeRenderId, activeScene?.scene_id, fallbackSceneImage, latestPackage?.final_output_url, mediaCandidateRenderJobs])
+  }, [activeRenderId, activeScene?.scene_id, fallbackSceneImage, latestPackage, mediaCandidateRenderJobs])
   const viewerImage = primarySceneMedia.kind === 'image' ? primarySceneMedia.url : fallbackSceneImage
   const activeSceneVideoUrl = primarySceneMedia.kind === 'video'
     ? normalizePlayableVideoUrl(primarySceneMedia.url)
@@ -876,6 +880,9 @@ export default function ScreeningRoom() {
     [audioAssetPlan, activeScene?.scene_id],
   )
   const activeRenderStatus = useMemo(() => {
+    if (primarySceneMedia.source === 'package' && String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film' && activeSceneVideoUrl) {
+      return { label: 'FINAL SHORT FILM', reason: 'Stitched final package output.' }
+    }
     if (activeSceneVideoUrl) {
       if (primarySceneMedia.source === 'hosted_render') {
         return { label: 'HOSTED RENDER', reason: activeScene ? 'Hosted provider output available.' : 'Hosted render preview available.' }
@@ -899,7 +906,7 @@ export default function ScreeningRoom() {
       return { label: 'NO OUTPUT', reason: fallbackReason ? `No playable output: ${fallbackReason}` : 'No playable output yet' }
     }
     return { label: 'LOCAL PREVIS', reason: '' }
-  }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene, primarySceneMedia.source])
+  }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene, latestPackage, primarySceneMedia.source])
   const revisionTimeline = useMemo(() => {
     const fromJobs = mediaCandidateRenderJobs.map((job, index) => {
       const payload = asRecord(job.output_payload) || {}
@@ -1701,7 +1708,9 @@ export default function ScreeningRoom() {
                 <div className="rounded border border-white/10 bg-black/25 p-2">
                   <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Stitched Film</div>
                   {latestPackage?.final_output_url && !String(latestPackage?.metadata?.assembly_kind || '').includes('manifest') ? (
-                    <a href={latestPackage.final_output_url} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] text-cyan-300 break-all">Open latest packaged output</a>
+                    <a href={latestPackage.final_output_url} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] text-cyan-300 break-all">
+                      {String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film' ? 'Open final stitched film' : 'Open latest packaged output'}
+                    </a>
                   ) : <div className="mt-1 text-[11px] text-zinc-300">No stitched film available yet.</div>}
                 </div>
                 <div className="rounded border border-white/10 bg-black/25 p-2">
@@ -1710,6 +1719,7 @@ export default function ScreeningRoom() {
                     <div className="mt-1 text-[11px] text-zinc-200">
                       status: {latestPackage.package_status}
                       {String(latestPackage?.metadata?.assembly_kind || '') === 'assembled_manifest' ? ' · manifest assembled' : ''}
+                      {String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film' ? ' · stitched film ready' : ''}
                     </div>
                   ) : <div className="mt-1 text-[11px] text-zinc-300">No final package yet.</div>}
                 </div>

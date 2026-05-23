@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pathlib import Path
+from urllib.parse import urlparse
 
 from app.models import FinalShortFilmPackage
+from app.services.short_film_stitching_service import short_film_stitching_service
 
 
 class FinalShortFilmPackageService:
@@ -177,7 +180,13 @@ class FinalShortFilmPackageService:
                 if status != "complete":
                     continue
                 output_payload = getattr(job, "output_payload", None)
-                output_url = str(getattr(output_payload, "asset_url", "") or "").strip()
+                raw_job = job.model_dump() if hasattr(job, "model_dump") else {}
+                top_level_output_url = str(raw_job.get("output_url") or "") if isinstance(raw_job, dict) else ""
+                output_url = str(
+                    top_level_output_url
+                    or getattr(output_payload, "asset_url", "")
+                    or ""
+                ).strip()
                 if not output_url:
                     continue
                 metadata = getattr(output_payload, "metadata", {}) or {}
@@ -197,40 +206,72 @@ class FinalShortFilmPackageService:
                     }
                 )
 
-        if not clips:
-            try:
-                from app.services.project_store import project_store
+        try:
+            from app.services.project_store import project_store
 
-                project = project_store.get_project(project_id) or {}
-                summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
-                summary_jobs = summary.get("one_button_render_jobs") if isinstance(summary.get("one_button_render_jobs"), list) else []
-                for row in summary_jobs:
-                    if not isinstance(row, dict):
-                        continue
-                    status = str(row.get("status") or "").strip().lower()
-                    output_url = str(row.get("output_url") or "").strip()
-                    if status != "complete" or not output_url:
-                        continue
-                    clips.append(
-                        {
-                            "job_id": str(row.get("job_id") or row.get("id") or "").strip(),
-                            "shot_id": str(row.get("shot_id") or "").strip(),
-                            "provider": str(row.get("provider") or "").strip(),
-                            "provider_mode": str(row.get("provider_mode") or "").strip().lower(),
-                            "output_url": output_url,
-                            "created_at": str(row.get("created_at") or "").strip(),
-                            "updated_at": str(row.get("updated_at") or "").strip(),
-                            "completed_at": str(row.get("completed_at") or "").strip(),
-                        }
-                    )
-            except Exception:
-                pass
+            project = project_store.get_project(project_id) or {}
+            summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+            summary_jobs = summary.get("one_button_render_jobs") if isinstance(summary.get("one_button_render_jobs"), list) else []
+            for row in summary_jobs:
+                if not isinstance(row, dict):
+                    continue
+                status = str(row.get("status") or "").strip().lower()
+                output_url = str(row.get("output_url") or "").strip()
+                if status != "complete" or not output_url:
+                    continue
+                clips.append(
+                    {
+                        "job_id": str(row.get("job_id") or row.get("id") or "").strip(),
+                        "shot_id": str(row.get("shot_id") or "").strip(),
+                        "provider": str(row.get("provider") or "").strip(),
+                        "provider_mode": str(row.get("provider_mode") or "").strip().lower(),
+                        "output_url": output_url,
+                        "created_at": str(row.get("created_at") or "").strip(),
+                        "updated_at": str(row.get("updated_at") or "").strip(),
+                        "completed_at": str(row.get("completed_at") or "").strip(),
+                    }
+                )
+        except Exception:
+            pass
 
         def _sort_key(row: Dict[str, Any]) -> str:
             return str(row.get("completed_at") or row.get("updated_at") or row.get("created_at") or "")
 
         clips.sort(key=_sort_key, reverse=True)
         return clips
+
+    @staticmethod
+    def _clip_sort_key(row: Dict[str, Any]) -> str:
+        return str(row.get("completed_at") or row.get("updated_at") or row.get("created_at") or "")
+
+    def _stitch_hosted_clips(self, project_id: str, clips: List[Dict[str, Any]]) -> Dict[str, Any]:
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        output_path = self._outputs_root / "final_films" / f"{project_id}_{timestamp}.mp4"
+        with tempfile.TemporaryDirectory(prefix=f"final_pkg_{project_id}_") as temp_dir:
+            work_dir = Path(temp_dir)
+            try:
+                clip_paths = short_film_stitching_service.download_or_stream_clips_safely(clips, work_dir)
+            except Exception as exc:
+                return {"status": "failed", "blocker": "clip_download_failed", "error_message": str(exc)}
+
+            if len(clip_paths) < 2:
+                return {"status": "failed", "blocker": "insufficient_clip_files", "error_message": "Need at least two clip files to stitch"}
+
+            concat_list = short_film_stitching_service.build_ffmpeg_concat_list(clip_paths, work_dir)
+            stitch_result = short_film_stitching_service.stitch_clips(concat_list, output_path, transcode=False)
+            if stitch_result.get("status") != "completed":
+                return stitch_result
+
+        validation = short_film_stitching_service.validate_output_file(output_path)
+        if not validation.get("valid"):
+            return {"status": "failed", "blocker": validation.get("blocker") or "output_invalid", "error_message": "Stitched output validation failed"}
+
+        return {
+            "status": "completed",
+            "output_path": str(output_path),
+            "output_url": f"/outputs/final_films/{output_path.name}",
+            "size_bytes": validation.get("size_bytes"),
+        }
 
     def create_package_from_completed_renders(
         self,
@@ -247,11 +288,24 @@ class FinalShortFilmPackageService:
             raise ValueError("No completed render outputs available for package assembly")
 
         provided_metadata = dict(metadata or {})
-        hosted_clips = [clip for clip in clips if clip.get("provider_mode") == "hosted_api"]
-        preferred_clips = hosted_clips or clips
-        latest_clip = preferred_clips[0]
+        stitch_warnings: List[str] = []
+        def _is_hosted_clip(clip: Dict[str, Any]) -> bool:
+            if str(clip.get("provider_mode") or "").strip().lower() == "hosted_api":
+                return True
+            url = str(clip.get("output_url") or "").strip()
+            if not url:
+                return False
+            parsed = urlparse(url)
+            if parsed.scheme in {"http", "https"} and parsed.netloc and "storage.example.com" not in parsed.netloc:
+                return True
+            return False
 
-        if len(preferred_clips) == 1:
+        hosted_clips = [clip for clip in clips if _is_hosted_clip(clip)]
+        preferred_clips = hosted_clips or clips
+        ordered_preferred = sorted(preferred_clips, key=self._clip_sort_key)
+        latest_clip = ordered_preferred[-1]
+
+        if len(ordered_preferred) == 1:
             assembly_kind = "single_scene_preview"
             final_output_url = str(latest_clip.get("output_url") or "").strip()
             assembly_metadata = {
@@ -260,19 +314,51 @@ class FinalShortFilmPackageService:
                 "clip_count": 1,
                 "source_render_job_ids": [latest_clip.get("job_id", "")],
                 "clip_urls": [final_output_url],
+                "stitch_status": "not_required",
             }
+        elif len(hosted_clips) >= 2:
+            ordered_hosted = sorted(hosted_clips, key=self._clip_sort_key)
+            stitch_result = self._stitch_hosted_clips(project_id=project_id, clips=ordered_hosted)
+            if stitch_result.get("status") == "completed":
+                assembly_kind = "stitched_film"
+                final_output_url = str(stitch_result.get("output_url") or "").strip()
+                assembly_metadata = {
+                    "assembly_kind": assembly_kind,
+                    "stitched_video_available": True,
+                    "clip_count": len(ordered_hosted),
+                    "source_render_job_ids": [str(row.get("job_id") or "") for row in ordered_hosted],
+                    "clip_urls": [str(row.get("output_url") or "") for row in ordered_hosted],
+                    "stitch_status": "completed",
+                    "stitched_output_path": str(stitch_result.get("output_path") or ""),
+                }
+            else:
+                stitch_warnings.append(str(stitch_result.get("error_message") or stitch_result.get("blocker") or "stitch_failed"))
+                assembly_kind = "assembled_manifest"
+                final_output_url = f"manifest://{project_id}/latest"
+                assembly_metadata = {
+                    "assembly_kind": assembly_kind,
+                    "stitched_video_available": False,
+                    "clip_count": len(ordered_hosted),
+                    "source_render_job_ids": [str(row.get("job_id") or "") for row in ordered_hosted],
+                    "clip_urls": [str(row.get("output_url") or "") for row in ordered_hosted],
+                    "stitch_status": "failed",
+                    "stitch_error": str(stitch_result.get("error_message") or stitch_result.get("blocker") or "stitch_failed"),
+                }
         else:
             assembly_kind = "assembled_manifest"
             final_output_url = f"manifest://{project_id}/latest"
             assembly_metadata = {
                 "assembly_kind": assembly_kind,
                 "stitched_video_available": False,
-                "clip_count": len(preferred_clips),
-                "source_render_job_ids": [str(row.get("job_id") or "") for row in preferred_clips],
-                "clip_urls": [str(row.get("output_url") or "") for row in preferred_clips],
+                "clip_count": len(ordered_preferred),
+                "source_render_job_ids": [str(row.get("job_id") or "") for row in ordered_preferred],
+                "clip_urls": [str(row.get("output_url") or "") for row in ordered_preferred],
+                "stitch_status": "skipped_not_hosted",
             }
 
         merged_metadata = {**provided_metadata, **assembly_metadata}
+        if stitch_warnings:
+            merged_metadata["warnings"] = stitch_warnings
         package = self.create_package_from_project(
             project_id=project_id,
             film_title=film_title,
