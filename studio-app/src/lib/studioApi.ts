@@ -1634,6 +1634,22 @@ export type TimelineFlowAnalysis = {
   low_data_reason?: string
 }
 
+export type EditorialRevisionComparison = {
+  project_id: string
+  baseline_revision_id: string
+  comparison_revision_id: string
+  baseline_summary: Record<string, unknown>
+  comparison_summary: Record<string, unknown>
+  pacing_tradeoff: string
+  escalation_tradeoff: string
+  emotional_residue_tradeoff: string
+  tonal_consistency_tradeoff: string
+  structural_clarity_tradeoff: string
+  strongest_difference: string
+  advisory_notes: string[]
+  uncertainty_note?: string
+}
+
 function isStudioDecisionGateShape(value: unknown): value is StudioDecisionGate {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const row = value as Record<string, unknown>
@@ -2182,6 +2198,26 @@ export async function getProjectDecisionGate(projectId: string, init?: RequestIn
 export async function getTimelineIntelligence(projectId: string, init?: RequestInit): Promise<TimelineFlowAnalysis> {
   return fetchJson<TimelineFlowAnalysis>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/timeline-intelligence`,
+    init,
+  )
+}
+
+export async function getEditorialRevisionIntelligence(
+  projectId: string,
+  options: {
+    baselineRevisionId?: string
+    comparisonRevisionId?: string
+    revisionEmphasis?: string
+  } = {},
+  init?: RequestInit,
+): Promise<EditorialRevisionComparison> {
+  const params = new URLSearchParams()
+  if (options.baselineRevisionId) params.set('baseline_revision_id', options.baselineRevisionId)
+  if (options.comparisonRevisionId) params.set('comparison_revision_id', options.comparisonRevisionId)
+  if (options.revisionEmphasis) params.set('revision_emphasis', options.revisionEmphasis)
+  const query = params.toString()
+  return fetchJson<EditorialRevisionComparison>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-revision-intelligence${query ? `?${query}` : ''}`,
     init,
   )
 }

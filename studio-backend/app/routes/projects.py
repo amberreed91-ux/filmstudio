@@ -39,6 +39,7 @@ from app.services.style_intelligence_service import style_intelligence_service
 from app.services.video_understanding_status_service import video_understanding_status_service
 from app.services.demo_seed_service import demo_seed_service
 from app.services.cinematic_timeline_intelligence_service import cinematic_timeline_intelligence_service
+from app.services.editorial_revision_intelligence_service import editorial_revision_intelligence_service
 from app.services.stability import (
     PlaybackError,
     PersistenceError,
@@ -204,6 +205,8 @@ if video_metadata_matching_service._video_asset_service is None:
     video_metadata_matching_service._video_asset_service = video_asset_service
 if cinematic_timeline_intelligence_service._storage is None:
     cinematic_timeline_intelligence_service._storage = get_storage("sqlite")
+if editorial_revision_intelligence_service._storage is None:
+    editorial_revision_intelligence_service._storage = get_storage("sqlite")
 
 router = APIRouter(prefix="/api/f51/studio", tags=["project-persistence"])
 
@@ -1195,6 +1198,23 @@ def get_project_timeline_intelligence(project_id: str):
     if not _project_exists(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     return cinematic_timeline_intelligence_service.analyze_project_timeline(project_id)
+
+
+@router.get("/projects/{project_id}/editorial-revision-intelligence")
+def get_editorial_revision_intelligence(
+    project_id: str,
+    baseline_revision_id: str = "",
+    comparison_revision_id: str = "",
+    revision_emphasis: str = "",
+):
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return editorial_revision_intelligence_service.compare_revisions(
+        project_id=project_id,
+        baseline_revision_id=baseline_revision_id,
+        comparison_revision_id=comparison_revision_id,
+        revision_emphasis=revision_emphasis,
+    )
 
 
 @router.post("/projects/{project_id}/build-director-signature")

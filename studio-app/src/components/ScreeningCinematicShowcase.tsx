@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { StudioDecisionGate } from '../lib/studioApi'
+import ScreeningEditorialComparisonPanel from './ScreeningEditorialComparisonPanel'
 
 type RevisionItem = {
   id: string
@@ -329,6 +330,13 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
             </div>
           </div>
         ) : null}
+        <ScreeningEditorialComparisonPanel
+          projectId={props.projectId}
+          baselineRevisionId={compareLeftId}
+          comparisonRevisionId={compareRightId}
+          revisionEmphasis={revisionEmphasis}
+          revisionCount={props.revisionCount}
+        />
 
         {props.revisions.length === 0 ? (
           <div className="mt-3 rounded-lg border border-dashed border-zinc-700 bg-black/30 px-3 py-6 text-center text-sm text-zinc-400">

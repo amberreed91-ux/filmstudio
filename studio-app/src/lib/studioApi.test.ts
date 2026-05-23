@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createClipRevision,
+  getEditorialRevisionIntelligence,
   getTimelineIntelligence,
   getProjectDecisionGate,
   getStudioProject,
@@ -122,6 +123,47 @@ describe('getTimelineIntelligence', () => {
 
     const [url] = fetchMock.mock.calls[0]
     expect(String(url)).toContain('/api/f51/studio/projects/proj-timeline/timeline-intelligence')
+  })
+})
+
+describe('getEditorialRevisionIntelligence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('calls editorial revision intelligence endpoint with revision ids and emphasis', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          project_id: 'proj-edit',
+          baseline_revision_id: 'rev-a',
+          comparison_revision_id: 'rev-b',
+          baseline_summary: {},
+          comparison_summary: {},
+          pacing_tradeoff: 'x',
+          escalation_tradeoff: 'x',
+          emotional_residue_tradeoff: 'x',
+          tonal_consistency_tradeoff: 'x',
+          structural_clarity_tradeoff: 'x',
+          strongest_difference: 'x',
+          advisory_notes: [],
+        }),
+        { status: 200 },
+      ),
+    )
+
+    await getEditorialRevisionIntelligence('proj-edit', {
+      baselineRevisionId: 'rev-a',
+      comparisonRevisionId: 'rev-b',
+      revisionEmphasis: 'emotional_residue',
+    })
+
+    const [url] = fetchMock.mock.calls[0]
+    const urlText = String(url)
+    expect(urlText).toContain('/api/f51/studio/projects/proj-edit/editorial-revision-intelligence')
+    expect(urlText).toContain('baseline_revision_id=rev-a')
+    expect(urlText).toContain('comparison_revision_id=rev-b')
+    expect(urlText).toContain('revision_emphasis=emotional_residue')
   })
 })
 
