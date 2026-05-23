@@ -239,6 +239,49 @@ export function applyJournalPrompt(prompt: JournalPrompt): string {
   return `${prompt} `
 }
 
+export type CandidateMemory = {
+  id: string
+  note: string
+  inferredTradeoffAxis: 'emotional_residue' | 'structural_clarity'
+  sessionOrder: number
+}
+
+export function inferTradeoffAxisFromText(note: string): CandidateMemory['inferredTradeoffAxis'] {
+  const text = note.toLowerCase()
+  if (text.includes('clarity') || text.includes('structure') || text.includes('pacing')) {
+    return 'structural_clarity'
+  }
+  return 'emotional_residue'
+}
+
+export function markCandidateMemory(
+  currentCandidates: CandidateMemory[],
+  note: string,
+  fallbackAxis: CandidateMemory['inferredTradeoffAxis'],
+): CandidateMemory[] {
+  if (!note.trim()) return currentCandidates
+  const existing = currentCandidates.find((candidate) => candidate.note === note)
+  if (existing) return currentCandidates
+  const inferred = inferTradeoffAxisFromText(note)
+  return [
+    {
+      id: `candidate-${currentCandidates.length + 1}`,
+      note,
+      inferredTradeoffAxis: inferred || fallbackAxis,
+      sessionOrder: currentCandidates.length + 1,
+    },
+    ...currentCandidates,
+  ]
+}
+
+export function removeCandidateMemory(currentCandidates: CandidateMemory[], candidateId: string): CandidateMemory[] {
+  return currentCandidates.filter((candidate) => candidate.id !== candidateId)
+}
+
+export function clearCandidateMemories(): CandidateMemory[] {
+  return []
+}
+
 export default function ScreeningCinematicShowcase(props: ScreeningCinematicShowcaseProps) {
   const [selectedRevisionId, setSelectedRevisionId] = useState(props.revisions[0]?.id || '')
   const [compareLeftId, setCompareLeftId] = useState(props.revisions[0]?.id || '')
@@ -248,6 +291,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const [sessionTasteCleared, setSessionTasteCleared] = useState(Boolean(props.initialSessionTasteCleared))
   const [journalDraft, setJournalDraft] = useState('')
   const [journalNotes, setJournalNotes] = useState<string[]>([])
+  const [candidateMemories, setCandidateMemories] = useState<CandidateMemory[]>([])
 
   const selectedRevision = useMemo(
     () => props.revisions.find((item) => item.id === selectedRevisionId) || props.revisions[0] || null,
@@ -464,10 +508,50 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
               <p className="mt-2 text-[11px] text-zinc-500">This journal is session-only and not saved.</p>
               <div className="mt-2 space-y-1.5" data-testid="cut-decision-journal-notes">
                 {journalNotes.length > 0 ? journalNotes.map((note, index) => (
-                  <p key={`${index}-${note.slice(0, 16)}`} className="rounded border border-white/10 bg-zinc-900/50 px-2 py-1 text-[11px] text-zinc-300">{note}</p>
+                  <div key={`${index}-${note.slice(0, 16)}`} className="rounded border border-white/10 bg-zinc-900/50 px-2 py-1">
+                    <p className="text-[11px] text-zinc-300">{note}</p>
+                    <button
+                      type="button"
+                      onClick={() => setCandidateMemories((current) => markCandidateMemory(current, note, revisionEmphasis))}
+                      className="mt-1 rounded border border-fuchsia-400/40 bg-fuchsia-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-fuchsia-100"
+                    >
+                      Mark As Candidate Memory
+                    </button>
+                  </div>
                 )) : (
                   <p className="text-[11px] text-zinc-500">No session notes yet.</p>
                 )}
+              </div>
+              <div className="mt-3 rounded border border-white/10 bg-zinc-900/35 px-2 py-2" data-testid="candidate-project-memories">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Candidate Project Memories</div>
+                <p className="mt-1 text-[11px] text-zinc-500">Candidate memories are not saved permanently.</p>
+                <p className="text-[11px] text-zinc-500">The Studio is waiting for explicit save approval.</p>
+                <div className="mt-2 space-y-1.5">
+                  {candidateMemories.length > 0 ? candidateMemories.map((candidate) => (
+                    <div key={candidate.id} className="rounded border border-white/10 bg-zinc-900/60 px-2 py-1.5">
+                      <p className="text-[11px] text-zinc-200">{candidate.note}</p>
+                      <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        Axis: {candidate.inferredTradeoffAxis === 'emotional_residue' ? 'Emotional Residue' : 'Structural Clarity'} · Session #{candidate.sessionOrder}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setCandidateMemories((current) => removeCandidateMemory(current, candidate.id))}
+                        className="mt-1 rounded border border-zinc-600/80 bg-zinc-900/80 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200"
+                      >
+                        Remove Candidate
+                      </button>
+                    </div>
+                  )) : (
+                    <p className="text-[11px] text-zinc-500">No candidate memories marked yet.</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCandidateMemories(clearCandidateMemories())}
+                  className="mt-2 rounded border border-zinc-600/80 bg-zinc-900/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200"
+                >
+                  Clear All Candidates
+                </button>
               </div>
             </div>
           </div>

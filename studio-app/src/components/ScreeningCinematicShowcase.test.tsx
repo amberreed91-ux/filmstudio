@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import type { ComponentProps } from 'react'
-import ScreeningCinematicShowcase, { addJournalEntry, applyJournalPrompt, buildJournalEntry } from './ScreeningCinematicShowcase'
+import ScreeningCinematicShowcase, {
+  addJournalEntry,
+  applyJournalPrompt,
+  buildJournalEntry,
+  clearCandidateMemories,
+  markCandidateMemory,
+  removeCandidateMemory,
+} from './ScreeningCinematicShowcase'
 
 function renderComponent(props: Partial<ComponentProps<typeof ScreeningCinematicShowcase>> = {}) {
   return renderToStaticMarkup(
@@ -115,6 +122,10 @@ describe('ScreeningCinematicShowcase', () => {
     expect(multiRevisionHtml).toContain('Add Session Note')
     expect(multiRevisionHtml).toContain('Clear Notes')
     expect(multiRevisionHtml).toContain('No session notes yet.')
+    expect(multiRevisionHtml).toContain('Candidate Project Memories')
+    expect(multiRevisionHtml).toContain('Candidate memories are not saved permanently.')
+    expect(multiRevisionHtml).toContain('The Studio is waiting for explicit save approval.')
+    expect(multiRevisionHtml).toContain('Clear All Candidates')
 
     const singleRevisionHtml = renderComponent({
       revisionCount: 1,
@@ -247,9 +258,37 @@ describe('ScreeningCinematicShowcase', () => {
     expect(unchanged.notes).toEqual(['existing'])
   })
 
+  it('marks, removes, and clears candidate memories in session state only', () => {
+    const start = markCandidateMemory([], 'I chose emotional residue because the pause feels honest.', 'emotional_residue')
+    expect(start).toHaveLength(1)
+    expect(start[0].note).toContain('pause feels honest')
+    expect(start[0].inferredTradeoffAxis).toBe('emotional_residue')
+
+    const withStructural = markCandidateMemory(start, 'Structural clarity matters more for this version.', 'emotional_residue')
+    expect(withStructural).toHaveLength(2)
+    expect(withStructural[0].inferredTradeoffAxis).toBe('structural_clarity')
+
+    const deduped = markCandidateMemory(withStructural, 'Structural clarity matters more for this version.', 'structural_clarity')
+    expect(deduped).toHaveLength(2)
+
+    const removed = removeCandidateMemory(withStructural, withStructural[0].id)
+    expect(removed).toHaveLength(1)
+
+    expect(clearCandidateMemories()).toEqual([])
+  })
+
   it('applies quick prompt starter text', () => {
     expect(applyJournalPrompt('Why this cut?')).toBe('Why this cut? ')
     expect(applyJournalPrompt('What changed emotionally?')).toBe('What changed emotionally? ')
     expect(applyJournalPrompt('What should survive the next revision?')).toBe('What should survive the next revision? ')
+  })
+
+  it('keeps candidate memory language non-persistent and without scoring claims', () => {
+    const html = renderComponent()
+    expect(html).toContain('Candidate memories are not saved permanently.')
+    expect(html).toContain('waiting for explicit save approval')
+    expect(html).not.toContain('score')
+    expect(html).not.toContain('percent')
+    expect(html).not.toContain('saved automatically')
   })
 })
