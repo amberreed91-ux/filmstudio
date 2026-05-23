@@ -296,7 +296,7 @@ export default function ProductionBoard() {
     }
   }, [executionSummary.production_summary, sceneRows])
   const hasGeneratedScenes = localStorage.getItem('studio_scenes_generated') === '1'
-  const approvedSceneMap = (() => {
+  const approvedSceneMap = useMemo(() => {
     const raw = localStorage.getItem('studio_approved_scene_map')
     if (!raw) return {} as Record<string, boolean>
     try {
@@ -305,8 +305,8 @@ export default function ProductionBoard() {
     } catch {
       return {} as Record<string, boolean>
     }
-  })()
-  const reviewedSceneMap = (() => {
+  }, [])
+  const reviewedSceneMap = useMemo(() => {
     const raw = localStorage.getItem('studio:reviewedScenes')
     if (!raw) return {} as Record<string, boolean>
     try {
@@ -315,8 +315,8 @@ export default function ProductionBoard() {
     } catch {
       return {} as Record<string, boolean>
     }
-  })()
-  const sceneReviewStatusMap = (() => {
+  }, [])
+  const sceneReviewStatusMap = useMemo(() => {
     const raw = localStorage.getItem('studio:sceneReviewStatus')
     if (!raw) return {} as Record<string, 'not_reviewed' | 'reviewed' | 'approved' | 'needs_work'>
     try {
@@ -327,7 +327,7 @@ export default function ProductionBoard() {
     } catch {
       return {} as Record<string, 'not_reviewed' | 'reviewed' | 'approved' | 'needs_work'>
     }
-  })()
+  }, [])
   const approvedSceneCount = Object.values(approvedSceneMap).filter(Boolean).length
   const reviewedSceneCount = Object.values(reviewedSceneMap).filter(Boolean).length
   const needsReviewCount = Math.max(0, reviewedSceneCount - approvedSceneCount)

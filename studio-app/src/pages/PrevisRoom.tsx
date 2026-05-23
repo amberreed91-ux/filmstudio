@@ -2334,7 +2334,13 @@ export default function PrevisRoom() {
                         className={`w-36 shrink-0 overflow-hidden rounded-xl border transition-all duration-300 ${isSelected ? 'scale-105 border-cyan-400/80 ring-1 ring-cyan-300/70' : 'border-zinc-700/80 opacity-85 hover:scale-[1.03] hover:opacity-100'}`}
                       >
                         <div className="h-16 w-full overflow-hidden bg-zinc-950">
-                          <img src={card.thumbnail} alt={card.label} className={`h-full w-full object-cover transition-all duration-500 ${card.mode === 'iteration' ? 'brightness-110 contrast-110' : ''}`} />
+                          {card.thumbnail ? (
+                            <img src={card.thumbnail} alt={card.label} className={`h-full w-full object-cover transition-all duration-500 ${card.mode === 'iteration' ? 'brightness-110 contrast-110' : ''}`} />
+                          ) : (
+                            <div className="grid h-full w-full place-items-center text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                              No Frame Yet
+                            </div>
+                          )}
                         </div>
                         <div className="px-2 py-2 text-left">
                           <div className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-200">{card.label}</div>

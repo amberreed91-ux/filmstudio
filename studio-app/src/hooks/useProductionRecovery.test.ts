@@ -43,6 +43,19 @@ describe('shouldAutoRecoverProductionBoard', () => {
     ).toBe(false)
   })
 
+  it('does not auto-recover when autoRecover is disabled', () => {
+    expect(
+      shouldAutoRecoverProductionBoard({
+        enabled: true,
+        projectId: 'demo_studio_cinematic_001',
+        autoRecover: false,
+        isRecovering: false,
+        status: 'idle',
+        pollingDisabled: false,
+      }),
+    ).toBe(false)
+  })
+
   it('auto-recovers only when idle and explicitly enabled', () => {
     expect(
       shouldAutoRecoverProductionBoard({
