@@ -435,9 +435,28 @@ export default function PrevisRoom() {
         listVideoAssetsForProject(activeProjectId, { signal: controller.signal }),
       ])
       if (cancelled) return
+      const cacheKey = `studio:renderJobs:${activeProjectId}`
       const jobs = jobsRes.status === 'fulfilled' && Array.isArray(jobsRes.value) ? jobsRes.value : []
+      const cachedJobs = (() => {
+        if (jobs.length > 0) return []
+        try {
+          const raw = localStorage.getItem(cacheKey)
+          const parsed = raw ? JSON.parse(raw) : []
+          return Array.isArray(parsed) ? parsed as RenderJob[] : []
+        } catch {
+          return []
+        }
+      })()
+      const effectiveJobs = jobs.length > 0 ? jobs : cachedJobs
       const assets = assetsRes.status === 'fulfilled' ? (assetsRes.value.assets || []) : []
-      setProjectRenderJobs(jobs)
+      setProjectRenderJobs(effectiveJobs)
+      if (jobs.length > 0) {
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(jobs))
+        } catch {
+          // ignore cache write failures
+        }
+      }
       setProjectVideoAssets(assets)
 
       const keyframePairs = await Promise.all(
@@ -469,9 +488,13 @@ export default function PrevisRoom() {
       }
     }
     void loadVisualSources()
+    const timer = window.setInterval(() => {
+      void loadVisualSources()
+    }, 8000)
     return () => {
       cancelled = true
       controller.abort()
+      window.clearInterval(timer)
     }
   }, [activeProjectId])
 
@@ -1358,6 +1381,14 @@ export default function PrevisRoom() {
     if (selectedShot?.displayPath) return selectedShot
     return normalizedShots[0] || selectedShot
   }, [normalizedShots, selectedShot])
+  const projectPrimaryMedia = useMemo(() => {
+    return selectPrimaryStudioMedia({
+      renderJobs: projectRenderJobs,
+      sceneId: selectedSceneIdSafe || '',
+      shotId: '',
+      placeholderUrl: '',
+    })
+  }, [projectRenderJobs, selectedSceneIdSafe])
 
   const heroStyleDriftHints = useMemo(() => {
     const aid = asString(heroShot?.previewAssetId).trim()
@@ -1389,6 +1420,9 @@ export default function PrevisRoom() {
   }, [heroShot?.previewKeyframeId])
   const originalHeroFramePath = heroShot?.displayPath || PREVIS_PLACEHOLDER_IMAGE
   const heroVideoUrl = asString(heroShot?.videoUrl).trim()
+    || ((projectPrimaryMedia.kind === 'video' || projectPrimaryMedia.source === 'hosted_render' || projectPrimaryMedia.source === 'render_preview' || projectPrimaryMedia.source === 'mock_render')
+      ? asString(projectPrimaryMedia.url).trim()
+      : '')
   const sceneMotionPreviewUrl = motionPreviewByScene[selectedSceneIdSafe] || motionAssetByScene.get(selectedSceneIdSafe || '') || ''
   const sceneMotionStatus = motionStatusByScene.get(selectedSceneIdSafe || '')
   const iteration1HeroPath = iterationCards[1]?.heroPath || ''
@@ -1416,7 +1450,7 @@ export default function PrevisRoom() {
     if (!heroShot) return { label: 'PLACEHOLDER', reason: 'No scenes available' }
     const shotStatus = asString(heroShot.status).toLowerCase()
     if (shotStatus === 'failed') return { label: 'FAILED', reason: 'Render failed' }
-    if (heroShot.videoUrl || heroShot.previewSourceType === 'runway_render') {
+    if (heroVideoUrl || heroShot.previewSourceType === 'runway_render') {
       return { label: 'Matched completed Runway render', reason: '' }
     }
     if (heroShot.previewSourceType === 'uploaded_video_keyframe') {
@@ -1435,7 +1469,7 @@ export default function PrevisRoom() {
       label: heroRenderSourceLabel || 'LOCAL PREVIS',
       reason: heroShot.fallbackReason ? `Using fallback: ${heroShot.fallbackReason}` : '',
     }
-  }, [heroShot, heroRenderSourceLabel, embeddingFallbackUrl])
+  }, [heroShot, heroRenderSourceLabel, embeddingFallbackUrl, heroVideoUrl])
   const isIterationSelected = selectedIteration !== 'original'
   const handleGenerateMotionPreview = async () => {
     if (!selectedSceneIdSafe) {

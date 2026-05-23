@@ -56,6 +56,19 @@ describe('selectPrimaryStudioMedia', () => {
     expect(selected.url).toContain('render-no-preview.mp4')
   })
 
+  it('treats runway output as hosted when provider_mode metadata is missing', () => {
+    const hosted = job({
+      output_payload: {
+        asset_url: 'https://d123abc.cloudfront.net/renders/hosted.mp4',
+        thumbnail_url: '',
+        metadata: {},
+      },
+    })
+    const selected = selectPrimaryStudioMedia({ renderJobs: [hosted] })
+    expect(selected.source).toBe('hosted_render')
+    expect(selected.url).toContain('cloudfront.net')
+  })
+
   it('treats hosted output as video even when url has no media extension', () => {
     const hosted = job({
       output_payload: {

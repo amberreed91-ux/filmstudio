@@ -59,7 +59,7 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
     return selectPrimaryStudioMedia({
       renderJobs,
       sceneId: '',
-      shotId: selectedJob.shot_id || '',
+      shotId: '',
     })
   }, [renderJobs, selectedJob])
 

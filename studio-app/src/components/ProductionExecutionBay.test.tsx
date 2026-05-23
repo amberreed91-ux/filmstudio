@@ -117,6 +117,44 @@ describe('ProductionExecutionBay', () => {
     expect(html).toContain('https://cdn.hosted.example.com/hosted-priority.mp4')
   })
 
+  it('prefers hosted output even when hosted shot id differs from first selected local job', () => {
+    const html = renderBay({
+      renderJobs: [
+        {
+          id: 'job-local-first',
+          project_id: 'demo_studio_cinematic_001',
+          shot_id: 'scene_001_shot_001',
+          provider: 'mock_success',
+          status: 'completed',
+          progress: 100,
+          retry_count: 0,
+          created_at: '2026-05-21T00:00:00Z',
+          updated_at: '2026-05-21T00:00:00Z',
+          output_payload: {
+            asset_url: '/outputs/final_films/route_keyframe_demo.mp4',
+            metadata: { provider_response_normalized: { metadata: { provider_mode: 'mock_success' } } },
+          },
+        },
+        {
+          id: 'job-hosted-other-shot',
+          project_id: 'demo_studio_cinematic_001',
+          shot_id: 'scene_001_shot_hosted_smoke',
+          provider: 'runway',
+          status: 'completed',
+          progress: 100,
+          retry_count: 0,
+          created_at: '2026-05-21T00:05:00Z',
+          updated_at: '2026-05-21T00:05:00Z',
+          output_payload: {
+            asset_url: 'https://dnznrvs05pmza.cloudfront.net/hosted.mp4',
+            metadata: { provider_response_normalized: { metadata: { provider_mode: 'hosted_api' } } },
+          },
+        },
+      ],
+    })
+    expect(html).toContain('https://dnznrvs05pmza.cloudfront.net/hosted.mp4')
+  })
+
   it('shows failed render recovery guidance', () => {
     const html = renderBay({
       renderJobs: [

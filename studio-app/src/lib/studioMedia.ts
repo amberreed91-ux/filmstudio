@@ -62,6 +62,10 @@ function providerModeFromJob(job: RenderJob): string {
   return asString(meta?.provider_mode).trim().toLowerCase()
 }
 
+function providerKeyFromJob(job: RenderJob): string {
+  return asString((job as unknown as AnyRecord).provider).trim().toLowerCase()
+}
+
 function jobOutputUrl(job: RenderJob): string {
   const payload = asRecord(job.output_payload) || {}
   const meta = asRecord(payload.metadata)
@@ -84,6 +88,25 @@ function jobPreviewUrl(job: RenderJob): string {
     || asString(output?.preview_url).trim()
     || asString((job as unknown as AnyRecord).preview_url).trim()
   )
+}
+
+function isLikelyHostedUrl(url: string): boolean {
+  const value = url.trim().toLowerCase()
+  if (!value) return false
+  if (value.startsWith('/outputs/')) return false
+  if (value.startsWith('http://') || value.startsWith('https://')) return true
+  return value.includes('cloudfront.net')
+}
+
+function isMockOutput(job: RenderJob, outputUrl: string): boolean {
+  const mode = providerModeFromJob(job)
+  if (mode === 'mock_success') return true
+  const inputPayload = asRecord((job as unknown as AnyRecord).input_payload) || {}
+  const parameters = asRecord(inputPayload.parameters) || {}
+  if (Boolean(parameters.use_mock_success)) return true
+  const outputValue = outputUrl.trim().toLowerCase()
+  if (outputValue.startsWith('/outputs/mock-video/')) return true
+  return false
 }
 
 function jobMatchesContext(job: RenderJob, sceneId: string, shotId: string): boolean {
@@ -112,8 +135,14 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
   const pool = matchingJobs.length > 0 ? matchingJobs : jobs
 
   const hostedOutput = pool.find((job) => {
+    const outputUrl = jobOutputUrl(job)
+    if (!outputUrl) return false
     const mode = providerModeFromJob(job)
-    return mode === 'hosted_api' && Boolean(jobOutputUrl(job))
+    if (mode === 'hosted_api') return true
+    if (isMockOutput(job, outputUrl)) return false
+    const provider = providerKeyFromJob(job)
+    const hostedProvider = provider === 'runway'
+    return hostedProvider && isLikelyHostedUrl(outputUrl)
   })
   if (hostedOutput) {
     const url = jobOutputUrl(hostedOutput)

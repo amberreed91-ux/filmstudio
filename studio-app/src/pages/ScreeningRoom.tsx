@@ -254,11 +254,30 @@ export default function ScreeningRoom() {
     }
     let cancelled = false
     async function loadOutputs() {
+      const cacheKey = `studio:renderJobs:${activeProjectId}`
       try {
         const jobs = await listRenderJobs(activeProjectId)
-        if (!cancelled) setRenderJobs(Array.isArray(jobs) ? jobs : [])
+        if (!cancelled) {
+          const normalizedJobs = Array.isArray(jobs) ? jobs : []
+          setRenderJobs(normalizedJobs)
+          if (normalizedJobs.length > 0) {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(normalizedJobs))
+            } catch {
+              // ignore cache write failures
+            }
+          }
+        }
       } catch {
-        if (!cancelled) setRenderJobs([])
+        if (!cancelled) {
+          try {
+            const raw = localStorage.getItem(cacheKey)
+            const parsed = raw ? JSON.parse(raw) : []
+            setRenderJobs(Array.isArray(parsed) ? parsed as RenderJob[] : [])
+          } catch {
+            setRenderJobs([])
+          }
+        }
       }
       try {
         const latest = await getLatestFinalShortFilmPackageForProject(activeProjectId)
@@ -268,6 +287,13 @@ export default function ScreeningRoom() {
       }
     }
     void loadOutputs()
+    const timer = window.setInterval(() => {
+      void loadOutputs()
+    }, 8000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [activeProjectId])
 
   useEffect(() => {
@@ -806,6 +832,14 @@ export default function ScreeningRoom() {
     [audioAssetPlan, activeScene?.scene_id],
   )
   const activeRenderStatus = useMemo(() => {
+    if (activeSceneVideoUrl) {
+      if (primarySceneMedia.source === 'hosted_render') {
+        return { label: 'HOSTED RENDER', reason: 'Hosted provider output available.' }
+      }
+      const motionEntry = activeScene?.scene_id ? firstVideoAssetByScene.get(activeScene.scene_id) : null
+      const motionLabel = motionEntry?.video_url ? 'Motion Preview (AI Generated)' : ''
+      return { label: 'COMFYUI RENDER', reason: motionLabel }
+    }
     if (!activeScene) return { label: 'NO OUTPUT', reason: 'No scenes available' }
     if (activeSceneVideoUrl) {
       const motionEntry = activeScene?.scene_id ? firstVideoAssetByScene.get(activeScene.scene_id) : null
@@ -821,7 +855,7 @@ export default function ScreeningRoom() {
       return { label: 'NO OUTPUT', reason: fallbackReason ? `No playable output: ${fallbackReason}` : 'No playable output yet' }
     }
     return { label: 'LOCAL PREVIS', reason: '' }
-  }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene])
+  }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene, primarySceneMedia.source])
   const revisionTimeline = useMemo(() => {
     const fromJobs = renderJobs.map((job, index) => {
       const payload = asRecord(job.output_payload) || {}

@@ -174,7 +174,17 @@ export default function ProductionBoard() {
       setLoadingJobs(true)
       try {
         const jobs = await listRenderJobs(activeProjectId, { signal: controller.signal })
-        if (!cancelled) setRenderJobs(Array.isArray(jobs) ? jobs : [])
+        if (!cancelled) {
+          const normalizedJobs = Array.isArray(jobs) ? jobs : []
+          setRenderJobs(normalizedJobs)
+          if (normalizedJobs.length > 0) {
+            try {
+              localStorage.setItem(`studio:renderJobs:${activeProjectId}`, JSON.stringify(normalizedJobs))
+            } catch {
+              // ignore cache write failures
+            }
+          }
+        }
       } catch {
         if (!cancelled) setRenderJobs([])
       } finally {

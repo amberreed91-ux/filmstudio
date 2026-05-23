@@ -54,6 +54,7 @@ describe('ScreeningCinematicShowcase', () => {
   it('renders intentional empty state copy when no revisions exist', () => {
     const html = renderComponent({ revisions: [], revisionCount: 0 })
     expect(html).toContain('The studio is preparing the next screening cut.')
+    expect(html).not.toContain('src=""')
   })
 
   it('uses needs review recommendation copy and screening link', () => {
