@@ -413,22 +413,30 @@ export default function ScreeningRoom() {
     [approvedSceneMap],
   )
   useEffect(() => {
+    const safeSetCut = (next: FilmCut | null) => {
+      setCurrentCut((prev) => {
+        const prevKey = prev ? JSON.stringify(prev) : ''
+        const nextKey = next ? JSON.stringify(next) : ''
+        return prevKey === nextKey ? prev : next
+      })
+    }
+
     try {
       const raw = localStorage.getItem('studio:filmCut')
       if (!raw) {
-        setCurrentCut(null)
+        safeSetCut(null)
         return
       }
       const parsed = JSON.parse(raw) as FilmCut
       if (!Array.isArray(parsed.scene_order) || !Array.isArray(parsed.included_scenes)) {
-        setCurrentCut(null)
+        safeSetCut(null)
         return
       }
-      setCurrentCut(parsed)
+      safeSetCut(parsed)
     } catch {
-      setCurrentCut(null)
+      safeSetCut(null)
     }
-  }, [executionSummary])
+  }, [activeProjectId])
   const playlist = useMemo(() => {
     if (currentCut && Array.isArray(currentCut.scene_order) && Array.isArray(currentCut.included_scenes)) {
       const byId = new Map(fullPlaylist.map((item) => [item.scene_id, item]))

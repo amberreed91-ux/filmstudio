@@ -22,12 +22,16 @@ const FALLBACK_AGENTS = {
 }
 
 const STUDIO_AGENTS = AGENTS || FALLBACK_AGENTS
+const DIRECTOR_AGENT = STUDIO_AGENTS.director || FALLBACK_AGENTS.director
+const CINEMATOGRAPHER_AGENT = STUDIO_AGENTS.cinematographer || FALLBACK_AGENTS.cinematographer
+const EDITOR_AGENT = STUDIO_AGENTS.editor || FALLBACK_AGENTS.editor
+const ARCHIVIST_AGENT = STUDIO_AGENTS.archivist || FALLBACK_AGENTS.archivist
 
 const RECENT_ACTIVITY = [
-  `${STUDIO_AGENTS.director.icon} ${STUDIO_AGENTS.director.name} approved Scene 12`,
-  `${STUDIO_AGENTS.cinematographer.icon} ${STUDIO_AGENTS.cinematographer.name} refined Scene 10 lighting`,
-  `${STUDIO_AGENTS.editor.icon} ${STUDIO_AGENTS.editor.name} flagged pacing dip`,
-  `${STUDIO_AGENTS.archivist.icon} ${STUDIO_AGENTS.archivist.name} applied reference pattern`,
+  `${DIRECTOR_AGENT.icon} ${DIRECTOR_AGENT.name} approved Scene 12`,
+  `${CINEMATOGRAPHER_AGENT.icon} ${CINEMATOGRAPHER_AGENT.name} refined Scene 10 lighting`,
+  `${EDITOR_AGENT.icon} ${EDITOR_AGENT.name} flagged pacing dip`,
+  `${ARCHIVIST_AGENT.icon} ${ARCHIVIST_AGENT.name} applied reference pattern`,
 ]
 
 type AnyRecord = Record<string, unknown>
