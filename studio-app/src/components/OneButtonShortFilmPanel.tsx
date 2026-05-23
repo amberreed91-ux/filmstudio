@@ -34,11 +34,6 @@ export default function OneButtonShortFilmPanel() {
     setIsRunning(true)
     setError('')
     setStatusMessage('Creating project...')
-    const timeout = window.setTimeout(() => {
-      setIsRunning(false)
-      setError('Generation timed out in UI. Please retry now that backend is online.')
-      setStatusMessage('')
-    }, 30000)
     try {
       const created = await createProject({ title: 'One Button Short Film' })
       const project = created.project
@@ -112,7 +107,6 @@ export default function OneButtonShortFilmPanel() {
       setError(err instanceof Error ? err.message : 'Failed to generate short film')
       setStatusMessage('')
     } finally {
-      window.clearTimeout(timeout)
       setIsRunning(false)
     }
   }
