@@ -10,8 +10,9 @@ import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIn
 import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
 import ScreeningIntelligencePanel from '../components/ScreeningIntelligencePanel'
 import ScreeningCinematicShowcase from '../components/ScreeningCinematicShowcase'
+import ScreeningTimelineIntelligencePanel from '../components/ScreeningTimelineIntelligencePanel'
 import { useStudio } from '../context/StudioContext'
-import { buildLocalFallbackExport, createFinalShortFilmPackage, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, getProjectDecisionGate, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue } from '../lib/studioApi'
+import { buildLocalFallbackExport, createFinalShortFilmPackage, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, getProjectDecisionGate, getTimelineIntelligence, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue, type TimelineFlowAnalysis } from '../lib/studioApi'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
 import { useProjectHydration } from '../hooks/useProjectHydration'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
@@ -181,6 +182,9 @@ export default function ScreeningRoom() {
   const [continuityIssues, setContinuityIssues] = useState<ContinuityIssue[]>([])
   const [directorSignature, setDirectorSignature] = useState<DirectorSignature | null>(null)
   const [styleDriftIssues, setStyleDriftIssues] = useState<StyleDriftIssue[]>([])
+  const [timelineAnalysis, setTimelineAnalysis] = useState<TimelineFlowAnalysis | null>(null)
+  const [timelineLoading, setTimelineLoading] = useState(false)
+  const [timelineError, setTimelineError] = useState('')
   const [decisionGate, setDecisionGate] = useState<StudioDecisionGate | null>(null)
   const [decisionGateLoading, setDecisionGateLoading] = useState(false)
   const [decisionGateError, setDecisionGateError] = useState('')
@@ -212,6 +216,39 @@ export default function ScreeningRoom() {
 
   useEffect(() => {
     if (activeProjectId) persistActiveProjectId(activeProjectId)
+  }, [activeProjectId])
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setTimelineAnalysis(null)
+      setTimelineError('')
+      setTimelineLoading(false)
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    async function loadTimeline() {
+      setTimelineLoading(true)
+      try {
+        const analysis = await getTimelineIntelligence(activeProjectId, { signal: controller.signal })
+        if (!cancelled) {
+          setTimelineAnalysis(analysis)
+          setTimelineError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTimelineAnalysis(null)
+          setTimelineError(error instanceof Error ? error.message : 'Timeline intelligence unavailable')
+        }
+      } finally {
+        if (!cancelled) setTimelineLoading(false)
+      }
+    }
+    void loadTimeline()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [activeProjectId])
 
   useEffect(() => {
@@ -1241,6 +1278,11 @@ export default function ScreeningRoom() {
               setActionFeedback('Assembling final package from completed renders')
               void handleCreateFinalPackage()
             }}
+          />
+          <ScreeningTimelineIntelligencePanel
+            analysis={timelineAnalysis}
+            isLoading={timelineLoading}
+            error={timelineError}
           />
 
           <section className="grid grid-cols-1 gap-6 md:grid-cols-6 xl:grid-cols-12">

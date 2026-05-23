@@ -38,6 +38,7 @@ from app.services.style_learning_service import style_learning_service
 from app.services.style_intelligence_service import style_intelligence_service
 from app.services.video_understanding_status_service import video_understanding_status_service
 from app.services.demo_seed_service import demo_seed_service
+from app.services.cinematic_timeline_intelligence_service import cinematic_timeline_intelligence_service
 from app.services.stability import (
     PlaybackError,
     PersistenceError,
@@ -201,6 +202,8 @@ if video_metadata_matching_service._storage is None:
     video_metadata_matching_service._storage = get_storage("sqlite")
 if video_metadata_matching_service._video_asset_service is None:
     video_metadata_matching_service._video_asset_service = video_asset_service
+if cinematic_timeline_intelligence_service._storage is None:
+    cinematic_timeline_intelligence_service._storage = get_storage("sqlite")
 
 router = APIRouter(prefix="/api/f51/studio", tags=["project-persistence"])
 
@@ -1184,6 +1187,14 @@ def get_project_decision_gate(project_id: str):
         "auto_approval_triggered": False,
         "auto_regeneration_triggered": False,
     }
+
+
+@router.get("/projects/{project_id}/timeline-intelligence")
+def get_project_timeline_intelligence(project_id: str):
+    """Advisory timeline flow analysis over existing package/render signals."""
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return cinematic_timeline_intelligence_service.analyze_project_timeline(project_id)
 
 
 @router.post("/projects/{project_id}/build-director-signature")

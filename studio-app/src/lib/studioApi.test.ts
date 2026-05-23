@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createClipRevision,
+  getTimelineIntelligence,
   getProjectDecisionGate,
   getStudioProject,
   resolveStudioApiBase,
@@ -89,6 +90,38 @@ describe('getProjectDecisionGate', () => {
     const gate = await getProjectDecisionGate('proj-wrap')
     expect(gate.gate_status).toBe('ready')
     expect(gate.recommended_next_action).toContain('approved cut')
+  })
+})
+
+describe('getTimelineIntelligence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('fetches project timeline intelligence from the dedicated endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          project_id: 'proj-timeline',
+          assembly_kind: 'stitched_film',
+          clip_count: 3,
+          pacing_read: 'Readable pulse.',
+          tension_curve: 'Escalation lands.',
+          slow_sections: [],
+          escalation_points: [],
+          emotional_residue_points: [],
+          abrupt_transition_flags: [],
+          tonal_consistency_read: 'Stable.',
+          advisory_notes: [],
+        }),
+        { status: 200 },
+      ),
+    )
+
+    await getTimelineIntelligence('proj-timeline')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/f51/studio/projects/proj-timeline/timeline-intelligence')
   })
 })
 

@@ -1619,6 +1619,21 @@ export type StudioDecisionGate = {
   auto_regeneration_triggered: boolean
 }
 
+export type TimelineFlowAnalysis = {
+  project_id: string
+  assembly_kind: string
+  clip_count: number
+  pacing_read: string
+  tension_curve: string
+  slow_sections: string[]
+  escalation_points: string[]
+  emotional_residue_points: string[]
+  abrupt_transition_flags: string[]
+  tonal_consistency_read: string
+  advisory_notes: string[]
+  low_data_reason?: string
+}
+
 function isStudioDecisionGateShape(value: unknown): value is StudioDecisionGate {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const row = value as Record<string, unknown>
@@ -2162,6 +2177,13 @@ export async function getProjectDecisionGate(projectId: string, init?: RequestIn
     init,
   )
   return normalizeDecisionGatePayload(payload)
+}
+
+export async function getTimelineIntelligence(projectId: string, init?: RequestInit): Promise<TimelineFlowAnalysis> {
+  return fetchJson<TimelineFlowAnalysis>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/timeline-intelligence`,
+    init,
+  )
 }
 
 export async function compareStyleSignatures(
