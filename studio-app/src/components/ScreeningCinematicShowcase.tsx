@@ -16,6 +16,8 @@ type RevisionItem = {
 
 type RevisionEmphasis = 'emotional_residue' | 'structural_clarity'
 
+type JournalPrompt = 'Why this cut?' | 'What changed emotionally?' | 'What should survive the next revision?'
+
 type ScreeningCinematicShowcaseProps = {
   projectId: string
   projectTitle: string
@@ -221,6 +223,22 @@ function creativeDisagreementAside(
   return null
 }
 
+export function buildJournalEntry(rawDraft: string): string | null {
+  const trimmed = rawDraft.trim()
+  if (!trimmed) return null
+  return trimmed
+}
+
+export function addJournalEntry(notes: string[], rawDraft: string): { notes: string[]; nextDraft: string } {
+  const entry = buildJournalEntry(rawDraft)
+  if (!entry) return { notes, nextDraft: rawDraft }
+  return { notes: [entry, ...notes], nextDraft: '' }
+}
+
+export function applyJournalPrompt(prompt: JournalPrompt): string {
+  return `${prompt} `
+}
+
 export default function ScreeningCinematicShowcase(props: ScreeningCinematicShowcaseProps) {
   const [selectedRevisionId, setSelectedRevisionId] = useState(props.revisions[0]?.id || '')
   const [compareLeftId, setCompareLeftId] = useState(props.revisions[0]?.id || '')
@@ -228,6 +246,8 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const [revisionEmphasis, setRevisionEmphasis] = useState<RevisionEmphasis>(props.initialRevisionEmphasis || 'emotional_residue')
   const [tastePreviewHidden, setTastePreviewHidden] = useState(Boolean(props.initialTastePreviewHidden))
   const [sessionTasteCleared, setSessionTasteCleared] = useState(Boolean(props.initialSessionTasteCleared))
+  const [journalDraft, setJournalDraft] = useState('')
+  const [journalNotes, setJournalNotes] = useState<string[]>([])
 
   const selectedRevision = useMemo(
     () => props.revisions.find((item) => item.id === selectedRevisionId) || props.revisions[0] || null,
@@ -396,6 +416,60 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                 <p className="mt-1 text-[11px] text-zinc-500">{sessionTastePreview.disclaimer}</p>
               </div>
             ) : null}
+
+            <div className="mt-3 rounded-md border border-white/10 bg-zinc-900/30 px-2 py-2" data-testid="cut-decision-journal">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Cut Decision Journal</div>
+              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                {(['Why this cut?', 'What changed emotionally?', 'What should survive the next revision?'] as JournalPrompt[]).map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => setJournalDraft(applyJournalPrompt(prompt))}
+                    className="rounded border border-zinc-700/90 bg-zinc-900/60 px-2 py-1 text-zinc-300"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+              <label className="sr-only" htmlFor="cut-decision-journal-input">Add session note</label>
+              <textarea
+                id="cut-decision-journal-input"
+                data-testid="cut-decision-journal-input"
+                value={journalDraft}
+                onChange={(event) => setJournalDraft(event.target.value)}
+                placeholder="Add session note..."
+                className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-2 py-1.5 text-xs text-zinc-100"
+                rows={3}
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = addJournalEntry(journalNotes, journalDraft)
+                    setJournalNotes(updated.notes)
+                    setJournalDraft(updated.nextDraft)
+                  }}
+                  className="rounded-md border border-cyan-400/45 bg-cyan-500/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-cyan-100"
+                >
+                  Add Session Note
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setJournalNotes([])}
+                  className="rounded-md border border-zinc-600/80 bg-zinc-900/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200"
+                >
+                  Clear Notes
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-500">This journal is session-only and not saved.</p>
+              <div className="mt-2 space-y-1.5" data-testid="cut-decision-journal-notes">
+                {journalNotes.length > 0 ? journalNotes.map((note, index) => (
+                  <p key={`${index}-${note.slice(0, 16)}`} className="rounded border border-white/10 bg-zinc-900/50 px-2 py-1 text-[11px] text-zinc-300">{note}</p>
+                )) : (
+                  <p className="text-[11px] text-zinc-500">No session notes yet.</p>
+                )}
+              </div>
+            </div>
           </div>
         ) : null}
         <ScreeningEditorialComparisonPanel

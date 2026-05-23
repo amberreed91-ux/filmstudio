@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import type { ComponentProps } from 'react'
-import ScreeningCinematicShowcase from './ScreeningCinematicShowcase'
+import ScreeningCinematicShowcase, { addJournalEntry, applyJournalPrompt, buildJournalEntry } from './ScreeningCinematicShowcase'
 
 function renderComponent(props: Partial<ComponentProps<typeof ScreeningCinematicShowcase>> = {}) {
   return renderToStaticMarkup(
@@ -111,6 +111,10 @@ describe('ScreeningCinematicShowcase', () => {
     expect(multiRevisionHtml).toContain('Hide Taste Preview')
     expect(multiRevisionHtml).toContain('Emerging Taste Read')
     expect(multiRevisionHtml).toContain('Director Taste Profile, Session Preview')
+    expect(multiRevisionHtml).toContain('Cut Decision Journal')
+    expect(multiRevisionHtml).toContain('Add Session Note')
+    expect(multiRevisionHtml).toContain('Clear Notes')
+    expect(multiRevisionHtml).toContain('No session notes yet.')
 
     const singleRevisionHtml = renderComponent({
       revisionCount: 1,
@@ -190,6 +194,12 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).not.toContain('your style is')
   })
 
+  it('shows taste and journal session-only language', () => {
+    const html = renderComponent()
+    expect(html).toContain('This session read is based on revision emphasis and comparison behavior only. It is not saved.')
+    expect(html).toContain('This journal is session-only and not saved.')
+  })
+
   it('shows explainer copy for observed session signals', () => {
     const html = renderComponent()
     expect(html).toContain('What is being observed? This session read is based on revision emphasis and comparison behavior only. It is not saved.')
@@ -222,5 +232,24 @@ describe('ScreeningCinematicShowcase', () => {
     })
     expect(html).toContain('<video')
     expect(html).toContain('https://cdn.hosted.example.com/final-cut.mp4')
+  })
+
+  it('builds and adds journal notes in-memory only', () => {
+    expect(buildJournalEntry('   ')).toBeNull()
+    expect(buildJournalEntry('I chose emotional residue.')).toBe('I chose emotional residue.')
+
+    const added = addJournalEntry([], 'I chose emotional residue because the pause feels honest.')
+    expect(added.notes).toHaveLength(1)
+    expect(added.notes[0]).toContain('pause feels honest')
+    expect(added.nextDraft).toBe('')
+
+    const unchanged = addJournalEntry(['existing'], '   ')
+    expect(unchanged.notes).toEqual(['existing'])
+  })
+
+  it('applies quick prompt starter text', () => {
+    expect(applyJournalPrompt('Why this cut?')).toBe('Why this cut? ')
+    expect(applyJournalPrompt('What changed emotionally?')).toBe('What changed emotionally? ')
+    expect(applyJournalPrompt('What should survive the next revision?')).toBe('What should survive the next revision? ')
   })
 })
