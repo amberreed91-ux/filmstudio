@@ -15,6 +15,7 @@ import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getLatestDi
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
 import { useProjectHydration } from '../hooks/useProjectHydration'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import { selectPrimaryStudioMedia } from '../lib/studioMedia'
 
 type AnyRecord = Record<string, unknown>
 type PlaylistItem = {
@@ -767,13 +768,27 @@ export default function ScreeningRoom() {
   const isWeakMoment = Boolean(activeScene?.scene_id && cutAnalysis.weakMoments.has(activeScene.scene_id))
   const isStrongMoment = Boolean(activeScene?.scene_id && cutAnalysis.strongMoments.has(activeScene.scene_id))
   const approvedLabel = activeScene?.scene_id && approvedSceneMap[activeScene.scene_id] ? 'Approved' : 'Needs Work'
-  const viewerImage =
+  const fallbackSceneImage =
     activeSceneAsset?.url
     || (activeSceneAsset?.file_path && isBrowserSafePath(activeSceneAsset.file_path) ? activeSceneAsset.file_path : '')
     || getViewerImage(activeRenderId)
-  const activeSceneVideoUrl = activeScene?.scene_id
+  const fallbackSceneVideoUrl = activeScene?.scene_id
     ? normalizePlayableVideoUrl(firstVideoAssetByScene.get(activeScene.scene_id)?.video_url || '')
     : ''
+  const primarySceneMedia = useMemo(() => {
+    return selectPrimaryStudioMedia({
+      renderJobs,
+      sceneId: activeScene?.scene_id || '',
+      shotId: activeRenderId,
+      packageUrl: latestPackage?.final_output_url || '',
+      reviewUrl: '',
+      keyframeUrl: fallbackSceneImage,
+    })
+  }, [activeRenderId, activeScene?.scene_id, fallbackSceneImage, latestPackage?.final_output_url, renderJobs])
+  const viewerImage = primarySceneMedia.kind === 'image' ? primarySceneMedia.url : fallbackSceneImage
+  const activeSceneVideoUrl = primarySceneMedia.kind === 'video'
+    ? normalizePlayableVideoUrl(primarySceneMedia.url)
+    : fallbackSceneVideoUrl
   const activeSoundProfile = useMemo(() => {
     if (!activeScene?.scene_id) return {}
     const source = asArray(executionSummary.scenes).find((entry) => {

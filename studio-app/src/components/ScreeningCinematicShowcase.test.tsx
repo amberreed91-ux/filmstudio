@@ -183,4 +183,13 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).toContain('/studio/production-board?project_id=demo_studio_cinematic_001')
     expect(html).toContain('/studio/screening-room?project_id=demo_studio_cinematic_001')
   })
+
+  it('uses hosted hero video when provided', () => {
+    const html = renderComponent({
+      heroVideoUrl: 'https://cdn.hosted.example.com/final-cut.mp4',
+      heroPreviewUrl: 'https://images.example.com/frame.jpg',
+    })
+    expect(html).toContain('<video')
+    expect(html).toContain('https://cdn.hosted.example.com/final-cut.mp4')
+  })
 })

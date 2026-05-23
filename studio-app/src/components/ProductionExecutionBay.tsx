@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ProviderStatus, RenderJob, StudioDecisionGate } from '../lib/studioApi'
 import { providerModeFromJob, providerTruthLabel } from '../lib/providerRuntime'
+import { selectPrimaryStudioMedia } from '../lib/studioMedia'
 
 type ProductionExecutionBayProps = {
   projectId: string
@@ -53,6 +54,13 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
     return providerStatuses.find((provider) => provider.provider_id.trim().toLowerCase() === providerId) || null
   }, [providerStatuses, selectedJob])
   const selectedProviderMode = providerModeFromJob(selectedJob) || (selectedProviderStatus?.provider_mode || '')
+  const selectedPrimaryMedia = useMemo(() => {
+    if (!selectedJob) return selectPrimaryStudioMedia({})
+    return selectPrimaryStudioMedia({
+      renderJobs: [selectedJob],
+      shotId: selectedJob.shot_id,
+    })
+  }, [selectedJob])
 
   const opsNote = useMemo(() => {
     if (stats.failed.length > 0) return 'A failed render needs recovery before review.'
@@ -85,9 +93,18 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Readiness: <span className="text-zinc-100">{stats.completed.length > 0 ? 'ready for screening' : 'awaiting render output'}</span></div>
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Queue: <span className="text-zinc-100">{renderJobs.length} job(s)</span></div>
           </div>
-          {latestCompleted?.output_payload?.asset_url || latestCompleted?.output_payload?.thumbnail_url ? (
+          {selectedPrimaryMedia.url ? (
             <div className="mt-3 rounded-md border border-emerald-400/35 bg-emerald-500/12 px-2 py-2 text-xs text-emerald-100">
-              Latest completed render: <a className="text-emerald-200" href={latestCompleted.output_payload?.asset_url || latestCompleted.output_payload?.thumbnail_url} target="_blank" rel="noreferrer">open output</a>
+              Latest completed render: <a className="text-emerald-200" href={selectedPrimaryMedia.url} target="_blank" rel="noreferrer">open output</a>
+            </div>
+          ) : null}
+          {selectedPrimaryMedia.kind === 'video' && selectedPrimaryMedia.url ? (
+            <div className="mt-3 overflow-hidden rounded-md border border-white/10 bg-black/35">
+              <video src={selectedPrimaryMedia.url} className="aspect-video w-full object-cover" controls muted playsInline />
+            </div>
+          ) : selectedPrimaryMedia.kind === 'image' && selectedPrimaryMedia.url ? (
+            <div className="mt-3 overflow-hidden rounded-md border border-white/10 bg-black/35">
+              <img src={selectedPrimaryMedia.url} alt="Selected render preview" className="aspect-video w-full object-cover" />
             </div>
           ) : null}
         </div>

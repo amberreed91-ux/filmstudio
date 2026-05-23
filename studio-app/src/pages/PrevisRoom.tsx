@@ -40,6 +40,7 @@ import { mapContinuityIssuesToScene, summarizeContinuityIssues } from '../lib/co
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
 import { resolveGenerateSceneShotId } from '../lib/shotGeneration'
 import { generateSceneOutcomeCopy, providerModeFromJob, providerModeFromStatus, providerTruthLabel } from '../lib/providerRuntime'
+import { selectPrimaryStudioMedia } from '../lib/studioMedia'
 
 type AnyRecord = Record<string, unknown>
 type InterventionAction = 'increase_tension' | 'fix_continuity' | 'improve_flow' | 'improve_visuals' | 'regenerate_scene'
@@ -863,23 +864,32 @@ export default function PrevisRoom() {
         keyframesByAssetId,
       )
       const matchedVisualUrl = asString(visualMatch.visual_url).trim()
-      const videoUrl =
-        visualMatch.source_type === 'runway_render' || visualMatch.source_type === 'project_level_fallback'
-          ? matchedVisualUrl
-          : asString(completedJob?.output_payload?.asset_url).trim() || videoAsset?.video_url || ''
       const resolvedImage =
         visualMatch.source_type === 'uploaded_video_keyframe'
           ? matchedVisualUrl
           : displayPath || keyframeUrl || (isBrowserSafePath(keyframePath) ? keyframePath : '')
+      const primaryMedia = selectPrimaryStudioMedia({
+        renderJobs: projectRenderJobs,
+        sceneId: selectedSceneIdSafe || 'scene_001',
+        shotId,
+        keyframeUrl: resolvedImage || videoAsset?.thumbnail_url || '',
+        placeholderUrl: PREVIS_PLACEHOLDER_IMAGE,
+      })
+      const videoUrl = primaryMedia.kind === 'video' ? primaryMedia.url : ''
+      const resolvedVisualImage = primaryMedia.kind === 'image' ? primaryMedia.url : resolvedImage
       let previewSourceType = visualMatch.source_type
-      if (previewSourceType === 'none' && displayPath) previewSourceType = 'uploaded_video_keyframe'
+      if (primaryMedia.source === 'hosted_render' || primaryMedia.source === 'mock_render') {
+        previewSourceType = 'runway_render'
+      } else if (previewSourceType === 'none' && resolvedVisualImage) {
+        previewSourceType = 'uploaded_video_keyframe'
+      }
       return {
         key: `${shotId}-${index}`,
         shotId,
         status: shotStatus,
         filePath,
         renderId,
-        displayPath: resolvedImage,
+        displayPath: resolvedVisualImage,
         videoUrl,
         thumbnailUrl,
         previewSourceType,

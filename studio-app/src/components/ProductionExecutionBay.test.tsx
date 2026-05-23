@@ -53,6 +53,32 @@ describe('ProductionExecutionBay', () => {
     expect(html).toContain('/studio/screening-room?project_id=demo_studio_cinematic_001')
   })
 
+  it('renders selected job hosted video preview when output exists', () => {
+    const html = renderBay({
+      renderJobs: [
+        {
+          id: 'job-hosted',
+          project_id: 'demo_studio_cinematic_001',
+          shot_id: 'shot_001',
+          provider: 'runway',
+          status: 'completed',
+          progress: 100,
+          retry_count: 0,
+          created_at: '2026-05-21T00:00:00Z',
+          updated_at: '2026-05-21T00:00:00Z',
+          output_payload: {
+            asset_url: 'https://cdn.hosted.example.com/shot.mp4',
+            metadata: {
+              provider_response_normalized: { metadata: { provider_mode: 'hosted_api' } },
+            },
+          },
+        },
+      ],
+    })
+    expect(html).toContain('<video')
+    expect(html).toContain('https://cdn.hosted.example.com/shot.mp4')
+  })
+
   it('shows failed render recovery guidance', () => {
     const html = renderBay({
       renderJobs: [
