@@ -108,6 +108,7 @@ describe('ScreeningCinematicShowcase', () => {
     expect(multiRevisionHtml).toContain('Emotional Residue')
     expect(multiRevisionHtml).toContain('Structural Clarity')
     expect(multiRevisionHtml).toContain('Emerging Taste Read')
+    expect(multiRevisionHtml).toContain('Director Taste Profile, Session Preview')
 
     const singleRevisionHtml = renderComponent({
       revisionCount: 1,
@@ -127,6 +128,9 @@ describe('ScreeningCinematicShowcase', () => {
     expect(emotionalHtml).toContain('creative-disagreement-aside')
     expect(emotionalHtml).toContain('For this session, the Studio is reading this as a preference toward emotional residue.')
     expect(emotionalHtml).toContain('For this session, the Studio is noticing a lean toward emotional residue.')
+    expect(emotionalHtml).toContain('Current axis:')
+    expect(emotionalHtml).toContain('Emotional Residue')
+    expect(emotionalHtml).toContain('temporary creative read, not a permanent profile.')
 
     const structuralHtml = renderComponent({
       continuityIssuesCount: 1,
@@ -138,6 +142,8 @@ describe('ScreeningCinematicShowcase', () => {
     expect(structuralHtml).not.toContain('creative-disagreement-aside')
     expect(structuralHtml).toContain('For this session, the Studio is reading this as a preference toward structural clarity.')
     expect(structuralHtml).toContain('Your current review posture favors structural clarity over lingering ambiguity.')
+    expect(structuralHtml).toContain('Structural Clarity')
+    expect(structuralHtml).toContain('temporary creative read, not a permanent profile.')
   })
 
   it('keeps disagreement copy human and free of scoring jargon', () => {
@@ -178,6 +184,8 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).not.toContain('score')
     expect(html).not.toContain('percent')
     expect(html).not.toContain('83%')
+    expect(html).not.toContain('you always')
+    expect(html).not.toContain('your style is')
   })
 
   it('keeps project_id preserved in room links', () => {
