@@ -92,3 +92,35 @@ def test_provider_status_requires_hosted_readiness():
             }
         )
     assert "provider_mode" in str(exc.value)
+
+
+def test_parse_args_uses_300_second_default_timeout(monkeypatch):
+    monkeypatch.delenv("RUNWAY_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setattr("sys.argv", ["verify"])
+    args = verify.parse_args()
+    assert args.timeout_seconds == 300
+
+
+def test_submit_and_poll_timeout_preserves_provider_job_id(monkeypatch):
+    calls = {"status_gets": 0}
+
+    def _fake_curl(method: str, url: str, *, payload=None, timeout=20):
+        if method == "POST":
+            return {"ok": True}
+        calls["status_gets"] += 1
+        return {
+            "id": "job-1",
+            "status": "rendering",
+            "provider_job_id": "rw-xyz",
+        }
+
+    monkeypatch.setattr(verify, "curl_json", _fake_curl)
+    monkeypatch.setattr(verify.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(verify.time, "time", lambda: 1000.0 + (calls["status_gets"] * 10.0))
+
+    with __import__("pytest").raises(RuntimeError) as exc:
+        verify.submit_and_poll_job("http://127.0.0.1:8010", "job-1", 5)
+
+    msg = str(exc.value)
+    assert "provider_job_id=rw-xyz" in msg
+    assert "last_status=rendering" in msg

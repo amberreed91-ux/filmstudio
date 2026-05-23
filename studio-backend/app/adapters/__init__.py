@@ -568,12 +568,12 @@ class RunwayAdapter(RenderProviderAdapter):
         return os.getenv("RUNWAY_MODEL", "gen4.5").strip() or "gen4.5"
 
     def _runway_timeout_seconds(self) -> int:
-        raw = os.getenv("RUNWAY_TIMEOUT_SECONDS", "60").strip()
+        raw = os.getenv("RUNWAY_TIMEOUT_SECONDS", "300").strip()
         try:
             timeout = int(float(raw))
-            return timeout if timeout > 0 else 60
+            return timeout if timeout > 0 else 300
         except Exception:
-            return 60
+            return 300
 
     @staticmethod
     def _normalize_ratio(raw_ratio: Optional[str]) -> str:
@@ -795,19 +795,22 @@ class RunwayAdapter(RenderProviderAdapter):
                 if poll_status in {"completed", "succeeded", "failed", "error", "cancelled"}:
                     break
                 if asyncio.get_running_loop().time() - started >= timeout_seconds:
-                    job.status = "failed"
                     timeout_message = f"Runway task polling timed out after {timeout_seconds}s"
-                    job.error_message = timeout_message
+                    # Keep job in rendering so callers can continue polling/reconcile
+                    # against the captured provider task id.
+                    job.status = "rendering"
+                    job.error_message = None
                     normalized = {
                         "provider": "runway",
                         "task": "video_generation",
-                        "status": "failed",
-                        "output": {"video_url": None, "status": "failed"},
+                        "status": "processing",
+                        "output": {"video_url": None, "status": "processing"},
                         "metadata": {
                             "task_id": task_id,
                             "model": model,
                             "provider_mode": "hosted_api",
-                            "error": self._error_metadata("timeout", timeout_message, raw_response=poll_response),
+                            "timeout": self._error_metadata("timeout", timeout_message, raw_response=poll_response),
+                            "last_provider_status": poll_status or "unknown",
                         },
                     }
                     job.output_payload = RenderJobOutput(asset_url="", thumbnail_url="", metadata={"provider_response_normalized": normalized})

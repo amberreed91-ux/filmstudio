@@ -144,14 +144,21 @@ def submit_and_poll_job(base: str, job_id: str, timeout_seconds: int) -> dict:
     deadline = time.time() + timeout_seconds
     last_seen: dict = {}
     while time.time() < deadline:
-        current = curl_json("GET", f"{base}/api/f51/studio/render/jobs/{job_id}", timeout=20)
+        # Use status endpoint to keep polling upstream provider when backend
+        # submit returns while task is still running.
+        current = curl_json("GET", f"{base}/api/f51/studio/render/jobs/{job_id}/status", timeout=20)
         last_seen = current
         status = str(current.get("status", "")).lower()
         if status in {"complete", "failed", "cancelled"}:
             return current
         time.sleep(5)
-
-    raise RuntimeError("Timed out waiting for render job completion")
+    provider_job_id = last_seen.get("provider_job_id")
+    last_status = str(last_seen.get("status", "unknown"))
+    raise RuntimeError(
+        f"Timed out waiting for render job completion; "
+        f"provider_job_id={provider_job_id or 'unknown'} last_status={last_status}. "
+        f"Try: curl -sS {base}/api/f51/studio/render/jobs/{job_id}/status"
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -164,7 +171,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeout-seconds",
         type=int,
-        default=int(os.getenv("RUNWAY_TIMEOUT_SECONDS", "900") or "900"),
+        default=int(os.getenv("RUNWAY_TIMEOUT_SECONDS", "300") or "300"),
         help="Timeout for hosted render completion",
     )
     return parser.parse_args()
