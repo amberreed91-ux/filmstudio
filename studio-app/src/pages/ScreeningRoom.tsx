@@ -259,7 +259,18 @@ export default function ScreeningRoom() {
         const jobs = await listRenderJobs(activeProjectId)
         if (!cancelled) {
           const normalizedJobs = Array.isArray(jobs) ? jobs : []
-          setRenderJobs(normalizedJobs)
+          const cachedJobs = (() => {
+            if (normalizedJobs.length > 0) return []
+            try {
+              const raw = localStorage.getItem(cacheKey)
+              const parsed = raw ? JSON.parse(raw) : []
+              return Array.isArray(parsed) ? parsed as RenderJob[] : []
+            } catch {
+              return []
+            }
+          })()
+          const effectiveJobs = normalizedJobs.length > 0 ? normalizedJobs : cachedJobs
+          setRenderJobs(effectiveJobs)
           if (normalizedJobs.length > 0) {
             try {
               localStorage.setItem(cacheKey, JSON.stringify(normalizedJobs))
@@ -466,6 +477,39 @@ export default function ScreeningRoom() {
       }
     }).filter((asset) => Boolean(asset.asset_id))
   }, [executionSummary.image_render_assets])
+  const executionSummaryRenderJobs = useMemo<RenderJob[]>(() => {
+    const queue = asArray(executionSummary.render_queue)
+    return queue
+      .map((entry, index) => {
+        const item = asRecord(entry) || {}
+        const id = asString(item.job_id).trim() || asString(item.id).trim() || `summary-job-${index + 1}`
+        const outputUrl =
+          asString(item.output_url).trim()
+          || asString(asRecord(item.output_payload)?.asset_url).trim()
+        if (!id || !outputUrl) return null
+        return {
+          id,
+          project_id: activeProjectId || asString(item.project_id).trim() || '',
+          shot_id: asString(item.shot_id).trim(),
+          provider: asString(item.provider).trim() || 'runway',
+          status: asString(item.status).trim() || 'complete',
+          progress: asNumber(item.progress) ?? 100,
+          retry_count: asNumber(item.retry_count) ?? 0,
+          created_at: asString(item.created_at).trim() || '',
+          updated_at: asString(item.updated_at).trim() || '',
+          output_payload: {
+            asset_url: outputUrl,
+            thumbnail_url: asString(item.preview_url).trim() || asString(asRecord(item.output_payload)?.thumbnail_url).trim() || '',
+            metadata: (asRecord(asRecord(item.output_payload)?.metadata) || {}) as Record<string, unknown>,
+          },
+        } as RenderJob
+      })
+      .filter((job): job is RenderJob => Boolean(job))
+  }, [activeProjectId, executionSummary.render_queue])
+  const mediaCandidateRenderJobs = useMemo(
+    () => (renderJobs.length > 0 ? renderJobs : executionSummaryRenderJobs),
+    [executionSummaryRenderJobs, renderJobs],
+  )
   const styleDriftIssuesBySceneId = useMemo(() => {
     const map = new Map<string, StyleDriftIssue[]>()
     const assetToScenes = new Map<string, Set<string>>()
@@ -803,14 +847,14 @@ export default function ScreeningRoom() {
     : ''
   const primarySceneMedia = useMemo(() => {
     return selectPrimaryStudioMedia({
-      renderJobs,
+      renderJobs: mediaCandidateRenderJobs,
       sceneId: activeScene?.scene_id || '',
       shotId: activeRenderId,
       packageUrl: latestPackage?.final_output_url || '',
       reviewUrl: '',
       keyframeUrl: fallbackSceneImage,
     })
-  }, [activeRenderId, activeScene?.scene_id, fallbackSceneImage, latestPackage?.final_output_url, renderJobs])
+  }, [activeRenderId, activeScene?.scene_id, fallbackSceneImage, latestPackage?.final_output_url, mediaCandidateRenderJobs])
   const viewerImage = primarySceneMedia.kind === 'image' ? primarySceneMedia.url : fallbackSceneImage
   const activeSceneVideoUrl = primarySceneMedia.kind === 'video'
     ? normalizePlayableVideoUrl(primarySceneMedia.url)
@@ -834,7 +878,7 @@ export default function ScreeningRoom() {
   const activeRenderStatus = useMemo(() => {
     if (activeSceneVideoUrl) {
       if (primarySceneMedia.source === 'hosted_render') {
-        return { label: 'HOSTED RENDER', reason: 'Hosted provider output available.' }
+        return { label: 'HOSTED RENDER', reason: activeScene ? 'Hosted provider output available.' : 'Hosted render preview available.' }
       }
       const motionEntry = activeScene?.scene_id ? firstVideoAssetByScene.get(activeScene.scene_id) : null
       const motionLabel = motionEntry?.video_url ? 'Motion Preview (AI Generated)' : ''
@@ -857,7 +901,7 @@ export default function ScreeningRoom() {
     return { label: 'LOCAL PREVIS', reason: '' }
   }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene, primarySceneMedia.source])
   const revisionTimeline = useMemo(() => {
-    const fromJobs = renderJobs.map((job, index) => {
+    const fromJobs = mediaCandidateRenderJobs.map((job, index) => {
       const payload = asRecord(job.output_payload) || {}
       return {
         id: job.id || `job-${index + 1}`,
@@ -885,7 +929,7 @@ export default function ScreeningRoom() {
           ? 'Strong cinematic beat with stable signal.'
           : '',
     }))
-  }, [cutAnalysis.strongMoments, cutAnalysis.weakMoments, firstSuccessfulAssetByScene, firstVideoAssetByScene, playlist, renderJobs])
+  }, [cutAnalysis.strongMoments, cutAnalysis.weakMoments, firstSuccessfulAssetByScene, firstVideoAssetByScene, playlist, mediaCandidateRenderJobs])
   const activeMotionStatus = activeScene?.scene_id ? motionStatusByScene.get(activeScene.scene_id) : null
   const generationTimeLabel = activeScene?.duration_estimate ? `${activeScene.duration_estimate}s` : 'n/a'
   const filmMemoryData = useMemo(() => {
@@ -1001,7 +1045,7 @@ export default function ScreeningRoom() {
             ) : null}
             {currentCut && playlist.length === 0 ? (
               <div className="studio-empty-state mt-3 text-xs text-rose-200">
-                No scenes in current cut.
+                {activeSceneVideoUrl ? 'No scenes in current cut, but a hosted render preview is available.' : 'No scenes in current cut.'}
                 <div className="mt-2">
                   <Link
                     to={withProjectQuery('/studio/production-board', activeProjectId)}
@@ -1229,7 +1273,7 @@ export default function ScreeningRoom() {
                     </div>
                   </button>
                 )})}
-                {playlist.length === 0 ? (
+                {playlist.length === 0 && !activeSceneVideoUrl ? (
                   <div className="text-sm text-zinc-400 border border-dashed border-zinc-700 rounded-lg px-3 py-4">
                     <div>No cut available yet.</div>
                     <Link
@@ -1246,7 +1290,7 @@ export default function ScreeningRoom() {
             <div className="lg:col-span-6 space-y-4">
               <div ref={theaterViewportRef} className="cinematic-panel screening-theater-frame p-4">
                 <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Main Viewer</h3>
-                {activeScene && (viewerImage || activeSceneVideoUrl) ? (
+                {(activeSceneVideoUrl || (activeScene && viewerImage)) ? (
                   <div className="relative screening-cinema-screen overflow-hidden rounded-xl border border-white/15">
                     {activeSceneVideoUrl ? (
                       <video
@@ -1259,23 +1303,23 @@ export default function ScreeningRoom() {
                         playsInline
                         onLoadedData={() => {
                           console.info('[ScreeningRoom] video_load_success', {
-                            scene_id: activeScene.scene_id,
+                            scene_id: activeScene?.scene_id || 'hosted_preview',
                             output_url: activeSceneVideoUrl,
-                            preview_url: firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '',
+                            preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
                           })
                         }}
                         onError={() => {
                           console.warn('[ScreeningRoom] video_load_failure', {
-                            scene_id: activeScene.scene_id,
+                            scene_id: activeScene?.scene_id || 'hosted_preview',
                             output_url: activeSceneVideoUrl,
-                            preview_url: firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '',
+                            preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
                           })
                         }}
                       />
                     ) : viewerImage ? (
                       <img
                         src={viewerImage}
-                        alt={`Screening preview for ${activeScene.scene_id}`}
+                        alt={`Screening preview for ${activeScene?.scene_id || 'hosted-preview'}`}
                         className={`aspect-video w-full object-cover transition-all duration-500 ${
                           isPlaying ? 'scale-[1.01] opacity-100' : 'scale-100 opacity-95'
                         }`}
@@ -1288,18 +1332,26 @@ export default function ScreeningRoom() {
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                     <div className="pointer-events-none absolute inset-0 screening-ambient-reflection" />
                     <div className="absolute bottom-3 left-3 rounded border border-white/20 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-100">
-                      {activeScene.scene_id}
+                      {activeScene?.scene_id || 'HOSTED PREVIEW'}
                     </div>
                     <div className="absolute top-3 right-3 flex items-center gap-2">
                       <span title="Render status" className="rounded border border-cyan-300/45 bg-cyan-500/14 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100">
                         {activeRenderStatus.label}
                       </span>
-                      <span className="rounded border border-white/20 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-100">
-                        {activeCutLabel}
-                      </span>
-                      <span className={`rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${approvedLabel === 'Approved' ? 'border-emerald-400/60 bg-emerald-500/18 text-emerald-100' : 'border-amber-400/60 bg-amber-500/18 text-amber-100'}`}>
-                        {approvedLabel}
-                      </span>
+                      {activeScene ? (
+                        <>
+                          <span className="rounded border border-white/20 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-100">
+                            {activeCutLabel}
+                          </span>
+                          <span className={`rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${approvedLabel === 'Approved' ? 'border-emerald-400/60 bg-emerald-500/18 text-emerald-100' : 'border-amber-400/60 bg-amber-500/18 text-amber-100'}`}>
+                            {approvedLabel}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="rounded border border-white/20 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-100">
+                          HOSTED RENDER PREVIEW
+                        </span>
+                      )}
                       <span className="rounded border border-fuchsia-300/45 bg-fuchsia-500/14 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-fuchsia-100">
                         {activeSceneVideoUrl ? 'MOTION READY' : (activeMotionStatus?.status || 'MOTION NOT GENERATED')}
                       </span>
@@ -1331,7 +1383,7 @@ export default function ScreeningRoom() {
                     ) : null}
                     <div className="absolute left-3 top-3 rounded border border-white/20 bg-black/45 px-3 py-2 text-[10px] text-zinc-100">
                       <div>Provider: <span className="text-cyan-200">{activeRenderStatus.label}</span></div>
-                      <div>Duration: <span className="text-zinc-100">{activeScene.duration_estimate || 0}s</span></div>
+                      <div>Duration: <span className="text-zinc-100">{activeScene?.duration_estimate || 0}s</span></div>
                       <div>Generation Time: <span className="text-zinc-100">{generationTimeLabel}</span></div>
                       <div>Emotional Tone: <span className="text-zinc-100">{screeningSummary.dominant_tone || 'n/a'}</span></div>
                     </div>

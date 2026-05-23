@@ -69,6 +69,39 @@ describe('selectPrimaryStudioMedia', () => {
     expect(selected.url).toContain('cloudfront.net')
   })
 
+  it('treats hosted url as hosted even when provider key is nonstandard', () => {
+    const hosted = job({
+      provider: 'runwayml',
+      output_payload: {
+        asset_url: 'https://d123abc.cloudfront.net/renders/hosted-nonstandard-provider.mp4',
+        thumbnail_url: '',
+        metadata: {},
+      },
+    })
+    const selected = selectPrimaryStudioMedia({ renderJobs: [hosted] })
+    expect(selected.source).toBe('hosted_render')
+    expect(selected.kind).toBe('video')
+  })
+
+  it('selects hosted project render even when scene/shot context is empty', () => {
+    const hosted = job({
+      shot_id: 'scene_099_shot_001',
+      output_payload: {
+        asset_url: 'https://dnznrvs05pmza.cloudfront.net/hosted-preview.mp4',
+        thumbnail_url: '',
+        metadata: {},
+      },
+    })
+    const selected = selectPrimaryStudioMedia({
+      renderJobs: [hosted],
+      sceneId: '',
+      shotId: '',
+      keyframeUrl: 'https://images.example.com/fallback.jpg',
+    })
+    expect(selected.source).toBe('hosted_render')
+    expect(selected.url).toContain('cloudfront.net')
+  })
+
   it('treats hosted output as video even when url has no media extension', () => {
     const hosted = job({
       output_payload: {

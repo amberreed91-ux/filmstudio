@@ -687,6 +687,40 @@ export default function PrevisRoom() {
       })
       .filter((asset) => Boolean(asset.asset_id))
   }, [executionSummary.image_render_assets])
+  const executionSummaryRenderJobs = useMemo<RenderJob[]>(() => {
+    const queue = asArray(executionSummary.render_queue)
+    return queue
+      .map((entry, index) => {
+        const item = asRecord(entry) || {}
+        const id = asString(item.job_id).trim() || asString(item.id).trim() || `summary-job-${index + 1}`
+        const shotId = asString(item.shot_id).trim()
+        const outputUrl =
+          asString(item.output_url).trim()
+          || asString(asRecord(item.output_payload)?.asset_url).trim()
+        if (!id || !outputUrl) return null
+        return {
+          id,
+          project_id: activeProjectId || asString(item.project_id).trim() || '',
+          shot_id: shotId,
+          provider: asString(item.provider).trim() || 'runway',
+          status: asString(item.status).trim() || 'complete',
+          progress: asNumber(item.progress) ?? 100,
+          retry_count: asNumber(item.retry_count) ?? 0,
+          created_at: asString(item.created_at).trim() || '',
+          updated_at: asString(item.updated_at).trim() || '',
+          output_payload: {
+            asset_url: outputUrl,
+            thumbnail_url: asString(item.preview_url).trim() || asString(asRecord(item.output_payload)?.thumbnail_url).trim() || '',
+            metadata: (asRecord(asRecord(item.output_payload)?.metadata) || {}) as Record<string, unknown>,
+          },
+        } as RenderJob
+      })
+      .filter((job): job is RenderJob => Boolean(job))
+  }, [activeProjectId, executionSummary.render_queue])
+  const mediaCandidateRenderJobs = useMemo(
+    () => (projectRenderJobs.length > 0 ? projectRenderJobs : executionSummaryRenderJobs),
+    [executionSummaryRenderJobs, projectRenderJobs],
+  )
   const styleRelevantAssetIdsForSelectedScene = useMemo(() => {
     const ids = new Set<string>()
     if (!selectedSceneIdSafe) return ids
@@ -823,7 +857,7 @@ export default function PrevisRoom() {
   }
   const completedRenderJobsByShot = useMemo(() => {
     const map = new Map<string, RenderJob>()
-    for (const job of projectRenderJobs) {
+    for (const job of mediaCandidateRenderJobs) {
       const status = asString(job.status).trim().toLowerCase()
       const url = asString(job.output_payload?.asset_url).trim()
       if (!job.shot_id || !url) continue
@@ -831,7 +865,7 @@ export default function PrevisRoom() {
       if (!map.has(job.shot_id)) map.set(job.shot_id, job)
     }
     return map
-  }, [projectRenderJobs])
+  }, [mediaCandidateRenderJobs])
   const firstKeyframeByAssetId = useMemo(() => {
     const map = new Map<string, VideoKeyframe>()
     for (const asset of projectVideoAssets) {
@@ -892,7 +926,7 @@ export default function PrevisRoom() {
           ? matchedVisualUrl
           : displayPath || keyframeUrl || (isBrowserSafePath(keyframePath) ? keyframePath : '')
       const primaryMedia = selectPrimaryStudioMedia({
-        renderJobs: projectRenderJobs,
+        renderJobs: mediaCandidateRenderJobs,
         sceneId: selectedSceneIdSafe || 'scene_001',
         shotId,
         keyframeUrl: resolvedImage || videoAsset?.thumbnail_url || '',
@@ -977,6 +1011,7 @@ export default function PrevisRoom() {
     completedRenderJobsByShot,
     projectVideoAssets,
     firstKeyframeByAssetId,
+    mediaCandidateRenderJobs,
   ])
 
   useEffect(() => {
@@ -1383,12 +1418,12 @@ export default function PrevisRoom() {
   }, [normalizedShots, selectedShot])
   const projectPrimaryMedia = useMemo(() => {
     return selectPrimaryStudioMedia({
-      renderJobs: projectRenderJobs,
+      renderJobs: mediaCandidateRenderJobs,
       sceneId: selectedSceneIdSafe || '',
       shotId: '',
       placeholderUrl: '',
     })
-  }, [projectRenderJobs, selectedSceneIdSafe])
+  }, [mediaCandidateRenderJobs, selectedSceneIdSafe])
 
   const heroStyleDriftHints = useMemo(() => {
     const aid = asString(heroShot?.previewAssetId).trim()
@@ -1447,7 +1482,12 @@ export default function PrevisRoom() {
     : asString(heroShot?.previewMatchReason).trim() || 'Visual source unavailable'
   const completeAnalysisCount = heroShot?.previewKeyframeId ? (frameAnalysesByKeyframeId[heroShot.previewKeyframeId]?.length || 0) : 0
   const heroRenderStatus = useMemo(() => {
-    if (!heroShot) return { label: 'PLACEHOLDER', reason: 'No scenes available' }
+    if (!heroShot) {
+      if (heroVideoUrl && projectPrimaryMedia.source === 'hosted_render') {
+        return { label: 'Latest hosted render for this project', reason: '' }
+      }
+      return { label: 'PLACEHOLDER', reason: 'No scenes available' }
+    }
     const shotStatus = asString(heroShot.status).toLowerCase()
     if (shotStatus === 'failed') return { label: 'FAILED', reason: 'Render failed' }
     if (heroVideoUrl || heroShot.previewSourceType === 'runway_render') {
@@ -1469,7 +1509,15 @@ export default function PrevisRoom() {
       label: heroRenderSourceLabel || 'LOCAL PREVIS',
       reason: heroShot.fallbackReason ? `Using fallback: ${heroShot.fallbackReason}` : '',
     }
-  }, [heroShot, heroRenderSourceLabel, embeddingFallbackUrl, heroVideoUrl])
+  }, [heroShot, heroRenderSourceLabel, embeddingFallbackUrl, heroVideoUrl, projectPrimaryMedia.source])
+  const totalRenderVisuals = Math.max(renderAssetSummary.total_assets, mediaCandidateRenderJobs.length)
+  const successfulRenderVisuals = Math.max(
+    renderAssetSummary.successful_assets,
+    mediaCandidateRenderJobs.filter((job) => {
+      const status = asString(job.status).trim().toLowerCase()
+      return status === 'complete' || status === 'completed' || status === 'success'
+    }).length,
+  )
   const isIterationSelected = selectedIteration !== 'original'
   const handleGenerateMotionPreview = async () => {
     if (!selectedSceneIdSafe) {
@@ -2165,13 +2213,15 @@ export default function PrevisRoom() {
                         Aligns with director signature
                       </div>
                     ) : null}
-                    {!sceneMotionPreviewUrl ? (
+                    {!sceneMotionPreviewUrl && !heroVideoUrl ? (
                       <div className="mt-1 inline-flex rounded border border-zinc-400/45 bg-zinc-700/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-200">
                         STILL IMAGE FALLBACK
                       </div>
                     ) : null}
                     {sceneMotionPreviewUrl ? (
                       <div className="mt-1 text-[10px] text-fuchsia-200">Motion Preview (AI Generated)</div>
+                    ) : heroVideoUrl ? (
+                      <div className="mt-1 text-[10px] text-emerald-200">Latest hosted render for this project</div>
                     ) : (
                       <div className="mt-1 text-[10px] text-amber-200">
                         Still image fallback. Motion workflow is not active yet.
@@ -2349,8 +2399,8 @@ export default function PrevisRoom() {
               <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/40 p-4 shadow-xl backdrop-blur-md">
                 <h3 className="mb-2 text-sm font-semibold tracking-wide text-zinc-200">Render Assets</h3>
                 <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
-                  <div className="rounded border border-zinc-700/80 bg-zinc-900/70 px-2 py-2">Total: <span className="text-zinc-100">{renderAssetSummary.total_assets}</span></div>
-                  <div className="rounded border border-zinc-700/80 bg-zinc-900/70 px-2 py-2">Success: <span className="text-emerald-300">{renderAssetSummary.successful_assets}</span></div>
+                  <div className="rounded border border-zinc-700/80 bg-zinc-900/70 px-2 py-2">Total: <span className="text-zinc-100">{totalRenderVisuals}</span></div>
+                  <div className="rounded border border-zinc-700/80 bg-zinc-900/70 px-2 py-2">Success: <span className="text-emerald-300">{successfulRenderVisuals}</span></div>
                   <div className="rounded border border-zinc-700/80 bg-zinc-900/70 px-2 py-2">Failed: <span className="text-rose-300">{renderAssetSummary.failed_assets}</span></div>
                 </div>
                 <div className="mt-2 text-xs text-zinc-400">Providers: {renderAssetSummary.providers.join(', ') || 'none'}</div>

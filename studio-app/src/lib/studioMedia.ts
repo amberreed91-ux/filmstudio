@@ -142,7 +142,10 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
     if (isMockOutput(job, outputUrl)) return false
     const provider = providerKeyFromJob(job)
     const hostedProvider = provider === 'runway'
-    return hostedProvider && isLikelyHostedUrl(outputUrl)
+    if (hostedProvider) return isLikelyHostedUrl(outputUrl)
+    // Some persisted rows do not normalize provider keys, but hosted URLs are still
+    // authoritative for playback priority when they are non-mock outputs.
+    return isLikelyHostedUrl(outputUrl)
   })
   if (hostedOutput) {
     const url = jobOutputUrl(hostedOutput)
