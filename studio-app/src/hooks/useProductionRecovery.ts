@@ -32,14 +32,45 @@ interface RecoveryResponse {
 
 interface UseProductionRecoveryOptions {
   projectId?: string
+  enabled?: boolean
   autoRecover?: boolean
   onRecoveryComplete?: (result: RecoveryResponse) => void
   onRecoveryError?: (error: string) => void
 }
 
+const CONTRACT_ERROR_MARKERS = [
+  'list_render_jobs',
+  'list_reviews',
+  'list_revisions',
+  'list_packages',
+  'list_all_projects',
+]
+
+export function isProductionRecoveryContractError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return CONTRACT_ERROR_MARKERS.some((marker) => lower.includes(marker))
+}
+
+export function shouldAutoRecoverProductionBoard(input: {
+  enabled: boolean
+  projectId?: string
+  autoRecover: boolean
+  isRecovering: boolean
+  status: RecoveryStatus
+  pollingDisabled: boolean
+}): boolean {
+  if (!input.enabled) return false
+  if (!input.projectId) return false
+  if (input.pollingDisabled) return false
+  if (!input.autoRecover) return false
+  if (input.isRecovering) return false
+  return input.status === 'idle'
+}
+
 export function useProductionRecovery(options: UseProductionRecoveryOptions = {}) {
   const {
     projectId,
+    enabled = true,
     autoRecover = true,
     onRecoveryComplete,
     onRecoveryError
@@ -59,6 +90,14 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
 
   const recoveryPollRef = useRef<NodeJS.Timeout | null>(null)
   const isMountedRef = useRef(true)
+  const pollingDisabledRef = useRef(false)
+
+  const stopPolling = useCallback(() => {
+    if (recoveryPollRef.current) {
+      clearInterval(recoveryPollRef.current)
+      recoveryPollRef.current = null
+    }
+  }, [])
 
   // Update recovery state safely
   const updateRecoveryState = useCallback((updates: Partial<RecoveryState>) => {
@@ -69,9 +108,20 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
 
   // Poll recovery status
   const pollRecoveryStatus = useCallback(async () => {
+    if (!enabled || !projectId || pollingDisabledRef.current) return
     try {
       const response = await fetch(`${STUDIO_API_BASE}/api/production-recovery/status`)
-      if (!response.ok) return
+      if (!response.ok) {
+        pollingDisabledRef.current = true
+        stopPolling()
+        updateRecoveryState({
+          isRecovering: false,
+          status: 'failed',
+          message: 'Recovery unavailable',
+          error: `Status endpoint unavailable (${response.status})`,
+        })
+        return
+      }
 
       const status = await response.json()
       
@@ -92,18 +142,32 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
           progress: 100
         })
         
-        if (recoveryPollRef.current) {
-          clearInterval(recoveryPollRef.current)
-          recoveryPollRef.current = null
-        }
+        stopPolling()
       }
     } catch (error) {
-      console.error('Failed to poll recovery status:', error)
+      pollingDisabledRef.current = true
+      stopPolling()
+      const message = error instanceof Error ? error.message : 'Unknown polling error'
+      updateRecoveryState({
+        isRecovering: false,
+        status: 'failed',
+        message: 'Recovery unavailable',
+        error: message,
+      })
     }
-  }, [recoveryState.isRecovering, updateRecoveryState])
+  }, [enabled, projectId, recoveryState.isRecovering, stopPolling, updateRecoveryState])
 
   // Start recovery process
   const startRecovery = useCallback(async () => {
+    if (!enabled) return
+    if (!projectId) {
+      updateRecoveryState({
+        isRecovering: false,
+        status: 'idle',
+        message: '',
+      })
+      return
+    }
     if (recoveryState.isRecovering) {
       console.warn('Recovery already in progress')
       return
@@ -129,6 +193,29 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
       }
 
       const result: RecoveryResponse = await response.json()
+
+      if (result.status === 'completed') {
+        const combinedErrors = [
+          result.error || '',
+          JSON.stringify(result.jobs || {}),
+          JSON.stringify(result.reviews || {}),
+          JSON.stringify(result.revisions || {}),
+          JSON.stringify(result.packages || {}),
+          JSON.stringify(result.projects || {}),
+        ].join(' ')
+        if (isProductionRecoveryContractError(combinedErrors)) {
+          pollingDisabledRef.current = true
+          stopPolling()
+          updateRecoveryState({
+            isRecovering: false,
+            status: 'failed',
+            message: 'Recovery unavailable',
+            error: 'Recovery backend contracts are unavailable in this runtime.',
+          })
+          onRecoveryError?.('Recovery backend contracts are unavailable in this runtime.')
+          return
+        }
+      }
       
       if (result.status === 'started') {
         updateRecoveryState({
@@ -137,9 +224,7 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
         })
         
         // Start polling for status updates
-        if (recoveryPollRef.current) {
-          clearInterval(recoveryPollRef.current)
-        }
+        stopPolling()
         recoveryPollRef.current = setInterval(pollRecoveryStatus, 2000)
         
       } else if (result.status === 'completed') {
@@ -216,7 +301,14 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
 
   // Auto-recover on mount if enabled
   useEffect(() => {
-    if (autoRecover && !recoveryState.isRecovering && recoveryState.status === 'idle') {
+    if (shouldAutoRecoverProductionBoard({
+      enabled,
+      projectId,
+      autoRecover,
+      isRecovering: recoveryState.isRecovering,
+      status: recoveryState.status,
+      pollingDisabled: pollingDisabledRef.current,
+    })) {
       // Small delay to allow other components to load first
       const timer = setTimeout(() => {
         startRecovery()
@@ -224,18 +316,15 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
       
       return () => clearTimeout(timer)
     }
-  }, [autoRecover, recoveryState.isRecovering, recoveryState.status, startRecovery])
+  }, [autoRecover, enabled, projectId, recoveryState.isRecovering, recoveryState.status, startRecovery])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       isMountedRef.current = false
-      if (recoveryPollRef.current) {
-        clearInterval(recoveryPollRef.current)
-        recoveryPollRef.current = null
-      }
+      stopPolling()
     }
-  }, [])
+  }, [stopPolling])
 
   return {
     recoveryState,

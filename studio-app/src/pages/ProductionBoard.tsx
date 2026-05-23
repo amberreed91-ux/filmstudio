@@ -225,8 +225,9 @@ export default function ProductionBoard() {
 
   // Production recovery hook
   const recovery = useProductionRecovery({
-    projectId,
-    autoRecover: true,
+    projectId: activeProjectId,
+    enabled: Boolean(activeProjectId),
+    autoRecover: false,
     onRecoveryComplete: (result) => {
       console.log('Production recovery completed:', result)
       setActionFeedback('Production board recovered successfully')
