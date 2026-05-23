@@ -76,6 +76,9 @@ export default function ScreeningEditorialComparisonPanel({
     return (
       <div className="mt-3 rounded-lg border border-white/10 bg-black/25 p-3" data-testid="screening-editorial-comparison">
         <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Editorial Revision Intelligence</div>
+        <div className="mt-1 text-[11px] text-zinc-500">
+          Emphasis: {revisionEmphasis === 'emotional_residue' ? 'Emotional Residue' : 'Structural Clarity'}
+        </div>
         <div className="mt-2 text-xs text-zinc-400">Reading editorial tradeoffs between revisions...</div>
       </div>
     )
@@ -85,6 +88,9 @@ export default function ScreeningEditorialComparisonPanel({
     return (
       <div className="mt-3 rounded-lg border border-white/10 bg-black/25 p-3" data-testid="screening-editorial-comparison">
         <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Editorial Revision Intelligence</div>
+        <div className="mt-1 text-[11px] text-zinc-500">
+          Emphasis: {revisionEmphasis === 'emotional_residue' ? 'Emotional Residue' : 'Structural Clarity'}
+        </div>
         <div className="mt-2 text-xs text-zinc-400">Editorial comparison is temporarily unavailable. Screening can continue.</div>
       </div>
     )
@@ -95,6 +101,9 @@ export default function ScreeningEditorialComparisonPanel({
   return (
     <div className="mt-3 rounded-lg border border-white/10 bg-black/25 p-3" data-testid="screening-editorial-comparison">
       <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Editorial Revision Intelligence</div>
+      <div className="mt-1 text-[11px] text-zinc-500">
+        Emphasis: {revisionEmphasis === 'emotional_residue' ? 'Emotional Residue' : 'Structural Clarity'}
+      </div>
       <div className="mt-2 text-sm text-zinc-100">{comparison.strongest_difference}</div>
       <div className="mt-2 grid gap-2 md:grid-cols-2 text-xs text-zinc-300">
         <div className="rounded border border-white/10 bg-white/5 p-2">
