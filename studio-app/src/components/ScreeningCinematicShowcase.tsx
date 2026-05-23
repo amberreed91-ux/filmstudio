@@ -36,6 +36,8 @@ type ScreeningCinematicShowcaseProps = {
   hasDirectorSignature: boolean
   revisions: RevisionItem[]
   initialRevisionEmphasis?: RevisionEmphasis
+  initialTastePreviewHidden?: boolean
+  initialSessionTasteCleared?: boolean
   onApproveCut: () => void
   onRequestRevision: () => void
   onCompareRevision: () => void
@@ -224,6 +226,8 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const [compareLeftId, setCompareLeftId] = useState(props.revisions[0]?.id || '')
   const [compareRightId, setCompareRightId] = useState(props.revisions[1]?.id || props.revisions[0]?.id || '')
   const [revisionEmphasis, setRevisionEmphasis] = useState<RevisionEmphasis>(props.initialRevisionEmphasis || 'emotional_residue')
+  const [tastePreviewHidden, setTastePreviewHidden] = useState(Boolean(props.initialTastePreviewHidden))
+  const [sessionTasteCleared, setSessionTasteCleared] = useState(Boolean(props.initialSessionTasteCleared))
 
   const selectedRevision = useMemo(
     () => props.revisions.find((item) => item.id === selectedRevisionId) || props.revisions[0] || null,
@@ -234,7 +238,13 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const nextStep = recommendation(props.gateStatus)
   const disagreementAside = creativeDisagreementAside(props, compareLeftId, compareRightId, props.revisionCount, revisionEmphasis)
   const tasteRead = emergingTasteRead(revisionEmphasis, props, Boolean(disagreementAside))
-  const sessionTastePreview = directorTasteSessionPreview(revisionEmphasis, props)
+  const sessionTastePreview = sessionTasteCleared
+    ? {
+        leaning: 'Emerging',
+        read: 'Taste read is reset for this session. The Studio needs more revision choices before saying more.',
+        disclaimer: 'The Studio is treating this as a temporary creative read, not a permanent profile.',
+      }
+    : directorTasteSessionPreview(revisionEmphasis, props)
 
   const heroMedia = props.heroVideoUrl || selectedRevision?.outputUrl || ''
   const heroImage = props.heroPreviewUrl || selectedRevision?.previewUrl || ''
@@ -333,14 +343,20 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
             <div className="mt-2 inline-flex rounded-md border border-zinc-700 bg-zinc-900/70 p-1">
               <button
                 type="button"
-                onClick={() => setRevisionEmphasis('emotional_residue')}
+                onClick={() => {
+                  setRevisionEmphasis('emotional_residue')
+                  setSessionTasteCleared(false)
+                }}
                 className={`rounded px-2.5 py-1 text-[11px] ${revisionEmphasis === 'emotional_residue' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
               >
                 Emotional Residue
               </button>
               <button
                 type="button"
-                onClick={() => setRevisionEmphasis('structural_clarity')}
+                onClick={() => {
+                  setRevisionEmphasis('structural_clarity')
+                  setSessionTasteCleared(false)
+                }}
                 className={`rounded px-2.5 py-1 text-[11px] ${revisionEmphasis === 'structural_clarity' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
               >
                 Structural Clarity
@@ -353,12 +369,33 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
               <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Emerging Taste Read</div>
               <p className="mt-1 text-[11px] text-zinc-400">{tasteRead}</p>
             </div>
-            <div className="mt-2 rounded-md border border-white/10 bg-zinc-900/40 px-2 py-1.5" data-testid="director-taste-session-preview">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Director Taste Profile, Session Preview</div>
-              <p className="mt-1 text-[11px] text-zinc-300">Current axis: <span className="text-zinc-100">{sessionTastePreview.leaning}</span></p>
-              <p className="mt-1 text-[11px] text-zinc-400">{sessionTastePreview.read}</p>
-              <p className="mt-1 text-[11px] text-zinc-500">{sessionTastePreview.disclaimer}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSessionTasteCleared(true)}
+                className="rounded-md border border-zinc-600/80 bg-zinc-900/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200"
+              >
+                Clear Session Read
+              </button>
+              <button
+                type="button"
+                onClick={() => setTastePreviewHidden((previous) => !previous)}
+                className="rounded-md border border-zinc-600/80 bg-zinc-900/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200"
+              >
+                {tastePreviewHidden ? 'Show Taste Preview' : 'Hide Taste Preview'}
+              </button>
             </div>
+            <p className="mt-2 text-[11px] text-zinc-500" data-testid="taste-observed-explainer">
+              What is being observed? This session read is based on revision emphasis and comparison behavior only. It is not saved.
+            </p>
+            {!tastePreviewHidden ? (
+              <div className="mt-2 rounded-md border border-white/10 bg-zinc-900/40 px-2 py-1.5" data-testid="director-taste-session-preview">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Director Taste Profile, Session Preview</div>
+                <p className="mt-1 text-[11px] text-zinc-300">Current axis: <span className="text-zinc-100">{sessionTastePreview.leaning}</span></p>
+                <p className="mt-1 text-[11px] text-zinc-400">{sessionTastePreview.read}</p>
+                <p className="mt-1 text-[11px] text-zinc-500">{sessionTastePreview.disclaimer}</p>
+              </div>
+            ) : null}
           </div>
         ) : null}
         <ScreeningEditorialComparisonPanel

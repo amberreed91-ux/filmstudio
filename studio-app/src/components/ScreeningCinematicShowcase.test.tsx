@@ -107,6 +107,8 @@ describe('ScreeningCinematicShowcase', () => {
     expect(multiRevisionHtml).toContain('revision-emphasis-toggle')
     expect(multiRevisionHtml).toContain('Emotional Residue')
     expect(multiRevisionHtml).toContain('Structural Clarity')
+    expect(multiRevisionHtml).toContain('Clear Session Read')
+    expect(multiRevisionHtml).toContain('Hide Taste Preview')
     expect(multiRevisionHtml).toContain('Emerging Taste Read')
     expect(multiRevisionHtml).toContain('Director Taste Profile, Session Preview')
 
@@ -186,6 +188,24 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).not.toContain('83%')
     expect(html).not.toContain('you always')
     expect(html).not.toContain('your style is')
+  })
+
+  it('shows explainer copy for observed session signals', () => {
+    const html = renderComponent()
+    expect(html).toContain('What is being observed? This session read is based on revision emphasis and comparison behavior only. It is not saved.')
+  })
+
+  it('resets displayed read to emerging when session read is cleared', () => {
+    const html = renderComponent({ initialSessionTasteCleared: true })
+    expect(html).toContain('Current axis:')
+    expect(html).toContain('Emerging')
+    expect(html).toContain('Taste read is reset for this session. The Studio needs more revision choices before saying more.')
+  })
+
+  it('hides session preview panel when hidden for this session', () => {
+    const html = renderComponent({ initialTastePreviewHidden: true })
+    expect(html).toContain('Show Taste Preview')
+    expect(html).not.toContain('Director Taste Profile, Session Preview')
   })
 
   it('keeps project_id preserved in room links', () => {
