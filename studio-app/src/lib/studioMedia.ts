@@ -117,9 +117,10 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
   })
   if (hostedOutput) {
     const url = jobOutputUrl(hostedOutput)
+    const kind = mediaKindFromUrl(url)
     return {
       url,
-      kind: mediaKindFromUrl(url),
+      kind: kind === 'unknown' ? 'video' : kind,
       source: 'hosted_render',
       providerMode: providerModeFromJob(hostedOutput),
       label: 'Hosted render output',
@@ -130,9 +131,10 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
   const previewJob = pool.find((job) => Boolean(jobPreviewUrl(job)))
   if (previewJob) {
     const url = jobPreviewUrl(previewJob)
+    const kind = mediaKindFromUrl(url)
     return {
       url,
-      kind: mediaKindFromUrl(url),
+      kind: kind === 'unknown' ? 'video' : kind,
       source: 'render_preview',
       providerMode: providerModeFromJob(previewJob),
       label: 'Render preview',
@@ -146,9 +148,10 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
   })
   if (mockOutput) {
     const url = jobOutputUrl(mockOutput)
+    const kind = mediaKindFromUrl(url)
     return {
       url,
-      kind: mediaKindFromUrl(url),
+      kind: kind === 'unknown' ? 'video' : kind,
       source: 'mock_render',
       providerMode: providerModeFromJob(mockOutput),
       label: 'Mock render output',

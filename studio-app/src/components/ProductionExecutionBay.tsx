@@ -57,10 +57,11 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
   const selectedPrimaryMedia = useMemo(() => {
     if (!selectedJob) return selectPrimaryStudioMedia({})
     return selectPrimaryStudioMedia({
-      renderJobs: [selectedJob],
-      shotId: selectedJob.shot_id,
+      renderJobs,
+      sceneId: '',
+      shotId: selectedJob.shot_id || '',
     })
-  }, [selectedJob])
+  }, [renderJobs, selectedJob])
 
   const opsNote = useMemo(() => {
     if (stats.failed.length > 0) return 'A failed render needs recovery before review.'

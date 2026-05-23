@@ -56,6 +56,21 @@ describe('selectPrimaryStudioMedia', () => {
     expect(selected.url).toContain('render-no-preview.mp4')
   })
 
+  it('treats hosted output as video even when url has no media extension', () => {
+    const hosted = job({
+      output_payload: {
+        asset_url: 'https://cdn.hosted.example.com/output/abc123',
+        metadata: {
+          provider_response_normalized: { metadata: { provider_mode: 'hosted_api' } },
+        },
+      },
+    })
+    const selected = selectPrimaryStudioMedia({ renderJobs: [hosted] })
+    expect(selected.source).toBe('hosted_render')
+    expect(selected.kind).toBe('video')
+    expect(selected.url).toContain('/output/abc123')
+  })
+
   it('keeps mock output path working when hosted output is absent', () => {
     const mock = job({
       output_payload: {

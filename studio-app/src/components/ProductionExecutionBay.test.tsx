@@ -79,6 +79,44 @@ describe('ProductionExecutionBay', () => {
     expect(html).toContain('https://cdn.hosted.example.com/shot.mp4')
   })
 
+  it('prefers hosted output from render pool for selected shot context', () => {
+    const html = renderBay({
+      renderJobs: [
+        {
+          id: 'job-local-first',
+          project_id: 'demo_studio_cinematic_001',
+          shot_id: 'shot_001',
+          provider: 'mock_success',
+          status: 'completed',
+          progress: 100,
+          retry_count: 0,
+          created_at: '2026-05-21T00:00:00Z',
+          updated_at: '2026-05-21T00:00:00Z',
+          output_payload: {
+            asset_url: '/outputs/mock-video/sample.mp4',
+            metadata: { provider_response_normalized: { metadata: { provider_mode: 'mock_success' } } },
+          },
+        },
+        {
+          id: 'job-hosted-second',
+          project_id: 'demo_studio_cinematic_001',
+          shot_id: 'shot_001',
+          provider: 'runway',
+          status: 'completed',
+          progress: 100,
+          retry_count: 0,
+          created_at: '2026-05-21T00:05:00Z',
+          updated_at: '2026-05-21T00:05:00Z',
+          output_payload: {
+            asset_url: 'https://cdn.hosted.example.com/hosted-priority.mp4',
+            metadata: { provider_response_normalized: { metadata: { provider_mode: 'hosted_api' } } },
+          },
+        },
+      ],
+    })
+    expect(html).toContain('https://cdn.hosted.example.com/hosted-priority.mp4')
+  })
+
   it('shows failed render recovery guidance', () => {
     const html = renderBay({
       renderJobs: [

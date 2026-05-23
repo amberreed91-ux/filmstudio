@@ -875,7 +875,10 @@ export default function PrevisRoom() {
         keyframeUrl: resolvedImage || videoAsset?.thumbnail_url || '',
         placeholderUrl: PREVIS_PLACEHOLDER_IMAGE,
       })
-      const videoUrl = primaryMedia.kind === 'video' ? primaryMedia.url : ''
+      const videoUrl =
+        (primaryMedia.kind === 'video' || primaryMedia.source === 'hosted_render' || primaryMedia.source === 'render_preview' || primaryMedia.source === 'mock_render')
+          ? primaryMedia.url
+          : ''
       const resolvedVisualImage = primaryMedia.kind === 'image' ? primaryMedia.url : resolvedImage
       let previewSourceType = visualMatch.source_type
       if (primaryMedia.source === 'hosted_render' || primaryMedia.source === 'mock_render') {
