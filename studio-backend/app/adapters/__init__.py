@@ -565,7 +565,7 @@ class RunwayAdapter(RenderProviderAdapter):
                 return {"raw_body": body_text}
 
     def _runway_model(self) -> str:
-        return os.getenv("RUNWAY_MODEL", "gen4_turbo").strip() or "gen4_turbo"
+        return os.getenv("RUNWAY_MODEL", "gen4.5").strip() or "gen4.5"
 
     def _runway_timeout_seconds(self) -> int:
         raw = os.getenv("RUNWAY_TIMEOUT_SECONDS", "60").strip()
