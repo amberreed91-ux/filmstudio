@@ -1326,7 +1326,7 @@ export type FinalShortFilmPackage = {
 
 export type CreateFinalShortFilmPackagePayload = {
   film_title: string
-  final_output_url: string
+  final_output_url?: string
   final_output_path?: string
   has_title_card?: boolean
   has_end_card?: boolean

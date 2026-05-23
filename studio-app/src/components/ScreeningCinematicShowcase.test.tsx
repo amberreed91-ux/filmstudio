@@ -47,6 +47,7 @@ describe('ScreeningCinematicShowcase', () => {
     expect(html).toContain('Revision Timeline')
     expect(html).toContain('Approval Stack')
     expect(html).toContain('Smart Actions')
+    expect(html).toContain('Create Final Package')
     expect(html).toContain('Why this shot matters:')
     expect(html).toContain('is ready because visual evidence, memory, and review state now agree.')
   })

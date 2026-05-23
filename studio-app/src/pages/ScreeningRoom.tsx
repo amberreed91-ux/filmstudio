@@ -11,7 +11,7 @@ import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPan
 import ScreeningIntelligencePanel from '../components/ScreeningIntelligencePanel'
 import ScreeningCinematicShowcase from '../components/ScreeningCinematicShowcase'
 import { useStudio } from '../context/StudioContext'
-import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, getProjectDecisionGate, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue } from '../lib/studioApi'
+import { buildLocalFallbackExport, createFinalShortFilmPackage, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, getProjectDecisionGate, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue } from '../lib/studioApi'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
 import { useProjectHydration } from '../hooks/useProjectHydration'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
@@ -1019,6 +1019,33 @@ export default function ScreeningRoom() {
     }
   }
 
+  async function handleCreateFinalPackage() {
+    const safeProjectId = activeProjectId || project?.project_id || projectId || 'local_project'
+    const packageTitle = (project?.title?.trim() || 'Studio Cut').slice(0, 120)
+    try {
+      const created = await createFinalShortFilmPackage(safeProjectId, {
+        film_title: packageTitle,
+        metadata: {
+          package_origin: 'screening_room',
+          requested_at: new Date().toISOString(),
+        },
+      })
+      const nextPackage = created?.package || null
+      setLatestPackage(nextPackage)
+      const assemblyKind = typeof nextPackage?.metadata?.assembly_kind === 'string' ? String(nextPackage.metadata.assembly_kind) : ''
+      if (assemblyKind === 'assembled_manifest') {
+        setExportMessage('Final package manifest assembled from completed renders.')
+      } else if (assemblyKind === 'single_scene_preview') {
+        setExportMessage('Single-scene final film preview package created.')
+      } else {
+        setExportMessage('Final package created.')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      setExportMessage(message || 'Could not create final package from completed renders.')
+    }
+  }
+
   return (
     <StudioShell title="Screening Room" subtitle="Playback and review of scene cuts and iteration outcomes.">
       <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
@@ -1196,8 +1223,8 @@ export default function ScreeningRoom() {
             onRequestRevision={() => handleReviewDecision('revise')}
             onCompareRevision={() => setActionFeedback('Select two revisions in the timeline to compare.')}
             onExportPackage={() => {
-              setActionFeedback('Preparing package export')
-              void handleExportCutManifest()
+              setActionFeedback('Assembling final package from completed renders')
+              void handleCreateFinalPackage()
             }}
           />
 
@@ -1673,8 +1700,8 @@ export default function ScreeningRoom() {
                 </div>
                 <div className="rounded border border-white/10 bg-black/25 p-2">
                   <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Stitched Film</div>
-                  {latestPackage?.final_output_url ? (
-                    <a href={latestPackage.final_output_url} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] text-cyan-300 break-all">Open latest stitched output</a>
+                  {latestPackage?.final_output_url && !String(latestPackage?.metadata?.assembly_kind || '').includes('manifest') ? (
+                    <a href={latestPackage.final_output_url} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] text-cyan-300 break-all">Open latest packaged output</a>
                   ) : <div className="mt-1 text-[11px] text-zinc-300">No stitched film available yet.</div>}
                 </div>
                 <div className="rounded border border-white/10 bg-black/25 p-2">
@@ -1682,6 +1709,7 @@ export default function ScreeningRoom() {
                   {latestPackage ? (
                     <div className="mt-1 text-[11px] text-zinc-200">
                       status: {latestPackage.package_status}
+                      {String(latestPackage?.metadata?.assembly_kind || '') === 'assembled_manifest' ? ' · manifest assembled' : ''}
                     </div>
                   ) : <div className="mt-1 text-[11px] text-zinc-300">No final package yet.</div>}
                 </div>

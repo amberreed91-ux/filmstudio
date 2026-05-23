@@ -917,7 +917,7 @@ def restitch_project_with_revisions(project_id: str, payload: RestitchWithRevisi
 # Final Short Film Package Endpoints
 class CreateFinalShortFilmPackagePayload(BaseModel):
     film_title: str
-    final_output_url: str
+    final_output_url: Optional[str] = None
     final_output_path: Optional[str] = None
     has_title_card: bool = False
     has_end_card: bool = False
@@ -1541,18 +1541,27 @@ def create_final_short_film_package(project_id: str, payload: CreateFinalShortFi
     
     try:
         final_output_url = as_non_empty_string(payload.final_output_url)
-        if not final_output_url:
-            raise ValidationError("Missing final_output_url", stage="packaging")
-        package = final_short_film_package_service.create_package_from_project(
-            project_id=project_id,
-            film_title=payload.film_title,
-            final_output_url=final_output_url,
-            final_output_path=payload.final_output_path,
-            has_title_card=payload.has_title_card,
-            has_end_card=payload.has_end_card,
-            has_soundtrack=payload.has_soundtrack,
-            metadata=payload.metadata,
-        )
+        if final_output_url:
+            package = final_short_film_package_service.create_package_from_project(
+                project_id=project_id,
+                film_title=payload.film_title,
+                final_output_url=final_output_url,
+                final_output_path=payload.final_output_path,
+                has_title_card=payload.has_title_card,
+                has_end_card=payload.has_end_card,
+                has_soundtrack=payload.has_soundtrack,
+                metadata=payload.metadata,
+            )
+        else:
+            package = final_short_film_package_service.create_package_from_completed_renders(
+                project_id=project_id,
+                film_title=payload.film_title,
+                final_output_path=payload.final_output_path,
+                has_title_card=payload.has_title_card,
+                has_end_card=payload.has_end_card,
+                has_soundtrack=payload.has_soundtrack,
+                metadata=payload.metadata,
+            )
         return {"package": package.model_dump()}
     except StabilityError as e:
         raise HTTPException(status_code=400, detail=e.to_dict())

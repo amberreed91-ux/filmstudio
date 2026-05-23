@@ -388,7 +388,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
           <button type="button" onClick={props.onRequestRevision} className="rounded-md border border-amber-400/50 bg-amber-500/15 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">Request Revision</button>
           <Link to={toRoomUrl('/studio/production-board', props.projectId)} className="rounded-md border border-zinc-400/45 bg-zinc-800/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-100 no-underline">Open Production Board</Link>
           <button type="button" onClick={props.onCompareRevision} className="rounded-md border border-cyan-400/45 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100">Compare Revision</button>
-          <button type="button" onClick={props.onExportPackage} className="rounded-md border border-fuchsia-400/45 bg-fuchsia-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-fuchsia-100">Export Package</button>
+          <button type="button" onClick={props.onExportPackage} className="rounded-md border border-fuchsia-400/45 bg-fuchsia-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-fuchsia-100">Create Final Package</button>
         </div>
         <div className="mt-3 text-xs text-zinc-400">{nextStep.message} <Link to={toRoomUrl(nextStep.href, props.projectId)} className="text-cyan-300">{nextStep.label}</Link></div>
       </div>
