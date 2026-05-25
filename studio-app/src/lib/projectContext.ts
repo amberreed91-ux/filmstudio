@@ -31,6 +31,8 @@ export function projectIdFromLocationState(locationState: unknown): string {
 export function resolveActiveProjectId(input: ResolveActiveProjectIdInput): string {
   const query = clean(input.queryProjectId)
   if (query) return query
+  const route = clean(input.routeProjectId)
+  if (route) return route
   const routeState = projectIdFromLocationState(input.locationState)
   if (routeState) return routeState
   const persisted = clean(input.persistedProjectId)

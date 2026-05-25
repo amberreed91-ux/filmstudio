@@ -560,7 +560,7 @@ export default function ProductionBoard() {
           <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
 
           <ProductionExecutionBay
-            projectId={activeProjectId || project?.project_id || 'demo_studio_cinematic_001'}
+            projectId={activeProjectId || project?.project_id || ''}
             projectTitle={project?.title || project?.project_id || 'Production Execution Mission'}
             decisionGate={decisionGate}
             renderJobs={renderJobs}

@@ -1884,7 +1884,7 @@ export default function PrevisRoom() {
           </section>
 
           <PrevisCinematicShowcase
-            projectId={activeProjectId || project?.project_id || 'demo_studio_cinematic_001'}
+            projectId={activeProjectId || project?.project_id || ''}
             sceneId={selectedSceneIdSafe || 'scene_001'}
             sceneTitle={asString(selectedScene.heading) || asString(selectedScene.location) || 'Scene intent in progress'}
             cinematicIntent={asString(selectedPromptBase) || 'Cinematic intent is still being written from scene evidence.'}

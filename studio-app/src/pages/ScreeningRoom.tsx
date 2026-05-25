@@ -1253,7 +1253,7 @@ export default function ScreeningRoom() {
           </section>
 
           <ScreeningCinematicShowcase
-            projectId={activeProjectId || project?.project_id || 'demo_studio_cinematic_001'}
+            projectId={activeProjectId || project?.project_id || ''}
             projectTitle={project?.title || project?.project_id || 'Screening Session'}
             heroPreviewUrl={viewerImage}
             heroVideoUrl={activeSceneVideoUrl}
