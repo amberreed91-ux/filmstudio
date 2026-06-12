@@ -15,7 +15,7 @@ export default function StudioLanding() {
 
   return (
     <div
-      className={`studio-landing-screen ${isEntering ? 'studio-landing-exit' : ''}`}
+      className={`studio-landing-screen cinematic-hero ${isEntering ? 'studio-landing-exit' : ''}`}
       role="presentation"
     >
       <div className="studio-landing-bg" />

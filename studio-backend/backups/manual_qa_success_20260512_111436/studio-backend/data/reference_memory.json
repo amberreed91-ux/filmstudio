@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-12T14:56:42.472074Z",
+  "projects": {
+    "test_v2_project": {
+      "visual_patterns": [],
+      "pacing_patterns": [],
+      "motif_patterns": [],
+      "tone_patterns": [],
+      "references": [
+        {
+          "reference_id": "ref_001",
+          "file_name": "sample_ref.txt",
+          "reference_type": "note",
+          "study_prompt": "Focus on dread pacing and motif escalation",
+          "patterns": {
+            "visual": [
+              "Use constrained framing around threat space."
+            ],
+            "pacing": [
+              "Delay reveal one beat longer than expected."
+            ],
+            "motif": [
+              "Escalate motif from static mark to active threat."
+            ],
+            "tone": [
+              "Keep dread grounded in physical space."
+            ]
+          },
+          "confidence": 0.75,
+          "usage_count": 0,
+          "last_used": null,
+          "status": "staged",
+          "source_reference": "sample_ref.txt",
+          "stored_at": "2026-05-06T19:18:15.729617Z"
+        }
+      ]
+    },
+    "default_project": {
+      "visual_patterns": [],
+      "pacing_patterns": [],
+      "motif_patterns": [],
+      "tone_patterns": [],
+      "references": []
+    },
+    "no_memory_project": {
+      "visual_patterns": [],
+      "pacing_patterns": [],
+      "motif_patterns": [],
+      "tone_patterns": [],
+      "references": []
+    },
+    "project-20260428222604": {
+      "visual_patterns": [
+        {
+          "pattern": "Favor readable silhouette and negative space around key action.",
+          "type": "visual",
+          "confidence": 0.3,
+          "usage_count": 0,
+          "weight": 0.3,
+          "last_used": null,
+          "source_reference": "Call Me By Your Name.MP4",
+          "status": "staged"
+        },
+        {
+          "pattern": "Maintain consistent key-light motivation across shots.",
+          "type": "visual",
+          "confidence": 0.3,
+          "usage_count": 0,
+          "weight": 0.3,
+          "last_used": null,
+          "source_reference": "Call Me By Your Name.MP4",
+          "status": "staged"
+        }
+      ],
+      "pacing_patterns": [
+        {
+          "pattern": "Delay payoff by extending quiet beats before disruption.",
+          "type": "pacing",
+          "confidence": 0.3,
+          "usage_count": 0,
+          "weight": 0.3,
+          "last_used": null,
+          "source_reference": "Call Me By Your Name.MP4",
+          "status": "staged"
+        }
+      ],
+      "motif_patterns": [
+        {
+          "pattern": "Introduce one recurring visual cue by scene midpoint.",
+          "type": "motif",
+          "confidence": 0.3,
+          "usage_count": 0,
+          "weight": 0.3,
+          "last_used": null,
+          "source_reference": "The Shinning.MP4",
+          "status": "staged"
+        },
+        {
+          "pattern": "Repeat the same symbol in evolving forms to build memory pressure.",
+          "type": "motif",
+          "confidence": 0.3,
+          "usage_count": 0,
+          "weight": 0.3,
+          "last_used": null,
+          "source_reference": "Call Me By Your Name.MP4",
+          "status": "staged"
+        }
+      ],
+      "tone_patterns": [
+        {
+          "pattern": "Use restrained emotional escalation before overt supernatural reveal.",
+          "type": "tone",
+          "confidence": 0.3,
+          "usage_count": 0,
+          "weight": 0.3,
+          "last_used": null,
+          "source_reference": "Call Me By Your Name.MP4",
+          "status": "staged"
+        },
+        {
+          "pattern": "Escalate unease with restrained beat timing.",
+          "type": "tone",
+          "confidence": 0.3,
+          "usage_count": 0,
+          "weight": 0.3,
+          "last_used": null,
+          "source_reference": "Call Me By Your Name.MP4",
+          "status": "staged"
+        },
+        {
+          "pattern": "Preserve one concrete visual anchor per scene for continuity.",
+          "type": "tone",
+          "confidence": 0.3,
+          "usage_count": 0,
+          "weight": 0.3,
+          "last_used": null,
+          "source_reference": "Call Me By Your Name.MP4",
+          "status": "staged"
+        }
+      ],
+      "references": [
+        {
+          "reference_id": "Call Me By Your Name.MP4-23578397-1777492506000",
+          "file_name": "Call Me By Your Name.MP4",
+          "reference_type": "video",
+          "study_prompt": "Hold on grief without rescue.",
+          "patterns": {
+            "visual": [
+              "Favor readable silhouette and negative space around key action.",
+              "Maintain consistent key-light motivation across shots."
+            ],
+            "pacing": [
+              "Delay payoff by extending quiet beats before disruption."
+            ],
+            "motif": [
+              "Repeat the same symbol in evolving forms to build memory pressure."
+            ],
+            "tone": [
+              "Use restrained emotional escalation before overt supernatural reveal.",
+              "Escalate unease with restrained beat timing.",
+              "Preserve one concrete visual anchor per scene for continuity."
+            ]
+          },
+          "confidence": 0.72,
+          "usage_count": 0,
+          "last_used": null,
+          "status": "staged",
+          "source_reference": "Call Me By Your Name.MP4",
+          "stored_at": "2026-05-07T06:46:33.898969Z"
+        },
+        {
+          "reference_id": "The Shinning.MP4-1644273-1777490874000",
+          "file_name": "The Shinning.MP4",
+          "reference_type": "video",
+          "study_prompt": "/Users/amberreed/Downloads/The Shinning.MP4",
+          "patterns": {
+            "visual": [
+              "Favor readable silhouette and negative space around key action.",
+              "Maintain consistent key-light motivation across shots."
+            ],
+            "pacing": [
+              "Delay payoff by extending quiet beats before disruption."
+            ],
+            "motif": [
+              "Introduce one recurring visual cue by scene midpoint."
+            ],
+            "tone": [
+              "Use restrained emotional escalation before overt supernatural reveal.",
+              "Escalate unease with restrained beat timing.",
+              "Preserve one concrete visual anchor per scene for continuity."
+            ]
+          },
+          "confidence": 0.72,
+          "usage_count": 0,
+          "last_used": null,
+          "status": "staged",
+          "source_reference": "The Shinning.MP4",
+          "stored_at": "2026-05-07T06:43:00.006655Z"
+        }
+      ]
+    }
+  }
+}

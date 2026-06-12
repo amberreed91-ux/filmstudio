@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { BookOpen, Clapperboard, DollarSign, Film, FolderKanban, Home, LayoutDashboard, FileText } from 'lucide-react'
+import { BookOpen, Clapperboard, DollarSign, Film, FolderKanban, Home, LayoutDashboard, FileText, Eye, Share2 } from 'lucide-react'
 import { matchPath } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import StudyRoom from './pages/StudyRoom'
@@ -17,6 +17,8 @@ import ProductionBoard from './pages/ProductionBoard'
 import ScreeningRoom from './pages/ScreeningRoom'
 import ArchiveRoom from './pages/ArchiveRoom'
 import StudioDevTools from './pages/StudioDevTools'
+import ShareProject from './pages/ShareProject'
+import UniverseGraphPage from './pages/UniverseGraphPage'
 
 export type NavigationPlacement =
   | 'primary'
@@ -69,70 +71,80 @@ export const APP_ROUTES: AppRoute[] = [
   },
   {
     path: '/studio/lobby',
-    label: 'Lobby',
-    title: 'Studio Lobby',
+    label: 'Home',
+    title: 'Home',
     purpose: 'Room-based entry point for navigating writing, previs, production, screening, and archive workflows.',
     placement: 'primary',
-    breadcrumbs: [{ label: 'Studio', to: '/studio' }, { label: 'Lobby' }],
+    breadcrumbs: [{ label: 'Studio', to: '/studio' }, { label: 'Home' }],
     contextualLinks: [
-      { to: '/studio/overview', label: 'Open Studio Dashboard' },
-      { to: '/studio/writers-room', label: "Open Writer's Room" },
-      { to: '/studio/previs', label: 'Open Previs Room' },
+      { to: '/studio/overview', label: 'Open Overview' },
+      { to: '/studio/writers-room', label: "Open Write" },
+      { to: '/studio/previs', label: 'Open Storyboard' },
     ],
     icon: <Home size={14} />,
     element: <StudioLobby />,
   },
   {
     path: '/studio/overview',
-    label: 'Studio Dashboard',
-    title: 'Studio Overview',
+    label: 'Overview',
+    title: 'Overview',
     purpose: 'Master command center for film health, active risks, and room-level progress.',
     placement: 'primary',
     breadcrumbs: [{ label: 'Home', to: '/' }, { label: 'Studio', to: '/studio' }, { label: 'Overview' }],
     contextualLinks: [
-      { to: '/studio/lobby', label: 'Open Lobby' },
-      { to: '/studio/writers-room', label: "Open Writer's Room" },
+      { to: '/studio/lobby', label: 'Open Home' },
+      { to: '/studio/writers-room', label: "Open Write" },
     ],
     icon: <LayoutDashboard size={14} />,
     element: <StudioOverview />,
   },
   {
     path: '/studio/writers-room',
-    label: "Writer's Room",
-    title: "Writer's Room",
+    label: 'Write',
+    title: 'Write',
     purpose: 'Narrative planning and revision room for story structure, beats, and continuity intent.',
     placement: 'primary',
-    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: "Writer's Room" }],
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Write' }],
     contextualLinks: [
-      { to: '/studio/previs', label: 'Open Previs Room' },
-      { to: '/studio/production-board', label: 'Open Production Board' },
+      { to: '/studio/previs', label: 'Open Storyboard' },
+      { to: '/studio/production-board', label: 'Open Scenes' },
     ],
     icon: <BookOpen size={14} />,
     element: <WritersRoom />,
   },
   {
+    path: '/studio/universe-graph',
+    label: 'Universe',
+    title: 'Universe Knowledge Graph',
+    purpose: 'Interconnected knowledge graph of characters, locations, lore, and objects.',
+    placement: 'primary',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Universe' }],
+    icon: <Share2 size={14} />,
+    element: <UniverseGraphPage />,
+  },
+  {
     path: '/studio/production-board',
-    label: 'Production Board',
-    title: 'Production Board',
+    label: 'Scenes',
+    title: 'Scenes',
     purpose: 'Execution and stage-state monitoring room for active scene output readiness.',
     placement: 'primary',
-    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Production Board' }],
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Scenes' }],
     contextualLinks: [
-      { to: '/studio/previs', label: 'Open Previs Room' },
-      { to: '/studio/screening-room', label: 'Open Screening Room' },
+      { to: '/studio/previs', label: 'Open Storyboard' },
+      { to: '/studio/screening-room', label: 'Open Watch' },
     ],
     icon: <Clapperboard size={14} />,
     element: <ProductionBoard />,
   },
   {
     path: '/studio/screening-room',
-    label: 'Screening Room',
-    title: 'Screening Room',
+    label: 'Watch',
+    title: 'Watch',
     purpose: 'Playback and review room for scene cuts, comparisons, and intervention outcomes.',
     placement: 'primary',
-    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Screening Room' }],
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Watch' }],
     contextualLinks: [
-      { to: '/studio/previs', label: 'Open Previs Room' },
+      { to: '/studio/previs', label: 'Open Storyboard' },
       { to: '/studio/archive', label: 'Open Archive' },
     ],
     icon: <Film size={14} />,
@@ -141,13 +153,13 @@ export const APP_ROUTES: AppRoute[] = [
   {
     path: '/studio/archive',
     label: 'Archive',
-    title: 'Archive Room',
+    title: 'Archive',
     purpose: 'Browse historical project states, quality snapshots, and prior intervention records.',
     placement: 'primary',
     breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Archive' }],
     contextualLinks: [
-      { to: '/studio/lobby', label: 'Return to Lobby' },
-      { to: '/studio/previs', label: 'Open Previs Room' },
+      { to: '/studio/lobby', label: 'Return to Home' },
+      { to: '/studio/previs', label: 'Open Storyboard' },
     ],
     icon: <FolderKanban size={14} />,
     element: <ArchiveRoom />,
@@ -376,6 +388,14 @@ export const APP_ROUTES: AppRoute[] = [
     ],
     icon: <DollarSign size={14} />,
     element: <Cost />,
+  },
+  {
+    path: '/share/:shareToken',
+    label: 'Share Project',
+    title: 'Shared Project View',
+    purpose: 'Read-only view of a shared project via share token.',
+    placement: 'hidden-system',
+    element: <ShareProject />,
   },
 ]
 

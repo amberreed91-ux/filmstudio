@@ -40,6 +40,10 @@ from app.services.video_understanding_status_service import video_understanding_
 from app.services.demo_seed_service import demo_seed_service
 from app.services.cinematic_timeline_intelligence_service import cinematic_timeline_intelligence_service
 from app.services.editorial_revision_intelligence_service import editorial_revision_intelligence_service
+from app.services.director_memory_service import (
+    director_memory_service,
+    ENTRY_KINDS as DIRECTOR_MEMORY_KINDS,
+)
 from app.services.stability import (
     PlaybackError,
     PersistenceError,
@@ -78,17 +82,9 @@ def _sync_project_to_canonical_store(project: Dict[str, Any]) -> None:
     project_id = str(project.get("project_id") or "").strip()
     if not project_id:
         return
-    title = str(project.get("title") or project_id)
-    updated_at = str(project.get("updated_at") or datetime.now(timezone.utc).isoformat())
     storage = get_storage("sqlite")
     try:
-        storage.save_project(
-            StudioProject(
-                project_id=project_id,
-                title=title,
-                updated_at=updated_at,
-            )
-        )
+        storage.save_project(StudioProject(**project))
     except Exception as exc:
         # Fallback for legacy/minimal sqlite schemas used in tests.
         try:
@@ -97,7 +93,9 @@ def _sync_project_to_canonical_store(project: Dict[str, Any]) -> None:
                     cursor = conn.cursor()
                     cursor.execute("PRAGMA table_info(projects)")
                     columns = [row[1] for row in cursor.fetchall()]
-                    payload = json.dumps({"project_id": project_id, "title": title, "updated_at": updated_at})
+                    title = str(project.get("title") or project_id)
+                    updated_at = str(project.get("updated_at") or datetime.now(timezone.utc).isoformat())
+                    payload = json.dumps(project)
                     if {"project_id", "data", "created_at", "updated_at"}.issubset(set(columns)):
                         cursor.execute(
                             """INSERT OR REPLACE INTO projects (project_id, data, created_at, updated_at)
@@ -114,6 +112,37 @@ def _sync_project_to_canonical_store(project: Dict[str, Any]) -> None:
         except (sqlite3.Error, AttributeError) as fallback_exc:
             logger.warning("Fallback canonical project sync failed for %s: %s", project_id, fallback_exc)
         logger.warning("Failed canonical project sync for %s: %s", project_id, exc)
+
+
+def _load_project_from_store(project_id: str):
+    current = project_store.get_project(project_id)
+    if current is not None:
+        return current
+
+    storage = get_storage("sqlite")
+    try:
+        persisted = storage.get_project(project_id)
+    except Exception as exc:
+        logger.debug("SQLite project lookup failed for %s: %s", project_id, exc)
+        persisted = None
+
+    if persisted is None:
+        logger.warning("PROJECT_NOT_FOUND | id=%s | db_checked=True", project_id)
+        return None
+
+    if hasattr(persisted, "model_dump"):
+        payload = persisted.model_dump(mode="json")
+    elif isinstance(persisted, dict):
+        payload = persisted
+    else:
+        payload = {"project_id": project_id}
+
+    try:
+        project_store.save_project(payload)
+    except Exception as exc:
+        logger.debug("Could not mirror SQLite project %s to project_store: %s", project_id, exc)
+
+    return payload
 
 if video_asset_service._storage is None:
     video_asset_service._storage = get_storage("sqlite")
@@ -354,6 +383,28 @@ class CollaborationCoDirectionPayload(CollaborationSessionPayload):
     note: str = ""
 
 
+class CreateScenePayload(BaseModel):
+    scene_name: str = ""
+    description: str = ""
+    location: str = ""
+    time_of_day: str = ""
+    emotional_tone: str = ""
+    characters: List[str] = Field(default_factory=list)
+    notes: str = ""
+    is_major_plot_point: bool = False
+
+
+class UpdateScenePayload(BaseModel):
+    scene_name: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    time_of_day: Optional[str] = None
+    emotional_tone: Optional[str] = None
+    characters: Optional[List[str]] = None
+    notes: Optional[str] = None
+    is_major_plot_point: Optional[bool] = None
+
+
 @router.get("/projects")
 def list_projects():
     return {"projects": project_store.list_projects()}
@@ -393,9 +444,48 @@ def update_project(project_id: str, payload: UpdateProjectPayload):
     return updated
 
 
+@router.delete("/projects/{project_id}")
+def delete_project(project_id: str):
+    """Delete a project and all associated data"""
+    timer = start_timer()
+    
+    # Check if project exists
+    project = project_store.get_project(project_id)
+    if project is None:
+        storage = get_storage("sqlite")
+        if storage:
+            project = storage.get_project(project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Delete from project_store (in-memory)
+    project_store.delete_project(project_id)
+    
+    # Delete from canonical storage (SQLite)
+    storage = get_storage("sqlite")
+    if storage:
+        try:
+            # Delete related data
+            storage.delete_cinematic_memory_records_for_project(project_id)
+            storage.delete_continuity_issues_for_project(project_id)
+            storage.delete_style_drift_issues_for_project(project_id)
+            
+            # Delete the project itself
+            deleted = storage.delete_project(project_id)
+            if not deleted:
+                logger.warning("PROJECT_DELETE | project=%s | storage_delete=false", project_id)
+        except Exception as exc:
+            logger.error("PROJECT_DELETE_ERROR | project=%s | error=%s", project_id, exc)
+            raise HTTPException(status_code=500, detail=f"Failed to delete project: {exc}")
+    
+    logger.info("PROJECT_DELETED | project=%s | elapsed=%dms", project_id, elapsed_ms(timer))
+    
+    return {"success": True, "project_id": project_id}
+
+
 @router.post("/projects/{project_id}/generate-scenes")
 def generate_scenes(project_id: str, payload: GenerateScenesPayload):
-    current = project_store.get_project(project_id)
+    current = _load_project_from_store(project_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -403,9 +493,28 @@ def generate_scenes(project_id: str, payload: GenerateScenesPayload):
     summary = parser.build_script_breakdown_bundle(payload.script_text or "")
     summary = _ensure_scene_fallback(summary, payload.script_text or "")
 
+    # Log each scene that was parsed
+    scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+    for scene in scenes:
+        if isinstance(scene, dict):
+            scene_id = scene.get("scene_id", "unknown")
+            title = scene.get("heading", "")
+            description = scene.get("text", "") or scene.get("description", "")
+            location = scene.get("location", "")
+            tone = scene.get("emotional_tone", "")
+            logger.info(
+                "SCENE_SAVED | project=%s | scene=%s | title=%s | description_length=%d | location=%s | tone=%s",
+                project_id,
+                scene_id,
+                title[:50] if title else "none",
+                len(description),
+                location or "none",
+                tone or "none"
+            )
+
     scene_ids = [
         str((scene or {}).get("scene_id") or "").strip()
-        for scene in (summary.get("scenes") if isinstance(summary.get("scenes"), list) else [])
+        for scene in scenes
     ]
     scene_ids = [scene_id for scene_id in scene_ids if scene_id]
 
@@ -459,7 +568,7 @@ def update_film_cut(project_id: str, payload: FilmCutPayload):
 
 @router.post("/projects/{project_id}/generate-motion")
 def generate_motion(project_id: str, payload: MotionPreviewPayload):
-    current = project_store.get_project(project_id)
+    current = _load_project_from_store(project_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -591,6 +700,218 @@ def create_or_get_collaboration_session(project_id: str, payload: CollaborationS
     return {"collaboration": result}
 
 
+@router.post("/projects/{project_id}/creative-memories")
+def save_creative_decision_memory(project_id: str, payload: Dict[str, Any]):
+    """Save a creative decision memory to project storage"""
+    timer = start_timer()
+    
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    try:
+        # Validate required fields
+        if not payload.get("user_note") or not str(payload.get("user_note")).strip():
+            raise ValidationError("user_note is required", stage="creative_memory")
+        if not payload.get("decision_type"):
+            raise ValidationError("decision_type is required", stage="creative_memory")
+        if not payload.get("inferred_tradeoff"):
+            raise ValidationError("inferred_tradeoff is required", stage="creative_memory")
+        
+        memory = project_store.save_creative_memory(project_id, payload)
+        log_stage_event(
+            project_id=project_id,
+            job_id=None,
+            provider=None,
+            stage="save_creative_memory",
+            duration_ms=elapsed_ms(timer),
+        )
+        return memory
+    except StabilityError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_dict())
+
+
+@router.get("/projects/{project_id}/creative-memories")
+def list_creative_decision_memories(project_id: str):
+    """List all creative decision memories for a project"""
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    memories = project_store.list_creative_memories(project_id)
+    return {
+        "project_id": project_id,
+        "memories": memories,
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.patch("/projects/{project_id}/creative-memories/{memory_id}")
+def update_creative_decision_memory(project_id: str, memory_id: str, payload: Dict[str, Any]):
+    """Update a creative decision memory"""
+    timer = start_timer()
+    
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    try:
+        memory = project_store.update_creative_memory(project_id, memory_id, payload)
+        if memory is None:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        
+        log_stage_event(
+            project_id=project_id,
+            job_id=None,
+            provider=None,
+            stage="update_creative_memory",
+            duration_ms=elapsed_ms(timer),
+        )
+        return memory
+    except StabilityError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_dict())
+
+
+@router.delete("/projects/{project_id}/creative-memories/{memory_id}")
+def delete_creative_decision_memory(project_id: str, memory_id: str):
+    """Delete a creative decision memory"""
+    timer = start_timer()
+    
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    success = project_store.delete_creative_memory(project_id, memory_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    
+    log_stage_event(
+        project_id=project_id,
+        job_id=None,
+        provider=None,
+        stage="delete_creative_memory",
+        duration_ms=elapsed_ms(timer),
+    )
+    return {"success": True, "memory_id": memory_id}
+
+
+# ---------------------------------------------------------------------------
+# Director's Memory Engine routes (v1)
+# Mirrors Creative Decision Memory pattern. Co-director voice; no numeric scores.
+# ---------------------------------------------------------------------------
+
+
+def _validate_director_memory_kind(kind: str) -> str:
+    if kind not in DIRECTOR_MEMORY_KINDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown director memory kind '{kind}'. Expected one of: {', '.join(DIRECTOR_MEMORY_KINDS)}",
+        )
+    return kind
+
+
+@router.get("/projects/{project_id}/director-memory")
+def get_director_memory(project_id: str):
+    """Return the full Director's Memory bundle for a project."""
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    memory = director_memory_service.get_memory(project_id)
+    return {
+        "project_id": project_id,
+        "memory": memory,
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/projects/{project_id}/director-memory/{kind}")
+def list_director_memory_entries(project_id: str, kind: str):
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    _validate_director_memory_kind(kind)
+    entries = director_memory_service.list_entries(project_id, kind)
+    return {"project_id": project_id, "kind": kind, "entries": entries}
+
+
+@router.post("/projects/{project_id}/director-memory/{kind}")
+def save_director_memory_entry(project_id: str, kind: str, payload: Dict[str, Any]):
+    """Save a new Director's Memory entry. Explicit-save-only."""
+    timer = start_timer()
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    _validate_director_memory_kind(kind)
+    try:
+        entry = director_memory_service.save_entry(project_id, kind, payload or {})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    log_stage_event(
+        project_id=project_id,
+        job_id=None,
+        provider=None,
+        stage=f"save_director_memory_{kind}",
+        duration_ms=elapsed_ms(timer),
+    )
+    return {"success": True, "entry": entry}
+
+
+@router.patch("/projects/{project_id}/director-memory/{kind}/{entry_id}")
+def update_director_memory_entry(
+    project_id: str, kind: str, entry_id: str, payload: Dict[str, Any]
+):
+    timer = start_timer()
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    _validate_director_memory_kind(kind)
+    try:
+        entry = director_memory_service.update_entry(project_id, kind, entry_id, payload or {})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Director memory entry not found")
+    log_stage_event(
+        project_id=project_id,
+        job_id=None,
+        provider=None,
+        stage=f"update_director_memory_{kind}",
+        duration_ms=elapsed_ms(timer),
+    )
+    return {"success": True, "entry": entry}
+
+
+@router.delete("/projects/{project_id}/director-memory/{kind}/{entry_id}")
+def delete_director_memory_entry(project_id: str, kind: str, entry_id: str):
+    timer = start_timer()
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    _validate_director_memory_kind(kind)
+    success = director_memory_service.delete_entry(project_id, kind, entry_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Director memory entry not found")
+    log_stage_event(
+        project_id=project_id,
+        job_id=None,
+        provider=None,
+        stage=f"delete_director_memory_{kind}",
+        duration_ms=elapsed_ms(timer),
+    )
+    return {"success": True, "entry_id": entry_id}
+
+
+@router.post("/projects/{project_id}/director-memory/scan")
+def scan_director_memory(project_id: str, payload: Dict[str, Any]):
+    """Scan a scene against Director's Memory and return co-director callbacks.
+
+    Request body: ``{"scene": {...}, "scene_index": <optional int>}``.
+    The scene payload is shape-flexible — any of ``title``, ``summary``,
+    ``description``, ``text``, ``beats`` is consulted.
+    """
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    scene = payload.get("scene") if isinstance(payload, dict) else None
+    if not isinstance(scene, dict):
+        raise HTTPException(status_code=400, detail="'scene' object is required")
+    scene_index = payload.get("scene_index") if isinstance(payload, dict) else None
+    result = director_memory_service.scan_scene(
+        project_id, scene, scene_index=scene_index
+    )
+    return result
+
+
 @router.get("/projects/{project_id}/collaboration")
 def get_collaboration_state(project_id: str):
     current = project_store.get_project(project_id)
@@ -678,7 +999,183 @@ def add_collaboration_co_direction_note(project_id: str, payload: CollaborationC
     return {"collaboration": result}
 
 
+# ============================================================================
+# Scene CRUD Endpoints
+# ============================================================================
+
+@router.get("/projects/{project_id}/scenes")
+def list_project_scenes(project_id: str):
+    """List all scenes for a project"""
+    current = _load_project_from_store(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
+    scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+    
+    return {"scenes": scenes}
+
+
+@router.post("/projects/{project_id}/scenes")
+def create_scene(project_id: str, payload: CreateScenePayload):
+    """Create a new scene for a project"""
+    current = _load_project_from_store(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
+    scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+    
+    # Generate scene_id
+    scene_count = len(scenes)
+    scene_id = f"scene_{scene_count + 1:03d}"
+    
+    # Create new scene
+    new_scene = {
+        "scene_id": scene_id,
+        "scene_name": payload.scene_name.strip() or f"Scene {scene_count + 1}",
+        "description": payload.description.strip(),
+        "location": payload.location.strip(),
+        "time_of_day": payload.time_of_day.strip() or "DAY",
+        "emotional_tone": payload.emotional_tone.strip() or "neutral",
+        "characters": payload.characters,
+        "notes": payload.notes.strip(),
+        "is_major_plot_point": payload.is_major_plot_point,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "status": "draft",
+    }
+    
+    # Add to scenes list
+    scenes.append(new_scene)
+    summary["scenes"] = scenes
+    
+    # Update film_cut to include new scene
+    film_cut = current.get("film_cut") if isinstance(current.get("film_cut"), dict) else {}
+    scene_order = film_cut.get("scene_order") if isinstance(film_cut.get("scene_order"), list) else []
+    included_scenes = film_cut.get("included_scenes") if isinstance(film_cut.get("included_scenes"), list) else []
+    
+    scene_order.append(scene_id)
+    included_scenes.append(scene_id)
+    
+    film_cut["scene_order"] = scene_order
+    film_cut["included_scenes"] = included_scenes
+    film_cut["excluded_scenes"] = []
+    
+    # Update project
+    updated = project_store.update_project(
+        project_id,
+        {
+            "execution_summary": summary,
+            "film_cut": film_cut,
+        },
+    )
+    
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    _sync_project_to_canonical_store(updated)
+    return {"scene": new_scene, "project": updated}
+
+
+@router.get("/projects/{project_id}/scenes/{scene_id}")
+def get_scene(project_id: str, scene_id: str):
+    """Get a specific scene"""
+    current = _load_project_from_store(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
+    scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+    
+    scene = next((s for s in scenes if isinstance(s, dict) and s.get("scene_id") == scene_id), None)
+    if scene is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    normalized_scene = dict(scene)
+    if not normalized_scene.get("description") and normalized_scene.get("text"):
+        normalized_scene["description"] = normalized_scene.get("text")
+
+    return {"scene": normalized_scene}
+
+
+@router.put("/projects/{project_id}/scenes/{scene_id}")
+def update_scene(project_id: str, scene_id: str, payload: UpdateScenePayload):
+    """Update a scene"""
+    current = _load_project_from_store(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
+    scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+    
+    scene_index = next((i for i, s in enumerate(scenes) if isinstance(s, dict) and s.get("scene_id") == scene_id), None)
+    if scene_index is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    
+    scene = scenes[scene_index]
+    
+    # Update fields
+    updates = payload.model_dump(exclude_none=True)
+    for key, value in updates.items():
+        scene[key] = value
+    
+    scene["updated_at"] = datetime.now(timezone.utc).isoformat()
+    scenes[scene_index] = scene
+    summary["scenes"] = scenes
+    
+    # Update project
+    updated = project_store.update_project(project_id, {"execution_summary": summary})
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    _sync_project_to_canonical_store(updated)
+    return {"scene": scene, "project": updated}
+
+
+@router.delete("/projects/{project_id}/scenes/{scene_id}")
+def delete_scene(project_id: str, scene_id: str):
+    """Delete a scene"""
+    current = _load_project_from_store(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
+    scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+    
+    # Remove scene
+    scenes = [s for s in scenes if not (isinstance(s, dict) and s.get("scene_id") == scene_id)]
+    summary["scenes"] = scenes
+    
+    # Update film_cut to remove scene
+    film_cut = current.get("film_cut") if isinstance(current.get("film_cut"), dict) else {}
+    scene_order = [sid for sid in (film_cut.get("scene_order") or []) if sid != scene_id]
+    included_scenes = [sid for sid in (film_cut.get("included_scenes") or []) if sid != scene_id]
+    excluded_scenes = [sid for sid in (film_cut.get("excluded_scenes") or []) if sid != scene_id]
+    
+    film_cut["scene_order"] = scene_order
+    film_cut["included_scenes"] = included_scenes
+    film_cut["excluded_scenes"] = excluded_scenes
+    
+    # Update project
+    updated = project_store.update_project(
+        project_id,
+        {
+            "execution_summary": summary,
+            "film_cut": film_cut,
+        },
+    )
+    
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    _sync_project_to_canonical_store(updated)
+    return {"message": "Scene deleted", "scene_id": scene_id}
+
+
+# ============================================================================
 # Short Film Review Endpoints
+# ============================================================================
 class CreateReviewPayload(BaseModel):
     output_url: str
     reviewer: str = ""
@@ -1652,3 +2149,110 @@ def update_final_short_film_package_status(package_id: str, payload: UpdatePacka
 def seed_demo_project(payload: SeedDemoProjectPayload = SeedDemoProjectPayload()):
     """Dev-only deterministic studio project seed for product demos."""
     return demo_seed_service.seed_demo_project(project_id=payload.project_id)
+
+
+# ── Provider status + per-scene override ─────────────────────────────────────
+
+class SceneProviderOverridePayload(BaseModel):
+    provider_mode: str = "simulated"  # "hosted_api" | "simulated"
+
+
+@router.get("/projects/{project_id}/provider-status")
+def get_project_provider_status(project_id: str):
+    """
+    Return the current provider status for a project.
+
+    Exposes the provider truth system (provider_mode, ready_for_hosted_generation,
+    is_mock, missing_requirements) plus any per-scene overrides stored in project
+    state.
+
+    Advisory only — does not mutate project state.
+    """
+    current = project_store.get_project(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Get the active provider status from the render service.
+    providers = render_service.list_providers()
+    default_provider = render_service.get_default_provider()
+
+    # Find the active provider status entry.
+    active_status = next(
+        (p for p in providers if p.provider_id == default_provider),
+        providers[0] if providers else None,
+    )
+
+    provider_mode = "simulated"
+    ready_for_hosted = False
+    is_mock = True
+    missing_requirements: list = []
+    active_provider = default_provider
+
+    if active_status:
+        provider_mode = str(active_status.provider_mode or "simulated")
+        ready_for_hosted = bool(active_status.ready_for_hosted_generation)
+        is_mock = bool(active_status.is_mock)
+        missing_requirements = list(active_status.missing_requirements or [])
+        active_provider = str(active_status.provider_id or default_provider)
+
+    # Per-scene overrides stored in project state.
+    per_scene_overrides: dict = {}
+    if isinstance(current, dict):
+        overrides_raw = current.get("provider_overrides")
+        if isinstance(overrides_raw, dict):
+            per_scene_overrides = overrides_raw
+
+    return {
+        "provider_mode": provider_mode,
+        "ready_for_hosted_generation": ready_for_hosted,
+        "is_mock": is_mock,
+        "missing_requirements": missing_requirements,
+        "active_provider": active_provider,
+        "per_scene_overrides": per_scene_overrides,
+    }
+
+
+@router.post("/projects/{project_id}/scenes/{scene_id}/provider-override")
+def set_scene_provider_override(
+    project_id: str,
+    scene_id: str,
+    payload: SceneProviderOverridePayload,
+):
+    """
+    Store a per-scene provider mode override in project state.
+
+    When a render job is created for this scene, the override is used instead
+    of the project default.  Overrides do not affect other scenes.
+
+    Valid provider_mode values: "hosted_api", "simulated".
+    """
+    current = project_store.get_project(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    valid_modes = {"hosted_api", "simulated", "mock_success"}
+    mode = str(payload.provider_mode or "simulated").strip().lower()
+    if mode not in valid_modes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid provider_mode '{mode}'. Must be one of: {sorted(valid_modes)}",
+        )
+
+    # Load existing overrides and update.
+    overrides: dict = {}
+    if isinstance(current, dict):
+        existing = current.get("provider_overrides")
+        if isinstance(existing, dict):
+            overrides = dict(existing)
+
+    overrides[scene_id] = mode
+
+    updated = project_store.update_project(project_id, {"provider_overrides": overrides})
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return {
+        "scene_id": scene_id,
+        "provider_mode": mode,
+        "per_scene_overrides": overrides,
+    }

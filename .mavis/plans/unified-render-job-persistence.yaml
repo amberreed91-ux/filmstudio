@@ -1,0 +1,155 @@
+version: 1
+plan:
+  name: 'unified-render-job-persistence'
+  max_concurrency: 4
+  max_consecutive_failures: 2
+  max_cycles: 8
+tasks:
+  - id: audit-render-paths
+    title: 'Audit render job creation paths'
+    prompt: |
+      Audit ALL render job creation paths in the backend codebase at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/
+
+      Find every place where render jobs are created:
+      1. Search for `render_service.create_job` or `render_service.submit_job`
+      2. Search for direct instantiation of RenderJobModel
+      3. Search for `one_button_render_jobs` being populated
+      4. Search for any async generation helpers that create jobs
+      5. Check the one-button short film flow in app/routes/projects.py (generate_short_film endpoint around line 315-477)
+      6. Check manual render flow in app/routes/render.py
+      7. Check render_executor.py and any provider execution layers
+
+      For each path found, determine:
+      - Does it call render_service.create_job()?
+      - Does it call render_service.submit_job()?
+      - Does _persist_job get called (via create_job/submit_job)?
+      - Does it write to project_state_store.json?
+
+      Return a list of all paths found with their current persistence behavior.
+    assigned_to: explore
+    verified_by: general
+    verify_prompt: 'Verify the audit results by re-running grep searches and checking each identified path actually calls render_service._persist_job'
+    timeout_ms: 300000
+
+  - id: implement-backfill-helper
+    title: 'Implement backfill_render_jobs_from_project_state'
+    prompt: |
+      Create a backfill helper function backfill_render_jobs_from_project_state() in the render service.
+
+      Location: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/services/render.py
+
+      The function should:
+      1. Load project_state_store.json from data/ directory
+      2. Scan all projects for one_button_render_jobs entries
+      3. For each job entry, check if it already exists in SQLite render_jobs table
+      4. If NOT in SQLite, create a new RenderJobModel and persist it via _persist_job()
+      5. Preserve all fields: job_id, provider_job_id, status, output_url, provider, project_id, shot_id, created_at, updated_at
+      6. Avoid duplicates by checking job.id before inserting
+      7. Return a summary dict: {backfilled_count, already_exists_count, errors}
+      8. Use the global _storage to access SQLite
+
+      The function signature:
+      def backfill_render_jobs_from_project_state() -> dict:
+          ...
+
+      It should log progress and errors.
+
+      After writing the function, also add it to the render.py module-level exports (it will be called from the backfill endpoint).
+    assigned_to: general
+    verified_by: general
+    verify_prompt: 'Verify the backfill function correctly reads project_state_store.json, creates RenderJobModel objects, and calls _persist_job without duplicates'
+    timeout_ms: 300000
+
+  - id: add-backfill-endpoint
+    title: 'Add backfill endpoint'
+    prompt: |
+      Add a new endpoint to the render routes file.
+
+      Location: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/render.py
+
+      Add this endpoint:
+      @router.post("/backfill-project-state")
+      async def backfill_render_jobs():
+          """Backfill render jobs from project_state_store.json into SQLite."""
+          from app.services.render import backfill_render_jobs_from_project_state
+          result = backfill_render_jobs_from_project_state()
+          return result
+
+      Use the existing router at prefix="/api/f51/studio/render".
+    assigned_to: general
+    verified_by: general
+    verify_prompt: 'Verify the endpoint is correctly registered with the router and returns the backfill result'
+    timeout_ms: 120000
+
+  - id: add-tests
+    title: 'Add tests for render job persistence'
+    prompt: |
+      Create a test file at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/services/test_render_job_persistence.py
+
+      Write tests for:
+      1. one-button flow persists render jobs - simulate generate_short_film flow and verify SQLite has the jobs
+      2. manual flow persists render jobs - call render_service.create_job() and verify SQLite
+      3. startup hydration restores jobs - verify render_service._jobs gets populated from storage on startup
+      4. backfill avoids duplicates - call backfill twice and verify no duplicate jobs
+      5. reconcile works after backfill - create a job with provider_job_id, backfill it, then verify reconcile_completed_runway_task works
+
+      Use pytest fixtures. Mock the storage layer where needed.
+      Use the existing test patterns from test_short_film_stitching_service.py as reference.
+
+      Test the specific historical job: job-20260509155819-scene_001_shot_001
+      - Verify it gets backfilled correctly
+      - Verify its output_url is preserved
+      - Verify GET render job works after backfill
+      - Verify no duplicate is created on second backfill
+
+      Run the tests and ensure they pass.
+    assigned_to: general
+    verified_by: explore
+    verify_prompt: 'Verify all tests pass by running pytest on the test file'
+    timeout_ms: 600000
+
+  - id: run-backend-tests
+    title: 'Run backend tests'
+    prompt: |
+      Run all backend tests to ensure no regressions.
+
+      Working directory: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/
+
+      Command: pytest app/services/test_render_job_persistence.py -v
+
+      If there are import errors or fixture issues, fix them.
+
+      Also run a quick smoke test on the full test suite:
+      pytest app/services/test_runway_reconcile.py -v
+      pytest app/services/test_projects.py -v
+
+      Report the test results.
+    assigned_to: explore
+    verified_by: general
+    verify_prompt: 'Verify test output shows all tests passing or clearly identifies failures'
+    timeout_ms: 300000
+
+  - id: final-qa
+    title: 'Final QA with historical job'
+    prompt: |
+      Perform final QA using the historical job: job-20260509155819-scene_001_shot_001
+
+      Steps:
+      1. Call the backfill endpoint: POST /api/f51/studio/render/backfill-project-state
+      2. Verify response shows the job was backfilled
+      3. Call GET /api/f51/studio/render/jobs/job-20260509155819-scene_001_shot_001
+      4. Verify job exists and output_url is preserved
+      5. Call POST /api/f51/studio/render/jobs/job-20260509155819-scene_001_shot_001/reconcile
+      6. Verify reconcile works (may not update since provider_job_id points to an old Runway task, but should not 404)
+      7. Call backfill again - verify no duplicate is created
+
+      If the backend is not running, start it first:
+      cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend && python main.py &
+
+      Use curl or httpx to make the requests.
+
+      Report all verification results.
+    assigned_to: general
+    verified_by: explore
+    verify_prompt: 'Verify the QA steps succeed: job is retrieved, output_url is present, reconcile does not 404, no duplicate on re-backfill'
+    timeout_ms: 300000

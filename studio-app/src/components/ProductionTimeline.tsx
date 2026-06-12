@@ -25,9 +25,9 @@ export default function ProductionTimeline({
   title?: string
 }) {
   return (
-    <section className="production-timeline-panel">
+    <section className="production-timeline-panel overflow-hidden">
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-200">{title}</div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-2 overflow-x-auto pb-2">
         {scenes.map((scene) => {
           const currentIdx = stageIndex(scene.currentStage)
           return (

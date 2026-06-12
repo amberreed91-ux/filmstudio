@@ -8,8 +8,17 @@ from app.services import render as render_module
 from app.services.render_job_backfill import backfill_render_jobs_from_project_state
 from app.services.project_store import project_store
 from app.models import ProviderConfig, RenderJobModel
+from pydantic import BaseModel, Field
+from typing import Any, Dict, List
 
 router = APIRouter()
+
+
+# ── Batch request model ───────────────────────────────────────────────────────
+
+class RenderBatchRequest(BaseModel):
+    shots: List[Dict[str, Any]] = Field(default_factory=list)
+    provider: Optional[str] = None
 
 
 # Provider management
@@ -126,6 +135,13 @@ async def reconcile_render_job(job_id: str):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return job
+
+
+@router.post("/jobs/{job_id}/refresh-url")
+async def refresh_render_job_output_url(job_id: str):
+    """Refresh a potentially expired hosted output URL for a render job."""
+    output_url = await render_service.refresh_output_url(job_id)
+    return {"output_url": output_url}
 
 
 @router.get("/jobs/{job_id}/outputs")
@@ -262,3 +278,5 @@ def backfill_project_state_render_jobs():
         storage=render_module._storage,
         render_service=render_service,
     )
+
+

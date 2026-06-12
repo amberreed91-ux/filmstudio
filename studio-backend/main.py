@@ -29,6 +29,18 @@ from app.routes.video_assets import router as video_assets_router
 from app.routes.video_analysis import router as video_analysis_router
 from app.routes.workflows import router as workflows_router
 from app.routes.production_recovery import router as production_recovery_router
+from app.routes.scene_continuity_intelligence import router as scene_continuity_intelligence_router
+from app.routes.film_dna import router as film_dna_router
+from app.routes.director_intent import router as director_intent_router
+from app.routes.session_debrief import router as session_debrief_router
+from app.routes.export_package import router as export_package_router, presets_router as festival_presets_router
+from app.routes.pitch_deck import router as pitch_deck_router
+from app.routes.previs_routes import router as previs_router
+from app.routes.script_intelligence import router as script_intelligence_router
+from app.routes.audience_simulator import router as audience_simulator_router
+from app.routes.debate import router as debate_router
+from app.routes.universe_graph import router as universe_graph_router
+from app.routes.production_scan import router as production_scan_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
 from app.auth import AuthService, demo_login
@@ -123,6 +135,10 @@ async def lifespan(app: FastAPI):
     video_asset_service._storage = storage
     logger.info("Final short film package service initialized with storage and other services")
     
+    # Start background polling task for active Runway jobs
+    asyncio.create_task(render_service.poll_active_runway_jobs())
+    logger.info("Started background Runway job polling task")
+    
     yield
     
     logger.info("Shutting down Studio API")
@@ -135,43 +151,34 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS - configured for production (includes localhost + 127.0.0.1 dev origins)
-CORS_ORIGINS = os.getenv(
-    "CORS_ORIGINS",
-    ",".join(
-        [
-            "http://localhost:5004",
-            "http://localhost:5003",
-            "http://localhost:5002",
-            "http://localhost:5001",
-            "http://localhost:5000",
-            "http://127.0.0.1:5004",
-            "http://127.0.0.1:5003",
-            "http://127.0.0.1:5002",
-            "http://127.0.0.1:5001",
-            "http://127.0.0.1:5000",
-            "http://localhost:8010",
-            "http://127.0.0.1:8010",
-            "http://localhost:8012",
-            "http://127.0.0.1:8012",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:5174",
-            "http://127.0.0.1:5174",
-            "http://localhost:4173",
-            "http://127.0.0.1:4173",
-            "http://localhost:4174",
-            "http://127.0.0.1:4174",
-        ]
-    ),
-).split(",")
+# CORS - configured for local frontend dev origins
+CORS_ORIGINS = [
+    "http://127.0.0.1:5001",
+    "http://localhost:5001",
+    "http://127.0.0.1:5000",
+    "http://localhost:5000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5174",
+    "http://localhost:5174",
+    "http://127.0.0.1:4173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4174",
+    "http://localhost:4174",
+    "http://127.0.0.1:8010",
+    "http://localhost:8010",
+    "http://127.0.0.1:8012",
+    "http://localhost:8012",
+]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Session-Token", "X-Request-ID"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Security headers middleware
@@ -213,9 +220,30 @@ app.include_router(memory_router)
 app.include_router(scene_intelligence_router)
 app.include_router(workflows_router)
 app.include_router(production_recovery_router)
+app.include_router(scene_continuity_intelligence_router)
+app.include_router(film_dna_router)
+app.include_router(director_intent_router)
+app.include_router(session_debrief_router)
+app.include_router(export_package_router)
+app.include_router(festival_presets_router)
+app.include_router(pitch_deck_router)
+app.include_router(previs_router, prefix="/api/f51/studio")
+app.include_router(script_intelligence_router)
+app.include_router(audience_simulator_router)
+app.include_router(debate_router)
+app.include_router(universe_graph_router)
+app.include_router(production_scan_router)
 
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Create previs output directory
+PREVIS_DIR = OUTPUTS_DIR / "previs"
+PREVIS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mount static files for previs images
+from fastapi.staticfiles import StaticFiles
+app.mount("/previs-assets", StaticFiles(directory=str(PREVIS_DIR)), name="previs-assets")
 
 
 @app.get("/outputs/mock-video/sample.mp4")

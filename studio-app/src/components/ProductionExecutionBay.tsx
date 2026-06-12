@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ProviderStatus, RenderJob, StudioDecisionGate } from '../lib/studioApi'
 import { providerModeFromJob, providerTruthLabel } from '../lib/providerRuntime'
-import { selectPrimaryStudioMedia } from '../lib/studioMedia'
+import { selectPrimaryStudioMedia, isValidAssetUrl } from '../lib/studioMedia'
+import { normalizeJobStatus } from '../lib/jobStatus'
 
 type ProductionExecutionBayProps = {
   projectId: string
@@ -17,12 +18,6 @@ function toRoom(path: string, projectId: string): string {
   return `${path}?project_id=${encodeURIComponent(projectId)}`
 }
 
-function normalizeStatus(status: string): string {
-  const value = status.trim().toLowerCase()
-  if (!value) return 'unknown'
-  return value
-}
-
 function providerLabel(provider: string): string {
   return provider.trim() || 'unknown-provider'
 }
@@ -30,13 +25,10 @@ function providerLabel(provider: string): string {
 export default function ProductionExecutionBay({ projectId, projectTitle, decisionGate, renderJobs, providerStatuses = [], onRetryFailedRender }: ProductionExecutionBayProps) {
   const [selectedJobId, setSelectedJobId] = useState(renderJobs[0]?.id || '')
   const stats = useMemo(() => {
-    const completed = renderJobs.filter((job) => {
-      const status = normalizeStatus(job.status)
-      return status === 'completed' || status === 'complete' || status === 'success'
-    })
-    const running = renderJobs.filter((job) => ['running', 'processing', 'in_progress'].includes(normalizeStatus(job.status)))
-    const failed = renderJobs.filter((job) => ['failed', 'error'].includes(normalizeStatus(job.status)))
-    const queued = renderJobs.filter((job) => ['queued', 'pending', 'created'].includes(normalizeStatus(job.status)))
+    const completed = renderJobs.filter((job) => normalizeJobStatus(job.status) === 'complete')
+    const running = renderJobs.filter((job) => normalizeJobStatus(job.status) === 'rendering')
+    const failed = renderJobs.filter((job) => normalizeJobStatus(job.status) === 'failed')
+    const queued = renderJobs.filter((job) => normalizeJobStatus(job.status) === 'pending')
     return { completed, running, failed, queued }
   }, [renderJobs])
 
@@ -53,7 +45,20 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
     const providerId = (selectedJob.provider || '').trim().toLowerCase()
     return providerStatuses.find((provider) => provider.provider_id.trim().toLowerCase() === providerId) || null
   }, [providerStatuses, selectedJob])
-  const selectedProviderMode = providerModeFromJob(selectedJob) || (selectedProviderStatus?.provider_mode || '')
+  // Issue #16 fix: Simplify provider mode fallback chain for clarity
+  const selectedProviderMode = useMemo(() => {
+    // First try: get mode from selected job
+    const jobMode = providerModeFromJob(selectedJob)
+    if (jobMode) return jobMode
+    
+    // Second try: get mode from provider status
+    if (selectedProviderStatus?.provider_mode) {
+      return selectedProviderStatus.provider_mode
+    }
+    
+    // Fallback: empty string (will show as "awaiting job" in UI)
+    return ''
+  }, [selectedJob, selectedProviderStatus])
   const selectedPrimaryMedia = useMemo(() => {
     if (!selectedJob) return selectPrimaryStudioMedia({})
     return selectPrimaryStudioMedia({
@@ -94,18 +99,42 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Readiness: <span className="text-zinc-100">{stats.completed.length > 0 ? 'ready for screening' : 'awaiting render output'}</span></div>
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Queue: <span className="text-zinc-100">{renderJobs.length} job(s)</span></div>
           </div>
-          {selectedPrimaryMedia.url ? (
+          {selectedPrimaryMedia.url && isValidAssetUrl(selectedPrimaryMedia.url) ? (
             <div className="mt-3 rounded-md border border-emerald-400/35 bg-emerald-500/12 px-2 py-2 text-xs text-emerald-100">
               Latest completed render: <a className="text-emerald-200" href={selectedPrimaryMedia.url} target="_blank" rel="noreferrer">open output</a>
             </div>
           ) : null}
-          {selectedPrimaryMedia.kind === 'video' && selectedPrimaryMedia.url ? (
+          {selectedPrimaryMedia.kind === 'video' && selectedPrimaryMedia.url && isValidAssetUrl(selectedPrimaryMedia.url) ? (
             <div className="mt-3 overflow-hidden rounded-md border border-white/10 bg-black/35">
-              <video src={selectedPrimaryMedia.url} className="aspect-video w-full object-cover" controls muted playsInline />
+              <video
+                src={selectedPrimaryMedia.url}
+                className="aspect-video w-full object-cover"
+                controls
+                muted
+                playsInline
+                onError={(e) => {
+                  const video = e.currentTarget
+                  const container = video.parentElement
+                  if (container) {
+                    container.innerHTML = `<div class="flex items-center justify-center aspect-video w-full bg-zinc-900/50 text-zinc-400 text-sm px-4 py-8"><div class="text-center"><div class="text-rose-400 mb-2">⚠ Video Failed to Load</div><div class="text-xs text-zinc-500">The video file may be unavailable or corrupted.</div></div></div>`
+                  }
+                }}
+              />
             </div>
-          ) : selectedPrimaryMedia.kind === 'image' && selectedPrimaryMedia.url ? (
+          ) : selectedPrimaryMedia.kind === 'image' && selectedPrimaryMedia.url && isValidAssetUrl(selectedPrimaryMedia.url) ? (
             <div className="mt-3 overflow-hidden rounded-md border border-white/10 bg-black/35">
-              <img src={selectedPrimaryMedia.url} alt="Selected render preview" className="aspect-video w-full object-cover" />
+              <img
+                src={selectedPrimaryMedia.url}
+                alt="Selected render preview"
+                className="aspect-video w-full object-cover"
+                onError={(e) => {
+                  const img = e.currentTarget
+                  const container = img.parentElement
+                  if (container) {
+                    container.innerHTML = `<div class="flex items-center justify-center aspect-video w-full bg-zinc-900/50 text-zinc-400 text-sm px-4 py-8"><div class="text-center"><div class="text-rose-400 mb-2">⚠ Image Failed to Load</div><div class="text-xs text-zinc-500">The image file may be unavailable or corrupted.</div></div></div>`
+                  }
+                }}
+              />
             </div>
           ) : null}
         </div>
@@ -113,6 +142,20 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
         <div className="rounded-xl border border-white/10 bg-zinc-950/70 p-4">
           <div className="text-[11px] uppercase tracking-[0.16em] text-fuchsia-200">Studio Ops Notes</div>
           <p className="mt-2 text-sm text-zinc-300">{opsNote}</p>
+          {renderJobs.length > 0 && (
+            <div className="mt-3">
+              <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-[0.1em] text-zinc-400">
+                <span>Batch Progress</span>
+                <span>{stats.completed.length} of {renderJobs.length} complete</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-zinc-800">
+                <div
+                  className="h-1.5 rounded-full bg-cyan-400 transition-all"
+                  style={{ width: `${renderJobs.length > 0 ? Math.round((stats.completed.length / renderJobs.length) * 100) : 0}%` }}
+                />
+              </div>
+            </div>
+          )}
           <div className="mt-3 grid gap-2 text-xs text-zinc-300">
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Completed: <span className="text-zinc-100">{stats.completed.length}</span></div>
             <div className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Running: <span className="text-zinc-100">{stats.running.length}</span></div>
@@ -132,17 +175,32 @@ export default function ProductionExecutionBay({ projectId, projectTitle, decisi
               const isSelected = selectedJob?.id === job.id
               const hasOutput = Boolean(job.output_payload?.asset_url || job.output_payload?.thumbnail_url)
               return (
-                <button
-                  type="button"
+                <div
                   key={job.id}
-                  data-selected={isSelected ? 'true' : 'false'}
-                  onClick={() => setSelectedJobId(job.id)}
-                  className={`min-w-[200px] rounded-lg border p-2 text-left text-xs transition ${isSelected ? 'border-cyan-300/60 bg-cyan-500/12' : 'border-white/10 bg-black/30 hover:border-white/30'}`}
+                  className={`flex flex-col gap-1 ${isSelected ? 'ring-2 ring-cyan-400/50 rounded-lg' : ''}`}
                 >
-                  <div className="text-zinc-100">{job.shot_id || job.id}</div>
-                  <div className="mt-1 text-zinc-400">{providerLabel(job.provider)} · {normalizeStatus(job.status)}</div>
-                  <div className="mt-1 text-zinc-500">{hasOutput ? 'output ready' : 'output pending'}</div>
-                </button>
+                  <button
+                    type="button"
+                    data-selected={isSelected ? 'true' : 'false'}
+                    aria-label={`Select render job ${job.shot_id || job.id} with status ${normalizeJobStatus(job.status)}`}
+                    onClick={() => setSelectedJobId(job.id)}
+                    className={`w-[120px] sm:w-[160px] flex-shrink-0 rounded-lg border p-2 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-black ${isSelected ? 'border-cyan-300/60 bg-cyan-500/12' : 'border-white/10 bg-black/30 hover:border-white/30'}`}
+                  >
+                    <div className="truncate text-zinc-100">{job.shot_id || job.id}</div>
+                    <div className="mt-1 truncate text-zinc-400">{providerLabel(job.provider)}{job.model ? ` - ${job.model}` : ''} · {normalizeJobStatus(job.status)}</div>
+                    <div className="mt-1 truncate text-zinc-500">{hasOutput ? 'output ready' : 'output pending'}</div>
+                  </button>
+                  {normalizeJobStatus(job.status) === 'complete' && job.output_payload?.asset_url && (
+                    <a
+                      href={job.output_payload.asset_url}
+                      download
+                      className="text-[10px] text-cyan-300 hover:text-cyan-100 transition-colors self-end flex items-center gap-1 pr-1"
+                    >
+                      <Download size={10} />
+                      Download
+                    </a>
+                  )}
+                </div>
               )
             })}
           </div>

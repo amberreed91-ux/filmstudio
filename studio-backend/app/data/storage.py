@@ -34,6 +34,25 @@ class StorageInterface:
     def list_project_ids(self) -> list[str]:
         raise NotImplementedError
 
+    # Universe Knowledge Graph
+    def get_universe_nodes(self, project_id: str) -> List[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def save_universe_node(self, node: Dict[str, Any]) -> bool:
+        raise NotImplementedError
+
+    def delete_universe_node(self, node_id: str) -> bool:
+        raise NotImplementedError
+
+    def get_universe_relationships(self, project_id: str) -> List[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def save_universe_relationship(self, rel: Dict[str, Any]) -> bool:
+        raise NotImplementedError
+
+    def delete_universe_relationship(self, relationship_id: str) -> bool:
+        raise NotImplementedError
+
 
 class DatabaseStorage:
     """SQLite storage with database-ready abstraction layer and connection pooling"""
@@ -710,6 +729,158 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_video_assets_source_type ON video_assets(source_type);
                 CREATE INDEX IF NOT EXISTS idx_video_assets_updated ON video_assets(updated_at);
             """),
+            (12, "Add continuity graph persistence tables", """
+                CREATE TABLE IF NOT EXISTS continuity_graphs (
+                    film_id TEXT PRIMARY KEY,
+                    graph_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL,
+                    CHECK (film_id != '')
+                );
+
+                CREATE TABLE IF NOT EXISTS continuity_graph_versions (
+                    version_id TEXT PRIMARY KEY,
+                    film_id TEXT NOT NULL,
+                    graph_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    CHECK (version_id != ''),
+                    CHECK (film_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_continuity_graph_versions_film ON continuity_graph_versions(film_id);
+                CREATE INDEX IF NOT EXISTS idx_continuity_graph_versions_created ON continuity_graph_versions(film_id, created_at);
+            """),
+            (13, "Add film DNA persistence table", """
+                CREATE TABLE IF NOT EXISTS film_dna (
+                    film_id TEXT PRIMARY KEY,
+                    dna_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL,
+                    CHECK (film_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_film_dna_updated ON film_dna(updated_at);
+            """),
+            (14, "Add session debriefs persistence table", """
+                CREATE TABLE IF NOT EXISTS session_debriefs (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    session_start TEXT NOT NULL,
+                    session_end TEXT NOT NULL,
+                    debrief_json TEXT NOT NULL DEFAULT '{}',
+                    generated_at TEXT NOT NULL,
+                    CHECK (id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_session_debriefs_project ON session_debriefs(project_id);
+                CREATE INDEX IF NOT EXISTS idx_session_debriefs_generated ON session_debriefs(generated_at);
+            """),
+            (15, "Add export packages persistence table", """
+                CREATE TABLE IF NOT EXISTS export_packages (
+                    package_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    package_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    CHECK (package_id != ''),
+                    CHECK (project_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_export_packages_project ON export_packages(project_id);
+                CREATE INDEX IF NOT EXISTS idx_export_packages_created ON export_packages(created_at);
+            """),
+            (16, "Add pitch decks persistence table", """
+                CREATE TABLE IF NOT EXISTS pitch_decks (
+                    deck_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    deck_json TEXT NOT NULL DEFAULT '{}',
+                    target_audience TEXT NOT NULL DEFAULT 'general',
+                    created_at TEXT NOT NULL,
+                    CHECK (deck_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (target_audience IN ('festival', 'investor', 'general'))
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_pitch_decks_project ON pitch_decks(project_id);
+                CREATE INDEX IF NOT EXISTS idx_pitch_decks_created ON pitch_decks(created_at);
+                CREATE INDEX IF NOT EXISTS idx_pitch_decks_audience ON pitch_decks(target_audience);
+            """),
+            (17, "Add previs_images and surfaced_disagreements tables", """
+                CREATE TABLE IF NOT EXISTS previs_images (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL,
+                    shot_id TEXT,
+                    image_path TEXT,
+                    job_id TEXT,
+                    status TEXT DEFAULT 'pending',
+                    prompt_used TEXT,
+                    fallback INTEGER DEFAULT 0,
+                    created_at TEXT,
+                    CHECK (id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (scene_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_previs_images_project ON previs_images(project_id);
+                CREATE INDEX IF NOT EXISTS idx_previs_images_scene ON previs_images(scene_id);
+                CREATE INDEX IF NOT EXISTS idx_previs_images_status ON previs_images(status);
+                CREATE INDEX IF NOT EXISTS idx_previs_images_job ON previs_images(job_id);
+
+                CREATE TABLE IF NOT EXISTS surfaced_disagreements (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    disagreement_id TEXT NOT NULL,
+                    decision_type TEXT,
+                    surfaced_at TEXT,
+                    dismissed_at TEXT,
+                    CHECK (id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (disagreement_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_surfaced_disagreements_project ON surfaced_disagreements(project_id);
+                CREATE INDEX IF NOT EXISTS idx_surfaced_disagreements_type ON surfaced_disagreements(decision_type);
+                CREATE INDEX IF NOT EXISTS idx_surfaced_disagreements_surfaced ON surfaced_disagreements(surfaced_at);
+            """),
+            (18, "Add Universe Knowledge Graph tables", """
+                CREATE TABLE IF NOT EXISTS universe_nodes (
+                    node_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    node_type TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    first_scene TEXT,
+                    last_scene TEXT,
+                    universe_tags TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (node_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (node_type IN ('character', 'location', 'object', 'lore'))
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_universe_nodes_project ON universe_nodes(project_id);
+                CREATE INDEX IF NOT EXISTS idx_universe_nodes_type ON universe_nodes(node_type);
+
+                CREATE TABLE IF NOT EXISTS universe_relationships (
+                    relationship_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    from_node TEXT NOT NULL,
+                    to_node TEXT NOT NULL,
+                    relationship_type TEXT NOT NULL,
+                    description TEXT,
+                    created_at TEXT NOT NULL,
+                    CHECK (relationship_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (from_node != ''),
+                    CHECK (to_node != ''),
+                    FOREIGN KEY (from_node) REFERENCES universe_nodes(node_id) ON DELETE CASCADE,
+                    FOREIGN KEY (to_node) REFERENCES universe_nodes(node_id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_universe_rels_project ON universe_relationships(project_id);
+                CREATE INDEX IF NOT EXISTS idx_universe_rels_from ON universe_relationships(from_node);
+                CREATE INDEX IF NOT EXISTS idx_universe_rels_to ON universe_relationships(to_node);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -859,6 +1030,87 @@ class DatabaseStorage:
             cursor = conn.cursor()
             cursor.execute("SELECT project_id FROM projects ORDER BY updated_at DESC")
             return [row["project_id"] for row in cursor.fetchall()]
+
+    # Universe Knowledge Graph
+    def get_universe_nodes(self, project_id: str) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM universe_nodes WHERE project_id = ? ORDER BY created_at ASC", (project_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def save_universe_node(self, node: Dict[str, Any]) -> bool:
+        now = datetime.now().isoformat()
+        node_id = node["node_id"]
+        project_id = node["project_id"]
+        node_type = node["node_type"]
+        name = node["name"]
+        description = node.get("description", "")
+        first_scene = node.get("first_scene", "")
+        last_scene = node.get("last_scene", "")
+        universe_tags = json.dumps(node.get("universe_tags", []))
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """INSERT OR REPLACE INTO universe_nodes 
+                       (node_id, project_id, node_type, name, description, first_scene, last_scene, universe_tags, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM universe_nodes WHERE node_id = ?), ?), ?)""",
+                    (node_id, project_id, node_type, name, description, first_scene, last_scene, universe_tags, node_id, now, now),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_universe_node", _write)
+        return True
+
+    def delete_universe_node(self, node_id: str) -> bool:
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM universe_nodes WHERE node_id = ?", (node_id,))
+                conn.commit()
+
+        self._execute_write_with_retry("delete_universe_node", _write)
+        return True
+
+    def get_universe_relationships(self, project_id: str) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM universe_relationships WHERE project_id = ?", (project_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def save_universe_relationship(self, rel: Dict[str, Any]) -> bool:
+        now = datetime.now().isoformat()
+        relationship_id = rel["relationship_id"]
+        project_id = rel["project_id"]
+        from_node = rel["from_node"]
+        to_node = rel["to_node"]
+        relationship_type = rel["relationship_type"]
+        description = rel.get("description", "")
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """INSERT OR REPLACE INTO universe_relationships 
+                       (relationship_id, project_id, from_node, to_node, relationship_type, description, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM universe_relationships WHERE relationship_id = ?), ?))""",
+                    (relationship_id, project_id, from_node, to_node, relationship_type, description, relationship_id, now),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_universe_relationship", _write)
+        return True
+
+    def delete_universe_relationship(self, relationship_id: str) -> bool:
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM universe_relationships WHERE relationship_id = ?", (relationship_id,))
+                conn.commit()
+
+        self._execute_write_with_retry("delete_universe_relationship", _write)
+        return True
 
     # Render Job Persistence
     def save_job(self, job: RenderJobModel) -> RenderJobModel:
@@ -2803,6 +3055,762 @@ class DatabaseStorage:
                 (max(1, int(limit)),),
             )
             return [self._row_to_frame_analysis_record(row) for row in cursor.fetchall()]
+
+    # =========================================================================
+    # CONTINUITY GRAPH PERSISTENCE
+    # =========================================================================
+
+    def save_continuity_graph(self, film_id: str, graph: dict) -> bool:
+        """
+        Persist the current continuity graph for a film.
+
+        Overwrites any existing graph for the same film_id.
+        The graph dict is serialized as JSON.
+
+        Args:
+            film_id: The film/project identifier (primary key).
+            graph:   The graph dict to persist.
+
+        Returns:
+            True on success.
+        """
+        now = datetime.now().isoformat()
+        graph_json = json.dumps(graph, default=str)
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO continuity_graphs (film_id, graph_json, updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (film_id, graph_json, now),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_continuity_graph", _write)
+        return True
+
+    def load_continuity_graph(self, film_id: str) -> Optional[dict]:
+        """
+        Load the current continuity graph for a film.
+
+        Args:
+            film_id: The film/project identifier.
+
+        Returns:
+            The deserialized graph dict, or None if no graph exists.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT graph_json FROM continuity_graphs WHERE film_id = ?",
+                (film_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                try:
+                    return json.loads(row["graph_json"])
+                except (json.JSONDecodeError, TypeError):
+                    return None
+            return None
+
+    def save_continuity_graph_version(
+        self,
+        film_id: str,
+        version_id: str,
+        graph: dict,
+    ) -> bool:
+        """
+        Persist a versioned snapshot of a continuity graph.
+
+        Each version is immutable once written (INSERT OR IGNORE).
+
+        Args:
+            film_id:    The film/project identifier.
+            version_id: A unique identifier for this version (e.g. UUID).
+            graph:      The graph dict to persist.
+
+        Returns:
+            True on success.
+        """
+        now = datetime.now().isoformat()
+        graph_json = json.dumps(graph, default=str)
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO continuity_graph_versions
+                        (version_id, film_id, graph_json, created_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (version_id, film_id, graph_json, now),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_continuity_graph_version", _write)
+        return True
+
+    def load_continuity_graph_version(
+        self,
+        film_id: str,
+        version_id: str,
+    ) -> Optional[dict]:
+        """
+        Load a specific versioned snapshot of a continuity graph.
+
+        Args:
+            film_id:    The film/project identifier (used for validation).
+            version_id: The version identifier.
+
+        Returns:
+            The deserialized graph dict, or None if not found.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT graph_json FROM continuity_graph_versions
+                WHERE version_id = ? AND film_id = ?
+                """,
+                (version_id, film_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                try:
+                    return json.loads(row["graph_json"])
+                except (json.JSONDecodeError, TypeError):
+                    return None
+            return None
+
+    def list_continuity_graph_versions(self, film_id: str) -> List[dict]:
+        """
+        List all version metadata for a film's continuity graph, ordered by
+        created_at ascending (oldest first).
+
+        Args:
+            film_id: The film/project identifier.
+
+        Returns:
+            List of dicts with keys: version_id, film_id, created_at.
+            (graph_json is excluded to keep the list lightweight.)
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT version_id, film_id, created_at
+                FROM continuity_graph_versions
+                WHERE film_id = ?
+                ORDER BY created_at ASC
+                """,
+                (film_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    # =========================================================================
+    # Film DNA Persistence
+    # =========================================================================
+
+    def save_film_dna(self, film_id: str, dna: dict) -> bool:
+        """
+        Persist the Film DNA profile for a film.
+
+        Overwrites any existing DNA for the same film_id.
+        The DNA dict is serialized as JSON.
+
+        Args:
+            film_id: The film/project identifier (primary key).
+            dna:     The DNA dict to persist.
+
+        Returns:
+            True on success.
+        """
+        now = datetime.now().isoformat()
+        dna_json = json.dumps(dna, default=str)
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO film_dna (film_id, dna_json, updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (film_id, dna_json, now),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_film_dna", _write)
+        return True
+
+    def load_film_dna(self, film_id: str) -> Optional[dict]:
+        """
+        Load the Film DNA profile for a film.
+
+        Args:
+            film_id: The film/project identifier.
+
+        Returns:
+            The deserialized DNA dict, or None if no DNA exists.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT dna_json FROM film_dna WHERE film_id = ?",
+                (film_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                try:
+                    return json.loads(row["dna_json"])
+                except (json.JSONDecodeError, TypeError):
+                    return None
+            return None
+
+    # =========================================================================
+    # Director Intent Persistence
+    # =========================================================================
+
+    def save_director_intent(self, project_id: str, intent: dict) -> bool:
+        """
+        Save or merge director intent for a project.
+        
+        Merges with existing intent rather than replacing entirely.
+        Only updates fields that are provided in the intent dict.
+        
+        Args:
+            project_id: The project identifier.
+            intent:     The intent dict to save/merge.
+        
+        Returns:
+            True on success.
+        """
+        from datetime import datetime
+        
+        # Load existing project
+        project = self.get_project(project_id)
+        if not project:
+            return False
+        
+        # Get existing intent or create new one
+        existing_intent = project.director_intent or {}
+        
+        # Merge with new intent
+        merged_intent = {**existing_intent, **intent}
+        
+        # Update timestamps
+        if not merged_intent.get("captured_at"):
+            merged_intent["captured_at"] = datetime.now().isoformat()
+        merged_intent["last_updated"] = datetime.now().isoformat()
+        
+        # Update project
+        project.director_intent = merged_intent
+        self.save_project(project)
+        return True
+
+    def load_director_intent(self, project_id: str) -> Optional[dict]:
+        """
+        Load director intent for a project.
+        
+        Args:
+            project_id: The project identifier.
+        
+        Returns:
+            The intent dict, or None if no intent exists.
+        """
+        project = self.get_project(project_id)
+        if not project:
+            return None
+        return project.director_intent
+
+    # =========================================================================
+    # Session Debrief Persistence
+    # =========================================================================
+
+    def save_session_debrief(self, project_id: str, debrief: dict) -> bool:
+        """
+        Save a session debrief for a project.
+        
+        Args:
+            project_id: The project identifier.
+            debrief:    The debrief dict to save.
+        
+        Returns:
+            True on success.
+        """
+        import uuid
+        
+        debrief_id = debrief.get("id") or f"debrief_{uuid.uuid4().hex[:12]}"
+        session_start = debrief.get("session_start", "")
+        session_end = debrief.get("session_end", "")
+        generated_at = debrief.get("generated_at", datetime.now().isoformat())
+        
+        debrief_json = json.dumps(debrief, default=str)
+        
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO session_debriefs 
+                    (id, project_id, session_start, session_end, debrief_json, generated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (debrief_id, project_id, session_start, session_end, debrief_json, generated_at),
+                )
+                conn.commit()
+        
+        self._execute_write_with_retry("save_session_debrief", _write)
+        return True
+
+    def list_session_debriefs(self, project_id: str, limit: int = 10) -> List[dict]:
+        """
+        List session debriefs for a project, most recent first.
+        
+        Args:
+            project_id: The project identifier.
+            limit:      Maximum number of debriefs to return.
+        
+        Returns:
+            List of debrief dicts (summary only).
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, session_start, session_end, generated_at, debrief_json
+                FROM session_debriefs
+                WHERE project_id = ?
+                ORDER BY generated_at DESC
+                LIMIT ?
+                """,
+                (project_id, limit),
+            )
+            rows = cursor.fetchall()
+            
+            debriefs = []
+            for row in rows:
+                try:
+                    full_debrief = json.loads(row["debrief_json"])
+                    # Return summary only
+                    debriefs.append({
+                        "id": row["id"],
+                        "session_start": row["session_start"],
+                        "session_end": row["session_end"],
+                        "generated_at": row["generated_at"],
+                        "advisory": full_debrief.get("advisory", ""),
+                    })
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            
+            return debriefs
+
+    def get_session_debrief(self, project_id: str, debrief_id: str) -> Optional[dict]:
+        """
+        Get a specific session debrief.
+        
+        Args:
+            project_id: The project identifier.
+            debrief_id: The debrief identifier.
+        
+        Returns:
+            The full debrief dict, or None if not found.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT debrief_json
+                FROM session_debriefs
+                WHERE project_id = ? AND id = ?
+                """,
+                (project_id, debrief_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                try:
+                    return json.loads(row["debrief_json"])
+                except (json.JSONDecodeError, TypeError):
+                    return None
+            return None
+
+
+    # =========================================================================
+    # Export Package Persistence
+    # =========================================================================
+
+    def save_export_package(self, project_id: str, package: dict) -> bool:
+        """
+        Save an export package for a project.
+        
+        Args:
+            project_id: The project identifier.
+            package:    The export package dict to save.
+        
+        Returns:
+            True on success.
+        """
+        package_id = package.get("package_id", "")
+        if not package_id:
+            return False
+        
+        created_at = package.get("created_at", datetime.now().isoformat())
+        package_json = json.dumps(package, default=str)
+        
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO export_packages 
+                    (package_id, project_id, package_json, created_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (package_id, project_id, package_json, created_at),
+                )
+                conn.commit()
+        
+        self._execute_write_with_retry("save_export_package", _write)
+        return True
+
+    def load_export_package(self, package_id: str) -> Optional[dict]:
+        """
+        Load a specific export package.
+        
+        Args:
+            package_id: The package identifier.
+        
+        Returns:
+            The full package dict, or None if not found.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT package_json
+                FROM export_packages
+                WHERE package_id = ?
+                """,
+                (package_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                try:
+                    return json.loads(row["package_json"])
+                except (json.JSONDecodeError, TypeError):
+                    return None
+            return None
+
+    def list_export_packages(self, project_id: str, limit: int = 10) -> List[dict]:
+        """
+        List export packages for a project, most recent first.
+        
+        Args:
+            project_id: The project identifier.
+            limit:      Maximum number of packages to return.
+        
+        Returns:
+            List of package summaries.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT package_id, created_at, package_json
+                FROM export_packages
+                WHERE project_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (project_id, limit),
+            )
+            rows = cursor.fetchall()
+            
+            packages = []
+            for row in rows:
+                try:
+                    full_package = json.loads(row["package_json"])
+                    manifest = full_package.get("manifest", {})
+                    
+                    # Return summary only
+                    packages.append({
+                        "package_id": row["package_id"],
+                        "created_at": row["created_at"],
+                        "status": full_package.get("status", "unknown"),
+                        "scene_count": manifest.get("scene_count", 0),
+                        "total_shots": manifest.get("total_shots", 0),
+                    })
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            
+            return packages
+
+    # =========================================================================
+    # Pitch Deck Persistence
+    # =========================================================================
+
+    def save_pitch_deck(self, project_id: str, deck: dict) -> bool:
+        """
+        Save a pitch deck for a project.
+        
+        Args:
+            project_id: The project identifier.
+            deck:       The pitch deck dict to save.
+        
+        Returns:
+            True on success.
+        """
+        deck_id = deck.get("deck_id", "")
+        if not deck_id:
+            return False
+        
+        target_audience = deck.get("target_audience", "general")
+        created_at = deck.get("generated_at", datetime.now().isoformat())
+        deck_json = json.dumps(deck, default=str)
+        
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO pitch_decks 
+                    (deck_id, project_id, deck_json, target_audience, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (deck_id, project_id, deck_json, target_audience, created_at),
+                )
+                conn.commit()
+        
+        self._execute_write_with_retry("save_pitch_deck", _write)
+        return True
+
+    def load_pitch_deck(self, deck_id: str) -> Optional[dict]:
+        """
+        Load a specific pitch deck.
+        
+        Args:
+            deck_id: The deck identifier.
+        
+        Returns:
+            The full deck dict, or None if not found.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT deck_json
+                FROM pitch_decks
+                WHERE deck_id = ?
+                """,
+                (deck_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                try:
+                    return json.loads(row["deck_json"])
+                except (json.JSONDecodeError, TypeError):
+                    return None
+            return None
+
+    def list_pitch_decks(self, project_id: str, limit: int = 10) -> List[dict]:
+        """
+        List pitch decks for a project, most recent first.
+        
+        Args:
+            project_id: The project identifier.
+            limit:      Maximum number of decks to return.
+        
+        Returns:
+            List of deck summaries.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT deck_id, target_audience, created_at
+                FROM pitch_decks
+                WHERE project_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (project_id, limit),
+            )
+            rows = cursor.fetchall()
+            
+            decks = []
+            for row in rows:
+                decks.append({
+                    "deck_id": row["deck_id"],
+                    "target_audience": row["target_audience"],
+                    "created_at": row["created_at"],
+                })
+            
+            return decks
+
+    # =========================================================================
+    # PREVIS IMAGES
+    # =========================================================================
+
+    def save_previs_image(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_id: Optional[str],
+        image_path: str,
+        job_id: str,
+        status: str,
+        prompt_used: str,
+        fallback: bool
+    ) -> bool:
+        """
+        Save or update a previs image record.
+        
+        Args:
+            project_id: Project identifier
+            scene_id: Scene identifier
+            shot_id: Optional shot identifier (None for scene hero images)
+            image_path: Path or URL to the image
+            job_id: Render job ID that generated this image
+            status: Status (pending, complete, failed)
+            prompt_used: The prompt used to generate the image
+            fallback: Whether this is a fallback/placeholder image
+            
+        Returns:
+            True if saved successfully
+        """
+        import uuid
+        from datetime import datetime
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            image_id = f"previs_{project_id}_{scene_id}_{shot_id or 'hero'}_{uuid.uuid4().hex[:8]}"
+            now = datetime.now().isoformat()
+            
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO previs_images (
+                    id, project_id, scene_id, shot_id, image_path,
+                    job_id, status, prompt_used, fallback, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    image_id,
+                    project_id,
+                    scene_id,
+                    shot_id,
+                    image_path,
+                    job_id,
+                    status,
+                    prompt_used,
+                    1 if fallback else 0,
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+            return True
+
+    def load_previs_images(self, project_id: str, scene_id: Optional[str] = None) -> list:
+        """
+        Load previs images for a project, optionally filtered by scene.
+        
+        Args:
+            project_id: Project identifier
+            scene_id: Optional scene identifier to filter by
+            
+        Returns:
+            List of previs image records
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if scene_id:
+                cursor.execute(
+                    """
+                    SELECT * FROM previs_images
+                    WHERE project_id = ? AND scene_id = ?
+                    ORDER BY created_at DESC
+                    """,
+                    (project_id, scene_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT * FROM previs_images
+                    WHERE project_id = ?
+                    ORDER BY scene_id, created_at DESC
+                    """,
+                    (project_id,),
+                )
+            
+            rows = cursor.fetchall()
+            images = []
+            for row in rows:
+                images.append({
+                    "id": row["id"],
+                    "project_id": row["project_id"],
+                    "scene_id": row["scene_id"],
+                    "shot_id": row["shot_id"],
+                    "image_path": row["image_path"],
+                    "job_id": row["job_id"],
+                    "status": row["status"],
+                    "prompt_used": row["prompt_used"],
+                    "fallback": bool(row["fallback"]),
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                })
+            
+            return images
+
+    def update_previs_image_status(
+        self,
+        job_id: str,
+        status: str,
+        image_path: Optional[str] = None
+    ) -> bool:
+        """
+        Update the status of a previs image by job_id.
+        
+        Args:
+            job_id: Render job ID
+            status: New status (pending, complete, failed)
+            image_path: Optional new image path/URL
+            
+        Returns:
+            True if updated successfully
+        """
+        from datetime import datetime
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            
+            if image_path:
+                cursor.execute(
+                    """
+                    UPDATE previs_images
+                    SET status = ?, image_path = ?, updated_at = ?
+                    WHERE job_id = ?
+                    """,
+                    (status, image_path, now, job_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE previs_images
+                    SET status = ?, updated_at = ?
+                    WHERE job_id = ?
+                    """,
+                    (status, now, job_id),
+                )
+            
+            conn.commit()
+            return cursor.rowcount > 0
 
 
 class JsonFileStorage:

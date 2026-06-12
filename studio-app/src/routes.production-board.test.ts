@@ -5,14 +5,14 @@ import { APP_ROUTES, PRIMARY_NAV_ROUTES } from './routes'
 
 describe('Production Board navigation contract', () => {
   it('primary nav includes Production Board at /studio/production-board', () => {
-    const navRoute = PRIMARY_NAV_ROUTES.find((route) => route.label === 'Production Board')
+    const navRoute = PRIMARY_NAV_ROUTES.find((route) => route.label === 'Scenes')
     expect(navRoute?.path).toBe('/studio/production-board')
   })
 
   it('app routes include Production Board component route', () => {
     const route = APP_ROUTES.find((entry) => entry.path === '/studio/production-board')
     expect(route).toBeTruthy()
-    expect(route?.title).toBe('Production Board')
+    expect(route?.title).toBe('Scenes')
     expect(route?.element).toBeTruthy()
   })
 

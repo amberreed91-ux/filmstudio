@@ -1,0 +1,14 @@
+[     140ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:14336
+[   52385ms] [ERROR] Access to fetch at 'http://127.0.0.1:8010/api/f51/studio/projects/project_eb5a87327aba/scenes' from origin 'http://127.0.0.1:5001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://127.0.0.1:5001/studio/writers-room?project_id=project_eb5a87327aba:0
+[   52386ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://127.0.0.1:8010/api/f51/studio/projects/project_eb5a87327aba/scenes:0
+[   52386ms] [ERROR] [Studio API Error] /api/f51/studio/projects/project_eb5a87327aba/scenes: TypeError: Failed to fetch
+    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:47:26)
+    at createScene (http://127.0.0.1:5001/src/lib/studioApi.ts:239:26)
+    at handleSaveScene (http://127.0.0.1:5001/src/pages/WritersRoom.tsx:153:26)
+    at executeDispatch (http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:9140:5)
+    at runWithFiberInDEV (http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:850:66)
+    at processDispatchQueue (http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:9166:27)
+    at http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:9453:5
+    at batchedUpdates$1 (http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:2043:12)
+    at dispatchEventForPluginEventSystem (http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:9239:4)
+    at dispatchEvent (http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:11318:29) @ http://127.0.0.1:5001/@vite/client:509

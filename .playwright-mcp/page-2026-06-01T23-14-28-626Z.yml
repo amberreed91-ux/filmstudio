@@ -1,0 +1,753 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - link "Untitled Film Workspace" [ref=e7] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e8]
+        - generic [ref=e10]: Untitled Film Workspace
+      - generic [ref=e11]: "Run the project like a studio head: review the pipeline, direct the crew, and lock creative decisions."
+    - navigation [ref=e12]:
+      - link "Home" [ref=e13] [cursor=pointer]:
+        - /url: /studio/lobby?project_id=project_921af73a732f
+      - link "Overview" [ref=e14] [cursor=pointer]:
+        - /url: /studio/overview?project_id=project_921af73a732f
+      - link "Write" [ref=e15] [cursor=pointer]:
+        - /url: /studio/writers-room?project_id=project_921af73a732f
+      - link "Scenes" [ref=e16] [cursor=pointer]:
+        - /url: /studio/production-board?project_id=project_921af73a732f
+      - link "Watch" [ref=e17] [cursor=pointer]:
+        - /url: /studio/screening-room?project_id=project_921af73a732f
+      - link "Archive" [ref=e18] [cursor=pointer]:
+        - /url: /studio/archive?project_id=project_921af73a732f
+      - link "Project Slate" [ref=e19] [cursor=pointer]:
+        - /url: /studio/slate?project_id=project_921af73a732f
+      - link "Previs Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/previs?project_id=project_921af73a732f
+      - link "Approval Room" [ref=e21] [cursor=pointer]:
+        - /url: /studio/approval-room?project_id=project_921af73a732f
+      - link "Study Room" [ref=e22] [cursor=pointer]:
+        - /url: /studio/study-room?project_id=project_921af73a732f
+      - link "Crew Ops" [ref=e23] [cursor=pointer]:
+        - /url: /studio/scheduler?project_id=project_921af73a732f
+      - link "Cost Manager" [ref=e24] [cursor=pointer]:
+        - /url: /studio/cost?project_id=project_921af73a732f
+    - generic [ref=e25]:
+      - button "Audio Off" [ref=e26]:
+        - img [ref=e27]
+        - generic [ref=e31]: Audio Off
+      - generic [ref=e34]: Syncing studio...
+      - generic [ref=e35]:
+        - img [ref=e36]
+        - generic [ref=e39]: Admin | FilmOS
+  - generic [ref=e40]:
+    - link "Home" [ref=e41] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e42]
+      - text: Home
+    - generic [ref=e45]:
+      - img [ref=e46]
+      - link "Studio Dashboard" [ref=e48] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e49]:
+      - img [ref=e50]
+      - generic [ref=e52]: Project Workspace
+  - generic [ref=e54]:
+    - generic [ref=e55]: "Room: Untitled Film Workspace"
+    - generic [ref=e56]: "Current Step: Script"
+    - generic [ref=e57]: "Next: Start by adding a script in Writer’s Room"
+    - generic [ref=e58]: "Approved: 0"
+    - button "Open ▾" [ref=e59]
+  - main [ref=e60]:
+    - generic [ref=e62]:
+      - link "Open Previs Room" [ref=e64] [cursor=pointer]:
+        - /url: /studio/project/project_eb5a87327aba/previs
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - heading "Project Overview Panel" [level=2] [ref=e68]
+            - paragraph [ref=e69]: Untitled Film is playing as a controlled, atmospheric tension piece built around character pressure, spatial tension, and a clear scene objective per sequence.
+          - button "Branch Creative Direction" [ref=e70] [cursor=pointer]:
+            - img [ref=e71]
+            - text: Branch Creative Direction
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: Genre
+            - generic [ref=e78]: Prestige genre drama
+          - generic [ref=e79]:
+            - generic [ref=e80]: Tone
+            - generic [ref=e81]: Controlled, atmospheric tension
+          - generic [ref=e82]:
+            - generic [ref=e83]: Audience
+            - generic [ref=e84]: Indie thriller audience
+          - generic [ref=e85]:
+            - generic [ref=e86]: Budget Level
+            - generic [ref=e87]: Prototype budget
+          - generic [ref=e88]:
+            - generic [ref=e89]: Production Mode
+            - generic [ref=e90]: Main production path
+          - generic [ref=e91]:
+            - generic [ref=e92]: Current Stage
+            - generic [ref=e93]: Development
+          - generic [ref=e94]:
+            - generic [ref=e95]: Commercial Positioning
+            - generic [ref=e96]: Clear hook for platform packaging and campaign positioning
+          - generic [ref=e97]:
+            - generic [ref=e98]: Festival Viability
+            - generic [ref=e99]: Selective festival viability, stronger as a market-facing genre package
+        - generic [ref=e100]:
+          - generic [ref=e101]: Production Mode
+          - combobox [ref=e102]:
+            - option "indie" [selected]
+            - option "prestige"
+            - option "commercial"
+            - option "experimental"
+            - option "streaming"
+            - option "documentary"
+          - generic [ref=e103]: "Influences: Michael Mann night texture • Fincher editorial precision"
+      - generic [ref=e104]:
+        - generic [ref=e105]:
+          - generic [ref=e107]:
+            - heading "Production Pipeline Panel" [level=2] [ref=e108]
+            - paragraph [ref=e109]: Stage-based workflow orchestration with approvals, revisions, and handoffs.
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - generic [ref=e112]:
+                - generic [ref=e113]:
+                  - generic [ref=e114]: Development
+                  - generic [ref=e115]: Studio leadership sets genre promise, audience, and slate fit.
+                - button "Approve Stage" [ref=e116] [cursor=pointer]:
+                  - img [ref=e117]
+                  - text: Approve Stage
+              - generic [ref=e120]:
+                - generic [ref=e121]:
+                  - generic [ref=e122]: Status
+                  - generic [ref=e123]: watch
+                - generic [ref=e124]:
+                  - generic [ref=e125]: Agents
+                  - generic [ref=e126]: director, rights_and_safety_reviewer
+                - generic [ref=e127]:
+                  - generic [ref=e128]: Pending Approvals
+                  - generic [ref=e129]: "0"
+                - generic [ref=e130]:
+                  - generic [ref=e131]: Revisions
+                  - generic [ref=e132]: "1"
+              - generic [ref=e133]:
+                - generic [ref=e134]: Logline lock
+                - generic [ref=e135]: tone targets
+                - generic [ref=e136]: commercial positioning brief
+            - generic [ref=e137]:
+              - generic [ref=e138]:
+                - generic [ref=e139]:
+                  - generic [ref=e140]: Script
+                  - generic [ref=e141]: Scene intent and emotional payoff are being clarified beat by beat.
+                - button "Approve Stage" [ref=e142] [cursor=pointer]:
+                  - img [ref=e143]
+                  - text: Approve Stage
+              - generic [ref=e146]:
+                - generic [ref=e147]:
+                  - generic [ref=e148]: Status
+                  - generic [ref=e149]: pending
+                - generic [ref=e150]:
+                  - generic [ref=e151]: Agents
+                  - generic [ref=e152]: director, editor
+                - generic [ref=e153]:
+                  - generic [ref=e154]: Pending Approvals
+                  - generic [ref=e155]: "0"
+                - generic [ref=e156]:
+                  - generic [ref=e157]: Revisions
+                  - generic [ref=e158]: "0"
+              - generic [ref=e159]:
+                - generic [ref=e160]: Scene objectives
+                - generic [ref=e161]: character arc map
+                - generic [ref=e162]: dialogue pass
+            - generic [ref=e163]:
+              - generic [ref=e164]:
+                - generic [ref=e165]:
+                  - generic [ref=e166]: Pre-production
+                  - generic [ref=e167]: Coverage and blocking are lining up against production feasibility.
+                - button "Approve Stage" [ref=e168] [cursor=pointer]:
+                  - img [ref=e169]
+                  - text: Approve Stage
+              - generic [ref=e172]:
+                - generic [ref=e173]:
+                  - generic [ref=e174]: Status
+                  - generic [ref=e175]: pending
+                - generic [ref=e176]:
+                  - generic [ref=e177]: Agents
+                  - generic [ref=e178]: storyboard_artist, cinematographer, production_designer
+                - generic [ref=e179]:
+                  - generic [ref=e180]: Pending Approvals
+                  - generic [ref=e181]: "0"
+                - generic [ref=e182]:
+                  - generic [ref=e183]: Revisions
+                  - generic [ref=e184]: "0"
+              - generic [ref=e185]:
+                - generic [ref=e186]: Blocking plans
+                - generic [ref=e187]: coverage map
+                - generic [ref=e188]: visual motif bible
+            - generic [ref=e189]:
+              - generic [ref=e190]:
+                - generic [ref=e191]:
+                  - generic [ref=e192]: Production
+                  - generic [ref=e193]: Benchmark renders are establishing tone, blocking, and usable coverage.
+                - button "Approve Stage" [ref=e194] [cursor=pointer]:
+                  - img [ref=e195]
+                  - text: Approve Stage
+              - generic [ref=e198]:
+                - generic [ref=e199]:
+                  - generic [ref=e200]: Status
+                  - generic [ref=e201]: pending
+                - generic [ref=e202]:
+                  - generic [ref=e203]: Agents
+                  - generic [ref=e204]: render_coordinator, cinematographer, continuity_supervisor
+                - generic [ref=e205]:
+                  - generic [ref=e206]: Pending Approvals
+                  - generic [ref=e207]: "0"
+                - generic [ref=e208]:
+                  - generic [ref=e209]: Revisions
+                  - generic [ref=e210]: "0"
+              - generic [ref=e211]:
+                - generic [ref=e212]: Benchmark take
+                - generic [ref=e213]: continuity-safe alternates
+                - generic [ref=e214]: approved dailies
+            - generic [ref=e215]:
+              - generic [ref=e216]:
+                - generic [ref=e217]:
+                  - generic [ref=e218]: Post-production
+                  - generic [ref=e219]: Pacing and sonic handoff determine whether the emotional payoff lands.
+                - button "Approve Stage" [ref=e220] [cursor=pointer]:
+                  - img [ref=e221]
+                  - text: Approve Stage
+              - generic [ref=e224]:
+                - generic [ref=e225]:
+                  - generic [ref=e226]: Status
+                  - generic [ref=e227]: pending
+                - generic [ref=e228]:
+                  - generic [ref=e229]: Agents
+                  - generic [ref=e230]: editor, sound_designer
+                - generic [ref=e231]:
+                  - generic [ref=e232]: Pending Approvals
+                  - generic [ref=e233]: "0"
+                - generic [ref=e234]:
+                  - generic [ref=e235]: Revisions
+                  - generic [ref=e236]: "0"
+              - generic [ref=e237]:
+                - generic [ref=e238]: Editorial rhythm pass
+                - generic [ref=e239]: sound bridge plan
+                - generic [ref=e240]: color route
+            - generic [ref=e241]:
+              - generic [ref=e242]:
+                - generic [ref=e243]:
+                  - generic [ref=e244]: Release
+                  - generic [ref=e245]: The studio controller is packaging the film for market and festival fit.
+                - button "Approve Stage" [ref=e246] [cursor=pointer]:
+                  - img [ref=e247]
+                  - text: Approve Stage
+              - generic [ref=e250]:
+                - generic [ref=e251]:
+                  - generic [ref=e252]: Status
+                  - generic [ref=e253]: pending
+                - generic [ref=e254]:
+                  - generic [ref=e255]: Agents
+                  - generic [ref=e256]: rights_and_safety_reviewer, director
+                - generic [ref=e257]:
+                  - generic [ref=e258]: Pending Approvals
+                  - generic [ref=e259]: "0"
+                - generic [ref=e260]:
+                  - generic [ref=e261]: Revisions
+                  - generic [ref=e262]: "0"
+              - generic [ref=e263]:
+                - generic [ref=e264]: Festival strategy
+                - generic [ref=e265]: campaign hooks
+                - generic [ref=e266]: distribution posture
+        - generic [ref=e267]:
+          - generic [ref=e269]:
+            - heading "Orchestration Layer" [level=2] [ref=e270]
+            - paragraph [ref=e271]: Studio leadership controls pacing, approvals, and conflict resolution.
+          - generic [ref=e272]:
+            - generic [ref=e273]:
+              - generic [ref=e274]: Controller Status
+              - generic [ref=e275]: Development is live. The studio controller is pacing the film as a indie package.
+            - generic [ref=e276]:
+              - generic [ref=e277]: Next Best Actions
+              - generic [ref=e278]:
+                - 'button "Tap to lock: Advance development by clearing 0 approval gate(s)." [ref=e279]':
+                  - generic [ref=e280]:
+                    - img [ref=e281]
+                    - text: "Tap to lock:"
+                  - text: Advance development by clearing 0 approval gate(s).
+                - 'button "Tap to lock: Advance script by clearing 0 approval gate(s)." [ref=e284]':
+                  - generic [ref=e285]:
+                    - img [ref=e286]
+                    - text: "Tap to lock:"
+                  - text: Advance script by clearing 0 approval gate(s).
+                - 'button "Tap to lock: Advance pre-production by clearing 0 approval gate(s)." [ref=e289]':
+                  - generic [ref=e290]:
+                    - img [ref=e291]
+                    - text: "Tap to lock:"
+                  - text: Advance pre-production by clearing 0 approval gate(s).
+            - generic [ref=e294]:
+              - generic [ref=e295]: Bottlenecks
+              - generic [ref=e296]:
+                - generic [ref=e297]: Tone, Blocking, and Coverage
+                - generic [ref=e298]: Editorial Rhythm and Sound
+      - generic [ref=e299]:
+        - generic [ref=e300]:
+          - generic [ref=e302]:
+            - heading "Crew Panel" [level=2] [ref=e303]
+            - paragraph [ref=e304]: Agent roles, craft authority, performance, and anti-redundancy scoring.
+          - generic [ref=e305]:
+            - generic [ref=e306]:
+              - generic [ref=e307]:
+                - generic [ref=e308]:
+                  - generic [ref=e309]: Director
+                  - generic [ref=e310]: Guard tone, character arc, scene objective, and emotional payoff across the slate.
+                - generic [ref=e311]:
+                  - generic [ref=e312]: Performance
+                  - generic [ref=e313]: "90"
+              - generic [ref=e314]:
+                - generic [ref=e315]:
+                  - generic [ref=e316]: Current Task
+                  - generic [ref=e317]: Covering Development
+                - generic [ref=e318]:
+                  - generic [ref=e319]: Activity Status
+                  - generic [ref=e320]: active
+                - generic [ref=e321]:
+                  - generic [ref=e322]: Redundancy Score
+                  - generic [ref=e323]: "0"
+              - generic [ref=e324]:
+                - generic [ref=e325]:
+                  - generic [ref=e326]: tone
+                  - generic [ref=e327]: Keep the tone anchored in controlled, atmospheric tension and let the scene objective stay on the benchmark take until the emotional payoff for the film feels earned.
+                - generic [ref=e328]:
+                  - generic [ref=e329]: tone
+                  - generic [ref=e330]: "Current handoff: Director is shaping tone so the development pass supports indie positioning without repeating another department's note."
+            - generic [ref=e331]:
+              - generic [ref=e332]:
+                - generic [ref=e333]:
+                  - generic [ref=e334]: Cinematographer
+                  - generic [ref=e335]: Own blocking, lensing, coverage, and visual motif while staying production-feasible.
+                - generic [ref=e336]:
+                  - generic [ref=e337]: Performance
+                  - generic [ref=e338]: "88"
+              - generic [ref=e339]:
+                - generic [ref=e340]:
+                  - generic [ref=e341]: Current Task
+                  - generic [ref=e342]: Covering Development
+                - generic [ref=e343]:
+                  - generic [ref=e344]: Activity Status
+                  - generic [ref=e345]: active
+                - generic [ref=e346]:
+                  - generic [ref=e347]: Redundancy Score
+                  - generic [ref=e348]: "0"
+              - generic [ref=e349]:
+                - generic [ref=e350]:
+                  - generic [ref=e351]: coverage
+                  - generic [ref=e352]: Tighten blocking around the benchmark setup and preserve clean coverage before chasing texture, so the visual motif stays legible without hurting production feasibility.
+                - generic [ref=e353]:
+                  - generic [ref=e354]: coverage
+                  - generic [ref=e355]: "Current handoff: Cinematographer is shaping coverage so the development pass supports indie positioning without repeating another department's note."
+            - generic [ref=e356]:
+              - generic [ref=e357]:
+                - generic [ref=e358]:
+                  - generic [ref=e359]: Editor
+                  - generic [ref=e360]: Shape pacing, editorial rhythm, transition logic, and emotional release.
+                - generic [ref=e361]:
+                  - generic [ref=e362]: Performance
+                  - generic [ref=e363]: "86"
+              - generic [ref=e364]:
+                - generic [ref=e365]:
+                  - generic [ref=e366]: Current Task
+                  - generic [ref=e367]: Covering Development
+                - generic [ref=e368]:
+                  - generic [ref=e369]: Activity Status
+                  - generic [ref=e370]: active
+                - generic [ref=e371]:
+                  - generic [ref=e372]: Redundancy Score
+                  - generic [ref=e373]: "0"
+              - generic [ref=e374]:
+                - generic [ref=e375]:
+                  - generic [ref=e376]: pacing
+                  - generic [ref=e377]: Hold the cut a half-beat longer before the reveal; the editorial rhythm wants more breath so the pacing lands instead of rushing the emotional payoff.
+                - generic [ref=e378]:
+                  - generic [ref=e379]: pacing
+                  - generic [ref=e380]: "Current handoff: Editor is shaping pacing so the development pass supports indie positioning without repeating another department's note."
+            - generic [ref=e381]:
+              - generic [ref=e382]:
+                - generic [ref=e383]:
+                  - generic [ref=e384]: Sound Designer
+                  - generic [ref=e385]: Shape diegetic and non-diegetic sound so scenes land with clarity and atmosphere.
+                - generic [ref=e386]:
+                  - generic [ref=e387]: Performance
+                  - generic [ref=e388]: "84"
+              - generic [ref=e389]:
+                - generic [ref=e390]:
+                  - generic [ref=e391]: Current Task
+                  - generic [ref=e392]: Covering Development
+                - generic [ref=e393]:
+                  - generic [ref=e394]: Activity Status
+                  - generic [ref=e395]: active
+                - generic [ref=e396]:
+                  - generic [ref=e397]: Redundancy Score
+                  - generic [ref=e398]: "0"
+              - generic [ref=e399]:
+                - generic [ref=e400]:
+                  - generic [ref=e401]: sound
+                  - generic [ref=e402]: Use diegetic room tone under the cut and reserve the non-diegetic lift for the transition, so the scene change carries tension without flattening the pace.
+                - generic [ref=e403]:
+                  - generic [ref=e404]: sound
+                  - generic [ref=e405]: "Current handoff: Sound Designer is shaping sound so the development pass supports indie positioning without repeating another department's note."
+            - generic [ref=e406]:
+              - generic [ref=e407]:
+                - generic [ref=e408]:
+                  - generic [ref=e409]: Production Designer
+                  - generic [ref=e410]: Protect visual motif, world texture, and production feasibility of environments and props.
+                - generic [ref=e411]:
+                  - generic [ref=e412]: Performance
+                  - generic [ref=e413]: "82"
+              - generic [ref=e414]:
+                - generic [ref=e415]:
+                  - generic [ref=e416]: Current Task
+                  - generic [ref=e417]: Covering Development
+                - generic [ref=e418]:
+                  - generic [ref=e419]: Activity Status
+                  - generic [ref=e420]: active
+                - generic [ref=e421]:
+                  - generic [ref=e422]: Redundancy Score
+                  - generic [ref=e423]: "0"
+              - generic [ref=e424]:
+                - generic [ref=e425]:
+                  - generic [ref=e426]: visual motif
+                  - generic [ref=e427]: Push the neon practicals and wet-surface visual motif only where continuity can hold across takes; the set texture should amplify tone, not compete with blocking.
+                - generic [ref=e428]:
+                  - generic [ref=e429]: visual motif
+                  - generic [ref=e430]: "Current handoff: Production Designer is shaping visual motif so the development pass supports indie positioning without repeating another department's note."
+        - generic [ref=e431]:
+          - generic [ref=e433]:
+            - heading "Crew Room" [level=2] [ref=e434]
+            - paragraph [ref=e435]: Structured, role-based discussion with overlap suppression and escalation logic.
+          - generic [ref=e436]:
+            - generic [ref=e437]:
+              - generic [ref=e438]:
+                - generic [ref=e439]:
+                  - generic [ref=e440]: Tone, Blocking, and Coverage
+                  - generic [ref=e441]: Keep scene objective, blocking clarity, and visual motif aligned before approvals lock.
+                - button "Resolve Thread" [ref=e442] [cursor=pointer]
+              - generic [ref=e443]: needs-escalation
+              - generic [ref=e444]: Cinematographer overlapped Director on tone; the weaker note was suppressed so each lane stays role-specific.
+              - generic [ref=e445]:
+                - generic [ref=e446]:
+                  - generic [ref=e447]: Director
+                  - generic [ref=e448]: Keep the tone anchored in controlled, atmospheric tension and let the scene objective stay on the benchmark take until the emotional payoff for the film feels earned.
+                - generic [ref=e449]:
+                  - generic [ref=e450]: Director
+                  - generic [ref=e451]: "Current handoff: Director is shaping tone so the development pass supports indie positioning without repeating another department's note."
+                - generic [ref=e452]:
+                  - generic [ref=e453]: Cinematographer
+                  - generic [ref=e454]: Tighten blocking around the benchmark setup and preserve clean coverage before chasing texture, so the visual motif stays legible without hurting production feasibility.
+              - generic [ref=e455]: "Escalation: Director settles tone if blocking and coverage start describing the same problem."
+            - generic [ref=e456]:
+              - generic [ref=e457]:
+                - generic [ref=e458]:
+                  - generic [ref=e459]: Editorial Rhythm and Sound
+                  - generic [ref=e460]: Protect pacing, diegetic texture, and continuity through the handoff into post.
+                - button "Resolve Thread" [ref=e461] [cursor=pointer]
+              - generic [ref=e462]: needs-escalation
+              - generic [ref=e463]: Sound Designer overlapped Editor on pacing; the weaker note was suppressed so each lane stays role-specific.
+              - generic [ref=e464]:
+                - generic [ref=e465]:
+                  - generic [ref=e466]: Editor
+                  - generic [ref=e467]: Hold the cut a half-beat longer before the reveal; the editorial rhythm wants more breath so the pacing lands instead of rushing the emotional payoff.
+                - generic [ref=e468]:
+                  - generic [ref=e469]: Editor
+                  - generic [ref=e470]: "Current handoff: Editor is shaping pacing so the development pass supports indie positioning without repeating another department's note."
+                - generic [ref=e471]:
+                  - generic [ref=e472]: Sound Designer
+                  - generic [ref=e473]: Use diegetic room tone under the cut and reserve the non-diegetic lift for the transition, so the scene change carries tension without flattening the pace.
+              - generic [ref=e474]: "Escalation: Editor resolves any overlap between pacing notes and sound bridge notes."
+            - generic [ref=e475]:
+              - generic [ref=e476]:
+                - generic [ref=e477]:
+                  - generic [ref=e478]: Production Feasibility and Release Posture
+                  - generic [ref=e479]: Balance schedule, rights, and commercial positioning so the film can ship cleanly.
+                - button "Resolve Thread" [ref=e480] [cursor=pointer]
+              - generic [ref=e481]: aligned
+              - generic [ref=e482]:
+                - generic [ref=e483]:
+                  - generic [ref=e484]: Production Designer
+                  - generic [ref=e485]: Push the neon practicals and wet-surface visual motif only where continuity can hold across takes; the set texture should amplify tone, not compete with blocking.
+                - generic [ref=e486]:
+                  - generic [ref=e487]: Production Designer
+                  - generic [ref=e488]: "Current handoff: Production Designer is shaping visual motif so the development pass supports indie positioning without repeating another department's note."
+              - generic [ref=e489]: "Escalation: Studio controller resolves if feasibility and market notes drift into the same lane."
+      - generic [ref=e490]:
+        - generic [ref=e491]:
+          - generic [ref=e493]:
+            - heading "Script and Story Panel" [level=2] [ref=e494]
+            - paragraph [ref=e495]: Draft trajectory, scene objectives, character tracking, and dialogue shape.
+          - generic [ref=e496]:
+            - generic [ref=e497]:
+              - generic [ref=e498]: Version History
+              - generic [ref=e499]: Untitled Film / indie cut / development pass
+            - generic [ref=e500]:
+              - generic [ref=e501]:
+                - generic [ref=e502]: Scene Breakdown
+                - generic [ref=e504]: Scene objectives will populate after script ingest.
+              - generic [ref=e505]:
+                - generic [ref=e506]: Dialogue Notes
+                - generic [ref=e507]: Preserve subtext and pacing by holding exposition off-screen and letting tension ride the blocking instead of dialogue density.
+        - generic [ref=e508]:
+          - generic [ref=e510]:
+            - heading "Visual Development Panel" [level=2] [ref=e511]
+            - paragraph [ref=e512]: Shot list, storyboards, cinematography plan, and tone references.
+          - generic [ref=e514]:
+            - generic [ref=e515]:
+              - generic [ref=e516]: Coverage Plan
+              - generic [ref=e517]: Coverage favors motivated wides for geography, then moves into selective close coverage when the character arc turns.
+            - generic [ref=e518]:
+              - generic [ref=e519]: Lighting and Visual Motif
+              - generic [ref=e520]: Michael Mann night texture • Fincher editorial precision anchor the motif while preserving continuity across alternates.
+        - generic [ref=e521]:
+          - generic [ref=e523]:
+            - heading "Editing and Post Panel" [level=2] [ref=e524]
+            - paragraph [ref=e525]: Pacing, transitions, sound design, VFX, and color strategy.
+          - generic [ref=e526]:
+            - generic [ref=e527]:
+              - generic [ref=e528]: Editorial Rhythm
+              - generic [ref=e529]: The current cut wants longer breath before reveals, then sharper exit cuts so pacing feels deliberate rather than stalled.
+            - generic [ref=e530]:
+              - generic [ref=e531]: Diegetic / Non-diegetic Sound
+              - generic [ref=e532]: Lead with diegetic texture on entries, then let the non-diegetic lift bridge scene transitions and emotional payoff.
+            - generic [ref=e533]:
+              - generic [ref=e534]: VFX Planning
+              - generic [ref=e535]: "Keep VFX invisible to the cut: prioritize extensions that support blocking and atmosphere, not spectacle drift."
+            - generic [ref=e536]:
+              - generic [ref=e537]: Color Grade Concept
+              - generic [ref=e538]: Push controlled contrast and selective chroma so the visual motif stays cinematic without breaking continuity.
+        - generic [ref=e539]:
+          - generic [ref=e541]:
+            - heading "Marketing and Release Panel" [level=2] [ref=e542]
+            - paragraph [ref=e543]: Audience targeting, trailer concepts, festival strategy, and distribution.
+          - generic [ref=e544]:
+            - generic [ref=e545]:
+              - generic [ref=e546]: Audience Targeting
+              - generic [ref=e547]: Indie thriller audience
+            - generic [ref=e548]:
+              - generic [ref=e549]: Trailer Concept
+              - generic [ref=e550]: Cut a trailer around the visual motif, the scene objective, and the turn in the character arc before revealing plot mechanics.
+            - generic [ref=e551]:
+              - generic [ref=e552]: Festival Strategy
+              - generic [ref=e553]: Selective festival viability, stronger as a market-facing genre package
+            - generic [ref=e554]:
+              - generic [ref=e555]: Distribution Plan
+              - generic [ref=e556]: Prioritize festival-to-platform path with a curated trailer and critic-facing rollout.
+      - generic [ref=e557]:
+        - generic [ref=e558]:
+          - generic [ref=e560]:
+            - heading "Memory and Learning System" [level=2] [ref=e561]
+            - paragraph [ref=e562]: Project memory, continuity, taste profile, and lessons learned.
+          - generic [ref=e563]:
+            - generic [ref=e564]:
+              - generic [ref=e565]: Project Memory
+              - generic [ref=e566]: "Tone lock: Controlled, atmospheric tension. Mode: indie. Locked decisions: 0."
+            - generic [ref=e567]:
+              - generic [ref=e568]: Character Memory
+              - generic [ref=e569]: Character arc tracking starts once named characters are locked.
+            - generic [ref=e570]:
+              - generic [ref=e571]: Scene Memory
+              - generic [ref=e572]: Scene geography will populate after the breakdown pass.
+            - generic [ref=e573]:
+              - generic [ref=e574]: Visual Memory
+              - generic [ref=e575]: Visual motif anchors on Michael Mann night texture, Fincher editorial precision with continuity checks on blocking and lighting.
+            - generic [ref=e576]:
+              - generic [ref=e577]: User Taste Profile
+              - generic [ref=e578]: The studio keeps favoring controlled, atmospheric tension, legible coverage, and emotionally precise pacing.
+            - generic [ref=e579]:
+              - generic [ref=e580]: Distilled Lessons
+              - generic [ref=e581]: Clear role lanes early so notes stay novel and production-feasible.
+          - generic [ref=e582]:
+            - generic [ref=e583]: Agent Memory
+            - generic [ref=e584]: "• Tone: noir"
+            - generic [ref=e585]: "• Scenes: 1 (Detective Office)"
+            - generic [ref=e586]: "• Camera: cinematic wide"
+            - link "Full API →" [ref=e588] [cursor=pointer]:
+              - /url: http://127.0.0.1:8010/docs
+        - generic [ref=e589]:
+          - generic [ref=e591]:
+            - heading "Reflection Layer" [level=2] [ref=e592]
+            - paragraph [ref=e593]: Distilled notes on what worked, what failed, and where redundancy was removed.
+          - generic [ref=e594]:
+            - generic [ref=e595]:
+              - generic [ref=e596]: Tone, Blocking, and Coverage Reflection
+              - generic [ref=e597]:
+                - generic [ref=e598]:
+                  - strong [ref=e599]: "Worked:"
+                  - text: The Director lane stayed specific to keep scene objective, blocking clarity, and visual motif aligned before approvals lock..
+                - generic [ref=e600]:
+                  - strong [ref=e601]: "Failed:"
+                  - text: No major regression is active.
+                - generic [ref=e602]:
+                  - strong [ref=e603]: "Redundant:"
+                  - text: Cinematographer overlapped Director on tone; the weaker note was suppressed so each lane stays role-specific.
+                - generic [ref=e604]:
+                  - strong [ref=e605]: "Change:"
+                  - text: Tighten role boundaries before the next approval gate.
+                - generic [ref=e606]:
+                  - strong [ref=e607]: "Improvement:"
+                  - text: Novelty stayed ahead of redundancy, so the next pass should move faster through approvals.
+            - generic [ref=e608]:
+              - generic [ref=e609]: Editorial Rhythm and Sound Reflection
+              - generic [ref=e610]:
+                - generic [ref=e611]:
+                  - strong [ref=e612]: "Worked:"
+                  - text: The Editor lane stayed specific to protect pacing, diegetic texture, and continuity through the handoff into post..
+                - generic [ref=e613]:
+                  - strong [ref=e614]: "Failed:"
+                  - text: No major regression is active.
+                - generic [ref=e615]:
+                  - strong [ref=e616]: "Redundant:"
+                  - text: Sound Designer overlapped Editor on pacing; the weaker note was suppressed so each lane stays role-specific.
+                - generic [ref=e617]:
+                  - strong [ref=e618]: "Change:"
+                  - text: Push cleaner handoffs so each department owns a distinct craft problem.
+                - generic [ref=e619]:
+                  - strong [ref=e620]: "Improvement:"
+                  - text: Novelty stayed ahead of redundancy, so the next pass should move faster through approvals.
+            - generic [ref=e621]:
+              - generic [ref=e622]: Production Feasibility and Release Posture Reflection
+              - generic [ref=e623]:
+                - generic [ref=e624]:
+                  - strong [ref=e625]: "Worked:"
+                  - text: The Production Designer lane stayed specific to balance schedule, rights, and commercial positioning so the film can ship cleanly..
+                - generic [ref=e626]:
+                  - strong [ref=e627]: "Failed:"
+                  - text: No major regression is active.
+                - generic [ref=e628]:
+                  - strong [ref=e629]: "Redundant:"
+                  - text: No duplicate commentary survived the suppression pass.
+                - generic [ref=e630]:
+                  - strong [ref=e631]: "Change:"
+                  - text: Push cleaner handoffs so each department owns a distinct craft problem.
+                - generic [ref=e632]:
+                  - strong [ref=e633]: "Improvement:"
+                  - text: Novelty stayed ahead of redundancy, so the next pass should move faster through approvals.
+      - generic [ref=e634]:
+        - generic [ref=e635]:
+          - generic [ref=e637]:
+            - heading "Evaluation Framework" [level=2] [ref=e638]
+            - paragraph [ref=e639]: Role-based scoring for usefulness, novelty, alignment, and learning velocity.
+          - generic [ref=e640]:
+            - generic [ref=e641]:
+              - generic [ref=e642]:
+                - generic [ref=e643]: Director
+                - generic [ref=e644]: Novelty 72
+              - generic [ref=e645]:
+                - generic [ref=e646]:
+                  - generic [ref=e647]: usefulness
+                  - generic [ref=e648]: "80"
+                - generic [ref=e649]:
+                  - generic [ref=e650]: quality
+                  - generic [ref=e651]: "78"
+                - generic [ref=e652]:
+                  - generic [ref=e653]: novelty
+                  - generic [ref=e654]: "72"
+                - generic [ref=e655]:
+                  - generic [ref=e656]: alignment
+                  - generic [ref=e657]: "82"
+                - generic [ref=e658]:
+                  - generic [ref=e659]: improvement
+                  - generic [ref=e660]: "74"
+            - generic [ref=e661]:
+              - generic [ref=e662]:
+                - generic [ref=e663]: Cinematographer
+                - generic [ref=e664]: Novelty 72
+              - generic [ref=e665]:
+                - generic [ref=e666]:
+                  - generic [ref=e667]: usefulness
+                  - generic [ref=e668]: "80"
+                - generic [ref=e669]:
+                  - generic [ref=e670]: quality
+                  - generic [ref=e671]: "78"
+                - generic [ref=e672]:
+                  - generic [ref=e673]: novelty
+                  - generic [ref=e674]: "72"
+                - generic [ref=e675]:
+                  - generic [ref=e676]: alignment
+                  - generic [ref=e677]: "82"
+                - generic [ref=e678]:
+                  - generic [ref=e679]: improvement
+                  - generic [ref=e680]: "74"
+            - generic [ref=e681]:
+              - generic [ref=e682]:
+                - generic [ref=e683]: Editor
+                - generic [ref=e684]: Novelty 72
+              - generic [ref=e685]:
+                - generic [ref=e686]:
+                  - generic [ref=e687]: usefulness
+                  - generic [ref=e688]: "80"
+                - generic [ref=e689]:
+                  - generic [ref=e690]: quality
+                  - generic [ref=e691]: "78"
+                - generic [ref=e692]:
+                  - generic [ref=e693]: novelty
+                  - generic [ref=e694]: "72"
+                - generic [ref=e695]:
+                  - generic [ref=e696]: alignment
+                  - generic [ref=e697]: "82"
+                - generic [ref=e698]:
+                  - generic [ref=e699]: improvement
+                  - generic [ref=e700]: "74"
+            - generic [ref=e701]:
+              - generic [ref=e702]:
+                - generic [ref=e703]: Sound Designer
+                - generic [ref=e704]: Novelty 72
+              - generic [ref=e705]:
+                - generic [ref=e706]:
+                  - generic [ref=e707]: usefulness
+                  - generic [ref=e708]: "80"
+                - generic [ref=e709]:
+                  - generic [ref=e710]: quality
+                  - generic [ref=e711]: "78"
+                - generic [ref=e712]:
+                  - generic [ref=e713]: novelty
+                  - generic [ref=e714]: "72"
+                - generic [ref=e715]:
+                  - generic [ref=e716]: alignment
+                  - generic [ref=e717]: "82"
+                - generic [ref=e718]:
+                  - generic [ref=e719]: improvement
+                  - generic [ref=e720]: "74"
+            - generic [ref=e721]:
+              - generic [ref=e722]:
+                - generic [ref=e723]: Production Designer
+                - generic [ref=e724]: Novelty 72
+              - generic [ref=e725]:
+                - generic [ref=e726]:
+                  - generic [ref=e727]: usefulness
+                  - generic [ref=e728]: "80"
+                - generic [ref=e729]:
+                  - generic [ref=e730]: quality
+                  - generic [ref=e731]: "78"
+                - generic [ref=e732]:
+                  - generic [ref=e733]: novelty
+                  - generic [ref=e734]: "72"
+                - generic [ref=e735]:
+                  - generic [ref=e736]: alignment
+                  - generic [ref=e737]: "82"
+                - generic [ref=e738]:
+                  - generic [ref=e739]: improvement
+                  - generic [ref=e740]: "74"
+        - generic [ref=e741]:
+          - generic [ref=e743]:
+            - heading "Studio Leadership Notes" [level=2] [ref=e744]
+            - paragraph [ref=e745]: Distilled notes become memory, sharpen approvals, and reduce repeated feedback.
+          - generic [ref=e746]:
+            - textbox "Lock a note about tone, pacing, blocking, continuity, market fit, or production feasibility." [ref=e747]
+            - button "Save Leadership Note" [disabled] [ref=e748] [cursor=pointer]:
+              - img [ref=e749]
+              - text: Save Leadership Note
+            - group [ref=e753]:
+              - generic "Co-Director Inspection" [ref=e754] [cursor=pointer]
+      - generic [ref=e757]:
+        - heading "Operational View" [level=2] [ref=e758]
+        - paragraph [ref=e759]: Provider pressure, render queue, and approval-safe execution.

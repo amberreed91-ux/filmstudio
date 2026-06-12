@@ -1,0 +1,20 @@
+[     532ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5001/node_modules/.vite/deps/react-dom_client.js?v=85703be2:14336
+[    9559ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8010/api/f51/studio/projects/project_921af73a732f:0
+[    9561ms] [ERROR] [Studio API Error] /api/f51/studio/projects/project_921af73a732f: Error: Project not found
+    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:81:10)
+    at async getProject (http://127.0.0.1:5001/src/lib/studioApi.ts:183:19)
+    at async http://127.0.0.1:5001/src/hooks/useProjectHydration.ts:25:21 @ http://127.0.0.1:5001/@vite/client:509
+[    9939ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8010/api/f51/studio/projects/project_921af73a732f/decision-gate:0
+[    9939ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8010/api/f51/studio/projects/project_921af73a732f/continuity-issues:0
+[    9939ms] [ERROR] [Studio API Error] /api/f51/studio/projects/project_921af73a732f/decision-gate: Error: Project not found
+    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:81:10)
+    at async getProjectDecisionGate (http://127.0.0.1:5001/src/lib/studioApi.ts:1018:18)
+    at async loadDecisionGate (http://127.0.0.1:5001/src/pages/ProductionBoard.tsx:125:18) @ http://127.0.0.1:5001/@vite/client:509
+[    9947ms] [ERROR] [Studio API Error] /api/f51/studio/projects/project_921af73a732f/continuity-issues: Error: Project not found
+    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:81:10)
+    at async loadContinuity (http://127.0.0.1:5001/src/pages/ProductionBoard.tsx:194:20) @ http://127.0.0.1:5001/@vite/client:509
+[   10111ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8010/api/f51/studio/projects/project_921af73a732f:0
+[   10111ms] [ERROR] [Studio API Error] /api/f51/studio/projects/project_921af73a732f: Error: Project not found
+    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:81:10)
+    at async getProject (http://127.0.0.1:5001/src/lib/studioApi.ts:183:19)
+    at async http://127.0.0.1:5001/src/hooks/useProjectHydration.ts:25:21 @ http://127.0.0.1:5001/@vite/client:509

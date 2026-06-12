@@ -30,6 +30,7 @@ export default function DirectorConsole({
   defaultProvider: string
   busy: boolean
   onGenerate: (payload: DirectorConsolePayload) => Promise<void>
+  onSimulateAudience?: () => void
 }) {
   const { activity } = useRenderActivity()
   const [sceneGoal, setSceneGoal] = useState('')
@@ -118,29 +119,40 @@ export default function DirectorConsole({
           </label>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-3 flex gap-2">
           <button
             type="button"
             disabled={busy}
             onClick={() => onGenerate({ sceneGoal, emotionalTone, pacing, cameraStyle, provider, collaborationMode })}
-            className="director-console-generate"
+            className="director-console-generate flex-1"
           >
             {busy ? 'Generating...' : 'Generate Scene'}
           </button>
-          {busy ? (
-            <div className="mt-2">
-              <CinematicLoading
-                compact
-                title="Render Job Atmosphere"
-                lines={[
-                  'Analyzing scene composition...',
-                  'Preparing cinematic lighting...',
-                  'Rendering motion frames...',
-                ]}
-              />
-            </div>
-          ) : null}
+          {onSimulateAudience && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onSimulateAudience}
+              className="rounded-lg border border-purple-400/40 bg-purple-500/12 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-purple-100 transition-all hover:bg-purple-500/20 disabled:opacity-50"
+              title="Simulate Audience Reactions"
+            >
+              Simulate
+            </button>
+          )}
         </div>
+        {busy ? (
+          <div className="mt-2">
+            <CinematicLoading
+              compact
+              title="Render Job Atmosphere"
+              lines={[
+                'Analyzing scene composition...',
+                'Preparing cinematic lighting...',
+                'Rendering motion frames...',
+              ]}
+            />
+          </div>
+        ) : null}
         <div className="mt-3">
           <CoDirectorCollaborationPanel
             room="director"

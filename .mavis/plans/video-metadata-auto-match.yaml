@@ -1,0 +1,914 @@
+version: 1
+plan:
+  name: 'video-metadata-auto-match'
+  max_concurrency: 6
+  max_consecutive_failures: 2
+  max_cycles: 15
+tasks:
+  - id: data-model
+    title: 'video metadata match data layer'
+    prompt: |
+      Implement the VideoMetadataMatch data model and storage layer for the Study Room auto-match feature.
+
+      ## Context
+
+      The project is at `/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/`.
+      - Existing `VideoAsset` model is at `app/models/__init__.py` (line ~404).
+      - Existing storage is at `app/data/storage.py` with SQLite persistence.
+      - Existing `SceneIntelligenceRecord` metadata is at `app/models/scene_intelligence.py` — this is the metadata library.
+
+      ## Work
+
+      1. Add `VideoMetadataMatch` Pydantic model to `app/models/__init__.py`:
+         ```python
+         class VideoMetadataMatch(BaseModel):
+             match_id: str
+             asset_id: str
+             metadata_id: str  # scene_id from SceneIntelligenceRecord
+             project_id: Optional[str] = None
+             match_status: str = "proposed"  # proposed | confirmed | rejected | auto_confirmed
+             match_confidence: float = 0.0
+             match_reason: str = ""
+             matched_fields: List[str] = Field(default_factory=list)
+             created_at: str = ""
+             updated_at: str = ""
+             metadata: dict = Field(default_factory=dict)
+         ```
+
+      2. Add storage table migration to `app/data/storage.py` — add migration #20:
+         ```sql
+         CREATE TABLE IF NOT EXISTS video_metadata_matches (
+             match_id TEXT PRIMARY KEY,
+             asset_id TEXT NOT NULL,
+             metadata_id TEXT NOT NULL,
+             project_id TEXT,
+             match_status TEXT NOT NULL DEFAULT 'proposed'
+                 CHECK (match_status IN ('proposed', 'confirmed', 'rejected', 'auto_confirmed')),
+             match_confidence REAL NOT NULL DEFAULT 0.0
+                 CHECK (match_confidence >= 0.0 AND match_confidence <= 1.0),
+             match_reason TEXT,
+             matched_fields TEXT,  -- JSON list
+             created_at TEXT NOT NULL,
+             updated_at TEXT NOT NULL,
+             metadata TEXT,
+             CHECK (match_id != ''),
+             CHECK (asset_id != ''),
+             CHECK (metadata_id != '')
+         );
+         CREATE INDEX IF NOT EXISTS idx_video_metadata_matches_asset ON video_metadata_matches(asset_id);
+         CREATE INDEX IF NOT EXISTS idx_video_metadata_matches_status ON video_metadata_matches(match_status);
+         ```
+
+      3. Add storage methods to `DatabaseStorage` class in `app/data/storage.py`:
+         - `save_video_metadata_match(match: VideoMetadataMatch) -> VideoMetadataMatch`
+         - `get_video_metadata_match(match_id: str) -> Optional[VideoMetadataMatch]`
+         - `list_video_metadata_matches_for_asset(asset_id: str) -> List[VideoMetadataMatch]`
+         - `list_video_metadata_matches(status: Optional[str] = None) -> List[VideoMetadataMatch]`
+         - `delete_video_metadata_match(match_id: str) -> bool`
+         - `_row_to_video_metadata_match(row) -> VideoMetadataMatch`
+
+      Follow the existing patterns for video_assets table in storage.py. Use json.dumps/loads for matched_fields JSON list and metadata dict.
+
+      4. Export `VideoMetadataMatch` from `app/models/__init__.py`.
+
+      Report the paths of all files changed.
+    assigned_to: general
+    verified_by: verifier
+    verify_prompt: |
+      Verify the VideoMetadataMatch data layer was implemented correctly.
+
+      1. Check `app/models/__init__.py` has `VideoMetadataMatch` model with all required fields.
+      2. Check `app/data/storage.py` has migration #20 with the video_metadata_matches table.
+      3. Check `DatabaseStorage` class has all 5 methods (save, get, list_for_asset, list, delete, _row_to).
+      4. Import and instantiate the model in a Python shell to verify it validates correctly.
+      5. Check no import errors or syntax errors.
+
+      Report pass/fail for each check and the files changed.
+    timeout_ms: 1800000
+
+  - id: matching-service
+    title: 'video metadata matching service'
+    prompt: |
+      Implement the `VideoMetadataMatchingService` for the Study Room auto-match feature.
+
+      ## Context
+
+      The project is at `/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/`.
+      - `VideoAsset` model at `app/models/__init__.py` (line ~404).
+      - `SceneIntelligenceRecord` at `app/models/scene_intelligence.py` — this is the metadata library.
+      - `SceneIntelligenceStore` at `app/services/scene_intelligence_store.py` — already exists.
+      - `DatabaseStorage` at `app/data/storage.py` — already has video_asset persistence.
+      - `VideoAssetService` at `app/services/video_asset_service.py` — already exists.
+      - Storage instance is configured as `get_storage("sqlite")` in `app/routes/projects.py`.
+
+      ## Work
+
+      Create `app/services/video_metadata_matching_service.py` with this content:
+
+      ```python
+      from __future__ import annotations
+      import re
+      import uuid
+      from datetime import datetime, timezone
+      from difflib import SequenceMatcher
+      from pathlib import Path
+      from typing import Any, Dict, List, Optional, Tuple
+
+      from app.models import VideoAsset
+      from app.models.scene_intelligence import SceneIntelligenceRecord
+      from app.services.scene_intelligence_store import scene_intelligence_store
+      from app.data.storage import DatabaseStorage
+
+      # Confidence thresholds
+      CONFIDENCE_AUTO_CONFIRM = 0.95
+      CONFIDENCE_STRONG = 0.80
+      CONFIDENCE_POSSIBLE = 0.60
+
+      class VideoMetadataMatchingService:
+          def __init__(self, storage: Optional[DatabaseStorage] = None) -> None:
+              self._storage = storage
+              self._metadata_store = scene_intelligence_store
+
+          def _now_iso(self) -> str:
+              return datetime.now(timezone.utc).isoformat()
+
+          def _generate_match_id(self) -> str:
+              return f"match-{uuid.uuid4().hex[:12]}"
+
+          # ---- normalization helpers ----
+
+          def _normalize(self, value: str) -> str:
+              """Normalize text for comparison: lowercase, strip, remove special chars."""
+              if not value:
+                  return ""
+              return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+          def _extract_base_name(self, filename: str) -> str:
+              """Extract base name without extension."""
+              if not filename:
+                  return ""
+              stem = Path(filename).stem
+              # Handle double extensions like .mp4
+              for ext in [".mp4", ".mov", ".webm"]:
+                  if stem.lower().endswith(ext):
+                      stem = stem[: -len(ext)]
+              return stem
+
+          # ---- scoring helpers ----
+
+          def _exact_match_score(self, asset_filename: str, metadata_filename: str) -> Tuple[float, List[str]]:
+              """Score based on exact/normalized filename match. Returns (score, matched_fields)."""
+              if not asset_filename or not metadata_filename:
+                  return 0.0, []
+              matched_fields: List[str] = []
+              score = 0.0
+
+              # Exact match
+              if asset_filename == metadata_filename:
+                  score = 1.0
+                  matched_fields.append("filename_exact")
+              # Normalized exact match
+              norm_asset = self._normalize(asset_filename)
+              norm_meta = self._normalize(metadata_filename)
+              if norm_asset and norm_meta and norm_asset == norm_meta:
+                  score = max(score, 0.98)
+                  matched_fields.append("filename_normalized")
+
+              return score, matched_fields
+
+          def _title_similarity_score(self, asset_title: str, metadata_title: str) -> Tuple[float, List[str]]:
+              """Score based on title similarity using SequenceMatcher."""
+              if not asset_title or not metadata_title:
+                  return 0.0, []
+              norm_asset = self._normalize(asset_title)
+              norm_meta = self._normalize(metadata_title)
+              if not norm_asset or not norm_meta:
+                  return 0.0, []
+              ratio = SequenceMatcher(None, norm_asset, norm_meta).ratio()
+              matched_fields: List[str] = []
+              if ratio >= 0.90:
+                  score = 0.95
+                  matched_fields.append("title_similarity_exact")
+              elif ratio >= 0.75:
+                  score = 0.85
+                  matched_fields.append("title_similarity_strong")
+              elif ratio >= 0.60:
+                  score = 0.70
+                  matched_fields.append("title_similarity_possible")
+              else:
+                  score = 0.0
+              return score, matched_fields
+
+          def _scene_match_score(self, asset_title: str, scene_record: Dict[str, Any]) -> Tuple[float, List[str]]:
+              """Score based on scene_id / scene_name / film_title match."""
+              if not asset_title or not scene_record:
+                  return 0.0, []
+              norm_asset = self._normalize(asset_title)
+              if not norm_asset:
+                  return 0.0, []
+              matched_fields: List[str] = []
+              best_score = 0.0
+
+              scene_id = self._normalize(scene_record.get("scene_id", ""))
+              scene_name = self._normalize(scene_record.get("scene_name", ""))
+              film_title = self._normalize(scene_record.get("film_title", ""))
+
+              candidates = [
+                  scene_id,
+                  scene_name,
+                  film_title,
+                  f"{film_title} {scene_name}" if film_title and scene_name else "",
+                  f"{film_title} {scene_id}" if film_title and scene_id else "",
+              ]
+
+              for candidate in candidates:
+                  if not candidate:
+                      continue
+                  if norm_asset == candidate:
+                      best_score = max(best_score, 0.96)
+                      matched_fields.append("scene_id_match")
+                  elif norm_asset in candidate or candidate in norm_asset:
+                      ratio = SequenceMatcher(None, norm_asset, candidate).ratio()
+                      if ratio >= 0.80:
+                          best_score = max(best_score, 0.85)
+                          if "scene_title_similarity" not in matched_fields:
+                              matched_fields.append("scene_title_similarity")
+
+              return best_score, matched_fields
+
+          def _duration_score(self, asset_duration: Optional[float], metadata_duration: Optional[float]) -> float:
+              """Score based on duration similarity."""
+              if asset_duration is None or metadata_duration is None:
+                  return 0.0
+              if asset_duration <= 0 or metadata_duration <= 0:
+                  return 0.0
+              diff = abs(asset_duration - metadata_duration)
+              ratio = diff / max(asset_duration, metadata_duration)
+              if ratio <= 0.02:
+                  return 0.10
+              elif ratio <= 0.05:
+                  return 0.05
+              return 0.0
+
+          def _file_size_score(self, asset_size: Optional[int], metadata_size: Optional[int]) -> float:
+              """Score based on file size similarity."""
+              if asset_size is None or metadata_size is None:
+                  return 0.0
+              if asset_size <= 0 or metadata_size <= 0:
+                  return 0.0
+              diff = abs(asset_size - metadata_size)
+              ratio = diff / max(asset_size, metadata_size)
+              if ratio <= 0.01:
+                  return 0.05
+              return 0.0
+
+          # ---- main matching methods ----
+
+          def score_metadata_match(self, asset: VideoAsset, metadata_record: Dict[str, Any]) -> Tuple[float, List[str], str]:
+              """
+              Score a single VideoAsset against a single SceneIntelligenceRecord.
+              Returns (confidence, matched_fields, match_reason).
+              """
+              base_name = self._extract_base_name(asset.title)
+              original_filename = (asset.metadata or {}).get("original_filename", "")
+              compare_names = [base_name, original_filename]
+
+              all_matched_fields: List[str] = []
+              total_score = 0.0
+              reasons: List[str] = []
+
+              # 1. Exact filename match
+              for name in compare_names:
+                  if name:
+                      score, fields = self._exact_match_score(name, metadata_record.get("scene_id", ""))
+                      if score > 0:
+                          total_score += score * 1.0
+                          all_matched_fields.extend(fields)
+                          reasons.append(f"exact match: {name}")
+                      score, fields = self._exact_match_score(name, metadata_record.get("scene_name", ""))
+                      if score > 0:
+                          total_score += score * 0.95
+                          all_matched_fields.extend(fields)
+                          reasons.append(f"exact scene_name match: {name}")
+                      score, fields = self._exact_match_score(name, metadata_record.get("film_title", ""))
+                      if score > 0:
+                          total_score += score * 0.90
+                          all_matched_fields.extend(fields)
+                          reasons.append(f"exact film_title match: {name}")
+
+              # 2. Title similarity
+              title = base_name or original_filename
+              if title:
+                  for field in ["scene_id", "scene_name", "film_title"]:
+                      meta_val = metadata_record.get(field, "")
+                      if meta_val:
+                          score, fields = self._title_similarity_score(title, meta_val)
+                          if score > 0:
+                              weight = 0.90 if field == "scene_name" else 0.85
+                              total_score += score * weight
+                              all_matched_fields.extend(fields)
+                              reasons.append(f"title similarity ({field}): {score:.2f}")
+
+              # 3. Scene title similarity
+              if title:
+                  score, fields = self._scene_match_score(title, metadata_record)
+                  if score > 0:
+                      total_score += score * 0.85
+                      all_matched_fields.extend(fields)
+                      reasons.append(f"scene match score: {score:.2f}")
+
+              # 4. Duration
+              dur_score = self._duration_score(
+                  asset.duration_seconds,
+                  metadata_record.get("duration_seconds"),
+              )
+              if dur_score > 0:
+                  total_score += dur_score
+                  all_matched_fields.append("duration_similarity")
+                  reasons.append(f"duration similarity: +{dur_score:.2f}")
+
+              # 5. File size
+              size_score = self._file_size_score(
+                  asset.file_size_bytes,
+                  metadata_record.get("file_size_bytes"),
+              )
+              if size_score > 0:
+                  total_score += size_score
+                  all_matched_fields.append("file_size_similarity")
+                  reasons.append(f"file size similarity: +{size_score:.2f}")
+
+              # Deduplicate matched_fields
+              all_matched_fields = list(dict.fromkeys(all_matched_fields))
+
+              confidence = min(1.0, total_score)
+              match_reason = "; ".join(reasons[:3]) if reasons else "no match signals found"
+
+              return confidence, all_matched_fields, match_reason
+
+          def find_candidate_matches_for_asset(self, asset: VideoAsset) -> List[Dict[str, Any]]:
+              """Find all potential metadata matches for a VideoAsset, sorted by confidence."""
+              metadata_records = self._metadata_store.list_records()
+              candidates: List[Dict[str, Any]] = []
+
+              for record in metadata_records:
+                  confidence, matched_fields, match_reason = self.score_metadata_match(asset, record)
+                  if confidence >= CONFIDENCE_POSSIBLE:
+                      candidates.append({
+                          "metadata_record": record,
+                          "metadata_id": record.get("scene_id", ""),
+                          "confidence": confidence,
+                          "matched_fields": matched_fields,
+                          "match_reason": match_reason,
+                      })
+
+              # Sort by confidence descending
+              candidates.sort(key=lambda x: x["confidence"], reverse=True)
+              return candidates
+
+          def auto_match_uploaded_asset(self, asset_id: str) -> Optional[Dict[str, Any]]:
+              """Run auto-match for a newly uploaded asset. Returns match result or None."""
+              if not self._storage:
+                  return None
+
+              asset = self._storage.get_video_asset(asset_id)
+              if not asset:
+                  return None
+
+              candidates = self.find_candidate_matches_for_asset(asset)
+              if not candidates:
+                  return None
+
+              best = candidates[0]
+              confidence = best["confidence"]
+              metadata_record = best["metadata_record"]
+              metadata_id = best["metadata_id"]
+              matched_fields = best["matched_fields"]
+              match_reason = best["match_reason"]
+
+              now = self._now_iso()
+              match_status = "auto_confirmed" if confidence >= CONFIDENCE_AUTO_CONFIRM else "proposed"
+
+              match = self._storage.save_video_metadata_match(
+                  VideoMetadataMatch(
+                      match_id=self._generate_match_id(),
+                      asset_id=asset_id,
+                      metadata_id=metadata_id,
+                      project_id=asset.project_id,
+                      match_status=match_status,
+                      match_confidence=confidence,
+                      match_reason=match_reason,
+                      matched_fields=matched_fields,
+                      created_at=now,
+                      updated_at=now,
+                      metadata={
+                          "scene_name": metadata_record.get("scene_name", ""),
+                          "film_title": metadata_record.get("film_title", ""),
+                          "intent": metadata_record.get("intent", ""),
+                          "emotional_beat_arc": metadata_record.get("emotional_beat_arc", []),
+                          "camera_logic": metadata_record.get("camera_logic", []),
+                          "pacing_curve": metadata_record.get("pacing_curve", []),
+                          "director_notes": metadata_record.get("director_notes", ""),
+                          "source": "metadata_library",
+                          "matched_metadata_id": metadata_id,
+                          "match_reason": match_reason,
+                      },
+                  )
+              )
+
+              return {
+                  "match": match,
+                  "confidence": confidence,
+                  "match_status": match_status,
+                  "metadata_record": metadata_record,
+              }
+
+          def confirm_match(self, match_id: str) -> Optional[VideoMetadataMatch]:
+              """Confirm a proposed match."""
+              if not self._storage:
+                  return None
+              match = self._storage.get_video_metadata_match(match_id)
+              if not match:
+                  return None
+              match.match_status = "confirmed"
+              match.updated_at = self._now_iso()
+              return self._storage.save_video_metadata_match(match)
+
+          def reject_match(self, match_id: str) -> Optional[VideoMetadataMatch]:
+              """Reject a proposed match."""
+              if not self._storage:
+                  return None
+              match = self._storage.get_video_metadata_match(match_id)
+              if not match:
+                  return None
+              match.match_status = "rejected"
+              match.updated_at = self._now_iso()
+              return self._storage.save_video_metadata_match(match)
+
+          def list_matches_for_asset(self, asset_id: str) -> List[VideoMetadataMatch]:
+              """List all matches for an asset."""
+              if not self._storage:
+                  return []
+              return self._storage.list_video_metadata_matches_for_asset(asset_id)
+
+          def list_unmatched_assets(self) -> List[VideoAsset]:
+              """List video assets that have no confirmed/auto_confirmed metadata match."""
+              if not self._storage:
+                  return []
+              all_assets = self._storage.list_video_assets(source_type="uploaded_file")
+              matched_asset_ids = {
+                  m.asset_id for m in self._storage.list_video_metadata_matches()
+                  if m.match_status in ("confirmed", "auto_confirmed")
+              }
+              return [a for a in all_assets if a.asset_id not in matched_asset_ids]
+
+
+      video_metadata_matching_service = VideoMetadataMatchingService()
+      ```
+
+      Report the file created.
+    assigned_to: general
+    verified_by: verifier
+    verify_prompt: |
+      Verify the VideoMetadataMatchingService was implemented correctly.
+
+      1. Check `app/services/video_metadata_matching_service.py` exists with all required methods.
+      2. Check the class has: `score_metadata_match`, `find_candidate_matches_for_asset`, `auto_match_uploaded_asset`, `confirm_match`, `reject_match`, `list_matches_for_asset`, `list_unmatched_assets`.
+      3. Check confidence thresholds are correct: AUTO_CONFIRM=0.95, STRONG=0.80, POSSIBLE=0.60.
+      4. Check matching priority order: exact filename, normalized, title similarity, scene match, duration, file size.
+      5. Check `auto_match_uploaded_asset` creates auto_confirmed if confidence >= 0.95, else proposed.
+      6. Check `video_metadata_matching_service` singleton is exported.
+      7. Try importing the module in Python to verify no import errors.
+
+      Report pass/fail for each check.
+    timeout_ms: 1800000
+
+  - id: api-endpoints
+    title: 'metadata match API endpoints'
+    prompt: |
+      Add metadata match API endpoints to the Study Room backend.
+
+      ## Context
+
+      The project is at `/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/`.
+      - Main router is at `app/routes/projects.py`.
+      - `VideoAssetService` is at `app/services/video_asset_service.py`.
+      - `VideoMetadataMatchingService` is at `app/services/video_metadata_matching_service.py` (to be created).
+      - Storage is initialized in `app/routes/projects.py`.
+
+      ## Work
+
+      1. Add to `app/routes/projects.py`:
+
+      Add at the top imports section (after existing imports):
+      ```python
+      from app.services.video_metadata_matching_service import video_metadata_matching_service
+      ```
+
+      Add these endpoint functions after the existing video-assets endpoints (~line 1028):
+
+      ```python
+      @router.post("/video-assets/{asset_id}/auto-match-metadata")
+      def auto_match_metadata(asset_id: str):
+          result = video_metadata_matching_service.auto_match_uploaded_asset(asset_id)
+          if not result:
+              raise HTTPException(status_code=404, detail="Asset not found or no metadata match found")
+          match_dict = result["match"].model_dump()
+          return {
+              "match": match_dict,
+              "confidence": result["confidence"],
+              "match_status": result["match_status"],
+              "metadata_record": result["metadata_record"],
+          }
+
+      @router.get("/video-assets/{asset_id}/metadata-matches")
+      def list_metadata_matches(asset_id: str):
+          asset = video_asset_service.get_asset(asset_id)
+          if asset is None:
+              raise HTTPException(status_code=404, detail="Video asset not found")
+          matches = video_metadata_matching_service.list_matches_for_asset(asset_id)
+          return {"matches": [m.model_dump() for m in matches]}
+
+      @router.post("/video-assets/{asset_id}/metadata-matches/{match_id}/confirm")
+      def confirm_metadata_match(asset_id: str, match_id: str):
+          match = video_metadata_matching_service.confirm_match(match_id)
+          if not match:
+              raise HTTPException(status_code=404, detail="Match not found")
+          if match.asset_id != asset_id:
+              raise HTTPException(status_code=400, detail="Match does not belong to this asset")
+          return {"match": match.model_dump()}
+
+      @router.post("/video-assets/{asset_id}/metadata-matches/{match_id}/reject")
+      def reject_metadata_match(asset_id: str, match_id: str):
+          match = video_metadata_matching_service.reject_match(match_id)
+          if not match:
+              raise HTTPException(status_code=404, detail="Match not found")
+          if match.asset_id != asset_id:
+              raise HTTPException(status_code=400, detail="Match does not belong to this asset")
+          return {"match": match.model_dump()}
+
+      @router.get("/video-assets/unmatched")
+      def list_unmatched_assets():
+          assets = video_metadata_matching_service.list_unmatched_assets()
+          return {"assets": [a.model_dump() for a in assets]}
+      ```
+
+      2. Update the upload endpoint to trigger auto-match after registration.
+
+      Find the `upload_video_asset` endpoint (~line 934) and add auto-match call after asset registration:
+
+      After this line:
+      ```python
+      return {"asset": asset.model_dump()}
+      ```
+
+      Add this before the return:
+      ```python
+      # Auto-match metadata after upload
+      try:
+          video_metadata_matching_service.auto_match_uploaded_asset(asset.asset_id)
+      except Exception:
+          pass  # Non-blocking: auto-match is best-effort
+      ```
+
+      3. Report file changed and line numbers of new endpoints.
+    assigned_to: general
+    verified_by: verifier
+    verify_prompt: |
+      Verify the API endpoints were added correctly.
+
+      1. Check `app/routes/projects.py` has the matching service import.
+      2. Check all 5 endpoints exist:
+         - POST /video-assets/{asset_id}/auto-match-metadata
+         - GET /video-assets/{asset_id}/metadata-matches
+         - POST /video-assets/{asset_id}/metadata-matches/{match_id}/confirm
+         - POST /video-assets/{asset_id}/metadata-matches/{match_id}/reject
+         - GET /video-assets/unmatched
+      3. Check the upload endpoint calls auto_match_uploaded_asset after registration.
+      4. Verify endpoints use proper HTTP status codes (404 for not found, 400 for bad request).
+      5. Check no syntax errors by running: python -m py_compile app/routes/projects.py
+
+      Report pass/fail for each check.
+    timeout_ms: 1800000
+
+  - id: frontend-ui
+    title: 'study room metadata match UI'
+    prompt: |
+      Update the StudyRoom.tsx frontend to show metadata match UI for uploaded videos.
+
+      ## Context
+
+      The project is at `/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/`.
+      - `StudyRoom.tsx` is at `src/pages/StudyRoom.tsx` (~1400 lines).
+      - `studioApi.ts` is at `src/lib/studioApi.ts`.
+      - `VideoAsset` type is defined in `studioApi.ts`.
+
+      ## Work
+
+      ### Step 1: Add TypeScript types to `studioApi.ts`
+
+      Add these types to `studioApi.ts` (find a good location near VideoAsset type, around line 1282):
+
+      ```typescript
+      export type VideoMetadataMatch = {
+        match_id: string
+        asset_id: string
+        metadata_id: string
+        project_id?: string
+        match_status: 'proposed' | 'confirmed' | 'rejected' | 'auto_confirmed'
+        match_confidence: number
+        match_reason: string
+        matched_fields: string[]
+        created_at: string
+        updated_at: string
+        metadata: Record<string, unknown>
+      }
+
+      export type AutoMatchResult = {
+        match: VideoMetadataMatch
+        confidence: number
+        match_status: string
+        metadata_record: SceneIntelligenceRecord
+      }
+      ```
+
+      Add these API functions to `studioApi.ts` (find a good location near video asset functions, ~line 1612):
+
+      ```typescript
+      export async function autoMatchMetadata(assetId: string): Promise<AutoMatchResult> {
+        return fetchJson<AutoMatchResult>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/auto-match-metadata`, {
+          method: 'POST',
+        })
+      }
+
+      export async function listMetadataMatches(assetId: string): Promise<{ matches: VideoMetadataMatch[] }> {
+        return fetchJson<{ matches: VideoMetadataMatch[] }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches`)
+      }
+
+      export async function confirmMetadataMatch(assetId: string, matchId: string): Promise<{ match: VideoMetadataMatch }> {
+        return fetchJson<{ match: VideoMetadataMatch }>(
+          `/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches/${encodeURIComponent(matchId)}/confirm`,
+          { method: 'POST' }
+        )
+      }
+
+      export async function rejectMetadataMatch(assetId: string, matchId: string): Promise<{ match: VideoMetadataMatch }> {
+        return fetchJson<{ match: VideoMetadataMatch }>(
+          `/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches/${encodeURIComponent(matchId)}/reject`,
+          { method: 'POST' }
+        )
+      }
+
+      export async function listUnmatchedAssets(): Promise<{ assets: VideoAsset[] }> {
+        return fetchJson<{ assets: VideoAsset[] }>('/api/f51/studio/video-assets/unmatched')
+      }
+      ```
+
+      ### Step 2: Update StudyRoom.tsx
+
+      1. Import the new API functions in the imports section (line ~7):
+         Add to the import statement that includes `uploadVideoAsset`:
+         ```typescript
+         autoMatchMetadata,
+         listMetadataMatches,
+         confirmMetadataMatch,
+         rejectMetadataMatch,
+         listUnmatchedAssets,
+         type VideoMetadataMatch,
+         ```
+
+      2. Add state for metadata matches and filter tab near the existing video asset state (around line 384):
+         ```typescript
+         const [metadataMatches, setMetadataMatches] = useState<VideoMetadataMatch[]>([])
+         const [metadataFilterTab, setMetadataFilterTab] = useState<'all' | 'matched' | 'proposed' | 'unmatched'>('all')
+         ```
+
+      3. Add functions to load matches and handle confirm/reject. Add these after the `loadVideoAssets` function:
+         ```typescript
+         const loadMetadataMatches = useCallback(async (assetId: string) => {
+           try {
+             const payload = await listMetadataMatches(assetId)
+             setMetadataMatches(Array.isArray(payload.matches) ? payload.matches : [])
+           } catch {
+             setMetadataMatches([])
+           }
+         }, [])
+
+         const handleConfirmMatch = useCallback(async (assetId: string, matchId: string) => {
+           try {
+             await confirmMetadataMatch(assetId, matchId)
+             await loadMetadataMatches(assetId)
+             setStatusMessage('Metadata match confirmed.')
+           } catch (error) {
+             setErrorMessage(error instanceof Error ? error.message : 'Failed to confirm match.')
+           }
+         }, [loadMetadataMatches])
+
+         const handleRejectMatch = useCallback(async (assetId: string, matchId: string) => {
+           try {
+             await rejectMetadataMatch(assetId, matchId)
+             await loadMetadataMatches(assetId)
+             setStatusMessage('Metadata match rejected.')
+           } catch (error) {
+             setErrorMessage(error instanceof Error ? error.message : 'Failed to reject match.')
+           }
+         }, [loadMetadataMatches])
+         ```
+
+      4. Add a hook to load metadata matches when video assets change. Find the existing `useEffect` that loads video assets (~line 569) and add metadata matches loading inside it:
+         After `setAllUploadedVideoAssets(...)`, add:
+         ```typescript
+         // Load metadata matches for uploaded assets
+         if (allPayload.assets.length > 0) {
+           for (const asset of allPayload.assets) {
+             void loadMetadataMatches(asset.asset_id)
+           }
+         }
+         ```
+
+      5. Update the video asset card display section to show match status. Find the video asset card rendering (search for `videoAssetView === 'project'`) and add match info:
+         - Show matched metadata title from `metadata.film_title` and `metadata.scene_name`
+         - Show match confidence as percentage
+         - Show match reason
+         - Show `Confirm Match` button (green) for proposed matches
+         - Show `Reject Match` button (red) for proposed matches
+         - Show match status badge
+
+      6. Add filter tabs for metadata match status. Find the video asset view toggle section and add tabs:
+         ```typescript
+         <div className="flex gap-2 mb-3">
+           <button onClick={() => setMetadataFilterTab('all')} className={`px-3 py-1 rounded text-xs ${metadataFilterTab === 'all' ? 'bg-cyan-500/30 text-cyan-100' : 'bg-zinc-800 text-zinc-400'}`}>All</button>
+           <button onClick={() => setMetadataFilterTab('matched')} className={`px-3 py-1 rounded text-xs ${metadataFilterTab === 'matched' ? 'bg-emerald-500/30 text-emerald-100' : 'bg-zinc-800 text-zinc-400'}`}>Matched</button>
+           <button onClick={() => setMetadataFilterTab('proposed')} className={`px-3 py-1 rounded text-xs ${metadataFilterTab === 'proposed' ? 'bg-amber-500/30 text-amber-100' : 'bg-zinc-800 text-zinc-400'}`}>Proposed</button>
+           <button onClick={() => setMetadataFilterTab('unmatched')} className={`px-3 py-1 rounded text-xs ${metadataFilterTab === 'unmatched' ? 'bg-zinc-500/30 text-zinc-100' : 'bg-zinc-800 text-zinc-400'}`}>Unmatched</button>
+         </div>
+         ```
+
+      7. For unmatched videos (filter='unmatched'), show "No metadata match found yet." message.
+
+      8. Keep existing functionality intact — do not change the upload flow or other tabs.
+
+      Report file paths changed and line numbers of key additions.
+    assigned_to: general
+    verified_by: verifier
+    verify_prompt: |
+      Verify the Study Room metadata match UI was updated correctly.
+
+      1. Check `studioApi.ts` has VideoMetadataMatch type, AutoMatchResult type, and 5 new API functions.
+      2. Check `StudyRoom.tsx` imports the new API functions and types.
+      3. Check state variables for metadataMatches and metadataFilterTab exist.
+      4. Check loadMetadataMatches, handleConfirmMatch, handleRejectMatch functions exist.
+      5. Check filter tabs for All/Matched/Proposed/Unmatched are rendered.
+      6. Check video asset cards show match confidence and match reason.
+      7. Check Confirm/Reject buttons exist for proposed matches.
+      8. Run npm build to check for TypeScript errors: cd studio-app && npm run build 2>&1 | head -30
+
+      Report pass/fail for each check.
+    timeout_ms: 2400000
+
+  - id: backend-tests
+    title: 'metadata matching tests'
+    prompt: |
+      Add unit tests for the VideoMetadataMatchingService.
+
+      ## Context
+
+      The project is at `/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/`.
+      - Create tests at `app/services/test_video_metadata_matching_service.py`.
+      - Use pytest patterns from existing test files like `test_video_assets_routes.py`.
+
+      ## Work
+
+      Create comprehensive tests covering all critical scenarios:
+
+      1. **Exact filename match auto-confirms** — create an asset with title matching a scene_id exactly, verify confidence >= 0.95.
+
+      2. **Normalized filename match creates strong match** — create an asset with filename that normalizes to match a scene_name (differing in spaces/underscores), verify confidence >= 0.80.
+
+      3. **Duration similarity improves score** — same base match with duration within 2%, verify duration boosts score.
+
+      4. **Unrelated metadata does not match** — asset with completely different filename from all metadata, verify no match or confidence < 0.60.
+
+      5. **Proposed match can be confirmed** — create a proposed match, call confirm_match, verify status changes to "confirmed".
+
+      6. **Proposed match can be rejected** — create a proposed match, call reject_match, verify status changes to "rejected".
+
+      7. **Upload triggers auto-match** — mock storage, upload an asset with filename matching metadata, verify auto_match_uploaded_asset returns a match.
+
+      8. **Confirmed match updates VideoAsset metadata** — after confirming a match, verify the match is stored correctly.
+
+      9. **Manual user tags are preserved** — create an asset with existing tags in metadata, run auto-match, verify tags are not overwritten.
+
+      Use a temp directory for storage and mock the SceneIntelligenceStore with test records.
+
+      Test structure:
+      ```python
+      import pytest
+      import json
+      import tempfile
+      from pathlib import Path
+      from app.models import VideoAsset
+      from app.services.video_metadata_matching_service import VideoMetadataMatchingService
+      from app.services.scene_intelligence_store import SceneIntelligenceStore
+      from app.data.storage import DatabaseStorage
+
+      @pytest.fixture
+      def temp_storage(tmp_path: Path):
+          storage = DatabaseStorage(str(tmp_path / "test.db"))
+          yield storage
+
+      @pytest.fixture
+      def mock_metadata_store(tmp_path: Path):
+          store = SceneIntelligenceStore(path=str(tmp_path / "scene_intel.json"))
+          # Pre-populate with test records
+          store.import_batch({
+              "scenes": [
+                  {
+                      "scene_id": "scene_001",
+                      "film_title": "Neon Nights",
+                      "scene_name": "Downtown Chase",
+                      "intent": "High speed car chase through neon-lit streets",
+                      "emotional_beat_arc": ["tension", "release", "triumph"],
+                      "camera_logic": ["handheld", "tracking shot"],
+                      "pacing_curve": ["fast", "faster", "peak"],
+                      "director_notes": "Keep the camera moving.",
+                  },
+                  {
+                      "scene_id": "scene_002",
+                      "film_title": "Neon Nights",
+                      "scene_name": "Rooftop Confession",
+                      "intent": "Emotional rooftop scene",
+                      "emotional_beat_arc": ["quiet", "confession", "resolution"],
+                      "camera_logic": ["static wide", "close-up"],
+                      "pacing_curve": ["slow", "medium", "resolved"],
+                      "director_notes": "Let the silence breathe.",
+                  },
+              ]
+          })
+          return store
+
+      # ... tests ...
+      ```
+
+      Report file created.
+    assigned_to: general
+    verified_by: verifier
+    verify_prompt: |
+      Verify the tests were created correctly.
+
+      1. Check `app/services/test_video_metadata_matching_service.py` exists.
+      2. Check all 9 test scenarios are implemented:
+         - exact filename match auto-confirms
+         - normalized filename match creates strong match
+         - duration similarity improves score
+         - unrelated metadata does not match
+         - proposed match can be confirmed
+         - proposed match can be rejected
+         - upload triggers auto-match
+         - confirmed match updates VideoAsset metadata
+         - manual user tags are preserved
+      3. Run the tests: cd studio-backend && python -m pytest app/services/test_video_metadata_matching_service.py -v 2>&1 | head -50
+      4. Check all tests pass (or at least import correctly if external deps are missing).
+
+      Report pass/fail for each check.
+    timeout_ms: 1800000
+
+  - id: build-verification
+    title: 'build verification'
+    prompt: |
+      Run build and backend tests to verify everything works.
+
+      ## Context
+
+      Project is at `/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/`.
+      - Backend is at `studio-backend/`.
+      - Frontend is at `studio-app/`.
+
+      ## Work
+
+      1. Run backend tests:
+         ```bash
+         cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend
+         python -m pytest app/services/test_video_metadata_matching_service.py -v --tb=short 2>&1 | tail -30
+         ```
+
+      2. Run npm build in studio-app:
+         ```bash
+         cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app
+         npm run build 2>&1 | tail -30
+         ```
+
+      3. Report results.
+
+      This is the final gate — if tests or build fail, report the exact error.
+    assigned_to: general
+    verified_by: verifier
+    verify_prompt: |
+      Run the build verification and confirm results.
+
+      1. Run: cd studio-backend && python -m pytest app/services/test_video_metadata_matching_service.py -v --tb=short 2>&1
+      2. Run: cd studio-app && npm run build 2>&1
+      3. Report whether backend tests pass and whether frontend builds successfully.
+      4. If there are errors, provide the specific error messages.
+
+      Report pass/fail summary.
+    timeout_ms: 1800000

@@ -784,7 +784,7 @@ class RunwayAdapter(RenderProviderAdapter):
                 return job
 
             job.provider_job_id = task_id
-            logger.info("Runway task_id captured: job_id=%s task_id=%s", job.id, task_id)
+            logger.info("RUNWAY_TASK_ID_STORED | job=%s | task_id=%s", job.id, task_id)
 
             poll_response: dict = {}
             poll_status = "pending"
@@ -800,6 +800,16 @@ class RunwayAdapter(RenderProviderAdapter):
                     # against the captured provider task id.
                     job.status = "rendering"
                     job.error_message = None
+                    
+                    # Add timeout metadata to track when timeout occurred
+                    if not hasattr(job, 'metadata') or job.metadata is None:
+                        job.metadata = {}
+                    job.metadata["timeout_at"] = datetime.now(datetime.now().astimezone().tzinfo).isoformat()
+                    job.metadata["timeout_note"] = (
+                        "Runway submission timed out after 5 minutes. "
+                        "Background polling will continue checking for completion."
+                    )
+                    
                     normalized = {
                         "provider": "runway",
                         "task": "video_generation",
@@ -815,6 +825,11 @@ class RunwayAdapter(RenderProviderAdapter):
                     }
                     job.output_payload = RenderJobOutput(asset_url="", thumbnail_url="", metadata={"provider_response_normalized": normalized})
                     job.updated_at = datetime.now().isoformat()
+                    logger.info(
+                        "Runway job %s timed out after %ds, background polling will continue",
+                        job.id,
+                        timeout_seconds
+                    )
                     return job
                 await asyncio.sleep(1)
 
@@ -970,24 +985,60 @@ class RunwayAdapter(RenderProviderAdapter):
             return job
         try:
             response = await self._runway_request("GET", f"/v1/tasks/{job.provider_job_id}")
-            raw_status = str(response.get("status", "")).strip().lower()
+            
+            # Log raw Runway response for debugging
+            import json
+            logger.info(
+                "RUNWAY_RAW_RESPONSE | task_id=%s | status=%s | body=%s",
+                job.provider_job_id,
+                response.get("status", "unknown"),
+                json.dumps(response)[:500]
+            )
+            
+            raw_status = str(response.get("status", "")).strip()
+            # Make status mapping case-insensitive
+            raw_status_upper = raw_status.upper()
             status_map = {
-                "pending": "pending",
-                "running": "rendering",
-                "processing": "rendering",
-                "rendering": "rendering",
-                "succeeded": "complete",
-                "complete": "complete",
-                "completed": "complete",
-                "failed": "failed",
-                "error": "failed",
-                "canceled": "failed",
-                "cancelled": "failed",
+                "PENDING": "pending",
+                "RUNNING": "rendering",
+                "PROCESSING": "rendering",
+                "RENDERING": "rendering",
+                "SUCCEEDED": "complete",
+                "COMPLETE": "complete",
+                "COMPLETED": "complete",
+                "FAILED": "failed",
+                "ERROR": "failed",
+                "CANCELED": "failed",
+                "CANCELLED": "failed",
             }
-            job.status = status_map.get(raw_status, "failed")
+            job.status = status_map.get(raw_status_upper, "failed")
             job.updated_at = datetime.now().isoformat()
+            
             if job.status == "complete":
                 video_url = self._extract_video_url(response)
+                
+                # Enhanced URL extraction with fallback
+                if not video_url:
+                    # Try multiple fields
+                    output_list = response.get("output", [])
+                    if isinstance(output_list, list) and len(output_list) > 0:
+                        video_url = output_list[0]
+                    
+                    if not video_url:
+                        artifacts = response.get("artifacts", [])
+                        if isinstance(artifacts, list) and len(artifacts) > 0:
+                            if isinstance(artifacts[0], dict):
+                                video_url = artifacts[0].get("url")
+                    
+                    if not video_url:
+                        video_url = response.get("url")
+                
+                logger.info(
+                    "RUNWAY_OUTPUT | task_id=%s | url=%s",
+                    job.provider_job_id,
+                    video_url or "NOT_FOUND"
+                )
+                
                 preview_url = response.get("preview_url") if isinstance(response.get("preview_url"), str) else None
                 job.error_message = None
                 job.output_payload = RenderJobOutput(

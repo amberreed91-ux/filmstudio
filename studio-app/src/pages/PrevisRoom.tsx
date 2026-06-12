@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { Film } from 'lucide-react'
 import StudioShell, { AGENTS, TabGroup } from '../components/StudioShell'
 import DirectorConsole from '../components/DirectorConsole'
+import DirectorDebatePanel from '../components/DirectorDebatePanel'
 import CinematicLoading from '../components/CinematicLoading'
 import PrevisIntelligencePanel from '../components/PrevisIntelligencePanel'
 import PrevisCinematicShowcase from '../components/PrevisCinematicShowcase'
@@ -10,6 +11,7 @@ import DecisionGateCard from '../components/DecisionGateCard'
 import { useStudio } from '../context/StudioContext'
 import {
   generateMotionPreview,
+  simulateSceneAudience,
   extractVideoAssetKeyframes,
   findSimilarKeyframes,
   getProject,
@@ -23,7 +25,9 @@ import {
   listProjectStyleDriftIssues,
   getProjectDecisionGate,
   updateFilmCut,
+  updateScene,
   updateSceneReview,
+  triggerDebate,
   type ContinuityIssue,
   type DirectorSignature,
   type StyleDriftIssue,
@@ -33,8 +37,11 @@ import {
   type VideoAsset,
   type VideoKeyframe,
   type StudioDecisionGate,
+  type CoDirectorDebateEntry,
 } from '../lib/studioApi'
 import { resolveVisualForSceneAndShot } from '../lib/previsVisualResolver'
+import { AudienceSimulatorModal } from '../components/AudienceSimulatorModal'
+import { SceneAudienceSimulation, ProjectAudienceSimulation } from '../types/audienceSimulator'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import { mapContinuityIssuesToScene, summarizeContinuityIssues } from '../lib/continuityIntelligence'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
@@ -1551,11 +1558,12 @@ export default function PrevisRoom() {
     setUiFeedback('Motion preview generated')
   }
 
-  const selectedCoherence = asRecord(asRecord(selectedScene)?.scene_coherence_report) || asRecord(executionSummary.scene_coherence_report)
+  // Note: selectedCoherence and selectedProgression were used for numeric score display (removed per UX requirements)
+  // const selectedCoherence = asRecord(asRecord(selectedScene)?.scene_coherence_report) || asRecord(executionSummary.scene_coherence_report)
   const selectedEmotionalFlow = asRecord(asRecord(selectedScene)?.scene_emotional_flow) || asRecord(executionSummary.scene_emotional_flow) || {}
   const selectedContinuity = asRecord(asRecord(selectedScene)?.scene_continuity_report) || asRecord(executionSummary.scene_continuity_report)
   const selectedMotifEvolution = asRecord(asRecord(selectedScene)?.motif_evolution_report) || asRecord(executionSummary.motif_evolution_report) || {}
-  const selectedProgression = asRecord(asRecord(selectedScene)?.narrative_progression_score) || asRecord(executionSummary.narrative_progression_score)
+  // const selectedProgression = asRecord(asRecord(selectedScene)?.narrative_progression_score) || asRecord(executionSummary.narrative_progression_score)
   const selectedVerdict = asRecord(asRecord(selectedScene)?.scene_quality_verdict) || asRecord(executionSummary.scene_quality_verdict)
   const selectedDebugControlState = asRecord(asRecord(selectedScene)?.debug_control_state) || asRecord(executionSummary.debug_control_state) || {}
   const selectedSceneMotifState = asRecord(asRecord(selectedScene)?.scene_motif_state) || {}
@@ -1758,22 +1766,94 @@ export default function PrevisRoom() {
       })
   }, [executionSummary.agent_disagreements, selectedScene, selectedSceneIdSafe])
 
-  const applyConflictFix = (agent: string) => {
-    const patch = agent === 'editor'
-      ? 'trimmed transition beat, tightened pacing rhythm'
-      : agent === 'cinematographer'
-        ? 'motivated framing pass, reinforced visual continuity'
-        : agent === 'continuity'
-          ? 'continuity alignment pass, logic consistency restored'
-          : 'emotional beat reinforced, escalation held one breath longer'
-    setScenePromptOverrides((prev) => ({
-      ...prev,
-      [promptOverrideKey]: `${selectedPromptBase}, ${patch}`.replace(/\s+,/g, ','),
-    }))
-    setSelectedIteration('iteration_1')
-    const message = `${AGENTS.director.icon} Director + crew: Applied ${agent} fix`
-    setUiFeedback(message)
-    logAgentActivity(message)
+  const [applyingFix, setApplyingFix] = useState<string | null>(null)
+  const [exploringAlternative, setExploringAlternative] = useState<string | null>(null)
+  const [alternativeSuggestion, setAlternativeSuggestion] = useState<string | null>(null)
+  const [activeDebate, setActiveDebate] = useState<CoDirectorDebateEntry | null>(null)
+  const [activeSimulation, setActiveSimulation] = useState<SceneAudienceSimulation | ProjectAudienceSimulation | null>(null)
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [triggeringDebate, setTriggeringDebate] = useState(false)
+
+  const handleSimulateAudience = async () => {
+    if (!activeProjectId || !selectedSceneIdSafe) return
+    setIsSimulating(true)
+    try {
+      const sim = await simulateSceneAudience(activeProjectId, selectedSceneIdSafe)
+      setActiveSimulation(sim)
+    } catch (err) {
+      console.error('Failed to simulate audience:', err)
+    } finally {
+      setIsSimulating(false)
+    }
+  }
+
+  const handleManualDebate = async () => {
+    if (!activeProjectId || !selectedSceneIdSafe) return
+    setTriggeringDebate(true)
+    try {
+      const query = `Debate current creative direction for Scene ${selectedSceneIdSafe}: "${asString(selectedScene.heading) || asString(selectedScene.location)}"`
+      const { debate } = await triggerDebate({
+        project_id: activeProjectId,
+        scene_id: selectedSceneIdSafe,
+        query,
+      })
+      setActiveDebate(debate)
+      logAgentActivity(`💡 Initiated Co-Director debate for ${selectedSceneIdSafe}`)
+    } catch (err) {
+      console.error('Failed to trigger manual debate:', err)
+    } finally {
+      setTriggeringDebate(false)
+    }
+  }
+
+  const applyConflictFix = async (agent: string, recommendation: string) => {
+    if (!activeProjectId || !selectedSceneIdSafe) {
+      setUiFeedback('No active project or scene')
+      return
+    }
+
+    setApplyingFix(agent)
+    try {
+      // Apply the fix by updating the scene with the recommendation
+      const result = await updateScene(activeProjectId, selectedSceneIdSafe, {
+        notes: `Applied ${agent} fix: ${recommendation}`,
+      })
+
+      if (result.error) {
+        setUiFeedback(`Failed to apply fix: ${result.error}`)
+        return
+      }
+
+      // Also update the prompt override for immediate visual feedback
+      const patch = agent === 'editor'
+        ? 'trimmed transition beat, tightened pacing rhythm'
+        : agent === 'cinematographer'
+          ? 'motivated framing pass, reinforced visual continuity'
+          : agent === 'continuity'
+            ? 'continuity alignment pass, logic consistency restored'
+            : 'emotional beat reinforced, escalation held one breath longer'
+      
+      setScenePromptOverrides((prev) => ({
+        ...prev,
+        [promptOverrideKey]: `${selectedPromptBase}, ${patch}`.replace(/\s+,/g, ','),
+      }))
+      setSelectedIteration('iteration_1')
+      
+      const message = `Revision applied — ${agent} fix integrated`
+      setUiFeedback(message)
+      logAgentActivity(`✓ Applied ${agent} fix: ${recommendation}`)
+
+      // Refresh the scene data
+      if (result.project) {
+        // Project was updated, could refresh here if needed
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to apply fix'
+      setUiFeedback(errorMessage)
+      console.error('[PrevisRoom] Apply fix failed:', err)
+    } finally {
+      setApplyingFix(null)
+    }
   }
 
   const ignoreConflict = (agent: string) => {
@@ -1788,23 +1868,38 @@ export default function PrevisRoom() {
       localStorage.setItem('studio:ignoredAgentDecisions', JSON.stringify(next))
       return next
     })
-    setUiFeedback(`Ignored ${agent} recommendation`)
+    setUiFeedback('Noted — moving on')
     logAgentActivity(`⚠️ User ignored ${agent} recommendation on ${row.scene_id}`)
   }
 
-  const exploreConflictAlternative = (agent: string) => {
-    const patch = agent === 'editor'
-      ? 'alternative cut timing, delayed reveal beat'
-      : agent === 'cinematographer'
-        ? 'alternative lensing, subtle shadow shift'
-        : 'alternative narrative escalation pass'
-    setScenePromptOverrides((prev) => ({
-      ...prev,
-      [promptOverrideKey]: `${selectedPromptBase}, ${patch}`.replace(/\s+,/g, ','),
-    }))
-    setSelectedIteration('iteration_2')
-    setUiFeedback(`Exploring ${agent} alternative`)
-    logAgentActivity(`🔁 Exploring ${agent} alternative for ${selectedSceneIdSafe || 'scene_001'}`)
+  const exploreConflictAlternative = async (agent: string, _recommendation: string) => {
+    if (!activeProjectId || !selectedSceneIdSafe) {
+      setUiFeedback('No active project or scene')
+      return
+    }
+
+    setExploringAlternative(agent)
+    try {
+      // For now, generate an alternative suggestion locally
+      // In a real implementation, this would call an AI endpoint with _recommendation as context
+      const alternativeText = agent === 'editor'
+        ? 'Alternative approach: Use a slower fade transition instead of a hard cut, allowing the emotional beat to breathe'
+        : agent === 'cinematographer'
+          ? 'Alternative approach: Try a wider lens with more negative space to emphasize isolation'
+          : agent === 'continuity'
+            ? 'Alternative approach: Add a subtle callback to an earlier scene element to strengthen narrative thread'
+            : 'Alternative approach: Shift the emotional peak slightly earlier to create more anticipation'
+
+      setAlternativeSuggestion(`${agent}: ${alternativeText}`)
+      setUiFeedback(`Alternative suggestion ready — review before applying`)
+      logAgentActivity(`🔁 Explored ${agent} alternative for ${selectedSceneIdSafe}`)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to explore alternative'
+      setUiFeedback(errorMessage)
+      console.error('[PrevisRoom] Explore alternative failed:', err)
+    } finally {
+      setExploringAlternative(null)
+    }
   }
   const successfulRenderIds = useMemo(() => {
     const result = new Set<string>()
@@ -1823,10 +1918,21 @@ export default function PrevisRoom() {
   }, [selectedSceneIdSafe, co_director_suggestions.length])
 
   return (
+    <>
     <StudioShell title="Rough Previs Room" subtitle="Read-only continuity and scene-previs inspection over the current execution bundle.">
       <div className="w-full overflow-visible">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
           <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
+          
+          {activeDebate && (
+            <DirectorDebatePanel
+              projectId={activeProjectId || ''}
+              sceneId={selectedSceneIdSafe}
+              debate={activeDebate}
+              onDismiss={() => setActiveDebate(null)}
+            />
+          )}
+
           <section className="cinematic-panel p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 2: REVIEW YOUR SCENES</div>
             <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100"><Film size={18} />Previs Room</h2>
@@ -1875,6 +1981,14 @@ export default function PrevisRoom() {
               <Link to={withProjectQuery('/studio/production-board', activeProjectId)} className="rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline">
                 Send Approved Shots to Production Board
               </Link>
+              <button
+                type="button"
+                onClick={handleManualDebate}
+                disabled={triggeringDebate}
+                className="rounded-md border border-indigo-500/45 bg-indigo-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100"
+              >
+                {triggeringDebate ? 'Preparing Counter-Argument...' : 'Debate this decision'}
+              </button>
             </div>
             {uiFeedback ? (
               <div className="mt-2 inline-flex rounded border border-cyan-300/40 bg-cyan-500/12 px-2 py-1 text-[11px] text-cyan-100">
@@ -2059,6 +2173,7 @@ export default function PrevisRoom() {
               defaultProvider={project?.render_provider?.provider_name || providers[0]?.provider_id || 'mock'}
               busy={isGeneratingScene}
               onGenerate={handleDirectorGenerate}
+              onSimulateAudience={handleSimulateAudience}
             />
             <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
               Provider mode: <span className={activeProviderMode === 'hosted_api' ? 'text-emerald-200' : 'text-amber-200'}>{providerTruthLabel(activeProviderStatus)}</span>
@@ -2630,19 +2745,6 @@ export default function PrevisRoom() {
                 {asString(selectedVerdict?.verdict) || 'not available'}
               </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {[
-                  { label: 'Coherence', value: asNumber(selectedCoherence?.coherence_score)?.toFixed(2) ?? 'n/a' },
-                  { label: 'Progression', value: asNumber(selectedProgression?.progression_score)?.toFixed(2) ?? 'n/a' },
-                  { label: 'Continuity', value: asNumber(selectedContinuity?.continuity_score)?.toFixed(2) ?? 'n/a' },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-2 py-3 text-center">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">{item.label}</div>
-                    <div className="mt-1 text-xl font-semibold text-zinc-100">{item.value}</div>
-                  </div>
-                ))}
-              </div>
-
               <TabGroup
                 className="mt-4"
                 value={activeRightTab}
@@ -2653,7 +2755,7 @@ export default function PrevisRoom() {
                   { id: 'prompt', label: 'Prompt' },
                   { id: 'continuity', label: 'Continuity' },
                   { id: 'assets', label: 'Assets' },
-                  { id: 'debug', label: 'Debug' },
+                  ...(import.meta.env.DEV ? [{ id: 'debug' as const, label: 'Debug' }] : []),
                 ]}
               />
 
@@ -2834,9 +2936,29 @@ export default function PrevisRoom() {
                                 <div className="font-semibold">{agent.icon} {agent.name}: {conflict.issue}</div>
                                 <div className="mt-1 text-zinc-300">{conflict.recommendation}</div>
                                 <div className="mt-2 flex flex-wrap gap-1.5">
-                                  <button type="button" onClick={() => applyConflictFix(conflict.agent)} className="rounded border border-cyan-300/45 bg-cyan-500/15 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-cyan-100">Apply Fix</button>
-                                  <button type="button" onClick={() => ignoreConflict(conflict.agent)} className="rounded border border-zinc-400/35 bg-zinc-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200">Ignore</button>
-                                  <button type="button" onClick={() => exploreConflictAlternative(conflict.agent)} className="rounded border border-amber-300/40 bg-amber-500/12 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">Explore Alternative</button>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => applyConflictFix(conflict.agent, conflict.recommendation)} 
+                                    disabled={applyingFix === conflict.agent}
+                                    className="rounded border border-cyan-300/45 bg-cyan-500/15 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-cyan-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {applyingFix === conflict.agent ? 'Applying…' : 'Apply Fix'}
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => ignoreConflict(conflict.agent)} 
+                                    className="rounded border border-zinc-400/35 bg-zinc-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200"
+                                  >
+                                    Ignore
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => exploreConflictAlternative(conflict.agent, conflict.recommendation)} 
+                                    disabled={exploringAlternative === conflict.agent}
+                                    className="rounded border border-amber-300/40 bg-amber-500/12 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {exploringAlternative === conflict.agent ? 'Exploring…' : 'Explore Alternative'}
+                                  </button>
                                 </div>
                               </div>
                             )
@@ -2849,8 +2971,12 @@ export default function PrevisRoom() {
                     <div className="rounded-xl border border-violet-500/25 bg-violet-500/5 p-3">
                       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-300">Continuity + Memory</div>
                       <div className="space-y-1 text-zinc-300">
-                        <div>Continuity Score: <span className="text-zinc-100">{asNumber(selectedContinuity?.continuity_score)?.toFixed(2) ?? 'n/a'}</span></div>
-                        <div>Continuity Issues: <span className="text-zinc-100 break-words">{asArray(selectedContinuity?.issues).map((item) => asString(item)).filter(Boolean).join(', ') || 'none reported'}</span></div>
+                        <div>
+                          {asNumber(selectedContinuity?.continuity_score) === 1 || !asArray(selectedContinuity?.issues).filter(Boolean).length
+                            ? 'No continuity issues detected'
+                            : `Continuity issues: ${asArray(selectedContinuity?.issues).filter(Boolean).length}`
+                          }
+                        </div>
                         <div>Motif Status: <span className="text-zinc-100">{asArray(selectedMotifEvolution?.motifs).length ? `${asArray(selectedMotifEvolution?.motifs).length} motifs tracked` : 'no motif evolution data'}</span></div>
                       </div>
                       <div className="mt-3 space-y-2 border-t border-violet-400/20 pt-2 text-[11px]">
@@ -2873,6 +2999,35 @@ export default function PrevisRoom() {
                     </div>
                     <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
                       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">Suggested Changes</div>
+                      {alternativeSuggestion ? (
+                        <div className="mb-3 rounded border border-emerald-400/40 bg-emerald-500/10 p-2">
+                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-200">Alternative Suggestion</div>
+                          <div className="text-zinc-200">{alternativeSuggestion}</div>
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Apply the alternative
+                                const agentMatch = alternativeSuggestion.match(/^(\w+):/)
+                                if (agentMatch) {
+                                  applyConflictFix(agentMatch[1], alternativeSuggestion)
+                                }
+                                setAlternativeSuggestion(null)
+                              }}
+                              className="rounded border border-emerald-300/45 bg-emerald-500/15 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-emerald-100"
+                            >
+                              Apply This Alternative
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAlternativeSuggestion(null)}
+                              className="rounded border border-zinc-400/35 bg-zinc-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       <ul className="space-y-1 text-zinc-300">
                         {suggestedChanges.length ? suggestedChanges.map((item, index) => <li key={`changes-${index}`}>• {asString(item) || String(item)}</li>) : <li className="text-zinc-500">No notes</li>}
                       </ul>
@@ -2941,5 +3096,12 @@ export default function PrevisRoom() {
         </div>
       </div>
     </StudioShell>
+
+    <AudienceSimulatorModal
+      projectId={activeProjectId || ''}
+      simulation={activeSimulation}
+      onClose={() => setActiveSimulation(null)}
+    />
+    </>
   )
 }

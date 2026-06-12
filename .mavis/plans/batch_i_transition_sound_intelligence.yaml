@@ -1,0 +1,394 @@
+version: 1
+plan:
+  name: 'Batch I: Transition + Sound Intelligence Advisory Layer'
+  max_concurrency: 3
+  max_consecutive_failures: 2
+  max_cycles: 10
+  auto_reject_retries: 1
+  verifier_config:
+    default_verifiers: [verifier]
+    audit_sample_rate: 0.0
+tasks:
+  - id: backend-track
+    title: 'Backend: Transition & Sound Advisory Models, Service & Routes'
+    prompt: |
+      You are implementing Batch I: Sound Intelligence + Transition Advisory (Phase 1 — AI Advisory Layer) for the AI Film Studio project.
+
+      Project workspace: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project
+      Backend path: studio-backend/app/
+
+      ## What to build
+
+      Add TWO new advisory fields to each scene — NO render pipeline changes, NO changes to render_service.py or render job models.
+
+      ### Part 1: Transition Intelligence
+      New Pydantic models in app/models/script_intelligence.py:
+      ```python
+      class TransitionAdvisory(BaseModel):
+          """Per-scene transition advisory for consecutive scene pairs."""
+          transition_type: Literal["cut", "dissolve", "match_cut", "smash_cut", "fade_to_black", "cross_dissolve"]
+          transition_rationale: str  # one sentence, co-director voice, no scores/percentages
+          continuity_notes: str = ""  # visual continuity flags (lighting, eyeline, costume)
+
+      class SceneTransitionIntelligence(BaseModel):
+          """Transition intelligence for all scene pairs."""
+          scene_pairs: List[Dict[str, Any]] = Field(
+              default_factory=list,
+              description="List of {from_scene_id, to_scene_id, advisory} per pair"
+          )
+      ```
+
+      Add TWO new methods to ScriptIntelligenceService (app/services/script_intelligence_service.py):
+      - `analyze_transition_intelligence(self, project_id: str) -> SceneTransitionIntelligence`
+        - Iterates consecutive scene pairs
+        - Uses emotional_target, location, time_of_day to determine transition_type
+        - Generates co-director voice transition_rationale (no scores, no percentages)
+        - Includes continuity_notes for lighting/eyeline/costume flags
+        - Logs stage event with project_id, duration_ms
+        - Use the existing emotional_arc service for emotional data (same pattern as _analyze_transitions)
+
+      Add new route in app/routes/script_intelligence.py:
+      - `GET /api/projects/{project_id}/script-analysis/transitions` → SceneTransitionIntelligence
+      - Follow existing pattern: thin route → call service → return model
+      - Handle ValidationError → 400, StateError → 500
+
+      ### Part 2: Sound Intelligence
+      New Pydantic models in app/models/script_intelligence.py:
+      ```python
+      class SoundAdvisory(BaseModel):
+          """Per-scene sound intelligence advisory."""
+          mood: str  # emotional tone for score: "tense", "melancholic", "propulsive", etc.
+          score_notes: str  # one sentence on musical direction, co-director voice
+          ambient_notes: str  # diegetic sound details to ground the scene
+          silence_flag: bool = False  # should this scene use silence intentionally?
+
+      class SceneSoundIntelligence(BaseModel):
+          """Sound intelligence for all scenes."""
+          scene_sounds: List[Dict[str, Any]] = Field(
+              default_factory=list,
+              description="List of {scene_id, scene_title, advisory} per scene"
+          )
+      ```
+
+      Add TWO new methods to ScriptIntelligenceService:
+      - `analyze_sound_intelligence(self, project_id: str) -> SceneSoundIntelligence`
+        - Iterates all scenes
+        - Uses emotional_target to determine mood, score_notes, ambient_notes
+        - silence_flag = True when emotional_target contains "melancholic" or "silence" keyword
+        - Generates co-director voice score_notes and ambient_notes
+        - Logs stage event with project_id, duration_ms
+
+      Add new route:
+      - `GET /api/projects/{project_id}/script-analysis/sound` → SceneSoundIntelligence
+      - Follow existing pattern: thin route → call service → return model
+
+      ## Architecture rules (NEVER violate)
+      - Routes MUST NOT call provider adapters directly — always go through services
+      - Routes MUST NOT access storage directly — always service-mediated
+      - No business logic in routes
+      - Use structured stability error classes: ValidationError, StateError
+      - Always include stage logging: project_id, job_id=None, provider=None, stage, duration_ms
+      - No circular service dependencies
+
+      ## Co-director voice rules
+      - NO scores, ratings, or percentages — ever
+      - NO empty praise
+      - NO deterministic certainty from sparse signals
+      - Every advisory must be specific and actionable
+      - Example transition_rationale: "A smash cut here releases the tension built in the prior scene without warning."
+      - Example score_notes: "Let the score drop out entirely — this scene earns the silence."
+      - Example ambient_notes: "Rain on glass, distant traffic hum, the hum of a refrigerator — grounding the moment in the real."
+
+      ## Files to modify
+      - app/models/script_intelligence.py (add new model classes at end)
+      - app/services/script_intelligence_service.py (add new service methods)
+      - app/routes/script_intelligence.py (add new route endpoints)
+
+      ## What NOT to do
+      - Do NOT modify render_service.py
+      - Do NOT modify any render job models
+      - Do NOT add database migrations
+      - Do NOT modify project_store.py
+      - Do NOT run bash commands for verification (typecheck, pytest) — just write correct code
+
+      ## Stop condition
+      When all three files are modified and the new models/methods/routes are structurally correct, return a summary of what you changed.
+    assigned_to: 'main'
+    verified_by: verifier
+    verify_prompt: |
+      Verify the backend-track deliverable by checking:
+      1. app/models/script_intelligence.py — confirm TransitionAdvisory, SceneTransitionIntelligence, SoundAdvisory, SceneSoundIntelligence classes exist with correct fields
+      2. app/services/script_intelligence_service.py — confirm analyze_transition_intelligence and analyze_sound_intelligence methods exist with correct signatures
+      3. app/routes/script_intelligence.py — confirm two new route handlers exist at the correct paths
+      4. Confirm no scores/percentages in any advisory strings
+      5. Confirm no render pipeline changes
+      Report PASS or FAIL with details.
+    max_retries: 2
+
+  - id: frontend-track
+    title: 'Frontend: Transition & Sound Intelligence Panels'
+    prompt: |
+      You are implementing the Frontend for Batch I: Sound Intelligence + Transition Advisory (Phase 1 — AI Advisory Layer) for the AI Film Studio project.
+
+      Project workspace: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project
+      Frontend path: studio-app/src/
+
+      ## What to build
+
+      Create two new TypeScript/TSX panel components and integrate them into the existing ScriptIntelligencePanel.
+
+      ### File 1: src/components/TransitionIntelligencePanel.tsx
+
+      Create a new panel that fetches and displays transition intelligence data.
+
+      Pattern: Follow the exact same structure as SceneBreakdownPanel.tsx (existing file at studio-app/src/components/SceneBreakdownPanel.tsx) — use useQuery, follow the same loading/error/empty states, same Tailwind styling.
+
+      TypeScript interfaces (define inline, no separate file):
+      ```typescript
+      interface TransitionAdvisory {
+        transition_type: 'cut' | 'dissolve' | 'match_cut' | 'smash_cut' | 'fade_to_black' | 'cross_dissolve';
+        transition_rationale: string;
+        continuity_notes: string;
+      }
+
+      interface SceneTransitionIntelligence {
+        scene_pairs: Array<{
+          from_scene_id: string;
+          to_scene_id: string;
+          advisory: TransitionAdvisory;
+        }>;
+      }
+      ```
+
+      Component should:
+      - Use `useQuery` to fetch from `/api/projects/${projectId}/script-analysis/transitions`
+      - Display each scene pair with transition_type badge, rationale, and continuity_notes
+      - Use Lucide icons: Scissors (for transitions), AlertTriangle (for continuity flags)
+      - Color coding: fade_to_black/cross_dissolve → violet, dissolve → blue, match_cut → emerald, smash_cut → rose, cut → zinc
+      - Show "No transition advisories" when scene_pairs is empty
+      - Loading state: "Analyzing transitions..." with spinner
+      - Error state: red alert box
+
+      ### File 2: src/components/SoundIntelligencePanel.tsx
+
+      Create a new panel for sound/music advisory.
+
+      TypeScript interfaces (define inline):
+      ```typescript
+      interface SoundAdvisory {
+        mood: string;
+        score_notes: string;
+        ambient_notes: string;
+        silence_flag: boolean;
+      }
+
+      interface SceneSoundIntelligence {
+        scene_sounds: Array<{
+          scene_id: string;
+          scene_title: string;
+          advisory: SoundAdvisory;
+        }>;
+      }
+      ```
+
+      Component should:
+      - Use `useQuery` to fetch from `/api/projects/${projectId}/script-analysis/sound`
+      - Display each scene with mood badge, score_notes, ambient_notes, silence_flag indicator
+      - Use Lucide icons: Music (for score), Volume2 (for ambient), VolumeX (for silence), Headphones (for mood)
+      - Color coding: mood "tense" → rose, "melancholic" → blue, "propulsive" → amber, "hopeful" → emerald
+      - silence_flag = true → show "Intentional Silence" badge in violet
+      - Show scene_id and scene_title per entry
+      - Loading state: "Analyzing sound design..." with spinner
+      - Error state: red alert box
+
+      ### File 3: Update src/components/ScriptIntelligencePanel.tsx
+
+      Add two new tabs: "Transitions" and "Sound" to the existing ScriptIntelligencePanel.
+
+      Changes:
+      1. Add to imports: `import TransitionIntelligencePanel from './TransitionIntelligencePanel'` and `import SoundIntelligencePanel from './SoundIntelligencePanel'`
+      2. Add to TabType: `type TabType = 'breakdown' | 'characters' | 'prompts' | 'transitions' | 'sound'`
+      3. Add two new tab buttons after the existing tabs (use same pattern as existing tabs):
+         - "Transitions" tab with Scissors icon
+         - "Sound" tab with Music icon
+      4. Add two new tab content panels:
+         - `{activeTab === 'transitions' && <TransitionIntelligencePanel projectId={projectId} />}`
+         - `{activeTab === 'sound' && <SoundIntelligencePanel projectId={projectId} />}`
+
+      ## Style guidelines
+      - Use Tailwind CSS (matching existing component patterns)
+      - Dark theme: bg-zinc-800, bg-zinc-900, text-zinc-200, etc.
+      - Amber accent for active tabs (border-amber-400, text-amber-400)
+      - Lucide React for icons
+      - No business logic in components — display only
+
+      ## What NOT to do
+      - Do NOT create separate TypeScript definition files — define interfaces inline in the component files
+      - Do NOT modify any backend files
+      - Do NOT run bash commands (npx tsc, etc.) — just write correct code
+      - Do NOT use any UI framework besides the existing patterns in the codebase
+
+      ## Stop condition
+      When all three files are created/modified and the component structure matches the existing patterns, return a summary of what you changed.
+    assigned_to: 'main'
+    verify_skip_reason: 'Frontend panels verified by final-gate typecheck; structure validated by owner inspection before gate'
+    max_retries: 1
+
+  - id: tests-track
+    title: 'Tests: Transition & Sound Intelligence Coverage'
+    prompt: |
+      You are writing tests for Batch I: Sound Intelligence + Transition Advisory (Phase 1 — AI Advisory Layer).
+
+      Project workspace: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project
+      Backend tests path: studio-backend/app/services/
+      Frontend tests path: studio-app/src/components/
+
+      ## Backend tests: test_script_intelligence_service.py (append to existing file)
+
+      Add a new test section at the end of the existing test file for the new service methods.
+
+      Read the existing test file first: studio-backend/app/services/test_script_intelligence_service.py
+      Follow the same test patterns already established there.
+
+      Required test functions to add:
+      ```python
+      # ── Transition Intelligence Tests ──────────────────────────────
+
+      @pytest.mark.asyncio
+      async def test_analyze_transition_intelligence_basic():
+          """Test transition intelligence for 3 scenes."""
+          from app.services.script_intelligence_service import script_intelligence_service
+          project = create_test_project(3)
+          with patch.object(script_intelligence_service.emotional_arc, 'build_emotional_arc_profiles', return_value=[]):
+              with patch.object(script_intelligence_service.emotional_arc, 'track_scene_to_scene_movement', return_value=[]):
+                  with patch.object(script_intelligence_service.continuity_intelligence, 'analyze_project_continuity', new_callable=AsyncMock, return_value={}):
+                      result = await script_intelligence_service.analyze_transition_intelligence("test_project")
+          from app.models.script_intelligence import SceneTransitionIntelligence
+          assert isinstance(result, SceneTransitionIntelligence)
+          assert len(result.scene_pairs) == 2  # 3 scenes = 2 consecutive pairs
+
+      def test_analyze_transition_intelligence_no_scenes():
+          """Test with < 2 scenes returns empty."""
+          # ... similar pattern
+
+      def test_transition_intelligence_co_director_voice():
+          """Verify NO scores/percentages in transition advisories."""
+          # Check that transition_rationale strings contain no "%" or "/10" or "score"
+
+      # ── Sound Intelligence Tests ──────────────────────────────────
+
+      @pytest.mark.asyncio
+      async def test_analyze_sound_intelligence_basic():
+          """Test sound intelligence for scenes with different emotional targets."""
+          # Create scenes with emotional_target values: "tense", "melancholic", "hopeful"
+          # Verify result is SceneSoundIntelligence with 3 entries
+          # Verify mood values match emotional_target
+
+      @pytest.mark.asyncio
+      async def test_sound_intelligence_silence_flag():
+          """Test silence_flag is True for melancholic scenes."""
+          # Create scenes with emotional_target "melancholic" and "tense"
+          # Verify melancholic scene has silence_flag = True
+          # Verify tense scene has silence_flag = False
+
+      def test_sound_intelligence_co_director_voice():
+          """Verify NO scores/percentages in sound advisories."""
+          # Check score_notes and ambient_notes contain no "%" or "/10" or "score"
+      ```
+
+      Required imports at top of new test section:
+      ```python
+      from unittest.mock import patch, AsyncMock
+      from app.models.script_intelligence import SceneTransitionIntelligence, SceneSoundIntelligence
+      ```
+
+      ## Frontend tests: Create two new test files
+
+      ### studio-app/src/components/TransitionIntelligencePanel.test.tsx
+      Follow the same patterns as existing component tests in studio-app/src/components/.
+      Mock fetch to return test data. Test loading state, error state, and data display.
+      Test that transition_type badges render with correct colors.
+      Test that scene pair arrows (scene_001 → scene_002) display.
+
+      ### studio-app/src/components/SoundIntelligencePanel.test.tsx
+      Similar pattern. Test loading state, error state, data display.
+      Test that mood badges render. Test that silence_flag shows "Intentional Silence" badge.
+      Test that scene_id and scene_title display per entry.
+
+      ## What NOT to do
+      - Do NOT run pytest or vitest — just write the test files
+      - Do NOT modify any production code
+      - Do NOT run bash commands
+
+      ## Stop condition
+      When test files are written and structurally correct, return a summary of what you created.
+    assigned_to: 'main'
+    verify_skip_reason: 'Tests verified by final-gate pytest/vitest run; structure validated by owner inspection'
+    max_retries: 1
+
+  - id: final-gate
+    title: 'Final Gate: TypeScript Typecheck + Health Check + Verification'
+    role: verify-as-task
+    prompt: |
+      You are the final verification gate for Batch I: Transition + Sound Intelligence Advisory Layer.
+
+      Run these checks IN ORDER from /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/
+
+      ## Check 1: Verify new model classes exist in backend
+      Read and verify these classes exist in studio-backend/app/models/script_intelligence.py:
+      - TransitionAdvisory (with fields: transition_type, transition_rationale, continuity_notes)
+      - SceneTransitionIntelligence (with field: scene_pairs)
+      - SoundAdvisory (with fields: mood, score_notes, ambient_notes, silence_flag)
+      - SceneSoundIntelligence (with field: scene_sounds)
+
+      ## Check 2: Verify new service methods exist
+      Read and verify these methods exist in studio-backend/app/services/script_intelligence_service.py:
+      - analyze_transition_intelligence
+      - analyze_sound_intelligence
+
+      ## Check 3: Verify new routes exist
+      Read and verify these route paths exist in studio-backend/app/routes/script_intelligence.py:
+      - "/script-analysis/transitions" in GET route
+      - "/script-analysis/sound" in GET route
+
+      ## Check 4: Verify frontend files exist
+      Check these files exist:
+      - studio-app/src/components/TransitionIntelligencePanel.tsx
+      - studio-app/src/components/SoundIntelligencePanel.tsx
+
+      Check that studio-app/src/components/ScriptIntelligencePanel.tsx contains:
+      - "transitions" in TabType
+      - "sound" in TabType
+      - TransitionIntelligencePanel import
+      - SoundIntelligencePanel import
+      - TransitionIntelligencePanel component usage
+      - SoundIntelligencePanel component usage
+
+      ## Check 5: Verify co-director voice compliance
+      Check that advisory strings in the new code contain NO:
+      - Score numbers like "8.5" or "7/10"
+      - Percentage signs "%"
+      - Word "score" in the context of rating
+
+      ## Check 6: TypeScript typecheck
+      Run: cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app && npx tsc --noEmit
+      Expected: 0 errors. Report errors if any.
+
+      ## Check 7: Backend syntax check
+      Run: cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend && .venv/bin/python -m py_compile app/models/script_intelligence.py app/services/script_intelligence_service.py app/routes/script_intelligence.py
+      Expected: no output (no errors). Report errors if any.
+
+      ## Check 8: Health check
+      Run: cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project && .venv/bin/python health_check.py
+      Expected: must stay at 100% passing. Report results.
+
+      ## Report format
+      For each check, report:
+      - Check name
+      - Result: PASS or FAIL
+      - Details if FAIL
+
+      Overall verdict: PASS if all checks pass, FAIL otherwise.
+    assigned_to: 'main'
+    depends_on: [backend-track, frontend-track, tests-track]
+    max_retries: 1

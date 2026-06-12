@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Form, UploadFile, File
 from fastapi.responses import JSONResponse
 from typing import Optional
@@ -11,6 +13,7 @@ from app.data import get_storage
 storage = get_storage("sqlite")
 project_service = ProjectService(storage)
 study_service = ReferenceStudyService(storage)
+logger = logging.getLogger(__name__)
 
 # Routers
 overview_router = APIRouter()
@@ -81,10 +84,11 @@ def get_project(project_id: str, session_id: Optional[str] = None):
     persisted = project_store.get_project(project_id)
     if persisted is not None:
         return persisted
-    project = project_service.get_project(project_id, session_id=session_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    project = _load_project_from_sqlite(project_id, session_id=session_id)
+    if project is not None:
+        return project
+    logger.warning("PROJECT_NOT_FOUND | id=%s | db_checked=True", project_id)
+    raise HTTPException(status_code=404, detail="Project not found")
 
 
 @projects_router.get("/projects/{project_id}/export/{artifact_type}")
@@ -270,3 +274,16 @@ def get_pending_shots(project_id: str):
     if error:
         raise HTTPException(status_code=400, detail=error)
     return {"project_id": project_id, "pending_shots": pending}
+def _load_project_from_sqlite(project_id: str, session_id: Optional[str] = None):
+    project = project_service.get_project(project_id, session_id=session_id)
+    if project is None:
+        return None
+
+    try:
+        if hasattr(project, "model_dump"):
+            project_store.save_project(project.model_dump(mode="json"))
+        elif isinstance(project, dict):
+            project_store.save_project(project)
+    except Exception as exc:
+        logger.debug("Could not mirror SQLite project %s to project_store: %s", project_id, exc)
+    return project

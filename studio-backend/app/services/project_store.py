@@ -171,5 +171,271 @@ class ProjectStore:
         merged["project_id"] = current["project_id"]
         return self.save_project(merged)
 
+    def delete_project(self, project_id: str) -> bool:
+        """Delete a project from the file-based store"""
+        project_key = str(project_id or "").strip()
+        if not project_key:
+            return False
+        
+        with self._lock:
+            payload = self._read()
+            projects = payload.get("projects", {})
+            
+            if project_key in projects:
+                del projects[project_key]
+                self._write(payload)
+                return True
+            
+            return False
+
+    def save_creative_memory(self, project_id: str, memory_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Save a creative decision memory to project"""
+        current = self.get_project(project_id)
+        if current is None:
+            raise ValueError(f"Project {project_id} not found")
+        
+        memory_id = f"memory_{uuid4().hex[:12]}"
+        now = self._now_iso()
+        
+        memory = {
+            "memory_id": memory_id,
+            "project_id": project_id,
+            "decision_type": str(memory_data.get("decision_type", "creative_note")),
+            "user_note": str(memory_data.get("user_note", "")),
+            "inferred_tradeoff": str(memory_data.get("inferred_tradeoff", "not_inferred")),
+            "inferred_tradeoff_explanation": str(memory_data.get("inferred_tradeoff_explanation", "")),
+            "source_context": memory_data.get("source_context", {}),
+            "saved_at": now,
+            "editable": True,
+            "forgettable": True,
+        }
+        
+        # Ensure memory_context exists and has creative_memories list
+        memory_context = current.get("memory_context", {})
+        if not isinstance(memory_context, dict):
+            memory_context = {}
+        
+        creative_memories = memory_context.get("creative_memories", [])
+        if not isinstance(creative_memories, list):
+            creative_memories = []
+        
+        creative_memories.append(memory)
+        memory_context["creative_memories"] = creative_memories
+        
+        # Save updated project
+        self.update_project(project_id, {"memory_context": memory_context})
+        
+        return memory
+
+    def list_creative_memories(self, project_id: str) -> List[Dict[str, Any]]:
+        """List all creative decision memories for a project"""
+        current = self.get_project(project_id)
+        if current is None:
+            return []
+        
+        memory_context = current.get("memory_context", {})
+        if not isinstance(memory_context, dict):
+            return []
+        
+        creative_memories = memory_context.get("creative_memories", [])
+        if not isinstance(creative_memories, list):
+            return []
+        
+        return creative_memories
+
+    def update_creative_memory(self, project_id: str, memory_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a creative decision memory"""
+        current = self.get_project(project_id)
+        if current is None:
+            return None
+        
+        memory_context = current.get("memory_context", {})
+        if not isinstance(memory_context, dict):
+            return None
+        
+        creative_memories = memory_context.get("creative_memories", [])
+        if not isinstance(creative_memories, list):
+            return None
+        
+        # Find and update the memory
+        updated_memory = None
+        for i, memory in enumerate(creative_memories):
+            if isinstance(memory, dict) and memory.get("memory_id") == memory_id:
+                # Apply updates
+                if "user_note" in updates:
+                    memory["user_note"] = str(updates["user_note"])
+                if "decision_type" in updates:
+                    memory["decision_type"] = str(updates["decision_type"])
+                # Note: inferred_tradeoff and source_context are read-only after creation
+                
+                creative_memories[i] = memory
+                updated_memory = memory
+                break
+        
+        if updated_memory is None:
+            return None
+        
+        memory_context["creative_memories"] = creative_memories
+        self.update_project(project_id, {"memory_context": memory_context})
+        
+        return updated_memory
+
+    def delete_creative_memory(self, project_id: str, memory_id: str) -> bool:
+        """Delete a creative decision memory"""
+        current = self.get_project(project_id)
+        if current is None:
+            return False
+        
+        memory_context = current.get("memory_context", {})
+        if not isinstance(memory_context, dict):
+            return False
+        
+        creative_memories = memory_context.get("creative_memories", [])
+        if not isinstance(creative_memories, list):
+            return False
+        
+        # Filter out the memory
+        original_count = len(creative_memories)
+        creative_memories = [
+            memory for memory in creative_memories
+            if not (isinstance(memory, dict) and memory.get("memory_id") == memory_id)
+        ]
+        
+        if len(creative_memories) == original_count:
+            return False  # Memory not found
+        
+        memory_context["creative_memories"] = creative_memories
+        self.update_project(project_id, {"memory_context": memory_context})
+        
+        return True
+
+    # ------------------------------------------------------------------ #
+    # Director's Memory Engine (v1)
+    # ------------------------------------------------------------------ #
+
+    _DIRECTOR_MEMORY_KINDS = ("symbols", "motifs", "characters", "themes", "notes", "debates")
+
+    def _empty_director_memory(self) -> Dict[str, List[Dict[str, Any]]]:
+        return {kind: [] for kind in self._DIRECTOR_MEMORY_KINDS}
+
+    def _get_director_memory_context(self, project: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+        memory_context = project.get("memory_context", {})
+        if not isinstance(memory_context, dict):
+            memory_context = {}
+        bundle = memory_context.get("director_memory", {})
+        if not isinstance(bundle, dict):
+            bundle = {}
+        # Ensure all kinds present
+        for kind in self._DIRECTOR_MEMORY_KINDS:
+            existing = bundle.get(kind)
+            if not isinstance(existing, list):
+                bundle[kind] = []
+        return bundle
+
+    def get_director_memory(self, project_id: str) -> Dict[str, List[Dict[str, Any]]]:
+        current = self.get_project(project_id)
+        if current is None:
+            return self._empty_director_memory()
+        return self._get_director_memory_context(current)
+
+    def save_director_memory_entry(
+        self,
+        project_id: str,
+        kind: str,
+        entry_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if kind not in self._DIRECTOR_MEMORY_KINDS:
+            raise ValueError(f"unknown director memory kind: {kind}")
+        current = self.get_project(project_id)
+        if current is None:
+            raise ValueError(f"Project {project_id} not found")
+
+        entry_id = f"dm_{kind}_{uuid4().hex[:12]}"
+        now = self._now_iso()
+        entry: Dict[str, Any] = {
+            "entry_id": entry_id,
+            "kind": kind,
+            "project_id": project_id,
+            "saved_at": now,
+            "updated_at": now,
+            "editable": True,
+            "forgettable": True,
+            **{k: v for k, v in entry_data.items() if k != "entry_id"},
+        }
+
+        memory_context = current.get("memory_context", {})
+        if not isinstance(memory_context, dict):
+            memory_context = {}
+        bundle = self._get_director_memory_context(current)
+        bundle[kind].append(entry)
+        memory_context["director_memory"] = bundle
+        self.update_project(project_id, {"memory_context": memory_context})
+        return entry
+
+    def update_director_memory_entry(
+        self,
+        project_id: str,
+        kind: str,
+        entry_id: str,
+        updates: Dict[str, Any],
+        *,
+        _allow_system_fields: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        if kind not in self._DIRECTOR_MEMORY_KINDS:
+            raise ValueError(f"unknown director memory kind: {kind}")
+        current = self.get_project(project_id)
+        if current is None:
+            return None
+        memory_context = current.get("memory_context", {})
+        if not isinstance(memory_context, dict):
+            return None
+        bundle = self._get_director_memory_context(current)
+        entries = bundle.get(kind, [])
+        updated: Optional[Dict[str, Any]] = None
+        protected = {"entry_id", "kind", "project_id", "saved_at"}
+        for i, entry in enumerate(entries):
+            if isinstance(entry, dict) and entry.get("entry_id") == entry_id:
+                for k, v in (updates or {}).items():
+                    if k in protected:
+                        continue
+                    entry[k] = v
+                entry["updated_at"] = self._now_iso()
+                entries[i] = entry
+                updated = entry
+                break
+        if updated is None:
+            return None
+        bundle[kind] = entries
+        memory_context["director_memory"] = bundle
+        self.update_project(project_id, {"memory_context": memory_context})
+        return updated
+
+    def delete_director_memory_entry(
+        self,
+        project_id: str,
+        kind: str,
+        entry_id: str,
+    ) -> bool:
+        if kind not in self._DIRECTOR_MEMORY_KINDS:
+            raise ValueError(f"unknown director memory kind: {kind}")
+        current = self.get_project(project_id)
+        if current is None:
+            return False
+        memory_context = current.get("memory_context", {})
+        if not isinstance(memory_context, dict):
+            return False
+        bundle = self._get_director_memory_context(current)
+        entries = bundle.get(kind, [])
+        new_entries = [
+            e for e in entries
+            if not (isinstance(e, dict) and e.get("entry_id") == entry_id)
+        ]
+        if len(new_entries) == len(entries):
+            return False
+        bundle[kind] = new_entries
+        memory_context["director_memory"] = bundle
+        self.update_project(project_id, {"memory_context": memory_context})
+        return True
+
 
 project_store = ProjectStore()

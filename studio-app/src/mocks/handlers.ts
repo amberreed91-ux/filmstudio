@@ -57,6 +57,16 @@ function buildStudioProject(overrides: Record<string, unknown> = {}): Record<str
         live_generation: 'disabled',
         requires: [],
       },
+      {
+        provider: 'AMD MI300X',
+        selected: false,
+        status: 'standby',
+        live_generation: 'enabled',
+        requires: ['api_key', 'api_endpoint'],
+        gpu: 'MI300X',
+        runtime: 'ROCm',
+        models: ['ltx-2', 'hunyuan-video'],
+      },
     ],
     shot_approval_gates: APPROVAL_GATES.map((g) => ({
       ...g,
@@ -93,7 +103,7 @@ function buildStudioProject(overrides: Record<string, unknown> = {}): Record<str
       eta: r.eta,
       cost_per_minute: r.cost,
       priority: r.priority,
-      provider: i % 2 === 0 ? 'Runway' : 'RunPod',
+      provider: i % 3 === 0 ? 'Runway' : (i % 3 === 1 ? 'RunPod' : 'AMD MI300X'),
     })),
     rights_safety_clearance_board: {
       overall_status: 'cleared',

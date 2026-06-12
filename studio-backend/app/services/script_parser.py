@@ -116,7 +116,7 @@ class ScriptParser:
 
     # Regex patterns for screenplay elements
     SCENE_HEADING_PATTERN = re.compile(
-        r'^(INT\.?|EXT\.?|INT\./EXT\.?|I/E\.?)\s+(.+?)\s*-\s*(.+?)$',
+        r'^(?:SCENE\s+\d+\s*:\s*)?(?:\d+\.\s*)?(INT\.?|EXT\.?|INT\./EXT\.?|I/E\.?)\s+(.+?)\s*-\s*(.+?)$',
         re.MULTILINE | re.IGNORECASE
     )
     
@@ -143,7 +143,7 @@ class ScriptParser:
         self.scenes: List[Scene] = []
         self.characters: Dict[str, Character] = {}
         self.locations: Dict[str, Location] = {}
-        self._simple_heading_pattern = re.compile(r'^\s*(INT\.|EXT\.)\s+.+$', re.IGNORECASE)
+        self._simple_heading_pattern = re.compile(r'^\s*(?:SCENE\s+\d+\s*:\s*)?(?:\d+\.\s*)?(INT\.|EXT\.)\s+.+$', re.IGNORECASE)
 
     def extract_structured_scenes(self, script_text: str) -> Dict[str, Any]:
         """
@@ -211,6 +211,13 @@ class ScriptParser:
                 current_heading = None
                 current_text_lines = []
                 return
+            
+            # Extract emotional tone if present
+            emotional_tone = ""
+            tone_match = re.search(r'Emotional tone:\s*(.+?)(?:\n|$)', text_block, re.IGNORECASE)
+            if tone_match:
+                emotional_tone = tone_match.group(1).strip()
+            
             scene_id = f"scene_{len(scenes) + 1:03d}"
             scenes.append(
                 {
@@ -220,6 +227,7 @@ class ScriptParser:
                     "time_of_day": time_of_day,
                     "characters": self._extract_simple_scene_characters(text_block),
                     "text": text_block,
+                    "emotional_tone": emotional_tone,
                 }
             )
             current_heading = None
@@ -237,6 +245,15 @@ class ScriptParser:
                 current_text_lines.append(raw_line)
 
         flush_current_scene()
+        
+        # Fallback: If no scenes found, try alternative formats
+        if len(scenes) == 0:
+            print(f"[SCRIPT_PARSER] No INT/EXT headings found, trying fallback parsing", flush=True)
+            scenes = self._fallback_scene_parsing(script_text)
+        
+        format_detected = "standard" if len(scenes) > 0 and any("INT" in s.get("heading", "").upper() or "EXT" in s.get("heading", "").upper() for s in scenes) else "fallback"
+        print(f"[SCRIPT_PARSER] SCRIPT_PARSED | scenes={len(scenes)} | format_detected={format_detected}", flush=True)
+        
         return {"scenes": scenes}
 
     def index_scenes_by_id(self, scenes: Any) -> Dict[str, Dict[str, Any]]:
@@ -13420,6 +13437,10 @@ class ScriptParser:
             return "", "", ""
 
         cleaned_heading = heading.strip()
+        
+        # Strip "SCENE X:" or "X." prefix if present
+        cleaned_heading = re.sub(r'^(?:SCENE\s+\d+\s*:\s*)?(?:\d+\.\s*)?', '', cleaned_heading, flags=re.IGNORECASE).strip()
+        
         heading_match = re.match(r'^(INT\.|EXT\.)\s+(.+)$', cleaned_heading, flags=re.IGNORECASE)
         if not heading_match:
             return cleaned_heading, "", ""
@@ -13430,6 +13451,109 @@ class ScriptParser:
 
         location, time_of_day = remainder.split(" - ", 1)
         return cleaned_heading, location.strip(), time_of_day.strip()
+
+    def _fallback_scene_parsing(self, script_text: str) -> List[Dict[str, Any]]:
+        """
+        Fallback parser for scripts without standard INT/EXT headings.
+        Tries to split on:
+        - "SCENE X:" or "Scene X:" patterns
+        - Numbered list format "1. Title"
+        - Double line breaks between paragraphs
+        """
+        scenes: List[Dict[str, Any]] = []
+        
+        # Try SCENE X: pattern first
+        scene_pattern = re.compile(r'^(?:SCENE|Scene)\s+(\d+)\s*:\s*(.*)$', re.MULTILINE)
+        matches = list(scene_pattern.finditer(script_text))
+        
+        if matches:
+            for i, match in enumerate(matches):
+                start_pos = match.start()
+                end_pos = matches[i + 1].start() if i + 1 < len(matches) else len(script_text)
+                
+                scene_number = match.group(1)
+                title = match.group(2).strip()
+                text_block = script_text[match.end():end_pos].strip()
+                
+                # Extract emotional tone if present
+                emotional_tone = ""
+                tone_match = re.search(r'Emotional tone:\s*(.+?)(?:\n|$)', text_block, re.IGNORECASE)
+                if tone_match:
+                    emotional_tone = tone_match.group(1).strip()
+                
+                scene_id = f"scene_{int(scene_number):03d}"
+                scenes.append({
+                    "scene_id": scene_id,
+                    "heading": title or f"Scene {scene_number}",
+                    "location": title.split('-')[0].strip() if '-' in title else title,
+                    "time_of_day": title.split('-')[1].strip() if '-' in title and len(title.split('-')) > 1 else "",
+                    "characters": self._extract_simple_scene_characters(text_block),
+                    "text": text_block,
+                    "emotional_tone": emotional_tone,
+                })
+            return scenes
+        
+        # Try numbered list format "1. Title"
+        numbered_pattern = re.compile(r'^(\d+)\.\s+(.+)$', re.MULTILINE)
+        matches = list(numbered_pattern.finditer(script_text))
+        
+        if matches:
+            for i, match in enumerate(matches):
+                start_pos = match.start()
+                end_pos = matches[i + 1].start() if i + 1 < len(matches) else len(script_text)
+                
+                scene_number = match.group(1)
+                title = match.group(2).strip()
+                text_block = script_text[match.end():end_pos].strip()
+                
+                # Extract emotional tone if present
+                emotional_tone = ""
+                tone_match = re.search(r'Emotional tone:\s*(.+?)(?:\n|$)', text_block, re.IGNORECASE)
+                if tone_match:
+                    emotional_tone = tone_match.group(1).strip()
+                
+                scene_id = f"scene_{int(scene_number):03d}"
+                scenes.append({
+                    "scene_id": scene_id,
+                    "heading": title,
+                    "location": title.split('-')[0].strip() if '-' in title else title,
+                    "time_of_day": title.split('-')[1].strip() if '-' in title and len(title.split('-')) > 1 else "",
+                    "characters": self._extract_simple_scene_characters(text_block),
+                    "text": text_block,
+                    "emotional_tone": emotional_tone,
+                })
+            return scenes
+        
+        # Last resort: split on double line breaks
+        paragraphs = re.split(r'\n\s*\n', script_text)
+        for i, para in enumerate(paragraphs):
+            para = para.strip()
+            if not para or len(para) < 20:  # Skip very short paragraphs
+                continue
+            
+            # Use first line as title
+            lines = para.split('\n')
+            title = lines[0].strip()
+            text_block = '\n'.join(lines[1:]).strip() if len(lines) > 1 else para
+            
+            # Extract emotional tone if present
+            emotional_tone = ""
+            tone_match = re.search(r'Emotional tone:\s*(.+?)(?:\n|$)', text_block, re.IGNORECASE)
+            if tone_match:
+                emotional_tone = tone_match.group(1).strip()
+            
+            scene_id = f"scene_{i + 1:03d}"
+            scenes.append({
+                "scene_id": scene_id,
+                "heading": title[:100],  # Cap title length
+                "location": "",
+                "time_of_day": "",
+                "characters": self._extract_simple_scene_characters(text_block),
+                "text": text_block,
+                "emotional_tone": emotional_tone,
+            })
+        
+        return scenes
 
     def _extract_simple_scene_characters(self, scene_text: str) -> List[str]:
         """

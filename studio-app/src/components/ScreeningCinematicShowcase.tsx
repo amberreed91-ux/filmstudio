@@ -1,7 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { StudioDecisionGate } from '../lib/studioApi'
+import type { StudioDecisionGate, CoDirectorDebateEntry } from '../lib/studioApi'
+import { saveCreativeDecisionMemory, triggerDebate } from '../lib/studioApi'
 import ScreeningEditorialComparisonPanel from './ScreeningEditorialComparisonPanel'
+import SaveDecisionMemoryModal from './SaveDecisionMemoryModal'
+import DirectorDebatePanel from './DirectorDebatePanel'
+import { useTasteMemory } from '../hooks/useTasteMemory'
+import type { InferredTradeoff, CreativeDecisionMemory } from '../types/creativeMemory'
 
 type RevisionItem = {
   id: string
@@ -40,6 +45,8 @@ type ScreeningCinematicShowcaseProps = {
   initialRevisionEmphasis?: RevisionEmphasis
   initialTastePreviewHidden?: boolean
   initialSessionTasteCleared?: boolean
+  // Emotional intelligence signals
+  tensionTrend?: string
   onApproveCut: () => void
   onRequestRevision: () => void
   onCompareRevision: () => void
@@ -182,16 +189,73 @@ function directorTasteSessionPreview(
 
 function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'activeSceneId' | 'gateStatus' | 'memoryRecordsCount' | 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'hasDirectorSignature' | 'renderJobsCount' | 'reviewsCount' | 'packagesCount'>): string {
   const subject = props.activeSceneId ? `Scene ${props.activeSceneId}` : 'This cut'
+  
+  // Use existing loaded signals: memory count, continuity/style drift, gate state, director signature, review/package readiness
+  // Co-director voice: emotionally perceptive, cinematically literate, no scores
+  
   if (props.memoryRecordsCount < 1) {
-    return `${subject} still matters, but the Studio needs more visual evidence before trusting the cut.`
+    return `${subject} needs more cinematic memory before the Studio can confirm its emotional weight.`
   }
-  if (props.continuityIssuesCount > 0 || props.styleDriftIssuesCount > 0) {
-    return `${subject} connects the scene's emotional pressure to final review, but visual consistency still needs tightening.`
+  
+  if (props.continuityIssuesCount > 0 && props.styleDriftIssuesCount > 0) {
+    return `${subject} connects emotional beats across the timeline, but both continuity and visual consistency need tightening before final review.`
   }
-  if (props.gateStatus === 'ready' && props.renderJobsCount > 0 && props.reviewsCount > 0 && props.packagesCount > 0 && props.hasDirectorSignature) {
-    return `${subject} is ready because visual evidence, memory, and review state now agree.`
+  
+  if (props.continuityIssuesCount > 0) {
+    return `${subject} holds its moment well, but the continuity risk could weaken the transition into the next sequence.`
   }
-  return `${subject} carries the visual memory of the project into the cut.`
+  
+  if (props.styleDriftIssuesCount > 0) {
+    return `${subject} carries tension effectively, though the visual language drifts from the signature the film is building.`
+  }
+  
+  if (props.gateStatus === 'ready' && props.renderJobsCount > 0 && props.reviewsCount > 0 && props.packagesCount > 0 && props.hasDirectorSignature && props.memoryRecordsCount > 2) {
+    return `${subject} is ready because memory, signature, review state, and package readiness now align.`
+  }
+  
+  if (props.reviewsCount > 0 && props.packagesCount > 0 && props.hasDirectorSignature) {
+    return `${subject} has earned its approval through coherent visual memory and consistent director signature.`
+  }
+  
+  if (props.memoryRecordsCount > 2 && props.hasDirectorSignature) {
+    return `${subject} reinforces a recurring visual motif that deepens the emotional throughline of the entire cut.`
+  }
+  
+  if (props.gateStatus === 'ready' && props.renderJobsCount > 0) {
+    return `${subject} is gate-ready with stable render outputs, waiting for final review confirmation.`
+  }
+  
+  return `${subject} carries the accumulated visual memory of the project into the final screening.`
+}
+
+// Scene tension tracking - simple tension trend indicator for Screening
+// Uses existing signals: audio_tension, dread_score, continuity warnings
+// Plain language only, no scores - co-director voice
+function tensionTrendAdvisory(tensionTrend: string | undefined): string {
+  if (!tensionTrend) return 'Tension read is gathering from dread curve and audio signals.'
+  
+  const normalized = tensionTrend.trim().toLowerCase()
+  
+  if (normalized === 'rising' || normalized === 'climbing' || normalized === 'building') {
+    return 'Tension builds across the cut—the dread curve supports this escalation into the climax.'
+  }
+  if (normalized === 'high' || normalized === 'sustained' || normalized === 'holding') {
+    return 'Tension sustains at a high level—the cut needs a release or payoff soon to avoid fatigue.'
+  }
+  if (normalized === 'dropping' || normalized === 'releasing' || normalized === 'falling') {
+    return 'Tension releases in this sequence—confirm the prior build earned this relief.'
+  }
+  if (normalized === 'flat' || normalized === 'low' || normalized === 'calm') {
+    return 'Tension remains low, offering breathing room but risking momentum loss if held too long.'
+  }
+  if (normalized === 'unstable' || normalized === 'inconsistent' || normalized === 'erratic') {
+    return 'Tension feels inconsistent across the cut—audio and scene flow signals are misaligned.'
+  }
+  if (normalized === 'peaking' || normalized === 'climax') {
+    return 'Tension peaks here—this beat should earn its place as the emotional high point.'
+  }
+  
+  return 'Tension tracking is reading dread curve and audio profile across the cut.'
 }
 
 function creativeDisagreementAside(
@@ -292,6 +356,48 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const [journalDraft, setJournalDraft] = useState('')
   const [journalNotes, setJournalNotes] = useState<string[]>([])
   const [candidateMemories, setCandidateMemories] = useState<CandidateMemory[]>([])
+  
+  // Creative Decision Memory v1 - Modal state
+  const [saveMemoryModalOpen, setSaveMemoryModalOpen] = useState(false)
+  const [saveMemoryError, setSaveMemoryError] = useState<string | null>(null)
+  const [activeDebate, setActiveDebate] = useState<CoDirectorDebateEntry | null>(null)
+  const [triggeringDebate, setTriggeringDebate] = useState(false)
+
+  const handleManualDebate = async () => {
+    if (!props.projectId) return
+    setTriggeringDebate(true)
+    try {
+      const query = `Debate revision comparison between ${compareLeft?.label || 'Baseline'} and ${compareRight?.label || 'Comparison'}. Emphasis: ${revisionEmphasis}.`
+      const { debate } = await triggerDebate({
+        project_id: props.projectId,
+        scene_id: props.activeSceneId,
+        query,
+      })
+      setActiveDebate(debate)
+    } catch (err) {
+      console.error('Failed to trigger manual debate:', err)
+    } finally {
+      setTriggeringDebate(false)
+    }
+  }
+
+  // Taste Memory v1 - Frontend session only, tracks revision emphasis choices
+  const tasteMemory = useTasteMemory()
+
+  // Record taste observation when revision emphasis changes
+  useEffect(() => {
+    // Only record if not cleared and we have actual revision context
+    if (!sessionTasteCleared && props.revisions.length > 0) {
+      tasteMemory.recordObservation(revisionEmphasis, 'revision_emphasis_toggle')
+    }
+  }, [revisionEmphasis, sessionTasteCleared, props.revisions.length, tasteMemory])
+
+  // Clear taste memory when user explicitly clears session
+  useEffect(() => {
+    if (sessionTasteCleared) {
+      tasteMemory.clearMemory()
+    }
+  }, [sessionTasteCleared, tasteMemory])
 
   const selectedRevision = useMemo(
     () => props.revisions.find((item) => item.id === selectedRevisionId) || props.revisions[0] || null,
@@ -313,8 +419,94 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const heroMedia = props.heroVideoUrl || selectedRevision?.outputUrl || ''
   const heroImage = props.heroPreviewUrl || selectedRevision?.previewUrl || ''
 
+  // Creative Decision Memory handlers
+  const handleSaveDecisionMemory = async (memory: Omit<CreativeDecisionMemory, 'memory_id' | 'saved_at'>) => {
+    setSaveMemoryError(null)
+    try {
+      await saveCreativeDecisionMemory(props.projectId, memory)
+      // Clear journal draft and close modal on success
+      setJournalDraft('')
+      setSaveMemoryModalOpen(false)
+    } catch (error) {
+      setSaveMemoryError(error instanceof Error ? error.message : 'Failed to save decision memory')
+      throw error
+    }
+  }
+
+  const handleSessionOnlyDecision = () => {
+    // User chose to keep the decision session-only (not save to project)
+    // Clear the draft and close modal
+    setJournalDraft('')
+    setSaveMemoryModalOpen(false)
+  }
+
+  const inferTradeoffFromCurrentState = (): InferredTradeoff => {
+    // Infer from revision emphasis and taste memory state
+    if (revisionEmphasis === 'emotional_residue') {
+      return 'emotional_residue_favored'
+    }
+    if (revisionEmphasis === 'structural_clarity') {
+      return 'structural_clarity_favored'
+    }
+    return 'not_inferred'
+  }
+
+  const buildTradeoffExplanation = (): string => {
+    // Language only, no scores
+    const tradeoff = inferTradeoffFromCurrentState()
+    const tasteState = tasteMemory.getTasteState()
+    
+    if (tradeoff === 'emotional_residue_favored') {
+      if (tasteState.confidence === 'strong') {
+        return 'You consistently favor emotional residue and longer emotional carryover across cuts.'
+      }
+      if (tasteState.confidence === 'consistent') {
+        return 'You tend to favor emotional residue over structural clarity in your revision choices.'
+      }
+      return 'For this decision, you leaned toward emotional residue over structural clarity.'
+    }
+    
+    if (tradeoff === 'structural_clarity_favored') {
+      if (tasteState.confidence === 'strong') {
+        return 'You consistently favor structural clarity and tighter pacing across cuts.'
+      }
+      if (tasteState.confidence === 'consistent') {
+        return 'You tend to favor structural clarity over emotional residue in your revision choices.'
+      }
+      return 'For this decision, you leaned toward structural clarity over emotional residue.'
+    }
+    
+    return 'The Studio does not have enough context to infer a clear preference from this decision.'
+  }
+
   return (
     <section className="space-y-5" data-testid="screening-cinematic-showcase">
+      <SaveDecisionMemoryModal
+        isOpen={saveMemoryModalOpen}
+        onClose={() => setSaveMemoryModalOpen(false)}
+        onSave={handleSaveDecisionMemory}
+        onSessionOnly={handleSessionOnlyDecision}
+        initialNote={journalDraft}
+        inferredTradeoff={inferTradeoffFromCurrentState()}
+        inferredExplanation={buildTradeoffExplanation()}
+        sourceContext={{
+          scene_id: props.activeSceneId,
+          revision_id: selectedRevisionId,
+          revision_emphasis: revisionEmphasis,
+          screen_location: 'screening_room_journal',
+        }}
+        projectId={props.projectId}
+      />
+      {activeDebate && (
+        <div className="mb-6">
+          <DirectorDebatePanel
+            projectId={props.projectId}
+            sceneId={props.activeSceneId}
+            debate={activeDebate}
+            onDismiss={() => setActiveDebate(null)}
+          />
+        </div>
+      )}
       <div className="relative overflow-hidden rounded-2xl border border-zinc-700/70 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black shadow-[0_28px_80px_rgba(0,0,0,0.55)]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(244,114,182,0.16),transparent_45%),radial-gradient(circle_at_bottom_left,rgba(56,189,248,0.14),transparent_42%)]" />
         <div className="relative grid gap-4 p-4 lg:grid-cols-[1.8fr_1fr] lg:p-6">
@@ -357,13 +549,32 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
           <div className="text-[11px] uppercase tracking-[0.16em] text-cyan-200">Co-Director Notes</div>
           <p className="mt-2 text-sm text-zinc-200">{creativeRead(props)}</p>
           <p className="mt-2 text-sm text-zinc-200">Why this shot matters: {whyThisShotMatters(props)}</p>
+          {props.tensionTrend ? (
+            <p className="mt-2 text-xs text-zinc-400">{tensionTrendAdvisory(props.tensionTrend)}</p>
+          ) : null}
           <p className="mt-2 text-xs text-zinc-400" data-testid="revision-emphasis-guidance">
             {revisionEmphasisGuidance(revisionEmphasis, props)}
           </p>
           {disagreementAside ? (
-            <p className="mt-2 text-xs text-zinc-400" data-testid="creative-disagreement-aside">
-              {disagreementAside}
-            </p>
+            <div className="mt-2 flex items-center justify-between gap-3 rounded border border-indigo-500/20 bg-indigo-500/5 p-2">
+              <p className="text-xs text-indigo-200/90" data-testid="creative-disagreement-aside">
+                {disagreementAside}
+              </p>
+              <button
+                type="button"
+                onClick={handleManualDebate}
+                disabled={triggeringDebate}
+                className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 hover:text-indigo-300"
+              >
+                Discuss
+              </button>
+            </div>
+          ) : null}
+          {props.tensionTrend ? (
+            <div className="mt-3 rounded-md border border-rose-400/30 bg-rose-500/8 px-2 py-1.5">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-rose-300">Tension trend</div>
+              <div className="mt-0.5 text-xs text-zinc-200">{props.tensionTrend}</div>
+            </div>
           ) : null}
           <div className="mt-3 text-sm text-zinc-300">{props.decisionGate?.recommended_next_action || nextStep.message}</div>
           <div className="mt-4 flex flex-wrap gap-2 text-xs">
@@ -393,13 +604,21 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
             <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">Revision Timeline</div>
             <div className="mt-1 text-xs text-zinc-500">Select two revisions to compare creative direction.</div>
           </div>
-          <button
-            type="button"
-            onClick={props.onCompareRevision}
-            className="rounded-md border border-cyan-400/45 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100"
-          >
-            Compare Revision
-          </button>
+            <button
+              type="button"
+              onClick={props.onCompareRevision}
+              className="rounded-md border border-cyan-400/45 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100"
+            >
+              Compare Revision
+            </button>
+            <button
+              type="button"
+              onClick={handleManualDebate}
+              disabled={triggeringDebate || props.revisions.length < 2}
+              className="rounded-md border border-indigo-500/45 bg-indigo-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100"
+            >
+              {triggeringDebate ? 'Preparing Debate...' : 'Debate this Comparison'}
+            </button>
         </div>
         {props.revisions.length > 1 ? (
           <div className="mt-3 rounded-lg border border-white/10 bg-black/25 p-2.5" data-testid="revision-emphasis-toggle">
@@ -431,7 +650,11 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
             </p>
             <div className="mt-2 rounded-md border border-white/10 bg-zinc-900/40 px-2 py-1.5" data-testid="emerging-taste-read">
               <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Emerging Taste Read</div>
-              <p className="mt-1 text-[11px] text-zinc-400">{tasteRead}</p>
+              {tasteMemory.hasEnoughData() ? (
+                <p className="mt-1 text-[11px] text-zinc-400">{tasteMemory.getTendencyMessage()}</p>
+              ) : (
+                <p className="mt-1 text-[11px] text-zinc-400">{tasteRead}</p>
+              )}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               <button
@@ -450,14 +673,31 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
               </button>
             </div>
             <p className="mt-2 text-[11px] text-zinc-500" data-testid="taste-observed-explainer">
-              What is being observed? This session read is based on revision emphasis and comparison behavior only. It is not saved.
+              What is being observed? This session read is based on revision emphasis toggle behavior only. It is not saved. Observations: {tasteMemory.observationCount}
             </p>
             {!tastePreviewHidden ? (
               <div className="mt-2 rounded-md border border-white/10 bg-zinc-900/40 px-2 py-1.5" data-testid="director-taste-session-preview">
                 <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Director Taste Profile, Session Preview</div>
-                <p className="mt-1 text-[11px] text-zinc-300">Current axis: <span className="text-zinc-100">{sessionTastePreview.leaning}</span></p>
-                <p className="mt-1 text-[11px] text-zinc-400">{sessionTastePreview.read}</p>
-                <p className="mt-1 text-[11px] text-zinc-500">{sessionTastePreview.disclaimer}</p>
+                {tasteMemory.hasEnoughData() ? (
+                  <>
+                    <p className="mt-1 text-[11px] text-zinc-300">
+                      Current leaning: <span className="text-zinc-100">{tasteMemory.currentLeaning === 'emotional_residue' ? 'Emotional Residue' : 'Structural Clarity'}</span>
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-300">
+                      Confidence: <span className="text-zinc-100 capitalize">{tasteMemory.confidence}</span>
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-400">{tasteMemory.getTendencyMessage()}</p>
+                    <p className="mt-1 text-[11px] text-zinc-500">The Studio is treating this as a temporary creative read, not a permanent profile.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 text-[11px] text-zinc-300">
+                      Current axis: <span className="text-zinc-100">Emerging</span>
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-400">The Studio is still observing your creative choices to understand your tendencies.</p>
+                    <p className="mt-1 text-[11px] text-zinc-500">The Studio is treating this as a temporary creative read, not a permanent profile.</p>
+                  </>
+                )}
               </div>
             ) : null}
 
@@ -499,12 +739,31 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    if (!journalDraft.trim()) {
+                      setSaveMemoryError('Please write a note before saving to project memory')
+                      return
+                    }
+                    setSaveMemoryModalOpen(true)
+                  }}
+                  disabled={!journalDraft.trim()}
+                  className="rounded-md border border-fuchsia-400/45 bg-fuchsia-500/14 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-fuchsia-100 disabled:opacity-50"
+                >
+                  Save this decision to project memory
+                </button>
+                <button
+                  type="button"
                   onClick={() => setJournalNotes([])}
                   className="rounded-md border border-zinc-600/80 bg-zinc-900/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200"
                 >
                   Clear Notes
                 </button>
               </div>
+              {saveMemoryError && (
+                <div className="mt-2 rounded-md border border-rose-400/40 bg-rose-500/10 px-2 py-1.5 text-xs text-rose-200">
+                  {saveMemoryError}
+                </div>
+              )}
               <p className="mt-2 text-[11px] text-zinc-500">This journal is session-only and not saved.</p>
               <div className="mt-2 space-y-1.5" data-testid="cut-decision-journal-notes">
                 {journalNotes.length > 0 ? journalNotes.map((note, index) => (

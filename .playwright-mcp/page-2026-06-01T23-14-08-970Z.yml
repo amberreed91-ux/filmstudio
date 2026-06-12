@@ -1,0 +1,102 @@
+- generic [ref=e262]:
+  - banner [ref=e263]:
+    - generic [ref=e264]:
+      - link "Production Board" [ref=e265] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e266]
+        - generic [ref=e268]: Production Board
+      - generic [ref=e269]: Track execution readiness, dependencies, and queue health across active scenes.
+    - navigation [ref=e270]:
+      - link "Home" [ref=e271] [cursor=pointer]:
+        - /url: /studio/lobby?project_id=project_921af73a732f
+      - link "Overview" [ref=e272] [cursor=pointer]:
+        - /url: /studio/overview?project_id=project_921af73a732f
+      - link "Write" [ref=e273] [cursor=pointer]:
+        - /url: /studio/writers-room?project_id=project_921af73a732f
+      - link "Scenes" [ref=e274] [cursor=pointer]:
+        - /url: /studio/production-board?project_id=project_921af73a732f
+      - link "Watch" [ref=e275] [cursor=pointer]:
+        - /url: /studio/screening-room?project_id=project_921af73a732f
+      - link "Archive" [ref=e276] [cursor=pointer]:
+        - /url: /studio/archive?project_id=project_921af73a732f
+      - link "Project Slate" [ref=e277] [cursor=pointer]:
+        - /url: /studio/slate?project_id=project_921af73a732f
+      - link "Previs Room" [ref=e278] [cursor=pointer]:
+        - /url: /studio/previs?project_id=project_921af73a732f
+      - link "Approval Room" [ref=e279] [cursor=pointer]:
+        - /url: /studio/approval-room?project_id=project_921af73a732f
+      - link "Study Room" [ref=e280] [cursor=pointer]:
+        - /url: /studio/study-room?project_id=project_921af73a732f
+      - link "Crew Ops" [ref=e281] [cursor=pointer]:
+        - /url: /studio/scheduler?project_id=project_921af73a732f
+      - link "Cost Manager" [ref=e282] [cursor=pointer]:
+        - /url: /studio/cost?project_id=project_921af73a732f
+      - link "Workspace" [ref=e283] [cursor=pointer]:
+        - /url: /studio/project/project_eb5a87327aba?project_id=project_921af73a732f
+    - generic [ref=e284]:
+      - button "Audio Off" [ref=e285]:
+        - img [ref=e286]
+        - generic [ref=e290]: Audio Off
+      - generic [ref=e293]: Studio connected
+      - generic [ref=e294]:
+        - img [ref=e295]
+        - generic [ref=e298]: Admin | FilmOS
+  - generic [ref=e299]:
+    - link "Home" [ref=e300] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e301]
+      - text: Home
+    - generic [ref=e304]:
+      - img [ref=e305]
+      - link "Studio Lobby" [ref=e307] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e308]:
+      - img [ref=e309]
+      - generic [ref=e311]: Scenes
+  - generic [ref=e313]:
+    - generic [ref=e314]: "Room: Production Board"
+    - generic [ref=e315]: "Current Step: Review"
+    - generic [ref=e316]: "Next: Start by adding a script in Writer’s Room"
+    - generic [ref=e317]: "Approved: 0"
+    - button "Open ▾" [ref=e318]
+  - main [ref=e319]:
+    - generic [ref=e321]:
+      - paragraph [ref=e322]: No film selected
+      - paragraph [ref=e323]: Go to Home to start or continue a film
+      - button "Go to Home" [ref=e324] [cursor=pointer]
+  - complementary "AI Crew Presence" [ref=e325]:
+    - generic [ref=e326]:
+      - generic [ref=e327]:
+        - generic [ref=e328]: AI Crew Presence
+        - generic [ref=e329]: radio link stable
+      - generic [ref=e330]:
+        - generic [ref=e331]:
+          - generic [ref=e332]: D
+          - generic [ref=e333]:
+            - generic [ref=e334]: Director
+            - generic [ref=e335]: Director adjusting pacing...
+          - generic [ref=e336]: ...
+        - generic [ref=e337]:
+          - generic [ref=e338]: W
+          - generic [ref=e339]:
+            - generic [ref=e340]: Writer
+            - generic [ref=e341]: Writer refining dramatic beats...
+          - generic [ref=e342]: ...
+        - generic [ref=e343]:
+          - generic [ref=e344]: M
+          - generic [ref=e345]:
+            - generic [ref=e346]: Memory Archivist
+            - generic [ref=e347]: Memory Archivist checking continuity...
+          - generic [ref=e348]: ...
+        - generic [ref=e349]:
+          - generic [ref=e350]: E
+          - generic [ref=e351]:
+            - generic [ref=e352]: Evaluator
+            - generic [ref=e353]: Evaluator scoring scene coherence...
+          - generic [ref=e354]: ...
+        - generic [ref=e355]:
+          - generic [ref=e356]: P
+          - generic [ref=e357]:
+            - generic [ref=e358]: Provider Router
+            - generic [ref=e359]: Provider Router selecting Runway...
+          - generic [ref=e360]: ...

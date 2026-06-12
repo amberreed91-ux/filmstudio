@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from main import app
+from app.data import get_storage
 
 def _client_with_store() -> TestClient:
     return TestClient(app)
@@ -22,6 +23,34 @@ def test_create_and_list_project():
     body = listed.json()
     assert isinstance(body.get("projects"), list)
     assert any(row.get("project_id") == payload["project_id"] for row in body["projects"])
+
+
+def test_create_project_persists_to_sqlite():
+    client = _client_with_store()
+
+    created = client.post("/api/f51/studio/projects", json={"title": "SQLite Persistence Test"})
+    assert created.status_code == 200
+    payload = created.json()
+    assert payload["project_id"]
+
+    stored = get_storage("sqlite").get_project(payload["project_id"])
+    assert stored is not None
+    assert stored.project_id == payload["project_id"]
+
+
+def test_cors_allows_local_frontend_origin():
+    client = _client_with_store()
+
+    response = client.options(
+        "/api/f51/studio/projects",
+        headers={
+            "Origin": "http://127.0.0.1:5001",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code in {200, 400}
+    assert response.headers.get("access-control-allow-origin") == "http://127.0.0.1:5001"
 
 
 def test_generate_scenes_and_load_project():

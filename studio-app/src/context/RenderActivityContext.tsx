@@ -6,9 +6,11 @@ export type LiveRenderStatus = 'queued' | 'preparing' | 'generating' | 'polling'
 export type LiveRenderActivity = {
   status: LiveRenderStatus
   provider: string
+  model?: string | null
   selectedProvider: string | null
   scene: string
   taskId: string
+  jobId: string
   elapsedSeconds: number
   updatedAt: number
   isActive: boolean
@@ -60,8 +62,10 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
     type Candidate = {
       status: LiveRenderStatus
       provider: string
+      model?: string | null
       scene: string
       taskId: string
+      jobId: string
       updatedAt: number
       isActive: boolean
       createdAt: number
@@ -69,18 +73,22 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
     const candidates: Candidate[] = []
 
     for (const job of renderJobs) {
-      const taskId = asString(job.id)
+      const taskId = asString(job.provider_job_id) || asString(job.id)
+      const jobId = asString(job.id)
       const scene = asString(job.shot_id) || asString(job.input_payload?.shot_id) || 'unknown_scene'
       const provider = asString(job.provider) || asString(project?.render_provider?.provider_name) || 'unknown_provider'
-      const isPolling = pollingJobs.has(taskId)
+      const model = asString(job.model) || null
+      const isPolling = pollingJobs.has(taskId) || pollingJobs.has(jobId)
       const status = normalizeRenderStatus(asString(job.status), isPolling)
       const updatedAt = Number.isFinite(Date.parse(job.updated_at || '')) ? Date.parse(job.updated_at || '') : now
       const createdAt = Number.isFinite(Date.parse(job.created_at || '')) ? Date.parse(job.created_at || '') : updatedAt
       candidates.push({
         status,
         provider,
+        model,
         scene,
         taskId,
+        jobId,
         updatedAt,
         isActive: status !== 'completed' && status !== 'failed',
         createdAt,
@@ -90,16 +98,18 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
     const queue = project?.render_queue || []
     for (const rawRow of queue) {
       const row = asRecord(rawRow) || {}
-      const taskId = asString(row.task_id) || asString(row.render_id) || asString(row.id)
+      const taskId = asString(row.provider_job_id) || asString(row.task_id) || asString(row.render_id) || asString(row.id)
+      const jobId = asString(row.id) || asString(row.render_id) || taskId
       if (!taskId) continue
       const scene = asString(row.scene_id) || asString(row.shot_id) || 'unknown_scene'
       const provider = asString(row.provider_name) || asString(row.provider) || asString(project?.render_provider?.provider_name) || 'unknown_provider'
-      const status = normalizeRenderStatus(asString(row.status), pollingJobs.has(taskId))
+      const status = normalizeRenderStatus(asString(row.status), pollingJobs.has(taskId) || pollingJobs.has(jobId))
       candidates.push({
         status,
         provider,
         scene,
         taskId,
+        jobId,
         updatedAt: now,
         isActive: status !== 'completed' && status !== 'failed',
         createdAt: now,
@@ -118,17 +128,20 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
     const provider = selected.isActive
       ? (selected.provider || resolvedSelectedProvider || 'idle')
       : 'idle'
+    const model = selected.isActive ? selected.model : null
     const start = startedAtByTask[selected.taskId] ?? selected.createdAt
     const elapsedSeconds = Math.max(0, Math.floor((now - start) / 1000))
     if (import.meta.env.DEV) {
-      console.log('[RenderActivity] selectedProvider:', resolvedSelectedProvider, 'activityProvider:', provider, 'activeRenderJob.provider:', selected.provider)
+      console.log('[RenderActivity] selectedProvider:', resolvedSelectedProvider, 'activityProvider:', provider, 'activeRenderJob.provider:', selected.provider, 'model:', selected.model)
     }
     return {
       status: selected.status,
       provider,
+      model,
       selectedProvider: resolvedSelectedProvider,
       scene: selected.scene,
       taskId: selected.taskId,
+      jobId: selected.jobId,
       elapsedSeconds,
       updatedAt: selected.updatedAt,
       isActive: selected.isActive,

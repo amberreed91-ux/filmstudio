@@ -55,7 +55,13 @@ export default function DecisionGateCard({ projectId, gate, loading = false, err
         ) : null}
       </div>
 
-      {showLoadingOnly ? <div className="text-zinc-400">Evaluating project state...</div> : null}
+      {showLoadingOnly ? (
+        <div className="space-y-2 animate-pulse">
+          <div className="h-3 w-3/4 rounded bg-zinc-700" />
+          <div className="h-3 w-1/2 rounded bg-zinc-700" />
+          <div className="mt-3 h-6 w-20 rounded-full bg-zinc-700" />
+        </div>
+      ) : null}
       {errorMessage ? <div className="text-rose-300">{errorMessage}</div> : null}
 
       {showGate && gate ? (

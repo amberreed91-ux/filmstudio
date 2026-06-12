@@ -2,20 +2,25 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { MonitorPlay } from 'lucide-react'
 import StudioShell, { TabGroup } from '../components/StudioShell'
+import ProjectContextBar from '../components/ProjectContextBar'
+import ProjectGuard from '../components/ProjectGuard'
 import RenderActivityPanel from '../components/RenderActivityPanel'
 import FilmMemoryPanel from '../components/FilmMemoryPanel'
-import DecisionGateCard from '../components/DecisionGateCard'
+
 import CoDirectorCollaborationPanel from '../components/CoDirectorCollaborationPanel'
 import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
 import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
 import ScreeningIntelligencePanel from '../components/ScreeningIntelligencePanel'
+import DirectorMemoryCallbacks from '../components/DirectorMemoryCallbacks'
+import SceneContinuityPanel from '../components/SceneContinuityPanel'
 import ScreeningCinematicShowcase from '../components/ScreeningCinematicShowcase'
 import ScreeningTimelineIntelligencePanel from '../components/ScreeningTimelineIntelligencePanel'
+import DirectorDebatePanel from '../components/DirectorDebatePanel'
 import { useStudio } from '../context/StudioContext'
-import { buildLocalFallbackExport, createFinalShortFilmPackage, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getProject, getProjectDecisionGate, getTimelineIntelligence, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, type CinematicMemoryRecord, type ContinuityIssue, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue, type TimelineFlowAnalysis } from '../lib/studioApi'
+import { buildLocalFallbackExport, createClipRevision, createFinalShortFilmPackage, createShortFilmReview, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getLatestShortFilmReview, getProject, getProjectDecisionGate, getTimelineIntelligence, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, refreshRenderJobOutputUrl, stitchShortFilm, submitClipRevisionRender, type CinematicMemoryRecord, type ContinuityIssue, type ContinuityReview, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue, type TimelineFlowAnalysis } from '../lib/studioApi'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
 import { useProjectHydration } from '../hooks/useProjectHydration'
-import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import { persistActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import { selectPrimaryStudioMedia } from '../lib/studioMedia'
 
 type AnyRecord = Record<string, unknown>
@@ -118,8 +123,35 @@ function isMockExternalAssetUrl(url: string): boolean {
 function normalizePlayableVideoUrl(url: string): string {
   const value = url.trim()
   if (!value) return ''
+  // CloudFront and other hosted URLs should be used directly
+  // Only fallback to local mock for the specific mock domain
   if (isMockExternalAssetUrl(value)) return '/outputs/mock-video/sample.mp4'
   return value
+}
+
+function getPreferredAssetUrl(job: any): string {
+  // Priority order for hosted media:
+  // 1. output_payload.asset_url (CloudFront URL from Runway)
+  // 2. output_url (legacy field)
+  // 3. preview_url (if available)
+  // 4. empty string (show honest empty state)
+  
+  const assetUrl = job.output_payload?.asset_url || ''
+  if (assetUrl && !isMockExternalAssetUrl(assetUrl)) {
+    return assetUrl
+  }
+  
+  const outputUrl = job.output_url || ''
+  if (outputUrl && !isMockExternalAssetUrl(outputUrl)) {
+    return outputUrl
+  }
+  
+  const previewUrl = job.output_payload?.thumbnail_url || job.preview_url || ''
+  if (previewUrl && !isMockExternalAssetUrl(previewUrl)) {
+    return previewUrl
+  }
+  
+  return ''
 }
 
 function statusTone(status: string): string {
@@ -160,6 +192,35 @@ function getExecutionSummary(state: unknown, projectSummary: unknown): AnyRecord
   return {}
 }
 
+function ContinuityDriftIndicator({ review }: { review: ContinuityReview }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-1.5 rounded border border-amber-400/40 bg-amber-500/10 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
+          Continuity observation
+        </span>
+        <span className="text-[10px] text-amber-300">{open ? '▲' : '▼'}</span>
+      </button>
+      <div className="mt-1 text-[10px] text-amber-100/80">{review.advisory}</div>
+      {open ? (
+        <div className="mt-1.5 space-y-1">
+          {review.drift_notes.map((note, i) => (
+            <div key={i} className="text-[10px] text-amber-200">· {note}</div>
+          ))}
+          {review.uncertainty_notes.map((note, i) => (
+            <div key={`u${i}`} className="text-[10px] text-zinc-400">· {note}</div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export default function ScreeningRoom() {
   const { projectId } = useParams()
   const navigate = useNavigate()
@@ -167,11 +228,15 @@ export default function ScreeningRoom() {
   const sessionId = searchParams.get('session_id')
   const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
-  const { project, loadProject } = useStudio()
+  const { project, activeProjectId, loadProject } = useStudio()
+  
+  // Use activeProjectId from context with fallback to route/query params
+  const effectiveProjectId = activeProjectId || projectId || queryProjectId
+  
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0)
   const [previewAllScenes, setPreviewAllScenes] = useState(false)
-  const [screeningInsightTab, setScreeningInsightTab] = useState<'flow' | 'ending' | 'dread' | 'assets' | 'structure' | 'validation'>('flow')
+  const [screeningInsightTab, setScreeningInsightTab] = useState<'flow' | 'ending' | 'dread' | 'assets' | 'structure' | 'validation' | 'continuity'>('flow')
   const [currentCut, setCurrentCut] = useState<FilmCut | null>(null)
   const [exportMessage, setExportMessage] = useState('')
   const [actionFeedback, setActionFeedback] = useState('')
@@ -186,8 +251,16 @@ export default function ScreeningRoom() {
   const [timelineLoading, setTimelineLoading] = useState(false)
   const [timelineError, setTimelineError] = useState('')
   const [decisionGate, setDecisionGate] = useState<StudioDecisionGate | null>(null)
-  const [decisionGateLoading, setDecisionGateLoading] = useState(false)
-  const [decisionGateError, setDecisionGateError] = useState('')
+  const [showRevisionModal, setShowRevisionModal] = useState(false)
+  const [revisionPrompt, setRevisionPrompt] = useState('')
+  const [revisionReason, setRevisionReason] = useState('')
+  const [revisionLoading, setRevisionLoading] = useState(false)
+  const [revisionError, setRevisionError] = useState('')
+  const [stitchingFilm, setStitchingFilm] = useState(false)
+  const [stitchingError, setStitchingError] = useState('')
+  const [stitchedFilmUrl, setStitchedFilmUrl] = useState<string | null>(null)
+  const [refreshedRenderUrls, setRefreshedRenderUrls] = useState<Record<string, string>>({})
+  const [refreshAttemptsByJobId, setRefreshAttemptsByJobId] = useState<Record<string, number>>({})
   const playbackTimerRef = useRef<number | null>(null)
   const theaterViewportRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -206,20 +279,16 @@ export default function ScreeningRoom() {
     resolveExecutionSummary: getExecutionSummary,
   })
   const executionSummary = hydration.executionSummary
-  const activeProjectId = resolveActiveProjectId({
-    queryProjectId,
-    routeProjectId: projectId || '',
-    locationState: location.state,
-    persistedProjectId: readPersistedActiveProjectId(),
-    contextProjectId: project?.project_id || '',
-  })
+  
+  // Note: activeProjectId comes from useStudio() context above
+  // effectiveProjectId provides fallback to route/query params
 
   useEffect(() => {
-    if (activeProjectId) persistActiveProjectId(activeProjectId)
-  }, [activeProjectId])
+    if (effectiveProjectId) persistActiveProjectId(effectiveProjectId)
+  }, [effectiveProjectId])
 
   useEffect(() => {
-    if (!activeProjectId) {
+    if (!effectiveProjectId) {
       setTimelineAnalysis(null)
       setTimelineError('')
       setTimelineLoading(false)
@@ -254,26 +323,20 @@ export default function ScreeningRoom() {
   useEffect(() => {
     if (!activeProjectId) {
       setDecisionGate(null)
-      setDecisionGateError('')
       return
     }
     let cancelled = false
     const controller = new AbortController()
     async function loadDecisionGate() {
-      setDecisionGateLoading(true)
       try {
         const gate = await getProjectDecisionGate(activeProjectId, { signal: controller.signal })
         if (!cancelled) {
           setDecisionGate(gate)
-          setDecisionGateError('')
         }
-      } catch (error) {
+      } catch {
         if (!cancelled) {
           setDecisionGate(null)
-          setDecisionGateError(error instanceof Error ? error.message : 'Failed to load decision gate.')
         }
-      } finally {
-        setDecisionGateLoading(false)
       }
     }
     void loadDecisionGate()
@@ -615,12 +678,16 @@ export default function ScreeningRoom() {
     return map
   }, [imageRenderAssets])
   const firstVideoAssetByScene = useMemo(() => {
-    const map = new Map<string, { video_url: string; thumbnail_url: string }>()
+    const map = new Map<string, { render_id: string; video_url: string; thumbnail_url: string }>()
     for (const asset of videoRenderAssets) {
       if (asset.status !== 'success' && asset.status !== 'pending') continue
       if (!asset.scene_id || map.has(asset.scene_id)) continue
       const motionUrl = asset.provider === 'comfyui_motion' ? (asset.motion_clip_url || asset.video_url) : ''
-      map.set(asset.scene_id, { video_url: motionUrl || asset.video_url, thumbnail_url: asset.thumbnail_url })
+      map.set(asset.scene_id, {
+        render_id: asset.render_id,
+        video_url: motionUrl || asset.video_url,
+        thumbnail_url: asset.thumbnail_url,
+      })
     }
     return map
   }, [videoRenderAssets])
@@ -865,6 +932,11 @@ export default function ScreeningRoom() {
     activeScene &&
     Math.abs((activeScene.duration_estimate || 0) - (previousScene.duration_estimate || 0)) >= 2
   const activeRenderId = activeScene?.render_ids?.[0] || ''
+  const activeSceneRenderJobId = useMemo(() => {
+    if (!activeScene?.scene_id) return ''
+    const previewAsset = firstVideoAssetByScene.get(activeScene.scene_id)
+    return previewAsset?.render_id || activeRenderId || ''
+  }, [activeRenderId, activeScene?.scene_id, firstVideoAssetByScene])
   const activeSceneAsset = activeScene?.scene_id ? firstSuccessfulAssetByScene.get(activeScene.scene_id) : null
   const activeSceneDiagnostics = activeScene?.scene_id ? sceneDiagnosticsById.get(activeScene.scene_id) : null
   const activeSceneContinuityIssues = useMemo(() => {
@@ -890,6 +962,12 @@ export default function ScreeningRoom() {
   const fallbackSceneVideoUrl = activeScene?.scene_id
     ? normalizePlayableVideoUrl(firstVideoAssetByScene.get(activeScene.scene_id)?.video_url || '')
     : ''
+  
+  // Determine primary video source: stitched film > individual scene clips
+  const primaryVideoUrl = stitchedFilmUrl 
+    ? normalizePlayableVideoUrl(stitchedFilmUrl)
+    : fallbackSceneVideoUrl
+  
   const primarySceneMedia = useMemo(() => {
     const stitchedPackageUrl =
       latestPackage && String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film'
@@ -905,9 +983,14 @@ export default function ScreeningRoom() {
     })
   }, [activeRenderId, activeScene?.scene_id, fallbackSceneImage, latestPackage, mediaCandidateRenderJobs])
   const viewerImage = primarySceneMedia.kind === 'image' ? primarySceneMedia.url : fallbackSceneImage
-  const activeSceneVideoUrl = primarySceneMedia.kind === 'video'
-    ? normalizePlayableVideoUrl(primarySceneMedia.url)
-    : fallbackSceneVideoUrl
+  const refreshedActiveSceneVideoUrl = activeSceneRenderJobId ? refreshedRenderUrls[activeSceneRenderJobId] || '' : ''
+  const activeSceneVideoUrl = stitchedFilmUrl 
+    ? normalizePlayableVideoUrl(stitchedFilmUrl)
+    : refreshedActiveSceneVideoUrl
+      ? normalizePlayableVideoUrl(refreshedActiveSceneVideoUrl)
+    : primarySceneMedia.kind === 'video'
+      ? normalizePlayableVideoUrl(primarySceneMedia.url)
+      : primaryVideoUrl
   const activeSoundProfile = useMemo(() => {
     if (!activeScene?.scene_id) return {}
     const source = asArray(executionSummary.scenes).find((entry) => {
@@ -925,6 +1008,9 @@ export default function ScreeningRoom() {
     [audioAssetPlan, activeScene?.scene_id],
   )
   const activeRenderStatus = useMemo(() => {
+    if (stitchedFilmUrl && activeSceneVideoUrl === stitchedFilmUrl) {
+      return { label: 'STITCHED FILM', reason: 'Complete film assembled from all scenes.' }
+    }
     if (primarySceneMedia.source === 'package' && String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film' && activeSceneVideoUrl) {
       return { label: 'FINAL SHORT FILM', reason: 'Stitched final package output.' }
     }
@@ -951,7 +1037,7 @@ export default function ScreeningRoom() {
       return { label: 'NO OUTPUT', reason: fallbackReason ? `No playable output: ${fallbackReason}` : 'No playable output yet' }
     }
     return { label: 'LOCAL PREVIS', reason: '' }
-  }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene, latestPackage, primarySceneMedia.source])
+  }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene, latestPackage, primarySceneMedia.source, stitchedFilmUrl])
   const revisionTimeline = useMemo(() => {
     const fromJobs = mediaCandidateRenderJobs.map((job, index) => {
       const payload = asRecord(job.output_payload) || {}
@@ -1041,11 +1127,210 @@ export default function ScreeningRoom() {
 
   function handleReviewDecision(decision: 'approve' | 'revise' | 'regenerate') {
     if (!activeScene?.scene_id) return
+    
+    // For revise, show the revision modal
+    if (decision === 'revise') {
+      setShowRevisionModal(true)
+      setRevisionPrompt('')
+      setRevisionReason('')
+      setRevisionError('')
+      return
+    }
+    
+    // For approve/regenerate, just store in localStorage
     const raw = localStorage.getItem('studio:screeningReviewActions')
     const existing = raw ? (JSON.parse(raw) as Record<string, string>) : {}
     const next = { ...existing, [activeScene.scene_id]: decision }
     localStorage.setItem('studio:screeningReviewActions', JSON.stringify(next))
     setActionFeedback(`Scene ${activeScene.scene_id} marked: ${decision}`)
+  }
+
+  async function handleActiveSceneVideoError() {
+    const jobId = activeSceneRenderJobId
+    if (!jobId) {
+      console.warn('[ScreeningRoom] video_load_failure', {
+        scene_id: activeScene?.scene_id || 'hosted_preview',
+        output_url: activeSceneVideoUrl,
+        preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
+        reason: 'missing_job_id',
+      })
+      return
+    }
+
+    const attempts = refreshAttemptsByJobId[jobId] || 0
+    if (attempts >= 1) {
+      console.warn('[ScreeningRoom] video_load_failure', {
+        scene_id: activeScene?.scene_id || 'hosted_preview',
+        output_url: activeSceneVideoUrl,
+        preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
+        job_id: jobId,
+        reason: 'refresh_already_tried',
+      })
+      return
+    }
+
+    setRefreshAttemptsByJobId((prev) => ({ ...prev, [jobId]: attempts + 1 }))
+
+    try {
+      const refreshed = await refreshRenderJobOutputUrl(jobId)
+      if (refreshed.output_url) {
+        setRefreshedRenderUrls((prev) => ({ ...prev, [jobId]: refreshed.output_url || '' }))
+        setActionFeedback('Refreshed hosted video URL')
+        return
+      }
+      console.warn('[ScreeningRoom] video_load_failure', {
+        scene_id: activeScene?.scene_id || 'hosted_preview',
+        output_url: activeSceneVideoUrl,
+        preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
+        job_id: jobId,
+        reason: 'refresh_returned_empty',
+      })
+    } catch (error) {
+      console.warn('[ScreeningRoom] video_load_failure', {
+        scene_id: activeScene?.scene_id || 'hosted_preview',
+        output_url: activeSceneVideoUrl,
+        preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
+        job_id: jobId,
+        reason: error instanceof Error ? error.message : 'refresh_failed',
+      })
+    }
+  }
+
+  async function handleSubmitRevision() {
+    if (!activeProjectId || !activeScene?.scene_id) {
+      setRevisionError('No active project or scene')
+      return
+    }
+
+    if (!revisionPrompt.trim()) {
+      setRevisionError('Please enter revision instructions')
+      return
+    }
+
+    setRevisionLoading(true)
+    setRevisionError('')
+
+    try {
+      // Find the render job for this scene
+      const sceneJobs = renderJobs.filter((job) => {
+        const jobSceneId = job.shot_id?.split('_shot_')[0] || job.shot_id
+        return jobSceneId === activeScene.scene_id
+      })
+
+      if (sceneJobs.length === 0) {
+        setRevisionError('No render job found for this scene')
+        setRevisionLoading(false)
+        return
+      }
+
+      // Use the most recent job
+      const originalJob = sceneJobs.sort((a, b) => {
+        const aTime = new Date(a.created_at || 0).getTime()
+        const bTime = new Date(b.created_at || 0).getTime()
+        return bTime - aTime
+      })[0]
+
+      // Create or get review
+      let reviewId: string
+      try {
+        const latestReview = await getLatestShortFilmReview(activeProjectId)
+        reviewId = latestReview.review.review_id
+      } catch {
+        // Create new review if none exists
+        const outputUrl = originalJob.output_payload?.asset_url || originalJob.output_payload?.thumbnail_url || ''
+        const newReview = await createShortFilmReview(activeProjectId, {
+          output_url: outputUrl,
+          reviewer: 'user',
+          notes: 'Scene review from Screening Room',
+        })
+        reviewId = newReview.review.review_id
+      }
+
+      // Create clip revision
+      const revision = await createClipRevision(activeProjectId, {
+        review_id: reviewId,
+        original_job_id: originalJob.id,
+        provider: 'runway',
+        revision_prompt: revisionPrompt.trim(),
+        revision_reason: revisionReason.trim() || 'User requested revision',
+        metadata: {
+          scene_id: activeScene.scene_id,
+          requested_from: 'screening_room',
+        },
+      })
+
+      // Optionally submit the revision render
+      await submitClipRevisionRender(revision.revision.revision_id, {})
+
+      setActionFeedback(`Revision queued for ${activeScene.scene_id}`)
+      setShowRevisionModal(false)
+      setRevisionPrompt('')
+      setRevisionReason('')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create revision'
+      setRevisionError(errorMessage)
+      console.error('[ScreeningRoom] Revision failed:', err)
+    } finally {
+      setRevisionLoading(false)
+    }
+  }
+
+  async function handleStitchFilm() {
+    if (!activeProjectId) {
+      setStitchingError('No active project')
+      return
+    }
+
+    setStitchingFilm(true)
+    setStitchingError('')
+    setActionFeedback('Assembling your film...')
+
+    try {
+      const result = await stitchShortFilm(activeProjectId, false)
+      
+      if (result.error) {
+        setStitchingError(result.error)
+        setActionFeedback('')
+        return
+      }
+
+      if (!result.result) {
+        setStitchingError('Stitching returned no result')
+        setActionFeedback('')
+        return
+      }
+
+      const { status, output_url, blocker, error_message, clip_count } = result.result
+
+      if (status === 'completed') {
+        setStitchedFilmUrl(output_url)
+        setActionFeedback(`Film stitched successfully! ${clip_count} scenes assembled.`)
+        setStitchingError('')
+      } else if (status === 'existing') {
+        setStitchedFilmUrl(output_url)
+        setActionFeedback(`Using existing stitched film (${clip_count} scenes).`)
+        setStitchingError('')
+      } else if (status === 'failed') {
+        const errorMsg = error_message || blocker || 'Stitching failed'
+        setStitchingError(errorMsg)
+        setActionFeedback('')
+        
+        // If no completed outputs, show helpful message
+        if (blocker === 'no_completed_outputs') {
+          setStitchingError('No completed renders available. Generate scenes in Production Board first.')
+        }
+      } else {
+        setStitchingError(`Unexpected status: ${status}`)
+        setActionFeedback('')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to stitch film'
+      setStitchingError(errorMessage)
+      setActionFeedback('')
+      console.error('[ScreeningRoom] Stitching failed:', err)
+    } finally {
+      setStitchingFilm(false)
+    }
   }
 
   useEffect(() => {
@@ -1100,11 +1385,10 @@ export default function ScreeningRoom() {
 
   return (
     <StudioShell title="Screening Room" subtitle="Playback and review of scene cuts and iteration outcomes.">
-      <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-        <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
-      </div>
-      <RenderActivityPanel roomName="Screening Room" />
-      <CollaboratorPresenceIndicators collaboration={collaboration || null} />
+      <ProjectGuard>
+        <ProjectContextBar roomName="screening room" />
+        <RenderActivityPanel roomName="Screening Room" />
+        <CollaboratorPresenceIndicators collaboration={collaboration || null} />
       <div className={`w-full overflow-visible ${isTheaterMode ? 'screening-theater-mode' : ''}`}>
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 space-y-5 text-zinc-100">
           <section className="cinematic-panel studio-fade-in p-5">
@@ -1115,12 +1399,20 @@ export default function ScreeningRoom() {
               Current Cut: <span className="text-zinc-100 font-semibold">{currentCut?.name || currentCut?.cut_id || 'Default'}</span>
             </div>
             <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.12em]">
+              <div className="rounded border border-cyan-400/35 bg-cyan-500/10 px-3 py-1.5 flex items-center gap-3">
+                <span className="text-cyan-100 font-semibold">NEXT: REVIEW AND APPROVE SCENES IN PREVIS</span>
+                <span className="text-cyan-200">—</span>
+                <span className="rounded-full bg-cyan-400/25 px-2.5 py-0.5 text-[10px] font-bold text-cyan-50">
+                  {approvedSceneIds.size} approved
+                </span>
+              </div>
               <span className="rounded border border-white/15 bg-black/25 px-2 py-1 text-zinc-300">Scenes in cut: {playlist.length}</span>
-              <span className="rounded border border-emerald-400/35 bg-emerald-500/10 px-2 py-1 text-emerald-200">Approved scenes: {approvedSceneIds.size}</span>
               <span className="rounded border border-cyan-400/35 bg-cyan-500/10 px-2 py-1 text-cyan-200">Runtime estimate: {Math.max(0, playlist.length * 3)} min</span>
             </div>
             {previewAllScenes || approvedSceneIds.size === 0 ? (
-              <div className="mt-2 text-xs text-amber-200">This cut is built from available scenes.</div>
+              <div className="mt-2 rounded border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-zinc-300">
+                This cut is built from available scenes.
+              </div>
             ) : null}
             {currentCut && playlist.length === 0 ? (
               <div className="studio-empty-state mt-3 text-xs text-rose-200">
@@ -1181,6 +1473,11 @@ export default function ScreeningRoom() {
               <div className="text-xs uppercase tracking-[0.1em] text-zinc-300">
                 Transition: <span className="font-semibold uppercase text-amber-200">{activeTransition?.transition || 'hold'}</span>
               </div>
+              {!isPlaying ? (
+                <div className="rounded-full border border-zinc-600/50 bg-zinc-800/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300">
+                  PAUSED
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
@@ -1226,6 +1523,20 @@ export default function ScreeningRoom() {
               </button>
               <button
                 type="button"
+                onClick={() => { void handleStitchFilm() }}
+                disabled={stitchingFilm}
+                className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] ${
+                  stitchingFilm
+                    ? 'border-zinc-600/40 bg-zinc-700/20 text-zinc-400 cursor-not-allowed'
+                    : stitchedFilmUrl
+                      ? 'border-emerald-300/45 bg-emerald-500/14 text-emerald-100'
+                      : 'border-violet-300/45 bg-violet-500/14 text-violet-100'
+                }`}
+              >
+                {stitchingFilm ? 'Stitching...' : stitchedFilmUrl ? 'Film Stitched ✓' : 'Stitch Film'}
+              </button>
+              <button
+                type="button"
                 onClick={() => { void toggleFullscreenMode() }}
                 className="rounded-lg border border-fuchsia-300/45 bg-fuchsia-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-fuchsia-100"
               >
@@ -1250,6 +1561,16 @@ export default function ScreeningRoom() {
             </div>
             {actionFeedback ? <div className="mt-2 text-[11px] text-cyan-200">{actionFeedback}</div> : null}
             {exportMessage ? <div className="mt-2 text-[11px] text-zinc-300">{exportMessage}</div> : null}
+            {stitchingError ? <div className="mt-2 text-[11px] text-rose-300 border border-rose-400/40 bg-rose-500/10 rounded px-2 py-1">{stitchingError}</div> : null}
+            {stitchedFilmUrl ? (
+              <div className="mt-2 text-[11px] text-emerald-300 border border-emerald-400/40 bg-emerald-500/10 rounded px-2 py-1">
+                ✓ Stitched film ready — playing complete film below
+              </div>
+            ) : playlist.length > 1 ? (
+              <div className="mt-2 text-[11px] text-amber-300 border border-amber-400/40 bg-amber-500/10 rounded px-2 py-1">
+                Multiple scenes available — click "Stitch Film" to create a complete film
+              </div>
+            ) : null}
           </section>
 
           <ScreeningCinematicShowcase
@@ -1393,11 +1714,7 @@ export default function ScreeningRoom() {
                           })
                         }}
                         onError={() => {
-                          console.warn('[ScreeningRoom] video_load_failure', {
-                            scene_id: activeScene?.scene_id || 'hosted_preview',
-                            output_url: activeSceneVideoUrl,
-                            preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
-                          })
+                          void handleActiveSceneVideoError()
                         }}
                       />
                     ) : viewerImage ? (
@@ -1506,6 +1823,13 @@ export default function ScreeningRoom() {
                       isPackaged={Boolean(latestPackage?.package_status === 'packaged' || latestPackage?.package_status === 'approved')}
                     />
                   </section>
+                ) : null}
+                {activeScene && (projectId || project?.project_id) ? (
+                  <DirectorMemoryCallbacks
+                    projectId={projectId || project?.project_id || ''}
+                    scene={activeScene as unknown as Record<string, unknown>}
+                    sceneIndex={currentSceneIndex}
+                  />
                 ) : null}
               </div>
 
@@ -1700,6 +2024,7 @@ export default function ScreeningRoom() {
                     { id: 'assets', label: 'Render Assets' },
                     { id: 'structure', label: 'Film Structure' },
                     { id: 'validation', label: 'Validation' },
+                    { id: 'continuity', label: 'Continuity' },
                   ]}
                 />
               </section>
@@ -1730,26 +2055,26 @@ export default function ScreeningRoom() {
                   {renderJobs.filter((job) => typeof job.output_payload?.asset_url === 'string' && job.output_payload?.asset_url).length > 0 ? (
                     <div className="mt-1 space-y-2 text-[11px]">
                       {renderJobs
-                        .filter((job) => typeof job.output_payload?.asset_url === 'string' && job.output_payload?.asset_url)
+                        .filter((job) => job.status === 'complete' && getPreferredAssetUrl(job))
                         .slice(0, 3)
                         .map((job) => {
-                          const rawAssetUrl = job.output_payload?.asset_url || ''
-                          const assetUrl = normalizePlayableVideoUrl(rawAssetUrl)
-                          const isExternalMock = isMockExternalAssetUrl(rawAssetUrl)
+                          const assetUrl = normalizePlayableVideoUrl(getPreferredAssetUrl(job))
+                          const isTestShot = job.shot_id?.toLowerCase().includes('stress') || job.shot_id?.toLowerCase().includes('test')
                           return (
                           <div key={job.id} className="rounded border border-white/10 bg-black/30 p-1.5">
                             <a href={assetUrl} target="_blank" rel="noreferrer" className="block text-cyan-300 break-all">
+                              {isTestShot && <span className="text-zinc-500 mr-1">[TEST]</span>}
                               {job.shot_id} ({job.status})
                             </a>
-                            {isExternalMock ? (
-                              <div className="mt-1 text-[10px] text-amber-200">Mock external asset unavailable locally.</div>
-                            ) : null}
                             <video
                               controls
                               preload="metadata"
                               className="mt-1 aspect-video w-full rounded border border-white/10 bg-black"
                               src={assetUrl}
                             />
+                            {job.continuity_review?.drift_detected ? (
+                              <ContinuityDriftIndicator review={job.continuity_review} />
+                            ) : null}
                           </div>
                         )})}
                     </div>
@@ -1859,6 +2184,20 @@ export default function ScreeningRoom() {
                 </details>
               </section>
               ) : null}
+
+              {screeningInsightTab === 'continuity' ? (
+                <SceneContinuityPanel
+                  filmId={activeProjectId || project?.project_id || ''}
+                  scenes={playlist.map((item) => ({ scene_id: item.scene_id }))}
+                  scenePairs={playlist.length >= 2
+                    ? playlist.slice(0, -1).map((item, i) => [item.scene_id, playlist[i + 1].scene_id] as [string, string])
+                    : []
+                  }
+                  onRevisionProposalAccepted={(proposal) => {
+                    console.log('[ScreeningRoom] revision proposal accepted', proposal)
+                  }}
+                />
+              ) : null}
             </aside>
           </section>
 
@@ -1881,9 +2220,28 @@ export default function ScreeningRoom() {
             <div className="cinematic-panel p-4 md:col-span-2 xl:col-span-4">
               <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Film Structure</h3>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded border border-white/10 bg-black/35 px-2 py-1">Act 1: {filmStructure.acts.find((a) => a.act === 1)?.scene_count ?? 0}</div>
-                <div className="rounded border border-white/10 bg-black/35 px-2 py-1">Act 2: {filmStructure.acts.find((a) => a.act === 2)?.scene_count ?? 0}</div>
-                <div className="rounded border border-white/10 bg-black/35 px-2 py-1">Act 3: {filmStructure.acts.find((a) => a.act === 3)?.scene_count ?? 0}</div>
+                {[1, 2, 3].map((actNum) => (
+                  <div key={`act-${actNum}`} className="flex items-center justify-between rounded border border-white/10 bg-black/35 px-2 py-1">
+                    <span>Act {actNum}: {filmStructure.acts.find((a) => a.act === actNum)?.scene_count ?? 0}</span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { debate } = await triggerDebate({
+                            project_id: effectiveProjectId,
+                            act_number: actNum,
+                            query: `Review Act ${actNum} as a whole. Analyze pacing, character growth, and thematic resolution.`,
+                          })
+                          setActiveDebate(debate)
+                        } catch (err) {
+                          console.error(`Failed to trigger Act ${actNum} review:`, err)
+                        }
+                      }}
+                      className="ml-2 rounded bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-indigo-300 hover:bg-indigo-500/40"
+                    >
+                      Review
+                    </button>
+                  </div>
+                ))}
                 <div className="rounded border border-white/10 bg-black/35 px-2 py-1">Sequences: {filmStructure.sequences.length}</div>
                 <div className="rounded border border-white/10 bg-black/35 px-2 py-1 col-span-2">Total Scenes: {filmStructure.total_scenes}</div>
               </div>
@@ -1915,6 +2273,83 @@ export default function ScreeningRoom() {
           </section>
         </div>
       </div>
+
+      {/* Revision Modal */}
+      {showRevisionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-zinc-100">Request Scene Revision</h3>
+            <p className="mt-2 text-sm text-zinc-400">
+              Describe the changes you'd like to see in this scene. The revision will be queued as a new render job.
+            </p>
+
+            <div className="mt-4 space-y-4">
+              {/* Revision Prompt */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Revision Instructions <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  value={revisionPrompt}
+                  onChange={(e) => setRevisionPrompt(e.target.value)}
+                  placeholder="E.g., Adjust lighting to be warmer, slow down pacing in the middle section..."
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  rows={4}
+                  disabled={revisionLoading}
+                />
+              </div>
+
+              {/* Revision Reason (optional) */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Reason (optional)
+                </label>
+                <input
+                  type="text"
+                  value={revisionReason}
+                  onChange={(e) => setRevisionReason(e.target.value)}
+                  placeholder="E.g., Continuity issue, pacing too fast, tone mismatch..."
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  disabled={revisionLoading}
+                />
+              </div>
+
+              {/* Error Message */}
+              {revisionError && (
+                <div className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                  {revisionError}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRevisionModal(false)
+                    setRevisionPrompt('')
+                    setRevisionReason('')
+                    setRevisionError('')
+                  }}
+                  disabled={revisionLoading}
+                  className="rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitRevision}
+                  disabled={revisionLoading || !revisionPrompt.trim()}
+                  className="rounded-lg border border-amber-400/45 bg-amber-500/14 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {revisionLoading ? 'Submitting...' : 'Submit Revision'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      </ProjectGuard>
     </StudioShell>
   )
 }

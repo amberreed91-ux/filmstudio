@@ -1,3 +1,12 @@
+import {
+  UniverseNode,
+  UniverseRelationship,
+  UniverseGraphData,
+  UniverseNodeType,
+  Absence,
+  AbsenceReport,
+} from '../types/universe'
+
 export type StudioOverview = {
   build?: string
   projects: Array<{
@@ -67,6 +76,13 @@ export type StudioProject = {
   risk_register?: Array<string>
   next_actions?: Array<string>
   collaboration?: Record<string, unknown>
+  share_token?: string
+  shared_collaborators?: Array<{
+    email: string
+    role: 'owner' | 'editor' | 'viewer'
+    shared_at: string
+    share_token: string
+  }>
 }
 
 export type StudyReferenceStudy = {
@@ -180,7 +196,9 @@ function normalizeStudioProject(raw: StudioProject): StudioProject {
 async function fetchJson<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const controller = new AbortController()
   const externalSignal = init?.signal
-  const timeout = setTimeout(() => controller.abort(), init?.timeoutMs ?? 8000)
+  // Default timeout: 30 seconds (increased from 8 seconds)
+  // Can be overridden per-endpoint for faster/slower operations
+  const timeout = setTimeout(() => controller.abort(), init?.timeoutMs ?? 30000)
   const signal = externalSignal ?? controller.signal
   const abortHandler = () => controller.abort()
 
@@ -243,9 +261,24 @@ async function fetchJson<T>(path: string, init?: RequestInit & { timeoutMs?: num
       if (externalSignal?.aborted) {
         throw new Error('Request aborted.')
       }
-      throw new Error('Request timed out after 8 seconds. The backend may be unreachable.')
+      throw new Error('Request timed out after 30 seconds. The backend may be unreachable.')
     }
+    // Log all API errors to console for debugging
+    console.error(`[Studio API Error] ${path}:`, err)
     throw err
+  }
+}
+
+// Health check function to verify backend is reachable
+export async function checkBackendHealth(): Promise<{ healthy: boolean; error?: string }> {
+  try {
+    await fetchJson('/health', { timeoutMs: 3000 }) // 3 second timeout for health check
+    return { healthy: true }
+  } catch (error) {
+    return {
+      healthy: false,
+      error: error instanceof Error ? error.message : 'Backend unreachable',
+    }
   }
 }
 
@@ -308,6 +341,62 @@ export function getStudioProject(projectId: string, options?: { sessionId?: stri
   return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}${query}`).then((raw) =>
     normalizeStudioProject(raw)
   )
+}
+
+export type ShareTokenResponse = {
+  project_id: string
+  share_token: string
+  share_url: string
+}
+
+export type CollaboratorShare = {
+  email: string
+  role: 'owner' | 'editor' | 'viewer'
+  shared_at: string
+  share_token: string
+}
+
+export type CollaboratorRole = 'owner' | 'editor' | 'viewer'
+
+export function generateShareToken(projectId: string) {
+  return fetchJson<ShareTokenResponse>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/share/generate`, {
+    method: 'POST',
+  })
+}
+
+export function shareWithCollaborator(projectId: string, email: string, role: CollaboratorRole = 'viewer') {
+  return fetchJson<ShareTokenResponse>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/share/collaborator`, {
+    method: 'POST',
+    body: JSON.stringify({ email, role }),
+  })
+}
+
+export function addSceneComment(sceneId: string, text: string, author: string) {
+  return fetchJson<SceneComment>(`/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ text, author }),
+  })
+}
+
+export function deleteSceneComment(sceneId: string, commentId: string) {
+  return fetchJson<void>(`/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/comments/${encodeURIComponent(commentId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function updateSceneApproval(sceneId: string, status: ApprovalStatus, notes?: string) {
+  return fetchJson<SceneApproval>(`/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/approval`, {
+    method: 'POST',
+    body: JSON.stringify({ status, notes }),
+  })
+}
+
+export function getProjectActivity(projectId: string) {
+  return fetchJson<ActivityEntry[]>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/activity`)
+}
+
+export function getSharedProject(shareToken: string) {
+  return fetchJson<StudioProject>(`/api/f51/studio/share/${encodeURIComponent(shareToken)}`)
 }
 
 export type PersistedProjectState = {
@@ -457,6 +546,22 @@ export async function updateProject(
   }
 }
 
+export async function deleteProject(projectId: string): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const result = await fetchJson<{ success: boolean; project_id: string }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}`,
+      {
+        method: 'DELETE',
+      },
+    )
+    return { success: result.success }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to delete project',
+    }
+  }
+}
+
 export async function generateScenes(
   projectId: string,
   scriptText: string,
@@ -468,6 +573,7 @@ export async function generateScenes(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ script_text: scriptText }),
+        timeoutMs: 60000, // 60 second timeout for script parsing
       },
     )
     return { project }
@@ -499,6 +605,183 @@ export async function updateSceneReview(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unable to save scene review',
+    }
+  }
+}
+
+// Scene CRUD operations
+
+// Advisory Types for Batch I - Sound Intelligence + Transition Advisory
+export type SoundAdvisory = {
+  mood: string
+  score_notes: string
+  ambient_notes: string
+  silence_flag: boolean
+}
+
+export type TransitionAdvisory = {
+  transition_type: 'cut' | 'dissolve' | 'match_cut' | 'smash_cut' | 'fade_to_black' | 'cross_dissolve'
+  transition_rationale: string
+  continuity_notes: string
+}
+
+// Batch J - Collaboration Types
+export type SceneComment = {
+  id: string
+  author: string
+  text: string
+  timestamp: string
+  scene_id: string
+}
+
+export type ApprovalStatus = 'pending' | 'approved' | 'changes_requested'
+
+export type SceneApproval = {
+  status: ApprovalStatus
+  approved_by?: string
+  approved_at?: string
+  requested_changes_by?: string
+  requested_changes_at?: string
+  notes?: string
+}
+
+export type Scene = {
+  scene_id: string
+  scene_name: string
+  description: string
+  location: string
+  time_of_day: string
+  emotional_tone: string
+  characters: string[]
+  notes: string
+  is_major_plot_point?: boolean
+  created_at: string
+  updated_at: string
+  status: string
+  sound_advisory?: SoundAdvisory
+  transition_advisory?: TransitionAdvisory
+  comments?: SceneComment[]
+  approval?: SceneApproval
+}
+
+// Activity Feed Types
+export type ActivityType = 'scene_edited' | 'render_submitted' | 'comment_added' | 'collaborator_joined' | 'scene_approved'
+
+export type ActivityEntry = {
+  id: string
+  type: ActivityType
+  action: string
+  author: string
+  timestamp: string
+  scene_id?: string
+  scene_name?: string
+  metadata?: Record<string, unknown>
+}
+
+export type CreateScenePayload = {
+  scene_name: string
+  description: string
+  location: string
+  time_of_day: string
+  emotional_tone: string
+  characters: string[]
+  notes: string
+  is_major_plot_point?: boolean
+}
+
+export type UpdateScenePayload = Partial<CreateScenePayload>
+
+export async function listScenes(projectId: string): Promise<{ scenes: Scene[]; error?: string }> {
+  try {
+    const response = await fetchJson<{ scenes: Scene[] }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes`,
+      { timeoutMs: 10000 }, // 10 second timeout for simple list operations
+    )
+    return { scenes: response.scenes || [] }
+  } catch (error) {
+    return {
+      scenes: [],
+      error: error instanceof Error ? error.message : 'Unable to list scenes',
+    }
+  }
+}
+
+export async function createScene(
+  projectId: string,
+  payload: CreateScenePayload,
+): Promise<{ scene?: Scene; project?: PersistedProjectState; error?: string }> {
+  try {
+    const response = await fetchJson<{ scene: Scene; project: PersistedProjectState }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        timeoutMs: 15000, // 15 second timeout for scene creation
+      },
+    )
+    return { scene: response.scene, project: response.project }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to create scene',
+    }
+  }
+}
+
+export async function getScene(
+  projectId: string,
+  sceneId: string,
+): Promise<{ scene?: Scene; error?: string }> {
+  try {
+    const response = await fetchJson<{ scene: Scene }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}`,
+    )
+    return { scene: response.scene }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to get scene',
+    }
+  }
+}
+
+export async function updateScene(
+  projectId: string,
+  sceneId: string,
+  payload: UpdateScenePayload,
+): Promise<{ scene?: Scene; project?: PersistedProjectState; error?: string }> {
+  try {
+    const response = await fetchJson<{ scene: Scene; project: PersistedProjectState }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    )
+    return { scene: response.scene, project: response.project }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to update scene',
+    }
+  }
+}
+
+export async function deleteScene(
+  projectId: string,
+  sceneId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await fetchJson<{ message: string; scene_id: string }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}`,
+      {
+        method: 'DELETE',
+      },
+    )
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unable to delete scene',
     }
   }
 }
@@ -711,6 +994,7 @@ export function ingestScript(payload: {
   return fetchJson<StudioProject>('/api/f51/studio/ingest-script', {
     method: 'POST',
     body: formData,
+    timeoutMs: 60000, // 60 second timeout for script ingestion
   })
 }
 
@@ -904,11 +1188,31 @@ export function setRenderMode(projectId: string, liveMode: boolean, providerName
   })
 }
 
+export function runProductionScan(projectId: string): Promise<ProductionScanReport> {
+  return fetchJson<ProductionScanReport>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scan`, {
+    method: 'POST',
+  })
+}
+
+export function getProductionScanReport(projectId: string, scan_id: string): Promise<ProductionScanReport> {
+  return fetchJson<ProductionScanReport>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scan/${encodeURIComponent(scan_id)}`)
+}
+
+export type ContinuityReview = {
+  passed: boolean
+  drift_detected: boolean
+  drift_notes: string[]
+  continuity_flags: string[]
+  advisory: string
+  uncertainty_notes: string[]
+}
+
 export type RenderJob = {
   id: string
   project_id: string
   shot_id: string
   provider: string
+  model?: string
   provider_job_id?: string
   status: string
   progress: number
@@ -925,6 +1229,8 @@ export type RenderJob = {
   }
   error_message?: string
   retry_count: number
+  continuity_context_injected?: boolean
+  continuity_review?: ContinuityReview | null
   created_at: string
   updated_at: string
   completed_at?: string
@@ -992,6 +1298,27 @@ export type RenderDiagnostics = {
   }
 }
 
+export type ReadinessLevel = 'ready' | 'minor_issues' | 'major_issues'
+export type Severity = 'note' | 'warning' | 'blocker'
+
+export interface ProductionScanFlag {
+  flag_type: string
+  severity: Severity
+  description: string
+  affected_scenes: string[]
+  co_director_note: string
+}
+
+export interface ProductionScanReport {
+  scan_id: string
+  project_id: string
+  readiness_level: ReadinessLevel
+  flags: ProductionScanFlag[]
+  clear_to_shoot: boolean
+  summary: string
+  generated_at: string
+}
+
 export type RenderAsset = {
   id: string
   job_id: string
@@ -1029,6 +1356,7 @@ export function createRenderJob(payload: {
   project_id: string
   shot_id: string
   provider?: string
+  model?: string
   prompt?: string
   reference_assets?: string[]
   parameters?: Record<string, unknown>
@@ -1037,6 +1365,7 @@ export function createRenderJob(payload: {
   params.append('project_id', payload.project_id)
   params.append('shot_id', payload.shot_id)
   if (payload.provider) params.append('provider', payload.provider)
+  if (payload.model) params.append('model', payload.model)
   if (payload.prompt) params.append('prompt', payload.prompt)
   if (payload.reference_assets) params.append('reference_assets', JSON.stringify(payload.reference_assets))
   if (payload.parameters) params.append('parameters', JSON.stringify(payload.parameters))
@@ -1091,6 +1420,12 @@ export function reconcileRenderJob(jobId: string) {
   })
 }
 
+export function refreshRenderJobOutputUrl(jobId: string) {
+  return fetchJson<{ output_url: string | null }>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/refresh-url`, {
+    method: 'POST',
+  })
+}
+
 export const studioApi = {
   overview: getStudioOverview,
   getProject: getStudioProject,
@@ -1117,11 +1452,29 @@ export const studioApi = {
   listRenderJobs,
   getRenderDiagnostics,
   reconcileRenderJob,
+  refreshRenderJobOutputUrl,
   importSceneIntelligence,
   listSceneIntelligence,
   getSceneIntelligence,
   generateSceneAnimationPrompt,
   linkSceneIntelligenceVideo,
+  getFilmDNA,
+  refreshFilmDNA,
+  getCharacterJourneys,
+  getArcCompleteness,
+  getDirectorIntent,
+  updateDirectorIntent,
+  buildExportPackage,
+  listExportPackages,
+  getExportPackage,
+  validateForFestival,
+  getFestivalPresets,
+  generatePitchDeck,
+  listPitchDecks,
+  getPitchDeck,
+  generateSessionDebrief,
+  listSessionDebriefs,
+  getSessionDebrief,
 }
 
 // Memory API
@@ -2284,4 +2637,865 @@ export async function listProjectVideoUnderstandingStatus(projectId: string): Pr
     enabled_asset_count: number
     asset_count: number
   }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/video-understanding-status`)
+}
+
+// ── Scene Batch Render API ────────────────────────────────────────────────────
+
+export type ShotInput = {
+  shot_id?: string
+  description?: string
+  prompt?: string
+  camera?: string
+  camera_notes?: string
+  reference_assets?: string[]
+  parameters?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export type RenderBatch = {
+  batch_id: string
+  scene_id: string
+  film_id?: string
+  job_ids: string[]
+  shared_context: Record<string, unknown>
+  status: string
+}
+
+export type RenderBatchStatus = {
+  batch_id: string
+  scene_id: string
+  total: number
+  complete: number
+  pending: number
+  failed: number
+  jobs: RenderJob[]
+}
+
+export async function createRenderBatch(
+  projectId: string,
+  sceneId: string,
+  shots: ShotInput[],
+  provider?: string,
+): Promise<RenderBatch> {
+  return fetchJson<RenderBatch>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/render-batch`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shots, provider }),
+    },
+  )
+}
+
+export async function getRenderBatchStatus(
+  projectId: string,
+  batchId: string,
+): Promise<RenderBatchStatus> {
+  return fetchJson<RenderBatchStatus>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-batch/${encodeURIComponent(batchId)}`,
+  )
+}
+
+// ── Provider Status API ───────────────────────────────────────────────────────
+
+export type ProjectProviderStatus = {
+  provider_mode: string
+  ready_for_hosted_generation: boolean
+  is_mock: boolean
+  missing_requirements: string[]
+  active_provider: string
+  per_scene_overrides: Record<string, string>
+}
+
+export type SceneProviderOverrideResult = {
+  scene_id: string
+  provider_mode: string
+  per_scene_overrides: Record<string, string>
+}
+
+export function getProjectProviderStatus(projectId: string): Promise<ProjectProviderStatus> {
+  return fetchJson<ProjectProviderStatus>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/provider-status`,
+  )
+}
+
+export function setSceneProviderOverride(
+  projectId: string,
+  sceneId: string,
+  providerMode: 'hosted_api' | 'simulated',
+): Promise<SceneProviderOverrideResult> {
+  return fetchJson<SceneProviderOverrideResult>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/provider-override`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider_mode: providerMode }),
+    },
+  )
+}
+
+// ── Graph-informed retry API ──────────────────────────────────────────────────
+
+export type RetryWithContextResult = {
+  job: RenderJob
+  advisory: string
+  capped: boolean
+}
+
+export function retryRenderJobWithContext(
+  projectId: string,
+  jobId: string,
+): Promise<RetryWithContextResult> {
+  return fetchJson<RetryWithContextResult>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-jobs/${encodeURIComponent(jobId)}/retry`,
+    { method: 'POST' },
+  )
+}
+
+// ── Film DNA API ──────────────────────────────────────────────────────────────
+
+export type CharacterJourneyEntry = {
+  scene_id: string
+  order_index: number
+  scene_title: string
+  emotional_state: string
+  knowledge_events: string[]
+  knowledge_gaps: string[]
+  dramatic_irony: boolean
+  irony_note: string | null
+}
+
+export type CharacterJourney = {
+  name: string
+  total_scenes: number
+  journey: CharacterJourneyEntry[]
+  arc_summary: string
+  unresolved_knowledge: string[]
+}
+
+export type CharacterJourneyMap = {
+  characters: CharacterJourney[]
+  dramatic_irony_scenes: string[]
+  advisory: string
+  uncertainty_notes: string[]
+  generated_at: string
+}
+
+export type TensionCurveEntry = {
+  scene_id: string
+  order_index: number
+  tension_read: string
+  note: string
+}
+
+export type ArcCompleteness = {
+  arc_read: string
+  tension_curve: TensionCurveEntry[]
+  resolution_read: string
+  missing_beats: string[]
+  pacing_observations: string[]
+  advisory: string
+  uncertainty_notes: string[]
+  confidence: string
+}
+
+export type FilmDNA = {
+  film_id: string
+  visual_language: {
+    dominant_motifs: string[]
+    color_palette_notes: string
+    recurring_shot_types: string[]
+    lighting_character: string
+  }
+  emotional_arc: {
+    opening_register: string
+    closing_register: string
+    peak_tension_scene: string
+    arc_shape: string
+  }
+  tonal_identity: {
+    primary_tone: string
+    secondary_tone: string | null
+    tone_consistency: string
+    genre_signals: string[]
+  }
+  character_roster: Array<{
+    name: string
+    scenes_present: number
+    first_appearance: string
+    last_appearance: string
+    emotional_trajectory: string
+  }>
+  character_journeys: CharacterJourneyMap
+  arc_completeness: ArcCompleteness
+  production_notes: string[]
+  uncertainty_notes: string[]
+  generated_at: string
+  scene_count: number
+  version_id: string
+}
+
+export type FilmDNARefreshResult = {
+  status: string
+  message: string
+}
+
+export function getFilmDNA(projectId: string): Promise<FilmDNA> {
+  return fetchJson<FilmDNA>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-dna`,
+  )
+}
+
+export function refreshFilmDNA(projectId: string): Promise<FilmDNARefreshResult> {
+  return fetchJson<FilmDNARefreshResult>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-dna/refresh`,
+    { method: 'POST' },
+  )
+}
+
+export function getCharacterJourneys(projectId: string): Promise<CharacterJourneyMap> {
+  return fetchJson<CharacterJourneyMap>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/character-journeys`,
+  )
+}
+
+export function getArcCompleteness(projectId: string): Promise<ArcCompleteness> {
+  return fetchJson<ArcCompleteness>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/arc-completeness`,
+  )
+}
+
+// ── Director Intent API ───────────────────────────────────────────────────────
+
+export type DirectorIntent = {
+  genre: string | null
+  tone_references: string[]
+  emotional_target: string | null
+  visual_references: string[]
+  what_success_looks_like: string | null
+  what_to_avoid: string[]
+  captured_at: string
+  last_updated: string
+}
+
+export type DirectorIntentUpdate = {
+  genre?: string | null
+  tone_references?: string[]
+  emotional_target?: string | null
+  visual_references?: string[]
+  what_success_looks_like?: string | null
+  what_to_avoid?: string[]
+}
+
+export function getDirectorIntent(projectId: string): Promise<DirectorIntent> {
+  return fetchJson<DirectorIntent>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-intent`,
+  )
+}
+
+export function updateDirectorIntent(
+  projectId: string,
+  intent: DirectorIntentUpdate,
+): Promise<DirectorIntent> {
+  return fetchJson<DirectorIntent>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-intent`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(intent),
+    },
+  )
+}
+
+// ── Session Debrief API ───────────────────────────────────────────────────────
+
+export type SessionDebriefDecision = {
+  type: string
+  description: string
+  scene: string | null
+}
+
+export type SessionDebriefUnresolvedItem = {
+  item: string
+  why: string
+  suggested_next: string
+}
+
+export type SessionDebrief = {
+  project_id: string
+  session_start: string
+  session_end: string
+  decisions_made: SessionDebriefDecision[]
+  what_changed: string[]
+  unresolved_items: SessionDebriefUnresolvedItem[]
+  continuity_state: string
+  film_dna_drift: string | null
+  next_session_focus: string[]
+  advisory: string
+  generated_at: string
+}
+
+export type SessionDebriefSummary = {
+  id: string
+  session_start: string
+  session_end: string
+  generated_at: string
+  advisory: string
+}
+
+export function generateSessionDebrief(
+  projectId: string,
+  sessionStart: string,
+  sessionEnd: string,
+): Promise<SessionDebrief> {
+  return fetchJson<SessionDebrief>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debrief`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_start: sessionStart,
+        session_end: sessionEnd,
+      }),
+    },
+  )
+}
+
+export function listSessionDebriefs(
+  projectId: string,
+  limit: number = 10,
+): Promise<{ debriefs: SessionDebriefSummary[] }> {
+  return fetchJson<{ debriefs: SessionDebriefSummary[] }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debriefs?limit=${limit}`,
+  )
+}
+
+export function getSessionDebrief(
+  projectId: string,
+  debriefId: string,
+): Promise<SessionDebrief> {
+  return fetchJson<SessionDebrief>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debriefs/${encodeURIComponent(debriefId)}`,
+  )
+}
+
+// ── Export Package API ────────────────────────────────────────────────────────
+
+export type ExportPackageManifest = {
+  film_title: string
+  scene_count: number
+  total_shots: number
+  render_provider: string
+  export_timestamp: string
+  scenes: Array<{
+    scene_id: string
+    title: string
+    order_index: number
+    shots: Array<{
+      shot_id: string
+      render_job_id: string | null
+      output_url: string | null
+      status: string
+      continuity_review_passed: boolean | null
+    }>
+  }>
+}
+
+export type ExportPackageContinuityReport = {
+  motif_thread_analysis: any
+  arc_completeness: any
+  active_contradictions: Array<{
+    scene_id: string
+    element_type: string
+    element_id: string
+    contradiction_notes: string
+  }>
+}
+
+export type ExportPackageRenderLineage = Array<{
+  shot_id: string
+  jobs: Array<RenderJob>
+}>
+
+export type ExportPackageDirectorNotes = {
+  director_intent: DirectorIntent | null
+  recent_session_debriefs: SessionDebriefSummary[]
+}
+
+export type ExportPackage = {
+  package_id: string
+  project_id: string
+  status: 'building' | 'complete' | 'failed'
+  manifest: ExportPackageManifest
+  continuity_report: ExportPackageContinuityReport | null
+  render_lineage: ExportPackageRenderLineage | null
+  director_notes: ExportPackageDirectorNotes | null
+  film_dna_snapshot: any | null
+  stitched_film_url: string | null
+  honest_assembly_note: string
+  created_at: string
+}
+
+export type ExportPackageSummary = {
+  package_id: string
+  created_at: string
+  status: string
+  scene_count: number
+  total_shots: number
+}
+
+export type BuildExportPackageOptions = {
+  include_continuity_report?: boolean
+  include_render_lineage?: boolean
+  include_director_notes?: boolean
+}
+
+export function buildExportPackage(
+  projectId: string,
+  options: BuildExportPackageOptions = {},
+): Promise<ExportPackage> {
+  return fetchJson<ExportPackage>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-package`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        include_continuity_report: options.include_continuity_report ?? true,
+        include_render_lineage: options.include_render_lineage ?? true,
+        include_director_notes: options.include_director_notes ?? true,
+      }),
+    },
+  )
+}
+
+export function listExportPackages(
+  projectId: string,
+  limit: number = 10,
+): Promise<{ packages: ExportPackageSummary[] }> {
+  return fetchJson<{ packages: ExportPackageSummary[] }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages?limit=${limit}`,
+  )
+}
+
+export function getExportPackage(
+  projectId: string,
+  packageId: string,
+): Promise<ExportPackage> {
+  return fetchJson<ExportPackage>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages/${encodeURIComponent(packageId)}`,
+  )
+}
+
+// ── Festival Validation API ──────────────────────────────────────────────────
+
+export type FestivalValidationFlag = {
+  requirement: string
+  status: 'met' | 'unmet' | 'unknown'
+  note: string
+  blocking: boolean
+}
+
+export type FestivalValidationResult = {
+  festival_name: string
+  package_id: string
+  valid: boolean
+  flags: FestivalValidationFlag[]
+  advisory: string
+  unknown_count: number
+  honest_note: string
+}
+
+export type FestivalSpecs = {
+  festival_name?: string
+  max_runtime_minutes?: number | null
+  min_runtime_minutes?: number | null
+  required_format?: string | null
+  required_resolution?: string | null
+  required_aspect_ratio?: string | null
+  max_file_size_mb?: number | null
+  requires_subtitles?: boolean
+  requires_color_grading_note?: boolean
+  custom_requirements?: string[]
+}
+
+export type FestivalPresets = {
+  [key: string]: FestivalSpecs
+}
+
+export function validateForFestival(
+  projectId: string,
+  packageId: string,
+  specs: FestivalSpecs | { preset: string },
+): Promise<FestivalValidationResult> {
+  return fetchJson<FestivalValidationResult>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages/${encodeURIComponent(packageId)}/validate-festival`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(specs),
+    },
+  )
+}
+
+export function getFestivalPresets(): Promise<{ presets: FestivalPresets }> {
+  return fetchJson<{ presets: FestivalPresets }>(
+    `/api/f51/studio/festival-presets`,
+  )
+}
+
+// ── Pitch Deck API ───────────────────────────────────────────────────────────
+
+export type PitchDeckSlide = {
+  slide_number: number
+  title: string
+  type: 'logline' | 'concept' | 'visual_language' | 'character' | 'arc' | 'tone' | 'production_note'
+  headline: string
+  body: string
+  visual_suggestion: string | null
+  data_source: 'film_dna' | 'character_journey' | 'director_intent' | 'arc_analysis' | 'synthesized' | 'export_package'
+}
+
+export type PitchDeck = {
+  deck_id: string
+  project_id: string
+  target_audience: 'festival' | 'investor' | 'general'
+  slides: PitchDeckSlide[]
+  logline: string
+  tone_statement: string
+  advisory: string
+  uncertainty_notes: string[]
+  honest_note: string
+  generated_at: string
+}
+
+export type PitchDeckSummary = {
+  deck_id: string
+  target_audience: string
+  created_at: string
+}
+
+export function generatePitchDeck(
+  projectId: string,
+  targetAudience: 'festival' | 'investor' | 'general' = 'general',
+): Promise<PitchDeck> {
+  return fetchJson<PitchDeck>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-deck`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_audience: targetAudience }),
+    },
+  )
+}
+
+export function listPitchDecks(
+  projectId: string,
+  limit: number = 10,
+): Promise<{ decks: PitchDeckSummary[] }> {
+  return fetchJson<{ decks: PitchDeckSummary[] }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-decks?limit=${limit}`,
+  )
+}
+
+export function getPitchDeck(
+  projectId: string,
+  deckId: string,
+): Promise<PitchDeck> {
+  return fetchJson<PitchDeck>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-decks/${encodeURIComponent(deckId)}`,
+  )
+}
+
+
+// Creative Decision Memory API (v1 - project-level JSON only)
+// Following AGENTS.md Creative Decision Memory Rules:
+// - Only save when user explicitly triggers "Save this decision to project memory"
+// - Every saved memory must be editable and forgettable
+// - Scope: project-level only
+// - inferred_tradeoff stays language-level — no numeric scoring
+
+import type { CreativeDecisionMemory, CreativeMemoryCollection } from '../types/creativeMemory'
+
+export async function saveCreativeDecisionMemory(
+  projectId: string,
+  memory: Omit<CreativeDecisionMemory, 'memory_id' | 'saved_at'>,
+): Promise<CreativeDecisionMemory> {
+  // Generate unique ID
+  const memoryId = `memory_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+  const savedAt = new Date().toISOString()
+
+  const fullMemory: CreativeDecisionMemory = {
+    ...memory,
+    memory_id: memoryId,
+    saved_at: savedAt,
+  }
+
+  const response = await fetchJson<{ success: boolean; memory: CreativeDecisionMemory }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullMemory),
+    },
+  )
+
+  return response.memory
+}
+
+export async function listCreativeDecisionMemories(projectId: string): Promise<CreativeMemoryCollection> {
+  return fetchJson<CreativeMemoryCollection>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories`,
+  )
+}
+
+export async function updateCreativeDecisionMemory(
+  projectId: string,
+  memoryId: string,
+  updates: Partial<Pick<CreativeDecisionMemory, 'user_note' | 'decision_type'>>,
+): Promise<CreativeDecisionMemory> {
+  const response = await fetchJson<{ success: boolean; memory: CreativeDecisionMemory }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories/${encodeURIComponent(memoryId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    },
+  )
+
+  return response.memory
+}
+
+export async function deleteCreativeDecisionMemory(
+  projectId: string,
+  memoryId: string,
+): Promise<void> {
+  await fetchJson<{ success: boolean }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories/${encodeURIComponent(memoryId)}`,
+    {
+      method: 'DELETE',
+    },
+  )
+}
+
+
+// ---------------------------------------------------------------------------
+// Director's Memory Engine v1 (per-project symbolic memory)
+// Following AGENTS.md memory rules:
+// - Explicit-save-only for user-defined entries
+// - Co-director voice — no scores or percentages
+// ---------------------------------------------------------------------------
+
+import type {
+  DirectorMemoryBundle,
+  DirectorMemoryEntry,
+  DirectorMemoryKind,
+  DirectorMemoryResponse,
+  DirectorMemoryScanResult,
+  CoDirectorDebateEntry,
+} from '../types/directorMemory'
+
+const directorMemoryRoot = (projectId: string) =>
+  `/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-memory`
+
+export async function getDirectorMemory(
+  projectId: string,
+): Promise<DirectorMemoryResponse> {
+  return fetchJson<DirectorMemoryResponse>(directorMemoryRoot(projectId))
+}
+
+export async function listDirectorMemoryEntries<T extends DirectorMemoryEntry = DirectorMemoryEntry>(
+  projectId: string,
+  kind: DirectorMemoryKind,
+): Promise<{ project_id: string; kind: DirectorMemoryKind; entries: T[] }> {
+  return fetchJson<{ project_id: string; kind: DirectorMemoryKind; entries: T[] }>(
+    `${directorMemoryRoot(projectId)}/${encodeURIComponent(kind)}`,
+  )
+}
+
+export async function saveDirectorMemoryEntry<T extends DirectorMemoryEntry = DirectorMemoryEntry>(
+  projectId: string,
+  kind: DirectorMemoryKind,
+  payload: Record<string, unknown>,
+): Promise<T> {
+  const response = await fetchJson<{ success: boolean; entry: T }>(
+    `${directorMemoryRoot(projectId)}/${encodeURIComponent(kind)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+  return response.entry
+}
+
+export async function updateDirectorMemoryEntry<T extends DirectorMemoryEntry = DirectorMemoryEntry>(
+  projectId: string,
+  kind: DirectorMemoryKind,
+  entryId: string,
+  updates: Record<string, unknown>,
+): Promise<T> {
+  const response = await fetchJson<{ success: boolean; entry: T }>(
+    `${directorMemoryRoot(projectId)}/${encodeURIComponent(kind)}/${encodeURIComponent(entryId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    },
+  )
+  return response.entry
+}
+
+export async function deleteDirectorMemoryEntry(
+  projectId: string,
+  kind: DirectorMemoryKind,
+  entryId: string,
+): Promise<void> {
+  await fetchJson<{ success: boolean }>(
+    `${directorMemoryRoot(projectId)}/${encodeURIComponent(kind)}/${encodeURIComponent(entryId)}`,
+    {
+      method: 'DELETE',
+    },
+  )
+}
+
+export async function scanSceneForDirectorMemory(
+  projectId: string,
+  scene: Record<string, unknown>,
+  sceneIndex?: number,
+): Promise<DirectorMemoryScanResult> {
+  return fetchJson<DirectorMemoryScanResult>(
+    `${directorMemoryRoot(projectId)}/scan`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene, scene_index: sceneIndex }),
+    },
+  )
+}
+
+export async function triggerDebate(payload: {
+  project_id: string
+  scene_id?: string
+  act_number?: number
+  is_full_project?: boolean
+  query: string
+}): Promise<{ debate: CoDirectorDebateEntry }> {
+  return fetchJson<{ debate: CoDirectorDebateEntry }>(
+    `/api/f51/studio/debate/trigger`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function debateAction(payload: {
+  project_id: string
+  debate_id: string
+  action: 'dismiss' | 'save'
+}): Promise<{ debate: CoDirectorDebateEntry }> {
+  return fetchJson<{ debate: CoDirectorDebateEntry }>(
+    `/api/f51/studio/debate/action`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function listDebates(projectId: string): Promise<{ debates: CoDirectorDebateEntry[] }> {
+  return fetchJson<{ debates: CoDirectorDebateEntry[] }>(`/api/f51/studio/debate/${projectId}`)
+}
+
+// Re-export bundle type for callers that import only from studioApi.
+export type { DirectorMemoryBundle }
+
+// Universe Knowledge Graph
+export async function getUniverseGraph(projectId: string): Promise<UniverseGraphData> {
+  return fetchJson(`/projects/${projectId}/universe-graph`)
+}
+
+export async function saveUniverseNode(projectId: string, node: UniverseNode): Promise<boolean> {
+  return fetchJson(`/projects/${projectId}/universe-graph/nodes`, {
+    method: 'POST',
+    body: JSON.stringify(node),
+  })
+}
+
+export async function deleteUniverseNode(projectId: string, nodeId: string): Promise<boolean> {
+  return fetchJson(`/projects/${projectId}/universe-graph/nodes/${nodeId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function saveUniverseRelationship(projectId: string, rel: UniverseRelationship): Promise<boolean> {
+  return fetchJson(`/projects/${projectId}/universe-graph/relationships`, {
+    method: 'POST',
+    body: JSON.stringify(rel),
+  })
+}
+
+export async function deleteUniverseRelationship(projectId: string, relationshipId: string): Promise<boolean> {
+  return fetchJson(`/projects/${projectId}/universe-graph/relationships/${relationshipId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getUniverseAbsences(projectId: string): Promise<AbsenceReport> {
+  return fetchJson(`/projects/${projectId}/universe-graph/absences`)
+}
+
+export async function exportUniverseBible(projectId: string): Promise<string> {
+  return fetchJson(`/projects/${projectId}/universe-graph/export`)
+}
+
+export async function forceAutoPopulateUniverse(projectId: string): Promise<UniverseGraphData> {
+  return fetchJson(`/projects/${projectId}/universe-graph/auto-populate`, {
+    method: 'POST',
+  })
+}
+
+export type {
+  UniverseNode,
+  UniverseRelationship,
+  UniverseGraphData,
+  UniverseNodeType,
+  Absence,
+  AbsenceReport,
+}
+
+import { AudienceReaction, SceneAudienceSimulation, ProjectAudienceSimulation } from '../types/audienceSimulator'
+
+/**
+ * Simulate audience reactions for a single scene.
+ */
+export async function simulateSceneAudience(projectId: string, sceneId: string): Promise<SceneAudienceSimulation> {
+  return fetchJson(`/api/f51/studio/audience-simulator/projects/${projectId}/scenes/${sceneId}/simulate`, {
+    method: 'POST',
+  })
+}
+
+/**
+ * Simulate audience reactions for the entire project sequence.
+ */
+export async function simulateProjectAudience(projectId: string): Promise<ProjectAudienceSimulation> {
+  return fetchJson(`/api/f51/studio/audience-simulator/projects/${projectId}/simulate`, {
+    method: 'POST',
+  })
+}
+
+/**
+ * Save a synthesis note to Director's Notes.
+ */
+export async function saveToDirectorsNotes(projectId: string, headline: string, note: string): Promise<void> {
+  await fetchJson(`/api/f51/studio/memory/${projectId}/review`, {
+    method: 'POST',
+    body: JSON.stringify({
+      feedback_type: 'director',
+      feedback_text: `${headline}: ${note}`,
+      recommendations: ['Keep audience perspective in mind'],
+    }),
+  })
 }

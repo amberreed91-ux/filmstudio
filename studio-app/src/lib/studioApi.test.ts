@@ -5,6 +5,7 @@ import {
   getTimelineIntelligence,
   getProjectDecisionGate,
   getStudioProject,
+  refreshRenderJobOutputUrl,
   resolveStudioApiBase,
   seedDemoStudioProject,
 } from './studioApi'
@@ -187,6 +188,25 @@ describe('clip revision API helpers', () => {
 
     const [url] = fetchMock.mock.calls[0]
     expect(String(url)).toContain('/api/f51/studio/projects/proj-clip/clip-revisions')
+  })
+})
+
+describe('render refresh helper', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('posts to the refresh-url endpoint for a render job', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ output_url: 'https://example.com/fresh.mp4' }), { status: 200 }),
+    )
+
+    await refreshRenderJobOutputUrl('job-123')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/f51/studio/render/jobs/job-123/refresh-url')
+    expect((init?.method || '').toUpperCase()).toBe('POST')
   })
 })
 

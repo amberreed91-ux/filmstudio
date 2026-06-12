@@ -1,529 +1,783 @@
-import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { FileText } from 'lucide-react'
-import StudioShell, { TabGroup } from '../components/StudioShell'
-import CinematicLoading from '../components/CinematicLoading'
-import CoDirectorCollaborationPanel from '../components/CoDirectorCollaborationPanel'
-import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
-import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
-import { createProject, generateScenes } from '../lib/studioApi'
-
-type ActRow = { act: number; scene_ids: string[]; scene_count: number }
-type SequenceRow = { sequence_id: string; scene_ids: string[]; length: number }
-
-const SAMPLE_SCRIPT = `INT. APARTMENT - NIGHT
-MAYA waits by the window.
-
-EXT. STREET - DAY
-Cars rush past.
-
-INT. WAREHOUSE - NIGHT
-JONAH reveals the plan.
-
-EXT. BRIDGE - SUNSET
-They split directions.`
-
-function parseScenes(script: string): string[] {
-  const lines = script.split('\n')
-  const sceneIds: string[] = []
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (/^(INT\.|EXT\.)/i.test(trimmed)) {
-      sceneIds.push(`scene_${String(sceneIds.length + 1).padStart(3, '0')}`)
-    }
-  }
-  return sceneIds
-}
-
-function splitScenes(script: string): Array<{ heading: string; body: string[] }> {
-  const lines = script.split('\n')
-  const scenes: Array<{ heading: string; body: string[] }> = []
-  let current: { heading: string; body: string[] } | null = null
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (/^(INT\.|EXT\.)/i.test(trimmed)) {
-      if (current) scenes.push(current)
-      current = { heading: trimmed, body: [] }
-      continue
-    }
-    if (current && trimmed) current.body.push(trimmed)
-  }
-  if (current) scenes.push(current)
-  return scenes
-}
-
-function extractSceneTextVisuals(text: string): string[] {
-  const source = text.toLowerCase()
-  const tags: Array<[string, string[]]> = [
-    ['chalk symbol', ['chalk', 'symbol']],
-    ['farmhouse kitchen', ['farmhouse', 'kitchen']],
-    ['eli drawing', ['eli', 'draw']],
-    ['spoon drops', ['spoon', 'drop']],
-    ['scratching inside wall', ['scratch', 'wall']],
-    ['mirror fogs from inside', ['mirror', 'fog']],
-    ['notebook ritual notes', ['notebook', 'ritual']],
-    ['third handprint across wrists', ['third', 'handprint', 'wrist']],
-  ]
-  return tags.filter(([, tokens]) => tokens.every((token) => source.includes(token))).map(([label]) => label)
-}
-
-function buildBundleFromScript(script: string) {
-  const split = splitScenes(script)
-  const scenes = split.map((scene, index) => {
-    const sceneId = `scene_${String(index + 1).padStart(3, '0')}`
-    const bodyText = scene.body.join(' ')
-    const headingParts = scene.heading.split(' - ')
-    const location = headingParts[0]?.replace(/^INT\.|^EXT\./i, '').trim() || scene.heading
-    const timeOfDay = headingParts[1]?.trim() || 'UNSPECIFIED'
-    const visuals = extractSceneTextVisuals(`${scene.heading} ${bodyText}`)
-    const primaryAction = scene.body[0] || 'quiet movement in frame'
-    const renderId = `${sceneId}_render_a`
-    const shotId = `shot_${sceneId}_001`
-    const basePrompt = [
-      `location ${location}`,
-      `time ${timeOfDay}`,
-      `characters ${bodyText.match(/\bMARA\b|\bELI\b/gi)?.join(', ') || 'none named'}`,
-      `action ${primaryAction}`,
-      `key objects ${(visuals.length ? visuals : ['chalk symbol']).join(', ')}`,
-      `supernatural elements ${visuals.filter((v) => v.includes('mirror') || v.includes('scratch') || v.includes('handprint')).join(', ') || 'subtle unseen pressure'}`,
-      `emotional tone ${index < 2 ? 'quiet supernatural unease' : 'rising supernatural tension'}`,
-      `lighting ${index < 2 ? 'natural soft' : 'contrast shadow'}`,
-      `camera ${index < 2 ? 'static' : 'slow push'}`,
-      'cinematic dark farmhouse realism',
-    ].join(', ')
-
-    return {
-      scene_id: sceneId,
-      heading: scene.heading,
-      location,
-      time_of_day: timeOfDay,
-      text: bodyText,
-      scene_visual_brief: {
-        scene_id: sceneId,
-        location,
-        time_of_day: timeOfDay,
-        characters: bodyText.match(/\bMARA\b|\bELI\b/gi) || [],
-        key_actions: scene.body.slice(0, 3),
-        supernatural_elements: visuals.filter((v) => v.includes('mirror') || v.includes('scratch') || v.includes('handprint')),
-        motifs: visuals.filter((v) => v.includes('chalk') || v.includes('symbol')),
-        emotional_intent: index < 2 ? 'quiet supernatural unease' : 'rising supernatural tension',
-        visual_must_haves: visuals,
-      },
-      scene_generation_summary: { status: 'complete' },
-      scene_quality_verdict: { verdict: 'needs_revision' },
-      scene_playback_preview: { available: true, render_ids: [renderId] },
-      co_director_suggestions: [
-        { id: `${sceneId}_s1`, type: 'tension', title: 'Increase visual tension', description: 'Raise contrast and isolate character silhouette.', confidence: 0.82 },
-        { id: `${sceneId}_s2`, type: 'continuity', title: 'Fix continuity gap', description: 'Align prop placement across cuts.', confidence: 0.76 },
-      ],
-      director_notes: {
-        what_works: ['Scene intent is visible'],
-        what_breaks: ['Escalation can be clearer'],
-        suggested_changes: ['Push one stronger visual beat'],
-      },
-      multi_shot_execution_ledger: [
-        {
-          shot_id: shotId,
-          status: 'complete',
-          render_id: renderId,
-          meta: { file_path: `https://picsum.photos/seed/${sceneId}_hero/800/450` },
-          shot_intent: {
-            framing: index < 2 ? 'wide' : 'medium close',
-            camera: index < 2 ? 'static' : 'slow push',
-            lighting: index < 2 ? 'natural soft' : 'contrast shadow',
-            mood: index < 2 ? 'quiet unease' : 'rising tension',
-            motif_instruction: index < 2 ? 'subtle background presence' : 'visible environmental intrusion',
-          },
-          prompt_pack: {
-            base_prompt: basePrompt,
-            style_tags: ['cinematic', 'dark', 'grain', 'natural light'],
-            negative_prompt: ['low quality', 'blurry', 'deformed', 'extra limbs', 'bad anatomy', 'distorted face', 'oversaturated'],
-          },
-        },
-      ],
-      scene_iterations: [],
-    }
-  })
-
-  const image_render_assets = scenes.map((scene) => {
-    const shot = scene.multi_shot_execution_ledger[0]
-    return {
-      asset_id: `image_${scene.scene_id}_${shot.shot_id}`,
-      scene_id: scene.scene_id,
-      shot_id: shot.shot_id,
-      provider: 'local_image',
-      status: 'success',
-      file_path: null,
-      url: shot.meta.file_path,
-      preview_label: `${scene.scene_id}:${shot.shot_id}`,
-      meta: {
-        prompt_used: shot.prompt_pack.base_prompt,
-        negative_prompt: shot.prompt_pack.negative_prompt.join(', '),
-        source: 'script',
-      },
-    }
-  })
-
-  return {
-    scenes,
-    image_render_assets,
-    render_asset_summary: {
-      total_assets: image_render_assets.length,
-      successful_assets: image_render_assets.length,
-      failed_assets: 0,
-      providers: ['local_image'],
-    },
-    screening_playlist: scenes.map((scene) => ({
-      scene_id: scene.scene_id,
-      cut: 'original',
-      render_ids: scene.scene_playback_preview.render_ids,
-      status: scene.scene_generation_summary.status,
-      verdict: scene.scene_quality_verdict.verdict,
-      duration_estimate: 2,
-    })),
-  }
-}
-
-function buildActs(sceneIds: string[]): ActRow[] {
-  const total = sceneIds.length
-  const act1End = Math.floor(total * 0.25)
-  const act2End = Math.floor(total * 0.75)
-  const a1 = sceneIds.slice(0, act1End)
-  const a2 = sceneIds.slice(act1End, act2End)
-  const a3 = sceneIds.slice(act2End)
-  return [
-    { act: 1, scene_ids: a1, scene_count: a1.length },
-    { act: 2, scene_ids: a2, scene_count: a2.length },
-    { act: 3, scene_ids: a3, scene_count: a3.length },
-  ]
-}
-
-function buildSequences(sceneIds: string[]): SequenceRow[] {
-  const out: SequenceRow[] = []
-  let i = 0
-  let seqId = 1
-  while (i < sceneIds.length) {
-    let chunk = 3
-    const remaining = sceneIds.length - i
-    if (remaining <= 2) chunk = remaining
-    else if (remaining === 4) chunk = 4
-    const rows = sceneIds.slice(i, i + chunk)
-    out.push({
-      sequence_id: `seq_${String(seqId).padStart(3, '0')}`,
-      scene_ids: rows,
-      length: rows.length,
-    })
-    i += chunk
-    seqId += 1
-  }
-  return out
-}
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { FileText, Plus, Edit2, Trash2, Save, X, Upload, FileUp } from 'lucide-react'
+import StudioShell from '../components/StudioShell'
+import ProjectContextBar from '../components/ProjectContextBar'
+import ProjectGuard from '../components/ProjectGuard'
+import { useStudio } from '../context/StudioContext'
+import DirectorDebatePanel from '../components/DirectorDebatePanel'
+import {
+  checkBackendHealth,
+  createProject,
+  createScene,
+  deleteScene,
+  generateScenes,
+  listScenes,
+  updateScene,
+  triggerDebate,
+  type CreateScenePayload,
+  type Scene,
+  type CoDirectorDebateEntry,
+} from '../lib/studioApi'
 
 export default function WritersRoom() {
+  const { projectId } = useParams()
+  const [searchParams] = useSearchParams()
+  const queryProjectId = searchParams.get('project_id') || ''
   const navigate = useNavigate()
-  const location = useLocation()
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [scriptInput, setScriptInput] = useState(SAMPLE_SCRIPT)
-  const [processedScript, setProcessedScript] = useState(SAMPLE_SCRIPT)
-  const [uploadedFileName, setUploadedFileName] = useState('')
-  const [uploadError, setUploadError] = useState('')
-  const [isDragActive, setIsDragActive] = useState(false)
-  const [flowMessage, setFlowMessage] = useState('')
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [detailsTab, setDetailsTab] = useState<'structure' | 'validation' | 'notes'>('structure')
-  const routeNotice = typeof (location.state as { notice?: unknown } | null)?.notice === 'string'
-    ? String((location.state as { notice?: unknown }).notice)
-    : ''
-  const sceneIds = useMemo(() => parseScenes(processedScript), [processedScript])
-  const acts = useMemo(() => buildActs(sceneIds), [sceneIds])
-  const sequences = useMemo(() => buildSequences(sceneIds), [sceneIds])
-  const scriptCharCount = scriptInput.length
-  const scriptLineCount = scriptInput.length > 0 ? scriptInput.split('\n').length : 0
-  const coDirectorWorkflow = useMemo(() => {
+  const { activeProject, activeProjectId } = useStudio()
+  
+  // Use activeProjectId from context, not from URL or localStorage
+  const effectiveProjectId = activeProjectId || projectId || queryProjectId
+  
+  const [scenes, setScenes] = useState<Scene[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [activeDebate, setActiveDebate] = useState<CoDirectorDebateEntry | null>(null)
+  
+  // Backend health check state
+  const [backendHealthy, setBackendHealthy] = useState(true)
+  const [healthCheckLoading, setHealthCheckLoading] = useState(false)
+  
+  // Script upload state
+  const [scriptText, setScriptText] = useState('')
+  const [uploadingScript, setUploadingScript] = useState(false)
+  const [scriptUploadError, setScriptUploadError] = useState('')
+  const [scriptUploadSuccess, setScriptUploadSuccess] = useState('')
+  
+  // Add/Edit scene form state
+  const [showForm, setShowForm] = useState(false)
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
+  const [formData, setFormData] = useState<CreateScenePayload>({
+    scene_name: '',
+    description: '',
+    location: '',
+    time_of_day: 'DAY',
+    emotional_tone: 'neutral',
+    characters: [],
+    notes: '',
+  })
+  const [characterInput, setCharacterInput] = useState('')
+
+  // Load project and scenes
+  useEffect(() => {
+    if (effectiveProjectId) {
+      void checkHealth()
+    }
+  }, [effectiveProjectId])
+
+  // Check backend health before loading scenes
+  const checkHealth = async () => {
+    setHealthCheckLoading(true)
+    const health = await checkBackendHealth()
+    setBackendHealthy(health.healthy)
+    setHealthCheckLoading(false)
+    
+    if (health.healthy) {
+      void loadScenes()
+    }
+  }
+
+  const retryHealthCheck = () => {
+    void checkHealth()
+  }
+
+  const loadScenes = async () => {
+    if (!effectiveProjectId) return
+    setLoading(true)
+    setError('')
     try {
-      const raw = localStorage.getItem('studio:lastBundle')
-      if (!raw) return null
-      const parsed = JSON.parse(raw) as Record<string, unknown>
-      const workflow = parsed?.co_director_workflow
-      return workflow && typeof workflow === 'object' && !Array.isArray(workflow) ? workflow : null
-    } catch {
-      return null
-    }
-  }, [flowMessage, isGenerating])
-  const activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
-
-  const allowedExtensions = ['txt', 'md', 'fountain', 'screenplay']
-
-  const readScriptFile = (file: File) => {
-    const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() || '' : ''
-    if (!allowedExtensions.includes(extension)) {
-      setUploadError('Unsupported file type. Use .txt, .md, .fountain, or .screenplay.')
-      return
-    }
-    if (file.size <= 0) {
-      setUploadError('File is empty. Please choose a non-empty script file.')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : ''
-      if (!result.trim()) {
-        setUploadError('File contains no readable text.')
-        return
+      const result = await listScenes(effectiveProjectId)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setScenes(result.scenes)
       }
-      setScriptInput(result)
-      setUploadedFileName(file.name)
-      setUploadError('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load scenes')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateProject = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await createProject({ title: 'New Film Project' })
+      if (result.error) {
+        setError(result.error)
+      } else if (result.project) {
+        localStorage.setItem('studio:activeProjectId', result.project.project_id)
+        navigate(`/studio/writers-room?project_id=${result.project.project_id}`)
+        setSuccess('Project created successfully')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create project')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddScene = () => {
+    setEditingSceneId(null)
+    setFormData({
+      scene_name: '',
+      description: '',
+      location: '',
+      time_of_day: 'DAY',
+      emotional_tone: 'neutral',
+      characters: [],
+      notes: '',
+    })
+    setCharacterInput('')
+    setShowForm(true)
+  }
+
+  const handleEditScene = (scene: Scene) => {
+    setEditingSceneId(scene.scene_id)
+    setFormData({
+      scene_name: scene.scene_name,
+      description: scene.description,
+      location: scene.location,
+      time_of_day: scene.time_of_day,
+      emotional_tone: scene.emotional_tone,
+      characters: scene.characters || [],
+      notes: scene.notes,
+      is_major_plot_point: scene.is_major_plot_point,
+    })
+    setCharacterInput('')
+    setShowForm(true)
+  }
+
+  const handleSaveScene = async () => {
+    if (!effectiveProjectId) {
+      setError('No active project. Please create a project first.')
+      return
+    }
+
+    if (!formData.scene_name.trim()) {
+      setError('Scene name is required')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      if (editingSceneId) {
+        // Update existing scene
+        const result = await updateScene(effectiveProjectId, editingSceneId, formData)
+        if (result.error) {
+          setError(result.error)
+        } else {
+          setSuccess('Scene updated successfully')
+          setShowForm(false)
+          await loadScenes()
+
+          // Trigger debate if major plot point or significant decision in description
+          const isSignificant = formData.is_major_plot_point || 
+            /dies|death|redemption|betrayal|act break|ending|finale|debate this/i.test(formData.description);
+            
+          if (isSignificant) {
+            const { debate } = await triggerDebate({
+              project_id: effectiveProjectId,
+              scene_id: editingSceneId,
+              query: formData.description || `Analyze updated major plot point: "${formData.scene_name}"`,
+            })
+            setActiveDebate(debate)
+          }
+        }
+      } else {
+        // Create new scene
+        const result = await createScene(effectiveProjectId, formData)
+        if (result.error) {
+          setError(result.error)
+        } else {
+          setSuccess('Scene created successfully')
+          setShowForm(false)
+          await loadScenes()
+
+          // Trigger debate if major plot point or significant decision in description
+          const isSignificant = formData.is_major_plot_point || 
+            /dies|death|redemption|betrayal|act break|ending|finale|debate this/i.test(formData.description);
+            
+          if (isSignificant && result.scene) {
+            const { debate } = await triggerDebate({
+              project_id: effectiveProjectId,
+              scene_id: result.scene.scene_id,
+              query: formData.description || `Analyze new major plot point: "${formData.scene_name}"`,
+            })
+            setActiveDebate(debate)
+          }
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save scene')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteScene = async (sceneId: string) => {
+    if (!effectiveProjectId) return
+    if (!confirm('Are you sure you want to delete this scene?')) return
+
+    setLoading(true)
+    setError('')
+    try {
+      const result = await deleteScene(effectiveProjectId, sceneId)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setSuccess('Scene deleted successfully')
+        await loadScenes()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete scene')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddCharacter = () => {
+    const char = characterInput.trim()
+    if (char && !formData.characters.includes(char)) {
+      setFormData({ ...formData, characters: [...formData.characters, char] })
+      setCharacterInput('')
+    }
+  }
+
+  const handleRemoveCharacter = (char: string) => {
+    setFormData({ ...formData, characters: formData.characters.filter((c) => c !== char) })
+  }
+
+  const handleGoToStoryboard = () => {
+    if (effectiveProjectId) {
+      navigate(`/studio/previs?project_id=${effectiveProjectId}`)
+    }
+  }
+
+  const handleScriptUpload = async () => {
+    if (!effectiveProjectId) {
+      setScriptUploadError('No active project. Please create a project first.')
+      return
+    }
+
+    if (!scriptText.trim()) {
+      setScriptUploadError('Please paste your script or upload a file')
+      return
+    }
+
+    setUploadingScript(true)
+    setScriptUploadError('')
+    setScriptUploadSuccess('')
+
+    try {
+      const result = await generateScenes(effectiveProjectId, scriptText.trim())
+      
+      if (result.error) {
+        setScriptUploadError(result.error)
+      } else if (result.project) {
+        // Count how many scenes were created
+        const executionSummary = result.project.execution_summary || {}
+        const scenesArray = Array.isArray(executionSummary.scenes) ? executionSummary.scenes : []
+        const sceneCount = scenesArray.length
+        
+        setScriptUploadSuccess(`Found ${sceneCount} scene${sceneCount !== 1 ? 's' : ''} in your script!`)
+        setScriptText('') // Clear the textarea
+        
+        // Reload scenes to show the newly created ones
+        await loadScenes()
+      }
+    } catch (err) {
+      setScriptUploadError(err instanceof Error ? err.message : 'Failed to import script')
+    } finally {
+      setUploadingScript(false)
+    }
+  }
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target?.result
+      if (typeof text === 'string') {
+        setScriptText(text)
+        setScriptUploadSuccess(`Loaded ${file.name}`)
+        setScriptUploadError('')
+      }
     }
     reader.onerror = () => {
-      setUploadError('Unable to read the file. Please try again.')
+      setScriptUploadError('Failed to read file')
     }
     reader.readAsText(file)
   }
 
-  const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    readScriptFile(file)
-    event.target.value = ''
-  }
-
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    setIsDragActive(false)
-    const file = event.dataTransfer.files?.[0]
-    if (!file) {
-      setUploadError('No file detected in drop event.')
-      return
-    }
-    readScriptFile(file)
-  }
-
-  const handleProcessScript = () => {
-    setProcessedScript(scriptInput)
-  }
-
-  const handleGenerateScenes = () => {
-    void (async () => {
-    const trimmed = scriptInput.trim()
-    if (!trimmed) {
-      setUploadError('Please paste or upload a script before generating scenes.')
-      return
-    }
-    setIsGenerating(true)
-    setFlowMessage('Processing script...')
-    handleProcessScript()
-    const bundle = buildBundleFromScript(trimmed)
-    let persistedMode = false
-    let activeProjectId = localStorage.getItem('studio:activeProjectId') || ''
-    if (!activeProjectId) {
-      const created = await createProject({ title: 'Studio Project' })
-      if (created.project?.project_id) {
-        activeProjectId = created.project.project_id
-        localStorage.setItem('studio:activeProjectId', activeProjectId)
-      }
-    }
-    if (activeProjectId) {
-      const generated = await generateScenes(activeProjectId, trimmed)
-      if (generated.project?.execution_summary && typeof generated.project.execution_summary === 'object') {
-        localStorage.setItem('studio:lastBundle', JSON.stringify(generated.project.execution_summary))
-        persistedMode = true
-      }
-    }
-    setUploadError('')
-    localStorage.setItem('studio:lastScript', trimmed)
-    if (!persistedMode) {
-      localStorage.setItem('studio:lastBundle', JSON.stringify(bundle))
-    }
-    localStorage.setItem('studio:lastBundleSource', 'writers-room-local')
-    localStorage.setItem('studio_script_exists', '1')
-    localStorage.setItem('studio_scenes_generated', (persistedMode ? (JSON.parse(localStorage.getItem('studio:lastBundle') || '{}') as { scenes?: unknown[] }).scenes?.length : bundle.scenes.length) ? '1' : '0')
-    localStorage.setItem('studio_last_script_lines', String(scriptLineCount))
-    setFlowMessage(persistedMode ? 'Scenes generated and saved to project.' : 'Scenes generated locally. Connect backend persistence for shared project visibility.')
-    setIsGenerating(false)
-    navigate('/studio/previs', {
-      state: {
-        execution_summary: persistedMode ? JSON.parse(localStorage.getItem('studio:lastBundle') || '{}') : bundle,
-        source: persistedMode ? 'project-persistence' : 'writers-room-local',
-      },
-    })
-    })()
-  }
-
   return (
-    <StudioShell title="Writer's Room" subtitle="Write, upload, revise, and prepare your script.">
-      <CollaboratorPresenceIndicators />
-      <div className="w-full overflow-visible">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
-          {routeNotice ? (
-            <section className="rounded-xl border border-amber-400/35 bg-amber-500/10 px-4 py-2 text-xs text-amber-100">
-              {routeNotice}
+    <StudioShell title="Writer's Room" subtitle="Create and manage your film scenes">
+      <ProjectGuard>
+        <ProjectContextBar roomName="writer's room" />
+        <div className="w-full overflow-visible">
+          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
+            
+            {/* Project Header */}
+            <section className="cinematic-panel p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">
+                    Current Project
+                  </div>
+                  <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100">
+                    <FileText size={18} />
+                    {activeProject?.title || 'Untitled Project'}
+                  </h2>
+                  {effectiveProjectId && (
+                    <p className="mt-1 text-xs text-zinc-400">Project ID: {effectiveProjectId}</p>
+                  )}
+                </div>
+                {!effectiveProjectId && (
+                  <button
+                    type="button"
+                    onClick={handleCreateProject}
+                    disabled={loading}
+                    className="rounded-lg border border-emerald-300/50 bg-emerald-500/14 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 transition-all duration-200 hover:scale-[1.02] disabled:opacity-50"
+                  >
+                    Create New Project
+                  </button>
+                )}
+              </div>
             </section>
-          ) : null}
-          <section className="cinematic-panel p-6">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 1: ADD YOUR SCRIPT</div>
-            <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100"><FileText size={18} />Writer&apos;s Room</h2>
-            <p className="mt-2 text-sm text-zinc-300">Shape tone, rhythm, and sequence structure before production handoff.</p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg border border-cyan-300/50 bg-cyan-500/14 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100 transition-all duration-200 hover:scale-[1.02]"
-              >
-                Upload Script
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".txt,.md,.fountain,.screenplay"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
-                {uploadedFileName ? `Loaded: ${uploadedFileName}` : 'No file loaded'}
-              </div>
-            </div>
-            <div
-              onDragEnter={(event) => {
-                event.preventDefault()
-                setIsDragActive(true)
-              }}
-              onDragOver={(event) => {
-                event.preventDefault()
-                setIsDragActive(true)
-              }}
-              onDragLeave={(event) => {
-                event.preventDefault()
-                setIsDragActive(false)
-              }}
-              onDrop={handleDrop}
-              className={`mt-3 rounded-xl border border-dashed p-4 text-center text-xs uppercase tracking-[0.12em] transition-all duration-200 ${
-                isDragActive
-                  ? 'dropzone-glow border-amber-300/70 bg-amber-400/10 text-amber-100'
-                  : 'border-white/20 bg-black/35 text-zinc-400'
-              }`}
-            >
-              Drag script file here
-            </div>
-            {uploadError ? (
-              <div className="mt-2 rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-                {uploadError}
-              </div>
-            ) : null}
-            <textarea
-              value={scriptInput}
-              onChange={(e) => setScriptInput(e.target.value)}
-              className="mt-4 h-56 w-full rounded-xl border border-white/15 bg-black/55 p-4 text-sm leading-relaxed tracking-[0.01em] text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20"
-            />
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
-                Dark editor mode · {scriptCharCount} chars · {scriptLineCount} lines
-              </div>
-              <button
-                type="button"
-                onClick={handleProcessScript}
-                className="rounded-lg border border-amber-300/50 bg-amber-500/14 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-100 transition-all duration-200 hover:scale-[1.02]"
-              >
-                Process Script
-              </button>
-            </div>
-            <div className="mt-3 rounded-lg border border-cyan-400/25 bg-cyan-500/8 px-3 py-2 text-xs text-cyan-100">
-              This processes your script and sends scenes to Previs.
-            </div>
-            <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-zinc-400">Script Processing</div>
-              <button
-                type="button"
-                onClick={handleGenerateScenes}
-                disabled={isGenerating}
-                className="mt-3 w-full rounded-lg border border-cyan-300/60 bg-cyan-500/22 px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-cyan-50 shadow-[0_0_26px_rgba(34,211,238,0.22)] transition-all duration-200 hover:scale-[1.01]"
-              >
-                {isGenerating ? 'Rendering motion frames...' : 'Generate Scenes'}
-              </button>
-            {isGenerating ? (
-              <div className="mt-2">
-                <CinematicLoading
-                  compact
-                  title="Generation Progress Atmosphere"
-                  lines={[
-                    'Analyzing scene composition...',
-                    'Preparing cinematic lighting...',
-                    'Rendering motion frames...',
-                  ]}
-                />
-              </div>
-            ) : null}
-            {flowMessage ? (
-              <div className="mt-2 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
-                {flowMessage}
-              </div>
-            ) : null}
-            <div className="mt-4">
-              <CoDirectorCollaborationPanel room="writer" workflow={coDirectorWorkflow} />
-            </div>
-            <div className="mt-4">
-              <MultiUserCollaborationPanel projectId={activeProjectId} room="writers-room" sceneId={sceneIds[0]} />
-            </div>
-          </section>
 
-          <section className="cinematic-panel p-4">
-            <TabGroup
-              className="mb-3"
-              value={detailsTab}
-              onChange={(next) => setDetailsTab(next)}
-              options={[
-                { id: 'structure', label: 'Structure' },
-                { id: 'validation', label: 'Validation' },
-                { id: 'notes', label: 'Notes' },
-              ]}
-            />
+          {/* Error/Success Messages */}
+          {error && (
+            <div className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+              {success}
+            </div>
+          )}
 
-            {detailsTab === 'structure' ? (
+          {/* Backend Health Check */}
+          {!backendHealthy && effectiveProjectId && (
+            <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-amber-200">Studio is starting up</div>
+                  <div className="mt-1 text-xs text-amber-100">
+                    Please wait a moment while the backend initializes...
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={retryHealthCheck}
+                  disabled={healthCheckLoading}
+                  className="rounded-lg border border-amber-300/50 bg-amber-500/14 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-100 transition-all duration-200 hover:scale-[1.02] disabled:opacity-50"
+                >
+                  {healthCheckLoading ? 'Checking...' : 'Retry'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Script Upload Section - Option A */}
+          {effectiveProjectId && backendHealthy && (
+            <section className="cinematic-panel p-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100">
+                  Option A — Upload Script
+                </h3>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Have a script? Upload it and we'll break it into scenes.
+                </p>
+              </div>
+
+              {scriptUploadError && (
+                <div className="mb-4 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                  {scriptUploadError}
+                </div>
+              )}
+              {scriptUploadSuccess && (
+                <div className="mb-4 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                  {scriptUploadSuccess}
+                </div>
+              )}
+
               <div className="space-y-4">
-                <div className="text-sm text-zinc-200">Total Scenes: {sceneIds.length}</div>
-                <div className="space-y-2">
-                  {acts.map((act) => (
-                    <div key={act.act} className="rounded-xl border border-white/10 bg-black/35 p-3">
-                      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100">Act {act.act}</div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.1em] text-zinc-400">Scene Count: {act.scene_count}</div>
-                    </div>
-                  ))}
+                {/* File Upload Button */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                    Upload Script File
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 rounded-lg border border-cyan-300/50 bg-cyan-500/14 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100 transition-all duration-200 hover:scale-[1.02] cursor-pointer">
+                      <FileUp size={16} />
+                      Choose File (.txt, .pdf)
+                      <input
+                        type="file"
+                        accept=".txt,.pdf"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    <span className="text-xs text-zinc-400">or paste your script below</span>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {sequences.map((sequence) => (
-                    <div key={sequence.sequence_id} className="rounded-xl border border-white/10 bg-black/35 p-3">
-                      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100">{sequence.sequence_id}</div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.1em] text-zinc-400">Length: {sequence.length}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
 
-            {detailsTab === 'validation' ? (
-              <div className="space-y-2 text-xs text-zinc-300">
-                <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                  {sceneIds.length > 0 ? 'Scene headings detected and grouped successfully.' : 'No scenes detected yet.'}
-                </div>
-                <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                  {scriptInput.trim() ? 'Script ready for processing.' : 'Paste or upload a script to validate.'}
-                </div>
-              </div>
-            ) : null}
+                {/* Script Textarea */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                    Paste Your Script Here
+                  </label>
+                  <textarea
+                    value={scriptText}
+                    onChange={(e) => setScriptText(e.target.value)}
+                    className="w-full h-48 rounded-lg border border-white/15 bg-black/55 p-3 text-sm text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20 font-mono"
+                    placeholder="Paste your script here...
 
-            {detailsTab === 'notes' ? (
-              <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-xs text-zinc-300">
-                Keep acts balanced and escalate visual pressure scene-by-scene before handing off to Previs.
+Example format:
+
+SCENE 1: INT. COFFEE SHOP - DAY
+A woman sits alone at a corner table, reading a worn paperback. The café is nearly empty. Rain streaks the window behind her.
+
+SCENE 2: EXT. STREET - NIGHT
+She walks through the rain, umbrella forgotten. The city lights blur in the downpour."
+                  />
+                </div>
+
+                {/* Import Button */}
+                <button
+                  type="button"
+                  onClick={handleScriptUpload}
+                  disabled={uploadingScript || !scriptText.trim()}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-emerald-300/60 bg-emerald-500/22 px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-emerald-50 shadow-[0_0_26px_rgba(16,185,129,0.22)] transition-all duration-200 hover:scale-[1.01] disabled:opacity-50"
+                >
+                  <Upload size={16} />
+                  {uploadingScript ? 'Importing Script...' : 'Import Script'}
+                </button>
               </div>
-            ) : null}
-          </section>
-          {!scriptInput.trim() ? (
-            <section className="cinematic-panel p-4">
-              <div className="text-sm text-zinc-300">Paste or upload your script to begin.</div>
             </section>
-          ) : null}
+          )}
+
+          {/* Manual Scene Entry Section - Option B */}
+          {effectiveProjectId && backendHealthy && (
+            <section className="cinematic-panel p-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100">
+                  Option B — Add Scenes Manually
+                </h3>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Building from scratch? Add scenes one by one.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddScene}
+                disabled={loading}
+                className="flex items-center gap-2 rounded-lg border border-cyan-300/50 bg-cyan-500/14 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100 transition-all duration-200 hover:scale-[1.02] disabled:opacity-50"
+              >
+                <Plus size={16} />
+                Add Scene
+              </button>
+            </section>
+          )}
+
+          {/* Scene List */}
+          {effectiveProjectId && backendHealthy && (
+            <section className="cinematic-panel p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100">
+                    Your Scenes ({scenes.length})
+                  </h3>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    All scenes from script upload and manual entry
+                  </p>
+                </div>
+              </div>
+
+              {loading && scenes.length === 0 ? (
+                <div className="text-center py-8 text-zinc-400">Loading scenes...</div>
+              ) : scenes.length === 0 ? (
+                <div className="text-center py-8 text-zinc-400">
+                  No scenes yet. Upload a script or add scenes manually above.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {scenes.map((scene) => (
+                    <div
+                      key={scene.scene_id}
+                      className="rounded-xl border border-white/10 bg-black/35 p-4 transition-all duration-200 hover:border-white/30"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-zinc-100">{scene.scene_name}</h4>
+                          <p className="mt-1 text-xs text-zinc-300">{scene.description}</p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                            <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-zinc-400">
+                              {scene.location || 'No location'}
+                            </span>
+                            <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-zinc-400">
+                              {scene.time_of_day}
+                            </span>
+                            <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-zinc-400">
+                              {scene.emotional_tone}
+                            </span>
+                            {scene.characters && scene.characters.length > 0 && (
+                              <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-zinc-400">
+                                {scene.characters.join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                          <button
+                            type="button"
+                            onClick={() => handleEditScene(scene)}
+                            className="rounded border border-amber-400/40 bg-amber-500/12 p-2 text-amber-100 transition-all hover:bg-amber-500/20"
+                            title="Edit scene"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteScene(scene.scene_id)}
+                            className="rounded border border-rose-400/40 bg-rose-500/12 p-2 text-rose-100 transition-all hover:bg-rose-500/20"
+                            title="Delete scene"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Next Step CTA */}
+              {scenes.length > 0 && (
+                <div className="mt-6 rounded-xl border border-emerald-400/35 bg-emerald-500/10 p-4">
+                  <div className="text-xs uppercase tracking-[0.12em] text-emerald-200 mb-2">
+                    Ready to Continue?
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoToStoryboard}
+                    className="w-full rounded-lg border border-emerald-300/60 bg-emerald-500/22 px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-emerald-50 shadow-[0_0_26px_rgba(16,185,129,0.22)] transition-all duration-200 hover:scale-[1.01]"
+                  >
+                    Next: Go to Storyboard / Scenes Room
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Add/Edit Scene Form */}
+          {activeDebate && (
+            <div className="mb-6">
+              <DirectorDebatePanel
+                projectId={effectiveProjectId}
+                debate={activeDebate}
+                onDismiss={() => setActiveDebate(null)}
+              />
+            </div>
+          )}
+
+          {showForm && (
+            <section className="cinematic-panel p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100">
+                  {editingSceneId ? 'Edit Scene' : 'Add New Scene'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="rounded border border-zinc-600 bg-zinc-800 p-2 text-zinc-300 transition-all hover:bg-zinc-700"
+                  title="Close form"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                    Scene Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.scene_name}
+                    onChange={(e) => setFormData({ ...formData, scene_name: e.target.value })}
+                    className="w-full rounded-lg border border-white/15 bg-black/55 p-3 text-sm text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20"
+                    placeholder="e.g., Opening Scene, The Confrontation"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full h-24 rounded-lg border border-white/15 bg-black/55 p-3 text-sm text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20"
+                    placeholder="Describe what happens in this scene..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                      Location
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      className="w-full rounded-lg border border-white/15 bg-black/55 p-3 text-sm text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20"
+                      placeholder="e.g., INT. APARTMENT, EXT. STREET"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="is_major_plot_point"
+                      checked={formData.is_major_plot_point}
+                      onChange={(e) => setFormData({ ...formData, is_major_plot_point: e.target.checked })}
+                      className="h-4 w-4 rounded border-white/15 bg-black/55 text-indigo-500 focus:ring-indigo-500/20"
+                    />
+                    <label htmlFor="is_major_plot_point" className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300">
+                      Mark as Major Plot Point (Triggers Co-Director Debate)
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                      Time of Day
+                    </label>
+                    <select
+                      value={formData.time_of_day}
+                      onChange={(e) => setFormData({ ...formData, time_of_day: e.target.value })}
+                      className="w-full rounded-lg border border-white/15 bg-black/55 p-3 text-sm text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20"
+                    >
+                      <option value="DAY">Day</option>
+                      <option value="NIGHT">Night</option>
+                      <option value="DAWN">Dawn</option>
+                      <option value="DUSK">Dusk</option>
+                      <option value="MORNING">Morning</option>
+                      <option value="AFTERNOON">Afternoon</option>
+                      <option value="EVENING">Evening</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                    Emotional Tone
+                  </label>
+                  <select
+                    value={formData.emotional_tone}
+                    onChange={(e) => setFormData({ ...formData, emotional_tone: e.target.value })}
+                    className="w-full rounded-lg border border-white/15 bg-black/55 p-3 text-sm text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20"
+                  >
+                    <option value="neutral">Neutral</option>
+                    <option value="tense">Tense</option>
+                    <option value="joyful">Joyful</option>
+                    <option value="melancholic">Melancholic</option>
+                    <option value="suspenseful">Suspenseful</option>
+                    <option value="romantic">Romantic</option>
+                    <option value="dramatic">Dramatic</option>
+                    <option value="comedic">Comedic</option>
+                    <option value="mysterious">Mysterious</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                    Characters
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={characterInput}
+                      onChange={(e) => setCharacterInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCharacter())}
+                      className="flex-1 rounded-lg border border-white/15 bg-black/55 p-3 text-sm text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20"
+                      placeholder="Add character name and press Enter"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCharacter}
+                      className="rounded-lg border border-cyan-300/50 bg-cyan-500/14 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {formData.characters.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.characters.map((char) => (
+                        <span
+                          key={char}
+                          className="flex items-center gap-2 rounded border border-white/10 bg-black/25 px-2 py-1 text-xs text-zinc-300"
+                        >
+                          {char}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCharacter(char)}
+                            className="text-rose-400 hover:text-rose-300"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300 mb-2">
+                    Notes
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="w-full h-20 rounded-lg border border-white/15 bg-black/55 p-3 text-sm text-zinc-100 outline-none transition-all duration-200 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20"
+                    placeholder="Additional notes or ideas for this scene..."
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={handleSaveScene}
+                    disabled={loading || !formData.scene_name.trim()}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-emerald-300/60 bg-emerald-500/22 px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-emerald-50 shadow-[0_0_26px_rgba(16,185,129,0.22)] transition-all duration-200 hover:scale-[1.01] disabled:opacity-50"
+                  >
+                    <Save size={16} />
+                    {loading ? 'Saving...' : editingSceneId ? 'Update Scene' : 'Create Scene'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(false)}
+                    className="rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-zinc-300 transition-all hover:bg-zinc-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
         </div>
       </div>
+      </ProjectGuard>
     </StudioShell>
   )
 }

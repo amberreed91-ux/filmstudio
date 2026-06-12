@@ -1,6 +1,7 @@
 from typing import Optional, Callable, Awaitable
 from datetime import datetime
 import os
+import uuid
 from app.models import (
     RenderJobModel, RenderJobInput, RenderJobOutput, RenderAsset,
     ProviderConfig, ProviderStatus, StudioProject
@@ -11,6 +12,14 @@ import logging
 import asyncio
 
 logger = logging.getLogger("studio-render")
+
+_CONTINUITY_CONTEXT_BLOCK = (
+    "\n\n[CINEMATIC CONTEXT]"
+    "\nEmotional register: {emotional_register}"
+    "\nActive visual motifs: {active_motifs}"
+    "\nTonal direction: {tonal_direction}"
+    "\nContinuity anchors: {continuity_anchors}"
+)
 
 # WebSocket notification callback - will be set by main.py
 _job_update_callback: Optional[Callable[[str, dict], Awaitable[None]]] = None
@@ -34,6 +43,47 @@ def set_job_update_callback(callback: Callable[[str, dict], Awaitable[None]]):
     """Set the WebSocket broadcast callback"""
     global _job_update_callback
     _job_update_callback = callback
+
+
+async def _run_continuity_review(job: RenderJobModel) -> None:
+    """
+    Run advisory continuity review after a job completes.
+    Attaches result to job.continuity_review and logs outcome.
+    Never raises — silent fallback on any error.
+    """
+    try:
+        from app.services.continuity_intelligence_service import (
+            continuity_intelligence_service as _cont_svc,
+        )
+        output_url = ""
+        if job.output_payload:
+            output_url = str(job.output_payload.asset_url or "").strip()
+        # Derive scene_id from shot_id (e.g. "scene_001_shot_001" → "scene_001")
+        shot_id = job.shot_id or ""
+        scene_id = "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+        review = await _cont_svc.review_render_output(
+            scene_id=scene_id,
+            film_id=job.project_id,
+            render_job_id=job.id,
+            render_output_url=output_url,
+            scene_data={},
+        )
+        job.continuity_review = review
+        if review.get("drift_detected"):
+            logger.info(
+                "CONTINUITY_DRIFT_DETECTED | scene=%s | job=%s | flags=%d",
+                scene_id,
+                job.id,
+                len(review.get("continuity_flags") or []),
+            )
+        else:
+            logger.info(
+                "CONTINUITY_REVIEW_PASSED | scene=%s | job=%s",
+                scene_id,
+                job.id,
+            )
+    except Exception as exc:
+        logger.debug("Continuity review skipped for job %s: %s", job.id, exc)
 
 
 async def _notify_update(job_id: str, job_data: dict):
@@ -102,6 +152,8 @@ class RenderService:
         self._provider_configs: dict[str, ProviderConfig] = {}
         self._jobs: dict[str, RenderJobModel] = {}
         self._submit_locks: set[str] = set()
+        # In-memory batch store: batch_id -> batch metadata dict
+        self._batches: dict[str, dict] = {}
         self._initialize_providers()
 
     def _initialize_providers(self):
@@ -172,6 +224,21 @@ class RenderService:
             capabilities=["video_generation"]
         )
 
+        # AMD MI300X ROCm provider for LTX-2 and HunyuanVideo
+        self._provider_configs["amd"] = ProviderConfig(
+            provider_id="amd",
+            name="AMD MI300X",
+            enabled=False,
+            is_simulated=True,  # Mock for Phase 1
+            api_key=None,
+            api_endpoint=None,
+            requires=["api_key", "api_endpoint"],
+            capabilities=["video_generation", "image_to_video"],
+            gpu="MI300X",
+            runtime="ROCm",
+            models=["ltx-2", "hunyuan-video"]
+        )
+
     def list_providers(self) -> list[ProviderStatus]:
         """List all available providers with status"""
         statuses = []
@@ -211,6 +278,20 @@ class RenderService:
             else:
                 display_label = f"{config.name}: unavailable"
 
+            # Add AMD-specific metadata if available
+            gpu = getattr(config, 'gpu', None)
+            runtime = getattr(config, 'runtime', None)
+            models = getattr(config, 'models', [])
+            
+            # Enhance display label for AMD with ROCm badge
+            if provider_id == "amd":
+                display_label = f"{config.name}: ROCm / Open Source"
+                if missing_requirements:
+                    joined = ", ".join(missing_requirements)
+                    display_label = f"{config.name}: ROCm / Open Source (hosted unavailable - {joined} required)"
+                elif not config.enabled:
+                    display_label = f"{config.name}: ROCm / Open Source (disabled)"
+            
             statuses.append(ProviderStatus(
                 provider_key=provider_id,
                 provider_id=provider_id,
@@ -225,7 +306,10 @@ class RenderService:
                 display_label=display_label,
                 capabilities=config.capabilities,
                 active_jobs=0,
-                queued_jobs=0
+                queued_jobs=0,
+                gpu=gpu,
+                runtime=runtime,
+                models=models
             ))
         return statuses
 
@@ -312,6 +396,31 @@ class RenderService:
         # Validate shot_id is not empty
         if not shot_id or not shot_id.strip():
             raise ValueError("shot_id cannot be empty")
+
+        # ── Per-scene provider override ───────────────────────────────────────
+        # If the project has a per-scene override for this shot's scene, use it
+        # instead of the caller-supplied provider (unless the caller explicitly
+        # passed one, which takes precedence).
+        if provider is None:
+            try:
+                _scene_id_for_override = (
+                    "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+                )
+                _project = project_store.get_project(project_id)
+                if isinstance(_project, dict):
+                    _overrides = _project.get("provider_overrides") or {}
+                    if isinstance(_overrides, dict):
+                        _override_mode = _overrides.get(_scene_id_for_override)
+                        if _override_mode == "hosted_api":
+                            # Use the first non-simulated enabled provider.
+                            for _pid, _cfg in self._provider_configs.items():
+                                if _cfg.enabled and not _cfg.is_simulated:
+                                    provider = _pid
+                                    break
+                        elif _override_mode in ("simulated", "mock_success"):
+                            provider = "simulated"
+            except Exception:
+                pass  # Never block a render due to override lookup failure
         
         # Normalize provider for consistent lookup
         if provider:
@@ -326,7 +435,54 @@ class RenderService:
         else:
             provider = self.get_default_provider()
         
-        job_id = f"job-{datetime.now().strftime('%Y%m%d%H%M%S')}-{shot_id}"
+        # ── Replace generic prompts with real scene descriptions ──────────────
+        # If prompt is generic or too short, fetch the actual scene description
+        _scene_id = "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+        _is_generic = (
+            not prompt.strip()
+            or len(prompt.strip()) < 50
+            or "Generate scene" in prompt
+            or "Cinematic quality" in prompt
+        )
+        
+        if _is_generic:
+            try:
+                _project = project_store.get_project(project_id)
+                if isinstance(_project, dict):
+                    _summary = _project.get("execution_summary") or {}
+                    _scenes = _summary.get("scenes") or []
+                    _scene = next(
+                        (s for s in _scenes if isinstance(s, dict) and s.get("scene_id") == _scene_id),
+                        None
+                    )
+                    if _scene:
+                        _description = str(_scene.get("description") or _scene.get("text") or "").strip()
+                        _location = str(_scene.get("location") or "").strip()
+                        _time_of_day = str(_scene.get("time_of_day") or "").strip()
+                        _tone = str(_scene.get("emotional_tone") or "").strip()
+                        
+                        if _description:
+                            _parts = [_description]
+                            if _location:
+                                _parts.append(f"Location: {_location}")
+                            if _time_of_day:
+                                _parts.append(_time_of_day)
+                            if _tone:
+                                _parts.append(f"Mood: {_tone}")
+                            _parts.append("Cinematic, film quality, single continuous shot.")
+                            
+                            # Build real prompt and cap at 512 characters
+                            prompt = ". ".join(_parts)[:512]
+                            logger.info(
+                                "RENDER_PROMPT_FROM_SCENE | scene=%s | description_length=%d | prompt_length=%d",
+                                _scene_id,
+                                len(_description),
+                                len(prompt)
+                            )
+            except Exception as _exc:
+                logger.warning("Failed to fetch scene description for prompt: %s", _exc)
+        
+        job_id = f"job-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}-{shot_id}"
         
         job = RenderJobModel(
             id=job_id,
@@ -343,7 +499,99 @@ class RenderService:
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat()
         )
+
+        # ── Continuity context injection ──────────────────────────────────────
+        # Derive scene_id from shot_id (e.g. "scene_001_shot_001" → "scene_001").
+        # film_id is the project_id — they are the same identifier here.
+        try:
+            from app.services.continuity_intelligence_service import (
+                continuity_intelligence_service as _cont_svc,
+            )
+            from app.utils.director_intent_injection import build_director_intent_prefix
+            from app.data.storage import get_storage
+            
+            _scene_id = "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+            _ctx = _cont_svc.build_prompt_context(scene_id=_scene_id, film_id=project_id)
+            _has_context = bool(
+                _ctx.get("emotional_register")
+                or _ctx.get("active_motifs")
+                or _ctx.get("tonal_direction")
+                or _ctx.get("continuity_anchors")
+            )
+            
+            # Build director intent prefix
+            _storage = get_storage()
+            _intent = _storage.load_director_intent(project_id)
+            _intent_prefix = build_director_intent_prefix(_intent)
+            
+            # Prepend director intent if it exists
+            if _intent_prefix:
+                job.input_payload.prompt = _intent_prefix + (job.input_payload.prompt or "")
+                logger.info("DIRECTOR_INTENT_INJECTION | project=%s", project_id)
+            
+            # Append continuity context if it exists
+            if _has_context:
+                _motifs = _ctx["active_motifs"]
+                _anchors = _ctx["continuity_anchors"]
+                _block = _CONTINUITY_CONTEXT_BLOCK.format(
+                    emotional_register=_ctx["emotional_register"] or "unspecified",
+                    active_motifs=", ".join(_motifs) if _motifs else "none",
+                    tonal_direction=_ctx["tonal_direction"] or "unspecified",
+                    continuity_anchors=", ".join(_anchors) if _anchors else "none",
+                )
+                job.input_payload.prompt = (job.input_payload.prompt or "") + _block
+                job.continuity_context_injected = True
+                logger.info(
+                    "CONTINUITY_PROMPT_INJECTION | scene=%s | motifs=%d | anchors=%d",
+                    _scene_id,
+                    len(_motifs),
+                    len(_anchors),
+                )
+        except Exception as _exc:  # never block a render
+            logger.debug("Continuity context injection skipped: %s", _exc)
+
+        # Diagnostic logging for provider status
+        config = self._provider_configs.get(provider)
+        runway_api_key = (
+            os.getenv("RUNWAYML_API_SECRET", "").strip()
+            or os.getenv("RUNWAY_API_KEY", "").strip()
+        )
+        test_mode = str(os.getenv("RENDER_PROVIDER_TEST_MODE", "")).strip().lower()
+        use_mock_success = bool(parameters and parameters.get("use_mock_success"))
         
+        # Calculate ready_for_hosted_generation for this provider
+        missing_requirements = []
+        if config and "api_key" in config.requires and not (config.api_key or "").strip():
+            missing_requirements.append("api_key")
+        
+        ready_for_hosted = bool(
+            config
+            and config.enabled
+            and not config.is_simulated
+            and not missing_requirements
+            and not (provider == "runway" and test_mode == "mock_success")
+            and not use_mock_success
+        )
+        
+        logger.info(
+            "RENDER_JOB_CREATED | job_id=%s | provider=%s | hosted=%s | key_present=%s | test_mode=%s | use_mock=%s | missing=%s",
+            job_id,
+            provider,
+            ready_for_hosted,
+            bool(runway_api_key),
+            test_mode or "none",
+            use_mock_success,
+            missing_requirements or "none"
+        )
+        
+        # Log final prompt to verify description is included
+        final_prompt = job.input_payload.prompt or ""
+        logger.info(
+            "FINAL_RENDER_PROMPT | scene=%s | prompt=%s",
+            _scene_id,
+            final_prompt[:150]
+        )
+
         self._jobs[job_id] = job
         _persist_job(job)
         return job
@@ -376,12 +624,18 @@ class RenderService:
             
             job.recovery_status = "active"
             submitted_job = await adapter.submit_job(job)
+            
+            # Ensure provider is set on the returned job
+            if not submitted_job.provider or submitted_job.provider.strip() == "":
+                submitted_job.provider = job.provider
+                logger.info(f"Provider field set to {job.provider} for job {job_id}")
+            
             submitted_job.recovery_status = "active"
             submitted_job.updated_at = datetime.now().isoformat()
             
             self._jobs[job_id] = submitted_job
             _persist_job(submitted_job)
-            _log_audit("submit_job", "render_job", job_id, details=f"provider={job.provider}")
+            _log_audit("submit_job", "render_job", job_id, details=f"provider={submitted_job.provider}")
             
             await _notify_update(job_id, submitted_job.model_dump())
             return submitted_job
@@ -463,6 +717,155 @@ class RenderService:
         _persist_job(job)
         
         return await self.submit_job(job_id)
+
+    async def retry_with_continuity_context(
+        self,
+        job_id: str,
+        film_id: str,
+        scene_id: str,
+    ) -> dict:
+        """
+        Retry a failed render job with a graph-informed prompt adjustment.
+
+        Keeps the original shot description unchanged, replaces the previous
+        continuity context block with a fresh one (the graph may have been
+        updated since the original render), and appends a retry note that
+        highlights the dominant motif or emotional register.
+
+        Caps retries at 3.  When the cap is reached, returns the failed job
+        unchanged with retry_advisory set.
+
+        Args:
+            job_id:   The ID of the failed job to retry.
+            film_id:  The film/project identifier (used for graph lookup).
+            scene_id: The scene identifier (used for context lookup).
+
+        Returns:
+            dict with the new job (or the original job when cap is reached),
+            plus an "advisory" key.
+        """
+        MAX_RETRIES = 3
+
+        # ── Load the failed job ───────────────────────────────────────────────
+        job = self.get_job(job_id)
+        if not job:
+            raise ValueError(f"Job {job_id} not found")
+
+        current_retry_count = job.retry_count or 0
+
+        # ── Enforce cap ───────────────────────────────────────────────────────
+        if current_retry_count >= MAX_RETRIES:
+            advisory = "Maximum retries reached. Manual review recommended."
+            job.retry_advisory = advisory
+            self._jobs[job_id] = job
+            _persist_job(job)
+            return {
+                "job": job.model_dump(),
+                "advisory": advisory,
+                "capped": True,
+            }
+
+        # ── Load fresh continuity context ─────────────────────────────────────
+        fresh_context: dict = {}
+        try:
+            from app.services.continuity_intelligence_service import (
+                continuity_intelligence_service as _cont_svc,
+            )
+            fresh_context = _cont_svc.build_prompt_context(
+                scene_id=scene_id,
+                film_id=film_id,
+            )
+        except Exception as _exc:
+            logger.debug("Continuity context unavailable for retry %s: %s", job_id, _exc)
+
+        # ── Strip old context blocks from the original prompt ─────────────────
+        original_prompt = ""
+        if job.input_payload and job.input_payload.prompt:
+            original_prompt = job.input_payload.prompt
+
+        # Remove any existing [CINEMATIC CONTEXT] and [SHOT POSITION] blocks
+        # so we can replace them with fresh ones.
+        clean_prompt = original_prompt
+        for marker in ("[CINEMATIC CONTEXT]", "[SHOT POSITION]", "[RETRY CONTEXT]"):
+            if marker in clean_prompt:
+                clean_prompt = clean_prompt[: clean_prompt.index(marker)].rstrip()
+
+        # ── Build fresh context block ─────────────────────────────────────────
+        _motifs = fresh_context.get("active_motifs") or []
+        _anchors = fresh_context.get("continuity_anchors") or []
+        _has_ctx = bool(
+            fresh_context.get("emotional_register")
+            or _motifs
+            or fresh_context.get("tonal_direction")
+            or _anchors
+        )
+        fresh_block = ""
+        if _has_ctx:
+            fresh_block = _CONTINUITY_CONTEXT_BLOCK.format(
+                emotional_register=fresh_context.get("emotional_register") or "unspecified",
+                active_motifs=", ".join(_motifs) if _motifs else "none",
+                tonal_direction=fresh_context.get("tonal_direction") or "unspecified",
+                continuity_anchors=", ".join(_anchors) if _anchors else "none",
+            )
+
+        # ── Build retry note ──────────────────────────────────────────────────
+        # Use dominant_motif from motif analysis if available, else emotional_register.
+        priority_signal = ""
+        try:
+            from app.services.continuity_intelligence_service import (
+                continuity_intelligence_service as _cont_svc2,
+            )
+            motif_analysis = _cont_svc2.get_motif_thread_analysis(film_id)
+            priority_signal = motif_analysis.get("dominant_motif") or ""
+        except Exception:
+            pass
+        if not priority_signal:
+            priority_signal = fresh_context.get("emotional_register") or "established visual language"
+
+        retry_note = (
+            f"\n\n[RETRY CONTEXT]"
+            f"\nPrevious attempt failed. "
+            f"Prioritize: {priority_signal}. "
+            f"Keep composition consistent with established visual language."
+        )
+
+        new_prompt = clean_prompt + fresh_block + retry_note
+
+        # ── Create new job ────────────────────────────────────────────────────
+        new_job = self.create_job(
+            project_id=film_id,
+            shot_id=job.shot_id,
+            provider=job.provider,
+            prompt=new_prompt,
+            reference_assets=list(job.input_payload.referenceAssets or []),
+            parameters=dict(job.input_payload.parameters or {}),
+        )
+        new_job.retry_of = job_id
+        new_job.retry_count = current_retry_count + 1
+        new_job.batch_id = job.batch_id  # preserve batch membership
+        self._jobs[new_job.id] = new_job
+        _persist_job(new_job)
+
+        # Submit the new job.
+        try:
+            submitted = await self.submit_job(new_job.id)
+        except Exception as _exc:
+            logger.warning("Retry job %s submit failed: %s", new_job.id, _exc)
+            submitted = new_job
+
+        advisory = (
+            f"Retry {current_retry_count + 1} of {MAX_RETRIES} submitted "
+            f"with fresh continuity context."
+        )
+        return {
+            "job": submitted.model_dump(),
+            "advisory": advisory,
+            "capped": False,
+        }
+
+    def _get_jobs_by_status(self, statuses: list[str]) -> list[RenderJobModel]:
+        """Get all jobs matching any of the given statuses"""
+        return [job for job in self._jobs.values() if job.status in statuses]
 
     def get_job(self, job_id: str) -> Optional[RenderJobModel]:
         """Get a job by ID"""
@@ -560,6 +963,7 @@ class RenderService:
             if not updated.completed_at:
                 updated.completed_at = updated.last_polled_at
 
+            await _run_continuity_review(updated)
             self._jobs[job_id] = updated
             _persist_job(updated)
             await _notify_update(job_id, updated.model_dump())
@@ -576,6 +980,39 @@ class RenderService:
         await _notify_update(job_id, updated.model_dump())
         return updated
 
+    async def refresh_output_url(self, job_id: str) -> Optional[str]:
+        """Refresh an expired hosted output URL from the upstream Runway task."""
+        job = self.get_job(job_id)
+        if not job or job.provider != "runway" or not job.provider_job_id:
+            return None
+
+        config = self._provider_configs.get("runway")
+        if not config:
+            return None
+
+        adapter = get_adapter("runway", config)
+        refreshed = await adapter.get_job_status(job)
+        fresh_url = ""
+        if refreshed.output_payload:
+            fresh_url = str(refreshed.output_payload.asset_url or "").strip()
+            if not fresh_url and isinstance(refreshed.output_payload.metadata, dict):
+                normalized = refreshed.output_payload.metadata.get("provider_response_normalized")
+                if isinstance(normalized, dict):
+                    output = normalized.get("output")
+                    if isinstance(output, dict):
+                        fresh_url = str(output.get("video_url") or "").strip()
+
+        if not fresh_url:
+            return None
+
+        refreshed.output_payload = refreshed.output_payload or RenderJobOutput(asset_url=fresh_url, thumbnail_url=None, metadata={})
+        refreshed.output_payload.asset_url = fresh_url
+        refreshed.updated_at = datetime.now().isoformat()
+        self._jobs[job_id] = refreshed
+        _persist_job(refreshed)
+        await _notify_update(job_id, refreshed.model_dump())
+        return fresh_url
+
     @staticmethod
     def _parse_iso(value: Optional[str]) -> Optional[datetime]:
         if not value:
@@ -591,6 +1028,195 @@ class RenderService:
         if baseline is None:
             return False
         return (datetime.now(baseline.tzinfo) - baseline).total_seconds() >= STALE_RENDER_THRESHOLD_SECONDS
+
+    async def create_scene_batch(
+        self,
+        film_id: str,
+        scene_id: str,
+        scene_data: dict,
+        shots: list,
+        provider: Optional[str] = None,
+    ) -> dict:
+        """
+        Create a coordinated batch of render jobs for all shots in a scene.
+
+        Calls build_prompt_context() once for the scene so every shot in the
+        batch shares the same visual continuity context.  Each shot also
+        receives a position note (opening / continuation / closing) so the
+        provider understands its role in the sequence.
+
+        Jobs are created in order and submitted in parallel.
+
+        Args:
+            film_id:    The film/project identifier.
+            scene_id:   The scene identifier.
+            scene_data: Scene metadata dict (description, emotional_tone, etc.).
+            shots:      Ordered list of shot dicts.  Each dict should contain at
+                        least a ``shot_id`` and optionally ``description``,
+                        ``camera``, ``prompt``.
+            provider:   Optional provider override; falls back to default.
+
+        Returns:
+            {
+                "batch_id":       str,
+                "scene_id":       str,
+                "job_ids":        list[str],
+                "shared_context": dict,   # continuity context applied to all shots
+                "status":         "pending"
+            }
+        """
+        import uuid as _uuid
+
+        batch_id = f"batch-{_uuid.uuid4().hex[:16]}"
+        total = len(shots)
+
+        # ── Build shared continuity context once for the whole scene ─────────
+        shared_context: dict = {}
+        try:
+            from app.services.continuity_intelligence_service import (
+                continuity_intelligence_service as _cont_svc,
+            )
+            shared_context = _cont_svc.build_prompt_context(
+                scene_id=scene_id,
+                film_id=film_id,
+            )
+        except Exception as _exc:
+            logger.debug("Batch shared context unavailable for scene %s: %s", scene_id, _exc)
+
+        # ── Build the shared context block string ─────────────────────────────
+        _motifs = shared_context.get("active_motifs") or []
+        _anchors = shared_context.get("continuity_anchors") or []
+        _has_ctx = bool(
+            shared_context.get("emotional_register")
+            or _motifs
+            or shared_context.get("tonal_direction")
+            or _anchors
+        )
+        shared_context_block = ""
+        if _has_ctx:
+            shared_context_block = _CONTINUITY_CONTEXT_BLOCK.format(
+                emotional_register=shared_context.get("emotional_register") or "unspecified",
+                active_motifs=", ".join(_motifs) if _motifs else "none",
+                tonal_direction=shared_context.get("tonal_direction") or "unspecified",
+                continuity_anchors=", ".join(_anchors) if _anchors else "none",
+            )
+
+        # ── Create one job per shot ───────────────────────────────────────────
+        job_ids: list[str] = []
+        for index, shot in enumerate(shots):
+            shot_id = str(shot.get("shot_id") or f"{scene_id}_shot_{index + 1:03d}")
+            base_prompt = str(
+                shot.get("prompt")
+                or shot.get("description")
+                or shot.get("visual_description")
+                or ""
+            ).strip()
+            camera = str(shot.get("camera") or shot.get("camera_notes") or "").strip()
+            if camera:
+                base_prompt = f"{base_prompt}. Camera: {camera}".strip(". ")
+
+            # Shot position note
+            if total == 1:
+                position_note = "Single shot — establish the space and carry the full emotional register."
+            elif index == 0:
+                position_note = f"Shot 1 of {total} in scene. Opening shot — establish the space."
+            elif index == total - 1:
+                position_note = f"Shot {index + 1} of {total} in scene. Closing shot — carry emotional register forward."
+            else:
+                position_note = f"Shot {index + 1} of {total} in scene. Continuation — maintain visual consistency with prior shot."
+
+            full_prompt = base_prompt
+            if shared_context_block:
+                full_prompt = full_prompt + shared_context_block
+            full_prompt = full_prompt + f"\n\n[SHOT POSITION]\n{position_note}"
+
+            job = self.create_job(
+                project_id=film_id,
+                shot_id=shot_id,
+                provider=provider,
+                prompt=full_prompt,
+                reference_assets=shot.get("reference_assets") or [],
+                parameters=shot.get("parameters") or {},
+            )
+            # Tag the job with the batch_id
+            job.batch_id = batch_id
+            self._jobs[job.id] = job
+            _persist_job(job)
+            job_ids.append(job.id)
+
+        # ── Submit all jobs in parallel ───────────────────────────────────────
+        submit_tasks = [self.submit_job(jid) for jid in job_ids]
+        results = await asyncio.gather(*submit_tasks, return_exceptions=True)
+        for jid, result in zip(job_ids, results):
+            if isinstance(result, Exception):
+                logger.warning("Batch job %s submit failed: %s", jid, result)
+
+        # ── Store batch metadata ──────────────────────────────────────────────
+        batch = {
+            "batch_id": batch_id,
+            "scene_id": scene_id,
+            "film_id": film_id,
+            "job_ids": job_ids,
+            "shared_context": shared_context,
+            "status": "pending",
+        }
+        self._batches[batch_id] = batch
+        logger.info(
+            "SCENE_BATCH_CREATED | batch=%s | scene=%s | shots=%d",
+            batch_id, scene_id, total,
+        )
+        return batch
+
+    def get_batch_status(self, batch_id: str) -> Optional[dict]:
+        """
+        Return the current status of a render batch.
+
+        Counts jobs by terminal state and returns a summary.
+
+        Args:
+            batch_id: The batch identifier.
+
+        Returns:
+            {
+                "batch_id":  str,
+                "scene_id":  str,
+                "total":     int,
+                "complete":  int,
+                "pending":   int,
+                "failed":    int,
+                "jobs":      list[dict]
+            }
+            or None if the batch_id is not found.
+        """
+        batch = self._batches.get(batch_id)
+        if not batch:
+            return None
+
+        job_dicts: list[dict] = []
+        complete = pending = failed = 0
+        for jid in batch["job_ids"]:
+            job = self.get_job(jid)
+            if job:
+                d = job.model_dump()
+                job_dicts.append(d)
+                if job.status == "complete":
+                    complete += 1
+                elif job.status in ("failed", "cancelled"):
+                    failed += 1
+                else:
+                    pending += 1
+            else:
+                pending += 1
+
+        return {
+            "batch_id": batch_id,
+            "scene_id": batch.get("scene_id", ""),
+            "total": len(batch["job_ids"]),
+            "complete": complete,
+            "pending": pending,
+            "failed": failed,
+            "jobs": job_dicts,
+        }
 
     async def recover_jobs_after_restart(self) -> dict:
         """Recover rendering/pending jobs and reconcile orphaned provider tasks after restart."""
@@ -619,6 +1245,7 @@ class RenderService:
                             updated.completed_at = updated.updated_at
                         if updated.status == "complete":
                             updated.recovery_status = "recovered_terminal"
+                            await _run_continuity_review(updated)
                         elif updated.is_terminal():
                             updated.recovery_status = "recovery_failed"
                         else:
@@ -645,6 +1272,30 @@ class RenderService:
             "error_count": len(errors),
             "errors": errors,
         }
+
+    async def poll_active_runway_jobs(self) -> None:
+        """
+        Background loop that polls Runway for all jobs in incomplete states.
+        Runs every 10 seconds. Never raises — logs errors and continues.
+        """
+        POLL_STATUSES = ["queued", "pending", "rendering", "processing", "submitted"]
+        logger.info("POLLING_LOOP_STARTED | interval=10s | statuses=%s", POLL_STATUSES)
+        
+        while True:
+            try:
+                active_jobs = self._get_jobs_by_status(POLL_STATUSES)
+                logger.info("POLLING_CYCLE | checking=%d jobs", len(active_jobs))
+                
+                for job in active_jobs:
+                    if job.provider != "runway":
+                        continue
+                    try:
+                        await self.reconcile_completed_runway_task(job.id)
+                    except Exception as e:
+                        logger.debug("Polling error for job %s: %s", job.id, e)
+            except Exception as e:
+                logger.error("Polling loop error: %s", e)
+            await asyncio.sleep(10)
 
 
 # Global service instance

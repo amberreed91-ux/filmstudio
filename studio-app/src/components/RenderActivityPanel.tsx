@@ -13,7 +13,16 @@ function statusLabel(status: LiveRenderStatus): string {
   return 'Failed'
 }
 
-function toClock(totalSeconds: number): string {
+function toClock(totalSeconds: number, status: LiveRenderStatus): string {
+  // For completed/failed jobs, show status text instead of elapsed time
+  if (status === 'completed') return 'Completed'
+  if (status === 'failed') return 'Failed'
+  
+  // Cap at 10 minutes (600 seconds)
+  if (totalSeconds > 600) {
+    return 'Taking longer than expected'
+  }
+  
   const mins = Math.floor(totalSeconds / 60)
   const secs = totalSeconds % 60
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
@@ -73,16 +82,24 @@ export default function RenderActivityPanel({ roomName }: { roomName: 'Lobby' | 
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-zinc-300">
           <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5">
             <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">Provider</div>
-            <div className="mt-1 truncate text-zinc-100">{formatProviderLabel(activity?.provider, availableProviderIds)}</div>
+            <div className="mt-1 truncate text-zinc-100">{formatProviderLabel(activity?.provider, availableProviderIds)}{activity?.model ? ` - ${activity.model}` : ''}</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5">
             <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">Elapsed</div>
-            <div className="mt-1 font-semibold text-zinc-100">{toClock(activity?.elapsedSeconds ?? 0)}</div>
+            <div className="mt-1 font-semibold text-zinc-100">{toClock(activity?.elapsedSeconds ?? 0, effectiveStatus)}</div>
           </div>
         </div>
-        <div className="mt-2 rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[11px] text-zinc-300">
-          <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">Task ID</span>
-          <div className="mt-1 truncate font-mono text-[11px] text-zinc-100">{activity?.taskId || enteredTaskId || 'n/a'}</div>
+        <div className="mt-2 space-y-2">
+          <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[11px] text-zinc-300">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">Task ID</span>
+            <div className="mt-1 truncate font-mono text-[11px] text-zinc-100">{activity?.taskId || enteredTaskId || 'n/a'}</div>
+          </div>
+          {activity?.taskId && activity.taskId !== (activity as any).jobId && (
+            <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[11px] text-zinc-300">
+              <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">Job ID</span>
+              <div className="mt-1 truncate font-mono text-[9px] text-zinc-400">{(activity as any).jobId || 'n/a'}</div>
+            </div>
+          )}
         </div>
       </div>
     </aside>

@@ -8,6 +8,7 @@ import { useRenderActivity } from '../context/RenderActivityContext'
 import { useAudioUX } from '../context/AudioUXContext'
 import { getRouteByPath, getRouteLabel } from '../routes'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import { roomDescription } from '../lib/userFacingText'
 
 const LazyAICrewPresence = lazyLoad(
   () => import('./AICrewPresence'),
@@ -228,6 +229,7 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
     { key: 'screening-room', label: 'Screening Room', to: '/studio/screening-room' },
     { key: 'archive', label: 'Archive', to: '/studio/archive' },
   ]
+  const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
   const [studioStatusOpen, setStudioStatusOpen] = useState(false)
   const hasGeneratedScenesFlag = localStorage.getItem('studio_scenes_generated') === '1'
   const hasApprovedScenesFlag = localStorage.getItem('studio_approved_scenes') === '1'
@@ -359,7 +361,7 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
   const currentStepLabel = flowSteps[activeStepIndex]?.label || 'Script'
 
   return (
-    <div className={`studio-room-shell ${roomVisualClass} ${productionStateClass} relative flex min-h-screen flex-col overflow-visible`} style={{ background: 'var(--bg-deep)' }}>
+    <div className={`studio-room-shell ${roomVisualClass} ${productionStateClass} relative flex min-h-screen flex-col overflow-x-auto`} style={{ background: 'var(--bg-deep)' }}>
       <TopNav title={activeTitle} subtitle={subtitle || route?.purpose} />
       {showBreadcrumbs ? <Breadcrumbs items={breadcrumbs} /> : null}
 
@@ -437,27 +439,58 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
               {roomNav.map((item) => {
                 const isActive = Boolean(matchPath({ path: item.to, end: true }, location.pathname))
+                const desc = roomDescription(item.key)
+                const getRoomIconClass = (key: string) => {
+                  if (key === 'lobby') return 'room-icon-home'
+                  if (key === 'workspace') return 'room-icon-workspace'
+                  if (key === 'development-room') return 'room-icon-study'
+                  if (key === 'writers-room') return 'room-icon-writers'
+                  if (key === 'study-room') return 'room-icon-study'
+                  if (key === 'production-board') return 'room-icon-previs'
+                  if (key === 'screening-room') return 'room-icon-approval'
+                  if (key === 'archive') return 'room-icon-study'
+                  return ''
+                }
+                const roomIconClass = getRoomIconClass(item.key)
                 return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => {
-                      if (import.meta.env.DEV) {
-                        console.log('[NavDebug] clicked room', {
-                          key: item.key,
-                          path: item.to,
-                          before: location.pathname,
-                        })
-                      }
-                      navigate(withProjectQuery(item.to, activeProjectId))
-                      if (import.meta.env.DEV) {
-                        console.log('[NavDebug] navigate called', { afterTarget: item.to })
-                      }
-                    }}
-                    className={`rounded-md border px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] ${isActive ? 'border-cyan-300/55 bg-cyan-500/14 text-cyan-100' : 'border-white/10 bg-black/20 text-zinc-300'}`}
-                  >
-                    {item.label}
-                  </button>
+                  <div key={item.key} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (import.meta.env.DEV) {
+                          console.log('[NavDebug] clicked room', {
+                            key: item.key,
+                            path: item.to,
+                            before: location.pathname,
+                          })
+                        }
+                        navigate(withProjectQuery(item.to, activeProjectId))
+                        if (import.meta.env.DEV) {
+                          console.log('[NavDebug] navigate called', { afterTarget: item.to })
+                        }
+                      }}
+                      onMouseEnter={() => setHoveredRoom(item.key)}
+                      onMouseLeave={() => setHoveredRoom(null)}
+                      onFocus={() => setHoveredRoom(item.key)}
+                      onBlur={() => setHoveredRoom(null)}
+                      className={`rounded-md border px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] ${roomIconClass} ${isActive ? 'border-cyan-300/55 bg-cyan-500/14 text-cyan-100' : 'border-white/10 bg-black/20 text-zinc-300'}`}
+                    >
+                      {item.label}
+                    </button>
+                    {hoveredRoom === item.key && desc && (
+                      <div
+                        className="absolute z-[9999] top-full mt-1 w-48 max-w-[12rem] overflow-hidden rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[9px] text-zinc-300 shadow-lg pointer-events-none whitespace-normal"
+                        style={{
+                          maxWidth: '12rem',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          minWidth: '10rem',
+                        }}
+                      >
+                        <div className="break-words">{desc}</div>
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -476,7 +509,8 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
         ) : null}
       </div>
 
-      <main className="w-full" style={{ background: 'linear-gradient(180deg, var(--bg-deep) 0%, #030306 40%, #010104 100%), radial-gradient(ellipse 80% 50% at 50% -10%, rgba(214,169,92,0.07) 0%, transparent 70%)', isolation: 'isolate' }}>
+      <main className="w-full studio-shell-main" style={{ background: 'linear-gradient(180deg, var(--bg-deep) 0%, #030306 40%, #010104 100%), radial-gradient(ellipse 80% 50% at 50% -10%, rgba(214,169,92,0.07) 0%, transparent 70%)', isolation: 'isolate' }}>
+        <div className="film-strip-decoration" />
         <div className="pointer-events-none absolute inset-0 z-0"
           style={{
             background: 'radial-gradient(ellipse 60% 40% at 15% 5%, rgba(122,214,209,0.05) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 15%, rgba(214,169,92,0.05) 0%, transparent 60%)',

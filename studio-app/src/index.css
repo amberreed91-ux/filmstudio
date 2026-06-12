@@ -1,7 +1,123 @@
 @import "tailwindcss";
+@import "./styles/studio-pro-design-system.css";
 
+/* Apply design system variables to base layer for Tailwind v4 */
+@layer base {
+  :root {
+    /* Design system colors */
+    --bg-void: #040810;
+    --bg-primary: #080f1a;
+    --bg-secondary: #0d1526;
+    --bg-elevated: #111d2e;
+    --bg-hover: #162236;
+    --border-subtle: #1a2744;
+    --border-default: #243452;
+    --border-active: #2d4470;
+    --text-primary: #e8edf5;
+    --text-secondary: #8896b0;
+    --text-dimmed: #4a5568;
+    --text-mono: #5b8dd9;
+    --accent-purple: #7c6af7;
+    --accent-amber: #e8a020;
+    --accent-green: #2ecc7a;
+    --accent-red: #e05050;
+    --accent-cyan: #38b2c8;
+  }
+
+  body {
+    background-color: #040810;
+    color: #e8edf5;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Utility classes */
+  .mono {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    color: #5b8dd9;
+  }
+
+  /* Card/Panel components */
+  .studio-card,
+  .studio-panel {
+    background: #0d1526;
+    border: 1px solid #1a2744;
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  /* Primary buttons */
+  .btn-studio-primary {
+    background: #7c6af7;
+    color: #040810;
+    border: none;
+    border-radius: 5px;
+    font-weight: 600;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: opacity 150ms ease;
+  }
+
+  .btn-studio-primary:hover {
+    opacity: 0.9;
+  }
+
+  /* Secondary buttons */
+  .btn-studio-secondary {
+    background: transparent;
+    border: 1px solid #334155;
+    color: #8896b0;
+    border-radius: 5px;
+    font-weight: 600;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .btn-studio-secondary:hover {
+    border-color: #475569;
+    color: #e8edf5;
+  }
+
+  /* Navigation */
+  .studio-nav {
+    background: #080f1a;
+    border-bottom: 1px solid #1a2744;
+  }
+
+  .studio-nav-tab {
+    color: #4a5568;
+    background: transparent;
+    border: none;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: color 150ms ease;
+    border-bottom: 2px solid transparent;
+  }
+
+  .studio-nav-tab:hover {
+    color: #8896b0;
+  }
+
+  .studio-nav-tab-active {
+    color: #e8edf5;
+    border-bottom-color: #7c6af7;
+  }
+
+  /* Advisory panel (replaces red blocked banner) */
+  .studio-advisory {
+    border-left: 3px solid #e8a020;
+    background: #0d1526;
+    border-top: 1px solid #1a2744;
+    border-right: 1px solid #1a2744;
+    border-bottom: 1px solid #1a2744;
+    border-radius: 8px;
+    padding: 20px;
+  }
+}
+
+/* Legacy variables - will be gradually migrated to design system */
 :root {
-  --font-display: 'Sora', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
   --brand-cyan-100: #d5f6f3;
   --brand-cyan-300: #7ad6d1;
@@ -65,39 +181,18 @@ html {
 }
 
 body {
-  background:
-    radial-gradient(1100px 700px at 52% 18%, rgba(214, 169, 92, 0.1), transparent 62%),
-    linear-gradient(180deg, #0a0a0a 0%, #050505 34%, #020202 100%);
+  background: var(--bg-void);
   color: var(--text-primary);
-  font-family: var(--font-body);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   letter-spacing: 0.01em;
   position: relative;
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.035), transparent 45%),
-    radial-gradient(700px 460px at 78% 10%, rgba(122, 214, 209, 0.06), transparent 70%);
-  z-index: -2;
-}
-
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 0.45px, transparent 0.45px);
-  background-size: 3px 3px;
-  mix-blend-mode: soft-light;
-  opacity: 0.16;
-  z-index: -1;
+  margin: 0;
+  padding: 0;
 }
 
 #root {
@@ -108,18 +203,18 @@ body::after {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-panel);
+  background: var(--bg-primary);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 3px;
+  background: var(--border-default);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.25);
+  background: var(--text-dimmed);
 }
 
 input, textarea, select {
@@ -740,7 +835,7 @@ p {
 
 .ai-crew-presence {
   position: fixed;
-  left: 14px;
+  right: 14px;
   bottom: 18px;
   width: min(335px, calc(100vw - 24px));
   border-radius: 14px;
@@ -750,6 +845,16 @@ p {
   overflow: hidden;
   backdrop-filter: blur(9px);
   z-index: 48;
+}
+
+/* On smaller screens, move to top-right to avoid navigation */
+@media (max-width: 768px) {
+  .ai-crew-presence {
+    top: 80px;
+    bottom: auto;
+    right: 14px;
+    left: auto;
+  }
 }
 
 .ai-crew-radio {
@@ -1383,4 +1488,455 @@ p {
   transform: translateY(-1px) scale(1.02);
   box-shadow: 0 0 26px rgba(214, 169, 92, 0.34);
   background: linear-gradient(135deg, rgba(214, 169, 92, 0.28), rgba(214, 169, 92, 0.12));
+}
+
+/* ============================================
+   CINEMA VISUAL LAYER - Film Studio Aesthetic
+   ============================================ */
+
+/* 1. Film Grain Texture Overlay */
+:root {
+  --film-grain-opacity: 0.04;
+}
+
+.film-grain-overlay::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--film-grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-size: 400px;
+  animation: grainShift 8s steps(10) infinite;
+}
+
+@keyframes grainShift {
+  0%, 100% { background-position: 0 0; }
+  10% { background-position: 100px 0; }
+  20% { background-position: 0 100px; }
+  30% { background-position: 100px 100px; }
+  40% { background-position: 200px 0; }
+  50% { background-position: 0 200px; }
+  60% { background-position: 200px 100px; }
+  70% { background-position: 100px 200px; }
+  80% { background-position: 200px 200px; }
+  90% { background-position: 0 0; }
+}
+
+/* Apply film grain to studio shell main area */
+.studio-shell-main {
+  position: relative;
+}
+
+.studio-shell-main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--film-grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-size: 400px;
+  animation: grainShift 8s steps(10) infinite;
+}
+
+/* 2. Scene Thumbnail Film Frame Placeholders */
+.aspect-widescreen {
+  position: relative;
+  aspect-ratio: 2.39 / 1;
+  background: linear-gradient(135deg, #0d1526 0%, #111827 50%, #0a0f1c 100%);
+  border: 2px solid rgba(6, 182, 212, 0.15);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.aspect-widescreen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  border-radius: 11px;
+  pointer-events: none;
+}
+
+.aspect-widescreen::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 9px;
+  pointer-events: none;
+}
+
+/* Film frame with clapperboard pattern */
+.aspect-widescreen .film-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgba(6, 182, 212, 0.6);
+}
+
+.aspect-widescreen .film-placeholder svg {
+  width: 60%;
+  height: 60%;
+  opacity: 0.3;
+}
+
+/* Clapperboard SVG placeholder */
+.aspect-widescreen .clapperboard-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, transparent 0%, rgba(6, 182, 212, 0.05) 50%, transparent 100%);
+}
+
+.aspect-widescreen .clapperboard-placeholder::before,
+.aspect-widescreen .clapperboard-placeholder::after {
+  content: '';
+  position: absolute;
+  width: 80%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.4), transparent);
+}
+
+.aspect-widescreen .clapperboard-placeholder::before {
+  top: 30%;
+}
+
+.aspect-widescreen .clapperboard-placeholder::after {
+  top: 50%;
+}
+
+/* Film strip perforations pattern */
+@keyframes filmScroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-100px); }
+}
+
+.film-strip-decoration {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  opacity: 0.05;
+}
+
+.film-strip-decoration .strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 200%;
+  background: 
+    repeating-linear-gradient(
+      to bottom,
+      rgba(6, 182, 212, 0.8) 0px,
+      rgba(6, 182, 212, 0.8) 2px,
+      transparent 2px,
+      transparent 8px
+    ),
+    linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.1), transparent);
+  animation: filmScroll 40s linear infinite;
+}
+
+.film-strip-decoration .perf {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 4px;
+  height: 100%;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(6, 182, 212, 0.8) 0px,
+    rgba(6, 182, 212, 0.8) 2px,
+    transparent 2px,
+    transparent 8px
+  );
+  transform: translateX(-50%);
+}
+
+/* 3. Cinematic Hero - Studio Home */
+.cinematic-hero {
+  position: relative;
+  min-height: 100vh;
+  background: 
+    linear-gradient(180deg, #040810 0%, #030306 40%, #010104 100%),
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(214, 169, 92, 0.07) 0%, transparent 70%),
+    /* Deep navy to black with subtle teal light leak */
+    radial-gradient(ellipse 60% 40% at 15% 5%, rgba(6, 182, 212, 0.08) 0%, transparent 40%),
+    /* Amber lens flare effect */
+    radial-gradient(ellipse 50% 30% at 85% 15%, rgba(214, 169, 92, 0.06) 0%, transparent 35%),
+    /* Subtle vignette */
+    radial-gradient(ellipse 120% 120% at 50% 50%, rgba(0, 0, 0, 0.2) 0%, transparent 70%);
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.cinematic-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at center, rgba(6, 182, 212, 0.03) 0%, transparent 50%),
+    linear-gradient(45deg, transparent 49%, rgba(6, 182, 212, 0.02) 50%, transparent 51%);
+  pointer-events: none;
+}
+
+.cinematic-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: var(--film-grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-size: 400px;
+  animation: grainShift 8s steps(10) infinite;
+  pointer-events: none;
+}
+
+/* 4. Aspect Ratio Frame UI for Scene Cards */
+.scene-frame {
+  position: relative;
+  border: 2px solid rgba(6, 182, 212, 0.25);
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0d1526 0%, #111827 100%);
+}
+
+.scene-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(6, 182, 212, 0.1);
+  border-radius: 15px;
+  pointer-events: none;
+}
+
+/* Film frame corner markers (viewfinder style) */
+.scene-frame-corner-marker {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-style: solid;
+  border-color: rgba(6, 182, 212, 0.4);
+  pointer-events: none;
+}
+
+.scene-frame-corner-marker.top-left {
+  top: 8px;
+  left: 8px;
+  border-width: 2px 0 0 2px;
+  border-radius: 4px 0 0 0;
+}
+
+.scene-frame-corner-marker.top-right {
+  top: 8px;
+  right: 8px;
+  border-width: 2px 2px 0 0;
+  border-radius: 0 4px 0 0;
+}
+
+.scene-frame-corner-marker.bottom-left {
+  bottom: 8px;
+  left: 8px;
+  border-width: 0 0 2px 2px;
+  border-radius: 0 0 0 4px;
+}
+
+.scene-frame-corner-marker.bottom-right {
+  bottom: 8px;
+  right: 8px;
+  border-width: 0 2px 2px 0;
+  border-radius: 0 0 4px 0;
+}
+
+/* 5. Animated Film Strip - Sidebar */
+.sidebar-film-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 30px;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  opacity: 0.08;
+}
+
+.sidebar-film-strip .film {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 200%;
+  background: 
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      rgba(6, 182, 212, 0.8) 1px,
+      rgba(6, 182, 212, 0.8) 2px,
+      transparent 2px,
+      transparent 16px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(6, 182, 212, 0.1),
+      rgba(6, 182, 212, 0.1) 2px,
+      transparent 2px,
+      transparent 8px
+    );
+  animation: filmScroll 60s linear infinite;
+}
+
+/* 6. Room-specific Visual Identity Icons */
+/* These are applied via className on navigation elements */
+
+/* Writers Room - Typewriter/Pen icon styling */
+.room-icon-writers { background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), transparent); }
+.room-icon-writers::before { content: "🖋️"; font-size: 1.2em; }
+
+/* Previs Room - Storyboard frames */
+.room-icon-previs { background: linear-gradient(135deg, rgba(214, 169, 92, 0.15), transparent); }
+.room-icon-previs::before { content: "🎞️"; font-size: 1.2em; }
+
+/* Approval Room - Clapperboard */
+.room-icon-approval { background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), transparent); }
+.room-icon-approval::before { content: "🎬"; font-size: 1.2em; }
+
+/* Study Room - Film reel */
+.room-icon-study { background: linear-gradient(135deg, rgba(148, 163, 184, 0.15), transparent); }
+.room-icon-study::before { content: "🎥"; font-size: 1.2em; }
+
+/* Crew Ops - Director's chair */
+.room-icon-crew { background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), transparent); }
+.room-icon-crew::before { content: "🪑"; font-size: 1.2em; }
+
+/* Cost Manager - Slate/budget board */
+.room-icon-cost { background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), transparent); }
+.room-icon-cost::before { content: "💰"; font-size: 1.2em; }
+
+/* Workspace - Editing timeline */
+.room-icon-workspace { background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), transparent); }
+.room-icon-workspace::before { content: "✂️"; font-size: 1.2em; }
+
+/* Studio Home - Movie camera */
+.room-icon-home { background: linear-gradient(135deg, rgba(214, 169, 92, 0.15), transparent); }
+.room-icon-home::before { content: "🎥"; font-size: 1.2em; }
+
+/* Enhanced clapperboard SVG for placeholders */
+.clapperboard-svg {
+  width: 100%;
+  height: 100%;
+  opacity: 0.5;
+}
+
+.clapperboard-svg path {
+  stroke: rgba(6, 182, 212, 0.6);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.clapperboard-svg line {
+  stroke: rgba(6, 182, 212, 0.4);
+  stroke-width: 1;
+}
+
+/* Light leak effect for special sections */
+.light-leak {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(40px);
+}
+
+.light-leak-teal {
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
+}
+
+.light-leak-amber {
+  background: radial-gradient(circle, rgba(214, 169, 92, 0.12) 0%, transparent 70%);
+}
+
+/* Vignette effect for focused areas */
+.vignette {
+  position: relative;
+}
+
+.vignette::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.3) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Subtle lens flare effect */
+.lens-flare {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+  background: 
+    radial-gradient(circle, rgba(214, 169, 92, 0.1) 0%, transparent 30%),
+    conic-gradient(from 0deg, transparent 0deg, rgba(214, 169, 92, 0.05) 10deg, transparent 20deg);
+  filter: blur(20px);
+}
+
+/* Film burn effect for edges */
+.film-burn {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  background: 
+    linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(0, 0, 0, 0.8) 50%,
+      transparent 100%
+    );
+  opacity: 0.5;
+}
+
+/* Animated subtle pulse for active elements */
+@keyframes subtlePulse {
+  0%, 100% { opacity: 0.03; }
+  50% { opacity: 0.06; }
+}
+
+.subtle-pulse {
+  animation: subtlePulse 4s ease-in-out infinite;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .film-strip-decoration {
+    width: 20px;
+    opacity: 0.03;
+  }
+  
+  .aspect-widescreen {
+    border-radius: 8px;
+  }
+  
+  .scene-frame {
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .film-strip-decoration {
+    display: none;
+  }
 }

@@ -27,6 +27,8 @@ import {
 type StudioContextValue = {
   overview: StudioOverview | null
   project: StudioProject | null
+  activeProject: StudioProject | null
+  activeProjectId: string | null
   loading: boolean
   error: string | null
   isDemoMode: boolean
@@ -35,6 +37,7 @@ type StudioContextValue = {
   pollingJobs: Set<string>
   selectedRenderProvider: string | null
   setSelectedRenderProvider: (provider: string | null) => void
+  setActiveProject: (projectId: string | null) => Promise<void>
   refreshOverview: () => Promise<void>
   loadProject: (projectId: string, options?: { sessionId?: string | null }) => Promise<void>
   loadDemo: (demoId?: string) => Promise<void>
@@ -50,7 +53,7 @@ type StudioContextValue = {
   analyzeStudyUpload: (file: File, options?: { rightsStatus?: string; studyFocus?: string; notes?: string }) => Promise<StudyReferenceStudy>
   recordDailiesSelect: (renderId: string, selected: boolean, score?: number, qcNote?: string) => Promise<void>
   loadProviders: () => Promise<void>
-  createJob: (shotId: string, provider?: string, prompt?: string, referenceAssets?: string[]) => Promise<RenderJob>
+  createJob: (shotId: string, provider?: string, model?: string, prompt?: string, referenceAssets?: string[], parameters?: Record<string, unknown>) => Promise<RenderJob>
   submitJob: (jobId: string) => Promise<RenderJob>
   cancelJob: (jobId: string) => Promise<void>
   retryJob: (jobId: string) => Promise<RenderJob>
@@ -59,7 +62,7 @@ type StudioContextValue = {
   stopJobPolling: (jobId: string) => void
 }
 
-const STORAGE_KEY = 'studio:selected-project-id'
+const STORAGE_KEY = 'studio:active-project-id' // Use sessionStorage for active project
 
 const StudioContext = createContext<StudioContextValue | null>(null)
 
@@ -105,6 +108,8 @@ function collectKnownRenderIds(project: StudioProject | null) {
 export function StudioProvider({ children }: { children: ReactNode }) {
   const [overview, setOverview] = useState<StudioOverview | null>(null)
   const [project, setProject] = useState<StudioProject | null>(null)
+  const [activeProject, setActiveProjectState] = useState<StudioProject | null>(null)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isDemoMode] = useState(false)
@@ -114,37 +119,50 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [selectedRenderProvider, setSelectedRenderProvider] = useState<string | null>(null)
   const pollingIntervals = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
+  async function setActiveProject(projectId: string | null) {
+    if (!projectId) {
+      setActiveProjectState(null)
+      setActiveProjectId(null)
+      sessionStorage.removeItem(STORAGE_KEY)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    try {
+      const current = await getStudioProject(projectId)
+      setActiveProjectState(current)
+      setActiveProjectId(projectId)
+      setProject(current) // Keep project in sync
+      sessionStorage.setItem(STORAGE_KEY, projectId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function refreshOverview() {
     setLoading(true)
     setError(null)
     try {
       const data = await getStudioOverview()
       setOverview(data)
-      const storedProjectId = window.localStorage.getItem(STORAGE_KEY)
-      const latestProjectId = data.latest_project?.project_id || data.projects?.[0]?.project_id || ''
-      const candidateProjectIds = [storedProjectId, latestProjectId].filter((value): value is string => Boolean(value))
-      let loadedProject: StudioProject | null = null
-      let lastLoadError: unknown = null
-
-      for (const candidate of candidateProjectIds) {
+      
+      // Check sessionStorage for active project (don't auto-select)
+      const storedProjectId = sessionStorage.getItem(STORAGE_KEY)
+      if (storedProjectId) {
         try {
-          loadedProject = await getStudioProject(candidate)
-          break
+          const loadedProject = await getStudioProject(storedProjectId)
+          setActiveProjectState(loadedProject)
+          setActiveProjectId(storedProjectId)
+          setProject(loadedProject)
         } catch (err) {
-          lastLoadError = err
-        }
-      }
-
-      if (loadedProject) {
-        setProject(loadedProject)
-        window.localStorage.setItem(STORAGE_KEY, loadedProject.project_id)
-      } else {
-        setProject(data.latest_project || null)
-        if (storedProjectId && latestProjectId && storedProjectId !== latestProjectId) {
-          window.localStorage.setItem(STORAGE_KEY, latestProjectId)
-        }
-        if (lastLoadError) {
-          // Silent fallback - using latest project
+          // Stored project not found, clear it
+          sessionStorage.removeItem(STORAGE_KEY)
+          setActiveProjectState(null)
+          setActiveProjectId(null)
         }
       }
     } catch (err) {
@@ -161,7 +179,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     try {
       const current = await getStudioProject(projectId, { sessionId: options?.sessionId ?? null })
       setProject(current)
-      window.localStorage.setItem(STORAGE_KEY, current.project_id)
+      setActiveProjectState(current)
+      setActiveProjectId(projectId)
+      sessionStorage.setItem(STORAGE_KEY, current.project_id)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
@@ -176,7 +196,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     try {
       const current = await createDemoProject(demoId)
       setProject(current)
-      window.localStorage.setItem(STORAGE_KEY, current.project_id)
+      setActiveProjectState(current)
+      setActiveProjectId(current.project_id)
+      sessionStorage.setItem(STORAGE_KEY, current.project_id)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
@@ -196,7 +218,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     try {
       const current = await ingestScript(payload)
       setProject(current)
-      window.localStorage.setItem(STORAGE_KEY, current.project_id)
+      setActiveProjectState(current)
+      setActiveProjectId(current.project_id)
+      sessionStorage.setItem(STORAGE_KEY, current.project_id)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
@@ -298,14 +322,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  async function createJob(shotId: string, provider?: string, prompt?: string, referenceAssets?: string[]) {
+  async function createJob(shotId: string, provider?: string, model?: string, prompt?: string, referenceAssets?: string[], parameters?: Record<string, unknown>) {
     if (!project?.project_id) throw new Error('No project loaded')
     const job = await createRenderJob({
       project_id: project.project_id,
       shot_id: shotId,
       provider,
+      model,
       prompt,
       reference_assets: referenceAssets,
+      parameters,
     })
     setRenderJobs(prev => [...prev, job])
     return job
@@ -381,6 +407,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const value: StudioContextValue = {
     overview,
     project,
+    activeProject,
+    activeProjectId,
     loading,
     error,
     isDemoMode,
@@ -389,6 +417,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     pollingJobs,
     selectedRenderProvider,
     setSelectedRenderProvider,
+    setActiveProject,
     refreshOverview,
     loadProject,
     loadDemo,

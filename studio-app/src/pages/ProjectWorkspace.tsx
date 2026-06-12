@@ -5,6 +5,7 @@ import StudioShell from '../components/StudioShell'
 import StudioPanel from '../components/StudioPanel'
 import CoDirectorInspectionPanel from '../components/CoDirectorInspectionPanel'
 import ExecutionSummaryInspectionPanel from '../components/ExecutionSummaryInspectionPanel'
+import DirectorMemoryPanel from '../components/DirectorMemoryPanel'
 import { useStudio } from '../context/StudioContext'
 import { STUDIO_API_BASE, type StudioProject } from '../lib/studioApi'
 import {
@@ -299,6 +300,8 @@ export function ProjectWorkspaceBody({
             </div>
           </div>
         </StudioPanel>
+
+        <DirectorMemoryPanel projectId={projectId} />
 
         <div className="grid grid-cols-[1.45fr_0.95fr] gap-4">
           <StudioPanel title="Production Pipeline Panel" subtitle="Stage-based workflow orchestration with approvals, revisions, and handoffs.">
@@ -663,7 +666,8 @@ export function ProjectWorkspaceBody({
                 ))}
               </div>
               <CoDirectorInspectionPanel project={sourceProject ?? null} />
-              <ExecutionSummaryInspectionPanel project={sourceProject ?? null} />
+              {/* Debug component - hidden in production */}
+              {/* <ExecutionSummaryInspectionPanel project={sourceProject ?? null} /> */}
             </div>
           </StudioPanel>
         </div>

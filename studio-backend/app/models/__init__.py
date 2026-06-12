@@ -249,6 +249,7 @@ class StudioProject(BaseModel):
     co_director_workflow: Optional[dict[str, Any]] = None
     co_director: Optional[dict[str, Any]] = None
     execution_summary: Optional[dict[str, Any]] = None
+    director_intent: Optional[dict[str, Any]] = None
 
 
 class BuildInfo(BaseModel):
@@ -670,6 +671,12 @@ class RenderJobModel(BaseModel):
     last_polled_at: Optional[str] = None
     retry_count: int = 0
     recovery_status: str = "none"
+    continuity_context_injected: bool = False
+    continuity_review: Optional[dict] = None
+    metadata: Optional[dict] = None
+    batch_id: Optional[str] = None
+    retry_of: Optional[str] = None
+    retry_advisory: Optional[str] = None
     created_at: str = ""
     updated_at: str = ""
     completed_at: Optional[str] = None
@@ -712,6 +719,10 @@ class ProviderConfig(BaseModel):
     api_endpoint: Optional[str] = None
     requires: list[str] = []
     capabilities: list[str] = []
+    # AMD-specific metadata for ROCm providers
+    gpu: Optional[str] = None
+    runtime: Optional[str] = None
+    models: list[str] = []
 
 
 class ProviderStatus(BaseModel):
@@ -729,6 +740,10 @@ class ProviderStatus(BaseModel):
     capabilities: list[str] = []
     active_jobs: int = 0
     queued_jobs: int = 0
+    # AMD-specific metadata
+    gpu: Optional[str] = None
+    runtime: Optional[str] = None
+    models: list[str] = []
 
 
 # Export agent and crew models

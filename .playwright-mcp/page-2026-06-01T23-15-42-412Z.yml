@@ -1,0 +1,467 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - link "Production Board" [ref=e7] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e8]
+        - generic [ref=e10]: Production Board
+      - generic [ref=e11]: Track execution readiness, dependencies, and queue health across active scenes.
+    - navigation [ref=e12]:
+      - link "Home" [ref=e13] [cursor=pointer]:
+        - /url: /studio/lobby?project_id=project_eb5a87327aba
+      - link "Overview" [ref=e14] [cursor=pointer]:
+        - /url: /studio/overview?project_id=project_eb5a87327aba
+      - link "Write" [ref=e15] [cursor=pointer]:
+        - /url: /studio/writers-room?project_id=project_eb5a87327aba
+      - link "Scenes" [ref=e16] [cursor=pointer]:
+        - /url: /studio/production-board?project_id=project_eb5a87327aba
+      - link "Watch" [ref=e17] [cursor=pointer]:
+        - /url: /studio/screening-room?project_id=project_eb5a87327aba
+      - link "Archive" [ref=e18] [cursor=pointer]:
+        - /url: /studio/archive?project_id=project_eb5a87327aba
+      - link "Project Slate" [ref=e19] [cursor=pointer]:
+        - /url: /studio/slate?project_id=project_eb5a87327aba
+      - link "Previs Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/previs?project_id=project_eb5a87327aba
+      - link "Approval Room" [ref=e21] [cursor=pointer]:
+        - /url: /studio/approval-room?project_id=project_eb5a87327aba
+      - link "Study Room" [ref=e22] [cursor=pointer]:
+        - /url: /studio/study-room?project_id=project_eb5a87327aba
+      - link "Crew Ops" [ref=e23] [cursor=pointer]:
+        - /url: /studio/scheduler?project_id=project_eb5a87327aba
+      - link "Cost Manager" [ref=e24] [cursor=pointer]:
+        - /url: /studio/cost?project_id=project_eb5a87327aba
+      - link "Workspace" [ref=e65] [cursor=pointer]:
+        - /url: /studio/project/project_eb5a87327aba?project_id=project_eb5a87327aba
+    - generic [ref=e25]:
+      - button "Audio Off" [ref=e26]:
+        - img [ref=e27]
+        - generic [ref=e31]: Audio Off
+      - generic [ref=e34]: Studio connected
+      - generic [ref=e35]:
+        - img [ref=e36]
+        - generic [ref=e39]: Admin | FilmOS
+  - generic [ref=e40]:
+    - link "Home" [ref=e41] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e42]
+      - text: Home
+    - generic [ref=e45]:
+      - img [ref=e46]
+      - link "Studio Lobby" [ref=e48] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e49]:
+      - img [ref=e50]
+      - generic [ref=e52]: Scenes
+  - generic [ref=e54]:
+    - generic [ref=e55]: "Room: Production Board"
+    - generic [ref=e56]: "Current Step: Review"
+    - generic [ref=e57]: "Next: Start by adding a script in Writer’s Room"
+    - generic [ref=e58]: "Approved: 0"
+    - button "Open ▾" [ref=e59]
+  - main [ref=e60]:
+    - generic [ref=e61]:
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - generic [ref=e68]: Naomi
+          - generic [ref=e69]: production board
+        - button "Switch film" [ref=e70] [cursor=pointer]
+      - complementary:
+        - generic: Collaborators Live
+        - generic:
+          - generic: No active collaborators right now.
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e73]:
+            - generic [ref=e74]:
+              - generic [ref=e75]: Studio Decision Gate
+              - generic [ref=e76]: Needs Review
+            - generic [ref=e77]:
+              - generic [ref=e78]: "Needs review: completed clips are ready for approval."
+              - generic [ref=e79]: "Current stage: production"
+              - generic [ref=e80]: Completed renders exist with no review decision yet.
+              - generic [ref=e81]: 1 render job(s) completed
+              - generic [ref=e82]:
+                - link "Open Previs" [ref=e83] [cursor=pointer]:
+                  - /url: /previs?project_id=project_eb5a87327aba
+                - link "Open Screening Room" [ref=e84] [cursor=pointer]:
+                  - /url: /screening?project_id=project_eb5a87327aba
+          - generic [ref=e85]:
+            - generic [ref=e86]:
+              - generic [ref=e87]:
+                - generic [ref=e88]: Execution Hero
+                - heading "Naomi" [level=3] [ref=e89]
+                - paragraph [ref=e90]: Render execution command center for your current studio mission.
+                - generic [ref=e91]:
+                  - generic [ref=e92]: "Gate status: needs_review"
+                  - generic [ref=e93]: "Provider status: runway"
+                  - generic [ref=e94]: "Provider mode: Runway: Real provider mode active"
+                  - generic [ref=e95]: "Readiness: ready for screening"
+                  - generic [ref=e96]:
+                    - text: "Queue:"
+                    - generic [ref=e97]: 1 job(s)
+                - generic [ref=e98]:
+                  - text: "Latest completed render:"
+                  - link "open output" [ref=e99] [cursor=pointer]:
+                    - /url: https://dnznrvs05pmza.cloudfront.net/8c02c691-55b0-483f-bec2-71e599e07060.mp4?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiMDdmZDIzMWMwYmM0YzEzZCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc4MDIwOTMwOH0.379SGMpuo5hnhbfzd9ePSfSUoguHWevlMdxyxpHNFAo
+              - generic [ref=e102]:
+                - generic [ref=e103]: Studio Ops Notes
+                - paragraph [ref=e104]: A completed render is ready for screening review.
+                - generic [ref=e105]:
+                  - generic [ref=e106]: "Completed: 1"
+                  - generic [ref=e107]: "Running: 0"
+                  - generic [ref=e108]: "Failed: 0"
+                  - generic [ref=e109]: "Queued: 0"
+            - generic [ref=e110]:
+              - generic [ref=e111]: Render Queue Timeline
+              - button "scene_001_shot_001 runway · complete output ready" [ref=e113]:
+                - generic [ref=e114]: scene_001_shot_001
+                - generic [ref=e115]: runway · complete
+                - generic [ref=e116]: output ready
+            - generic [ref=e117]:
+              - link "Open Screening Room" [ref=e118] [cursor=pointer]:
+                - /url: /studio/screening-room?project_id=project_eb5a87327aba
+              - button "Retry Failed Render" [disabled] [ref=e119]
+              - link "Open Previs" [ref=e120] [cursor=pointer]:
+                - /url: /studio/previs?project_id=project_eb5a87327aba
+              - link "Review Decision Gate" [ref=e121] [cursor=pointer]:
+                - /url: /studio/study-room?project_id=project_eb5a87327aba
+          - generic [ref=e122]:
+            - generic [ref=e123]: "STEP 3: TRACK PROGRESS"
+            - heading "Production Board" [level=2] [ref=e124]:
+              - img [ref=e125]
+              - text: Production Board
+            - paragraph [ref=e128]: Live scene control surface for cut health, blockers, and lock readiness.
+            - generic [ref=e129]:
+              - generic [ref=e130]: "Approved Scenes: 0"
+              - generic [ref=e131]: "Reviewed Scenes: 0"
+              - generic [ref=e132]: "Needs Review: 0"
+              - generic [ref=e133]: "Needs Attention: 3"
+            - generic [ref=e134]:
+              - generic [ref=e135]: "Next Step:"
+              - generic [ref=e136]: Generate Scenes
+              - generic [ref=e137]: "Crew lead: 🔗 Continuity Supervisor"
+            - generic [ref=e138]:
+              - generic [ref=e139]:
+                - generic [ref=e140]: Total Scenes
+                - generic [ref=e141]: "3"
+              - generic [ref=e142]:
+                - generic [ref=e143]: Locked
+                - generic [ref=e144]: "0"
+              - generic [ref=e145]:
+                - generic [ref=e146]: In Progress
+                - generic [ref=e147]: "0"
+              - generic [ref=e148]:
+                - generic [ref=e149]: Blocked
+                - generic [ref=e150]: "3"
+              - generic [ref=e151]:
+                - generic [ref=e152]: Continuity Issues
+                - generic [ref=e153]: "0"
+            - generic [ref=e154]:
+              - button "Edit Cut" [ref=e155]
+              - button "Save Current Cut" [ref=e156]
+              - button "Create New Cut" [ref=e157]
+              - generic [ref=e158]: "scenes in cut: 3"
+              - button "Export Shot List" [ref=e159]
+          - generic [ref=e161]:
+            - generic [ref=e162]: Production Pipeline Timeline
+            - generic [ref=e163]:
+              - generic [ref=e164]:
+                - generic [ref=e165]: scene_001
+                - generic [ref=e166]:
+                  - generic [ref=e167]:
+                    - generic [ref=e168]: ✓
+                    - generic [ref=e169]: script
+                  - generic [ref=e170]:
+                    - generic [ref=e171]: ✓
+                    - generic [ref=e172]: previs
+                  - generic [ref=e173]:
+                    - generic [ref=e174]: ✓
+                    - generic [ref=e175]: generation
+                  - generic [ref=e178]: review
+                  - generic [ref=e181]: edit
+                  - generic [ref=e184]: archive
+              - generic [ref=e185]:
+                - generic [ref=e186]: scene_002
+                - generic [ref=e187]:
+                  - generic [ref=e188]:
+                    - generic [ref=e189]: ✓
+                    - generic [ref=e190]: script
+                  - generic [ref=e191]:
+                    - generic [ref=e192]: ✓
+                    - generic [ref=e193]: previs
+                  - generic [ref=e194]:
+                    - generic [ref=e195]: ✓
+                    - generic [ref=e196]: generation
+                  - generic [ref=e199]: review
+                  - generic [ref=e202]: edit
+                  - generic [ref=e205]: archive
+              - generic [ref=e206]:
+                - generic [ref=e207]: scene_003
+                - generic [ref=e208]:
+                  - generic [ref=e209]:
+                    - generic [ref=e210]: ✓
+                    - generic [ref=e211]: script
+                  - generic [ref=e212]:
+                    - generic [ref=e213]: ✓
+                    - generic [ref=e214]: previs
+                  - generic [ref=e215]:
+                    - generic [ref=e216]: ✓
+                    - generic [ref=e217]: generation
+                  - generic [ref=e220]: review
+                  - generic [ref=e223]: edit
+                  - generic [ref=e226]: archive
+        - generic [ref=e227]:
+          - generic [ref=e229]:
+            - generic [ref=e230]:
+              - generic [ref=e231]: Multi-User Collaboration
+              - button "Sync" [ref=e232]
+            - generic [ref=e233]: "Shared room: lobby · Session: collab_562db974086b4b"
+            - generic [ref=e234]:
+              - button "Approve (0)" [ref=e235]
+              - button "Revise (0)" [ref=e236]
+              - button "Regenerate (1)" [ref=e503]
+            - generic [ref=e238]:
+              - textbox "Live comment..." [ref=e239]
+              - button "Send" [disabled] [ref=e240]
+            - generic [ref=e241]:
+              - textbox "Co-direction note..." [ref=e242]
+              - button "Add" [disabled] [ref=e243]
+            - generic [ref=e245]:
+              - generic [ref=e246]: Memory Archivist (reviewer)
+              - text: Shared room standing by for notes.
+            - generic [ref=e247]: Advisory co-direction only. Project ownership remains authoritative.
+          - generic [ref=e249]:
+            - generic [ref=e250]:
+              - heading "Film Memory Graph" [level=3] [ref=e251]
+              - generic [ref=e252]: Memory Archivist Linked
+            - generic [ref=e253]: Memory Archivist checking continuity...
+            - generic [ref=e254]:
+              - generic [ref=e255]:
+                - generic [ref=e256]: theme
+                - generic [ref=e257]: none
+              - generic [ref=e258]:
+                - generic [ref=e259]: motif
+                - generic [ref=e260]: bowed strings
+              - generic [ref=e261]:
+                - generic [ref=e262]: motif
+                - generic [ref=e263]: sub-bass drone
+              - generic [ref=e264]:
+                - generic [ref=e265]: motif
+                - generic [ref=e266]: distant house creaks
+              - generic [ref=e267]:
+                - generic [ref=e268]: arc
+                - generic [ref=e269]: scene_001:review
+              - generic [ref=e270]:
+                - generic [ref=e271]: arc
+                - generic [ref=e272]: scene_002:review
+              - generic [ref=e273]:
+                - generic [ref=e274]: arc
+                - generic [ref=e275]: scene_003:review
+              - generic [ref=e276]:
+                - generic [ref=e277]: callback
+                - generic [ref=e278]: callback:scene_002
+              - generic [ref=e279]:
+                - generic [ref=e280]: callback
+                - generic [ref=e281]: callback:scene_003
+              - generic [ref=e282]:
+                - generic [ref=e283]: continuity
+                - generic [ref=e284]: scene_001:Scene quality verdict requires revision
+              - generic [ref=e285]:
+                - generic [ref=e286]: continuity
+                - generic [ref=e287]: scene_002:Scene quality verdict requires revision
+              - generic [ref=e288]:
+                - generic [ref=e289]: continuity
+                - generic [ref=e290]: scene_003:Scene quality verdict requires revision
+          - generic [ref=e291]:
+            - heading "Scene Queue" [level=3] [ref=e292]
+            - generic [ref=e293]:
+              - generic [ref=e294]:
+                - generic [ref=e295]: Render Jobs (Source of Truth)
+                - button "Refresh Status" [ref=e296]
+              - generic [ref=e515]:
+                - generic [ref=e516]: "job_id: job-20260529202358-8d7632c9-scene_001_shot_001 • project_id: project_eb5a87327aba • shot_id: scene_001_shot_001"
+                - generic [ref=e517]: "provider: runway • task_id: 02da9b32-8043-476e-b8c1-1a9f96326547 • status: complete"
+                - generic [ref=e518]: "created_at: 2026-05-29T20:23:58.955468 • updated_at: 2026-05-29T20:25:35.729875"
+                - generic [ref=e519]:
+                  - link "Open Output" [ref=e520] [cursor=pointer]:
+                    - /url: https://dnznrvs05pmza.cloudfront.net/8c02c691-55b0-483f-bec2-71e599e07060.mp4?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiMDdmZDIzMWMwYmM0YzEzZCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc4MDIwOTMwOH0.379SGMpuo5hnhbfzd9ePSfSUoguHWevlMdxyxpHNFAo
+                  - link "Send to Screening Room" [ref=e521] [cursor=pointer]:
+                    - /url: /studio/screening-room?project_id=project_eb5a87327aba
+                - button "Recover/Reconcile" [ref=e522]
+                - button "Retry" [ref=e523]
+            - generic [ref=e307]:
+              - generic [ref=e308]:
+                - generic [ref=e309]: Filter by status
+                - combobox "Filter by status" [ref=e310]:
+                  - option "all" [selected]
+                  - option "planned"
+                  - option "review"
+                  - option "locked"
+                  - option "blocked"
+              - generic [ref=e311]:
+                - generic [ref=e312]: Sort by
+                - combobox "Sort by" [ref=e313]:
+                  - option "scene order" [selected]
+                  - option "blockers"
+            - generic [ref=e314]:
+              - generic [ref=e316]: Approved (0)
+              - generic [ref=e318]: Needs Work (0)
+              - generic [ref=e319]:
+                - generic [ref=e320]: Needs Review (3)
+                - generic [ref=e321]:
+                  - generic [ref=e322]:
+                    - generic [ref=e323]:
+                      - generic [ref=e324]:
+                        - generic [ref=e325]: scene_001
+                        - generic [ref=e326]: ORIGINAL CUT
+                        - generic [ref=e327]: "agent: 🔗 Continuity Supervisor"
+                        - generic [ref=e328]:
+                          - generic [ref=e329]: A woman sits alone at a corner table reading a worn paperback. The café is nearly empty. Rain streaks the window behind…
+                          - generic [ref=e330]:
+                            - generic [ref=e331]: COFFEE SHOP
+                            - generic [ref=e332]: quiet, isolated, contemplative.
+                      - generic [ref=e333]:
+                        - generic [ref=e334]: Needs Attention
+                        - generic [ref=e335]: 🔥 High Conflict
+                        - generic [ref=e336]: blocked
+                    - generic [ref=e337]:
+                      - generic [ref=e338]:
+                        - generic [ref=e339]: State
+                        - generic [ref=e340]: review
+                      - generic [ref=e341]:
+                        - generic [ref=e342]: Issues
+                        - generic [ref=e343]: 1 blocker
+                    - group [ref=e345]:
+                      - generic "Blockers" [ref=e346] [cursor=pointer]
+                    - generic [ref=e347]:
+                      - generic [ref=e348]: needs review
+                      - generic [ref=e349]: in cut
+                      - generic [ref=e350]: "audio readiness: needs design"
+                      - button "Open Scene" [ref=e351]
+                    - generic [ref=e352]:
+                      - generic [ref=e353]: Render Controls
+                      - generic [ref=e354]:
+                        - generic [ref=e355]: "Duration:"
+                        - combobox [ref=e356]:
+                          - option "5s"
+                          - option "10s" [selected]
+                          - option "15s"
+                          - option "20s"
+                      - generic [ref=e357]:
+                        - generic [ref=e358]: Ready
+                        - button "Regenerate" [ref=e360]
+                  - generic [ref=e361]:
+                    - generic [ref=e362]:
+                      - generic [ref=e363]:
+                        - generic [ref=e364]: scene_002
+                        - generic [ref=e365]: ORIGINAL CUT
+                        - generic [ref=e366]: "agent: 🔗 Continuity Supervisor"
+                        - generic [ref=e367]:
+                          - generic [ref=e368]: She steps outside into heavy rain pulling her coat tight. The street is deserted except for distant headlights. Emotiona…
+                          - generic [ref=e369]:
+                            - generic [ref=e370]: STREET
+                            - generic [ref=e371]: uneasy, exposed, transitional.
+                      - generic [ref=e372]:
+                        - generic [ref=e373]: Needs Attention
+                        - generic [ref=e374]: 🔥 High Conflict
+                        - generic [ref=e375]: blocked
+                    - generic [ref=e376]:
+                      - generic [ref=e377]:
+                        - generic [ref=e378]: State
+                        - generic [ref=e379]: review
+                      - generic [ref=e380]:
+                        - generic [ref=e381]: Issues
+                        - generic [ref=e382]: 2 blockers
+                    - group [ref=e384]:
+                      - generic "Blockers" [ref=e385] [cursor=pointer]
+                    - generic [ref=e386]:
+                      - generic [ref=e387]: needs review
+                      - generic [ref=e388]: in cut
+                      - generic [ref=e389]: "audio readiness: needs design"
+                      - button "Open Scene" [ref=e390]
+                    - generic [ref=e391]:
+                      - generic [ref=e392]: Render Controls
+                      - generic [ref=e393]:
+                        - generic [ref=e394]: "Duration:"
+                        - combobox [ref=e395]:
+                          - option "5s"
+                          - option "10s" [selected]
+                          - option "15s"
+                          - option "20s"
+                      - button "Generate" [ref=e398]
+                  - generic [ref=e399]:
+                    - generic [ref=e400]:
+                      - generic [ref=e401]:
+                        - generic [ref=e402]: scene_003
+                        - generic [ref=e403]: ORIGINAL CUT
+                        - generic [ref=e404]: "agent: 🔗 Continuity Supervisor"
+                        - generic [ref=e405]:
+                          - generic [ref=e406]: She pushes open the door to a dark apartment. A single envelope sits on the floor beneath the mail slot. She stares at i…
+                          - generic [ref=e407]:
+                            - generic [ref=e408]: APARTMENT
+                            - generic [ref=e409]: dread, stillness, arriving at something.
+                      - generic [ref=e410]:
+                        - generic [ref=e411]: Needs Attention
+                        - generic [ref=e412]: 🔥 High Conflict
+                        - generic [ref=e413]: blocked
+                    - generic [ref=e414]:
+                      - generic [ref=e415]:
+                        - generic [ref=e416]: State
+                        - generic [ref=e417]: review
+                      - generic [ref=e418]:
+                        - generic [ref=e419]: Issues
+                        - generic [ref=e420]: 1 blocker
+                    - group [ref=e422]:
+                      - generic "Blockers" [ref=e423] [cursor=pointer]
+                    - generic [ref=e424]:
+                      - generic [ref=e425]: needs review
+                      - generic [ref=e426]: in cut
+                      - generic [ref=e427]: "audio readiness: needs design"
+                      - button "Open Scene" [ref=e428]
+                    - generic [ref=e429]:
+                      - generic [ref=e430]: Render Controls
+                      - generic [ref=e431]:
+                        - generic [ref=e432]: "Duration:"
+                        - combobox [ref=e433]:
+                          - option "5s"
+                          - option "10s" [selected]
+                          - option "15s"
+                          - option "20s"
+                      - button "Generate" [ref=e436]
+  - complementary "AI Crew Presence" [ref=e437]:
+    - generic [ref=e438]:
+      - generic [ref=e439]:
+        - generic [ref=e440]: AI Crew Presence
+        - generic [ref=e441]: radio link stable
+      - generic [ref=e442]:
+        - generic [ref=e443]:
+          - generic [ref=e444]: D
+          - generic [ref=e445]:
+            - generic [ref=e446]: Director
+            - generic [ref=e447]: Director adjusting pacing...
+          - generic [ref=e448]: ...
+        - generic [ref=e449]:
+          - generic [ref=e450]: W
+          - generic [ref=e451]:
+            - generic [ref=e452]: Writer
+            - generic [ref=e453]: Writer refining dramatic beats...
+          - generic [ref=e454]: ...
+        - generic [ref=e455]:
+          - generic [ref=e456]: M
+          - generic [ref=e457]:
+            - generic [ref=e458]: Memory Archivist
+            - generic [ref=e459]: Memory Archivist checking continuity...
+          - generic [ref=e460]: ...
+        - generic [ref=e461]:
+          - generic [ref=e462]: E
+          - generic [ref=e463]:
+            - generic [ref=e464]: Evaluator
+            - generic [ref=e465]: Evaluator scoring scene coherence...
+          - generic [ref=e466]: ...
+        - generic [ref=e467]:
+          - generic [ref=e468]: P
+          - generic [ref=e469]:
+            - generic [ref=e470]: Provider Router
+            - generic [ref=e471]: Provider Router selecting Runway...
+          - generic [ref=e472]: ...

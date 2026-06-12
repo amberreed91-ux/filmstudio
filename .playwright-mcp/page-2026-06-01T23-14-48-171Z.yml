@@ -1,0 +1,61 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - link "Production Board" [ref=e7] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e8]
+        - generic [ref=e10]: Production Board
+      - generic [ref=e11]: Track execution readiness, dependencies, and queue health across active scenes.
+    - navigation [ref=e12]:
+      - link "Home" [ref=e13] [cursor=pointer]:
+        - /url: /studio/lobby?project_id=project_eb5a87327aba
+      - link "Overview" [ref=e14] [cursor=pointer]:
+        - /url: /studio/overview?project_id=project_eb5a87327aba
+      - link "Write" [ref=e15] [cursor=pointer]:
+        - /url: /studio/writers-room?project_id=project_eb5a87327aba
+      - link "Scenes" [ref=e16] [cursor=pointer]:
+        - /url: /studio/production-board?project_id=project_eb5a87327aba
+      - link "Watch" [ref=e17] [cursor=pointer]:
+        - /url: /studio/screening-room?project_id=project_eb5a87327aba
+      - link "Archive" [ref=e18] [cursor=pointer]:
+        - /url: /studio/archive?project_id=project_eb5a87327aba
+      - link "Project Slate" [ref=e19] [cursor=pointer]:
+        - /url: /studio/slate?project_id=project_eb5a87327aba
+      - link "Previs Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/previs?project_id=project_eb5a87327aba
+      - link "Approval Room" [ref=e21] [cursor=pointer]:
+        - /url: /studio/approval-room?project_id=project_eb5a87327aba
+      - link "Study Room" [ref=e22] [cursor=pointer]:
+        - /url: /studio/study-room?project_id=project_eb5a87327aba
+      - link "Crew Ops" [ref=e23] [cursor=pointer]:
+        - /url: /studio/scheduler?project_id=project_eb5a87327aba
+      - link "Cost Manager" [ref=e24] [cursor=pointer]:
+        - /url: /studio/cost?project_id=project_eb5a87327aba
+    - generic [ref=e25]:
+      - button "Audio Off" [ref=e26]:
+        - img [ref=e27]
+        - generic [ref=e31]: Audio Off
+      - generic [ref=e34]: Syncing studio...
+      - generic [ref=e35]:
+        - img [ref=e36]
+        - generic [ref=e39]: Admin | FilmOS
+  - generic [ref=e40]:
+    - link "Home" [ref=e41] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e42]
+      - text: Home
+    - generic [ref=e45]:
+      - img [ref=e46]
+      - link "Studio Lobby" [ref=e48] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e49]:
+      - img [ref=e50]
+      - generic [ref=e52]: Scenes
+  - generic [ref=e54]:
+    - generic [ref=e55]: "Room: Production Board"
+    - generic [ref=e56]: "Current Step: Review"
+    - generic [ref=e57]: "Next: Start by adding a script in Writer’s Room"
+    - generic [ref=e58]: "Approved: 0"
+    - button "Open ▾" [ref=e59]
+  - main [ref=e60]:
+    - paragraph [ref=e63]: Loading...
