@@ -299,7 +299,7 @@ export default function ScreeningRoom() {
     async function loadTimeline() {
       setTimelineLoading(true)
       try {
-        const analysis = await getTimelineIntelligence(activeProjectId, { signal: controller.signal })
+        const analysis = await getTimelineIntelligence(effectiveProjectId, { signal: controller.signal })
         if (!cancelled) {
           setTimelineAnalysis(analysis)
           setTimelineError('')
@@ -318,7 +318,7 @@ export default function ScreeningRoom() {
       cancelled = true
       controller.abort()
     }
-  }, [activeProjectId])
+  }, [effectiveProjectId])
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -2223,23 +2223,6 @@ export default function ScreeningRoom() {
                 {[1, 2, 3].map((actNum) => (
                   <div key={`act-${actNum}`} className="flex items-center justify-between rounded border border-white/10 bg-black/35 px-2 py-1">
                     <span>Act {actNum}: {filmStructure.acts.find((a) => a.act === actNum)?.scene_count ?? 0}</span>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const { debate } = await triggerDebate({
-                            project_id: effectiveProjectId,
-                            act_number: actNum,
-                            query: `Review Act ${actNum} as a whole. Analyze pacing, character growth, and thematic resolution.`,
-                          })
-                          setActiveDebate(debate)
-                        } catch (err) {
-                          console.error(`Failed to trigger Act ${actNum} review:`, err)
-                        }
-                      }}
-                      className="ml-2 rounded bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-indigo-300 hover:bg-indigo-500/40"
-                    >
-                      Review
-                    </button>
                   </div>
                 ))}
                 <div className="rounded border border-white/10 bg-black/35 px-2 py-1">Sequences: {filmStructure.sequences.length}</div>

@@ -1,4 +1,4 @@
-import {
+import type {
   UniverseNode,
   UniverseRelationship,
   UniverseGraphData,
@@ -3294,6 +3294,8 @@ import type {
   CoDirectorDebateEntry,
 } from '../types/directorMemory'
 
+export type { CoDirectorDebateEntry }
+
 const directorMemoryRoot = (projectId: string) =>
   `/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-memory`
 
@@ -3466,7 +3468,7 @@ export type {
   AbsenceReport,
 }
 
-import { AudienceReaction, SceneAudienceSimulation, ProjectAudienceSimulation } from '../types/audienceSimulator'
+import type { SceneAudienceSimulation, ProjectAudienceSimulation } from '../types/audienceSimulator'
 
 /**
  * Simulate audience reactions for a single scene.

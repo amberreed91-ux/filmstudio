@@ -23,7 +23,6 @@ export default function StudioLanding() {
       <div className="studio-landing-vignette" />
 
       <main className="studio-landing-content">
-        <p className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-200">LANDING PAGE ACTIVE</p>
         <h1 className="studio-landing-title">STUDIO</h1>
         <p className="studio-landing-subtitle">Direct. Shape. Remember.</p>
         <button

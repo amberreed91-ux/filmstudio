@@ -41,7 +41,7 @@ import {
 } from '../lib/studioApi'
 import { resolveVisualForSceneAndShot } from '../lib/previsVisualResolver'
 import { AudienceSimulatorModal } from '../components/AudienceSimulatorModal'
-import { SceneAudienceSimulation, ProjectAudienceSimulation } from '../types/audienceSimulator'
+import type { SceneAudienceSimulation, ProjectAudienceSimulation } from '../types/audienceSimulator'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import { mapContinuityIssuesToScene, summarizeContinuityIssues } from '../lib/continuityIntelligence'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
@@ -2173,7 +2173,7 @@ export default function PrevisRoom() {
               defaultProvider={project?.render_provider?.provider_name || providers[0]?.provider_id || 'mock'}
               busy={isGeneratingScene}
               onGenerate={handleDirectorGenerate}
-              onSimulateAudience={handleSimulateAudience}
+              onSimulateAudience={() => {}}
             />
             <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
               Provider mode: <span className={activeProviderMode === 'hosted_api' ? 'text-emerald-200' : 'text-amber-200'}>{providerTruthLabel(activeProviderStatus)}</span>

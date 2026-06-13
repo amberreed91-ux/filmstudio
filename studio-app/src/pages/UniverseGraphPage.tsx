@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ForceGraph2D } from 'react-force-graph-2d';
+import ForceGraph2D from 'react-force-graph-2d';
 import { 
   Users, MapPin, Box, ScrollText, Share2, Plus, Search, 
   Download, RefreshCw, AlertCircle, X, Info
@@ -9,7 +9,7 @@ import {
   saveUniverseRelationship, deleteUniverseRelationship, 
   getUniverseAbsences, exportUniverseBible, forceAutoPopulateUniverse 
 } from '../lib/studioApi';
-import { 
+import type { 
   UniverseNode, UniverseRelationship, UniverseGraphData, 
   UniverseNodeType, AbsenceReport 
 } from '../types/universe';

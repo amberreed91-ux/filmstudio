@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Download } from 'lucide-react'
 import type { ProviderStatus, RenderJob, StudioDecisionGate } from '../lib/studioApi'
 import { providerModeFromJob, providerTruthLabel } from '../lib/providerRuntime'
 import { selectPrimaryStudioMedia, isValidAssetUrl } from '../lib/studioMedia'

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { SceneAudienceSimulation, AudienceReaction } from '../types/audienceSimulator'
+import type { SceneAudienceSimulation } from '../types/audienceSimulator'
 import { saveToDirectorsNotes } from '../lib/studioApi'
 import { Loader2, Save, MessageSquare, AlertTriangle, Lightbulb } from 'lucide-react'
 

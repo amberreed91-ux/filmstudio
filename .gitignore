@@ -1,0 +1,14 @@
+**/__pycache__/
+*.pyc
+*.pyo
+.opencode/
+.playwright-mcp/
+studio-backend/outputs/keyframes/
+studio-backend/outputs/uploads/
+studio-backend/studio.db
+studio-backend/data/studio.db
+node_modules/
+.DS_Store
+untitled/
+untitled1/
+film app/

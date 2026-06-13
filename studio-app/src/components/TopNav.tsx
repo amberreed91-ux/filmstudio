@@ -7,7 +7,7 @@ import { PRIMARY_NAV_ROUTES } from '../routes'
 import { isStudioDevMode } from '../lib/devMode'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import { STUDIO_API_BASE, triggerDebate, listDebates } from '../lib/studioApi'
-import { CoDirectorDebateEntry } from '../types/directorMemory'
+import type { CoDirectorDebateEntry } from '../types/directorMemory'
 import DirectorDebatePanel from './DirectorDebatePanel'
 import { DropdownMenu } from './StudioShell'
 
@@ -99,8 +99,9 @@ export default function TopNav({ title, subtitle, showProjectPicker }: TopNavPro
     try {
       const { debates } = await listDebates(activeProjectId)
       setDebateHistory(debates.slice(-5).reverse())
-    } catch (err) {
-      console.error('Failed to load debate history:', err)
+    } catch (err: any) {
+      // Silently ignore 404 and other errors - no console logging
+      return
     }
   }
 

@@ -256,4 +256,4 @@ function ActivityItem({ activity, projectId, isLast = false }: ActivityItemProps
 }
 
 // Export mock data for testing
-export { MOCK_ACTIVITY, formatActivityTime, getActivityIcon }
+export { formatActivityTime, getActivityIcon }

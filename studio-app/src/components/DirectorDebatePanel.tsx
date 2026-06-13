@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Type, Clapperboard, Camera, Film, Clipboard, MessageSquare, AlertTriangle, CheckCircle2, Save, X } from 'lucide-react'
-import { CoDirectorDebateEntry, AgentResponse } from '../types/directorMemory'
+import type { CoDirectorDebateEntry, AgentResponse } from '../types/directorMemory'
 import { triggerDebate, debateAction } from '../lib/studioApi'
 
 export interface DirectorDebatePanelProps {

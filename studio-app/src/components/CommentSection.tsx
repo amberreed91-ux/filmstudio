@@ -146,7 +146,7 @@ export default function CommentSection({
           />
           <button
             type="button"
-            onClick={void handleAddComment()}
+            onClick={() => void handleAddComment()}
             disabled={!newComment.trim() || isSubmitting}
             className="px-3 py-2 rounded-md border border-white/15 bg-zinc-800/50 text-zinc-300 hover:bg-zinc-700/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
             title="Add comment"
@@ -167,4 +167,4 @@ export default function CommentSection({
 }
 
 // Export helper for use in other components
-export { formatTimestamp, canDeleteComment }
+export { formatTimestamp }

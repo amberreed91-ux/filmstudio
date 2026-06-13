@@ -1,6 +1,6 @@
 import React from 'react'
 import { AudienceSimulatorCard } from './AudienceSimulatorCard'
-import { SceneAudienceSimulation, ProjectAudienceSimulation } from '../types/audienceSimulator'
+import type { SceneAudienceSimulation, ProjectAudienceSimulation } from '../types/audienceSimulator'
 import { X } from 'lucide-react'
 
 interface AudienceSimulatorModalProps {

@@ -24,6 +24,7 @@ export default function DirectorConsole({
   defaultProvider,
   busy,
   onGenerate,
+  onSimulateAudience,
 }: {
   sceneId: string
   providers: ProviderOption[]
