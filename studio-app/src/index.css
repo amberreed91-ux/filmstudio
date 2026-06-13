@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/studio-pro-design-system.css";
+@import "./styles/design-tokens.css";
 
 /* Apply design system variables to base layer for Tailwind v4 */
 @layer base {

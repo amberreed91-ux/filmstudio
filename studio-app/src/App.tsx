@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { StudioProvider } from './context/StudioContext'
 import { RenderActivityProvider } from './context/RenderActivityContext'
 import { AudioUXProvider } from './context/AudioUXContext'
@@ -86,14 +87,33 @@ export default function App() {
 
 function StudioRoutes() {
   const location = useLocation()
-  const routeDebugKey = `${location.pathname}${location.search}`
 
   return (
-    <Routes location={location} key={routeDebugKey}>
-      {APP_ROUTES.map((route) => (
-        <Route key={route.path} path={route.path} element={route.element} />
-      ))}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        {APP_ROUTES.map((route) => (
+          <Route key={route.path} path={route.path} element={
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.2 }}
+            >
+              {route.element}
+            </motion.div>
+          } />
+        ))}
+        <Route path="*" element={
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <NotFound />
+          </motion.div>
+        } />
+      </Routes>
+    </AnimatePresence>
   )
 }

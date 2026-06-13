@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { FileText, Plus, Edit2, Trash2, Save, X, Upload, FileUp } from 'lucide-react'
+import { Plus, Edit2, Trash2, Save, X, Upload, FileUp } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
@@ -322,22 +322,32 @@ export default function WritersRoom() {
     <StudioShell title="Writer's Room" subtitle="Create and manage your film scenes">
       <ProjectGuard>
         <ProjectContextBar roomName="writer's room" />
-        <div className="w-full overflow-visible">
-          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
-            
+        <div className="w-full overflow-visible" style={{ background: 'var(--color-surface-0)' }}>
+          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+            {/* Room Hero - "The Page" */}
+            <section className="rounded-2xl border p-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+              <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Writers Room</div>
+              <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+                The Page
+              </h1>
+              <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                Craft your narrative. Shape your scenes. Build your story.
+              </p>
+            </section>
+
             {/* Project Header */}
-            <section className="cinematic-panel p-6">
+            <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">
+                  <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>
                     Current Project
                   </div>
-                  <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100">
-                    <FileText size={18} />
+                  <h2 className="mt-2 text-lg font-light" style={{ color: 'var(--color-text-primary)' }}>
                     {activeProject?.title || 'Untitled Project'}
                   </h2>
                   {effectiveProjectId && (
-                    <p className="mt-1 text-xs text-zinc-400">Project ID: {effectiveProjectId}</p>
+                    <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>Project ID: {effectiveProjectId}</p>
                   )}
                 </div>
                 {!effectiveProjectId && (
@@ -345,7 +355,8 @@ export default function WritersRoom() {
                     type="button"
                     onClick={handleCreateProject}
                     disabled={loading}
-                    className="rounded-lg border border-emerald-300/50 bg-emerald-500/14 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 transition-all duration-200 hover:scale-[1.02] disabled:opacity-50"
+                    className="rounded-lg border px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition hover:border-[#00d4aa]"
+                    style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}
                   >
                     Create New Project
                   </button>
@@ -491,47 +502,48 @@ She walks through the rain, umbrella forgotten. The city lights blur in the down
 
           {/* Scene List */}
           {effectiveProjectId && backendHealthy && (
-            <section className="cinematic-panel p-6">
+            <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100">
+                  <h3 className="text-sm uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-primary)' }}>
                     Your Scenes ({scenes.length})
                   </h3>
-                  <p className="mt-1 text-xs text-zinc-400">
+                  <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                     All scenes from script upload and manual entry
                   </p>
                 </div>
               </div>
 
               {loading && scenes.length === 0 ? (
-                <div className="text-center py-8 text-zinc-400">Loading scenes...</div>
+                <div className="text-center py-8" style={{ color: 'var(--color-text-secondary)' }}>Loading scenes...</div>
               ) : scenes.length === 0 ? (
-                <div className="text-center py-8 text-zinc-400">
+                <div className="text-center py-8" style={{ color: 'var(--color-text-secondary)' }}>
                   No scenes yet. Upload a script or add scenes manually above.
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {scenes.map((scene) => (
                     <div
                       key={scene.scene_id}
-                      className="rounded-xl border border-white/10 bg-black/35 p-4 transition-all duration-200 hover:border-white/30"
+                      className="rounded-lg border p-4 transition-all hover:border-[#00d4aa]"
+                      style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h4 className="text-sm font-semibold text-zinc-100">{scene.scene_name}</h4>
-                          <p className="mt-1 text-xs text-zinc-300">{scene.description}</p>
+                          <h4 className="text-sm font-light" style={{ color: 'var(--color-text-primary)' }}>{scene.scene_name}</h4>
+                          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{scene.description}</p>
                           <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                            <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-zinc-400">
+                            <span className="rounded px-2 py-1" style={{ background: 'var(--color-surface-3)', color: 'var(--color-text-secondary)' }}>
                               {scene.location || 'No location'}
                             </span>
-                            <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-zinc-400">
+                            <span className="rounded px-2 py-1" style={{ background: 'var(--color-surface-3)', color: 'var(--color-text-secondary)' }}>
                               {scene.time_of_day}
                             </span>
-                            <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-zinc-400">
+                            <span className="rounded px-2 py-1" style={{ background: 'var(--color-surface-3)', color: 'var(--color-text-secondary)' }}>
                               {scene.emotional_tone}
                             </span>
                             {scene.characters && scene.characters.length > 0 && (
-                              <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-zinc-400">
+                              <span className="rounded px-2 py-1" style={{ background: 'var(--color-surface-3)', color: 'var(--color-text-secondary)' }}>
                                 {scene.characters.join(', ')}
                               </span>
                             )}

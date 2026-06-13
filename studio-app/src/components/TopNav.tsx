@@ -1,23 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Film, User, ChevronDown, Volume2, VolumeX, Users, History } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { useStudio } from '../context/StudioContext'
 import { useAudioUX } from '../context/AudioUXContext'
 import { PRIMARY_NAV_ROUTES } from '../routes'
-import { isStudioDevMode } from '../lib/devMode'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import { STUDIO_API_BASE, triggerDebate, listDebates } from '../lib/studioApi'
 import type { CoDirectorDebateEntry } from '../types/directorMemory'
 import DirectorDebatePanel from './DirectorDebatePanel'
-import { DropdownMenu } from './StudioShell'
 
 interface TopNavProps {
-  title?: string
-  subtitle?: string
   showProjectPicker?: boolean
 }
 
-export default function TopNav({ title, subtitle, showProjectPicker }: TopNavProps) {
+export default function TopNav({ showProjectPicker }: TopNavProps) {
   const apiBaseUrl = STUDIO_API_BASE
   const [backendStatus, setBackendStatus] = useState<'checking' | 'available' | 'unavailable'>('checking')
   const location = useLocation()
@@ -34,7 +31,6 @@ export default function TopNav({ title, subtitle, showProjectPicker }: TopNavPro
   useEffect(() => {
     if (activeProjectId) persistActiveProjectId(activeProjectId)
   }, [activeProjectId])
-  const devModeEnabled = isStudioDevMode()
 
   useEffect(() => {
     let cancelled = false
@@ -130,104 +126,116 @@ export default function TopNav({ title, subtitle, showProjectPicker }: TopNavPro
 
   return (
     <>
-      <header style={{ background: 'var(--bg-panel)', borderBottom: '1px solid var(--border)' }}
-        className="flex items-center justify-between px-6 h-14 flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <header
+        style={{ background: '#0f0f0f', borderBottom: '0.5px solid #1e1e1e' }}
+        className="flex items-center justify-between px-4 h-12 flex-shrink-0"
+      >
+        <div className="flex items-center gap-6">
           <Link to="/studio" className="flex items-center gap-2 text-white no-underline">
-            <Film size={18} style={{ color: 'var(--accent-cyan)' }} />
             {showProjectPicker ? (
               <span className="flex items-center gap-1 text-sm font-medium text-white p-0">
-                <Film size={14} className="mr-1" style={{ color: 'var(--accent-cyan)' }} />
+                <Film size={14} style={{ color: 'var(--color-accent)' }} />
                 Project: {activeProject?.title || 'No active project'}
-                <ChevronDown size={14} style={{ color: 'var(--text-secondary)' }} />
+                <ChevronDown size={14} style={{ color: 'var(--color-text-secondary)' }} />
               </span>
             ) : (
-              <span className="text-sm font-semibold tracking-widest uppercase" style={{ color: 'var(--accent-cyan)', letterSpacing: '0.12em' }}>
-                {title || 'FilmOS Studio'}
+              <span
+                className="text-xs font-semibold tracking-widest uppercase"
+                style={{ color: 'var(--color-accent)', letterSpacing: '0.12em' }}
+              >
+                STUDIO
               </span>
             )}
           </Link>
-          {subtitle && (
-            <span className="text-xs sr-only" style={{ color: 'var(--text-muted)' }}>{subtitle}</span>
-          )}
         </div>
 
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-6">
           {PRIMARY_NAV_ROUTES.map((route) => {
             const active = isRouteActive(route.path)
-            const getRoomIconClass = (path: string) => {
-              if (path.includes('lobby') || path === '/studio') return 'room-icon-home'
-              if (path.includes('writers-room')) return 'room-icon-writers'
-              if (path.includes('previs')) return 'room-icon-previs'
-              if (path.includes('approval-room') || path === '/studio/dashboard' || path === '/studio/approval') return 'room-icon-approval'
-              if (path.includes('study-room') || path === '/studio/study') return 'room-icon-study'
-              if (path.includes('scheduler') || path.includes('crew')) return 'room-icon-crew'
-              if (path.includes('cost')) return 'room-icon-cost'
-              if (path.includes('workspace') || path.includes('project')) return 'room-icon-workspace'
-              if (path.includes('production-board') || path.includes('scenes')) return 'room-icon-previs'
-              if (path.includes('screening-room') || path.includes('watch')) return 'room-icon-approval'
-              if (path.includes('archive')) return 'room-icon-study'
-              return ''
-            }
-            const roomIconClass = getRoomIconClass(route.path)
             return (
               <Link
                 key={route.path}
                 to={withProjectQuery(route.path, activeProjectId)}
-                className={`studio-nav-link px-4 py-1.5 text-sm rounded transition-all no-underline ${roomIconClass}`}
+                className="text-xs no-underline transition-colors"
                 style={{
-                  color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                  borderBottom: active ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                  fontWeight: active ? 500 : 400,
+                  color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                  position: 'relative',
                 }}
               >
-                {route.icon && <span className="mr-1.5">{route.icon}</span>}
                 {route.label}
+                {active && (
+                  <motion.div
+                    layoutId="active-tab"
+                    style={{
+                      position: 'absolute',
+                      bottom: -4,
+                      left: 0,
+                      right: 0,
+                      height: '1.5px',
+                      backgroundColor: 'var(--color-accent)',
+                    }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  />
+                )}
               </Link>
             )
           })}
           {activeProject?.project_id && (
             <Link
               to={withProjectQuery(`/studio/project/${activeProject.project_id}`, activeProjectId)}
-              className="studio-nav-link room-icon-workspace px-4 py-1.5 text-sm rounded transition-all no-underline"
+              className="text-xs no-underline transition-colors"
               style={{
-                color: location.pathname.startsWith('/studio/project/') ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                borderBottom: location.pathname.startsWith('/studio/project/') ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                fontWeight: location.pathname.startsWith('/studio/project/') ? 500 : 400,
+                color: location.pathname.startsWith('/studio/project/')
+                  ? 'var(--color-text-primary)'
+                  : 'var(--color-text-muted)',
+                position: 'relative',
               }}
             >
               Workspace
+              {location.pathname.startsWith('/studio/project/') && (
+                <motion.div
+                  layoutId="active-tab"
+                  style={{
+                    position: 'absolute',
+                    bottom: -4,
+                    left: 0,
+                    right: 0,
+                    height: '1.5px',
+                    backgroundColor: 'var(--color-accent)',
+                  }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                />
+              )}
             </Link>
           )}
         </nav>
 
         <div className="flex items-center gap-3">
           {activeProjectId && (
-            <div className="flex items-center gap-2 mr-4">
+            <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleConvene()}
                 placeholder="Ask co-directors..."
-                className="bg-black/40 border border-white/10 rounded px-3 py-1 text-xs text-white focus:outline-none focus:border-indigo-500/50 w-48"
+                className="bg-[#1a1a1a] border border-[#1e1e1e] rounded px-3 py-1 text-xs text-white focus:outline-none focus:border-[#00d4aa] transition-all w-[180px] focus:w-[240px]"
               />
               <button
                 type="button"
                 onClick={handleConvene}
                 disabled={isConvening || !query.trim()}
-                className="flex items-center gap-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 rounded px-3 py-1 text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#222] text-[#888] border border-[#1e1e1e] rounded px-3 py-1 text-xs transition-all disabled:opacity-50"
               >
                 <Users size={14} />
-                <span>Convene</span>
               </button>
               {debateHistory.length > 0 && (
                 <div className="relative group">
-                  <button className="flex items-center justify-center rounded border border-white/10 bg-black/40 p-1.5 text-zinc-400 hover:text-white transition-colors">
+                  <button className="flex items-center justify-center rounded border border-[#1e1e1e] bg-[#1a1a1a] p-1.5 text-[#444] hover:text-white transition-colors">
                     <History size={14} />
                   </button>
-                  <div className="absolute right-0 top-full mt-1 hidden group-hover:block w-64 rounded-lg border border-white/10 bg-zinc-900 shadow-2xl z-[110] overflow-hidden">
-                    <div className="px-3 py-2 border-b border-white/5 bg-zinc-950/50 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  <div className="absolute right-0 top-full mt-1 hidden group-hover:block w-64 rounded-lg border border-[#1e1e1e] bg-[#0d0d0d] shadow-2xl z-[110] overflow-hidden">
+                    <div className="px-3 py-2 border-b border-[#1e1e1e] bg-[#080808] text-[10px] font-bold uppercase tracking-widest text-[#444]">
                       Recent Debates
                     </div>
                     <div className="max-h-64 overflow-y-auto">
@@ -235,10 +243,9 @@ export default function TopNav({ title, subtitle, showProjectPicker }: TopNavPro
                         <button
                           key={d.debate_id}
                           onClick={() => setActiveDebate(d)}
-                          className="w-full text-left px-3 py-2 border-b border-white/5 hover:bg-white/5 transition-colors"
+                          className="w-full text-left px-3 py-2 border-b border-[#1e1e1e] hover:bg-[#1a1a1a] transition-colors"
                         >
-                          <div className="text-[10px] text-zinc-300 font-medium truncate">{d.query}</div>
-                          <div className="text-[8px] text-zinc-500 mt-0.5">{new Date(d.created_at).toLocaleDateString()}</div>
+                          <div className="text-[10px] text-[#888] font-medium truncate">{d.query}</div>
                         </button>
                       ))}
                     </div>
@@ -250,23 +257,20 @@ export default function TopNav({ title, subtitle, showProjectPicker }: TopNavPro
           <button
             type="button"
             onClick={toggleMuted}
-            className="studio-icon-chip flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-zinc-200"
+            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-[#888] border border-[#1e1e1e] bg-[#1a1a1a] hover:border-[#00d4aa] transition-colors"
             title={muted ? 'Enable studio audio hooks' : 'Mute studio audio hooks'}
           >
             {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
-            <span>{muted ? 'Audio Off' : 'Audio On'}</span>
           </button>
-          <div className="studio-icon-chip flex items-center gap-2 px-3 py-1.5 rounded text-xs" style={{
-            background: studioStatus.background,
-            border: studioStatus.border,
-            color: studioStatus.color,
+          <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border border-[#1e1e1e] bg-[#1a1a1a]" style={{
+            color: studioStatus.color === '#22c55e' ? '#22c55e' : studioStatus.color,
           }}>
-            <span className="status-dot inline-block" style={{ background: studioStatus.color }}></span>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: studioStatus.color === '#22c55e' ? '#22c55e' : studioStatus.color }}></span>
             <span>{studioStatus.label}</span>
           </div>
-          <div className="studio-icon-chip flex items-center gap-2 px-3 py-1.5 rounded" style={{ background: 'rgba(255,255,255,0.05)' }}>
-            <User size={14} style={{ color: 'var(--text-secondary)' }} />
-            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Admin | FilmOS</span>
+          <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border border-[#1e1e1e] bg-[#1a1a1a] text-[#888]">
+            <User size={14} />
+            <span>Admin</span>
           </div>
         </div>
       </header>

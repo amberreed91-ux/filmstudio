@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Clapperboard } from 'lucide-react'
 import StudioShell, { AGENTS, CollapsibleSection, EmptyStateCard, MetricCard, TabGroup } from '../components/StudioShell'
 import StudioBrainOrchestrationPanel from '../components/StudioBrainOrchestrationPanel'
 import { useStudio } from '../context/StudioContext'
@@ -113,12 +112,6 @@ export default function StudioOverview() {
       return { score: 0, total_conflicts: 0, high_conflicts: 0 }
     }
   }, [])
-  const summarySource = useMemo(() => {
-    if (project?.execution_summary && typeof project.execution_summary === 'object') return 'live'
-    const localRaw = localStorage.getItem('studio:lastBundle')
-    if (localRaw) return 'fallback'
-    return 'empty'
-  }, [project?.execution_summary])
   const executionSummary = useMemo(() => {
     const fromProject = asRecord(project?.execution_summary)
     if (Object.keys(fromProject).length > 0) return fromProject
@@ -323,91 +316,158 @@ export default function StudioOverview() {
     )
   }
   return (
-    <StudioShell title="Studio Overview" subtitle="Your film at a glance. What’s working. What needs attention.">
-      <div className="relative isolate min-h-screen w-full overflow-hidden rounded-[2rem] bg-[radial-gradient(circle_at_12%_0%,rgba(245,158,11,0.16),transparent_34%),radial-gradient(circle_at_88%_8%,rgba(34,211,238,0.12),transparent_32%),radial-gradient(circle_at_50%_100%,rgba(99,102,241,0.08),transparent_38%),linear-gradient(145deg,#030305_0%,#090a10_48%,#020203_100%)]">
-        <div className="pointer-events-none absolute -left-24 top-24 h-80 w-80 rounded-full bg-amber-400/10 blur-3xl" />
-        <div className="pointer-events-none absolute right-0 top-0 h-96 w-96 rounded-full bg-cyan-400/10 blur-3xl" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/50 to-transparent" />
+    <StudioShell title="Studio Overview" subtitle="Your film at a glance. What's working. What needs attention.">
+      <div className="relative isolate min-h-screen w-full overflow-hidden" style={{ background: 'var(--color-surface-0)' }}>
+        {/* Film grain overlay */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[0.03]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          }}
+        />
+
         <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-8 text-zinc-100 sm:px-6 lg:px-8">
-          <div className="space-y-6">
-          <section className="relative overflow-hidden rounded-[1.75rem] border border-white/12 bg-white/[0.045] p-6 shadow-[0_32px_110px_rgba(0,0,0,0.46)] backdrop-blur-2xl">
-            <div className="absolute inset-0 bg-[radial-gradient(900px_420px_at_80%_0%,rgba(214,169,92,0.22),transparent_70%)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(780px_360px_at_10%_100%,rgba(34,211,238,0.13),transparent_70%)]" />
-            <div className="relative z-10 grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-              <div>
-                <div className="inline-flex rounded-full border border-amber-200/25 bg-amber-300/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-100">Command Center</div>
-                <h2 className="mt-4 flex items-center gap-3 text-3xl font-semibold tracking-[0.08em] text-zinc-50">
-                  <span className="grid h-11 w-11 place-items-center rounded-2xl border border-amber-300/30 bg-amber-400/15 shadow-[0_0_34px_rgba(245,158,11,0.16)]"><Clapperboard size={22} /></span>
-                  STUDIO OVERVIEW
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">Your film at a glance. What&apos;s working. What needs attention. The dashboard now reads like a live control surface instead of a static report.</p>
-                <div className="mt-4 inline-flex rounded-full border border-white/10 bg-black/35 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
-                  {summarySource === 'live' ? 'Live Project Data' : summarySource === 'fallback' ? 'Fallback Preview' : 'No project data yet'}
+          <div className="space-y-8">
+          {/* Hero Section - "The Gate" */}
+          <section className="relative overflow-hidden rounded-2xl border p-12" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+            <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>The Gate</div>
+            <h1 className="mt-4 text-5xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+              Direct. Shape. Remember.
+            </h1>
+          </section>
+
+          {/* Stats Row */}
+          <section className="grid grid-cols-4 gap-4">
+            <div className="rounded-lg border p-4" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+              <div className="text-2xl font-light" style={{ color: 'var(--color-text-primary)' }}>{mergedProjectOptions.length}</div>
+              <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>Projects</div>
+            </div>
+            <div className="rounded-lg border p-4" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+              <div className="text-2xl font-light" style={{ color: 'var(--color-text-primary)' }}>{asNumber(renderAssetSummary.total_assets) ?? 0}</div>
+              <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>Rendering</div>
+            </div>
+            <div className="rounded-lg border p-4" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+              <div className="text-2xl font-light" style={{ color: 'var(--color-text-primary)' }}>{approvedScenesCount}</div>
+              <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>Approved</div>
+            </div>
+            <div className="rounded-lg border p-4" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+              <div className="text-2xl font-light" style={{ color: 'var(--color-text-primary)' }}>{scenes.length - approvedScenesCount}</div>
+              <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>Drafts</div>
+            </div>
+          </section>
+
+          {/* Film Cards Grid */}
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {roomPreviews.slice(0, 6).map((room) => (
+              <Link
+                key={room.title}
+                to={room.to}
+                className="group relative overflow-hidden rounded-lg border p-5 transition-all hover:border-[#00d4aa]"
+                style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}
+              >
+                <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>{room.title}</div>
+                <div className="mt-2 text-sm" style={{ color: 'var(--color-text-primary)' }}>{room.status}</div>
+                <div className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>{room.preview}</div>
+                <div className="mt-3 h-1 w-full rounded-full" style={{ background: 'var(--color-surface-2)' }}>
+                  <div className="h-full w-1/2 rounded-full" style={{ background: 'var(--color-accent)' }} />
                 </div>
+              </Link>
+            ))}
+          </section>
+
+          {/* AI Crew Presence Panel */}
+          <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+            <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>AI Crew Presence</div>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
+                <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{DIRECTOR_AGENT.name}</span>
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Active</span>
               </div>
-              <div className="rounded-2xl border border-white/12 bg-black/35 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-                <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">Current Project</div>
-                <button
-                  type="button"
-                  className="mt-2 w-full rounded-xl border border-amber-300/40 bg-amber-400/12 px-3 py-2 text-left text-xs text-zinc-100 transition hover:border-amber-200/60 hover:bg-amber-400/18"
-                >
-                  {project?.title || 'No project loaded'}
-                </button>
-                {projectOptions.length > 0 ? (
-                  <select
-                    value={activeProjectId}
-                    onChange={(event) => {
-                      if (event.target.value) {
-                        localStorage.setItem('studio:activeProjectId', event.target.value)
-                        void loadProject(event.target.value)
-                      }
-                    }}
-                    className="mt-2 w-full rounded-xl border border-white/20 bg-black/55 px-2 py-2 text-xs text-zinc-100 outline-none transition focus:border-cyan-200/50 focus:ring-2 focus:ring-cyan-300/15"
-                  >
-                    {mergedProjectOptions.map((option) => (
-                      <option key={option.project_id} value={option.project_id}>
-                        {option.title || option.project_id}
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const created = await createProject({ title: `Studio Project ${new Date().toLocaleDateString()}` })
-                    if (!created.project?.project_id) return
-                    localStorage.setItem('studio:activeProjectId', created.project.project_id)
-                    setProjectSaveMessage('Project created')
-                    await loadProject(created.project.project_id)
-                    const response = await listProjects()
-                    setPersistedProjects((response.projects || []).map((p) => ({ project_id: p.project_id, title: p.title || p.project_id })))
-                  }}
-                  className="mt-2 w-full rounded-xl border border-emerald-300/40 bg-emerald-400/12 px-3 py-2 text-left text-xs font-semibold text-emerald-100 transition hover:-translate-y-0.5 hover:bg-emerald-400/18"
-                >
-                  Create New Project
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const safeProjectId = activeProjectId || 'local_project'
-                    try {
-                      const exported = await fetchExportPackage(safeProjectId, 'pitch-pack')
-                      downloadJson(`${safeProjectId}-pitch-pack.json`, exported)
-                      setExportMessage('Export created')
-                    } catch {
-                      const fallback = buildLocalFallbackExport('pitch-pack')
-                      downloadJson(`${safeProjectId}-pitch-pack-fallback.json`, fallback)
-                      setExportMessage('Export created (local fallback)')
-                    }
-                  }}
-                  className="mt-2 w-full rounded-xl border border-cyan-300/40 bg-cyan-400/12 px-3 py-2 text-left text-xs font-semibold text-cyan-100 transition hover:-translate-y-0.5 hover:bg-cyan-400/18"
-                >
-                  Export Pitch Pack
-                </button>
-                {exportMessage ? <div className="mt-1 text-[10px] text-zinc-300">{exportMessage}</div> : null}
-                {projectSaveMessage ? <div className="mt-1 text-[10px] text-emerald-200">{projectSaveMessage}</div> : null}
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
+                <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{CINEMATOGRAPHER_AGENT.name}</span>
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Active</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
+                <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{EDITOR_AGENT.name}</span>
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Active</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
+                <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{ARCHIVIST_AGENT.name}</span>
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Active</span>
               </div>
             </div>
+          </section>
+
+          {/* Project Controls */}
+          <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+            <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>Current Project</div>
+            <button
+              type="button"
+              className="mt-3 w-full rounded-lg border px-4 py-2 text-left text-sm transition hover:border-[#00d4aa]"
+              style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+            >
+              {project?.title || 'No project loaded'}
+            </button>
+            {projectOptions.length > 0 ? (
+              <select
+                value={activeProjectId}
+                onChange={(event) => {
+                  if (event.target.value) {
+                    localStorage.setItem('studio:activeProjectId', event.target.value)
+                    void loadProject(event.target.value)
+                  }
+                }}
+                className="mt-2 w-full rounded-lg border px-4 py-2 text-sm outline-none transition focus:border-[#00d4aa]"
+                style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+              >
+                {mergedProjectOptions.map((option) => (
+                  <option key={option.project_id} value={option.project_id}>
+                    {option.title || option.project_id}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button
+              type="button"
+              onClick={async () => {
+                const created = await createProject({ title: `Studio Project ${new Date().toLocaleDateString()}` })
+                if (!created.project?.project_id) return
+                localStorage.setItem('studio:activeProjectId', created.project.project_id)
+                setProjectSaveMessage('Project created')
+                await loadProject(created.project.project_id)
+                const response = await listProjects()
+                setPersistedProjects((response.projects || []).map((p) => ({ project_id: p.project_id, title: p.title || p.project_id })))
+              }}
+              className="mt-2 w-full rounded-lg border px-4 py-2 text-sm font-semibold transition hover:border-[#00d4aa]"
+              style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}
+            >
+              Create New Project
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const safeProjectId = activeProjectId || 'local_project'
+                try {
+                  const exported = await fetchExportPackage(safeProjectId, 'pitch-pack')
+                  downloadJson(`${safeProjectId}-pitch-pack.json`, exported)
+                  setExportMessage('Export created')
+                } catch {
+                  const fallback = buildLocalFallbackExport('pitch-pack')
+                  downloadJson(`${safeProjectId}-pitch-pack-fallback.json`, fallback)
+                  setExportMessage('Export created (local fallback)')
+                }
+              }}
+              className="mt-2 w-full rounded-lg border px-4 py-2 text-sm font-semibold transition hover:border-[#00d4aa]"
+              style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}
+            >
+              Export Pitch Pack
+            </button>
+            {exportMessage ? <div className="mt-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{exportMessage}</div> : null}
+            {projectSaveMessage ? <div className="mt-2 text-xs" style={{ color: '#22c55e' }}>{projectSaveMessage}</div> : null}
           </section>
 
           {Boolean(localStorage.getItem('studio:lastBundle')) && !activeProjectId ? (

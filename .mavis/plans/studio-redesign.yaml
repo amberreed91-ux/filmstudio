@@ -1,0 +1,415 @@
+version: 1
+plan:
+  name: 'AI Film Studio — Cinematic Physical Studio Aesthetic UI Revamp'
+  max_concurrency: 2
+  max_consecutive_failures: 2
+  max_cycles: 5
+  verifier_config:
+    default_verifiers: [verifier]
+    audit_sample_rate: 0.0
+
+tasks:
+  - id: track-a-rooms
+    title: 'Redesign StudioLobby, WritersRoom, PrevisRoom, ScreeningRoom'
+    prompt: |
+      You are redesigning the AI Film Studio app with a cinematic physical studio aesthetic.
+      Working directory: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app
+
+      DESIGN SYSTEM (already in place — use these tokens, do NOT redefine them):
+      - --color-surface-0: #080808
+      - --color-surface-1: #0a0a0a
+      - --color-surface-2: #0d0d0d
+      - --color-surface-3: #111111
+      - --color-border: #1e1e1e
+      - --color-border-subtle: #161616
+      - --color-accent: #00d4aa
+      - --color-text-primary: #e8e8e8
+      - --color-text-secondary: #888
+      - --color-text-muted: #444
+      - --color-text-ghost: #333
+      - --radius-sm: 4px
+      - --radius-md: 8px
+      - --radius-lg: 12px
+      All tokens are already in src/styles/design-tokens.css. Reference them in inline styles or Tailwind arbitrary values.
+
+      GLOBAL SHELL — already done (TopNav has layoutId="active-tab", App.tsx has AnimatePresence):
+      - TopNav.tsx: already has the dark design with Framer Motion layoutId="active-tab" and command bar
+      - App.tsx: already wraps routes in AnimatePresence with opacity 0→1, y 8→0, duration 0.2s
+      - StudioLayout.tsx: already a thin flex-col wrapper
+      - DO NOT touch these files — they are done
+
+      EXISTING COMPONENTS — keep these working, only change visual presentation:
+      - StudioShell: wraps pages with TopNav + breadcrumbs, keep all props
+      - AICrewPresence: keep as-is, it's lazy-loaded
+      - ProjectContextBar, ProjectGuard: keep as-is
+      - DirectorDebatePanel: keep as-is
+      - All API calls, data fetching, and state management: keep exactly as-is
+
+      RULES:
+      - DO NOT break any existing functionality — UI changes only
+      - DO NOT touch any .test.tsx files
+      - DO NOT touch src/lib/ or src/hooks/ or src/context/ directories
+      - Keep ALL existing state, props, API calls, and handlers
+      - Framer Motion is already installed and imported in existing files
+      - Use CSS inline styles referencing the design tokens (already defined in :root)
+      - All surfaces must be #080808 to #111111 range — NO white backgrounds
+      - Zinc palette + teal accent (#00d4aa) only — no new colors
+
+      ========================
+      ROOM 1: STUDIO LOBBY — "The Gate"
+      ========================
+      File: src/pages/StudioLobby.tsx (StudioLobby component)
+
+      CURRENT STATE: Has "Welcome to Studio" hero with cyan/emerald buttons, project cards grid, room directory. Wrapped in StudioShell.
+
+      REDESIGN SPEC:
+      - Full-bleed dark hero: large typographic treatment "Direct. Shape. Remember." — thin font weight, tight letter-spacing. Use inline styles with fontWeight: '200' or '300', letterSpacing: '-0.03em'.
+      - Film grain overlay: CSS-only using SVG filter at 2-3% opacity. Add this pattern to the hero section:
+        ```css
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
+        ```
+        Apply via inline style on the hero container.
+      - Film cards: dark rounded cards with progress bar and render status — use surface-2 background, border-border, rounded-lg
+      - Stats row: 4 stats (projects, rendering, approved, drafts) — minimal number + label, use surface-2 panels
+      - Right sidebar: AI Crew Presence panel (already exists as LazyAICrewPresence) — integrate it into the layout
+      - "Start a New Film" button: use teal accent (#00d4aa) — border, text, and subtle glow
+      - Room directory cards: use surface-1 background, teal accent on hover
+      - Film grain texture on Studio Home hero ONLY (not on other rooms)
+
+      ========================
+      ROOM 2: WRITERS ROOM — "The Page"
+      ========================
+      File: src/pages/WritersRoom.tsx (WritersRoom component)
+
+      CURRENT STATE: Already has a room hero section with eyebrow label "Writers Room", title "The Page". Has scene list with INT/EXT/DAY/NIGHT tags. Wrapped in StudioShell > ProjectGuard > ProjectContextBar.
+
+      REDESIGN SPEC:
+      - The existing room hero is already close to spec. Enhance it:
+        - Make the eyebrow label smaller (11px), tracking 0.2em, teal accent color
+        - Make the title larger (4xl or 5xl), thin font weight (200-300), tight letter-spacing (-0.02em)
+        - Add a subtle subtitle
+      - Left panel: scene list with INT/EXT/DAY/NIGHT tags as small pills
+        - Active scene highlighted with teal border-left (2px solid #00d4aa)
+      - Right sidebar: clapboard visual — stripe pattern header using CSS:
+        ```css
+        background: repeating-linear-gradient(90deg, #111 0px, #111 40px, #1a1a1a 40px, #1a1a1a 80px);
+        ```
+        - Production metadata (project title, scene count)
+        - Co-director notes feed (existing DirectorDebatePanel component)
+      - Use surface-1/surface-2 panels consistently
+      - All borders: 0.5px solid #1e1e1e
+
+      ========================
+      ROOM 3: PREVIS ROOM — "The Lightboard"
+      ========================
+      File: src/pages/PrevisRoom.tsx (PrevisRoom component)
+
+      CURRENT STATE: 3107 lines, massive component with many sub-panels (CinematicShowcase, DecisionGateCard, DirectorConsole, PrevisIntelligencePanel, AudienceSimulatorModal). The component already has some dark styling. You need to:
+      
+      1. Add the room hero at the top (inside the component, after ProjectContextBar, before the main content):
+      ```tsx
+      <section className="rounded-2xl border p-8 mb-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+        <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Previs Room</div>
+        <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+          The Lightboard
+        </h1>
+        <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          Visual planning and storyboarding. Frame your story.
+        </p>
+      </section>
+      ```
+
+      2. Style the main storyboard grid: 3-column grid, each frame has viewfinder corner marks using CSS:
+      ```css
+      .storyboard-frame { position: relative; }
+      .storyboard-frame::before, .storyboard-frame::after,
+      .storyboard-frame > div:first-child::before, .storyboard-frame > div:first-child::after {
+        content: '';
+        position: absolute;
+        width: 12px; height: 12px;
+        border-color: var(--color-accent);
+        border-style: solid;
+      }
+      .storyboard-frame::before { top: 0; left: 0; border-width: 1.5px 0 0 1.5px; }
+      .storyboard-frame::after { top: 0; right: 0; border-width: 1.5px 1.5px 0 0; }
+      /* etc. */
+      ```
+      
+      3. Style the shot list: shot type pill, lens note, blocking note — use surface-1/surface-2
+      4. Right sidebar: film strip decorative element (CSS repeating gradient stripes), lens intelligence panel
+      5. The component is huge — focus on: (a) adding the room hero, (b) styling the existing storyboard/shot-grid area, (c) adding viewfinder corner marks to frames
+
+      ========================
+      ROOM 4: SCREENING ROOM — "The Theater"
+      ========================
+      File: src/pages/ScreeningRoom.tsx (ScreeningRoom component)
+
+      CURRENT STATE: 2338 lines, massive component with ScreeningCinematicShowcase, render activity panel, co-director collaboration panel, timeline intelligence, director memory callbacks, etc.
+
+      REDESIGN SPEC:
+      1. Add the room hero at the top (after ProjectContextBar):
+      ```tsx
+      <section className="rounded-2xl border p-8 mb-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+        <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Screening Room</div>
+        <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+          The Theater
+        </h1>
+        <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          Review cuts, compare iterations, simulate audiences.
+        </p>
+      </section>
+      ```
+
+      2. Style the main video screen area:
+      - Large 2.39:1 screen frame with viewfinder corners (CSS borders)
+      - Transport controls: play/pause/skip, timeline scrubber, timecode — dark pill design
+      - Cut timeline: horizontal scroll of scene thumbnails with transition badges (CUT, DISS, FADE)
+      - Use rounded pill shapes for transport buttons (border-radius: 20px)
+      
+      3. Right sidebar: runtime stats, audience simulation cards
+
+      ========================
+      VERIFICATION:
+      ========================
+      After completing all 4 rooms, verify:
+      1. Read src/App.tsx — confirm it has AnimatePresence page transitions (it should already)
+      2. Read src/components/TopNav.tsx — confirm it has the dark design and Framer Motion (it should already)
+      3. Read src/styles/design-tokens.css — confirm design tokens exist (they should already)
+      4. Check that no .test.tsx files were modified
+      5. Check that no src/lib/, src/hooks/, or src/context/ files were changed
+      6. Run: cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app && npx tsc --noEmit 2>&1 | head -50
+         If there are errors, fix them.
+      7. Report: list of files changed, any issues encountered, tsc result.
+
+      IMPORTANT: Do NOT ask for confirmation. Work through each room in order. Write deliverable.md when done listing all changed files and tsc result.
+    assigned_to: developer
+    verified_by: verifier
+    verify_prompt: |
+      Verify the Track A rooms redesign:
+      1. Read StudioLobby.tsx — confirm it has "Direct. Shape. Remember." hero with film grain overlay
+      2. Read WritersRoom.tsx — confirm it has room hero with "The Page" title, INT/EXT tags, clapboard sidebar
+      3. Read PrevisRoom.tsx — confirm it has room hero with "The Lightboard" title
+      4. Read ScreeningRoom.tsx — confirm it has room hero with "The Theater" title
+      5. Confirm no .test.tsx files were modified
+      6. Confirm no src/lib/, src/hooks/, or src/context/ files were changed
+      7. Run: cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app && npx tsc --noEmit 2>&1 | head -50 — verify 0 errors
+      8. Report findings clearly: PASS or FAIL with specific details
+    timeout_ms: 2400000
+
+  - id: track-b-rooms
+    title: 'Redesign Dashboard, ProductionBoard, UniverseGraphPage'
+    prompt: |
+      You are redesigning the AI Film Studio app with a cinematic physical studio aesthetic.
+      Working directory: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app
+
+      DESIGN SYSTEM (already in place — use these tokens, do NOT redefine them):
+      - --color-surface-0: #080808
+      - --color-surface-1: #0a0a0a
+      - --color-surface-2: #0d0d0d
+      - --color-surface-3: #111111
+      - --color-border: #1e1e1e
+      - --color-border-subtle: #161616
+      - --color-accent: #00d4aa
+      - --color-text-primary: #e8e8e8
+      - --color-text-secondary: #888
+      - --color-text-muted: #444
+      - --color-text-ghost: #333
+      - --radius-sm: 4px
+      - --radius-md: 8px
+      - --radius-lg: 12px
+      All tokens are already in src/styles/design-tokens.css. Reference them in inline styles.
+
+      GLOBAL SHELL — already done (TopNav has layoutId="active-tab", App.tsx has AnimatePresence):
+      - TopNav.tsx: already has the dark design with Framer Motion layoutId="active-tab" and command bar
+      - App.tsx: already wraps routes in AnimatePresence with opacity 0→1, y 8→0, duration 0.2s
+      - StudioLayout.tsx: already a thin flex-col wrapper
+      - DO NOT touch these files — they are done
+
+      EXISTING COMPONENTS — keep these working, only change visual presentation:
+      - StudioShell: wraps pages with TopNav + breadcrumbs, keep all props
+      - ProjectContextBar, ProjectGuard: keep as-is
+      - DirectorDebatePanel: keep as-is
+      - All API calls, data fetching, and state management: keep exactly as-is
+
+      RULES:
+      - DO NOT break any existing functionality — UI changes only
+      - DO NOT touch any .test.tsx files
+      - DO NOT touch src/lib/ or src/hooks/ or src/context/ directories
+      - Keep ALL existing state, props, API calls, and handlers
+      - All surfaces must be #080808 to #111111 range — NO white backgrounds
+      - Zinc palette + teal accent (#00d4aa) only
+
+      ========================
+      ROOM 1: DASHBOARD — "The Cutting Room" (Approval Room)
+      ========================
+      Files: src/pages/Dashboard.tsx, also routes at /studio/approval and /studio/approval-room
+
+      CURRENT STATE: Has QC cards, approval gates, comparison panels. Large component.
+
+      REDESIGN SPEC:
+      1. Add room hero at the top:
+      ```tsx
+      <section className="rounded-2xl border p-8 mb-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+        <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Approval Room</div>
+        <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+          The Cutting Room
+        </h1>
+        <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          Quality control, approval gates, and benchmark take review.
+        </p>
+      </section>
+      ```
+
+      2. Film strip header showing all scenes:
+      - CSS film strip with sprocket holes effect:
+      ```css
+      background: repeating-linear-gradient(
+        90deg,
+        #1a1a1a 0px, #1a1a1a 20px,
+        #0a0a0a 20px, #0a0a0a 28px,
+        #1a1a1a 28px, #1a1a1a 48px,
+        transparent 48px, transparent 60px
+      );
+      border-top: 2px solid #111;
+      border-bottom: 2px solid #111;
+      height: 32px;
+      ```
+      - Approved scenes: teal (#00d4aa) glow/indicator
+      - Rejected scenes: red indicator
+      - Pending scenes: neutral
+
+      3. Review cards below:
+      - Each scene card with status badge: Approved (teal border), Revise (amber border), Pending (zinc border)
+      - Note section with muted text
+      - Action buttons (Approve/Revise/Reject) — use rounded pill style
+      - Use surface-1/surface-2 backgrounds consistently
+
+      4. Right sidebar: reel visual (CSS film reel with notches), approval progress bar (teal fill on dark track), producer/director notes
+
+      ========================
+      ROOM 2: PRODUCTION BOARD — "The Call Sheet"
+      ========================
+      File: src/pages/ProductionBoard.tsx
+
+      CURRENT STATE: Has render queue, provider status badges, scene cards.
+
+      REDESIGN SPEC:
+      1. Add room hero:
+      ```tsx
+      <section className="rounded-2xl border p-8 mb-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+        <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Production Board</div>
+        <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+          The Call Sheet
+        </h1>
+        <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          Scene production pipeline. Track renders and status.
+        </p>
+      </section>
+      ```
+
+      2. Kanban columns: Draft / Rendering / Complete
+      - Each column: header with count badge, cards listed below
+      - Scene cards: surface-2 background, rounded-lg, with provider badge (Runway ML / AMD MI300X) and progress bar
+      - Progress bars: teal fill on dark track (#0d0d0d)
+      - Use surface-1 for column backgrounds
+
+      3. Right sidebar: render queue with live progress bars (animate with CSS transitions), provider labels with colored dots
+
+      ========================
+      ROOM 3: UNIVERSE KNOWLEDGE GRAPH — "The Story Bible"
+      ========================
+      File: src/pages/UniverseGraphPage.tsx
+
+      CURRENT STATE: Has knowledge graph visualization (react-force-graph-2d), node list panel.
+
+      REDESIGN SPEC:
+      1. Add room hero:
+      ```tsx
+      <section className="rounded-2xl border p-8 mb-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+        <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Story Bible</div>
+        <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+          The Story Bible
+        </h1>
+        <div className="mt-4">
+          <button className="rounded-lg border px-4 py-2 text-xs uppercase tracking-[0.12em] transition hover:border-[#00d4aa]"
+            style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}>
+            Export Bible
+          </button>
+        </div>
+      </section>
+      ```
+
+      2. Left: interactive node graph on dark grid background
+      - Characters: teal (#00d4aa) nodes
+      - Locations: blue nodes (#4a9eff or similar)
+      - Objects: amber (#f59e0b) nodes
+      - Dark grid background: 
+      ```css
+      background-color: #0a0a0a;
+      background-image:
+        linear-gradient(rgba(30,30,30,0.5) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(30,30,30,0.5) 1px, transparent 1px);
+      background-size: 40px 40px;
+      ```
+
+      3. Right sidebar: filter tabs (Characters / Locations / Objects), selected node detail panel with surface-1 background, Director Memory Engine alert banner (amber border, surface-1 bg)
+
+      ========================
+      VERIFICATION:
+      ========================
+      After completing all 3 rooms, verify:
+      1. Read Dashboard.tsx — confirm room hero with "The Cutting Room"
+      2. Read ProductionBoard.tsx — confirm room hero with "The Call Sheet", kanban columns
+      3. Read UniverseGraphPage.tsx — confirm room hero with "The Story Bible", node graph styling
+      4. Confirm no .test.tsx files were modified
+      5. Confirm no src/lib/, src/hooks/, or src/context/ files were changed
+      6. Run: cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app && npx tsc --noEmit 2>&1 | head -50
+         If there are errors, fix them.
+      7. Report: list of files changed, any issues encountered, tsc result.
+
+      IMPORTANT: Do NOT ask for confirmation. Work through each room in order. Write deliverable.md when done listing all changed files and tsc result.
+    assigned_to: developer
+    verified_by: verifier
+    verify_prompt: |
+      Verify the Track B rooms redesign:
+      1. Read Dashboard.tsx — confirm room hero with "The Cutting Room" title, film strip header, review cards
+      2. Read ProductionBoard.tsx — confirm room hero with "The Call Sheet" title, kanban columns (Draft/Rendering/Complete)
+      3. Read UniverseGraphPage.tsx — confirm room hero with "The Story Bible" title, Export Bible button, node graph with color coding
+      4. Confirm no .test.tsx files were modified
+      5. Confirm no src/lib/, src/hooks/, or src/context/ files were changed
+      6. Run: cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app && npx tsc --noEmit 2>&1 | head -50 — verify 0 errors
+      7. Report findings clearly: PASS or FAIL with specific details
+    timeout_ms: 2400000
+
+  - id: final-verification
+    title: 'Final TypeScript + Health check'
+    prompt: |
+      Run the final verification:
+      1. cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app && npx tsc --noEmit 2>&1
+         - Must be 0 errors
+      
+      2. Run health check:
+         cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project && source .venv/bin/activate && python -m pytest studio-backend/app/main.py 2>&1 | tail -20 || true
+         OR if there's a health endpoint: check if the backend health endpoint works
+      
+      3. Report: tsc result (errors count), health check result.
+      
+      IMPORTANT: Write deliverable.md with the final results.
+    assigned_to: developer
+    depends_on: [track-a-rooms, track-b-rooms]
+    verified_by: verifier
+    verify_prompt: |
+      Verify final state:
+      1. Run: cd /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app && npx tsc --noEmit 2>&1
+         - Must report 0 errors
+      2. Check all room pages have room heroes:
+         - StudioLobby: "Direct. Shape. Remember." hero
+         - WritersRoom: "The Page" title
+         - PrevisRoom: "The Lightboard" title
+         - ScreeningRoom: "The Theater" title
+         - Dashboard: "The Cutting Room" title
+         - ProductionBoard: "The Call Sheet" title
+         - UniverseGraphPage: "The Story Bible" title
+      3. Confirm design tokens are used (--color-surface-0 through --color-accent)
+      4. Report PASS/FAIL with count of tsc errors and which rooms are confirmed redesigned
+    timeout_ms: 600000
