@@ -52,6 +52,7 @@ export const AGENTS = {
 interface StudioShellProps {
   title?: string
   subtitle?: string
+  transparent?: boolean
   children: ReactNode
 }
 
@@ -182,7 +183,7 @@ export function EmptyStateCard({
   )
 }
 
-export default function StudioShell({ title, subtitle, children }: StudioShellProps) {
+export default function StudioShell({ title, subtitle, transparent, children }: StudioShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { activity } = useRenderActivity()
@@ -361,8 +362,8 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
   const currentStepLabel = flowSteps[activeStepIndex]?.label || 'Script'
 
   return (
-    <div className={`studio-room-shell ${roomVisualClass} ${productionStateClass} relative flex min-h-screen flex-col overflow-x-auto`} style={{ background: 'var(--bg-deep)' }}>
-      <TopNav title={activeTitle} subtitle={subtitle || route?.purpose} />
+    <div className={`studio-room-shell ${roomVisualClass} ${productionStateClass} relative flex min-h-screen flex-col overflow-x-auto`} style={{ background: transparent ? 'transparent' : 'var(--bg-deep)' }}>
+      <TopNav />
       {showBreadcrumbs ? <Breadcrumbs items={breadcrumbs} /> : null}
 
       <div className="cinematic-panel mx-4 mt-3 px-3 py-2">
@@ -509,7 +510,7 @@ export default function StudioShell({ title, subtitle, children }: StudioShellPr
         ) : null}
       </div>
 
-      <main className="w-full studio-shell-main" style={{ background: 'linear-gradient(180deg, var(--bg-deep) 0%, #030306 40%, #010104 100%), radial-gradient(ellipse 80% 50% at 50% -10%, rgba(214,169,92,0.07) 0%, transparent 70%)', isolation: 'isolate' }}>
+      <main className="w-full studio-shell-main" style={transparent ? { background: 'transparent', isolation: 'auto' } : { background: 'linear-gradient(180deg, var(--bg-deep) 0%, #030306 40%, #010104 100%), radial-gradient(ellipse 80% 50% at 50% -10%, rgba(214,169,92,0.07) 0%, transparent 70%)', isolation: 'isolate' }}>
         <div className="film-strip-decoration" />
         <div className="pointer-events-none absolute inset-0 z-0"
           style={{

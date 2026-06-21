@@ -1,0 +1,33 @@
+{
+  "file_name": "tests/smoke_video.py",
+  "revisions": [
+    {
+      "revision_id": "4e4ff119-1c95-4968-bac2-4ee046bf18cf",
+      "metadata": {
+        "timestamp": "2026-06-17T10:00:10.498366",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 4796,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-17T10:00:10.498366"
+    },
+    {
+      "revision_id": "49cdacf5-c51a-4a10-8396-c2d7f32f98d0",
+      "metadata": {
+        "timestamp": "2026-06-17T08:25:43.863125",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 4563,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T08:25:43.863125"
+    }
+  ]
+}

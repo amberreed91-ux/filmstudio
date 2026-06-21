@@ -1,0 +1,19 @@
+{
+  "file_name": "studio-backend/app/routes/proactive.py",
+  "revisions": [
+    {
+      "revision_id": "e297dadb-e5f2-4205-8ad7-5bbc40df759f",
+      "metadata": {
+        "timestamp": "2026-06-15T16:20:34.814917",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 3885,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-15T16:20:34.814917"
+    }
+  ]
+}

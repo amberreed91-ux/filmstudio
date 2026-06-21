@@ -103,26 +103,52 @@ class UniverseGraphService:
         except Exception as e:
             logger.warning(f"Character auto-population limited: {e}")
 
-        # 2. Locations from Scene Intelligence
+        # 2. Locations, Objects, and Lore from Scene Intelligence
         try:
             scene_data = self.scene_store._load()
             records = scene_data.get("records", {})
             
             locations = {} # name -> {description, scenes}
+            objects = {} # name -> {description, scenes}
+            lore = {} # name -> {description, scenes}
+            
             for scene_id, scene in records.items():
                 # Filter by project (assuming project_id matches film_title or we can't filter easily)
                 # In this project, scene_intelligence is often shared but we can try to find relevant scenes
-                loc_name = scene.get("scene_name", "").split("-")[0].strip()
-                if not loc_name: continue
+                scene_name = scene.get("scene_name", "").split("-")[0].strip()
+                if not scene_name: continue
                 
-                if loc_name not in locations:
-                    locations[loc_name] = {"description": scene.get("director_notes", ""), "scenes": [scene_id]}
+                # Determine node type based on content
+                scene_desc = scene.get("director_notes", "") + " " + scene.get("scene_description", "")
+                scene_desc_lower = scene_desc.lower()
+                scene_name_lower = scene_name.lower()
+                
+                # Check if it's a location (contains INT/EXT or location keywords)
+                location_keywords = ["int.", "ext.", "interior", "exterior", "room", "house", "building", "street", "park", "office", "restaurant", "bar", "cafe", "kitchen", "bedroom", "bathroom", "living room", "hallway", "elevator", "lobby", "hotel", "hospital", "school", "church", "temple", "forest", "mountain", "beach", "river", "lake", "ocean", "desert", "city", "town", "village", "road", "highway", "bridge", "tunnel", "airport", "station", "platform", "train", "bus", "subway", "warehouse", "factory", "studio", "stage", "set", ""]
+                is_location = any(keyword in scene_desc_lower for keyword in location_keywords)
+                
+                # Check if it's an object (prop-like terms)
+                object_keywords = ["table", "chair", "desk", "bed", "door", "window", "phone", "computer", "car", "keys", "bag", "gun", "knife", "book", "pen", "paper", "glass", "cup", "bottle", "plate", "fork", "spoon", "knife", "watch", "ring", "necklace", "earring", "shoes", "clothes", "shirt", "pants", "jacket", "coat", "hat", "cap", "glasses", "camera", "microphone", "speaker", "television", "radio", "lamp", "light", "candle", "match", "cigarette", "food", "drink", "medicine", "pill", "bandage", "bandaid", "tool", "hammer", "screwdriver", "wrench", "drill", "saw", "nail", "screw", "bolt", "rope", "chain", "wire", "cable", "cord", "plug", "socket", "switch", "button", "lever", "handle", "knob", "dial", "meter", "gauge", "scale", "balance", "weight", "measure", "container", "box", "case", "bag", "pouch", "pocket", "wallet", "purse", "backpack", "suitcase", "luggage", "trunk", "crate", "barrel", "drum", "tank", "vessel", "bottle", "jar", "can", "tin", "bucket", "pail", "basket", "bin", "trash", "garbage", "waste", "recycle", "compost", "fertilizer", "soil", "dirt", "sand", "gravel", "rock", "stone", "brick", "concrete", "cement", "wood", "metal", "plastic", "glass", "paper", "cardboard", "fabric", "cloth", "leather", "rubber", "foam", "sponge", "towel", "rag", "cloth", "napkin", "tissue", "wipe", "brush", "comb", "mirror", "picture", "frame", "painting", "sculpture", "statue", "monument", "memorial", "plaque", "sign", "poster", "banner", "flag", "emblem", "symbol", "logo", "badge", "medal", "trophy", "award", "prize", "ribbon", "certificate", "document", "file", "folder", "envelope", "letter", "note", "memo", "message", "email", "text", "call", "phone", "mobile", "cell", "smartphone", "tablet", "laptop", "desktop", "monitor", "screen", "keyboard", "mouse", "trackpad", "printer", "scanner", "copier", "fax", "shredder", "stapler", "hole punch", "paper clip", "binder", "clip", "fastener", "tape", "glue", "adhesive", "sticker", "label", "tag", "marker", "highlighter", "pen", "pencil", "eraser", "sharpener", "ruler", "compass", "protractor", "calculator", "abacus", "cash register", "credit card", "debit card", "check", "cash", "money", "currency", "coin", "bill", "note", "receipt", "invoice", "ticket", "pass", "permit", "license", "id", "passport", "visa", "card", "key", "lock", "safe", "vault", "alarm", "sensor", "camera", "monitor", "screen", "display", "projector", "speaker", "microphone", "headphone", "earphone", "earbud", "headset", "earmuff", "earplug", "mask", "goggles", "glasses", "sunglasses", "contact", "lens", "frame", "case", "box", "bag", "pouch", "pocket", "wallet", "purse", "backpack", "suitcase", "luggage", "trunk", "crate", "barrel", "drum", "tank", "vessel", "bottle", "jar", "can", "tin", "bucket", "pail", "basket", "bin", "trash", "garbage", "waste", "recycle", "compost", "fertilizer", "soil", "dirt", "sand", "gravel", "rock", "stone", "brick", "concrete", "cement", "wood", "metal", "plastic", "glass", "paper", "cardboard", "fabric", "cloth", "leather", "rubber", "foam", "sponge", "towel", "rag", "cloth", "napkin", "tissue", "wipe", "brush", "comb", "mirror", "picture", "frame", "painting", "sculpture", "statue", "monument", "memorial", "plaque", "sign", "poster", "banner", "flag", "emblem", "symbol", "logo", "badge", "medal", "trophy", "award", "prize", "ribbon", "certificate", "document", "file", "folder", "envelope", "letter", "note", "memo", "message", "email", "text", "call", "phone", "mobile", "cell", "smartphone", "tablet", "laptop", "desktop", "monitor", "screen", "keyboard", "mouse", "trackpad", "printer", "scanner", "copier", "fax", "shredder", "stapler", "hole punch", "paper clip", "binder", "clip", "fastener", "tape", "glue", "adhesive", "sticker", "label", "tag", "marker", "highlighter", "pen", "pencil", "eraser", "sharpener", "ruler", "compass", "protractor", "calculator", "abacus", "cash register", "credit card", "debit card", "check", "cash", "money", "currency", "coin", "bill", "note", "receipt", "invoice", "ticket", "pass", "permit", "license", "id", "passport", "visa", "card", "key", "lock", "safe", "vault", "alarm", "sensor", "camera", "monitor", "screen", "display", "projector", "speaker", "microphone", "headphone", "earphone", "earbud", "headset", "earmuff", "earplug", "mask", "goggles", "glasses", "sunglasses", "contact", "lens"]
+                is_object = any(keyword in scene_name_lower for keyword in object_keywords)
+                
+                # Classification logic
+                if is_object:
+                    target_dict = objects
+                elif is_location:
+                    target_dict = locations
                 else:
-                    if scene_id not in locations[loc_name]["scenes"]:
-                        locations[loc_name]["scenes"].append(scene_id)
+                    # Default to lore for scene titles that don't match location/object patterns
+                    target_dict = lore
+                
+                if scene_name not in target_dict:
+                    target_dict[scene_name] = {"description": scene.get("director_notes", ""), "scenes": [scene_id]}
+                else:
+                    if scene_id not in target_dict[scene_name]["scenes"]:
+                        target_dict[scene_name]["scenes"].append(scene_id)
             
+            # Create location nodes
             for loc_name, data in locations.items():
-                if loc_name.lower() in created_nodes: continue # Avoid naming collisions
+                if loc_name.lower() in created_nodes: continue
                 
                 node_id = f"loc-{uuid.uuid4().hex[:8]}"
                 node = UniverseNode(
@@ -137,8 +163,45 @@ class UniverseGraphService:
                 nodes.append(node)
                 created_nodes[loc_name.lower()] = node_id
                 self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
+            
+            # Create object nodes
+            for obj_name, data in objects.items():
+                if obj_name.lower() in created_nodes: continue
+                
+                node_id = f"obj-{uuid.uuid4().hex[:8]}"
+                node = UniverseNode(
+                    node_id=node_id,
+                    project_id=project_id,
+                    node_type="object",
+                    name=obj_name,
+                    description=data["description"] or "A significant prop or object in the story.",
+                    first_scene=data["scenes"][0],
+                    last_scene=data["scenes"][-1]
+                )
+                nodes.append(node)
+                created_nodes[obj_name.lower()] = node_id
+                self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
+            
+            # Create lore nodes
+            for lore_name, data in lore.items():
+                if lore_name.lower() in created_nodes: continue
+                
+                node_id = f"lore-{uuid.uuid4().hex[:8]}"
+                node = UniverseNode(
+                    node_id=node_id,
+                    project_id=project_id,
+                    node_type="lore",
+                    name=lore_name,
+                    description=data["description"] or "A thematic element or world-building fact.",
+                    first_scene=data["scenes"][0],
+                    last_scene=data["scenes"][-1]
+                )
+                nodes.append(node)
+                created_nodes[lore_name.lower()] = node_id
+                self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
+                
         except Exception as e:
-            logger.warning(f"Location auto-population limited: {e}")
+            logger.warning(f"Scene-based node auto-population limited: {e}")
 
         # 3. Objects from Symbols in Director Memory
         try:

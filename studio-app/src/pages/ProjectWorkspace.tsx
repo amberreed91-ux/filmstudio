@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ProactiveCoDirectorCard from '../components/ProactiveCoDirectorCard'
+import { useProactiveCoDirector } from '../hooks/useProactiveCoDirector'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, GitBranch, Lock, Save } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
@@ -116,6 +118,16 @@ export function ProjectWorkspaceBody({
   const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState(workspaceKey, initialIdentity.productionMode))
   const [leadershipInput, setLeadershipInput] = useState('')
 
+  const { check: proactiveCheck, card: proactiveCard, dismiss: proactiveDismiss, saveToNotes: proactiveSaveToNotes } = useProactiveCoDirector(projectId)
+
+  // Fire project_open check once when the workspace mounts
+  useEffect(() => {
+    void proactiveCheck('project_open', {
+      lastEdited: sourceProject?.updated_at,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
   useEffect(() => {
     saveWorkspaceState(workspaceKey, workspaceState)
   }, [workspaceKey, workspaceState])
@@ -232,6 +244,17 @@ export function ProjectWorkspaceBody({
   return (
     <StudioShell title={`${identity.title} Workspace`} subtitle="Run the project like a studio head: review the pipeline, direct the crew, and lock creative decisions.">
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Proactive Co-Director Card */}
+        {proactiveCard && (
+          <ProactiveCoDirectorCard
+            message={proactiveCard.message}
+            triggerType={proactiveCard.trigger_type}
+            saveToNotes={proactiveCard.save_to_notes}
+            onDismiss={proactiveDismiss}
+            onSaveToNotes={proactiveCard.save_to_notes ? () => proactiveSaveToNotes() : undefined}
+          />
+        )}
+
         {providerStatusStripMessage || executionStatusStripMessage || validationStatusStripMessage || shotPipelineStripMessage || takePipelineStripMessage || renderStatusStripMessage || sceneStatusStripMessage || productionSignalMessage || sceneIntentLabel || reviewStateMessage || memoryVisibilityMessage || memorySnapshotMessage || shotPlanMessage || previsStripMessage || visualBoardMessage ? (
           <div className="space-y-2">
             {providerStatusStripMessage ? <ProviderStatusStrip message={providerStatusStripMessage} /> : null}

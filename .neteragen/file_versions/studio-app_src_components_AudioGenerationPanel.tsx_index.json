@@ -1,0 +1,19 @@
+{
+  "file_name": "studio-app/src/components/AudioGenerationPanel.tsx",
+  "revisions": [
+    {
+      "revision_id": "aceaaa56-5019-492e-bb4b-63904e50a0bc",
+      "metadata": {
+        "timestamp": "2026-06-15T15:56:06.045711",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 11438,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-15T15:56:06.045711"
+    }
+  ]
+}

@@ -19,6 +19,7 @@ import ArchiveRoom from './pages/ArchiveRoom'
 import StudioDevTools from './pages/StudioDevTools'
 import ShareProject from './pages/ShareProject'
 import UniverseGraphPage from './pages/UniverseGraphPage'
+import { ThreeTest } from './pages/ThreeTest'
 
 export type NavigationPlacement =
   | 'primary'
@@ -289,6 +290,14 @@ export const APP_ROUTES: AppRoute[] = [
     ],
     icon: <Film size={14} />,
     element: <PrevisRoom />,
+  },
+  {
+    path: '/three-test',
+    label: 'Three Test',
+    title: 'Three.js R3F Test',
+    purpose: 'Isolated test to verify R3F Canvas rendering.',
+    placement: 'hidden-system',
+    element: <ThreeTest />,
   },
   {
     path: '/studio/dashboard',

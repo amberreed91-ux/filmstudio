@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/shared/bin/dora",
+  "revisions": [
+    {
+      "revision_id": "b55ad040-8852-4f30-b3b5-c73f57eabafe",
+      "metadata": {
+        "timestamp": "2026-06-17T10:13:54.767658",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 240,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:13:54.767658"
+    }
+  ]
+}

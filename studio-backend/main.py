@@ -41,6 +41,10 @@ from app.routes.audience_simulator import router as audience_simulator_router
 from app.routes.debate import router as debate_router
 from app.routes.universe_graph import router as universe_graph_router
 from app.routes.production_scan import router as production_scan_router
+from app.routes.audio import router as audio_router
+from app.routes.stitching import router as stitching_router
+from app.routes.export import router as final_export_router
+from app.routes.proactive import router as proactive_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
 from app.auth import AuthService, demo_login
@@ -233,6 +237,10 @@ app.include_router(audience_simulator_router)
 app.include_router(debate_router)
 app.include_router(universe_graph_router)
 app.include_router(production_scan_router)
+app.include_router(audio_router)
+app.include_router(stitching_router)
+app.include_router(final_export_router)
+app.include_router(proactive_router)
 
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)

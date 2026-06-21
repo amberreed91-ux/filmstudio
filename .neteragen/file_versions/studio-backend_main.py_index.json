@@ -1,0 +1,131 @@
+{
+  "file_name": "studio-backend/main.py",
+  "revisions": [
+    {
+      "revision_id": "ab97ad7c-294b-4a88-ba21-de1a6c34aa3f",
+      "metadata": {
+        "timestamp": "2026-06-15T16:20:42.990914",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17585,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:20:42.990914"
+    },
+    {
+      "revision_id": "24e417e6-89e9-4e0d-8cfa-90c35b8fd902",
+      "metadata": {
+        "timestamp": "2026-06-15T16:20:39.380392",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17548,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:20:39.380392"
+    },
+    {
+      "revision_id": "fde7e936-44c2-4ad2-8fbd-e69cac5d5054",
+      "metadata": {
+        "timestamp": "2026-06-15T16:15:40.995227",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17488,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:15:40.995227"
+    },
+    {
+      "revision_id": "04774825-7369-4424-bdac-9cecf019c7b6",
+      "metadata": {
+        "timestamp": "2026-06-15T16:15:37.794725",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17448,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:15:37.794725"
+    },
+    {
+      "revision_id": "4cd482e9-389f-40f4-8e61-57078161a361",
+      "metadata": {
+        "timestamp": "2026-06-15T16:10:28.936007",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17388,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:10:28.936007"
+    },
+    {
+      "revision_id": "f49c1faa-bfac-488c-aebd-0da9066b78b4",
+      "metadata": {
+        "timestamp": "2026-06-15T16:10:23.499189",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17351,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:10:23.499189"
+    },
+    {
+      "revision_id": "f75fe5b7-a40f-4a47-9b8a-7bedfb58a000",
+      "metadata": {
+        "timestamp": "2026-06-15T15:55:07.995354",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17291,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T15:55:07.995354"
+    },
+    {
+      "revision_id": "3fa47ef5-885a-4d17-83b2-9e2ecb2d79dc",
+      "metadata": {
+        "timestamp": "2026-06-15T15:55:03.725648",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17258,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T15:55:03.725648"
+    },
+    {
+      "revision_id": "3f98b182-0da8-4032-8f4a-f806ed68cabb",
+      "metadata": {
+        "timestamp": "2026-06-15T15:55:03.723560",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17206,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-15T15:55:03.723560"
+    }
+  ]
+}

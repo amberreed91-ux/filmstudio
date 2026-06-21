@@ -16,6 +16,7 @@ import SceneContinuityPanel from '../components/SceneContinuityPanel'
 import ScreeningCinematicShowcase from '../components/ScreeningCinematicShowcase'
 import ScreeningTimelineIntelligencePanel from '../components/ScreeningTimelineIntelligencePanel'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
+import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
 import { buildLocalFallbackExport, createClipRevision, createFinalShortFilmPackage, createShortFilmReview, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getLatestShortFilmReview, getProject, getProjectDecisionGate, getTimelineIntelligence, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, refreshRenderJobOutputUrl, stitchShortFilm, submitClipRevisionRender, type CinematicMemoryRecord, type ContinuityIssue, type ContinuityReview, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue, type TimelineFlowAnalysis } from '../lib/studioApi'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
@@ -1384,7 +1385,10 @@ export default function ScreeningRoom() {
   }
 
   return (
-    <StudioShell title="Screening Room" subtitle="Playback and review of scene cuts and iteration outcomes.">
+    <>
+      <TheaterScene videoUrl={primaryVideoUrl} />
+      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto' }}>
+        <StudioShell title="Screening Room" subtitle="Playback and review of scene cuts and iteration outcomes." transparent>
       <ProjectGuard>
         <ProjectContextBar roomName="screening room" />
         <RenderActivityPanel roomName="Screening Room" />
@@ -2333,6 +2337,8 @@ export default function ScreeningRoom() {
         </div>
       )}
       </ProjectGuard>
-    </StudioShell>
+        </StudioShell>
+      </div>
+    </>
   )
 }

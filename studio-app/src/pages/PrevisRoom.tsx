@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Film } from 'lucide-react'
 import StudioShell, { AGENTS, TabGroup } from '../components/StudioShell'
 import DirectorConsole from '../components/DirectorConsole'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
@@ -8,6 +7,7 @@ import CinematicLoading from '../components/CinematicLoading'
 import PrevisIntelligencePanel from '../components/PrevisIntelligencePanel'
 import PrevisCinematicShowcase from '../components/PrevisCinematicShowcase'
 import DecisionGateCard from '../components/DecisionGateCard'
+import AudioGenerationPanel from '../components/AudioGenerationPanel'
 import { useStudio } from '../context/StudioContext'
 import {
   generateMotionPreview,
@@ -1920,82 +1920,75 @@ export default function PrevisRoom() {
   return (
     <>
     <StudioShell title="Rough Previs Room" subtitle="Read-only continuity and scene-previs inspection over the current execution bundle.">
-      <div className="w-full overflow-visible">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
+      <div className="w-full overflow-visible relative" style={{ background: 'var(--color-surface-0)', zIndex: 1 }}>
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+          {/* Room Hero - "The Lightboard" */}
+          <section className="rounded-2xl border p-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+            <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Previs Room</div>
+            <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+              The Lightboard
+            </h1>
+            <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              Visualize your shots. Refine your vision. Build your sequence.
+            </p>
+          </section>
+
           <DecisionGateCard projectId={activeProjectId} gate={decisionGate} loading={decisionGateLoading} error={decisionGateError} />
-          
+
           {activeDebate && (
             <DirectorDebatePanel
               projectId={activeProjectId || ''}
-              sceneId={selectedSceneIdSafe}
               debate={activeDebate}
               onDismiss={() => setActiveDebate(null)}
             />
           )}
 
-          <section className="cinematic-panel p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 2: REVIEW YOUR SCENES</div>
-            <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100"><Film size={18} />Previs Room</h2>
-            <div className="mt-1 text-sm text-zinc-300">Improve scenes and approve the ones you want in your film.</div>
-            {!hasRealData ? (
-              <div className="mt-2 rounded border border-amber-300/35 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+          <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>
+                  Scene Navigation
+                </div>
+                <div className="mt-2 text-sm" style={{ color: 'var(--color-text-primary)' }}>
+                  {asString(selectedScene.heading) || asString(selectedScene.location) || 'Scene context unavailable'}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSelectSceneByIndex(selectedSceneIndex - 1)}
+                  disabled={selectedSceneIndex <= 0}
+                  className="rounded-lg border px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition hover:border-[#00d4aa] disabled:opacity-40"
+                  style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectSceneByIndex(selectedSceneIndex + 1)}
+                  disabled={selectedSceneIndex >= totalScenes - 1}
+                  className="rounded-lg border px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition hover:border-[#00d4aa] disabled:opacity-40"
+                  style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 flex gap-4 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              <span>Scene {Math.min(selectedSceneIndex + 1, Math.max(totalScenes, 1))} of {Math.max(totalScenes, 1)}</span>
+              <span>Reviewed: {reviewedCount} / {totalScenes}</span>
+              <span style={{ color: '#22c55e' }}>Approved: {approvedCount} / {totalScenes}</span>
+            </div>
+          </section>
+
+          {!hasRealData && (
+            <div className="rounded-lg border p-4" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+              <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                 No scenes yet. Start in Writer&apos;s Room or generate a short film first.
               </div>
-            ) : null}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleSelectSceneByIndex(selectedSceneIndex - 1)}
-                disabled={selectedSceneIndex <= 0}
-                className="rounded-md border border-zinc-500/40 bg-zinc-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Previous Scene
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectSceneByIndex(selectedSceneIndex + 1)}
-                disabled={selectedSceneIndex >= totalScenes - 1}
-                className="rounded-md border border-zinc-500/40 bg-zinc-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next Scene
-              </button>
-              <span className="rounded-md border border-cyan-300/40 bg-cyan-500/12 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-cyan-100">
-                Scene {Math.min(selectedSceneIndex + 1, Math.max(totalScenes, 1))} of {Math.max(totalScenes, 1)}
-              </span>
-              <span className="rounded-md border border-white/15 bg-black/25 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-200">
-                {asString(selectedScene.heading) || asString(selectedScene.location) || 'Scene context unavailable'}
-              </span>
-              <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-zinc-300">
-                {asString(selectedPromptBase).split(',').slice(0, 1).join(', ') || 'No scene description available'}
-              </span>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.12em]">
-              <span className="rounded border border-white/15 bg-black/25 px-2 py-1 text-zinc-300">Reviewed Scenes: {reviewedCount} / {totalScenes}</span>
-              <span className="rounded border border-emerald-400/40 bg-emerald-500/10 px-2 py-1 text-emerald-200">Approved Scenes: {approvedCount} / {totalScenes}</span>
-              <span className="rounded border border-amber-400/40 bg-amber-500/10 px-2 py-1 text-amber-200">Needs Work: {needsWorkCount}</span>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Link to={withProjectQuery('/studio/writers-room', activeProjectId)} className="rounded-md border border-zinc-500/35 bg-zinc-700/15 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-200 no-underline">
-                Back to Writer&apos;s Room
-              </Link>
-              <Link to={withProjectQuery('/studio/production-board', activeProjectId)} className="rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline">
-                Send Approved Shots to Production Board
-              </Link>
-              <button
-                type="button"
-                onClick={handleManualDebate}
-                disabled={triggeringDebate}
-                className="rounded-md border border-indigo-500/45 bg-indigo-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100"
-              >
-                {triggeringDebate ? 'Preparing Counter-Argument...' : 'Debate this decision'}
-              </button>
-            </div>
-            {uiFeedback ? (
-              <div className="mt-2 inline-flex rounded border border-cyan-300/40 bg-cyan-500/12 px-2 py-1 text-[11px] text-cyan-100">
-                {uiFeedback}
-              </div>
-            ) : null}
-          </section>
+          )}
 
           <PrevisCinematicShowcase
             projectId={activeProjectId || project?.project_id || ''}
@@ -2496,6 +2489,22 @@ export default function PrevisRoom() {
                   <div>Silence Strategy: <span className="text-zinc-100">{asString(selectedSoundProfile.silence_strategy) || 'not set'}</span></div>
                   <div>Score Direction: <span className="text-zinc-100">{asString(selectedSoundProfile.score_direction) || 'not set'}</span></div>
                 </div>
+              </section>
+
+              <section className="rounded-2xl border border-zinc-700/50 bg-zinc-900/40 p-3 shadow-xl">
+                <AudioGenerationPanel
+                  projectId={activeProjectId || ''}
+                  sceneId={selectedSceneIdSafe || ''}
+                  soundAdvisory={
+                    asRecord(asRecord(selectedScene)?.sound_advisory) as {
+                      mood?: string
+                      score_notes?: string
+                      ambient_notes?: string
+                      silence_flag?: boolean
+                    } | undefined
+                  }
+                  sceneDescription={asString(asRecord(selectedScene)?.description) || asString(asRecord(selectedScene)?.heading) || ''}
+                />
               </section>
 
               <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4 shadow-xl backdrop-blur-md">

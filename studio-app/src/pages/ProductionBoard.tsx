@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ClipboardList, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import StudioShell, { AGENTS, DropdownMenu } from '../components/StudioShell'
 import SceneCard from '../components/SceneCard'
 import ProjectContextBar from '../components/ProjectContextBar'
@@ -927,14 +927,25 @@ function ProductionBoardContent() {
         <ProjectContextBar roomName="production board" />
         <RenderActivityPanel roomName="Production Board" />
         <CollaboratorPresenceIndicators collaboration={collaboration || null} />
-      <div className="w-full">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 space-y-5 text-zinc-100">
-          <DecisionGateCard 
-            projectId={effectiveProjectId} 
-            gate={decisionGate} 
-            loading={decisionGateLoading} 
-            error={decisionGateError} 
+      <div className="w-full" style={{ background: 'var(--color-surface-0)' }}>
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          <DecisionGateCard
+            projectId={effectiveProjectId}
+            gate={decisionGate}
+            loading={decisionGateLoading}
+            error={decisionGateError}
           />
+
+          {/* Room Hero - "The Call Sheet" */}
+          <section className="rounded-2xl border p-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+            <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Production Board</div>
+            <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+              The Call Sheet
+            </h1>
+            <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              Track progress. Manage renders. Coordinate your crew.
+            </p>
+          </section>
 
           <ProductionExecutionBay
             projectId={effectiveProjectId || project?.project_id || ''}
@@ -945,137 +956,87 @@ function ProductionBoardContent() {
             onRetryFailedRender={handleRetryFirstFailedRender}
           />
 
-          <section className="cinematic-panel studio-fade-in p-5">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 3: TRACK PROGRESS</div>
-            <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100"><ClipboardList size={18} />Production Board</h2>
-            <p className="mt-2 text-sm text-zinc-300">Live scene control surface for cut health, blockers, and lock readiness.</p>
-            <div className="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-              <div className="rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-3 py-2">Approved Scenes: <span className="font-semibold text-emerald-200">{approvedSceneCount}</span></div>
-              <div className="rounded-lg border border-cyan-400/35 bg-cyan-500/10 px-3 py-2">Reviewed Scenes: <span className="font-semibold text-cyan-200">{reviewedSceneCount}</span></div>
-              <div className="status-pulse-soft rounded-lg border border-amber-400/35 bg-amber-500/10 px-3 py-2">Needs Review: <span className="font-semibold text-amber-200">{needsReviewCount}</span></div>
-              <div className="status-pulse-soft rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2">Needs Attention: <span className="font-semibold text-rose-200">{needsAttentionCount}</span></div>
-            </div>
-            <div className="mt-4 rounded-xl border border-amber-300/35 bg-amber-500/10 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-amber-200">Next Step:</div>
-              <div className="mt-1 text-sm font-semibold text-zinc-100">{nextStepText}</div>
-              <div className="mt-1 text-[11px] text-zinc-300">
-                Crew lead: {firstNeedsAttention ? `${AGENTS.continuity.icon} ${AGENTS.continuity.name}` : `${AGENTS.director.icon} ${AGENTS.director.name}`}
+          <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+              <div className="rounded-lg border p-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}>
+                <div style={{ color: 'var(--color-text-secondary)' }}>Approved Scenes</div>
+                <div className="mt-1 font-semibold" style={{ color: '#22c55e' }}>{approvedSceneCount}</div>
+              </div>
+              <div className="rounded-lg border p-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}>
+                <div style={{ color: 'var(--color-text-secondary)' }}>Reviewed Scenes</div>
+                <div className="mt-1 font-semibold" style={{ color: 'var(--color-text-primary)' }}>{reviewedSceneCount}</div>
+              </div>
+              <div className="rounded-lg border p-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}>
+                <div style={{ color: 'var(--color-text-secondary)' }}>Needs Review</div>
+                <div className="mt-1 font-semibold" style={{ color: '#f59e0b' }}>{needsReviewCount}</div>
+              </div>
+              <div className="rounded-lg border p-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}>
+                <div style={{ color: 'var(--color-text-secondary)' }}>Needs Attention</div>
+                <div className="mt-1 font-semibold" style={{ color: '#f87171' }}>{needsAttentionCount}</div>
               </div>
             </div>
+          </section>
 
-            {/* Production Recovery Indicator */}
-            <ProductionRecoveryIndicator
-              isRecovering={recovery.isRecovering}
-              recoveryStatus={recovery.recoveryStatus}
-              recoveryMessage={recovery.recoveryMessage}
-              recoveryError={recovery.recoveryError}
-              recoveredItems={recovery.recoveredItems}
-              onSafeRefresh={recovery.safeRefresh}
-              onDismiss={recovery.resetRecovery}
-            />
-            
-            {/* Manual Recovery Controls */}
-            {!recovery.isRecovering && recovery.recoveryStatus !== 'recovering' && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  aria-label="Refresh production board data"
-                  type="button"
-                  onClick={() => {
-                    setActionFeedback('Starting production recovery...')
-                    recovery.safeRefresh()
-                  }}
-                  className="rounded-lg border border-cyan-300/40 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100"
-                >
-                  Refresh Production Board
-                </button>
-                {recovery.recoveryStatus === 'failed' && (
-                  <button
-                    aria-label="Retry production recovery after failure"
-                    type="button"
-                    onClick={() => {
-                      setActionFeedback('Retrying production recovery...')
-                      recovery.safeRefresh()
-                    }}
-                    className="rounded-lg border border-amber-300/40 bg-amber-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100"
-                  >
-                    Retry Recovery
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-              <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Total Scenes</div>
-                <div className="font-semibold text-zinc-100">{productionSummary.total_scenes}</div>
-              </div>
-              <div className="rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-[0.1em] text-emerald-200">Locked</div>
-                <div className="font-semibold text-emerald-100">{productionSummary.locked_scenes}</div>
-              </div>
-              <div className="rounded-lg border border-cyan-400/35 bg-cyan-500/10 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-[0.1em] text-cyan-200">In Progress</div>
-                <div className="font-semibold text-cyan-100">{productionSummary.scenes_in_progress}</div>
-              </div>
-              <div className="rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-[0.1em] text-rose-200">Blocked</div>
-                <div className="font-semibold text-rose-100">{productionSummary.blocked_scenes}</div>
-              </div>
-              <div className={`rounded-lg border px-3 py-2 ${continuityIssues.length > 0 ? 'border-amber-400/35 bg-amber-500/10' : 'border-emerald-400/35 bg-emerald-500/10'}`}>
-                <div className={`text-[10px] uppercase tracking-[0.1em] ${continuityIssues.length > 0 ? 'text-amber-200' : 'text-emerald-200'}`}>Continuity Issues</div>
-                <div className="font-semibold text-zinc-100">{continuityIssues.length}</div>
-                {continuityIssues.length > 0 && (
-                  <div className="mt-1 flex gap-2">
-                    <span className="text-[9px] text-red-300">{continuityIssues.filter(i => i.severity === 'high').length} high</span>
-                    <span className="text-[9px] text-amber-300">{continuityIssues.filter(i => i.severity === 'medium').length} med</span>
-                    <span className="text-[9px] text-blue-300">{continuityIssues.filter(i => i.severity === 'low').length} low</span>
-                  </div>
-                )}
-              </div>
+          <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+            <div className="text-xs uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-secondary)' }}>
+              Next Step
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="mt-2 text-sm" style={{ color: 'var(--color-text-primary)' }}>
+              {nextStepText}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Crew lead: {firstNeedsAttention ? `${AGENTS.continuity.icon} ${AGENTS.continuity.name}` : `${AGENTS.director.icon} ${AGENTS.director.name}`}
+            </div>
+          </section>
+
+          <ProductionRecoveryIndicator
+            isRecovering={recovery.isRecovering}
+            recoveryStatus={recovery.recoveryStatus}
+            recoveryMessage={recovery.recoveryMessage}
+            recoveryError={recovery.recoveryError}
+            recoveredItems={recovery.recoveredItems}
+            onSafeRefresh={recovery.safeRefresh}
+            onDismiss={recovery.resetRecovery}
+          />
+
+          {!recovery.isRecovering && recovery.recoveryStatus !== 'recovering' && (
+            <div className="flex gap-2">
               <button
-                aria-label={editCutMode ? 'Exit cut editing mode' : 'Enter cut editing mode'}
                 type="button"
                 onClick={() => {
-                  setEditCutMode((prev) => !prev)
-                  setActionFeedback(editCutMode ? 'Edit mode disabled' : 'Edit mode enabled')
+                  setActionFeedback('Starting production recovery...')
+                  recovery.safeRefresh()
                 }}
-                className="rounded-lg border border-amber-300/45 bg-amber-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100"
+                className="rounded-lg border px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition hover:border-[#00d4aa]"
+                style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}
               >
-                {editCutMode ? 'Done Editing Cut' : 'Edit Cut'}
-              </button>
-              <button
-                aria-label="Save current film cut configuration"
-                type="button"
-                onClick={saveCurrentCut}
-                className="rounded-lg border border-cyan-300/40 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100"
-              >
-                Save Current Cut
-              </button>
-              <button
-                aria-label="Create a new film cut variant"
-                type="button"
-                onClick={createNewCut}
-                className="rounded-lg border border-emerald-300/40 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100"
-              >
-                Create New Cut
-              </button>
-              <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
-                scenes in cut: {filmCut?.included_scenes.length ?? 0}
-              </span>
-              <button
-                aria-label="Export shot list as JSON file"
-                type="button"
-                onClick={() => { void handleExportShotList() }}
-                className="rounded-lg border border-cyan-300/40 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100"
-              >
-                Export Shot List
+                Refresh Production Board
               </button>
             </div>
-            {actionFeedback ? <div className="mt-2 text-[11px] text-cyan-200">{actionFeedback}</div> : null}
-            {exportMessage ? <div className="mt-2 text-[11px] text-zinc-300">{exportMessage}</div> : null}
+          )}
+
+          <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
+            <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+              <div className="rounded-lg border p-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}>
+                <div className="text-[10px] uppercase tracking-[0.1em]" style={{ color: 'var(--color-text-muted)' }}>Total Scenes</div>
+                <div className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{productionSummary.total_scenes}</div>
+              </div>
+              <div className="rounded-lg border p-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}>
+                <div className="text-[10px] uppercase tracking-[0.1em]" style={{ color: '#22c55e' }}>Locked</div>
+                <div className="font-semibold" style={{ color: '#22c55e' }}>{productionSummary.locked_scenes}</div>
+              </div>
+              <div className="rounded-lg border p-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}>
+                <div className="text-[10px] uppercase tracking-[0.1em]" style={{ color: 'var(--color-text-primary)' }}>In Progress</div>
+                <div className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{productionSummary.scenes_in_progress}</div>
+              </div>
+              <div className="rounded-lg border p-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border-subtle)' }}>
+                <div className="text-[10px] uppercase tracking-[0.1em]" style={{ color: '#f87171' }}>Blocked</div>
+                <div className="font-semibold" style={{ color: '#f87171' }}>{productionSummary.blocked_scenes}</div>
+              </div>
+            </div>
           </section>
-          <section className="cinematic-panel studio-fade-in p-4">
+
+          <section className="rounded-lg border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
             <ProductionTimeline
               title="Production Pipeline Timeline"
               scenes={timelineRows.length > 0 ? timelineRows : [{ sceneId: 'scene_001', currentStage: 'script', isRendering: false }]}

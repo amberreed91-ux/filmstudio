@@ -1,0 +1,61 @@
+{
+  "file_name": "studio-app/src/pages/StudioLobby.tsx",
+  "revisions": [
+    {
+      "revision_id": "9ff78509-8336-45f4-b789-58e6b3b2f76b",
+      "metadata": {
+        "timestamp": "2026-06-15T16:31:03.939979",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17373,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:31:03.939979"
+    },
+    {
+      "revision_id": "5954c1f3-8352-4252-a976-9b1e878fa267",
+      "metadata": {
+        "timestamp": "2026-06-15T16:30:56.036971",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17423,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:30:56.036971"
+    },
+    {
+      "revision_id": "7baa9861-d1dd-4906-8fa1-0f02736bb0d0",
+      "metadata": {
+        "timestamp": "2026-06-15T16:30:50.962801",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17646,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:30:50.962801"
+    },
+    {
+      "revision_id": "d422b35a-1a56-46ca-b4ee-8287dc267c5f",
+      "metadata": {
+        "timestamp": "2026-06-15T16:30:50.961822",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 17675,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": null
+      },
+      "saved_at": "2026-06-15T16:30:50.961822"
+    }
+  ]
+}

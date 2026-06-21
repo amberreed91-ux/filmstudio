@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/music/bin/activate",
+  "revisions": [
+    {
+      "revision_id": "3c0dd3a8-72ff-466d-bd43-3f74b984531f",
+      "metadata": {
+        "timestamp": "2026-06-17T08:27:51.225662",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 1754,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T08:27:51.225662"
+    }
+  ]
+}

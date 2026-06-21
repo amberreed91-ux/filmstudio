@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
+import { CinematicCut } from './components/CinematicCut'
 import { StudioProvider } from './context/StudioContext'
 import { RenderActivityProvider } from './context/RenderActivityContext'
 import { AudioUXProvider } from './context/AudioUXContext'
@@ -74,6 +75,7 @@ export default function App() {
         <AudioUXProvider>
           <RenderActivityProvider>
             <BrowserRouter>
+              <CinematicCut />
               <StudioLayout>
                 <StudioRoutes />
               </StudioLayout>

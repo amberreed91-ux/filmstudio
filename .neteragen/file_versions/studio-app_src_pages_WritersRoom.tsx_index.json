@@ -1,0 +1,103 @@
+{
+  "file_name": "studio-app/src/pages/WritersRoom.tsx",
+  "revisions": [
+    {
+      "revision_id": "dcee33d5-60dc-4925-98b3-5cea00d80203",
+      "metadata": {
+        "timestamp": "2026-06-15T16:22:09.901358",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 35781,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:22:09.901358"
+    },
+    {
+      "revision_id": "1d24b25a-d1d7-4f17-86ca-db1ed63dca6a",
+      "metadata": {
+        "timestamp": "2026-06-15T16:22:03.917215",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 35271,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:22:03.917215"
+    },
+    {
+      "revision_id": "5860da50-871d-46c0-a4f7-b7fb1fa48e6e",
+      "metadata": {
+        "timestamp": "2026-06-15T16:21:59.378022",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 35088,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:21:59.378022"
+    },
+    {
+      "revision_id": "d5881856-0701-46e4-af72-19c3693cf314",
+      "metadata": {
+        "timestamp": "2026-06-15T16:21:42.017553",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 34956,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:21:42.017553"
+    },
+    {
+      "revision_id": "46281aaf-3d2c-44c5-80e2-c5340e047abb",
+      "metadata": {
+        "timestamp": "2026-06-15T16:21:36.654001",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 34793,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:21:36.654001"
+    },
+    {
+      "revision_id": "ff345af5-c7e2-45f1-8d05-a57247967d6e",
+      "metadata": {
+        "timestamp": "2026-06-15T16:21:31.385431",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 34644,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:21:31.385431"
+    },
+    {
+      "revision_id": "b5edcb1f-6bc1-4a04-9033-ee1ed73d7130",
+      "metadata": {
+        "timestamp": "2026-06-15T16:21:31.384451",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 34636,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-15T16:21:31.384451"
+    }
+  ]
+}

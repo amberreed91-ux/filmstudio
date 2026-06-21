@@ -1,0 +1,16 @@
+{
+  "file_name": "studio-app/src/lib/stitchingApi.ts",
+  "revision_id": "685ddf18-6246-49fa-93d1-c3b08cd49178",
+  "metadata": {
+    "timestamp": "2026-06-15T16:10:41.717391",
+    "type": "cache_version",
+    "source": "initial_create",
+    "size": 2113,
+    "is_reverted": false,
+    "git_branch_name": "backend-expansion-dependency-slicing",
+    "agent_name": "Cody",
+    "description": null
+  },
+  "content": "/**\n * Stitching API client\n *\n * POST /api/f51/studio/projects/{id}/stitch\n * GET  /api/f51/studio/projects/{id}/stitch/status\n * GET  /api/f51/studio/projects/{id}/stitch/download\n */\n\nconst BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8010'\n\nexport interface StitchJob {\n  job_id: string\n  project_id: string\n  status: 'pending' | 'running' | 'complete' | 'failed' | 'not_started'\n  progress: number\n  current_scene: string | null\n  scenes_total: number\n  scenes_done: number\n  output_path: string | null\n  output_url: string | null\n  error: string | null\n  transitions_used: string[]\n  scene_count: number\n  started_at: number | null\n  finished_at: number | null\n  advisory: string\n  mock_mode?: boolean\n}\n\nexport interface StitchTriggerResponse {\n  job: StitchJob\n  advisory: string\n}\n\nexport interface StitchDownloadResponse {\n  output_url: string\n  download_url: string\n  mock_mode: boolean\n  advisory: string\n}\n\nasync function fetchStitch<T>(path: string, options?: RequestInit): Promise<T> {\n  const res = await fetch(`${BASE_URL}${path}`, {\n    headers: { 'Content-Type': 'application/json' },\n    ...options,\n  })\n  if (!res.ok) {\n    const text = await res.text().catch(() => res.statusText)\n    throw new Error(`Stitch API ${res.status}: ${text}`)\n  }\n  return res.json() as Promise<T>\n}\n\n/** Trigger a full film stitch for the project. */\nexport async function triggerStitch(projectId: string): Promise<StitchTriggerResponse> {\n  return fetchStitch<StitchTriggerResponse>(\n    `/api/f51/studio/projects/${projectId}/stitch`,\n    { method: 'POST' },\n  )\n}\n\n/** Poll stitching job status. */\nexport async function getStitchStatus(projectId: string): Promise<StitchJob> {\n  return fetchStitch<StitchJob>(`/api/f51/studio/projects/${projectId}/stitch/status`)\n}\n\n/** Get download URL for the final stitched film. */\nexport async function getStitchDownload(\n  projectId: string,\n): Promise<StitchDownloadResponse | null> {\n  try {\n    return await fetchStitch<StitchDownloadResponse>(\n      `/api/f51/studio/projects/${projectId}/stitch/download`,\n    )\n  } catch {\n    return null\n  }\n}\n",
+  "saved_at": "2026-06-15T16:10:41.717391"
+}

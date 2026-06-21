@@ -1,0 +1,16 @@
+{
+  "file_name": "tests/venvs/shared/bin/activate.csh",
+  "revision_id": "8d41b92c-4190-417c-9c0a-76a49466fbc3",
+  "metadata": {
+    "timestamp": "2026-06-17T10:00:58.949935",
+    "type": "cache_version",
+    "source": "initial_create",
+    "size": 981,
+    "is_reverted": false,
+    "git_branch_name": "backend-expansion-dependency-slicing",
+    "agent_name": "Cody",
+    "description": null
+  },
+  "content": "# This file must be used with \"source bin/activate.csh\" *from csh*.\n# You cannot run it directly.\n# Created by Davide Di Blasi <davidedb@gmail.com>.\n# Ported to Python 3.3 venv by Andrew Svetlov <andrew.svetlov@gmail.com>\n\nalias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH \"$_OLD_VIRTUAL_PATH\" && unset _OLD_VIRTUAL_PATH; rehash; test $?_OLD_VIRTUAL_PROMPT != 0 && set prompt=\"$_OLD_VIRTUAL_PROMPT\" && unset _OLD_VIRTUAL_PROMPT; unsetenv VIRTUAL_ENV; unsetenv VIRTUAL_ENV_PROMPT; test \"\\!:*\" != \"nondestructive\" && unalias deactivate'\n\n# Unset irrelevant variables.\ndeactivate nondestructive\n\nsetenv VIRTUAL_ENV \"/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/tests/venvs/shared\"\n\nset _OLD_VIRTUAL_PATH=\"$PATH\"\nsetenv PATH \"$VIRTUAL_ENV/bin:$PATH\"\n\n\nset _OLD_VIRTUAL_PROMPT=\"$prompt\"\n\nif (! \"$?VIRTUAL_ENV_DISABLE_PROMPT\") then\n    set prompt = \"(shared) $prompt\"\n    setenv VIRTUAL_ENV_PROMPT \"(shared) \"\nendif\n\nalias pydoc python -m pydoc\n\nrehash\n",
+  "saved_at": "2026-06-17T10:00:58.949935"
+}

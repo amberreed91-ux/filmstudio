@@ -1,0 +1,16 @@
+{
+  "file_name": "studio-app/vite.config.ts",
+  "revision_id": "9d1a0e0e-c6ad-477c-b9bd-5fbc279c36b6",
+  "metadata": {
+    "timestamp": "2026-06-15T16:46:13.982835",
+    "type": "cache_version",
+    "source": "ToolTextFileEdit",
+    "size": 600,
+    "is_reverted": false,
+    "git_branch_name": "backend-expansion-dependency-slicing",
+    "agent_name": "Jace",
+    "description": ""
+  },
+  "content": "import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\nimport tailwindcss from '@tailwindcss/vite'\n\nexport default defineConfig({\n  base: '/',\n  plugins: [\n    tailwindcss(),\n    react(),\n  ],\n  server: {\n    port: 5000,\n    host: true,\n    allowedHosts: true,\n    proxy: {\n      '/api': {\n        target: 'http://127.0.0.1:8010',\n        changeOrigin: true,\n      },\n      '/health': {\n        target: 'http://127.0.0.1:8010',\n        changeOrigin: true,\n      },\n      '/outputs': {\n        target: 'http://127.0.0.1:8010',\n        changeOrigin: true,\n      },\n    },\n  },\n})\n",
+  "saved_at": "2026-06-15T16:46:13.982835"
+}

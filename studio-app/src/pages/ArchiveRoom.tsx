@@ -214,34 +214,48 @@ export default function ArchiveRoom() {
 
   return (
     <StudioShell title="Archive Room" subtitle="Memory vault for film snapshots, scene versions, and best-cut lineage.">
-      <div className="w-full overflow-visible">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-100">
-          <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/45 p-5 shadow-2xl backdrop-blur-md">
+      <div className="w-full overflow-visible" style={{ background: 'var(--color-surface-0)' }}>
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          {/* Room Hero - "The Vault" */}
+          <section className="rounded-2xl border p-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+            <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Archive Room</div>
+            <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+              The Vault
+            </h1>
+            <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              Every version, every snapshot, every decision preserved.
+            </p>
+          </section>
+
+          <section className="rounded-2xl border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-xl font-semibold tracking-wide text-zinc-100"><Archive size={18} />Archive Snapshots</h2>
+              <h2 className="flex items-center gap-2 text-xl font-semibold tracking-wide" style={{ color: 'var(--color-text-primary)' }}><Archive size={18} />Archive Snapshots</h2>
               <button
                 type="button"
                 onClick={() => { void handleExportPackage('archive-snapshot') }}
-                className="rounded-md border border-cyan-300/35 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100"
+                className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] transition hover:border-[#00d4aa]"
+                style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}
               >
                 Export Snapshot
               </button>
             </div>
             {!hasRealArchiveSnapshots ? (
-              <div className="mt-3 rounded-lg border border-dashed border-zinc-700 px-3 py-3 text-xs text-zinc-300">
+              <div className="mt-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: 'var(--color-border-subtle)', color: 'var(--color-text-secondary)' }}>
                 <div>No saved versions yet.</div>
                 <Link
                   to={withProjectQuery('/studio/writers-room', activeProjectId)}
-                  className="mt-2 inline-flex rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline"
+                  className="mt-2 inline-flex rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] no-underline transition hover:border-[#00d4aa]"
+                  style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}
                 >
                   Generate a film
                 </Link>
               </div>
             ) : null}
-            {exportMessage ? <div className="mt-2 text-xs text-zinc-300">{exportMessage}</div> : null}
+            {exportMessage ? <div className="mt-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{exportMessage}</div> : null}
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-6 xl:grid-cols-12">
               {archiveSnapshots.map((snapshot) => {
                 const isActive = snapshot.snapshot_id === selectedSnapshot?.snapshot_id
+                const statusLabel = snapshot.completion_percent >= 100 ? 'Complete' : 'In Progress'
                 return (
                   <button
                     key={snapshot.snapshot_id}
@@ -255,8 +269,10 @@ export default function ArchiveRoom() {
                   >
                     <div className="text-xs uppercase tracking-[0.14em] text-zinc-300">{snapshot.snapshot_id}</div>
                     <div className="mt-1 text-xs text-zinc-400">{snapshot.timestamp}</div>
-                    <div className="mt-1 text-xs text-zinc-200">Completion: {snapshot.completion_percent.toFixed(2)}%</div>
-                    <div className="mt-1 text-xs text-zinc-200">Tone: {snapshot.dominant_tone}</div>
+                    <div className="mt-1 text-xs text-zinc-200">Status: {statusLabel}</div>
+                    {snapshot.dominant_tone && snapshot.dominant_tone !== 'none' && (
+                      <div className="mt-1 text-xs text-zinc-200">Tone: {snapshot.dominant_tone}</div>
+                    )}
                     <div className="mt-1 text-xs text-zinc-200">Best Cut: {snapshot.best_cut}</div>
                   </button>
                 )

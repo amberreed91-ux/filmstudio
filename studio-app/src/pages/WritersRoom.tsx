@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Plus, Edit2, Trash2, Save, X, Upload, FileUp } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
@@ -6,6 +6,8 @@ import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
 import { useStudio } from '../context/StudioContext'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
+import ProactiveCoDirectorCard from '../components/ProactiveCoDirectorCard'
+import { useProactiveCoDirector } from '../hooks/useProactiveCoDirector'
 import {
   checkBackendHealth,
   createProject,
@@ -30,6 +32,8 @@ export default function WritersRoom() {
   // Use activeProjectId from context, not from URL or localStorage
   const effectiveProjectId = activeProjectId || projectId || queryProjectId
   
+  const { check: proactiveCheck, card: proactiveCard, dismiss: proactiveDismiss, saveToNotes: proactiveSaveToNotes } = useProactiveCoDirector(effectiveProjectId)
+
   const [scenes, setScenes] = useState<Scene[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -177,6 +181,9 @@ export default function WritersRoom() {
           setShowForm(false)
           await loadScenes()
 
+          // Proactive co-director check after scene save
+          void proactiveCheck('scene_save', { sceneId: editingSceneId })
+
           // Trigger debate if major plot point or significant decision in description
           const isSignificant = formData.is_major_plot_point || 
             /dies|death|redemption|betrayal|act break|ending|finale|debate this/i.test(formData.description);
@@ -199,6 +206,11 @@ export default function WritersRoom() {
           setSuccess('Scene created successfully')
           setShowForm(false)
           await loadScenes()
+
+          // Proactive co-director check after scene save
+          if (result.scene) {
+            void proactiveCheck('scene_save', { sceneId: result.scene.scene_id })
+          }
 
           // Trigger debate if major plot point or significant decision in description
           const isSignificant = formData.is_major_plot_point || 
@@ -319,10 +331,11 @@ export default function WritersRoom() {
   }
 
   return (
-    <StudioShell title="Writer's Room" subtitle="Create and manage your film scenes">
+    <>
+      <StudioShell title="Writer's Room" subtitle="Create and manage your film scenes">
       <ProjectGuard>
         <ProjectContextBar roomName="writer's room" />
-        <div className="w-full overflow-visible" style={{ background: 'var(--color-surface-0)' }}>
+        <div className="w-full overflow-visible relative" style={{ background: 'var(--color-surface-0)', zIndex: 1 }}>
           <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
             {/* Room Hero - "The Page" */}
@@ -591,6 +604,19 @@ She walks through the rain, umbrella forgotten. The city lights blur in the down
             </section>
           )}
 
+          {/* Proactive Co-Director Card */}
+          {proactiveCard && (
+            <div className="mb-2">
+              <ProactiveCoDirectorCard
+                message={proactiveCard.message}
+                triggerType={proactiveCard.trigger_type}
+                saveToNotes={proactiveCard.save_to_notes}
+                onDismiss={proactiveDismiss}
+                onSaveToNotes={proactiveCard.save_to_notes ? () => proactiveSaveToNotes() : undefined}
+              />
+            </div>
+          )}
+
           {/* Add/Edit Scene Form */}
           {activeDebate && (
             <div className="mb-6">
@@ -791,5 +817,6 @@ She walks through the rain, umbrella forgotten. The city lights blur in the down
       </div>
       </ProjectGuard>
     </StudioShell>
+    </>
   )
 }

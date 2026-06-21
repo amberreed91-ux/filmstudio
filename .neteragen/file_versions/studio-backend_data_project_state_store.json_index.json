@@ -1,0 +1,33 @@
+{
+  "file_name": "studio-backend/data/project_state_store.json",
+  "revisions": [
+    {
+      "revision_id": "c452b9d7-c98a-4eac-af7d-62d34ec3a0ed",
+      "metadata": {
+        "timestamp": "2026-06-16T04:22:52.046032",
+        "type": "cache_version",
+        "source": "external_edit",
+        "size": 20,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": "External edit"
+      },
+      "saved_at": "2026-06-16T04:22:52.046032"
+    },
+    {
+      "revision_id": "1689bcc3-d5b9-41cc-bb6a-6d5e59fff3d9",
+      "metadata": {
+        "timestamp": "2026-06-15T14:29:26.842349",
+        "type": "cache_version",
+        "source": "initial_from_disk",
+        "size": 474190,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Many",
+        "description": null
+      },
+      "saved_at": "2026-06-15T14:29:26.842349"
+    }
+  ]
+}
