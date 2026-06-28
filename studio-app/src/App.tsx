@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CinematicCut } from './components/CinematicCut'
@@ -63,6 +64,8 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
   }
 }
 
+const queryClient = new QueryClient()
+
 export default function App() {
   if (typeof window !== 'undefined') {
     window.enableStudioDevMode = enableStudioDevMode
@@ -71,18 +74,20 @@ export default function App() {
   
   return (
     <AppErrorBoundary>
-      <StudioProvider>
-        <AudioUXProvider>
-          <RenderActivityProvider>
-            <BrowserRouter>
-              <CinematicCut />
-              <StudioLayout>
-                <StudioRoutes />
-              </StudioLayout>
-            </BrowserRouter>
-          </RenderActivityProvider>
-        </AudioUXProvider>
-      </StudioProvider>
+      <QueryClientProvider client={queryClient}>
+        <StudioProvider>
+          <AudioUXProvider>
+            <RenderActivityProvider>
+              <BrowserRouter>
+                <CinematicCut />
+                <StudioLayout>
+                  <StudioRoutes />
+                </StudioLayout>
+              </BrowserRouter>
+            </RenderActivityProvider>
+          </AudioUXProvider>
+        </StudioProvider>
+      </QueryClientProvider>
     </AppErrorBoundary>
   )
 }

@@ -264,7 +264,7 @@ async function fetchJson<T>(path: string, init?: RequestInit & { timeoutMs?: num
       if (externalSignal?.aborted) {
         throw new Error('Request aborted.')
       }
-      throw new Error('Request timed out after 30 seconds. The backend may be unreachable.')
+      throw new Error('Render timed out — job may still be processing')
     }
     // Log all API errors to console for debugging
     console.error(`[Studio API Error] ${path}:`, err)
@@ -651,16 +651,19 @@ export type SceneApproval = {
 export type Scene = {
   scene_id: string
   scene_name: string
+  heading: string
   description: string
   location: string
   time_of_day: string
   emotional_tone: string
   characters: string[]
   notes: string
+  text?: string
   is_major_plot_point?: boolean
   created_at: string
   updated_at: string
   status: string
+  storyboard_image?: string
   sound_advisory?: SoundAdvisory
   transition_advisory?: TransitionAdvisory
   comments?: SceneComment[]
@@ -785,6 +788,82 @@ export async function deleteScene(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unable to delete scene',
+    }
+  }
+}
+
+// ── Character Descriptions ──────────────────────────────────────────────────
+
+export type CharacterRecord = {
+  id: string
+  project_id: string
+  name: string
+  age: string | null
+  look: string | null
+  energy: string | null
+  core_wound: string | null
+  core_desire: string | null
+  relationship_notes: string | null
+  visual_prompt_summary: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function listCharacters(
+  projectId: string,
+): Promise<{ characters: CharacterRecord[]; error?: string }> {
+  try {
+    const response = await fetchJson<{ characters: CharacterRecord[] }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters`,
+    )
+    return { characters: response.characters || [] }
+  } catch (error) {
+    return {
+      characters: [],
+      error: error instanceof Error ? error.message : 'Unable to list characters',
+    }
+  }
+}
+
+export async function updateCharacter(
+  projectId: string,
+  characterId: string,
+  payload: Partial<CharacterRecord>,
+): Promise<{ character?: CharacterRecord; error?: string }> {
+  try {
+    const response = await fetchJson<{ character: CharacterRecord }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    )
+    return { character: response.character }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to update character',
+    }
+  }
+}
+
+export async function createCharacterSkeleton(
+  projectId: string,
+  name: string,
+): Promise<{ character?: CharacterRecord; error?: string }> {
+  try {
+    const response = await fetchJson<{ character: CharacterRecord }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      },
+    )
+    return { character: response.character }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to create character',
     }
   }
 }
@@ -1001,27 +1080,48 @@ export function ingestScript(payload: {
   })
 }
 
-export function studyReferencePrompt(referencePrompt: string) {
+export function studyReferencePrompt(referencePrompt: string, projectId: string, studyFocus?: string) {
   const form = new FormData()
   form.append('reference_prompt', referencePrompt)
+  form.append('project_id', projectId)
   form.append('rights_status', 'analysis_only')
-  form.append('study_focus', 'cinematography, editing, sound, and production design')
+  form.append('study_focus', studyFocus || 'cinematography, editing, sound, and production design')
   return fetchJson<StudyReferenceStudy>('/api/f51/studio/study-reference-prompt', {
     method: 'POST',
     body: form,
   })
 }
 
-export function studyReferenceUpload(file: File, options?: { rightsStatus?: string; studyFocus?: string; notes?: string }) {
+export function reorganizeReferenceLibrary(projectId: string) {
   const form = new FormData()
+  form.append('project_id', projectId)
+  return fetchJson<{ project_id: string; reorganized: number; total: number; studies: Array<Record<string, unknown>> }>(
+    '/api/f51/studio/reorganize-reference-library',
+    { method: 'POST', body: form },
+  )
+}
+
+export function studyReferenceUpload(projectId: string, file: File, options?: { rightsStatus?: string; studyFocus?: string; notes?: string }) {
+  console.log('studyReferenceUpload called with:', { projectId, fileName: file.name })
+  const form = new FormData()
+  form.append('project_id', projectId)
   form.append('file', file)
   form.append('rights_status', options?.rightsStatus || 'analysis_only')
   form.append('study_focus', options?.studyFocus || 'cinematography, editing, sound, and production design')
   form.append('notes', options?.notes || '')
+  console.log('studyReferenceUpload making request:', { projectId })
+  console.log('API base:', STUDIO_API_BASE)
   return fetchJson<StudyReferenceStudy>('/api/f51/studio/study-reference', {
     method: 'POST',
     body: form,
   })
+}
+
+export function generateSceneStoryboard(projectId: string, sceneId: string) {
+  return fetchJson<{ image_url: string; status: string }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard`,
+    { method: 'POST', timeoutMs: 30000 },
+  )
 }
 
 export function simulateScreening(projectId: string) {
@@ -1197,6 +1297,82 @@ export function runProductionScan(projectId: string): Promise<ProductionScanRepo
   })
 }
 
+// ── Previs Bay AI Features (wired to The Study context) ─────────────────
+
+export type EnhancePromptRequest = {
+  scene_id: string
+  prompt_text: string
+}
+
+export type EnhancePromptResponse = {
+  enhanced_prompt: string
+  original_prompt: string
+  study_memories_used: number
+}
+
+export async function enhancePrevisPrompt(
+  projectId: string,
+  payload: EnhancePromptRequest,
+): Promise<EnhancePromptResponse> {
+  return fetchJson<EnhancePromptResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/enhance-prompt`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export type DirectorNoteRequest = {
+  scene_id: string
+  generation_context?: string
+}
+
+export type DirectorNoteResponse = {
+  notes: string
+  study_memories_used: number
+}
+
+export async function generatePrevisDirectorNotes(
+  projectId: string,
+  payload: DirectorNoteRequest,
+): Promise<DirectorNoteResponse> {
+  return fetchJson<DirectorNoteResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/director-notes`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export type ShotCountRequest = {
+  scene_id: string
+}
+
+export type ShotCountResponse = {
+  scene_id: string
+  recommended_shot_count: number
+  reasoning: string
+  study_memories_used: number
+}
+
+export async function recommendShotCount(
+  projectId: string,
+  payload: ShotCountRequest,
+): Promise<ShotCountResponse> {
+  return fetchJson<ShotCountResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/shot-count`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
 export function getProductionScanReport(projectId: string, scan_id: string): Promise<ProductionScanReport> {
   return fetchJson<ProductionScanReport>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scan/${encodeURIComponent(scan_id)}`)
 }
@@ -1230,6 +1406,8 @@ export type RenderJob = {
     thumbnail_url?: string
     metadata: Record<string, unknown>
   }
+  output_url?: string
+  preview_url?: string
   error_message?: string
   retry_count: number
   continuity_context_injected?: boolean
@@ -1259,6 +1437,7 @@ export type ProviderStatus = {
   is_mock?: boolean
   enabled?: boolean
   ready_for_hosted_generation?: boolean
+  api_key_configured?: boolean
   provider_mode?: 'mock_success' | 'hosted_api' | 'unavailable' | string
   missing_requirements?: string[]
   display_label?: string
@@ -1319,6 +1498,8 @@ export interface ProductionScanReport {
   flags: ProductionScanFlag[]
   clear_to_shoot: boolean
   summary: string
+  co_director_quote: string
+  stats_line: string
   generated_at: string
 }
 
@@ -1372,7 +1553,9 @@ export function createRenderJob(payload: {
   if (payload.prompt) params.append('prompt', payload.prompt)
   if (payload.reference_assets) params.append('reference_assets', JSON.stringify(payload.reference_assets))
   if (payload.parameters) params.append('parameters', JSON.stringify(payload.parameters))
-  return fetchJson<RenderJob>('/api/f51/studio/render/jobs?' + params.toString(), {
+  const url = '/api/f51/studio/render/jobs?' + params.toString()
+  console.log('Calling render endpoint:', url, payload)
+  return fetchJson<RenderJob>(url, {
     method: 'POST',
   })
 }
@@ -1389,6 +1572,12 @@ export function getRenderJob(jobId: string) {
 
 export function getRenderJobStatus(jobId: string) {
   return fetchJson<RenderJob>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/status`)
+}
+
+export function deleteRenderJob(jobId: string) {
+  return fetchJson<{ status: string }>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+  })
 }
 
 export function cancelRenderJob(jobId: string) {
@@ -1427,6 +1616,40 @@ export function refreshRenderJobOutputUrl(jobId: string) {
   return fetchJson<{ output_url: string | null }>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/refresh-url`, {
     method: 'POST',
   })
+}
+
+// ── Scene Composition ──────────────────────────────────────────────────────
+
+export type SceneComposition = {
+  id: string
+  project_id: string
+  scene_id: string
+  composed_url: string
+  shot_count: number
+  duration_seconds: number | null
+  created_at: string
+  updated_at: string
+}
+
+export type ComposeResult = {
+  composed_url: string
+  shot_count: number
+  duration_seconds: number | null
+  project_id: string
+  scene_id: string
+}
+
+export async function composeScene(projectId: string, sceneId: string): Promise<ComposeResult> {
+  return fetchJson<ComposeResult>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/compose`,
+    { method: 'POST', timeoutMs: 180000 },
+  )
+}
+
+export async function getSceneComposition(projectId: string, sceneId: string): Promise<SceneComposition> {
+  return fetchJson<SceneComposition>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/composition`,
+  )
 }
 
 export const studioApi = {
@@ -3414,6 +3637,36 @@ export async function listDebates(projectId: string): Promise<{ debates: CoDirec
   return fetchJson<{ debates: CoDirectorDebateEntry[] }>(`/api/f51/studio/debate/${projectId}`)
 }
 
+// ── Writers Intelligence (Character Mind + Scene Debate) ────────────
+
+export async function simulateCharacterMind(
+  projectId: string,
+  payload: { character_name: string; scene_id: string },
+): Promise<{ simulation: string; character: string; scene_id: string }> {
+  return fetchJson<{ simulation: string; character: string; scene_id: string }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/character-mind`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function triggerSceneDebate(
+  projectId: string,
+  payload: { scene_id: string },
+): Promise<{ restraint: string; urgency: string; scene_id: string }> {
+  return fetchJson<{ restraint: string; urgency: string; scene_id: string }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/debate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
 // Re-export bundle type for callers that import only from studioApi.
 export type { DirectorMemoryBundle }
 
@@ -3503,4 +3756,58 @@ export async function saveToDirectorsNotes(projectId: string, headline: string, 
       recommendations: ['Keep audience perspective in mind'],
     }),
   })
+}
+
+// ── Why This Shot Matters ─────────────────────────────────────────────────
+
+export type SceneRationaleResponse = {
+  rationale: string
+  scene_context: {
+    scene_id: string
+    characters: string[]
+    location: string
+    emotional_tone: string
+    scene_heading: string
+  }
+  emotional_context: {
+    emotional_register: string
+    tonal_direction: string
+    active_motifs: string[]
+  }
+  scene_position: number | null
+  total_scenes: number | null
+}
+
+// ── Emotion Analysis ────────────────────────────────────────────────────
+
+export type EmotionMetricGroup = {
+  engagement: number
+  tension: number
+  emotional_impact: number
+}
+
+export type EmotionAnalysisResult = {
+  scene_id: string
+  general: EmotionMetricGroup
+  cinephile: EmotionMetricGroup
+  genre_fan: EmotionMetricGroup
+}
+
+export async function analyzeSceneEmotion(
+  projectId: string,
+  sceneId: string,
+): Promise<EmotionAnalysisResult> {
+  return fetchJson<EmotionAnalysisResult>(
+    `/api/f51/studio/emotion-analysis/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/analyze`,
+    { method: 'POST' },
+  )
+}
+
+export async function getSceneRationale(
+  projectId: string,
+  sceneId: string,
+): Promise<SceneRationaleResponse> {
+  return fetchJson<SceneRationaleResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/rationale`,
+  )
 }

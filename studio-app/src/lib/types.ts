@@ -95,6 +95,7 @@ export interface StoryboardShot {
   scene: string
   description: string
   status: string
+  storyboard_image?: string
 }
 
 export interface RenderJob {

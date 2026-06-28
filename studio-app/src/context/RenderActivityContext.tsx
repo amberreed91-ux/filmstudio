@@ -54,7 +54,7 @@ function statusPriority(status: LiveRenderStatus): number {
 }
 
 export function RenderActivityProvider({ children }: { children: ReactNode }) {
-  const { project, renderJobs, pollingJobs, selectedRenderProvider } = useStudio()
+  const { project, renderJobs, pollingJobs, selectedRenderProvider, providers } = useStudio()
   const [startedAtByTask, setStartedAtByTask] = useState<Record<string, number>>({})
   const [now, setNow] = useState(Date.now())
 
@@ -124,7 +124,19 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
       return b.updatedAt - a.updatedAt
     })
     const selected = candidates[0]
-    const resolvedSelectedProvider = asString(selectedRenderProvider) || null
+    const rawSelectedProvider = asString(selectedRenderProvider) || null
+    const forceLocal = import.meta.env.VITE_FORCE_LOCAL_PROVIDER === 'true'
+    const runwayConfigured = forceLocal ? false : (
+      providers.some(p =>
+        p.provider_id === 'runway' &&
+        p.enabled === true &&
+        p.ready_for_hosted_generation === true &&
+        p.api_key_configured === true
+      ) ?? false
+    )
+    const resolvedSelectedProvider = rawSelectedProvider === 'runway' && !runwayConfigured
+      ? 'local'
+      : rawSelectedProvider
     const provider = selected.isActive
       ? (selected.provider || resolvedSelectedProvider || 'idle')
       : 'idle'
@@ -132,7 +144,7 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
     const start = startedAtByTask[selected.taskId] ?? selected.createdAt
     const elapsedSeconds = Math.max(0, Math.floor((now - start) / 1000))
     if (import.meta.env.DEV) {
-      console.log('[RenderActivity] selectedProvider:', resolvedSelectedProvider, 'activityProvider:', provider, 'activeRenderJob.provider:', selected.provider, 'model:', selected.model)
+      console.log('[RenderActivity] selectedProvider:', resolvedSelectedProvider, 'activityProvider:', provider, 'activeRenderJob.provider:', selected.provider, 'model:', selected.model, 'runwayConfigured:', runwayConfigured)
     }
     return {
       status: selected.status,
@@ -146,7 +158,7 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
       updatedAt: selected.updatedAt,
       isActive: selected.isActive,
     } satisfies LiveRenderActivity
-  }, [now, pollingJobs, project?.render_provider?.provider_name, project?.render_queue, renderJobs, selectedRenderProvider, startedAtByTask])
+  }, [now, pollingJobs, project?.render_provider?.provider_name, project?.render_queue, providers, renderJobs, selectedRenderProvider, startedAtByTask])
 
   useEffect(() => {
     if (!activity?.taskId) return

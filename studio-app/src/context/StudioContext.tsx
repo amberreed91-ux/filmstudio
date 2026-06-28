@@ -20,9 +20,11 @@ import {
   submitRenderJob,
   getRenderJobStatus,
   cancelRenderJob,
+  deleteRenderJob,
   retryRenderJobById,
   listRenderJobs,
 } from '../lib/studioApi'
+import { readPersistedActiveProjectId } from '../lib/projectContext'
 
 type StudioContextValue = {
   overview: StudioOverview | null
@@ -56,6 +58,7 @@ type StudioContextValue = {
   createJob: (shotId: string, provider?: string, model?: string, prompt?: string, referenceAssets?: string[], parameters?: Record<string, unknown>) => Promise<RenderJob>
   submitJob: (jobId: string) => Promise<RenderJob>
   cancelJob: (jobId: string) => Promise<void>
+  deleteJob: (jobId: string) => Promise<void>
   retryJob: (jobId: string) => Promise<RenderJob>
   loadJobs: (projectId?: string) => Promise<void>
   startJobPolling: (jobId: string) => void
@@ -150,8 +153,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const data = await getStudioOverview()
       setOverview(data)
       
-      // Check sessionStorage for active project (don't auto-select)
-      const storedProjectId = sessionStorage.getItem(STORAGE_KEY)
+      // Check sessionStorage first, then fall back to localStorage for cross-session recovery
+      let storedProjectId: string | null = sessionStorage.getItem(STORAGE_KEY) || readPersistedActiveProjectId()
       if (storedProjectId) {
         try {
           const loadedProject = await getStudioProject(storedProjectId)
@@ -159,10 +162,28 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           setActiveProjectId(storedProjectId)
           setProject(loadedProject)
         } catch (err) {
-          // Stored project not found, clear it
+          // Stored project not found, clear all persisted references
           sessionStorage.removeItem(STORAGE_KEY)
+          localStorage.removeItem('studio:activeProjectId')
+          localStorage.removeItem('studio:selected-project-id')
           setActiveProjectState(null)
           setActiveProjectId(null)
+          storedProjectId = null
+        }
+      }
+      // If still no project, fall back to the first project from overview
+      if (!storedProjectId && data.projects && data.projects.length > 0) {
+        const firstProjectId = data.projects[0].project_id
+        try {
+          const loadedProject = await getStudioProject(firstProjectId)
+          setActiveProjectState(loadedProject)
+          setActiveProjectId(firstProjectId)
+          setProject(loadedProject)
+          sessionStorage.setItem(STORAGE_KEY, firstProjectId)
+          localStorage.setItem('studio:activeProjectId', firstProjectId)
+          localStorage.setItem('studio:selected-project-id', firstProjectId)
+        } catch (err) {
+          // Fallback project also failed - that's ok
         }
       }
     } catch (err) {
@@ -263,10 +284,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }
 
   async function analyzeStudyPrompt(referencePrompt: string) {
+    if (!project?.project_id) throw new Error('No project loaded')
     setLoading(true)
     setError(null)
     try {
-      return await studyReferencePrompt(referencePrompt)
+      return await studyReferencePrompt(project.project_id, referencePrompt)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
@@ -279,10 +301,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     file: File,
     options?: { rightsStatus?: string; studyFocus?: string; notes?: string },
   ) {
+    if (!project?.project_id) throw new Error('No project loaded')
     setLoading(true)
     setError(null)
     try {
-      return await studyReferenceUpload(file, {
+      return await studyReferenceUpload(project.project_id, file, {
         rightsStatus: options?.rightsStatus,
         studyFocus: options?.studyFocus,
         notes: options?.notes,
@@ -352,6 +375,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     stopJobPolling(jobId)
   }
 
+  async function deleteJob(jobId: string) {
+    await deleteRenderJob(jobId)
+    setRenderJobs(prev => prev.filter(j => j.id !== jobId))
+    stopJobPolling(jobId)
+  }
+
   async function retryJob(jobId: string) {
     const job = await retryRenderJobById(jobId)
     setRenderJobs(prev => prev.map(j => j.id === jobId ? job : j))
@@ -400,10 +429,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  useEffect(() => {
-    void refreshOverview()
-  }, [])
-
   const value: StudioContextValue = {
     overview,
     project,
@@ -431,6 +456,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     createJob,
     submitJob,
     cancelJob,
+    deleteJob,
     retryJob,
     loadJobs,
     startJobPolling,

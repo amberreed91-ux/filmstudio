@@ -74,9 +74,20 @@ export default function ProductionScanReportView({ report, onRescan }: Productio
       {/* Summary */}
       <div className="p-6 bg-white/5 border-b border-white/10 flex-shrink-0 print:bg-gray-100 print:border-black/20">
         <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400 mb-2">Co-Director Synthesis</h3>
-        <p className="text-lg leading-relaxed italic text-zinc-200 print:text-black">
-          "{report.summary}"
-        </p>
+        {report.co_director_quote ? (
+          <p className="text-lg leading-relaxed italic text-zinc-200 print:text-black mb-2">
+            "{report.co_director_quote}"
+          </p>
+        ) : (
+          <p className="text-lg leading-relaxed italic text-zinc-200 print:text-black mb-2">
+            "{report.summary}"
+          </p>
+        )}
+        {report.stats_line && (
+          <p className="text-sm text-zinc-400 print:text-gray-600 font-mono">
+            {report.stats_line}
+          </p>
+        )}
       </div>
 
       {/* Flags */}

@@ -1,41 +1,36 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useRef, useMemo } from 'react'
 import { PerspectiveCamera } from '@react-three/drei'
-import { EffectComposer, Bloom, Vignette, ChromaticAberration } from '@react-three/postprocessing'
-import { Vector2 } from 'three'
 import * as THREE from 'three'
 
-// Floating ash/dust particles — slow, heavy, like disturbed paper dust
-function AshParticles() {
-  const ref = useRef<THREE.Points>(null)
-  const count = 180
+/**
+ * The Page — intimate writer's room / study environment.
+ * Warm key light simulating a desk lamp, cool ambient bounce,
+ * silhouette bookshelves in the background, and drifting dust motes.
+ */
 
-  const { positions, phases, speeds } = useMemo(() => {
-    const positions = new Float32Array(count * 3)
-    const phases = new Float32Array(count)
-    const speeds = new Float32Array(count)
+function DustMotes() {
+  const ref = useRef<THREE.Points>(null)
+  const count = 25
+
+  const positions = useMemo(() => {
+    const pos = new Float32Array(count * 3)
     for (let i = 0; i < count; i++) {
-      positions[i * 3]     = (Math.random() - 0.5) * 14
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 8
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 10
-      phases[i] = Math.random() * Math.PI * 2
-      speeds[i] = 0.0002 + Math.random() * 0.0004
+      pos[i * 3]     = (Math.random() - 0.5) * 8
+      pos[i * 3 + 1] = Math.random() * 5
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 4 - 2
     }
-    return { positions, phases, speeds }
+    return pos
   }, [])
 
   useFrame(({ clock }) => {
     if (!ref.current) return
-    const t = clock.getElapsedTime()
     const pos = ref.current.geometry.attributes.position.array as Float32Array
     for (let i = 0; i < count; i++) {
-      const phase = phases[i]
-      const speed = speeds[i]
-      pos[i * 3]     += Math.sin(t * speed * 0.7 + phase) * 0.003
-      pos[i * 3 + 1] += speed * 0.8 // very slow upward drift
-      pos[i * 3 + 2] += Math.cos(t * speed + phase * 1.4) * 0.002
-      // Wrap when drifted too far
-      if (pos[i * 3 + 1] > 4) pos[i * 3 + 1] = -4
+      pos[i * 3 + 1] += 0.001
+      if (pos[i * 3 + 1] > 5) {
+        pos[i * 3 + 1] = 0
+      }
     }
     ref.current.geometry.attributes.position.needsUpdate = true
   })
@@ -46,10 +41,10 @@ function AshParticles() {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.022}
-        color="#c8924a"
+        size={0.02}
+        color="#ffd165"
         transparent
-        opacity={0.25}
+        opacity={0.3}
         sizeAttenuation
         depthWrite={false}
       />
@@ -57,60 +52,42 @@ function AshParticles() {
   )
 }
 
-// The desk — dark volcanic glass surface, partially visible at bottom of frame
-function WriterDesk() {
+function BackgroundSilhouettes() {
   return (
-    <group position={[0, -2.8, 0]}>
-      {/* Desk surface */}
-      <mesh receiveShadow>
-        <boxGeometry args={[6, 0.06, 3.5]} />
-        <meshStandardMaterial
-          color="#0d0b08"
-          roughness={0.3}
-          metalness={0.6}
-        />
+    <group>
+      {/* Bookshelf left — far back */}
+      <mesh position={[-6, -0.5, -10]} rotation={[0, 0.3, 0]}>
+        <boxGeometry args={[2.5, 3.5, 0.4]} />
+        <meshStandardMaterial color="#050403" roughness={1} metalness={0} transparent opacity={0.7} />
       </mesh>
-      {/* Scattered papers — subtle white planes at slight angles */}
-      <mesh position={[-0.4, 0.04, 0.2]} rotation={[0, 0.15, 0]}>
-        <planeGeometry args={[1.1, 0.85]} />
-        <meshStandardMaterial color="#f0ead6" roughness={0.9} />
+      {/* Shelf dividers */}
+      <mesh position={[-6, 0.7, -9.9]}>
+        <boxGeometry args={[2.5, 0.06, 0.2]} />
+        <meshStandardMaterial color="#060504" roughness={1} />
       </mesh>
-      <mesh position={[0.5, 0.04, -0.1]} rotation={[0, -0.08, 0]}>
-        <planeGeometry args={[1.1, 0.85]} />
-        <meshStandardMaterial color="#ede6d0" roughness={0.9} />
+      <mesh position={[-6, -0.3, -9.9]}>
+        <boxGeometry args={[2.5, 0.06, 0.2]} />
+        <meshStandardMaterial color="#060504" roughness={1} />
       </mesh>
-      <mesh position={[-0.1, 0.035, -0.3]} rotation={[0, 0.22, 0]}>
-        <planeGeometry args={[1.1, 0.85]} />
-        <meshStandardMaterial color="#f5eedc" roughness={0.9} />
-      </mesh>
-    </group>
-  )
-}
 
-// Desk lamp — the signature element, a practical amber light source
-function DeskLamp() {
-  return (
-    <group position={[2.2, -1.4, -0.8]}>
-      {/* Lamp base */}
-      <mesh castShadow>
-        <cylinderGeometry args={[0.12, 0.18, 0.08, 12]} />
-        <meshStandardMaterial color="#1a1510" roughness={0.8} metalness={0.4} />
+      {/* Bookshelf right — far back */}
+      <mesh position={[6, -0.5, -11]} rotation={[0, -0.3, 0]}>
+        <boxGeometry args={[2.5, 3.5, 0.4]} />
+        <meshStandardMaterial color="#050403" roughness={1} metalness={0} transparent opacity={0.7} />
       </mesh>
-      {/* Lamp arm */}
-      <mesh position={[0, 0.55, 0]} castShadow>
-        <cylinderGeometry args={[0.025, 0.025, 1.1, 8]} />
-        <meshStandardMaterial color="#1a1510" roughness={0.7} metalness={0.5} />
+      <mesh position={[6, 0.7, -10.9]}>
+        <boxGeometry args={[2.5, 0.06, 0.2]} />
+        <meshStandardMaterial color="#060504" roughness={1} />
       </mesh>
-      {/* Lamp shade */}
-      <mesh position={[0, 1.15, 0]} castShadow>
-        <coneGeometry args={[0.28, 0.32, 16, 1, true]} />
-        <meshStandardMaterial
-          color="#c8824a"
-          roughness={0.6}
-          side={THREE.DoubleSide}
-          emissive="#c8824a"
-          emissiveIntensity={0.15}
-        />
+      <mesh position={[6, -0.3, -10.9]}>
+        <boxGeometry args={[2.5, 0.06, 0.2]} />
+        <meshStandardMaterial color="#060504" roughness={1} />
+      </mesh>
+
+      {/* Desk edge — barely visible, bottom-left */}
+      <mesh position={[-3, -2.2, -8]} rotation={[0.05, 0.1, 0]}>
+        <boxGeometry args={[4, 0.1, 1.5]} />
+        <meshStandardMaterial color="#080706" roughness={1} metalness={0} transparent opacity={0.8} />
       </mesh>
     </group>
   )
@@ -119,72 +96,65 @@ function DeskLamp() {
 function SceneContents() {
   return (
     <>
-      <color attach="background" args={['#06050302']} />
-      <fog attach="fog" args={['#080604', 8, 22]} />
+      <color attach="background" args={['#0c0b09']} />
 
-      <PerspectiveCamera makeDefault position={[0, 0.5, 7]} fov={58} />
+      {/* Fog — fades background silhouettes into darkness */}
+      <fogExp2 attach="fog" args={['#0e0d0b', 0.025]} />
 
-      {/* Near-black ambient — barely any fill, room is dark */}
-      <ambientLight intensity={0.04} color="#3a2a1a" />
+      <PerspectiveCamera makeDefault position={[0, 0.5, 5]} fov={55} />
 
-      {/* THE signature light — warm practical lamp, key source */}
+      {/* Ambient — very dim warm fill */}
+      <ambientLight intensity={0.06} color="#1a1a14" />
+
+      {/* Desk lamp — warm key, directional, close */}
       <pointLight
-        position={[2.2, -0.3, -0.8]}
-        intensity={18}
-        color="#d4884a"
-        distance={8}
-        decay={2}
-        castShadow
-      />
-
-      {/* Subtle screen/page bounce — cold fill from slightly forward */}
-      <pointLight
-        position={[-1.2, -1.8, 2]}
+        position={[3, 5, 2]}
         intensity={1.2}
-        color="#c4b8a0"
-        distance={5}
-        decay={2}
+        color="#ffd165"
+        distance={20}
       />
 
-      {/* Ceiling — deep dark, barely visible */}
-      <mesh position={[0, 5, 0]} rotation={[Math.PI / 2, 0, 0]}>
+      {/* Screen/window cool bounce */}
+      <pointLight
+        position={[-5, 3, -3]}
+        intensity={0.15}
+        color="#4cd7f6"
+        distance={15}
+      />
+
+      {/* Floor — dark, barely reflective */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]}>
         <planeGeometry args={[20, 20]} />
-        <meshStandardMaterial color="#05040300" roughness={1} />
+        <meshStandardMaterial color="#0a0907" roughness={0.8} metalness={0.2} />
       </mesh>
 
-      {/* Back wall — deep shadow */}
-      <mesh position={[0, 0, -7]}>
-        <planeGeometry args={[20, 16]} />
-        <meshStandardMaterial color="#06050300" roughness={1} />
+      {/* Back wall */}
+      <mesh position={[0, 1.5, -12]}>
+        <planeGeometry args={[20, 14]} />
+        <meshStandardMaterial color="#080705" roughness={1} />
       </mesh>
 
       {/* Side walls */}
-      <mesh position={[-7, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <planeGeometry args={[20, 16]} />
-        <meshStandardMaterial color="#07060400" roughness={1} />
+      <mesh position={[-8, 1.5, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[24, 14]} />
+        <meshStandardMaterial color="#090806" roughness={1} />
       </mesh>
-      <mesh position={[7, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
-        <planeGeometry args={[20, 16]} />
-        <meshStandardMaterial color="#07060400" roughness={1} />
+      <mesh position={[8, 1.5, 0]} rotation={[0, -Math.PI / 2, 0]}>
+        <planeGeometry args={[24, 14]} />
+        <meshStandardMaterial color="#090806" roughness={1} />
       </mesh>
 
-      <WriterDesk />
-      <DeskLamp />
-      <AshParticles />
+      {/* Ceiling */}
+      <mesh position={[0, 5.5, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[20, 24]} />
+        <meshStandardMaterial color="#080705" roughness={1} />
+      </mesh>
 
-      <EffectComposer>
-        <Bloom
-          luminanceThreshold={0.15}
-          luminanceSmoothing={0.85}
-          intensity={2.2}
-        />
-        <Vignette eskil={false} offset={0.2} darkness={1.1} />
-        <ChromaticAberration
-          offset={new Vector2(0.0008, 0.0008)}
-          radialModulation={false}
-          modulationOffset={0}
-        />
-      </EffectComposer>
+      {/* Background silhouettes — bookshelves and desk edge */}
+      <BackgroundSilhouettes />
+
+      {/* Dust motes drifting in lamp light */}
+      <DustMotes />
     </>
   )
 }
@@ -201,7 +171,7 @@ export function PageScene() {
     >
       <Canvas
         shadows
-        gl={{ antialias: true, alpha: false }}
+        gl={{ powerPreference: "high-performance", antialias: false }}
         style={{ width: '100%', height: '100%' }}
       >
         <SceneContents />

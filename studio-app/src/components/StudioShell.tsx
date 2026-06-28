@@ -1,14 +1,30 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import BackendDownStatusBar from './BackendDownStatusBar'
 import { Link, matchPath, useLocation, useNavigate } from 'react-router-dom'
-import Breadcrumbs from './Breadcrumbs'
-import TopNav from './TopNav'
+import {
+  Clapperboard,
+  FileEdit,
+  Eye,
+  Camera,
+  MonitorPlay,
+  Share2,
+  Archive,
+  BookOpen,
+  Search,
+  Settings,
+  Bell,
+  User,
+  Filter,
+} from 'lucide-react'
 import { lazyLoad } from './LazyLoad'
 import { useRenderActivity } from '../context/RenderActivityContext'
 import { useAudioUX } from '../context/AudioUXContext'
 import { getRouteByPath, getRouteLabel } from '../routes'
 import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import { roomDescription } from '../lib/userFacingText'
+import { useRenderStatusStore } from '../stores/renderStatusStore'
+import CoDirectorDrawer from './CoDirectorDrawer'
 
 const LazyAICrewPresence = lazyLoad(
   () => import('./AICrewPresence'),
@@ -183,6 +199,55 @@ export function EmptyStateCard({
   )
 }
 
+/* ─── Room definitions for side nav ─────────────────────────────────────── */
+interface RoomNavItem {
+  key: string
+  label: string
+  stitchName: string
+  icon: ReactNode
+  to: string
+}
+
+const ROOM_NAV_ITEMS: RoomNavItem[] = [
+  { key: 'gate', label: 'The Gate', stitchName: 'The Gate', icon: <Clapperboard size={20} />, to: '/' },
+  { key: 'page', label: 'The Page', stitchName: 'The Page', icon: <FileEdit size={20} />, to: '/studio/writers-room' },
+  { key: 'board', label: 'The Board', stitchName: 'The Board', icon: <Eye size={20} />, to: '/studio/production-board' },
+  { key: 'previs', label: 'The Previs Bay', stitchName: 'The Previs Bay', icon: <Camera size={20} />, to: '/studio/previs' },
+  { key: 'theater', label: 'The Theater', stitchName: 'The Theater', icon: <MonitorPlay size={20} />, to: '/studio/screening-room' },
+  { key: 'universe', label: 'The Universe', stitchName: 'The Universe', icon: <Share2 size={20} />, to: '/studio/universe-graph' },
+  { key: 'vault', label: 'The Vault', stitchName: 'The Vault', icon: <Archive size={20} />, to: '/studio/archive' },
+  { key: 'study', label: 'The Study', stitchName: 'The Study', icon: <BookOpen size={20} />, to: '/studio/study-room' },
+]
+
+/* ─── Rooms that use full r3f environments (no CSS background image) ──────── */
+const R3F_ROOMS = new Set(['/studio/writers-room', '/studio/screening-room'])
+
+/* ─── Route-to-background map ────────────────────────────────────────────── */
+const roomBackgrounds: Record<string, string> = {
+  '/': 'url("/backgrounds/the-gate-bg.png")',
+  '/studio/production-board': 'url("/backgrounds/the-board-bg.png")',
+  '/studio/previs': 'url("/backgrounds/the-previs-bg.png")',
+  '/studio/universe-graph': 'url("/backgrounds/the-universe-bg.png")',
+  '/studio/archive': 'url("/backgrounds/the-vault-bg.png")',
+  '/studio/study-room': 'url("/backgrounds/the-study-bg.png")',
+}
+
+/**
+ * Resolve the background key from a pathname.
+ * Tries exact match first, then falls back to prefix match against studio routes,
+ * then falls back to '/' (Gate).
+ */
+function resolveBackgroundKey(pathname: string): string {
+  if (roomBackgrounds[pathname]) return pathname
+  // try prefix match against known studio routes
+  for (const route of Object.keys(roomBackgrounds)) {
+    if (route !== '/' && pathname.startsWith(route)) return route
+  }
+  // studio sub-paths that don't match a specific room get the Gate background
+  if (pathname.startsWith('/studio')) return '/'
+  return '/'
+}
+
 export default function StudioShell({ title, subtitle, transparent, children }: StudioShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -190,21 +255,28 @@ export default function StudioShell({ title, subtitle, transparent, children }: 
   const { emitAudioEvent } = useAudioUX()
   const prevPathRef = useRef(location.pathname)
   const prevRenderStatusRef = useRef(activity?.status || null)
-  const route = getRouteByPath(location.pathname)
-  const breadcrumbs = (route?.breadcrumbs || [{ label: 'Studio Home' }]).filter((item, index, list) => {
-    if (index === 0) return true
-    const current = item.label.trim().toLowerCase()
-    const previous = (list[index - 1]?.label || '').trim().toLowerCase()
-    return current !== previous
-  })
-  const activeTitle = title || route?.title || 'Studio'
-  const showBreadcrumbs =
-    breadcrumbs.length > 1 ||
-    breadcrumbs[0]?.label?.trim().toLowerCase() !== activeTitle.trim().toLowerCase()
-  const contextualLinks = (route?.contextualLinks || []).map((link) => ({
-    to: link.to,
-    label: link.label || getRouteLabel(link.to),
-  }))
+  const { status: renderStatus, setStatus } = useRenderStatusStore()
+  const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [codirectorOpen, setCodirectorOpen] = useState(false)
+
+  // Sync render status from RenderActivityContext into zustand store
+  useEffect(() => {
+    if (!activity) {
+      setStatus('idle')
+      return
+    }
+    const s = activity.status
+    if (s === 'generating' || s === 'polling' || s === 'preparing' || s === 'queued') {
+      setStatus('running', activity.jobId)
+    } else if (s === 'completed') {
+      setStatus('complete', activity.jobId)
+    } else if (s === 'failed') {
+      setStatus('failed', activity.jobId)
+    }
+  }, [activity, setStatus])
+
+  const activeTitle = title || getRouteByPath(location.pathname)?.title || 'Studio'
   const projectMatch = matchPath({ path: '/studio/project/:projectId/*' }, location.pathname)
   const projectId = projectMatch?.params?.projectId
   const activeProjectId = resolveActiveProjectId({
@@ -216,121 +288,21 @@ export default function StudioShell({ title, subtitle, transparent, children }: 
   useEffect(() => {
     if (activeProjectId) persistActiveProjectId(activeProjectId)
   }, [activeProjectId])
-  const previsTo = projectId ? `/studio/project/${projectId}/previs` : '/studio/previs'
-  const isPrevisRoute =
-    Boolean(matchPath({ path: '/studio/previs', end: true }, location.pathname)) ||
-    Boolean(matchPath({ path: '/studio/project/:projectId/previs', end: true }, location.pathname))
-  const roomNav = [
-    { key: 'lobby', label: 'Lobby', to: '/studio/lobby' },
-    { key: 'workspace', label: 'Workspace', to: '/studio/workspace' },
-    { key: 'development-room', label: 'Development Room', to: '/studio/development-room' },
-    { key: 'writers-room', label: "Writer's Room", to: '/studio/writers-room' },
-    { key: 'study-room', label: 'Study Room', to: '/studio/study-room' },
-    { key: 'production-board', label: 'Production Board', to: '/studio/production-board' },
-    { key: 'screening-room', label: 'Screening Room', to: '/studio/screening-room' },
-    { key: 'archive', label: 'Archive', to: '/studio/archive' },
-  ]
-  const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
-  const [studioStatusOpen, setStudioStatusOpen] = useState(false)
-  const hasGeneratedScenesFlag = localStorage.getItem('studio_scenes_generated') === '1'
-  const hasApprovedScenesFlag = localStorage.getItem('studio_approved_scenes') === '1'
-  const hasScriptFlag = localStorage.getItem('studio_script_exists') === '1'
-  const lastScript = localStorage.getItem('studio:lastScript') || ''
-  const lastBundleRaw = localStorage.getItem('studio:lastBundle') || ''
-  let hasBundleScenes = false
-  try {
-    const parsed = JSON.parse(lastBundleRaw)
-    hasBundleScenes = Array.isArray(parsed?.scenes) && parsed.scenes.length > 0
-  } catch {
-    hasBundleScenes = false
-  }
-  const approvedSceneMap = (() => {
-    const raw = localStorage.getItem('studio_approved_scene_map')
-    if (!raw) return {} as Record<string, boolean>
-    try {
-      const parsed = JSON.parse(raw)
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, boolean>) : {}
-    } catch {
-      return {} as Record<string, boolean>
+
+  // ── Parallax effect: all .glass-panel lean on mousemove ──
+  useEffect(() => {
+    function handleMouseMove(e: MouseEvent) {
+      const x = (e.clientX / window.innerWidth - 0.5) * 2   // -1 to 1
+      const y = (e.clientY / window.innerHeight - 0.5) * 2   // -1 to 1
+      const panels = document.querySelectorAll('.glass-panel')
+      for (const panel of panels) {
+        const el = panel as HTMLElement
+        el.style.transform = `rotateY(${x * 1.5}deg) rotateX(${y * -1.5}deg)`
+      }
     }
-  })()
-  const approvedSceneCount = Object.values(approvedSceneMap).filter(Boolean).length
-  const hasApprovedScenes = hasApprovedScenesFlag || approvedSceneCount > 0
-  const hasScript = hasScriptFlag || lastScript.trim().length > 0
-  const hasGeneratedScenes = hasGeneratedScenesFlag || hasBundleScenes
-  const latestAgentAction = localStorage.getItem('studio:lastAgentAction') || ''
-
-  const flowSteps = [
-    { label: 'Script', to: '/studio/writers-room' },
-    { label: 'Scenes', to: '/studio/writers-room' },
-    { label: 'Previs', to: previsTo },
-    { label: 'Review', to: '/studio/production-board' },
-    { label: 'Cut', to: '/studio/screening-room' },
-    { label: 'Archive', to: '/studio/archive' },
-  ]
-  const isWritersRoute = Boolean(matchPath({ path: '/studio/writers-room', end: true }, location.pathname))
-  const isProductionRoute = Boolean(matchPath({ path: '/studio/production-board', end: true }, location.pathname))
-  const isScreeningRoute = Boolean(matchPath({ path: '/studio/screening-room', end: true }, location.pathname))
-  const isArchiveRoute = Boolean(matchPath({ path: '/studio/archive', end: true }, location.pathname))
-  const activeStepIndex = isArchiveRoute
-    ? 5
-    : isScreeningRoute
-      ? 4
-      : isProductionRoute
-        ? 3
-        : isPrevisRoute
-          ? 2
-          : isWritersRoute
-            ? (hasScript ? 1 : 0)
-            : hasApprovedScenes
-              ? 4
-              : hasGeneratedScenes
-                ? 2
-                : hasScript
-                  ? 1
-                  : 0
-
-  const nextStep = !hasScript
-    ? { text: "Start by adding a script in Writer’s Room", cta: "Go to Writer's Room", to: '/studio/writers-room' }
-    : !hasGeneratedScenes
-      ? { text: 'Generate scenes to continue', cta: 'Generate Scenes', to: '/studio/writers-room' }
-      : !hasApprovedScenes
-        ? { text: 'Review and approve scenes in Previs', cta: 'Go to Previs', to: previsTo }
-        : { text: 'Watch your film in Screening Room', cta: 'Go to Screening', to: '/studio/screening-room' }
-  const nextStepWithProject = { ...nextStep, to: withProjectQuery(nextStep.to, activeProjectId) }
-
-  function handleBack() {
-    if (window.history.length > 1) {
-      navigate(-1)
-      return
-    }
-    navigate(withProjectQuery('/studio', activeProjectId))
-  }
-
-  const roomVisualClass =
-    location.pathname.includes('/studio/overview')
-      ? 'shell-overview'
-      : location.pathname.includes('/studio/writers-room')
-        ? 'shell-writers'
-        : location.pathname.includes('/studio/previs')
-          ? 'shell-previs'
-          : location.pathname.includes('/studio/production-board')
-            ? 'shell-production'
-            : location.pathname.includes('/studio/screening-room')
-              ? 'shell-screening'
-              : location.pathname.includes('/studio/archive')
-                ? 'shell-archive'
-                : location.pathname.includes('/studio/study-room')
-                  ? 'shell-study'
-                  : 'shell-default'
-
-  const productionStateClass = (() => {
-    if (activity?.status === 'failed') return 'studio-bg-failed'
-    if (activity?.status === 'completed') return 'studio-bg-completed'
-    if (activity?.status === 'generating' || activity?.status === 'polling' || activity?.status === 'preparing' || activity?.status === 'queued') return 'studio-bg-generating'
-    if (location.pathname.includes('/screening-room') || location.pathname.includes('/production-board')) return 'studio-bg-reviewing'
-    return 'studio-bg-idle'
-  })()
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
 
   useEffect(() => {
     if (prevPathRef.current !== location.pathname) {
@@ -344,6 +316,18 @@ export default function StudioShell({ title, subtitle, transparent, children }: 
       prevPathRef.current = location.pathname
     }
   }, [emitAudioEvent, location.pathname])
+
+  /* Keyboard shortcut: Cmd+D / Ctrl+D toggles co-director drawer */
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        setCodirectorOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   useEffect(() => {
     const prev = prevRenderStatusRef.current
@@ -359,170 +343,215 @@ export default function StudioShell({ title, subtitle, transparent, children }: 
     prevRenderStatusRef.current = next
   }, [activity?.status, emitAudioEvent])
 
-  const currentStepLabel = flowSteps[activeStepIndex]?.label || 'Script'
+  /* ── Render status pill ───────────────────────────────────────────── */
+  const statusPill = (() => {
+    switch (renderStatus) {
+      case 'running':
+        return (
+          <span className="status-chip" style={{ color: '#4cd7f6', border: '1px solid rgba(76,215,246,0.3)' }}>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#4cd7f6] mr-1.5 animate-pulse" />
+            RENDERING
+          </span>
+        )
+      case 'complete':
+        return (
+          <span className="status-chip" style={{ color: '#ffd165', border: '1px solid rgba(255,209,101,0.3)' }}>
+            ✓ READY
+          </span>
+        )
+      case 'failed':
+        return (
+          <span className="status-chip" style={{ color: '#ffb4ab', border: '1px solid rgba(255,180,171,0.3)' }}>
+            ✗ FAILED
+          </span>
+        )
+      default:
+        return (
+          <span className="status-chip" style={{ color: '#9b8f79', border: '1px solid rgba(155,143,121,0.3)' }}>
+            IDLE
+          </span>
+        )
+    }
+  })()
 
+  /* ── Determine if studio route (don't show side nav on landing) ──── */
+  const isStudioRoute = location.pathname.startsWith('/studio') || location.pathname === '/'
+
+  /* ── Check if current room uses r3f environment instead of CSS bg ──── */
+  const isR3fRoom = R3F_ROOMS.has(location.pathname)
+
+  /* ── Background key for the current route ─────────────────────────── */
+  const bgKey = resolveBackgroundKey(location.pathname)
   return (
-    <div className={`studio-room-shell ${roomVisualClass} ${productionStateClass} relative flex min-h-screen flex-col overflow-x-auto`} style={{ background: transparent ? 'transparent' : 'var(--bg-deep)' }}>
-      <TopNav />
-      {showBreadcrumbs ? <Breadcrumbs items={breadcrumbs} /> : null}
+    <>
+      {/* ── Atmospheric Background (lifted up, never unmounts) ─────────── */}
+      {/* Background image — crossfades on route change via Framer Motion */}
+      {/* Only rendered for non-r3f rooms — The Page and The Theater use their own 3D canvas */}
+      {!isR3fRoom && (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={bgKey}
+            className="fixed inset-0 z-[-2] bg-cover bg-center pointer-events-none"
+            style={{ backgroundImage: roomBackgrounds[bgKey] ?? 'none' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+          />
+        </AnimatePresence>
+      )}
 
-      <div className="cinematic-panel mx-4 mt-3 px-3 py-2">
-        <div className="flex min-h-[48px] flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.12em]">
-          <span className="studio-status-chip text-zinc-100">Room: {activeTitle}</span>
-          <span className="studio-status-chip text-amber-100">Current Step: {currentStepLabel}</span>
-          <span className="studio-status-chip text-cyan-100">Next: {nextStep.text}</span>
-          <span className="studio-status-chip text-zinc-200">Approved: {approvedSceneCount}</span>
-          <button
-            type="button"
-            onClick={() => setStudioStatusOpen((prev) => !prev)}
-            className="ml-auto rounded border border-white/20 bg-black/35 px-2.5 py-1 text-zinc-100 transition-colors hover:border-cyan-300/45"
-          >
-            {studioStatusOpen ? 'Collapse ▴' : 'Open ▾'}
-          </button>
-        </div>
+      {/* Fog overlay — never changes between rooms */}
+      <div className="bg-atmos-fog" />
 
-        {studioStatusOpen ? (
-          <div className="mt-2 max-h-[55vh] overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {flowSteps.map((step, index) => {
-                const isCurrent = index === activeStepIndex
-                const isCompleted = index < activeStepIndex
-                return (
-                  <div
-                    key={step.label}
-                    className="rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.12em]"
-                    style={
-                      isCurrent
-                        ? { color: 'var(--text-primary)', border: '1px solid rgba(214,169,92,0.6)', background: 'rgba(214,169,92,0.16)' }
-                        : isCompleted
-                          ? { color: 'rgb(167 243 208)', border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.12)' }
-                          : { color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.03)' }
-                    }
-                  >
-                    {step.label}
-                  </div>
-                )
-              })}
-            </div>
+      {/* Film grain overlay — never changes between rooms */}
+      <div className="bg-film-grain" />
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleBack}
-                title="Go back"
-                className="btn-ghost text-xs px-3 py-1.5 inline-flex items-center gap-1"
-                type="button"
-              >
-                <ArrowLeft size={12} />
-                Back
-              </button>
-              <Link to="/studio" className="btn-ghost text-xs px-3 py-1.5 no-underline">
-                Studio Home
-              </Link>
-              <Link
-                to={nextStepWithProject.to}
-                className="rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline"
-              >
-                {nextStep.cta}
-              </Link>
-              {contextualLinks.map((link) => (
-                <Link
-                  key={link.to}
-                  to={withProjectQuery(link.to, activeProjectId)}
-                  className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] no-underline transition-all duration-200 hover:scale-[1.02]"
-                  style={{ background: 'rgba(214,169,92,0.08)', color: 'var(--accent-amber)', border: '1px solid rgba(214,169,92,0.3)' }}
-                >
-                  {link.label}
-                  <ArrowRight size={12} />
-                </Link>
-              ))}
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
-              {roomNav.map((item) => {
-                const isActive = Boolean(matchPath({ path: item.to, end: true }, location.pathname))
-                const desc = roomDescription(item.key)
-                const getRoomIconClass = (key: string) => {
-                  if (key === 'lobby') return 'room-icon-home'
-                  if (key === 'workspace') return 'room-icon-workspace'
-                  if (key === 'development-room') return 'room-icon-study'
-                  if (key === 'writers-room') return 'room-icon-writers'
-                  if (key === 'study-room') return 'room-icon-study'
-                  if (key === 'production-board') return 'room-icon-previs'
-                  if (key === 'screening-room') return 'room-icon-approval'
-                  if (key === 'archive') return 'room-icon-study'
-                  return ''
-                }
-                const roomIconClass = getRoomIconClass(item.key)
-                return (
-                  <div key={item.key} className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (import.meta.env.DEV) {
-                          console.log('[NavDebug] clicked room', {
-                            key: item.key,
-                            path: item.to,
-                            before: location.pathname,
-                          })
-                        }
-                        navigate(withProjectQuery(item.to, activeProjectId))
-                        if (import.meta.env.DEV) {
-                          console.log('[NavDebug] navigate called', { afterTarget: item.to })
-                        }
-                      }}
-                      onMouseEnter={() => setHoveredRoom(item.key)}
-                      onMouseLeave={() => setHoveredRoom(null)}
-                      onFocus={() => setHoveredRoom(item.key)}
-                      onBlur={() => setHoveredRoom(null)}
-                      className={`rounded-md border px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] ${roomIconClass} ${isActive ? 'border-cyan-300/55 bg-cyan-500/14 text-cyan-100' : 'border-white/10 bg-black/20 text-zinc-300'}`}
-                    >
-                      {item.label}
-                    </button>
-                    {hoveredRoom === item.key && desc && (
-                      <div
-                        className="absolute z-[9999] top-full mt-1 w-48 max-w-[12rem] overflow-hidden rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[9px] text-zinc-300 shadow-lg pointer-events-none whitespace-normal"
-                        style={{
-                          maxWidth: '12rem',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          minWidth: '10rem',
-                        }}
-                      >
-                        <div className="break-words">{desc}</div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="mt-3 rounded-xl border border-white/10 bg-zinc-900/35 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-300">Active Crew</div>
-              <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-zinc-200 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded border border-white/10 bg-black/25 px-2 py-1.5">🎬 Director — reviewing scenes</div>
-                <div className="rounded border border-indigo-300/30 bg-indigo-500/10 px-2 py-1.5">🎥 Cinematographer — adjusting visuals</div>
-                <div className="rounded border border-cyan-300/30 bg-cyan-500/10 px-2 py-1.5">✂️ Editor — analyzing pacing</div>
-                <div className="rounded border border-emerald-300/30 bg-emerald-500/10 px-2 py-1.5">🧠 Archivist — applying references</div>
-              </div>
-              {latestAgentAction ? <div className="mt-2 text-[11px] text-amber-200">Most recent: {latestAgentAction}</div> : null}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <main className="w-full studio-shell-main" style={transparent ? { background: 'transparent', isolation: 'auto' } : { background: 'linear-gradient(180deg, var(--bg-deep) 0%, #030306 40%, #010104 100%), radial-gradient(ellipse 80% 50% at 50% -10%, rgba(214,169,92,0.07) 0%, transparent 70%)', isolation: 'isolate' }}>
-        <div className="film-strip-decoration" />
-        <div className="pointer-events-none absolute inset-0 z-0"
-          style={{
-            background: 'radial-gradient(ellipse 60% 40% at 15% 5%, rgba(122,214,209,0.05) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 15%, rgba(214,169,92,0.05) 0%, transparent 60%)',
-            mixBlendMode: 'screen',
-          }}
+      {/* ── Recording bar (full-width, top of interface) ── */}
+      {renderStatus === 'running' && (
+        <div
+          className="recording-bar fixed top-0 left-0 w-full z-[60]"
+          style={{ height: '2px', backgroundColor: '#93000a' }}
         />
-        <div className="relative z-10 min-h-full">
-          {children}
+      )}
+
+      {/* ── Backend offline status bar ── */}
+      <BackendDownStatusBar />
+
+      <div className="flex min-h-screen" style={{ background: transparent ? 'transparent' : 'var(--bg-deep)' }}>
+        {/* ── SIDE NAV (fixed left, 72px, glass-panel) ── */}
+        {isStudioRoute && (
+          <nav
+            className="glass-panel fixed left-4 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-3 py-6 px-3 rounded-full"
+            style={{ width: '72px' }}
+          >
+            {ROOM_NAV_ITEMS.map((room) => {
+              /* Match: exact path or the route starts with the room path structure */
+              const isActive =
+                location.pathname === room.to ||
+                (room.to !== '/' && location.pathname.startsWith(room.to)) ||
+                (room.to === '/' && location.pathname === '/') ||
+                /* Special case: handle /studio prefix for all studio-internal routes */
+                (room.to.startsWith('/studio/') && location.pathname.startsWith(room.to))
+
+              return (
+                <div key={room.key} className="relative flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => navigate(room.to)}
+                    onMouseEnter={() => setHoveredRoom(room.key)}
+                    onMouseLeave={() => setHoveredRoom(null)}
+                    onFocus={() => setHoveredRoom(room.key)}
+                    onBlur={() => setHoveredRoom(null)}
+                    className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 ${
+                      isActive
+                        ? 'bg-[#03b5d3] text-[#003640] scale-110 shadow-[0_0_20px_rgba(76,215,246,0.4)]'
+                        : 'text-[#d3c5ac] opacity-60 hover:bg-[#3a3939] hover:opacity-100'
+                    }`}
+                  >
+                    {room.icon}
+                  </button>
+                  {hoveredRoom === room.key && (
+                    <div
+                      className="glass-panel absolute left-full ml-3 px-3 py-1.5 rounded-lg whitespace-nowrap pointer-events-none z-50"
+                      style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}
+                    >
+                      {room.stitchName}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </nav>
+        )}
+
+        {/* ── MAIN CONTENT AREA ── */}
+        <div className={`flex-1 flex flex-col ${isStudioRoute ? 'ml-[88px]' : ''}`}>
+          {/* ── TOP BAR ── */}
+          {isStudioRoute && (
+            <header className="flex items-center justify-between px-6 h-14 flex-shrink-0" style={{ background: 'transparent' }}>
+              {/* Left: STUDIO logo */}
+              <Link to="/studio" className="flex items-center gap-2 no-underline">
+                <span
+                  className="text-lg font-bold tracking-[0.3em] amber-glow"
+                  style={{ fontFamily: 'Geist, sans-serif', color: '#ffd165' }}
+                >
+                  STUDIO
+                </span>
+              </Link>
+
+              {/* Right: search, status pill, icons */}
+              <div className="flex items-center gap-4">
+                {/* Search input (cyber-input style) */}
+                <div className="relative">
+                  <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: '#9b8f79' }} />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search archive..."
+                    className="cyber-input pl-8 pr-2 py-1.5 text-xs"
+                    style={{ width: '180px' }}
+                  />
+                </div>
+
+                {/* Render status pill */}
+                {statusPill}
+
+                {/* Settings icon */}
+                <button type="button" className="flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
+                  <Settings size={16} />
+                </button>
+
+                {/* Notifications bell with badge dot */}
+                <button type="button" className="relative flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
+                  <Bell size={16} />
+                  {/* Badge dot: pending render jobs */}
+                  {activity?.isActive && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#93000a]" />
+                  )}
+                </button>
+
+                {/* Co-Director toggle (movie_filter) */}
+                <button
+                  type="button"
+                  onClick={() => setCodirectorOpen((prev) => !prev)}
+                  aria-label="Toggle Co-Director Brain (Cmd+D)"
+                  aria-pressed={codirectorOpen}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-status-xs transition-all ${
+                    codirectorOpen
+                      ? 'bg-primary/20 text-primary shadow-[0_0_18px_rgba(255,209,101,0.55)] amber-glow'
+                      : 'text-on-surface-variant opacity-70 hover:opacity-100 hover:bg-[#3a3939]'
+                  }`}
+                >
+                  <Filter size={13} />
+                  <span>CO-DIRECTOR</span>
+                </button>
+
+                {/* Account circle */}
+                <button type="button" className="flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
+                  <User size={16} />
+                </button>
+              </div>
+            </header>
+          )}
+
+          {/* ── CHILDREN ── */}
+          <main className="flex-1 w-full">
+            <div className="relative z-10 min-h-full">
+              {children}
+            </div>
+          </main>
+          <LazyAICrewPresence />
         </div>
-      </main>
-      <LazyAICrewPresence />
-    </div>
+
+        <CoDirectorDrawer
+          isOpen={codirectorOpen}
+          onClose={() => setCodirectorOpen(false)}
+          activeProjectId={activeProjectId}
+          activeRoomName={activeTitle}
+        />
+      </div>
+    </>
   )
 }
