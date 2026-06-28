@@ -13560,19 +13560,74 @@ class ScriptParser:
         Extract unique character names from uppercase dialogue-cue style lines.
 
         This is deliberately heuristic and pattern-based only (no NLP).
+        Only promotes names that appear as genuine dialogue cues (ALL CAPS name
+        followed by parenthetical or dialogue line) in at least one scene.
         """
         if not isinstance(scene_text, str) or not scene_text.strip():
             return []
 
+        EXCLUDED_PATTERNS = [
+            'FADE IN', 'FADE OUT', 'FADE TO', 'CUT TO', 'SMASH CUT',
+            'DISSOLVE TO', 'MATCH CUT', 'JUMP CUT',
+            'THE END', 'FIN',
+            'CONTINUED', "CONT'D", 'MORE', 'OVER', 'INTERCUT',
+            'BACK TO', 'LATER', 'CONTINUOUS', 'MOMENTS LATER',
+        ]
+
+        # Institution/organization name patterns
+        INSTITUTION_KEYWORDS = {
+            'PROJECT', 'DEPARTMENT', 'COMMITTEE', 'BOARD', 'PROGRAM',
+            'FOUNDATION', 'AGENCY', 'BUREAU', 'COUNCIL', 'AUTHORITY',
+            'COMMISSION', 'DIVISION', 'OFFICE', 'SERVICE', 'CORPORATION',
+            'INCORPORATED', 'INC', 'LLC', 'ASSOCIATION', 'INSTITUTE',
+            'UNIVERSITY', 'COLLEGE', 'SCHOOL', 'HOSPITAL', 'LABORATORY',
+            'STUDIO', 'PRODUCTIONS', 'PICTURES', 'FILMS', 'ENTERTAINMENT',
+        }
+
+        # Generic role words — not character names unless they have dialogue
+        GENERIC_ROLES = {
+            'OWNER', 'OFFICER', 'GUARD', 'RESIDENT',
+            'CROWD', 'VOICE', 'MAN', 'WOMAN', 'BOY', 'GIRL',
+            'PERSON', 'STRANGER', 'NARRATOR', 'ANNOUNCER', 'NEWSCASTER',
+            'REPORTER', 'INTERVIEWER', 'DOCTOR', 'NURSE', 'COP', 'POLICE',
+            'SOLDIER', 'SAILOR', 'PILOT', 'DRIVER', 'PASSENGER', 'TOURIST',
+            'TITLE CARD',
+        }
+
+        def is_valid_character(name: str) -> bool:
+            name_clean = name.strip().rstrip('.')
+            if name_clean.upper() in [p.upper() for p in EXCLUDED_PATTERNS]:
+                return False
+            if name.strip().endswith('.'):
+                return False
+            if any(c.islower() for c in name):
+                return False
+            if len(name.split()) > 4:
+                return False
+            return True
+
+        def has_institution_pattern(name: str) -> bool:
+            words = name.upper().split()
+            return any(kw in words for kw in INSTITUTION_KEYWORDS)
+
+        def looks_like_title_card(name: str) -> bool:
+            return name.upper().startswith("TITLE CARD") or name.strip().startswith("TITLE CARD:")
+
+        def is_generic_role(name: str) -> bool:
+            names = [s.strip().rstrip('.') for s in name.strip().split() if s.strip()]
+            return len(names) == 1 and names[0].upper() in GENERIC_ROLES
+
         skip_names = {
             "CUT TO", "CUT TO:", "FADE IN", "FADE OUT", "FADE TO BLACK", "DISSOLVE TO",
-            "SMASH CUT", "THE END", "CONTINUED", "MORE", "SUPER", "TITLE", "MONTAGE"
+            "SMASH CUT", "THE END", "CONTINUED", "MORE", "SUPER", "TITLE", "MONTAGE",
         }
+
+        line_pattern = re.compile(r'^\s*([A-Z][A-Z0-9\.\'\-\s]{0,40})(?:\s*\([^)]*\))?\s*$')
+        lines = scene_text.splitlines()
         extracted: List[str] = []
         seen = set()
-        line_pattern = re.compile(r'^\s*([A-Z][A-Z0-9\.\'\-\s]{0,40})(?:\s*\([^)]*\))?\s*$')
 
-        for line in scene_text.splitlines():
+        for idx, line in enumerate(lines):
             stripped = line.strip()
             if not stripped:
                 continue
@@ -13583,15 +13638,25 @@ class ScriptParser:
             candidate = match.group(1).strip()
             if not candidate or candidate != candidate.upper():
                 continue
+            if not is_valid_character(candidate):
+                continue
             if candidate in skip_names:
                 continue
             if len(candidate.split()) > 4:
                 continue
             if not re.search(r'[A-Z]', candidate):
                 continue
-            if candidate not in seen:
-                seen.add(candidate)
-                extracted.append(candidate)
+            if looks_like_title_card(candidate):
+                continue
+            if has_institution_pattern(candidate):
+                continue
+            if is_generic_role(candidate):
+                continue
+            if candidate in seen:
+                continue
+
+            seen.add(candidate)
+            extracted.append(candidate)
 
         return extracted
 
@@ -13643,13 +13708,25 @@ class ScriptParser:
             elif current_scene and line:
                 scene_text.append(line)
                 
-                # Check for character dialogue
+                # Check for character dialogue — must be a genuine dialogue cue
                 char_match = self.CHARACTER_PATTERN.match(line)
                 if char_match and self._is_character_name(line):
                     char_name = char_match.group(1).strip()
                     if char_name and not self._is_action_line(char_name):
-                        current_scene.characters.append(char_name)
-        
+                        # Verify next non-empty line is dialogue (parenthetical or non-ALL-CAPS)
+                        is_dialogue = False
+                        for j in range(i + 1, len(lines)):
+                            nxt = lines[j].strip()
+                            if not nxt:
+                                continue
+                            if nxt.startswith('('):
+                                is_dialogue = True
+                            elif not (nxt == nxt.upper() and len(nxt) > 2):
+                                is_dialogue = True
+                            break
+                        if is_dialogue:
+                            current_scene.characters.append(char_name)
+
         # Save last scene
         if current_scene:
             current_scene.description = '\n'.join(scene_text).strip()
@@ -13705,11 +13782,31 @@ class ScriptParser:
         # - 2-30 characters
         # - May have (V.O.), (O.S.), (CONT'D) suffixes
         text_upper = text.upper()
-        
+
+        EXCLUDED_PATTERNS = [
+            'FADE IN', 'FADE OUT', 'FADE TO', 'CUT TO', 'SMASH CUT',
+            'DISSOLVE TO', 'MATCH CUT', 'JUMP CUT',
+            'THE END', 'FIN',
+            'CONTINUED', "CONT'D", 'MORE', 'OVER', 'INTERCUT',
+            'BACK TO', 'LATER', 'CONTINUOUS', 'MOMENTS LATER',
+        ]
+
+        def is_valid_character(name: str) -> bool:
+            name_clean = name.strip().rstrip('.')
+            if name_clean.upper() in [p.upper() for p in EXCLUDED_PATTERNS]:
+                return False
+            if name.strip().endswith('.'):
+                return False
+            if any(c.islower() for c in name):
+                return False
+            if len(name.split()) > 4:
+                return False
+            return True
+
         # Skip if too long (probably action description)
         if len(text) > 30:
             return False
-        
+
         # Skip common screenplay elements
         skip_patterns = [
             r'THE END',
@@ -13728,13 +13825,28 @@ class ScriptParser:
         for pattern in skip_patterns:
             if re.match(pattern, text_upper):
                 return False
-        
+
+        # Skip institution/organization names (multi-word like "COASTAL RENEWAL PROJECT")
+        INSTITUTION_WORDS = {'PROJECT', 'DEPARTMENT', 'RENEWAL', 'COMMITTEE', 'BOARD', 'PROGRAM', 'TIDE'}
+        name_words = set(w.strip().rstrip('.') for w in text_upper.split() if w.strip())
+        if name_words & INSTITUTION_WORDS:
+            return False
+
+        # Skip single-word generic role names (OWNER, etc.)
+        GENERIC_ROLE_WORDS = {'OWNER'}
+        clean_words = {w.rstrip('.') for w in name_words}
+        if len(clean_words) == 1 and clean_words.pop() in GENERIC_ROLE_WORDS:
+            return False
+
         # Skip if contains lowercase
         if text != text.upper():
             # Allow parentheticals like "JOHN (V.O.)"
             if '(' not in text or text.upper() != text.split('(')[0].strip():
                 return False
-        
+
+        if not is_valid_character(text.strip().rstrip('.')):
+            return False
+
         return True
 
     def _is_action_line(self, text: str) -> bool:
@@ -13775,8 +13887,13 @@ class ScriptParser:
                     "int_ext": s.int_ext,
                     "location": s.location,
                     "time_of_day": s.time_of_day,
-                    "description": s.description[:500] if s.description else "",  # Truncate
-                    "characters": list(set(s.characters)),
+                    "description": s.description[:500] if s.description else "",
+                    "text": (s.heading + "\n" + s.description) if s.description else s.heading,
+                    "characters": sorted(set(
+                        c.replace("_", " ").title().strip()
+                        for c in (s.characters or [])
+                        if c and c.strip()
+                    )),
                     "word_count": len(s.description.split()) if s.description else 0
                 }
                 for s in self.scenes

@@ -21,7 +21,8 @@ class AudienceSimulatorService:
         if not project:
             raise ValueError(f"Project {project_id} not found")
 
-        scenes = project.get("scenes", [])
+        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+        scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
         scene = next((s for s in scenes if str(s.get("scene_id")) == scene_id), None)
         if not scene:
             raise ValueError(f"Scene {scene_id} not found in project {project_id}")
@@ -60,7 +61,8 @@ class AudienceSimulatorService:
         if not project:
             raise ValueError(f"Project {project_id} not found")
 
-        scenes = project.get("scenes", [])
+        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+        scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
         scene_sims = []
         for scene in scenes:
             scene_id = str(scene.get("scene_id"))

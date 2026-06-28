@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber'
 export function ThreeTest() {
   return (
     <div style={{ width: '100vw', height: '100vh', background: 'red' }}>
-      <Canvas>
+      <Canvas gl={{ powerPreference: "high-performance", antialias: false }}>
         <color attach="background" args={['blue']} />
         <ambientLight intensity={2} />
         <mesh>

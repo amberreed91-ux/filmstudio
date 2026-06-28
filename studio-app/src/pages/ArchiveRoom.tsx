@@ -1,383 +1,872 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
-import { Archive } from 'lucide-react'
-import StudioShell, { TabGroup } from '../components/StudioShell'
-import { useStudio } from '../context/StudioContext'
-import { buildLocalFallbackExport, downloadJson, fetchExportPackage, getProject, type ExportPackageType } from '../lib/studioApi'
-import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  AlertCircle,
+  Archive,
+  CheckCircle2,
+  Download,
+  Edit3,
+  Filter,
+  Loader2,
+  Play,
+  Plus,
+  Search,
+  Trash2,
+  Wifi,
+  X,
+  ImageIcon,
+  FileVideo,
+  Music,
+  FileType2,
+  Upload,
+} from 'lucide-react'
+import StudioShell from '../components/StudioShell'
+import ProjectContextBar from '../components/ProjectContextBar'
+import ProjectGuard from '../components/ProjectGuard'
+import {
+  deleteProject,
+  fetchExportPackage,
+  getProjectDecisionGate,
+  listProjects,
+  listScenes,
+  updateProject,
+  listVideoAssetsForProject,
+  type PersistedProjectState,
+  type Scene,
+  type StudioDecisionGate,
+} from '../lib/studioApi'
+import { normalizeJobStatus } from '../lib/jobStatus'
 
-type AnyRecord = Record<string, unknown>
+// ── Types ──────────────────────────────────────────────────────────────────
 
-type ArchiveSnapshot = {
-  snapshot_id: string
-  timestamp: string
-  scene_count: number
-  completion_percent: number
-  dominant_tone: string
-  best_cut: 'original' | 'iteration'
-  notes: string
+type SortMode = 'recent' | 'az' | 'runtime' | 'status'
+type FilterMode = 'all' | 'in_progress' | 'complete' | 'archived'
+type FilmStatus = 'complete' | 'in_progress' | 'draft'
+
+interface FilmEntry {
+  project: PersistedProjectState
+  status: FilmStatus
+  sceneCount: number
+  runtime: number
+  genre: string
+  logline: string
+  thumbnailUrl?: string
 }
 
-function asRecord(value: unknown): AnyRecord | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  return value as AnyRecord
+interface AssetEntry {
+  asset_id: string
+  source_type: string
+  source_url?: string
+  status: string
+  filename?: string
+  content_type?: string
+  title?: string
 }
 
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
+interface ReadinessIssue {
+  id: string
+  severity: 'error' | 'warning' | 'info'
+  message: string
 }
 
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : ''
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const SORT_LABELS: Record<SortMode, string> = {
+  recent: 'Most Recent',
+  az: 'A-Z',
+  runtime: 'Runtime',
+  status: 'Status',
 }
 
-function asNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
+const FILTER_LABELS: Record<FilterMode, string> = {
+  all: 'ALL',
+  in_progress: 'IN PROGRESS',
+  complete: 'COMPLETE',
+  archived: 'ARCHIVED',
 }
 
-function getExecutionSummary(state: unknown, projectSummary: unknown): AnyRecord {
-  let localBundle: AnyRecord | null = null
-  try {
-    const raw = localStorage.getItem('studio:lastBundle')
-    if (raw) localBundle = asRecord(JSON.parse(raw))
-  } catch {
-    localBundle = null
+function statusBadgeClass(status: FilmStatus): string {
+  switch (status) {
+    case 'complete':
+      return 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10'
+    case 'in_progress':
+      return 'text-amber-400 border-amber-400/30 bg-amber-400/10 animate-pulse'
+    case 'draft':
+      return 'text-zinc-400 border-zinc-400/30 bg-zinc-400/5'
   }
-  const locationState = asRecord(state)
-  const candidates: unknown[] = [
-    asRecord(locationState?.execution_summary),
-    asRecord(locationState?.executionSummary),
-    asRecord(locationState?.bundle),
-    asRecord(asRecord(locationState?.project)?.execution_summary),
-    asRecord(projectSummary),
-    localBundle,
-  ]
-  for (const candidate of candidates) {
-    const record = asRecord(candidate)
-    if (record && Object.keys(record).length > 0) return record
-  }
-  return {}
 }
+
+function deriveStatus(project: PersistedProjectState, scenes: Scene[]): FilmStatus {
+  const approvedCount = project.approved_scenes?.length || 0
+  const reviewedCount = project.reviewed_scenes?.length || 0
+  if (approvedCount > 0 && approvedCount >= scenes.length && scenes.length > 0) return 'complete'
+  if (reviewedCount > 0 || approvedCount > 0) return 'in_progress'
+  return 'draft'
+}
+
+function estimateRuntime(scenes: Scene[]): number {
+  return scenes.length * 2.5
+}
+
+function deriveGenre(project: PersistedProjectState): string {
+  const exec = project.execution_summary as Record<string, unknown>
+  const genre = exec?.genre
+  if (typeof genre === 'string' && genre.trim()) return genre
+  return 'Drama'
+}
+
+function filmCompletedDate(film: FilmEntry): string {
+  const dateSource = film.status === 'complete' ? film.project.updated_at : film.project.created_at
+  return new Date(dateSource).toLocaleDateString()
+}
+
+function deriveLogline(project: PersistedProjectState): string {
+  const exec = project.execution_summary as Record<string, unknown>
+  const logline = exec?.logline
+  if (typeof logline === 'string' && logline.trim()) return logline
+  return 'No logline set. Click to edit.'
+}
+
+function assetTypeBadge(sourceType: string, contentType?: string): { label: string; className: string } {
+  const st = sourceType.toLowerCase()
+  if (st.includes('audio') || contentType?.startsWith('audio')) return { label: 'AUDIO', className: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/20' }
+  if (st.includes('exr') || st.includes('image') || contentType?.startsWith('image')) return { label: 'EXR', className: 'bg-violet-500/15 text-violet-300 border-violet-400/20' }
+  const ct = contentType?.toLowerCase() || ''
+  if (ct.includes('raw') || st.includes('raw')) return { label: 'RAW', className: 'bg-amber-500/15 text-amber-300 border-amber-400/20' }
+  return { label: 'FILE', className: 'bg-zinc-500/15 text-zinc-300 border-zinc-400/20' }
+}
+
+function assetTypeIcon(sourceType: string) {
+  const st = sourceType.toLowerCase()
+  if (st.includes('audio') || st.includes('music') || st.includes('sound')) return <Music size={18} />
+  if (st.includes('exr') || st.includes('image') || st.includes('png') || st.includes('jpg')) return <FileType2 size={18} />
+  return <FileVideo size={18} />
+}
+
+// ── Component ──────────────────────────────────────────────────────────────
 
 export default function ArchiveRoom() {
-  const { projectId } = useParams()
-  const [searchParams] = useSearchParams()
-  const sessionId = searchParams.get('session_id')
-  const queryProjectId = searchParams.get('project_id') || ''
-  const location = useLocation()
-  const { project, loadProject } = useStudio()
-  const loadRequestKeyRef = useRef<string | null>(null)
-  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('')
-  const [archiveTab, setArchiveTab] = useState<'snapshots' | 'versions' | 'best_cuts' | 'memory'>('snapshots')
-  const [exportMessage, setExportMessage] = useState('')
-  const [persistedSummary, setPersistedSummary] = useState<AnyRecord | null>(null)
-  const activeProjectId = resolveActiveProjectId({
-    queryProjectId,
-    routeProjectId: projectId || '',
-    locationState: location.state,
-    persistedProjectId: readPersistedActiveProjectId(),
-    contextProjectId: project?.project_id || '',
-  })
-  useEffect(() => {
-    if (activeProjectId) persistActiveProjectId(activeProjectId)
-  }, [activeProjectId])
-  const exportCards: Array<{ type: ExportPackageType; title: string; description: string }> = [
-    { type: 'pitch-pack', title: 'Pitch Pack', description: 'Story, structure, direction, and ending payload.' },
-    { type: 'shot-list', title: 'Shot List', description: 'Scene/shot intent with render references.' },
-    { type: 'prompt-pack', title: 'Prompt Pack', description: 'Visual briefs, prompt packs, and memory influence.' },
-    { type: 'cut-manifest', title: 'Cut Manifest', description: 'Cut order, inclusion list, runtime and transitions.' },
-    { type: 'festival-export', title: 'Festival Export', description: 'Submission-ready package with delivery metadata and presets.' },
-    { type: 'youtube-export', title: 'YouTube Export', description: 'Channel-ready delivery with runtime, poster, and subtitle metadata.' },
-    { type: 'trailer-export', title: 'Trailer Export', description: '90-second promotional export preset with source-cut references.' },
-    { type: 'teaser-export', title: 'Teaser Export', description: '30-second teaser preset for social promotion workflows.' },
-    { type: 'subtitle-packages', title: 'Subtitle Packages', description: 'SRT/VTT subtitle bundle for distribution channels.' },
-    { type: 'archive-snapshot', title: 'Archive Snapshot', description: 'Snapshots, versions, best cut, production summary.' },
-  ]
+  const navigate = useNavigate()
 
-  async function handleExportPackage(type: ExportPackageType) {
-    const safeProjectId = activeProjectId || 'local_project'
+  // ── Core state ────────────────────────────────────────────────────────────
+  const [films, setFilms] = useState<FilmEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  // ── Filter/sort/search ────────────────────────────────────────────────────
+  const [sortMode, setSortMode] = useState<SortMode>('recent')
+  const [filterMode, setFilterMode] = useState<FilterMode>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // ── Selected film ─────────────────────────────────────────────────────────
+  const [selectedFilm, setSelectedFilm] = useState<FilmEntry | null>(null)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [editingLogline, setEditingLogline] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [loglineDraft, setLoglineDraft] = useState('')
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  const [archiving, setArchiving] = useState<string | null>(null)
+  const [exporting, setExporting] = useState<string | null>(null)
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState<FilmEntry | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [readinessIssues, setReadinessIssues] = useState<ReadinessIssue[]>([])
+  const [publishing, setPublishing] = useState(false)
+
+  // ── Asset Bin ─────────────────────────────────────────────────────────────
+  const [assets, setAssets] = useState<AssetEntry[]>([])
+  const [loadingAssets, setLoadingAssets] = useState(false)
+  const [assetFilter, setAssetFilter] = useState<string>('all')
+  const [showImportModal, setShowImportModal] = useState(false)
+
+  // ── Load films ────────────────────────────────────────────────────────────
+  const loadFilms = useCallback(async () => {
+    setLoading(true)
+    setError('')
     try {
-      const payload = await fetchExportPackage(safeProjectId, type)
-      downloadJson(`${safeProjectId}-${type}.json`, payload)
-      setExportMessage('Export created')
-    } catch {
-      const fallback = buildLocalFallbackExport(type)
-      downloadJson(`${safeProjectId}-${type}-fallback.json`, fallback)
-      setExportMessage('Export created (local fallback)')
-    }
-  }
-
-  useEffect(() => {
-    if (!projectId) return
-    const loadRequestKey = `${projectId}:${sessionId ?? ''}`
-    if (loadRequestKeyRef.current === loadRequestKey) return
-    loadRequestKeyRef.current = loadRequestKey
-    void loadProject(projectId, { sessionId })
-  }, [loadProject, projectId, sessionId])
-
-  useEffect(() => {
-    if (!activeProjectId || projectId) return
-    void (async () => {
-      const response = await getProject(activeProjectId)
-      const summary = asRecord(response.project?.execution_summary)
-      if (summary) setPersistedSummary(summary)
-    })()
-  }, [activeProjectId, projectId])
-
-  const executionSummary = useMemo(
-    () => getExecutionSummary(location.state, project?.execution_summary || persistedSummary),
-    [location.state, project?.execution_summary, persistedSummary],
-  )
-
-  const archiveSnapshots = useMemo<ArchiveSnapshot[]>(() => {
-    const raw = asArray(executionSummary.archive_snapshots)
-    const parsed = raw.map((entry, index) => {
-      const item = asRecord(entry) || {}
-      const bestCut: ArchiveSnapshot['best_cut'] =
-        asString(item.best_cut).trim().toLowerCase() === 'iteration' ? 'iteration' : 'original'
-      return {
-        snapshot_id: asString(item.snapshot_id).trim() || `snap_${String(index + 1).padStart(3, '0')}`,
-        timestamp: asString(item.timestamp).trim() || `2026-01-0${index + 1}T00:00:00Z`,
-        scene_count: asNumber(item.scene_count) ?? 0,
-        completion_percent: asNumber(item.completion_percent) ?? 0,
-        dominant_tone: asString(item.dominant_tone).trim() || 'none',
-        best_cut: bestCut,
-        notes: asString(item.notes).trim() || 'No notes',
+      const { projects, error: listError } = await listProjects()
+      if (listError) {
+        setError(listError)
+        setFilms([])
+        return
       }
-    })
-    if (parsed.length > 0) return parsed
-    return [
-      {
-        snapshot_id: 'snap_001',
-        timestamp: '2026-01-01T00:00:00Z',
-        scene_count: 0,
-        completion_percent: 0,
-        dominant_tone: 'none',
-        best_cut: 'original',
-        notes: 'No archive snapshots available yet.',
-      },
-    ]
-  }, [executionSummary.archive_snapshots])
-  const hasRealArchiveSnapshots = asArray(executionSummary.archive_snapshots).length > 0
+
+      // Load scenes for each project to derive status/runtime
+      const filmEntries: FilmEntry[] = []
+      for (const project of projects) {
+        try {
+          const { scenes } = await listScenes(project.project_id)
+          filmEntries.push({
+            project,
+            status: deriveStatus(project, scenes),
+            sceneCount: scenes.length,
+            runtime: estimateRuntime(scenes),
+            genre: deriveGenre(project),
+            logline: deriveLogline(project),
+          })
+        } catch {
+          filmEntries.push({
+            project,
+            status: 'draft',
+            sceneCount: 0,
+            runtime: 0,
+            genre: deriveGenre(project),
+            logline: deriveLogline(project),
+          })
+        }
+      }
+      setFilms(filmEntries)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load films')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // ── Load assets for selected film ─────────────────────────────────────────
+  const loadAssets = useCallback(async () => {
+    if (!selectedFilm) return
+    setLoadingAssets(true)
+    try {
+      const { assets: loadedAssets } = await listVideoAssetsForProject(selectedFilm.project.project_id)
+      const normalized = (Array.isArray(loadedAssets) ? loadedAssets : []).map((asset) => ({
+        asset_id: asset.asset_id,
+        source_type: asset.source_type,
+        source_url: asset.source_url,
+        status: asset.status,
+        filename: asset.title,
+        title: asset.title,
+        content_type: typeof asset.metadata?.content_type === 'string' ? asset.metadata.content_type : undefined,
+      }))
+      setAssets(normalized)
+    } catch {
+      setAssets([])
+    } finally {
+      setLoadingAssets(false)
+    }
+  }, [selectedFilm])
 
   useEffect(() => {
-    if (!selectedSnapshotId && archiveSnapshots.length > 0) {
-      setSelectedSnapshotId(archiveSnapshots[archiveSnapshots.length - 1].snapshot_id)
-    }
-  }, [archiveSnapshots, selectedSnapshotId])
+    void loadFilms()
+  }, [loadFilms])
 
-  const selectedSnapshot = useMemo(
-    () => archiveSnapshots.find((snap) => snap.snapshot_id === selectedSnapshotId) || archiveSnapshots[0],
-    [archiveSnapshots, selectedSnapshotId],
+  useEffect(() => {
+    void loadAssets()
+  }, [loadAssets])
+
+  // ── Filtered + sorted films ───────────────────────────────────────────────
+  const displayedFilms = useMemo(() => {
+    let result = films
+
+    // Filter
+    if (filterMode !== 'all') {
+      result = result.filter((f) => f.status === filterMode)
+    }
+
+    // Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(
+        (f) =>
+          f.project.title.toLowerCase().includes(q) ||
+          f.genre.toLowerCase().includes(q) ||
+          f.logline.toLowerCase().includes(q),
+      )
+    }
+
+    // Sort
+    const sorted = [...result]
+    switch (sortMode) {
+      case 'recent':
+        sorted.sort((a, b) => new Date(b.project.updated_at).getTime() - new Date(a.project.updated_at).getTime())
+        break
+      case 'az':
+        sorted.sort((a, b) => a.project.title.localeCompare(b.project.title))
+        break
+      case 'runtime':
+        sorted.sort((a, b) => b.runtime - a.runtime)
+        break
+      case 'status':
+        const order: Record<FilmStatus, number> = { complete: 0, in_progress: 1, draft: 2 }
+        sorted.sort((a, b) => order[a.status] - order[b.status])
+        break
+    }
+
+    return sorted
+  }, [films, filterMode, searchQuery, sortMode])
+
+  // ── Filtered assets ───────────────────────────────────────────────────────
+  const filteredAssets = useMemo(() => {
+    if (assetFilter === 'all') return assets
+    return assets.filter((a) => a.content_type?.startsWith(assetFilter) || a.source_type === assetFilter)
+  }, [assets, assetFilter])
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleScreen = useCallback(
+    (film: FilmEntry) => {
+      navigate(`/studio/screening-room?project_id=${film.project.project_id}`)
+    },
+    [navigate],
   )
 
-  const sceneVersions = useMemo(() => {
-    const scenes = asArray(executionSummary.scenes)
-    return scenes
-      .map((scene) => {
-        const row = asRecord(scene) || {}
-        return {
-          scene_id: asString(row.scene_id).trim() || 'scene_unknown',
-          versions: asArray(row.scene_versions)
-            .map((version, index) => {
-              const item = asRecord(version) || {}
-              return {
-                version_id: asString(item.version_id).trim() || `version_${index + 1}`,
-                type: asString(item.type).trim() || 'original',
-                timestamp: asString(item.timestamp).trim() || '',
-                quality_score: asNumber(item.quality_score) ?? 0,
-              }
-            })
-            .filter((version) => Boolean(version.version_id)),
+  const handleExport = useCallback(async (film: FilmEntry) => {
+    setExporting(film.project.project_id)
+    setError('')
+    try {
+      const result = await fetchExportPackage(film.project.project_id, 'festival-export')
+      const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${film.project.title}-export.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setSuccess(`Exported "${film.project.title}"`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(null)
+    }
+  }, [])
+
+  const handleStartRename = useCallback((film: FilmEntry) => {
+    setTitleDraft(film.project.title)
+    setEditingTitle(true)
+  }, [])
+
+  const handleSaveRename = useCallback(async () => {
+    if (!selectedFilm || !titleDraft.trim()) return
+    setError('')
+    try {
+      const { project } = await updateProject(selectedFilm.project.project_id, { title: titleDraft.trim() })
+      if (project) {
+        const updatedFilm = { ...selectedFilm, project, logline: deriveLogline(project) }
+        setSelectedFilm(updatedFilm)
+        setFilms((prev) => prev.map((f) => (f.project.project_id === project.project_id ? updatedFilm : f)))
+        setSuccess('Title updated')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rename failed')
+    } finally {
+      setEditingTitle(false)
+    }
+  }, [selectedFilm, titleDraft])
+
+  const handleStartEditLogline = useCallback((film: FilmEntry) => {
+    setLoglineDraft(film.logline)
+    setEditingLogline(true)
+  }, [])
+
+  const handleSaveLogline = useCallback(async () => {
+    if (!selectedFilm || !loglineDraft.trim()) return
+    setError('')
+    try {
+      const execSummary = { ...selectedFilm.project.execution_summary, logline: loglineDraft.trim() }
+      const { project } = await updateProject(selectedFilm.project.project_id, { execution_summary: execSummary })
+      if (project) {
+        const updatedFilm = { ...selectedFilm, project, logline: loglineDraft.trim() }
+        setSelectedFilm(updatedFilm)
+        setFilms((prev) => prev.map((f) => (f.project.project_id === project.project_id ? updatedFilm : f)))
+        setSuccess('Logline updated')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Logline update failed')
+    } finally {
+      setEditingLogline(false)
+    }
+  }, [selectedFilm, loglineDraft])
+
+  const handleArchive = useCallback(async (film: FilmEntry) => {
+    setArchiving(film.project.project_id)
+    setError('')
+    try {
+      const { error: delError } = await deleteProject(film.project.project_id)
+      if (delError) {
+        setError(delError)
+      } else {
+        setSuccess(`"${film.project.title}" archived`)
+        setFilms((prev) => prev.filter((f) => f.project.project_id !== film.project.project_id))
+        if (selectedFilm?.project.project_id === film.project.project_id) {
+          setSelectedFilm(null)
         }
-      })
-      .filter((scene) => scene.versions.length > 0)
-  }, [executionSummary.scenes])
-
-  const archiveSummary = useMemo(() => {
-    const summary = asRecord(executionSummary.archive_summary) || {}
-    return {
-      total_snapshots: asNumber(summary.total_snapshots) ?? archiveSnapshots.length,
-      latest_completion: asNumber(summary.latest_completion) ?? selectedSnapshot?.completion_percent ?? 0,
-      best_quality_scene: asString(summary.best_quality_scene).trim() || 'none',
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Archive failed')
+    } finally {
+      setArchiving(null)
+      setShowArchiveConfirm(null)
     }
-  }, [executionSummary.archive_summary, archiveSnapshots.length, selectedSnapshot])
+  }, [selectedFilm])
 
-  const bestCutSummary = useMemo(() => {
-    const summary = asRecord(executionSummary.best_cut_summary) || {}
-    return {
-      selected_cut: asString(summary.selected_cut).trim() || 'original',
-      reason: asString(summary.reason).trim() || 'No reason available',
-      confidence: asNumber(summary.confidence) ?? 0,
+  const handleReadinessScan = useCallback(async () => {
+    if (!selectedFilm) return
+    setScanning(true)
+    setReadinessIssues([])
+    setError('')
+    try {
+      const gate = await getProjectDecisionGate(selectedFilm.project.project_id)
+      const issues: ReadinessIssue[] = []
+
+      if (selectedFilm.sceneCount === 0) {
+        issues.push({ id: 'no-scenes', severity: 'error', message: 'No scenes in project' })
+      }
+      if (selectedFilm.project.approved_scenes.length === 0) {
+        issues.push({ id: 'no-approvals', severity: 'warning', message: 'No scenes approved yet' })
+      }
+      if (selectedFilm.project.reviewed_scenes.length < selectedFilm.sceneCount) {
+        issues.push({
+          id: 'unreviewed',
+          severity: 'info',
+          message: `${selectedFilm.sceneCount - selectedFilm.project.reviewed_scenes.length} scenes not yet reviewed`,
+        })
+      }
+      if (!selectedFilm.project.film_cut || Object.keys(selectedFilm.project.film_cut).length === 0) {
+        issues.push({ id: 'no-cut', severity: 'warning', message: 'No final film cut assembled' })
+      }
+
+      setReadinessIssues(issues)
+      if (issues.length === 0) {
+        setSuccess('All checks passed — film is ready')
+      } else {
+        const errors = issues.filter((i) => i.severity === 'error').length
+        const warnings = issues.filter((i) => i.severity === 'warning').length
+        setSuccess(`Scan complete: ${errors} error${errors !== 1 ? 's' : ''}, ${warnings} warning${warnings !== 1 ? 's' : ''}`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Scan failed')
+    } finally {
+      setScanning(false)
     }
-  }, [executionSummary.best_cut_summary])
+  }, [selectedFilm])
 
+  const handlePublish = useCallback(async () => {
+    if (!selectedFilm) return
+    setPublishing(true)
+    setError('')
+    try {
+      await fetchExportPackage(selectedFilm.project.project_id, 'festival-export')
+      setSuccess(`"${selectedFilm.project.title}" published to archive`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Publish failed')
+    } finally {
+      setPublishing(false)
+    }
+  }, [selectedFilm])
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <StudioShell title="Archive Room" subtitle="Memory vault for film snapshots, scene versions, and best-cut lineage.">
-      <div className="w-full overflow-visible" style={{ background: 'var(--color-surface-0)' }}>
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-          {/* Room Hero - "The Vault" */}
-          <section className="rounded-2xl border p-8" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
-            <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-accent)' }}>Archive Room</div>
-            <h1 className="mt-3 text-4xl font-light tracking-tight" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
-              The Vault
+    <>
+      <StudioShell title="Archive" subtitle="The Vault — Film Archive">
+      <ProjectGuard>
+        <ProjectContextBar roomName="archive" />
+
+        {/* Status messages */}
+        <div className="px-4 pt-2">
+          {error && (
+            <div className="mb-2 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
+              {success}
+            </div>
+          )}
+        </div>
+
+        {/* ── HEADER ROW ────────────────────────────────────────────────── */}
+        <div className="px-4 pb-3">
+          <div className="flex items-center justify-between">
+            <h1
+              className="text-2xl font-bold uppercase tracking-[0.2em] amber-glow"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              THE VAULT
             </h1>
-            <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              Every version, every snapshot, every decision preserved.
-            </p>
-          </section>
-
-          <section className="rounded-2xl border p-5" style={{ background: 'var(--color-surface-1)', borderColor: 'var(--color-border-subtle)' }}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-xl font-semibold tracking-wide" style={{ color: 'var(--color-text-primary)' }}><Archive size={18} />Archive Snapshots</h2>
-              <button
-                type="button"
-                onClick={() => { void handleExportPackage('archive-snapshot') }}
-                className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] transition hover:border-[#00d4aa]"
-                style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}
+            <div className="flex items-center gap-3">
+              {/* Sort dropdown */}
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                className="glass-panel rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] outline-none"
+                style={{ color: 'var(--color-on-surface)' }}
               >
-                Export Snapshot
-              </button>
-            </div>
-            {!hasRealArchiveSnapshots ? (
-              <div className="mt-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: 'var(--color-border-subtle)', color: 'var(--color-text-secondary)' }}>
-                <div>No saved versions yet.</div>
-                <Link
-                  to={withProjectQuery('/studio/writers-room', activeProjectId)}
-                  className="mt-2 inline-flex rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] no-underline transition hover:border-[#00d4aa]"
-                  style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-accent)' }}
-                >
-                  Generate a film
-                </Link>
+                {(Object.keys(SORT_LABELS) as SortMode[]).map((mode) => (
+                  <option key={mode} value={mode} className="bg-zinc-900">
+                    {SORT_LABELS[mode]}
+                  </option>
+                ))}
+              </select>
+
+              {/* Search */}
+              <div className="flex items-center gap-1.5">
+                <Search size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search films..."
+                  className="cyber-input w-[160px] rounded px-3 py-1.5 text-xs outline-none"
+                  style={{ color: 'var(--color-on-surface)' }}
+                />
               </div>
-            ) : null}
-            {exportMessage ? <div className="mt-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{exportMessage}</div> : null}
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-6 xl:grid-cols-12">
-              {archiveSnapshots.map((snapshot) => {
-                const isActive = snapshot.snapshot_id === selectedSnapshot?.snapshot_id
-                const statusLabel = snapshot.completion_percent >= 100 ? 'Complete' : 'In Progress'
-                return (
-                  <button
-                    key={snapshot.snapshot_id}
-                    type="button"
-                    onClick={() => setSelectedSnapshotId(snapshot.snapshot_id)}
-                    className={`min-w-0 break-words rounded-xl border p-3 text-left transition-all md:col-span-2 xl:col-span-4 ${
-                      isActive
-                        ? 'border-cyan-300/60 bg-cyan-500/15 shadow-[0_0_24px_rgba(34,211,238,0.25)]'
-                        : 'border-zinc-700/70 bg-zinc-900/60 hover:border-zinc-500/80'
+            </div>
+          </div>
+
+          {/* Filter chips */}
+          <div className="mt-3 flex gap-1.5">
+            {(Object.keys(FILTER_LABELS) as FilterMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setFilterMode(mode)}
+                className={`status-chip rounded border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] transition-all ${
+                  filterMode === mode
+                    ? 'border-primary/50 bg-primary/15 text-primary'
+                    : 'hover:bg-white/8'
+                }`}
+                style={{
+                  borderColor: filterMode === mode ? undefined : 'rgba(255,255,255,0.08)',
+                  color: filterMode === mode ? undefined : 'var(--color-on-surface-variant)',
+                }}
+              >
+                {FILTER_LABELS[mode]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── TWO-PANEL LAYOUT ──────────────────────────────────────────── */}
+        <div className="flex h-[calc(100vh-220px)] w-full gap-4 px-4 pb-4">
+          {/* ── LEFT: FILM LIST (horizontal rows) ──────────────────────── */}
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+              </div>
+            ) : displayedFilms.length === 0 ? (
+              <div className="glass-panel flex flex-col items-center justify-center rounded-xl py-20 text-center">
+                <Archive size={32} className="mb-3 opacity-30" style={{ color: 'var(--color-on-surface-variant)' }} />
+                <p className="text-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  {searchQuery || filterMode !== 'all'
+                    ? 'No films match your filters.'
+                    : 'The vault is empty. Create a project to get started.'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {displayedFilms.map((film) => (
+                  <div
+                    key={film.project.project_id}
+                    className={`glass-panel group flex items-center gap-4 overflow-hidden rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.005] ${
+                      selectedFilm?.project.project_id === film.project.project_id ? 'ring-1 ring-amber-400/40' : ''
                     }`}
+                    onClick={() => setSelectedFilm(film)}
                   >
-                    <div className="text-xs uppercase tracking-[0.14em] text-zinc-300">{snapshot.snapshot_id}</div>
-                    <div className="mt-1 text-xs text-zinc-400">{snapshot.timestamp}</div>
-                    <div className="mt-1 text-xs text-zinc-200">Status: {statusLabel}</div>
-                    {snapshot.dominant_tone && snapshot.dominant_tone !== 'none' && (
-                      <div className="mt-1 text-xs text-zinc-200">Tone: {snapshot.dominant_tone}</div>
-                    )}
-                    <div className="mt-1 text-xs text-zinc-200">Best Cut: {snapshot.best_cut}</div>
-                  </button>
-                )
-              })}
-            </div>
-          </section>
+                    {/* Thumbnail 180x100 */}
+                    <div
+                      className="glass-panel relative shrink-0 overflow-hidden rounded-lg"
+                      style={{ width: 180, height: 100 }}
+                    >
+                      {film.thumbnailUrl ? (
+                        <img
+                          src={film.thumbnailUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <ImageIcon size={28} className="opacity-20" style={{ color: 'var(--color-on-surface-variant)' }} />
+                        </div>
+                      )}
+                      <span
+                        className={`status-chip absolute right-2 top-2 z-10 rounded border px-1.5 py-0.5 text-[8px] font-bold ${statusBadgeClass(film.status)}`}
+                      >
+                        {film.status.replace('_', ' ').toUpperCase()}
+                      </span>
+                    </div>
 
-          <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/45 p-5 shadow-2xl backdrop-blur-md">
-            <TabGroup
-              className="mb-3"
-              value={archiveTab}
-              onChange={(next) => setArchiveTab(next)}
-              options={[
-                { id: 'snapshots', label: 'Snapshots' },
-                { id: 'versions', label: 'Scene Versions' },
-                { id: 'best_cuts', label: 'Best Cuts' },
-                { id: 'memory', label: 'Memory' },
-              ]}
-            />
-            <h3 className="text-sm uppercase tracking-[0.14em] text-zinc-300">Export Center</h3>
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {exportCards.map((card) => (
-                <article key={card.type} className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100">{card.title}</div>
-                  <div className="mt-1 text-[11px] text-zinc-400">{card.description}</div>
-                  <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-emerald-300">status: ready</div>
-                  <button
-                    type="button"
-                    onClick={() => { void handleExportPackage(card.type) }}
-                    className="mt-2 rounded-md border border-cyan-300/40 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100"
-                  >
-                    Export JSON
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            <article className="lg:col-span-8 rounded-2xl border border-zinc-800/70 bg-zinc-900/40 p-5 shadow-xl backdrop-blur-md">
-              {archiveTab === 'versions' ? (
-                <>
-                  <h3 className="text-sm uppercase tracking-[0.14em] text-zinc-300">Scene Version Panel</h3>
-                  <div className="mt-3 space-y-3 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
-                    {sceneVersions.length > 0 ? sceneVersions.map((scene) => (
-                      <div key={scene.scene_id} className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-200">{scene.scene_id}</div>
-                        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                          {scene.versions.map((version) => (
-                            <div key={version.version_id} className="rounded-lg border border-zinc-700/60 bg-zinc-950/50 p-2">
-                              <div className="text-[11px] text-zinc-300">{version.version_id}</div>
-                              <div className="text-[11px] text-zinc-400">Type: {version.type}</div>
-                              <div className="text-[11px] text-zinc-400">{version.timestamp}</div>
-                              <div className="text-[11px] text-cyan-200">Quality: {version.quality_score.toFixed(3)}</div>
-                            </div>
-                          ))}
+                    {/* Right detail area */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-4">
+                        <h3 className="headline-lg truncate text-on-surface">
+                          {film.project.title}
+                        </h3>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleScreen(film) }}
+                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02]"
+                            style={{ color: 'var(--color-primary)' }}
+                          >
+                            <Play size={12} />
+                            SCREEN
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); void handleExport(film) }}
+                            disabled={exporting === film.project.project_id}
+                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                            style={{ color: 'var(--color-on-surface-variant)' }}
+                          >
+                            {exporting === film.project.project_id ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Download size={12} />
+                            )}
+                            EXPORT
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedFilm(film); handleStartRename(film) }}
+                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02]"
+                            style={{ color: 'var(--color-on-surface-variant)' }}
+                          >
+                            <Edit3 size={12} />
+                            RENAME
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setShowArchiveConfirm(film) }}
+                            disabled={archiving === film.project.project_id}
+                            className="flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                            style={{ background: 'rgba(244,63,94,0.1)', color: 'var(--color-error)' }}
+                          >
+                            {archiving === film.project.project_id ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={12} />
+                            )}
+                            ARCHIVE
+                          </button>
                         </div>
                       </div>
-                    )) : (
-                      <div className="rounded-xl border border-dashed border-zinc-700 p-4 text-xs text-zinc-400">No scene version history found.</div>
-                    )}
+                      {/* Metadata row */}
+                      <div className="mt-1.5 flex items-center gap-3 font-metadata-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        <span>{filmCompletedDate(film)}</span>
+                        <span className="opacity-30">|</span>
+                        <span>{film.sceneCount} SCENES</span>
+                        <span className="opacity-30">|</span>
+                        <span>{Math.round(film.runtime)}m RUNTIME</span>
+                      </div>
+                    </div>
                   </div>
-                </>
-              ) : archiveTab === 'best_cuts' ? (
-                <div className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-4 text-xs text-zinc-200">
-                  Best cut summary is shown in the right panel. Use snapshot cards to compare iterations.
-                </div>
-              ) : archiveTab === 'memory' ? (
-                <div className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-4 text-xs text-zinc-200">
-                  Archive memory links snapshots, scene versions, and best-cut decisions for reuse.
-                </div>
-              ) : (
-                <div className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-4 text-xs text-zinc-200">
-                  Select a snapshot above to inspect the active archive state.
-                </div>
-              )}
-            </article>
+                ))}
+              </div>
+            )}
+          </div>
 
-            <aside className="lg:col-span-4 space-y-4">
-              <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/40 p-4 shadow-xl backdrop-blur-md">
-                <h3 className="text-sm uppercase tracking-[0.14em] text-zinc-300">Archive Summary</h3>
-                <div className="mt-2 space-y-1 text-xs text-zinc-200">
-                  <div>Total Snapshots: <span className="text-zinc-100">{archiveSummary.total_snapshots}</span></div>
-                  <div>Latest Completion: <span className="text-zinc-100">{archiveSummary.latest_completion.toFixed(2)}%</span></div>
-                  <div>Best Quality Scene: <span className="text-zinc-100">{archiveSummary.best_quality_scene}</span></div>
+          {/* ── RIGHT: ASSET BIN PANEL (380px) ────────────────────────── */}
+          <div className="flex w-[380px] shrink-0 flex-col gap-3 overflow-y-auto">
+            {selectedFilm ? (
+              <div className="glass-panel rounded-xl p-4 space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-metadata-sm text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--color-primary)' }}>
+                      ASSET BIN
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAssetFilter(assetFilter === 'all' ? 'video' : 'all')}
+                      className="rounded p-0.5 transition-all hover:bg-white/10"
+                      aria-label="Filter assets"
+                    >
+                      <Filter size={12} style={{ color: 'var(--color-on-surface-variant)' }} />
+                    </button>
+                  </div>
                 </div>
-              </section>
 
-              <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/40 p-4 shadow-xl backdrop-blur-md">
-                <h3 className="text-sm uppercase tracking-[0.14em] text-zinc-300">Best Cut</h3>
-                <div className="mt-2 space-y-1 text-xs text-zinc-200">
-                  <div>Selected: <span className="text-zinc-100">{bestCutSummary.selected_cut}</span></div>
-                  <div>Reason: <span className="text-zinc-100">{bestCutSummary.reason}</span></div>
-                  <div>Confidence: <span className="text-cyan-200">{bestCutSummary.confidence.toFixed(3)}</span></div>
+                {/* Asset filter chips */}
+                <div className="flex gap-1.5">
+                  {['all', 'video', 'image', 'audio'].map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setAssetFilter(filter)}
+                      className={`status-chip rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] transition-all ${
+                        assetFilter === filter ? 'border-primary/40 bg-primary/10 text-primary' : ''
+                      }`}
+                      style={{
+                        borderColor: assetFilter === filter ? undefined : 'rgba(255,255,255,0.06)',
+                        color: assetFilter === filter ? undefined : 'var(--color-on-surface-variant)',
+                      }}
+                    >
+                      {filter.toUpperCase()}
+                    </button>
+                  ))}
                 </div>
-              </section>
 
-              <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/40 p-4 shadow-xl backdrop-blur-md">
-                <h3 className="text-sm uppercase tracking-[0.14em] text-zinc-300">Selected Snapshot Notes</h3>
-                <div className="mt-2 text-xs text-zinc-200">{selectedSnapshot?.notes || 'No notes'}</div>
-              </section>
-            </aside>
-          </section>
+                {/* Asset grid 2-col */}
+                {loadingAssets ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+                  </div>
+                ) : filteredAssets.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <ImageIcon size={24} className="mb-2 opacity-20" style={{ color: 'var(--color-on-surface-variant)' }} />
+                    <p className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      No assets imported yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {filteredAssets.map((asset) => {
+                      const badge = assetTypeBadge(asset.source_type, asset.content_type)
+                      const thumbSrc = asset.source_url || ''
+                      return (
+                        <div
+                          key={asset.asset_id}
+                          className="glass-panel flex flex-col items-center rounded-lg p-2 transition-all hover:scale-[1.02]"
+                          style={{ background: 'rgba(14,14,14,0.5)' }}
+                        >
+                          {/* Preview area */}
+                          <div
+                            className="flex h-[80px] w-full items-center justify-center rounded-md"
+                            style={{ background: 'var(--color-surface-container-lowest)' }}
+                          >
+                            {thumbSrc ? (
+                              <img
+                                src={thumbSrc}
+                                alt=""
+                                className="h-full w-full rounded-md object-cover opacity-70"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                              />
+                            ) : (
+                              <span style={{ color: 'var(--color-on-surface-variant)', opacity: 0.3 }}>
+                                {assetTypeIcon(asset.source_type)}
+                              </span>
+                            )}
+                          </div>
+                          {/* Filename */}
+                          <p
+                            className="mt-1.5 w-full truncate text-[9px] font-mono"
+                            style={{ color: 'var(--color-on-surface)' }}
+                          >
+                            {asset.filename || asset.title || asset.asset_id}
+                          </p>
+                          {/* Badge */}
+                          <span
+                            className={`status-chip mt-0.5 rounded px-1.5 py-0.5 text-[7px] font-bold ${badge.className}`}
+                          >
+                            {badge.label}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Bottom import button */}
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(true)}
+                  className="glass-panel flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01]"
+                  style={{ color: 'var(--color-on-surface-variant)', background: 'rgba(20,20,20,0.5)' }}
+                >
+                  <Plus size={12} />
+                  IMPORT ASSET
+                </button>
+              </div>
+            ) : (
+              <div className="glass-panel flex flex-col items-center justify-center rounded-xl py-16 text-center">
+                <Archive size={28} className="mb-3 opacity-20" style={{ color: 'var(--color-on-surface-variant)' }} />
+                <p className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  Select a film to view its asset bin.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+
+        {/* ── ARCHIVE CONFIRM MODAL ────────────────────────────────────── */}
+        {showArchiveConfirm && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            onClick={() => setShowArchiveConfirm(null)}
+          >
+            <div className="glass-panel w-[360px] rounded-xl p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-2 flex items-center gap-2">
+                <AlertCircle size={20} style={{ color: 'var(--color-error)' }} />
+                <h3 className="text-lg font-bold" style={{ color: 'var(--color-on-surface)' }}>
+                  Archive Film
+                </h3>
+              </div>
+              <p className="mb-4 text-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                Are you sure you want to archive "{showArchiveConfirm.project.title}"? This will remove it from your active projects. This cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowArchiveConfirm(null)}
+                  className="glass-panel flex-1 rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01]"
+                  style={{ color: 'var(--color-on-surface-variant)' }}
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleArchive(showArchiveConfirm)}
+                  disabled={archiving === showArchiveConfirm.project.project_id}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50"
+                  style={{
+                    background: 'rgba(244,63,94,0.15)',
+                    color: 'var(--color-error)',
+                    border: '1px solid rgba(244,63,94,0.3)',
+                  }}
+                >
+                  {archiving === showArchiveConfirm.project.project_id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  ARCHIVE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── IMPORT ASSET MODAL (stub) ─────────────────────────────────── */}
+        {showImportModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            onClick={() => setShowImportModal(false)}
+          >
+            <div className="glass-panel w-[380px] rounded-xl p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
+                  IMPORT ASSET
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="rounded p-1 transition-all hover:bg-white/10"
+                  style={{ color: 'var(--color-on-surface-variant)' }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                Asset import uses the existing <code className="font-mono text-[10px] text-cyan-300">uploadVideoAsset</code> flow in other rooms. This panel is ready for wire-up.
+              </p>
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="glass-panel flex-1 rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01]"
+                  style={{ color: 'var(--color-on-surface-variant)' }}
+                >
+                  CLOSE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </ProjectGuard>
     </StudioShell>
+    </>
   )
 }

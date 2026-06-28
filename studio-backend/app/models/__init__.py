@@ -108,6 +108,7 @@ class StoryboardShot(BaseModel):
     scene: str
     description: str
     status: str = "pending"
+    storyboard_image: str | None = None
 
 
 class RenderJob(BaseModel):
@@ -143,6 +144,7 @@ class StudyReference(BaseModel):
     rights_status: str = "analysis_only"
     allowed_use: str = "study_only"
     study_focus: str = ""
+    notes: str = ""
     source_stats: dict = {}
     extraction_status: str = "pending"
     study_cards: list[dict] = []
@@ -734,6 +736,7 @@ class ProviderStatus(BaseModel):
     is_mock: bool = False
     enabled: bool = False
     ready_for_hosted_generation: bool = False
+    api_key_configured: bool = False
     provider_mode: str = "unavailable"
     missing_requirements: list[str] = []
     display_label: str = ""

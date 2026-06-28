@@ -44,6 +44,8 @@ from app.services.director_memory_service import (
     director_memory_service,
     ENTRY_KINDS as DIRECTOR_MEMORY_KINDS,
 )
+from app.services.shot_rationale_service import shot_rationale_service
+from app.services.universe_graph_service import universe_graph_service
 from app.services.stability import (
     PlaybackError,
     PersistenceError,
@@ -461,19 +463,13 @@ def delete_project(project_id: str):
     # Delete from project_store (in-memory)
     project_store.delete_project(project_id)
     
-    # Delete from canonical storage (SQLite)
+    # Delete from canonical storage (SQLite) with full cascade
     storage = get_storage("sqlite")
     if storage:
         try:
-            # Delete related data
-            storage.delete_cinematic_memory_records_for_project(project_id)
-            storage.delete_continuity_issues_for_project(project_id)
-            storage.delete_style_drift_issues_for_project(project_id)
-            
-            # Delete the project itself
-            deleted = storage.delete_project(project_id)
+            deleted = storage.cascade_delete_project(project_id)
             if not deleted:
-                logger.warning("PROJECT_DELETE | project=%s | storage_delete=false", project_id)
+                logger.warning("PROJECT_DELETE | project=%s | cascade_delete=false", project_id)
         except Exception as exc:
             logger.error("PROJECT_DELETE_ERROR | project=%s | error=%s", project_id, exc)
             raise HTTPException(status_code=500, detail=f"Failed to delete project: {exc}")
@@ -481,6 +477,76 @@ def delete_project(project_id: str):
     logger.info("PROJECT_DELETED | project=%s | elapsed=%dms", project_id, elapsed_ms(timer))
     
     return {"success": True, "project_id": project_id}
+
+
+@router.post("/admin/migrate-characters")
+def migrate_characters():
+    """Re-run character extraction against all existing scene content.
+    Removes characters that fail the fixed validation (COASTAL RENEWAL PROJECT,
+    OWNER, REPRESENTATIVE, THE LAST TIDE, etc.) while keeping valid names
+    (MARA, ELI, CHILD) that have genuine dialogue cues."""
+    storage = get_storage("sqlite")
+    if not storage:
+        raise HTTPException(status_code=503, detail="Storage not available")
+    
+    parser = ScriptParser()
+    results = {"projects_checked": 0, "characters_removed": 0, "characters_kept": 0}
+    
+    project_ids = storage.list_project_ids()
+    for pid in project_ids:
+        project = project_store.get_project(pid)
+        if project is None:
+            try:
+                persisted = storage.get_project(pid)
+                if persisted and hasattr(persisted, "model_dump"):
+                    project = persisted.model_dump(mode="json")
+                elif isinstance(persisted, dict):
+                    project = persisted
+            except Exception:
+                continue
+        if not isinstance(project, dict):
+            continue
+        
+        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+        scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+        if not scenes:
+            continue
+        
+        results["projects_checked"] += 1
+        changed = False
+        
+        for scene in scenes:
+            if not isinstance(scene, dict):
+                continue
+            scene_text = scene.get("text") or ""
+            if not scene_text.strip():
+                continue
+            
+            old_chars = scene.get("characters") if isinstance(scene.get("characters"), list) else []
+            if not old_chars:
+                continue
+            
+            valid_chars = parser._extract_simple_scene_characters(scene_text)
+            valid_set = set(c.upper() for c in valid_chars)
+            
+            removed = [c for c in old_chars if c.upper() not in valid_set]
+            kept = [c for c in old_chars if c.upper() in valid_set]
+            
+            if removed:
+                scene["characters"] = kept
+                changed = True
+                results["characters_removed"] += len(removed)
+                results["characters_kept"] += len(kept)
+        
+        if changed:
+            project_store.update_project(pid, {"execution_summary": summary})
+    
+    return {
+        "success": True,
+        "projects_checked": results["projects_checked"],
+        "characters_removed": results["characters_removed"],
+        "characters_kept": results["characters_kept"],
+    }
 
 
 @router.post("/projects/{project_id}/generate-scenes")
@@ -540,6 +606,12 @@ def generate_scenes(project_id: str, payload: GenerateScenesPayload):
     )
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        universe_graph_service.auto_populate_from_scenes(project_id)
+    except Exception as exc:
+        logger.warning("Universe auto-populate after scene generation failed: %s", exc)
+
     return updated
 
 
@@ -846,6 +918,14 @@ def save_director_memory_entry(project_id: str, kind: str, payload: Dict[str, An
         stage=f"save_director_memory_{kind}",
         duration_ms=elapsed_ms(timer),
     )
+    # Sync to SQLite to keep both stores consistent
+    try:
+        project = storage.get_project(project_id)
+        if project:
+            from app.routes import _sync_to_project_store
+            _sync_to_project_store(project)
+    except Exception:
+        pass
     return {"success": True, "entry": entry}
 
 
@@ -870,6 +950,14 @@ def update_director_memory_entry(
         stage=f"update_director_memory_{kind}",
         duration_ms=elapsed_ms(timer),
     )
+    # Sync to SQLite to keep both stores consistent
+    try:
+        project = storage.get_project(project_id)
+        if project:
+            from app.routes import _sync_to_project_store
+            _sync_to_project_store(project)
+    except Exception:
+        pass
     return {"success": True, "entry": entry}
 
 
@@ -889,6 +977,14 @@ def delete_director_memory_entry(project_id: str, kind: str, entry_id: str):
         stage=f"delete_director_memory_{kind}",
         duration_ms=elapsed_ms(timer),
     )
+    # Sync to SQLite to keep both stores consistent
+    try:
+        project = storage.get_project(project_id)
+        if project:
+            from app.routes import _sync_to_project_store
+            _sync_to_project_store(project)
+    except Exception:
+        pass
     return {"success": True, "entry_id": entry_id}
 
 
@@ -1012,8 +1108,20 @@ def list_project_scenes(project_id: str):
     
     summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
     scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+    script_text = current.get("script_text") or ""
     
-    return {"scenes": scenes}
+    enriched = []
+    for s in scenes:
+        if not isinstance(s, dict):
+            continue
+        scene = dict(s)
+        if not scene.get("text"):
+            heading = scene.get("heading") or ""
+            description = scene.get("description") or scene.get("script") or ""
+            scene["text"] = (heading + "\n" + description) if description else heading
+        enriched.append(scene)
+    
+    return {"scenes": enriched}
 
 
 @router.post("/projects/{project_id}/scenes")
@@ -1075,6 +1183,12 @@ def create_scene(project_id: str, payload: CreateScenePayload):
         raise HTTPException(status_code=404, detail="Project not found")
     
     _sync_project_to_canonical_store(updated)
+
+    try:
+        universe_graph_service.auto_populate_from_scenes(project_id)
+    except Exception as exc:
+        logger.warning("Universe auto-populate after scene creation failed: %s", exc)
+
     return {"scene": new_scene, "project": updated}
 
 
@@ -1095,8 +1209,68 @@ def get_scene(project_id: str, scene_id: str):
     normalized_scene = dict(scene)
     if not normalized_scene.get("description") and normalized_scene.get("text"):
         normalized_scene["description"] = normalized_scene.get("text")
+    if not normalized_scene.get("text"):
+        heading = normalized_scene.get("heading") or ""
+        description = normalized_scene.get("description") or ""
+        normalized_scene["text"] = (heading + "\n" + description) if description else heading
 
     return {"scene": normalized_scene}
+
+
+@router.get("/projects/{project_id}/scenes/{scene_id}/rationale")
+def get_scene_rationale(project_id: str, scene_id: str):
+    """Return a one-sentence 'Why this shot matters' rationale.
+
+    Composes existing signals — scene data, continuity context,
+    scene intelligence intent — without new API calls or LLM use.
+    """
+    current = _load_project_from_store(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
+    scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+    film_cut = current.get("film_cut") if isinstance(current.get("film_cut"), dict) else {}
+    scene_order = film_cut.get("scene_order") or []
+
+    scene = next((s for s in scenes if isinstance(s, dict) and s.get("scene_id") == scene_id), None)
+    if scene is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    scene_position = None
+    total_scenes = len(scene_order) if scene_order else len(scenes)
+    if scene_order:
+        try:
+            scene_position = scene_order.index(scene_id) + 1
+        except ValueError:
+            pass
+
+    try:
+        continuity_context = continuity_intelligence_service.build_prompt_context(
+            scene_id=scene_id, film_id=project_id,
+        )
+    except Exception:
+        continuity_context = None
+
+    try:
+        from app.services.scene_intelligence_store import scene_intelligence_store
+        scene_intent = scene_intelligence_store.get_record(scene_id)
+    except Exception:
+        scene_intent = None
+
+    result = shot_rationale_service.get_rationale(
+        project_id=project_id,
+        scene_id=scene_id,
+        scene_data=scene,
+        continuity_context=continuity_context,
+        scene_intent=scene_intent,
+        scene_position=scene_position,
+        total_scenes=total_scenes,
+    )
+
+    result["scene_position"] = scene_position
+    result["total_scenes"] = total_scenes
+    return result
 
 
 @router.put("/projects/{project_id}/scenes/{scene_id}")
@@ -1130,6 +1304,12 @@ def update_scene(project_id: str, scene_id: str, payload: UpdateScenePayload):
         raise HTTPException(status_code=404, detail="Project not found")
     
     _sync_project_to_canonical_store(updated)
+
+    try:
+        universe_graph_service.auto_populate_from_scenes(project_id)
+    except Exception as exc:
+        logger.warning("Universe auto-populate after scene update failed: %s", exc)
+
     return {"scene": scene, "project": updated}
 
 
@@ -1170,6 +1350,12 @@ def delete_scene(project_id: str, scene_id: str):
         raise HTTPException(status_code=404, detail="Project not found")
     
     _sync_project_to_canonical_store(updated)
+
+    try:
+        universe_graph_service.auto_populate_from_scenes(project_id)
+    except Exception as exc:
+        logger.warning("Universe auto-populate after scene delete failed: %s", exc)
+
     return {"message": "Scene deleted", "scene_id": scene_id}
 
 
@@ -2149,6 +2335,47 @@ def update_final_short_film_package_status(package_id: str, payload: UpdatePacka
 def seed_demo_project(payload: SeedDemoProjectPayload = SeedDemoProjectPayload()):
     """Dev-only deterministic studio project seed for product demos."""
     return demo_seed_service.seed_demo_project(project_id=payload.project_id)
+
+
+# ── Character Descriptions ────────────────────────────────────────────────────
+
+@router.get("/projects/{project_id}/characters")
+def list_characters(project_id: str):
+    """List all character descriptions for a project."""
+    storage = get_storage("sqlite")
+    try:
+        storage.seed_demo_characters(project_id)
+    except Exception:
+        pass
+    characters = storage.get_characters(project_id)
+    return {"characters": characters}
+
+
+@router.put("/projects/{project_id}/characters/{character_id}")
+def update_character(project_id: str, character_id: str, payload: dict):
+    """Update a single character description."""
+    storage = get_storage("sqlite")
+    existing = storage.get_character(character_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Character not found")
+    name = payload.get("name") or existing["name"]
+    updated = storage.save_character(project_id, name, payload)
+    return {"character": updated}
+
+
+class CharacterSkeletonPayload(BaseModel):
+    name: str
+
+
+@router.post("/projects/{project_id}/characters")
+def create_character_skeleton(project_id: str, payload: CharacterSkeletonPayload):
+    """Create a skeleton character record (name only) for a detected character."""
+    storage = get_storage("sqlite")
+    existing = storage.get_character_by_name(project_id, payload.name)
+    if existing:
+        return {"character": existing}
+    created = storage.save_character(project_id, payload.name, {"name": payload.name})
+    return {"character": created}
 
 
 # ── Provider status + per-scene override ─────────────────────────────────────

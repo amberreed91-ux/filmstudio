@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from queue import Queue
 import threading
 import time
+from uuid import uuid4
 
 from app.models import StudioProject, StudioOverview, BuildInfo, RenderJobModel
 
@@ -51,6 +52,12 @@ class StorageInterface:
         raise NotImplementedError
 
     def delete_universe_relationship(self, relationship_id: str) -> bool:
+        raise NotImplementedError
+
+    def delete_universe_project_data(self, project_id: str) -> bool:
+        raise NotImplementedError
+
+    def list_universe_project_ids(self) -> List[str]:
         raise NotImplementedError
 
 
@@ -881,6 +888,62 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_universe_rels_from ON universe_relationships(from_node);
                 CREATE INDEX IF NOT EXISTS idx_universe_rels_to ON universe_relationships(to_node);
             """),
+            (19, "Add study_memories table for persisted Study room Active Memory", """
+                CREATE TABLE IF NOT EXISTS study_memories (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    source_reference TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (project_id != ''),
+                    CHECK (category IN ('learned_style', 'tone_rules', 'pacing'))
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_study_memories_project ON study_memories(project_id);
+                CREATE INDEX IF NOT EXISTS idx_study_memories_category ON study_memories(project_id, category);
+            """),
+            (20, "Add characters table for persistent character descriptions", """
+                CREATE TABLE IF NOT EXISTS characters (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    age TEXT,
+                    look TEXT,
+                    energy TEXT,
+                    core_wound TEXT,
+                    core_desire TEXT,
+                    relationship_notes TEXT,
+                    visual_prompt_summary TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (project_id != ''),
+                    CHECK (name != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
+                CREATE INDEX IF NOT EXISTS idx_characters_project_name ON characters(project_id, name);
+            """),
+            (21, "Add scene_compositions table for composed scene videos", """
+                CREATE TABLE IF NOT EXISTS scene_compositions (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL,
+                    composed_url TEXT NOT NULL,
+                    shot_count INTEGER NOT NULL DEFAULT 0,
+                    duration_seconds REAL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (project_id != ''),
+                    CHECK (scene_id != ''),
+                    CHECK (composed_url != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_scene_compositions_project ON scene_compositions(project_id);
+                CREATE INDEX IF NOT EXISTS idx_scene_compositions_scene ON scene_compositions(scene_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_scene_compositions_project_scene ON scene_compositions(project_id, scene_id);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -974,16 +1037,28 @@ class DatabaseStorage:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT project_id, data FROM projects ORDER BY updated_at DESC")
-            return {row["project_id"]: StudioProject(**json.loads(row["data"])) for row in cursor.fetchall()}
+            out: dict[str, StudioProject] = {}
+            for row in cursor.fetchall():
+                raw = row["data"]
+                if not raw:
+                    continue
+                try:
+                    out[row["project_id"]] = StudioProject(**json.loads(raw))
+                except Exception:
+                    continue
+            return out
 
     def get_project(self, project_id: str) -> Optional[StudioProject]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT data FROM projects WHERE project_id = ?", (project_id,))
             row = cursor.fetchone()
-            if row:
+            if not row or not row["data"]:
+                return None
+            try:
                 return StudioProject(**json.loads(row["data"]))
-            return None
+            except Exception:
+                return None
 
     def save_project(self, project: StudioProject) -> StudioProject:
         project.updated_at = datetime.now().isoformat()
@@ -1017,6 +1092,53 @@ class DatabaseStorage:
 
         self._execute_write_with_retry("save_project", _write)
         return project
+
+    def cascade_delete_project(self, project_id: str) -> bool:
+        """Delete a project and ALL child records in correct order.
+        Wraps the entire delete in a transaction for atomicity."""
+        child_tables = [
+            "surfaced_disagreements",
+            "previs_images",
+            "pitch_decks",
+            "export_packages",
+            "session_debriefs",
+            "video_frame_analyses",
+            "video_keyframes",
+            "workflow_executions",
+            "final_short_film_packages",
+            "clip_revisions",
+            "short_film_reviews",
+            "style_drift_issues",
+            "director_signatures",
+            "style_signatures",
+            "continuity_issues",
+            "cinematic_memory_records",
+            "visual_embeddings",
+            "crew_task_log",
+            "crew_tasks",
+            "review_memories",
+            "style_memories",
+            "character_memories",
+            "scene_memories",
+            "memory_versions",
+            "project_memories",
+            "universe_relationships",
+            "universe_nodes",
+            "study_memories",
+            "scene_compositions",
+            "render_jobs",
+        ]
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("BEGIN")
+                for table in child_tables:
+                    cursor.execute(f"DELETE FROM {table} WHERE project_id = ?", (project_id,))
+                cursor.execute("DELETE FROM projects WHERE project_id = ?", (project_id,))
+                conn.commit()
+                return True
+        except Exception:
+            return False
 
     def delete_project(self, project_id: str) -> bool:
         with self._get_connection() as conn:
@@ -1112,6 +1234,23 @@ class DatabaseStorage:
         self._execute_write_with_retry("delete_universe_relationship", _write)
         return True
 
+    def delete_universe_project_data(self, project_id: str) -> bool:
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM universe_relationships WHERE project_id = ?", (project_id,))
+                cursor.execute("DELETE FROM universe_nodes WHERE project_id = ?", (project_id,))
+                conn.commit()
+
+        self._execute_write_with_retry("delete_universe_project_data", _write)
+        return True
+
+    def list_universe_project_ids(self) -> List[str]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT project_id FROM universe_nodes")
+            return [row["project_id"] for row in cursor.fetchall()]
+
     # Render Job Persistence
     def save_job(self, job: RenderJobModel) -> RenderJobModel:
         with self._get_connection() as conn:
@@ -1193,6 +1332,48 @@ class DatabaseStorage:
             updated_at=row["updated_at"],
             completed_at=row["completed_at"]
         )
+
+    # Scene Composition Persistence
+    def save_scene_composition(self, project_id: str, scene_id: str, composed_url: str, shot_count: int, duration_seconds: float | None = None) -> dict:
+        from datetime import datetime
+        now = datetime.now().isoformat()
+        comp_id = f"{project_id}_{scene_id}_composed"
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT OR REPLACE INTO scene_compositions
+                   (id, project_id, scene_id, composed_url, shot_count, duration_seconds, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?,
+                           COALESCE((SELECT created_at FROM scene_compositions WHERE id = ?), ?),
+                           ?)""",
+                (comp_id, project_id, scene_id, composed_url, shot_count, duration_seconds,
+                 comp_id, now, now)
+            )
+            conn.commit()
+        return {
+            "id": comp_id,
+            "project_id": project_id,
+            "scene_id": scene_id,
+            "composed_url": composed_url,
+            "shot_count": shot_count,
+            "duration_seconds": duration_seconds,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    def get_scene_composition(self, project_id: str, scene_id: str) -> dict | None:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT * FROM scene_compositions
+                   WHERE project_id = ? AND scene_id = ?
+                   ORDER BY updated_at DESC LIMIT 1""",
+                (project_id, scene_id)
+            )
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
 
     # Session management
     def create_session(self, session_id: str, user_id: str, ttl_seconds: int = 86400) -> bool:
@@ -3811,6 +3992,270 @@ class DatabaseStorage:
             
             conn.commit()
             return cursor.rowcount > 0
+
+    # ========================================================================
+    # STUDY MEMORIES (Active Memory persistence)
+    # ========================================================================
+
+    def save_study_memory(
+        self,
+        project_id: str,
+        category: str,
+        content: str,
+        source_reference: str | None = None,
+    ) -> dict:
+        """Upsert a study memory entry. On duplicate (same project + category + content),
+        update the existing row rather than inserting a new one."""
+        now = datetime.now().isoformat()
+        memory_id = f"sm_{uuid4().hex[:12]}"
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                # Check for existing entry with same project + category + content
+                cursor.execute(
+                    """SELECT id FROM study_memories
+                       WHERE project_id = ? AND category = ? AND content = ?""",
+                    (project_id, category, content),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    cursor.execute(
+                        """UPDATE study_memories
+                           SET updated_at = ?, source_reference = COALESCE(?, source_reference)
+                           WHERE id = ?""",
+                        (now, source_reference, existing["id"]),
+                    )
+                    conn.commit()
+                    return {
+                        "id": existing["id"],
+                        "project_id": project_id,
+                        "category": category,
+                        "content": content,
+                        "source_reference": source_reference,
+                        "created_at": None,
+                        "updated_at": now,
+                    }
+                cursor.execute(
+                    """INSERT INTO study_memories (id, project_id, category, content, source_reference, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (memory_id, project_id, category, content, source_reference, now, now),
+                )
+                conn.commit()
+                return {
+                    "id": memory_id,
+                    "project_id": project_id,
+                    "category": category,
+                    "content": content,
+                    "source_reference": source_reference,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+
+        return self._execute_write_with_retry("save_study_memory", _write)
+
+    def get_study_memories(self, project_id: str) -> list[dict]:
+        """Get all study memories for a project, ordered by category."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT id, project_id, category, content, source_reference, created_at, updated_at
+                   FROM study_memories
+                   WHERE project_id = ?
+                   ORDER BY category, created_at ASC""",
+                (project_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_study_memories_by_category(self, project_id: str, category: str) -> list[dict]:
+        """Get study memories for a project filtered by category."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT id, project_id, category, content, source_reference, created_at, updated_at
+                   FROM study_memories
+                   WHERE project_id = ? AND category = ?
+                   ORDER BY created_at ASC""",
+                (project_id, category),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def delete_study_memory(self, memory_id: str) -> bool:
+        """Delete a single study memory entry."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM study_memories WHERE id = ?", (memory_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_study_memories_for_project(self, project_id: str) -> int:
+        """Delete all study memories for a project. Returns count deleted."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM study_memories WHERE project_id = ?", (project_id,))
+            conn.commit()
+            return cursor.rowcount
+
+
+    # ------------------------------------------------------------------
+    # Character Descriptions
+    # ------------------------------------------------------------------
+
+    def save_character(self, project_id: str, name: str, data: dict) -> dict:
+        """Upsert a character record. Matches on (project_id, name)."""
+        now = datetime.now().isoformat()
+        _new_id = data.get("id") or f"chr_{uuid4().hex[:12]}"
+
+        def _write():
+            nonlocal _new_id
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """SELECT id FROM characters WHERE project_id = ? AND name = ?""",
+                    (project_id, name),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    char_id = existing["id"]
+                    cursor.execute(
+                        """UPDATE characters SET age=?, look=?, energy=?, core_wound=?,
+                           core_desire=?, relationship_notes=?, visual_prompt_summary=?, updated_at=?
+                           WHERE id=?""",
+                        (
+                            data.get("age"),
+                            data.get("look"),
+                            data.get("energy"),
+                            data.get("core_wound"),
+                            data.get("core_desire"),
+                            data.get("relationship_notes"),
+                            data.get("visual_prompt_summary"),
+                            now,
+                            char_id,
+                        ),
+                    )
+                else:
+                    char_id = _new_id
+                    cursor.execute(
+                        """INSERT INTO characters (id, project_id, name, age, look, energy,
+                           core_wound, core_desire, relationship_notes, visual_prompt_summary, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            char_id,
+                            project_id,
+                            name,
+                            data.get("age"),
+                            data.get("look"),
+                            data.get("energy"),
+                            data.get("core_wound"),
+                            data.get("core_desire"),
+                            data.get("relationship_notes"),
+                            data.get("visual_prompt_summary"),
+                            now,
+                            now,
+                        ),
+                    )
+                conn.commit()
+                cursor.execute("SELECT * FROM characters WHERE id = ?", (char_id,))
+                return dict(cursor.fetchone())
+
+        return self._execute_write_with_retry("save_character", _write)
+
+    def get_characters(self, project_id: str) -> list[dict]:
+        """Get all character records for a project."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT * FROM characters WHERE project_id = ? ORDER BY name ASC""",
+                (project_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_character(self, character_id: str) -> dict | None:
+        """Get a single character by ID."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""SELECT * FROM characters WHERE id = ?""", (character_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_character_by_name(self, project_id: str, name: str) -> dict | None:
+        """Get a character by project_id and name."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT * FROM characters WHERE project_id = ? AND name = ?""",
+                (project_id, name),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def delete_character(self, character_id: str) -> bool:
+        """Delete a character record."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM characters WHERE id = ?", (character_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def seed_demo_characters(self, project_id: str) -> int:
+        """Seed character descriptions for the demo project. Idempotent."""
+        existing = self.get_characters(project_id)
+        if existing:
+            return 0
+
+        characters = [
+            {
+                "name": "MARA",
+                "age": "32",
+                "look": "Dark hair usually tied back. Tired eyes that still notice everything. Weathered hands. Practical clothing: old jackets, worn boots, faded sweaters. Nothing flashy. Carries herself like someone who learned early that life does not wait.",
+                "energy": "Quiet intensity. Listens more than she talks. Sarcastic edge when uncomfortable, deep tenderness underneath.",
+                "core_wound": "Her father disappeared and left behind a question instead of an answer.",
+                "core_desire": "",
+                "relationship_notes": "",
+                "visual_prompt_summary": "32-year-old woman, dark hair tied back, tired knowing eyes, weathered hands, worn practical clothing, old jacket and boots, quiet intensity, coastal working class aesthetic",
+            },
+            {
+                "name": "ELI",
+                "age": "67",
+                "look": "Lifelong fisherman. Gray beard. Sun-damaged skin. Heavy work jacket. Old boots. Looks like he belongs in an old photograph.",
+                "energy": "Ancient calm. Has accepted nature does not owe humans anything. Wise but still gets angry, tired, worried.",
+                "core_wound": "",
+                "core_desire": "",
+                "relationship_notes": "",
+                "visual_prompt_summary": "67-year-old fisherman, gray beard, sun-weathered skin, heavy work jacket, old worn boots, ancient calm presence, looks like an old photograph",
+            },
+            {
+                "name": "CHILD",
+                "age": "7",
+                "look": "Messy hair. Always barefoot or wearing worn shoes. Curious eyes.",
+                "energy": "Pure hope. Sees beginnings where Mara sees endings.",
+                "core_wound": "",
+                "core_desire": "",
+                "relationship_notes": "",
+                "visual_prompt_summary": "7-year-old child, messy hair, barefoot or worn shoes, wide curious eyes, embodies hope and wonder",
+            },
+            {
+                "name": "REPRESENTATIVE",
+                "age": "41",
+                "look": "Clean, professional, composed. Neutral clothing. Looks like she belongs in a boardroom. Slightly uncomfortable outside her environment.",
+                "energy": "Controlled empathy. Not a villain. Genuinely believes she is helping. That makes her complicated.",
+                "core_wound": "",
+                "core_desire": "",
+                "relationship_notes": "",
+                "visual_prompt_summary": "41-year-old woman, professional composed appearance, neutral business clothing, controlled expression, slightly out of place in coastal setting",
+            },
+        ]
+
+        count = 0
+        for char_data in characters:
+            self.save_character(project_id, char_data["name"], char_data)
+            count += 1
+        return count
+
+    def detect_unknown_characters(self, project_id: str, scene_characters: list[str]) -> list[str]:
+        """Given a list of character names from scenes, return those not yet in the DB."""
+        known = {c["name"].upper() for c in self.get_characters(project_id)}
+        return [c for c in scene_characters if c.upper() not in known]
 
 
 class JsonFileStorage:

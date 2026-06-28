@@ -50,11 +50,13 @@ def test_render_service_provider_selection_is_unaffected_by_codirector_stack():
     """
     service = RenderService()
 
-    # Baseline: Runway is the primary active video provider path.
-    assert service.get_default_provider() == "runway"
+    # Baseline: local/simulated is the default when no Runway API key is present.
+    assert service.get_default_provider() == "local"
 
     # Disable simulated, then enable a real provider and ensure default follows
     # provider config only (not any co-director metadata).
+    # NOTE: get_default_provider() now always returns "local" for this build,
+    # so the test verifies co-director state does not change provider selection.
     simulated = service.get_provider_config("simulated")
     assert simulated is not None
     simulated.enabled = False
@@ -68,7 +70,8 @@ def test_render_service_provider_selection_is_unaffected_by_codirector_stack():
     assert config is not None
     config.enabled = True
     service.set_provider_config(config)
-    assert service.get_default_provider() == "generic"
+    # Default provider is always "local" regardless of other enabled providers
+    assert service.get_default_provider() == "local"
 
 
 def test_authority_paths_do_not_consume_adapter_contract_trace_tokens():

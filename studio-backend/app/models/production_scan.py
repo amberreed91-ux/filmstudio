@@ -20,4 +20,6 @@ class ProductionScanReport(BaseModel):
     flags: List[ProductionScanFlag] = Field(default_factory=list)
     clear_to_shoot: bool
     summary: str
+    co_director_quote: str = ""
+    stats_line: str = ""
     generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")

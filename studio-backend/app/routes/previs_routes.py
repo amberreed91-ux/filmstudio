@@ -1,12 +1,13 @@
 """
 Previs Image Generation Routes
 
-Endpoints for generating preview images for scenes using Runway Gen-3.
+Endpoints for generating preview images for scenes using Runway Gen-3,
+plus AI-enhanced Previs Bay features wired to The Study context.
 """
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import logging
 import shutil
 import os
@@ -240,3 +241,187 @@ async def generate_all_previs(project_id: str) -> dict:
         "total_scenes": len(scenes),
         "jobs": jobs
     }
+
+
+# ===========================================================================
+# AI-Enhanced Previs Bay Endpoints (wired to The Study context)
+# ===========================================================================
+
+class EnhancePromptRequest(BaseModel):
+    scene_id: str
+    prompt_text: str
+
+
+class EnhancePromptResponse(BaseModel):
+    enhanced_prompt: str
+    original_prompt: str
+    study_memories_used: int
+
+
+class DirectorNoteRequest(BaseModel):
+    scene_id: str
+    generation_context: Optional[str] = None
+
+
+class DirectorNoteResponse(BaseModel):
+    notes: str
+    study_memories_used: int
+
+
+class ShotCountRequest(BaseModel):
+    scene_id: str
+
+
+class ShotCountResponse(BaseModel):
+    scene_id: str
+    recommended_shot_count: int
+    reasoning: str
+    study_memories_used: int
+
+
+def _get_llm():
+    from app.llm_client import call_llm
+    return call_llm
+
+
+@router.post("/projects/{project_id}/previs/enhance-prompt")
+async def enhance_prompt(
+    project_id: str,
+    body: EnhancePromptRequest,
+) -> EnhancePromptResponse:
+    """
+    AI-enhance a render prompt using The Study's Active Memory + scene context.
+
+    Fetches categorized Director's Memory (STYLE, TONE, PACING) and the full
+    scene script, then calls the LLM to produce an enriched render prompt.
+    """
+    from app.services.study_context import build_study_context_block, fetch_active_memories
+
+    context_block = build_study_context_block(project_id, body.scene_id)
+    memories = fetch_active_memories(project_id)
+    mem_count = memories.get("raw_count", 0)
+
+    system_prompt = (
+        "You are a cinematographer's assistant. Your job is to enhance a text-to-video "
+        "prompt by weaving in scene context and the director's established creative memory.\n\n"
+        f"{context_block}\n\n"
+        "Rules:\n"
+        "- Preserve original intent; enrich, do not replace\n"
+        "- Use cinematic language — mood, lighting, camera movement, composition\n"
+        "- Keep the enhanced prompt under 400 characters\n"
+        "- Output ONLY the enhanced prompt — no explanation, no labels"
+    )
+
+    user_message = f"Original prompt: {body.prompt_text}"
+
+    try:
+        call_llm = _get_llm()
+        reply = await call_llm(system_prompt, user_message, max_tokens=512)
+        enhanced = reply.strip().strip('"').strip("'")
+    except Exception as exc:
+        logger.error("ENHANCE_PROMPT_FAILED | project=%s | %s", project_id, exc)
+        enhanced = body.prompt_text
+
+    return EnhancePromptResponse(
+        enhanced_prompt=enhanced or body.prompt_text,
+        original_prompt=body.prompt_text,
+        study_memories_used=mem_count,
+    )
+
+
+@router.post("/projects/{project_id}/previs/director-notes")
+async def previs_director_notes(
+    project_id: str,
+    body: DirectorNoteRequest,
+) -> DirectorNoteResponse:
+    """
+    Generate AI Director Notes for a Previs Bay generation using The Study context.
+
+    Injects Active Memory + full scene text so the co-director voice is contextual.
+    """
+    from app.services.study_context import build_study_context_block, fetch_active_memories
+
+    context_block = build_study_context_block(project_id, body.scene_id)
+    memories = fetch_active_memories(project_id)
+    mem_count = memories.get("raw_count", 0)
+
+    system_prompt = (
+        "You are the A24 Co-Director watching a previs generation. "
+        "Speak in cinematic language. Be specific and actionable.\n\n"
+        f"{context_block}\n\n"
+        "Rules:\n"
+        "- No scores or percentages\n"
+        "- No generic praise\n"
+        "- Reference the scene content and the director's creative memory\n"
+        "- One paragraph, 2-4 sentences\n"
+        "- Advisory only — never override the creator's authority"
+    )
+
+    gen_context = body.generation_context or "A new previs render has been generated."
+    user_message = f"The previs generation is complete.\n\n{gen_context}"
+
+    try:
+        call_llm = _get_llm()
+        reply = await call_llm(system_prompt, user_message, max_tokens=512)
+        notes = reply.strip()
+    except Exception as exc:
+        logger.error("DIRECTOR_NOTES_FAILED | project=%s | %s", project_id, exc)
+        notes = "The generation is complete. Review the result and continue."
+
+    return DirectorNoteResponse(
+        notes=notes,
+        study_memories_used=mem_count,
+    )
+
+
+@router.post("/projects/{project_id}/previs/shot-count")
+async def recommend_shot_count(
+    project_id: str,
+    body: ShotCountRequest,
+) -> ShotCountResponse:
+    """
+    Recommend a shot count for a scene using The Study context.
+
+    Fetches Active Memory + full scene text, then calls the LLM to recommend
+    a shot count (1-10) with cinematic reasoning.
+    """
+    from app.services.study_context import build_study_context_block, fetch_active_memories
+
+    context_block = build_study_context_block(project_id, body.scene_id)
+    memories = fetch_active_memories(project_id)
+    mem_count = memories.get("raw_count", 0)
+
+    system_prompt = (
+        "You are a shot breakdown specialist. Recommend how many distinct shots "
+        "a scene needs for proper cinematic coverage.\n\n"
+        f"{context_block}\n\n"
+        "Rules:\n"
+        "- Output a JSON object with keys: shot_count (integer 1-10), reasoning (string)\n"
+        "- Consider dialogue, action, character count, emotional beats\n"
+        "- A dialogue scene between 2 characters typically needs 3-5 shots\n"
+        "- A monologue or single action may need 1-2 shots\n"
+        "- An action scene or ensemble needs 5+ shots\n"
+        "- Output ONLY valid JSON, no other text"
+    )
+
+    user_message = "Based on the scene content and creative memory, how many shots do you recommend?"
+
+    try:
+        call_llm = _get_llm()
+        reply = await call_llm(system_prompt, user_message, max_tokens=512)
+        import json as _json
+        result = _json.loads(reply.strip())
+        shot_count = int(result.get("shot_count", 3))
+        reasoning = str(result.get("reasoning", ""))
+        shot_count = max(1, min(10, shot_count))
+    except Exception as exc:
+        logger.error("SHOT_COUNT_FAILED | project=%s | %s", project_id, exc)
+        shot_count = 3
+        reasoning = "Default recommendation based on scene complexity."
+
+    return ShotCountResponse(
+        scene_id=body.scene_id,
+        recommended_shot_count=shot_count,
+        reasoning=reasoning,
+        study_memories_used=mem_count,
+    )

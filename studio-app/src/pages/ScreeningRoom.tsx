@@ -1,2344 +1,1765 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { MonitorPlay } from 'lucide-react'
-import StudioShell, { TabGroup } from '../components/StudioShell'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import {
+  Brain,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Film,
+  Loader2,
+  MonitorPlay,
+  Pause,
+  Play,
+  Share2,
+  SkipBack,
+  SkipForward,
+  Sparkles,
+  Users,
+  Volume2,
+  Wand2,
+} from 'lucide-react'
+import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
-import RenderActivityPanel from '../components/RenderActivityPanel'
-import FilmMemoryPanel from '../components/FilmMemoryPanel'
-
-import CoDirectorCollaborationPanel from '../components/CoDirectorCollaborationPanel'
-import CollaboratorPresenceIndicators from '../components/CollaboratorPresenceIndicators'
-import MultiUserCollaborationPanel from '../components/MultiUserCollaborationPanel'
-import ScreeningIntelligencePanel from '../components/ScreeningIntelligencePanel'
-import DirectorMemoryCallbacks from '../components/DirectorMemoryCallbacks'
-import SceneContinuityPanel from '../components/SceneContinuityPanel'
-import ScreeningCinematicShowcase from '../components/ScreeningCinematicShowcase'
-import ScreeningTimelineIntelligencePanel from '../components/ScreeningTimelineIntelligencePanel'
-import DirectorDebatePanel from '../components/DirectorDebatePanel'
 import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
-import { buildLocalFallbackExport, createClipRevision, createFinalShortFilmPackage, createShortFilmReview, downloadJson, fetchExportPackage, getLatestDirectorSignature, getLatestFinalShortFilmPackageForProject, getLatestShortFilmReview, getProject, getProjectDecisionGate, getTimelineIntelligence, listProjectCinematicMemory, listProjectContinuityIssues, listProjectStyleDriftIssues, listRenderJobs, refreshRenderJobOutputUrl, stitchShortFilm, submitClipRevisionRender, type CinematicMemoryRecord, type ContinuityIssue, type ContinuityReview, type DirectorSignature, type FinalShortFilmPackage, type RenderJob, type StudioDecisionGate, type StyleDriftIssue, type TimelineFlowAnalysis } from '../lib/studioApi'
-import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
-import { useProjectHydration } from '../hooks/useProjectHydration'
+import {
+  analyzeSceneEmotion,
+  fetchExportPackage,
+  getLatestFinalShortFilmPackageForProject,
+  getSceneComposition,
+  getSceneRationale,
+  listRenderJobs,
+  listScenes,
+  saveCreativeDecisionMemory,
+  simulateProjectAudience,
+  simulateSceneAudience,
+  stitchShortFilm,
+  updateScene,
+  type EmotionAnalysisResult,
+  type FinalShortFilmPackage,
+  type RenderJob,
+  type Scene,
+  type SceneComposition,
+  type SceneRationaleResponse,
+} from '../lib/studioApi'
+import type { ProjectAudienceSimulation, SceneAudienceSimulation } from '../types/audienceSimulator'
+import { normalizeJobStatus } from '../lib/jobStatus'
 import { persistActiveProjectId, withProjectQuery } from '../lib/projectContext'
-import { selectPrimaryStudioMedia } from '../lib/studioMedia'
 
-type AnyRecord = Record<string, unknown>
-type PlaylistItem = {
-  scene_id: string
-  cut: string
-  render_ids: string[]
-  status: string
-  verdict: string
-  duration_estimate: number
-}
+// ── Types ──────────────────────────────────────────────────────────────────
 
-type SceneDiagnostics = {
-  score: number
-  issues: string[]
-  state: string
-  blockers: string[]
-  selected_cut: string
-}
-type FilmCut = {
-  cut_id: string
-  name?: string
-  scene_order: string[]
-  included_scenes: string[]
-  excluded_scenes?: string[]
-  created_at?: string
+type PlaybackRate = 0.5 | 1 | 1.5 | 2
+type AudienceSegment = 'general' | 'cinephile' | 'genre_fan'
+
+interface SceneTake {
+  sceneId: string
+  sceneName: string
+  takeNumber: number
+  videoUrl?: string
+  duration: number
 }
 
-function asRecord(value: unknown): AnyRecord | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  return value as AnyRecord
+interface CoDirectorNote {
+  id: string
+  agentName: string
+  text: string
+  timestamp: string
 }
 
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
+interface WeakSceneMarker {
+  startPercent: number
+  endPercent: number
 }
 
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : ''
+interface SceneAudienceMetrics {
+  engagement: number
+  tension: number
+  emotionalImpact: number
 }
 
-function asNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
+interface ShotInfo {
+  shotNumber: number
+  videoUrl?: string
 }
 
-function normalizePlaylistItem(value: unknown, index: number): PlaylistItem {
-  const item = asRecord(value) || {}
-  const sceneId = asString(item.scene_id).trim() || `scene_${String(index + 1).padStart(3, '0')}`
-  const rawRenderIds = asArray(item.render_ids)
-  const renderIds = rawRenderIds
-    .map((entry) => asString(entry).trim())
-    .filter(Boolean)
-  const status = asString(item.status).trim().toLowerCase() || 'not_started'
-  const verdict = asString(item.verdict).trim().toLowerCase() || 'unknown'
-  const duration = asNumber(item.duration_estimate) ?? renderIds.length * 2
-  const cut = asString(item.cut).trim() || 'original'
-  return {
-    scene_id: sceneId,
-    cut,
-    render_ids: renderIds,
-    status,
-    verdict,
-    duration_estimate: duration,
-  }
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const PLAYBACK_RATES: PlaybackRate[] = [0.5, 1, 1.5, 2]
+const AUDIENCE_SEGMENTS: { key: AudienceSegment; label: string }[] = [
+  { key: 'general', label: 'GENERAL' },
+  { key: 'cinephile', label: 'CINEPHILE' },
+  { key: 'genre_fan', label: 'GENRE FAN' },
+]
+
+function isSceneNotFoundError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /scene.*not found/i.test(msg)
 }
 
-function normalizeSummary(value: unknown, sceneCount: number) {
-  const summary = asRecord(value) || {}
-  return {
-    total_scenes: asNumber(summary.total_scenes) ?? sceneCount,
-    playable_scenes: asNumber(summary.playable_scenes) ?? 0,
-    average_quality: asNumber(summary.average_quality) ?? 0,
-    dominant_tone: asString(summary.dominant_tone).trim() || 'none',
-  }
+function formatTimecode(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
-function getViewerImage(renderId: string): string {
-  if (renderId.startsWith('http://') || renderId.startsWith('https://')) {
-    return renderId
-  }
-  return ''
-}
-
-function isBrowserSafePath(path: string): boolean {
-  const lower = path.trim().toLowerCase()
-  return lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('data:image/')
-}
-
-function isMockExternalAssetUrl(url: string): boolean {
-  const value = url.trim()
-  if (!value) return false
-  try {
-    const parsed = new URL(value)
-    return parsed.hostname === 'storage.example.com'
-  } catch {
-    return false
-  }
-}
-
-function normalizePlayableVideoUrl(url: string): string {
-  const value = url.trim()
-  if (!value) return ''
-  // CloudFront and other hosted URLs should be used directly
-  // Only fallback to local mock for the specific mock domain
-  if (isMockExternalAssetUrl(value)) return '/outputs/mock-video/sample.mp4'
-  return value
-}
-
-function getPreferredAssetUrl(job: any): string {
-  // Priority order for hosted media:
-  // 1. output_payload.asset_url (CloudFront URL from Runway)
-  // 2. output_url (legacy field)
-  // 3. preview_url (if available)
-  // 4. empty string (show honest empty state)
-  
-  const assetUrl = job.output_payload?.asset_url || ''
-  if (assetUrl && !isMockExternalAssetUrl(assetUrl)) {
-    return assetUrl
-  }
-  
-  const outputUrl = job.output_url || ''
-  if (outputUrl && !isMockExternalAssetUrl(outputUrl)) {
-    return outputUrl
-  }
-  
-  const previewUrl = job.output_payload?.thumbnail_url || job.preview_url || ''
-  if (previewUrl && !isMockExternalAssetUrl(previewUrl)) {
-    return previewUrl
-  }
-  
-  return ''
-}
-
-function statusTone(status: string): string {
-  if (status === 'complete' || status === 'success') return 'text-emerald-300'
-  if (status === 'partial') return 'text-amber-300'
-  if (status === 'failed') return 'text-rose-300'
-  return 'text-zinc-300'
-}
-
-function verdictTone(verdict: string): string {
-  if (verdict === 'strong') return 'bg-emerald-500/30 border-emerald-400/60'
-  if (verdict === 'needs_revision' || verdict === 'mixed') return 'bg-amber-500/30 border-amber-400/60'
-  if (verdict === 'failed') return 'bg-rose-500/30 border-rose-400/60'
-  return 'bg-zinc-700/40 border-zinc-500/60'
-}
-
-function getExecutionSummary(state: unknown, projectSummary: unknown): AnyRecord {
-  let localBundle: AnyRecord | null = null
-  try {
-    const raw = localStorage.getItem('studio:lastBundle')
-    if (raw) localBundle = asRecord(JSON.parse(raw))
-  } catch {
-    localBundle = null
-  }
-  const locationState = asRecord(state)
-  const candidates: unknown[] = [
-    asRecord(locationState?.execution_summary),
-    asRecord(locationState?.executionSummary),
-    asRecord(locationState?.bundle),
-    asRecord(asRecord(locationState?.project)?.execution_summary),
-    asRecord(projectSummary),
-    localBundle,
-  ]
-  for (const candidate of candidates) {
-    const record = asRecord(candidate)
-    if (record && Object.keys(record).length > 0) return record
-  }
-  return {}
-}
-
-function ContinuityDriftIndicator({ review }: { review: ContinuityReview }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="mt-1.5 rounded border border-amber-400/40 bg-amber-500/10 px-2 py-1.5">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 text-left"
-      >
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
-          Continuity observation
-        </span>
-        <span className="text-[10px] text-amber-300">{open ? '▲' : '▼'}</span>
-      </button>
-      <div className="mt-1 text-[10px] text-amber-100/80">{review.advisory}</div>
-      {open ? (
-        <div className="mt-1.5 space-y-1">
-          {review.drift_notes.map((note, i) => (
-            <div key={i} className="text-[10px] text-amber-200">· {note}</div>
-          ))}
-          {review.uncertainty_notes.map((note, i) => (
-            <div key={`u${i}`} className="text-[10px] text-zinc-400">· {note}</div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
-}
+// ── Component ──────────────────────────────────────────────────────────────
 
 export default function ScreeningRoom() {
   const { projectId } = useParams()
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const sessionId = searchParams.get('session_id')
   const queryProjectId = searchParams.get('project_id') || ''
-  const location = useLocation()
-  const { project, activeProjectId, loadProject } = useStudio()
-  
-  // Use activeProjectId from context with fallback to route/query params
+  const navigate = useNavigate()
+  const { activeProject, activeProjectId } = useStudio()
+
   const effectiveProjectId = activeProjectId || projectId || queryProjectId
-  
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentSceneIndex, setCurrentSceneIndex] = useState(0)
-  const [previewAllScenes, setPreviewAllScenes] = useState(false)
-  const [screeningInsightTab, setScreeningInsightTab] = useState<'flow' | 'ending' | 'dread' | 'assets' | 'structure' | 'validation' | 'continuity'>('flow')
-  const [currentCut, setCurrentCut] = useState<FilmCut | null>(null)
-  const [exportMessage, setExportMessage] = useState('')
-  const [actionFeedback, setActionFeedback] = useState('')
-  const [isTheaterMode, setIsTheaterMode] = useState(false)
+
+  // ── Core state ────────────────────────────────────────────────────────────
+  const [scenes, setScenes] = useState<Scene[]>([])
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
-  const [latestPackage, setLatestPackage] = useState<FinalShortFilmPackage | null>(null)
-  const [cinematicMemory, setCinematicMemory] = useState<CinematicMemoryRecord[]>([])
-  const [continuityIssues, setContinuityIssues] = useState<ContinuityIssue[]>([])
-  const [directorSignature, setDirectorSignature] = useState<DirectorSignature | null>(null)
-  const [styleDriftIssues, setStyleDriftIssues] = useState<StyleDriftIssue[]>([])
-  const [timelineAnalysis, setTimelineAnalysis] = useState<TimelineFlowAnalysis | null>(null)
-  const [timelineLoading, setTimelineLoading] = useState(false)
-  const [timelineError, setTimelineError] = useState('')
-  const [decisionGate, setDecisionGate] = useState<StudioDecisionGate | null>(null)
-  const [showRevisionModal, setShowRevisionModal] = useState(false)
-  const [revisionPrompt, setRevisionPrompt] = useState('')
-  const [revisionReason, setRevisionReason] = useState('')
-  const [revisionLoading, setRevisionLoading] = useState(false)
-  const [revisionError, setRevisionError] = useState('')
-  const [stitchingFilm, setStitchingFilm] = useState(false)
-  const [stitchingError, setStitchingError] = useState('')
-  const [stitchedFilmUrl, setStitchedFilmUrl] = useState<string | null>(null)
-  const [refreshedRenderUrls, setRefreshedRenderUrls] = useState<Record<string, string>>({})
-  const [refreshAttemptsByJobId, setRefreshAttemptsByJobId] = useState<Record<string, number>>({})
-  const playbackTimerRef = useRef<number | null>(null)
-  const theaterViewportRef = useRef<HTMLDivElement | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  // ── Video player state ────────────────────────────────────────────────────
+  const [sceneTakes, setSceneTakes] = useState<SceneTake[]>([])
+  const [activeTakeIndex, setActiveTakeIndex] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [playbackRate, setPlaybackRate] = useState<PlaybackRate>(1)
+  const [volume, setVolume] = useState(80)
+  const [showTakeDropdown, setShowTakeDropdown] = useState(false)
+  const [hoveringVideo, setHoveringVideo] = useState(false)
+
+  // ── Shot navigation state ───────────────────────────────────────────────
+  const [activeShotNumber, setActiveShotNumber] = useState(1)
+  const [activeShotTakeIndex, setActiveShotTakeIndex] = useState(0)
+
+  // ── Scene composition state ────────────────────────────────────────────
+  const [sceneComposition, setSceneComposition] = useState<SceneComposition | null>(null)
+
+  // ── Per-scene audience sim cache ────────────────────────────────────────
+  const [sceneAudienceCache, setSceneAudienceCache] = useState<Record<string, SceneAudienceSimulation>>({})
+  const [sceneAudienceLoading, setSceneAudienceLoading] = useState(false)
+
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const timelineRef = useRef<HTMLDivElement>(null)
+
+  // ── Export state ──────────────────────────────────────────────────────────
+  const [exporting, setExporting] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
+  const [finalPackage, setFinalPackage] = useState<FinalShortFilmPackage | null>(null)
+  const [stitching, setStitching] = useState(false)
+
+  // ── Analysis sidebar state ────────────────────────────────────────────────
+  const [audienceSegment, setAudienceSegment] = useState<AudienceSegment>('general')
+  const [audienceSim, setAudienceSim] = useState<ProjectAudienceSimulation | null>(null)
+  const [simulating, setSimulating] = useState(false)
+  const [coDirectorNotes, setCoDirectorNotes] = useState<CoDirectorNote[]>([])
+  const [requestingNotes, setRequestingNotes] = useState(false)
+
+  // ── Full film playback state ─────────────────────────────────────────────
+  const [isFullFilm, setIsFullFilm] = useState(false)
+  const [showFinOverlay, setShowFinOverlay] = useState(false)
+
+  // ── Emotion analysis cache (Groq-powered audience scores) ───────────────
+  const [emotionAnalysisCache, setEmotionAnalysisCache] = useState<Record<string, EmotionAnalysisResult>>({})
+
+  // ── Scene composition cache (for status badges across all scenes) ────────
+  const [sceneCompositionsCache, setSceneCompositionsCache] = useState<Record<string, SceneComposition | null>>({})
+
+  // ── Shot rationale ("Why this shot matters") ───────────────────────────────
+  const [shotRationale, setShotRationale] = useState<SceneRationaleResponse | null>(null)
+  const [loadingRationale, setLoadingRationale] = useState(false)
+
   useEffect(() => {
-    if (!actionFeedback) return
-    const timer = window.setTimeout(() => setActionFeedback(''), 2600)
-    return () => window.clearTimeout(timer)
-  }, [actionFeedback])
+    const active = sceneTakes[activeTakeIndex]
+    if (!active?.sceneId || !effectiveProjectId) {
+      setShotRationale(null)
+      return
+    }
+    let cancelled = false
+    setLoadingRationale(true)
+    getSceneRationale(effectiveProjectId, active.sceneId)
+      .then((result) => {
+        if (!cancelled) setShotRationale(result)
+      })
+      .catch(() => {
+        if (!cancelled) setShotRationale(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRationale(false)
+      })
+    return () => { cancelled = true }
+  }, [activeTakeIndex, sceneTakes, effectiveProjectId])
 
-  const hydration = useProjectHydration({
-    projectId,
-    sessionId,
-    locationState: location.state,
-    projectExecutionSummary: project?.execution_summary,
-    loadProject,
-    getProject,
-    resolveExecutionSummary: getExecutionSummary,
-  })
-  const executionSummary = hydration.executionSummary
-  
-  // Note: activeProjectId comes from useStudio() context above
-  // effectiveProjectId provides fallback to route/query params
+  // ── Weak scene markers (simulated) ────────────────────────────────────────
+  const weakSceneMarkers: WeakSceneMarker[] = useMemo(() => {
+    if (scenes.length === 0) return []
+    // Simulate weak scenes at ~30% and ~70% of timeline
+    return [
+      { startPercent: 28, endPercent: 35 },
+      { startPercent: 68, endPercent: 74 },
+    ]
+  }, [scenes])
 
+  // ── Persist project ID ────────────────────────────────────────────────────
   useEffect(() => {
     if (effectiveProjectId) persistActiveProjectId(effectiveProjectId)
   }, [effectiveProjectId])
 
-  useEffect(() => {
-    if (!effectiveProjectId) {
-      setTimelineAnalysis(null)
-      setTimelineError('')
-      setTimelineLoading(false)
-      return
-    }
-    let cancelled = false
-    const controller = new AbortController()
-    async function loadTimeline() {
-      setTimelineLoading(true)
-      try {
-        const analysis = await getTimelineIntelligence(effectiveProjectId, { signal: controller.signal })
-        if (!cancelled) {
-          setTimelineAnalysis(analysis)
-          setTimelineError('')
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setTimelineAnalysis(null)
-          setTimelineError(error instanceof Error ? error.message : 'Timeline intelligence unavailable')
-        }
-      } finally {
-        if (!cancelled) setTimelineLoading(false)
+  // ── Load scenes ───────────────────────────────────────────────────────────
+  const loadScenes = useCallback(async () => {
+    if (!effectiveProjectId) return
+    setLoading(true)
+    setError('')
+    try {
+      const result = await listScenes(effectiveProjectId)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setScenes(result.scenes)
       }
-    }
-    void loadTimeline()
-    return () => {
-      cancelled = true
-      controller.abort()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load scenes')
+    } finally {
+      setLoading(false)
     }
   }, [effectiveProjectId])
 
   useEffect(() => {
-    if (!activeProjectId) {
-      setDecisionGate(null)
-      return
-    }
-    let cancelled = false
-    const controller = new AbortController()
-    async function loadDecisionGate() {
-      try {
-        const gate = await getProjectDecisionGate(activeProjectId, { signal: controller.signal })
-        if (!cancelled) {
-          setDecisionGate(gate)
-        }
-      } catch {
-        if (!cancelled) {
-          setDecisionGate(null)
-        }
-      }
-    }
-    void loadDecisionGate()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [activeProjectId])
+    void loadScenes()
+  }, [loadScenes])
 
+  // ── Load render jobs ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!activeProjectId) {
+    if (!effectiveProjectId) {
       setRenderJobs([])
-      setLatestPackage(null)
       return
     }
     let cancelled = false
-    async function loadOutputs() {
-      const cacheKey = `studio:renderJobs:${activeProjectId}`
+    async function loadJobs() {
       try {
-        const jobs = await listRenderJobs(activeProjectId)
-        if (!cancelled) {
-          const normalizedJobs = Array.isArray(jobs) ? jobs : []
-          const cachedJobs = (() => {
-            if (normalizedJobs.length > 0) return []
-            try {
-              const raw = localStorage.getItem(cacheKey)
-              const parsed = raw ? JSON.parse(raw) : []
-              return Array.isArray(parsed) ? parsed as RenderJob[] : []
-            } catch {
-              return []
-            }
-          })()
-          const effectiveJobs = normalizedJobs.length > 0 ? normalizedJobs : cachedJobs
-          setRenderJobs(effectiveJobs)
-          if (normalizedJobs.length > 0) {
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify(normalizedJobs))
-            } catch {
-              // ignore cache write failures
-            }
-          }
-        }
+        const jobs = await listRenderJobs(effectiveProjectId)
+        if (!cancelled) setRenderJobs(Array.isArray(jobs) ? jobs : [])
       } catch {
-        if (!cancelled) {
-          try {
-            const raw = localStorage.getItem(cacheKey)
-            const parsed = raw ? JSON.parse(raw) : []
-            setRenderJobs(Array.isArray(parsed) ? parsed as RenderJob[] : [])
-          } catch {
-            setRenderJobs([])
-          }
-        }
-      }
-      try {
-        const latest = await getLatestFinalShortFilmPackageForProject(activeProjectId)
-        if (!cancelled) setLatestPackage(latest.package || null)
-      } catch {
-        if (!cancelled) setLatestPackage(null)
+        if (!cancelled) setRenderJobs([])
       }
     }
-    void loadOutputs()
-    const timer = window.setInterval(() => {
-      void loadOutputs()
-    }, 8000)
+    void loadJobs()
+    const timer = setInterval(loadJobs, 15000)
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      clearInterval(timer)
     }
-  }, [activeProjectId])
+  }, [effectiveProjectId])
 
+  // ── Build scene takes from render jobs ────────────────────────────────────
   useEffect(() => {
-    if (!activeProjectId) {
-      setCinematicMemory([])
-      return
-    }
-    let cancelled = false
-    const controller = new AbortController()
-    async function loadMemory() {
-      try {
-        const payload = await listProjectCinematicMemory(activeProjectId, { signal: controller.signal })
-        if (!cancelled) setCinematicMemory(payload.memory_records || [])
-      } catch {
-        if (!cancelled) setCinematicMemory([])
-      }
-    }
-    void loadMemory()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [activeProjectId])
-
-  // Load continuity + style intelligence (advisory)
-  useEffect(() => {
-    if (!activeProjectId) {
-      setContinuityIssues([])
-      setDirectorSignature(null)
-      setStyleDriftIssues([])
-      return
-    }
-    let cancelled = false
-    const controller = new AbortController()
-    async function loadAdvisory() {
-      try {
-        const [continuityRes, sigRes, driftRes] = await Promise.all([
-          listProjectContinuityIssues(activeProjectId, { signal: controller.signal }),
-          getLatestDirectorSignature(activeProjectId, { signal: controller.signal }),
-          listProjectStyleDriftIssues(activeProjectId, { signal: controller.signal }),
-        ])
-        if (cancelled) return
-        setContinuityIssues(continuityRes.issues || [])
-        setDirectorSignature(sigRes.signature || null)
-        setStyleDriftIssues(Array.isArray(driftRes.issues) ? driftRes.issues : [])
-      } catch {
-        if (!cancelled) {
-          setContinuityIssues([])
-          setDirectorSignature(null)
-          setStyleDriftIssues([])
-        }
-      }
-    }
-    void loadAdvisory()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [activeProjectId])
-
-  const fullPlaylist = useMemo(() => {
-    const raw = asArray(executionSummary.screening_playlist)
-    if (raw.length > 0) return raw.map(normalizePlaylistItem)
-    const scenes = asArray(executionSummary.scenes)
-    return scenes.map((scene, index) => {
-      const sceneRecord = asRecord(scene) || {}
-      const sceneId = asString(sceneRecord.scene_id).trim() || `scene_${String(index + 1).padStart(3, '0')}`
-      const preview = asRecord(sceneRecord.scene_playback_preview)
-      const renderIds = asArray(preview?.render_ids).map((id) => asString(id).trim()).filter(Boolean)
-      const status = asString(asRecord(sceneRecord.scene_generation_summary)?.status).trim().toLowerCase() || 'not_started'
-      const verdict = asString(asRecord(sceneRecord.scene_quality_verdict)?.verdict).trim().toLowerCase() || 'unknown'
-      const cut = asString(sceneRecord.selected_iteration).trim() || 'original'
+    if (scenes.length === 0) return
+    const completedJobs = renderJobs.filter((j) => normalizeJobStatus(j.status) === 'complete')
+    const takes: SceneTake[] = scenes.map((scene, index) => {
+      const matchingJobs = completedJobs.filter((j) => {
+        const shotId = j.shot_id || j.input_payload?.shot_id || ''
+        const jobSceneId = shotId.split('_shot_')[0] || ''
+        return jobSceneId === scene.scene_id
+      })
+      // Sort by created_at descending to get the most recent completed job
+      const sortedJobs = [...matchingJobs].sort((a, b) => {
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+      })
+      // Find first completed job with output_payload.asset_url
+      const jobWithUrl = sortedJobs.find((j) => {
+        const url = j.output_payload?.asset_url
+        return typeof url === 'string' && url.trim().length > 0
+      })
+      const videoUrl = jobWithUrl?.output_payload?.asset_url || undefined
       return {
-        scene_id: sceneId,
-        cut,
-        render_ids: renderIds,
-        status,
-        verdict,
-        duration_estimate: renderIds.length * 2,
+        sceneId: scene.scene_id,
+        sceneName: scene.scene_name || `Scene ${index + 1}`,
+        takeNumber: matchingJobs.length,
+        videoUrl,
+        duration: 4,
       }
     })
-  }, [executionSummary])
-  const coDirectorWorkflow = asRecord(executionSummary.co_director_workflow) || asRecord(executionSummary.co_director)
-  const collaboration = asRecord(project?.collaboration) || asRecord(executionSummary.collaboration)
-  const hasPlaylistData = fullPlaylist.length > 0
+    setSceneTakes(takes)
+  }, [scenes, renderJobs])
+
+  // ── Load final package ────────────────────────────────────────────────────
   useEffect(() => {
-    if (hasPlaylistData) return
-    if (activeProjectId) return
-    navigate(withProjectQuery('/studio/previs', activeProjectId), {
-      replace: true,
-      state: { notice: 'No cut available yet. Review and approve scenes in Previs first.' },
-    })
-  }, [activeProjectId, hasPlaylistData, navigate])
-  const approvedSceneMap = useMemo(() => {
-    const raw = localStorage.getItem('studio_approved_scene_map')
-    if (!raw) return {} as Record<string, boolean>
-    try {
-      const parsed = JSON.parse(raw)
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, boolean>) : {}
-    } catch {
-      return {} as Record<string, boolean>
+    if (!effectiveProjectId) return
+    let cancelled = false
+    async function loadFinalPackage() {
+      try {
+        const { package: pkg } = await getLatestFinalShortFilmPackageForProject(effectiveProjectId)
+        if (!cancelled && pkg) setFinalPackage(pkg)
+      } catch {
+        // No package yet
+      }
+    }
+    void loadFinalPackage()
+    return () => {
+      cancelled = true
+    }
+  }, [effectiveProjectId])
+
+  // ── Load scene composition when active take changes ──────────────────────
+  useEffect(() => {
+    const active = sceneTakes[activeTakeIndex]
+    if (!active?.sceneId || !effectiveProjectId) {
+      setSceneComposition(null)
+      return
+    }
+    let cancelled = false
+    async function loadComposition() {
+      try {
+        const comp = await getSceneComposition(effectiveProjectId, active.sceneId)
+        if (!cancelled) setSceneComposition(comp)
+      } catch {
+        if (!cancelled) setSceneComposition(null)
+      }
+    }
+    void loadComposition()
+    return () => { cancelled = true }
+  }, [effectiveProjectId, sceneTakes, activeTakeIndex])
+
+  // ── Load compositions for all scenes (for status badges) ─────────────────
+  useEffect(() => {
+    if (!effectiveProjectId || scenes.length === 0) return
+    let cancelled = false
+    async function loadAllCompositions() {
+      const cache: Record<string, SceneComposition | null> = {}
+      const promises = scenes.map(async (sc) => {
+        try {
+          const comp = await getSceneComposition(effectiveProjectId, sc.scene_id)
+          cache[sc.scene_id] = comp
+        } catch {
+          cache[sc.scene_id] = null
+        }
+      })
+      await Promise.all(promises)
+      if (!cancelled) setSceneCompositionsCache(cache)
+    }
+    loadAllCompositions()
+    return () => { cancelled = true }
+  }, [effectiveProjectId, scenes])
+
+  const activeTake = sceneTakes[activeTakeIndex]
+
+  // ── Emotion analysis cache (Groq) — load on scene change ─────────────────
+  useEffect(() => {
+    if (!effectiveProjectId || !activeTake?.sceneId) return
+    if (emotionAnalysisCache[activeTake.sceneId]) return
+    let cancelled = false
+    setSceneAudienceLoading(true)
+    analyzeSceneEmotion(effectiveProjectId, activeTake.sceneId)
+      .then((result) => {
+        if (!cancelled) {
+          setEmotionAnalysisCache((prev) => ({ ...prev, [activeTake.sceneId]: result }))
+        }
+      })
+      .catch((err) => {
+        console.warn('[emotion-analysis] failed for', activeTake.sceneId, err)
+      })
+      .finally(() => {
+        if (!cancelled) setSceneAudienceLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [effectiveProjectId, activeTake?.sceneId])
+
+  // ── Video event handlers ──────────────────────────────────────────────────
+  const handleTimeUpdate = useCallback(() => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime)
     }
   }, [])
-  const approvedSceneIds = useMemo(
-    () => new Set(Object.entries(approvedSceneMap).filter(([, approved]) => Boolean(approved)).map(([sceneId]) => sceneId)),
-    [approvedSceneMap],
-  )
-  useEffect(() => {
-    const safeSetCut = (next: FilmCut | null) => {
-      setCurrentCut((prev) => {
-        const prevKey = prev ? JSON.stringify(prev) : ''
-        const nextKey = next ? JSON.stringify(next) : ''
-        return prevKey === nextKey ? prev : next
-      })
-    }
 
-    try {
-      const raw = localStorage.getItem('studio:filmCut')
-      if (!raw) {
-        safeSetCut(null)
-        return
+  const handleLoadedMetadata = useCallback(() => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration)
+      if (isFullFilm) {
+        videoRef.current.play().catch(() => {})
+        setIsPlaying(true)
       }
-      const parsed = JSON.parse(raw) as FilmCut
-      if (!Array.isArray(parsed.scene_order) || !Array.isArray(parsed.included_scenes)) {
-        safeSetCut(null)
-        return
-      }
-      safeSetCut(parsed)
-    } catch {
-      safeSetCut(null)
     }
-  }, [activeProjectId])
-  const playlist = useMemo(() => {
-    if (currentCut && Array.isArray(currentCut.scene_order) && Array.isArray(currentCut.included_scenes)) {
-      const byId = new Map(fullPlaylist.map((item) => [item.scene_id, item]))
-      const ordered = currentCut.scene_order
-        .map((sceneId) => byId.get(sceneId))
-        .filter((item): item is PlaylistItem => Boolean(item))
-      const includedSet = new Set(currentCut.included_scenes)
-      return ordered.filter((item) => includedSet.has(item.scene_id))
-    }
-    if (previewAllScenes || approvedSceneIds.size === 0) return fullPlaylist
-    return fullPlaylist.filter((item) => approvedSceneIds.has(item.scene_id))
-  }, [fullPlaylist, approvedSceneIds, previewAllScenes, currentCut])
+  }, [isFullFilm])
 
-  const screeningSummary = useMemo(
-    () => normalizeSummary(executionSummary.screening_summary, playlist.length),
-    [executionSummary.screening_summary, playlist.length],
-  )
-  const visualQualitySummary = useMemo(() => {
-    const scenes = asArray(executionSummary.scenes).map((scene) => asRecord(scene) || {})
-    const faithfulnessScores = scenes
-      .map((scene) => asNumber(asRecord(scene.script_faithfulness)?.score))
-      .filter((score): score is number => typeof score === 'number')
-    const riskSceneCount = scenes.filter((scene) => asString(asRecord(scene.script_faithfulness)?.risk).toLowerCase() === 'high').length
-    const averageFaithfulness =
-      faithfulnessScores.length > 0
-        ? faithfulnessScores.reduce((sum, value) => sum + value, 0) / faithfulnessScores.length
-        : 0
-    return {
-      averageFaithfulness,
-      riskSceneCount,
-    }
-  }, [executionSummary.scenes])
-  const imageRenderAssets = useMemo(() => {
-    return asArray(executionSummary.image_render_assets).map((entry) => {
-      const item = asRecord(entry) || {}
-      const meta = asRecord(item.meta) || {}
-      return {
-        asset_id: asString(item.asset_id).trim(),
-        scene_id: asString(item.scene_id).trim(),
-        shot_id: asString(item.shot_id).trim(),
-        status: asString(item.status).trim().toLowerCase(),
-        file_path: asString(item.file_path).trim(),
-        url: asString(item.url).trim(),
-        provider: asString(item.provider).trim() || 'local_image',
-        fallback_reason: asString(meta.fallback_reason).trim(),
-      }
-    }).filter((asset) => Boolean(asset.asset_id))
-  }, [executionSummary.image_render_assets])
-  const executionSummaryRenderJobs = useMemo<RenderJob[]>(() => {
-    const queue = asArray(executionSummary.render_queue)
-    return queue
-      .map((entry, index) => {
-        const item = asRecord(entry) || {}
-        const id = asString(item.job_id).trim() || asString(item.id).trim() || `summary-job-${index + 1}`
-        const outputUrl =
-          asString(item.output_url).trim()
-          || asString(asRecord(item.output_payload)?.asset_url).trim()
-        if (!id || !outputUrl) return null
-        return {
-          id,
-          project_id: activeProjectId || asString(item.project_id).trim() || '',
-          shot_id: asString(item.shot_id).trim(),
-          provider: asString(item.provider).trim() || 'runway',
-          status: asString(item.status).trim() || 'complete',
-          progress: asNumber(item.progress) ?? 100,
-          retry_count: asNumber(item.retry_count) ?? 0,
-          created_at: asString(item.created_at).trim() || '',
-          updated_at: asString(item.updated_at).trim() || '',
-          output_payload: {
-            asset_url: outputUrl,
-            thumbnail_url: asString(item.preview_url).trim() || asString(asRecord(item.output_payload)?.thumbnail_url).trim() || '',
-            metadata: (asRecord(asRecord(item.output_payload)?.metadata) || {}) as Record<string, unknown>,
-          },
-        } as RenderJob
-      })
-      .filter((job): job is RenderJob => Boolean(job))
-  }, [activeProjectId, executionSummary.render_queue])
-  const mediaCandidateRenderJobs = useMemo(
-    () => (renderJobs.length > 0 ? renderJobs : executionSummaryRenderJobs),
-    [executionSummaryRenderJobs, renderJobs],
-  )
-  const styleDriftIssuesBySceneId = useMemo(() => {
-    const map = new Map<string, StyleDriftIssue[]>()
-    const assetToScenes = new Map<string, Set<string>>()
-    for (const asset of imageRenderAssets) {
-      if (!asset.scene_id || !asset.asset_id) continue
-      if (!assetToScenes.has(asset.asset_id)) assetToScenes.set(asset.asset_id, new Set())
-      assetToScenes.get(asset.asset_id)!.add(asset.scene_id)
-    }
-    for (const issue of styleDriftIssues) {
-      const scenes = assetToScenes.get(issue.asset_id || '')
-      if (!scenes) continue
-      for (const sid of scenes) {
-        if (!map.has(sid)) map.set(sid, [])
-        map.get(sid)!.push(issue)
-      }
-    }
-    return map
-  }, [imageRenderAssets, styleDriftIssues])
-  const videoRenderAssets = useMemo(() => {
-    return asArray(executionSummary.video_render_assets).map((entry) => {
-      const item = asRecord(entry) || {}
-      return {
-        render_id: asString(item.render_id).trim(),
-        scene_id: asString(item.scene_id).trim(),
-        shot_id: asString(item.shot_id).trim(),
-        provider: asString(item.provider).trim().toLowerCase(),
-        status: asString(item.status).trim().toLowerCase(),
-        video_url: asString(item.video_url).trim(),
-        motion_clip_url: asString(item.motion_clip_url).trim(),
-        thumbnail_url: asString(item.thumbnail_url).trim(),
-        error: asString(item.error).trim(),
-        meta: asRecord(item.meta) || {},
-      }
-    }).filter((asset) => Boolean(asset.scene_id))
-  }, [executionSummary.video_render_assets])
-  const renderAssetSummary = useMemo(() => {
-    const summary = asRecord(executionSummary.render_asset_summary) || {}
-    return {
-      total_assets: asNumber(summary.total_assets) ?? imageRenderAssets.length,
-      successful_assets: asNumber(summary.successful_assets) ?? imageRenderAssets.filter((a) => a.status === 'success').length,
-      failed_assets: asNumber(summary.failed_assets) ?? imageRenderAssets.filter((a) => a.status === 'failed').length,
-      providers: asArray(summary.providers).map((v) => asString(v).trim()).filter(Boolean),
-    }
-  }, [executionSummary.render_asset_summary, imageRenderAssets])
-  const firstSuccessfulAssetByScene = useMemo(() => {
-    const map = new Map<string, { url: string; file_path: string; provider: string; status: string; fallback_reason: string }>()
-    for (const asset of imageRenderAssets) {
-      if (asset.status !== 'success') continue
-      if (!asset.scene_id || map.has(asset.scene_id)) continue
-      map.set(asset.scene_id, {
-        url: asset.url,
-        file_path: asset.file_path,
-        provider: asset.provider,
-        status: asset.status,
-        fallback_reason: asset.fallback_reason,
-      })
-    }
-    return map
-  }, [imageRenderAssets])
-  const firstVideoAssetByScene = useMemo(() => {
-    const map = new Map<string, { render_id: string; video_url: string; thumbnail_url: string }>()
-    for (const asset of videoRenderAssets) {
-      if (asset.status !== 'success' && asset.status !== 'pending') continue
-      if (!asset.scene_id || map.has(asset.scene_id)) continue
-      const motionUrl = asset.provider === 'comfyui_motion' ? (asset.motion_clip_url || asset.video_url) : ''
-      map.set(asset.scene_id, {
-        render_id: asset.render_id,
-        video_url: motionUrl || asset.video_url,
-        thumbnail_url: asset.thumbnail_url,
-      })
-    }
-    return map
-  }, [videoRenderAssets])
-  const motionStatusByScene = useMemo(() => {
-    const map = new Map<string, { status: string; reason: string }>()
-    for (const asset of videoRenderAssets) {
-      if ((asset.provider || '').toLowerCase() !== 'comfyui_motion') continue
-      if (!asset.scene_id || map.has(asset.scene_id)) continue
-      const motionUrl = asset.motion_clip_url || asset.video_url
-      if (motionUrl) {
-        map.set(asset.scene_id, { status: 'MOTION READY', reason: '' })
-      } else if ((asset.status || '').toLowerCase() === 'failed') {
-        map.set(asset.scene_id, {
-          status: 'COMFYUI MOTION UNAVAILABLE',
-          reason: asString(asset.error).trim() || asString(asRecord(asset.meta)?.fallback_reason).trim() || 'render_motion returned None',
-        })
-      } else {
-        map.set(asset.scene_id, { status: 'MOTION NOT GENERATED', reason: '' })
-      }
-    }
-    return map
-  }, [videoRenderAssets])
-  const sceneTransitions = useMemo(() => {
-    const rawTransitions = asArray(executionSummary.scene_transitions)
-    if (rawTransitions.length > 0) {
-      return rawTransitions.map((item, index) => {
-        const row = asRecord(item) || {}
-        return {
-          scene_id: asString(row.scene_id).trim() || playlist[index]?.scene_id || '',
-          transition: asString(row.transition).trim().toLowerCase() || 'hold',
-          duration: asNumber(row.duration) ?? playlist[index]?.duration_estimate ?? 2,
-        }
-      })
-    }
-    return playlist.map((item) => {
-      let transition = 'hold'
-      if (item.status === 'complete' || item.status === 'success') transition = 'cut'
-      else if (item.status === 'partial') transition = 'fade'
-      return {
-        scene_id: item.scene_id,
-        transition,
-        duration: item.duration_estimate,
-      }
-    })
-  }, [executionSummary.scene_transitions, playlist])
-  const sequenceFlow = useMemo(() => {
-    const flow = asRecord(executionSummary.sequence_flow) || {}
-    const flowScore = asNumber(flow.flow_score) ?? 1
-    const issues = asArray(flow.issues).map((entry) => asString(entry).trim()).filter(Boolean)
-    return { flow_score: flowScore, issues }
-  }, [executionSummary.sequence_flow])
-  const editingSuggestions = useMemo(() => {
-    const editing = asRecord(executionSummary.editing_intelligence) || {}
-    const rows = asArray(editing.suggestions)
-      .map((entry) => {
-        const row = asRecord(entry) || {}
-        return {
-          suggestion_type: asString(row.suggestion_type).trim() || 'general',
-          priority: asString(row.priority).trim() || 'medium',
-          title: asString(row.title).trim() || 'Editing advisory',
-          recommendation: asString(row.recommendation).trim(),
-          rationale: asString(row.rationale).trim(),
-          advisory_only: row.advisory_only !== false,
-        }
-      })
-      .filter((row) => Boolean(row.recommendation))
-    return rows
-  }, [executionSummary.editing_intelligence])
-  const scoreMap = useMemo(() => {
-    const map = asRecord(executionSummary.score_map) || {}
-    return {
-      dominant_instrumentation: asArray(map.dominant_instrumentation).map((v) => asString(v).trim()).filter(Boolean),
-      recurring_audio_motif: asString(map.recurring_audio_motif).trim() || 'none',
-      dynamic_arc: asString(map.dynamic_arc).trim() || 'none',
-      silence_usage: asString(map.silence_usage).trim() || 'none',
-    }
-  }, [executionSummary.score_map])
-  const audioCues = useMemo(() => {
-    return asArray(executionSummary.audio_cues)
-      .map((entry) => {
-        const item = asRecord(entry) || {}
-        return {
-          scene_id: asString(item.scene_id).trim(),
-          cue_type: asString(item.cue_type).trim(),
-          description: asString(item.description).trim(),
-          timing: asString(item.timing).trim(),
-          intensity: asNumber(item.intensity) ?? 0,
-        }
-      })
-      .filter((cue) => Boolean(cue.scene_id))
-  }, [executionSummary.audio_cues])
-  const audioAssetPlan = useMemo(() => {
-    return asArray(executionSummary.audio_asset_plan)
-      .map((entry) => {
-        const item = asRecord(entry) || {}
-        return {
-          scene_id: asString(item.scene_id).trim(),
-          cue_id: asString(item.cue_id).trim(),
-          asset_type: asString(item.asset_type).trim() || 'ambience',
-          status: asString(item.status).trim() || 'planned',
-          provider: asString(item.provider).trim() || 'none',
-          prompt: asString(item.prompt).trim(),
-        }
-      })
-      .filter((cue) => Boolean(cue.scene_id))
-  }, [executionSummary.audio_asset_plan])
-  const audioSummary = useMemo(() => {
-    const summary = asRecord(executionSummary.audio_summary) || {}
-    return {
-      total_cues: asNumber(summary.total_cues) ?? audioCues.length,
-      planned_assets: asNumber(summary.planned_assets) ?? audioAssetPlan.length,
-      high_tension_scenes: asNumber(summary.high_tension_scenes) ?? 0,
-      needs_audio_design: Boolean(summary.needs_audio_design),
-    }
-  }, [executionSummary.audio_summary, audioAssetPlan.length, audioCues.length])
-  const endingImpact = useMemo(() => {
-    const impact = asRecord(executionSummary.ending_impact) || {}
-    return {
-      ending_zone_scene_ids: asArray(impact.ending_zone_scene_ids).map((v) => asString(v).trim()).filter(Boolean),
-      dominant_feeling: asString(impact.dominant_feeling).trim() || 'none',
-      impact_score: asNumber(impact.impact_score) ?? 0,
-      emotional_implication: asString(impact.emotional_implication).trim() || 'No ending impact available.',
-    }
-  }, [executionSummary.ending_impact])
-  const dreadCurve = useMemo(() => {
-    return asArray(executionSummary.dread_curve)
-      .map((entry, index) => {
-        const row = asRecord(entry) || {}
-        return {
-          scene_id: asString(row.scene_id).trim() || playlist[index]?.scene_id || `scene_${index + 1}`,
-          dread_score: asNumber(row.dread_score) ?? 0,
-          phase: asString(row.phase).trim() || 'early',
-        }
-      })
-  }, [executionSummary.dread_curve, playlist])
-  const filmStructure = useMemo(() => {
-    const structure = asRecord(executionSummary.film_structure) || {}
-    const acts = asArray(structure.acts).map((row) => {
-      const item = asRecord(row) || {}
-      return {
-        act: asNumber(item.act) ?? 0,
-        scene_count: asNumber(item.scene_count) ?? 0,
-      }
-    })
-    return {
-      acts,
-      sequences: asArray(structure.sequences),
-      total_scenes: asNumber(structure.total_scenes) ?? playlist.length,
-    }
-  }, [executionSummary.film_structure, playlist.length])
-  const filmProgress = useMemo(() => {
-    const progress = asRecord(executionSummary.film_progress) || {}
-    return {
-      completion_percent: asNumber(progress.completion_percent) ?? 0,
-      ready_to_screen: Boolean(progress.ready_to_screen),
-    }
-  }, [executionSummary.film_progress])
-  const filmValidation = useMemo(() => {
-    const validation = asRecord(executionSummary.film_validation) || {}
-    const issues = asArray(validation.issues).map((v) => asString(v).trim()).filter(Boolean)
-    const strengths = asArray(validation.strengths).map((v) => asString(v).trim()).filter(Boolean)
-    return { issues, strengths }
-  }, [executionSummary.film_validation])
-  const sceneDiagnosticsById = useMemo(() => {
-    const map = new Map<string, SceneDiagnostics>()
-    asArray(executionSummary.scenes).forEach((entry, index) => {
-      const row = asRecord(entry) || {}
-      const sceneId = asString(row.scene_id).trim() || playlist[index]?.scene_id || `scene_${index + 1}`
-      const health = asRecord(row.scene_health) || {}
-      const status = asRecord(row.production_status) || {}
-      map.set(sceneId, {
-        score: asNumber(health.score) ?? 0,
-        issues: asArray(health.issues).map((item) => asString(item).trim()).filter(Boolean),
-        state: asString(status.state).trim().toLowerCase() || 'planned',
-        blockers: asArray(status.blockers).map((item) => asString(item).trim()).filter(Boolean),
-        selected_cut: asString(status.selected_cut).trim().toLowerCase() || 'original',
-      })
-    })
-    return map
-  }, [executionSummary.scenes, playlist])
-  const cutAnalysis = useMemo(() => {
-    const raw = asRecord(executionSummary.cut_analysis) || {}
-    const weak = asArray(raw.weak_moments).map((item) => asString(item).trim()).filter(Boolean)
-    const strong = asArray(raw.strong_moments).map((item) => asString(item).trim()).filter(Boolean)
-    if (weak.length > 0 || strong.length > 0) {
-      return { weakMoments: new Set(weak), strongMoments: new Set(strong) }
-    }
-    const fallbackWeak: string[] = []
-    const fallbackStrong: string[] = []
-    playlist.forEach((item) => {
-      const diagnostics = sceneDiagnosticsById.get(item.scene_id)
-      const score = diagnostics?.score ?? 0
-      const issues = diagnostics?.issues.length ?? 0
-      if (score < 0.6 || issues > 0 || item.verdict === 'failed' || item.verdict === 'needs_revision') {
-        fallbackWeak.push(item.scene_id)
-      } else if (score >= 0.8 && item.verdict === 'strong') {
-        fallbackStrong.push(item.scene_id)
-      }
-    })
-    return { weakMoments: new Set(fallbackWeak), strongMoments: new Set(fallbackStrong) }
-  }, [executionSummary.cut_analysis, playlist, sceneDiagnosticsById])
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) return
-    console.log('SCREENING PLAYLIST:', playlist)
-    console.log('SCREENING SUMMARY:', screeningSummary)
-    console.log('SCENE TRANSITIONS:', sceneTransitions)
-    console.log('SEQUENCE FLOW:', sequenceFlow)
-  }, [playlist, screeningSummary, sceneTransitions, sequenceFlow])
-
-  useEffect(() => {
-    if (currentSceneIndex < playlist.length) return
-    setCurrentSceneIndex(playlist.length > 0 ? playlist.length - 1 : 0)
-  }, [currentSceneIndex, playlist.length])
-
-  useEffect(() => {
-    if (!isPlaying || playlist.length === 0) return
-    const activeTransition = sceneTransitions[currentSceneIndex]
-    const durationSeconds = Math.max(1, activeTransition?.duration ?? playlist[currentSceneIndex]?.duration_estimate ?? 2)
-    playbackTimerRef.current = window.setTimeout(() => {
-      setCurrentSceneIndex((prev) => {
-        if (prev >= playlist.length - 1) {
-          setIsPlaying(false)
-          return prev
-        }
-        return prev + 1
-      })
-    }, durationSeconds * 1000)
-    return () => {
-      if (playbackTimerRef.current !== null) {
-        window.clearTimeout(playbackTimerRef.current)
-        playbackTimerRef.current = null
-      }
-    }
-  }, [isPlaying, currentSceneIndex, playlist, sceneTransitions])
-
-  const activeScene = playlist[currentSceneIndex] || null
-  const activeTransition = sceneTransitions[currentSceneIndex] || null
-  const previousScene = currentSceneIndex > 0 ? playlist[currentSceneIndex - 1] : null
-  const pacingShiftDetected =
-    previousScene &&
-    activeScene &&
-    Math.abs((activeScene.duration_estimate || 0) - (previousScene.duration_estimate || 0)) >= 2
-  const activeRenderId = activeScene?.render_ids?.[0] || ''
-  const activeSceneRenderJobId = useMemo(() => {
-    if (!activeScene?.scene_id) return ''
-    const previewAsset = firstVideoAssetByScene.get(activeScene.scene_id)
-    return previewAsset?.render_id || activeRenderId || ''
-  }, [activeRenderId, activeScene?.scene_id, firstVideoAssetByScene])
-  const activeSceneAsset = activeScene?.scene_id ? firstSuccessfulAssetByScene.get(activeScene.scene_id) : null
-  const activeSceneDiagnostics = activeScene?.scene_id ? sceneDiagnosticsById.get(activeScene.scene_id) : null
-  const activeSceneContinuityIssues = useMemo(() => {
-    if (!activeScene?.scene_id) return []
-    return continuityIssues.filter(
-      (issue) =>
-        (issue.source_asset_id || issue.asset_id || '').includes(activeScene.scene_id) ||
-        (issue.compared_asset_id || '').includes(activeScene.scene_id),
-    )
-  }, [activeScene?.scene_id, continuityIssues])
-  const activeSceneStyleDrifts = useMemo(() => {
-    if (!activeScene?.scene_id) return [] as StyleDriftIssue[]
-    return styleDriftIssuesBySceneId.get(activeScene.scene_id) || []
-  }, [activeScene?.scene_id, styleDriftIssuesBySceneId])
-  const activeCutLabel = (activeSceneDiagnostics?.selected_cut === 'iteration' || activeScene?.cut !== 'original') ? 'ITERATION CUT' : 'ORIGINAL CUT'
-  const isWeakMoment = Boolean(activeScene?.scene_id && cutAnalysis.weakMoments.has(activeScene.scene_id))
-  const isStrongMoment = Boolean(activeScene?.scene_id && cutAnalysis.strongMoments.has(activeScene.scene_id))
-  const approvedLabel = activeScene?.scene_id && approvedSceneMap[activeScene.scene_id] ? 'Approved' : 'Needs Work'
-  const fallbackSceneImage =
-    activeSceneAsset?.url
-    || (activeSceneAsset?.file_path && isBrowserSafePath(activeSceneAsset.file_path) ? activeSceneAsset.file_path : '')
-    || getViewerImage(activeRenderId)
-  const fallbackSceneVideoUrl = activeScene?.scene_id
-    ? normalizePlayableVideoUrl(firstVideoAssetByScene.get(activeScene.scene_id)?.video_url || '')
-    : ''
-  
-  // Determine primary video source: stitched film > individual scene clips
-  const primaryVideoUrl = stitchedFilmUrl 
-    ? normalizePlayableVideoUrl(stitchedFilmUrl)
-    : fallbackSceneVideoUrl
-  
-  const primarySceneMedia = useMemo(() => {
-    const stitchedPackageUrl =
-      latestPackage && String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film'
-        ? latestPackage.final_output_url || ''
-        : ''
-    return selectPrimaryStudioMedia({
-      renderJobs: mediaCandidateRenderJobs,
-      sceneId: activeScene?.scene_id || '',
-      shotId: activeRenderId,
-      packageUrl: stitchedPackageUrl,
-      reviewUrl: '',
-      keyframeUrl: fallbackSceneImage,
-    })
-  }, [activeRenderId, activeScene?.scene_id, fallbackSceneImage, latestPackage, mediaCandidateRenderJobs])
-  const viewerImage = primarySceneMedia.kind === 'image' ? primarySceneMedia.url : fallbackSceneImage
-  const refreshedActiveSceneVideoUrl = activeSceneRenderJobId ? refreshedRenderUrls[activeSceneRenderJobId] || '' : ''
-  const activeSceneVideoUrl = stitchedFilmUrl 
-    ? normalizePlayableVideoUrl(stitchedFilmUrl)
-    : refreshedActiveSceneVideoUrl
-      ? normalizePlayableVideoUrl(refreshedActiveSceneVideoUrl)
-    : primarySceneMedia.kind === 'video'
-      ? normalizePlayableVideoUrl(primarySceneMedia.url)
-      : primaryVideoUrl
-  const activeSoundProfile = useMemo(() => {
-    if (!activeScene?.scene_id) return {}
-    const source = asArray(executionSummary.scenes).find((entry) => {
-      const row = asRecord(entry) || {}
-      return asString(row.scene_id).trim() === activeScene.scene_id
-    })
-    return asRecord(asRecord(source)?.sound_profile) || {}
-  }, [activeScene?.scene_id, executionSummary.scenes])
-  const activeAudioCues = useMemo(
-    () => audioCues.filter((cue) => cue.scene_id === (activeScene?.scene_id || '')),
-    [audioCues, activeScene?.scene_id],
-  )
-  const activeAudioPlan = useMemo(
-    () => audioAssetPlan.filter((cue) => cue.scene_id === (activeScene?.scene_id || '')),
-    [audioAssetPlan, activeScene?.scene_id],
-  )
-  const activeRenderStatus = useMemo(() => {
-    if (stitchedFilmUrl && activeSceneVideoUrl === stitchedFilmUrl) {
-      return { label: 'STITCHED FILM', reason: 'Complete film assembled from all scenes.' }
-    }
-    if (primarySceneMedia.source === 'package' && String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film' && activeSceneVideoUrl) {
-      return { label: 'FINAL SHORT FILM', reason: 'Stitched final package output.' }
-    }
-    if (activeSceneVideoUrl) {
-      if (primarySceneMedia.source === 'hosted_render') {
-        return { label: 'HOSTED RENDER', reason: activeScene ? 'Hosted provider output available.' : 'Hosted render preview available.' }
-      }
-      const motionEntry = activeScene?.scene_id ? firstVideoAssetByScene.get(activeScene.scene_id) : null
-      const motionLabel = motionEntry?.video_url ? 'Motion Preview (AI Generated)' : ''
-      return { label: 'COMFYUI RENDER', reason: motionLabel }
-    }
-    if (!activeScene) return { label: 'NO OUTPUT', reason: 'No scenes available' }
-    if (activeSceneVideoUrl) {
-      const motionEntry = activeScene?.scene_id ? firstVideoAssetByScene.get(activeScene.scene_id) : null
-      const motionLabel = motionEntry?.video_url ? 'Motion Preview (AI Generated)' : ''
-      return { label: 'COMFYUI RENDER', reason: motionLabel }
-    }
-    const provider = asString(activeSceneAsset?.provider).toLowerCase()
-    if (provider === 'comfyui') return { label: 'COMFYUI RENDER', reason: '' }
-    if (asString(activeSceneAsset?.status).toLowerCase() === 'failed') return { label: 'FAILED', reason: 'Render failed' }
-    const source = (activeSceneAsset?.url || activeSceneAsset?.file_path || '').toLowerCase()
-    if (!source || source.includes('picsum.photos')) {
-      const fallbackReason = asString(activeSceneAsset?.fallback_reason)
-      return { label: 'NO OUTPUT', reason: fallbackReason ? `No playable output: ${fallbackReason}` : 'No playable output yet' }
-    }
-    return { label: 'LOCAL PREVIS', reason: '' }
-  }, [activeScene, activeSceneAsset, activeSceneVideoUrl, firstVideoAssetByScene, latestPackage, primarySceneMedia.source, stitchedFilmUrl])
-  const revisionTimeline = useMemo(() => {
-    const fromJobs = mediaCandidateRenderJobs.map((job, index) => {
-      const payload = asRecord(job.output_payload) || {}
-      return {
-        id: job.id || `job-${index + 1}`,
-        label: `Revision ${index + 1}`,
-        status: asString(job.status) || 'unknown',
-        runtimeSeconds: Math.max(0, asNumber(payload.duration_seconds) ?? 0),
-        previewUrl: asString(payload.preview_url) || asString(payload.thumbnail_url) || '',
-        outputUrl: normalizePlayableVideoUrl(asString(payload.output_url) || asString(payload.asset_url) || ''),
-        createdAt: asString(job.created_at) || '',
-        notes: asString(payload.revision_intent) || asString(payload.notes) || '',
-      }
-    })
-    if (fromJobs.length > 0) return fromJobs
-    return playlist.map((scene, index) => ({
-      id: `${scene.scene_id}-${index}`,
-      label: `Scene ${index + 1}`,
-      status: scene.status || 'unknown',
-      runtimeSeconds: Math.max(0, scene.duration_estimate || 0),
-      previewUrl: firstVideoAssetByScene.get(scene.scene_id)?.thumbnail_url || firstSuccessfulAssetByScene.get(scene.scene_id)?.url || '',
-      outputUrl: normalizePlayableVideoUrl(firstVideoAssetByScene.get(scene.scene_id)?.video_url || ''),
-      createdAt: '',
-      notes: cutAnalysis.weakMoments.has(scene.scene_id)
-        ? 'Continuity or pacing concerns flagged.'
-        : cutAnalysis.strongMoments.has(scene.scene_id)
-          ? 'Strong cinematic beat with stable signal.'
-          : '',
-    }))
-  }, [cutAnalysis.strongMoments, cutAnalysis.weakMoments, firstSuccessfulAssetByScene, firstVideoAssetByScene, playlist, mediaCandidateRenderJobs])
-  const activeMotionStatus = activeScene?.scene_id ? motionStatusByScene.get(activeScene.scene_id) : null
-  const generationTimeLabel = activeScene?.duration_estimate ? `${activeScene.duration_estimate}s` : 'n/a'
-  const filmMemoryData = useMemo(() => {
-    const motifs = asArray(scoreMap.dominant_instrumentation).map((v) => asString(v).trim()).filter(Boolean)
-    const callbacks = asArray(endingImpact.ending_zone_scene_ids).map((v) => `callback:${asString(v).trim()}`).filter(Boolean)
-    const continuityRefs: string[] = []
-    if (activeSceneDiagnostics?.issues?.length) {
-      continuityRefs.push(...activeSceneDiagnostics.issues.slice(0, 4))
-    } else if (activeSceneContinuityIssues.length > 0) {
-      continuityRefs.push(
-        ...activeSceneContinuityIssues.slice(0, 4).map((issue) => `${issue.issue_type.replace(/_/g, ' ')}: ${issue.description}`),
-      )
+  const togglePlay = useCallback(() => {
+    if (!videoRef.current) return
+    if (isPlaying) {
+      videoRef.current.pause()
+      setIsPlaying(false)
     } else {
-      continuityRefs.push(INTELLIGENCE_EMPTY.noContinuityIssues)
+      void videoRef.current.play()
+      setIsPlaying(true)
     }
-    const tone = asString(screeningSummary.dominant_tone).trim()
-    const feel = asString(endingImpact.dominant_feeling).trim()
-    const themes = [tone, feel].filter(Boolean)
-    return {
-      themes,
-      motifs,
-      emotionalArcs: asArray(dreadCurve)
-        .slice(0, 4)
-        .map((item) => `${asString(asRecord(item)?.scene_id).trim()}:${(Number(asRecord(item)?.dread_score || 0) * 100).toFixed(0)}%`)
-        .filter((row) => !row.endsWith(':0%')),
-      callbacks,
-      continuityReferences: continuityRefs,
-    }
-  }, [
-    activeSceneContinuityIssues,
-    activeSceneDiagnostics?.issues,
-    dreadCurve,
-    endingImpact.dominant_feeling,
-    endingImpact.ending_zone_scene_ids,
-    scoreMap.dominant_instrumentation,
-    screeningSummary.dominant_tone,
-  ])
+  }, [isPlaying])
 
-  async function toggleFullscreenMode() {
-    if (!theaterViewportRef.current) return
-    if (!document.fullscreenElement) {
-      await theaterViewportRef.current.requestFullscreen()
-      setIsTheaterMode(true)
-      setActionFeedback('Theater fullscreen enabled')
-      return
-    }
-    await document.exitFullscreen()
-    setIsTheaterMode(false)
-    setActionFeedback('Theater fullscreen disabled')
-  }
-
-  useEffect(() => {
-    const onFullscreenChange = () => setIsTheaterMode(Boolean(document.fullscreenElement))
-    document.addEventListener('fullscreenchange', onFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  const handleSkipPrev = useCallback(() => {
+    setActiveTakeIndex((prev) => (prev > 0 ? prev - 1 : prev))
+    setCurrentTime(0)
   }, [])
 
-  function handleReviewDecision(decision: 'approve' | 'revise' | 'regenerate') {
-    if (!activeScene?.scene_id) return
-    
-    // For revise, show the revision modal
-    if (decision === 'revise') {
-      setShowRevisionModal(true)
-      setRevisionPrompt('')
-      setRevisionReason('')
-      setRevisionError('')
-      return
+  const handleSkipNext = useCallback(() => {
+    setActiveTakeIndex((prev) => (prev < sceneTakes.length - 1 ? prev + 1 : prev))
+    setCurrentTime(0)
+  }, [sceneTakes.length])
+
+  const handleRateChange = useCallback((rate: PlaybackRate) => {
+    setPlaybackRate(rate)
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate
     }
-    
-    // For approve/regenerate, just store in localStorage
-    const raw = localStorage.getItem('studio:screeningReviewActions')
-    const existing = raw ? (JSON.parse(raw) as Record<string, string>) : {}
-    const next = { ...existing, [activeScene.scene_id]: decision }
-    localStorage.setItem('studio:screeningReviewActions', JSON.stringify(next))
-    setActionFeedback(`Scene ${activeScene.scene_id} marked: ${decision}`)
-  }
+  }, [])
 
-  async function handleActiveSceneVideoError() {
-    const jobId = activeSceneRenderJobId
-    if (!jobId) {
-      console.warn('[ScreeningRoom] video_load_failure', {
-        scene_id: activeScene?.scene_id || 'hosted_preview',
-        output_url: activeSceneVideoUrl,
-        preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
-        reason: 'missing_job_id',
-      })
-      return
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseInt(e.target.value, 10)
+    setVolume(vol)
+    if (videoRef.current) {
+      videoRef.current.volume = vol / 100
     }
+  }, [])
 
-    const attempts = refreshAttemptsByJobId[jobId] || 0
-    if (attempts >= 1) {
-      console.warn('[ScreeningRoom] video_load_failure', {
-        scene_id: activeScene?.scene_id || 'hosted_preview',
-        output_url: activeSceneVideoUrl,
-        preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
-        job_id: jobId,
-        reason: 'refresh_already_tried',
-      })
-      return
+  const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current || !videoRef.current) return
+    const rect = timelineRef.current.getBoundingClientRect()
+    const percent = (e.clientX - rect.left) / rect.width
+    const newTime = percent * duration
+    videoRef.current.currentTime = newTime
+    setCurrentTime(newTime)
+  }, [duration])
+
+  const handleJumpToWeakScene = useCallback(() => {
+    if (weakSceneMarkers.length === 0 || !videoRef.current) return
+    const marker = weakSceneMarkers[0]
+    const newTime = (marker.startPercent / 100) * duration
+    videoRef.current.currentTime = newTime
+    setCurrentTime(newTime)
+    setSuccess('Jumped to weak scene')
+  }, [weakSceneMarkers, duration])
+
+  // ── Full film playback ────────────────────────────────────────────────────
+  const handlePlayFilm = useCallback(() => {
+    setActiveTakeIndex(0)
+    setActiveShotNumber(1)
+    setActiveShotTakeIndex(0)
+    setCurrentTime(0)
+    setIsFullFilm(true)
+  }, [])
+
+  const handleStopFilm = useCallback(() => {
+    setIsFullFilm(false)
+    if (videoRef.current) {
+      videoRef.current.pause()
+      setIsPlaying(false)
     }
+  }, [])
 
-    setRefreshAttemptsByJobId((prev) => ({ ...prev, [jobId]: attempts + 1 }))
-
-    try {
-      const refreshed = await refreshRenderJobOutputUrl(jobId)
-      if (refreshed.output_url) {
-        setRefreshedRenderUrls((prev) => ({ ...prev, [jobId]: refreshed.output_url || '' }))
-        setActionFeedback('Refreshed hosted video URL')
-        return
-      }
-      console.warn('[ScreeningRoom] video_load_failure', {
-        scene_id: activeScene?.scene_id || 'hosted_preview',
-        output_url: activeSceneVideoUrl,
-        preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
-        job_id: jobId,
-        reason: 'refresh_returned_empty',
-      })
-    } catch (error) {
-      console.warn('[ScreeningRoom] video_load_failure', {
-        scene_id: activeScene?.scene_id || 'hosted_preview',
-        output_url: activeSceneVideoUrl,
-        preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
-        job_id: jobId,
-        reason: error instanceof Error ? error.message : 'refresh_failed',
-      })
-    }
-  }
-
-  async function handleSubmitRevision() {
-    if (!activeProjectId || !activeScene?.scene_id) {
-      setRevisionError('No active project or scene')
-      return
-    }
-
-    if (!revisionPrompt.trim()) {
-      setRevisionError('Please enter revision instructions')
-      return
-    }
-
-    setRevisionLoading(true)
-    setRevisionError('')
-
-    try {
-      // Find the render job for this scene
-      const sceneJobs = renderJobs.filter((job) => {
-        const jobSceneId = job.shot_id?.split('_shot_')[0] || job.shot_id
-        return jobSceneId === activeScene.scene_id
-      })
-
-      if (sceneJobs.length === 0) {
-        setRevisionError('No render job found for this scene')
-        setRevisionLoading(false)
-        return
-      }
-
-      // Use the most recent job
-      const originalJob = sceneJobs.sort((a, b) => {
-        const aTime = new Date(a.created_at || 0).getTime()
-        const bTime = new Date(b.created_at || 0).getTime()
-        return bTime - aTime
-      })[0]
-
-      // Create or get review
-      let reviewId: string
-      try {
-        const latestReview = await getLatestShortFilmReview(activeProjectId)
-        reviewId = latestReview.review.review_id
-      } catch {
-        // Create new review if none exists
-        const outputUrl = originalJob.output_payload?.asset_url || originalJob.output_payload?.thumbnail_url || ''
-        const newReview = await createShortFilmReview(activeProjectId, {
-          output_url: outputUrl,
-          reviewer: 'user',
-          notes: 'Scene review from Screening Room',
-        })
-        reviewId = newReview.review.review_id
-      }
-
-      // Create clip revision
-      const revision = await createClipRevision(activeProjectId, {
-        review_id: reviewId,
-        original_job_id: originalJob.id,
-        provider: 'runway',
-        revision_prompt: revisionPrompt.trim(),
-        revision_reason: revisionReason.trim() || 'User requested revision',
-        metadata: {
-          scene_id: activeScene.scene_id,
-          requested_from: 'screening_room',
-        },
-      })
-
-      // Optionally submit the revision render
-      await submitClipRevisionRender(revision.revision.revision_id, {})
-
-      setActionFeedback(`Revision queued for ${activeScene.scene_id}`)
-      setShowRevisionModal(false)
-      setRevisionPrompt('')
-      setRevisionReason('')
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create revision'
-      setRevisionError(errorMessage)
-      console.error('[ScreeningRoom] Revision failed:', err)
-    } finally {
-      setRevisionLoading(false)
-    }
-  }
-
-  async function handleStitchFilm() {
-    if (!activeProjectId) {
-      setStitchingError('No active project')
-      return
-    }
-
-    setStitchingFilm(true)
-    setStitchingError('')
-    setActionFeedback('Assembling your film...')
-
-    try {
-      const result = await stitchShortFilm(activeProjectId, false)
-      
-      if (result.error) {
-        setStitchingError(result.error)
-        setActionFeedback('')
-        return
-      }
-
-      if (!result.result) {
-        setStitchingError('Stitching returned no result')
-        setActionFeedback('')
-        return
-      }
-
-      const { status, output_url, blocker, error_message, clip_count } = result.result
-
-      if (status === 'completed') {
-        setStitchedFilmUrl(output_url)
-        setActionFeedback(`Film stitched successfully! ${clip_count} scenes assembled.`)
-        setStitchingError('')
-      } else if (status === 'existing') {
-        setStitchedFilmUrl(output_url)
-        setActionFeedback(`Using existing stitched film (${clip_count} scenes).`)
-        setStitchingError('')
-      } else if (status === 'failed') {
-        const errorMsg = error_message || blocker || 'Stitching failed'
-        setStitchingError(errorMsg)
-        setActionFeedback('')
-        
-        // If no completed outputs, show helpful message
-        if (blocker === 'no_completed_outputs') {
-          setStitchingError('No completed renders available. Generate scenes in Production Board first.')
+  const handleVideoEnded = useCallback(() => {
+    if (!isFullFilm) return
+    if (activeTakeIndex < scenes.length - 1) {
+      setActiveTakeIndex((prev) => prev + 1)
+      setActiveShotNumber(1)
+      setActiveShotTakeIndex(0)
+      setCurrentTime(0)
+    } else {
+      setShowFinOverlay(true)
+      setTimeout(() => {
+        setShowFinOverlay(false)
+        setIsFullFilm(false)
+        setActiveTakeIndex(0)
+        setActiveShotNumber(1)
+        setActiveShotTakeIndex(0)
+        setCurrentTime(0)
+        if (videoRef.current) {
+          videoRef.current.pause()
+          setIsPlaying(false)
         }
-      } else {
-        setStitchingError(`Unexpected status: ${status}`)
-        setActionFeedback('')
+      }, 3000)
+    }
+  }, [isFullFilm, activeTakeIndex, scenes.length])
+
+  // ── Scene status badge helper ─────────────────────────────────────────────
+  function getSceneStatus(sceneId: string): 'composed' | 'rendered' | 'unrendered' {
+    if (sceneCompositionsCache[sceneId]) return 'composed'
+    const hasRender = renderJobs.some((j) => {
+      const jobSceneId = j.shot_id?.split('_shot_')[0] || ''
+      const hasUrl = !!(j.output_payload?.asset_url || j.output_url)
+      return jobSceneId === sceneId && normalizeJobStatus(j.status) === 'complete' && hasUrl
+    })
+    if (hasRender) return 'rendered'
+    return 'unrendered'
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function deriveMetrics(text: string, sceneIndex?: number): SceneAudienceMetrics {
+    const lower = text.toLowerCase()
+    const words = lower.split(/\s+/).filter(Boolean)
+    const wordCount = words.length
+    const sentences = lower.split(/[.!?]+/).filter((s) => s.trim().length > 0)
+    const sentenceCount = sentences.length
+
+    console.log(
+      `[deriveMetrics] sceneIndex=${sceneIndex} wordCount=${wordCount} sentenceCount=${sentenceCount} text="${text.slice(0, 300)}"`,
+    )
+
+    let engagement = 50
+    let tension = 40
+    let emotionalImpact = 45
+    let anyKeywordMatched = false
+
+    const engageSignals = [
+      'grip', 'engage', 'captivat', 'compel', 'absorb', 'rivet', 'immers', 'fascinat', 'intrigu',
+      'quiet', 'observes', 'watches', 'lingers', 'moves', 'walks', 'slow', 'patient', 'still',
+      'hold', 'attention', 'hook', 'interest', 'curious', 'drawn', 'pace', 'rhythm',
+      'appreciate', 'attentive', 'involv', 'participation',
+    ]
+    for (const s of engageSignals) { if (lower.includes(s)) { engagement += 8; anyKeywordMatched = true } }
+
+    const tensionSignals = [
+      'tension', 'suspense', 'anxiety', 'dread', 'pressur', 'urgent', 'tense', 'unease',
+      'ominous', 'threat', 'danger', 'uneasy', 'unsettl', 'disturb', 'weight', 'heavy',
+      'pause', 'silence', 'stillness', 'wait', 'breath', 'subtext', 'restraint',
+    ]
+    for (const s of tensionSignals) { if (lower.includes(s)) { tension += 8; anyKeywordMatched = true } }
+
+    const emotionSignals = [
+      'emotion', 'moved', 'touch', 'heart', 'tear', 'joy', 'sorrow', 'grief', 'hope',
+      'fear', 'love', 'power', 'deep', 'poignant', 'yearn', 'melancholy', 'longing',
+      'warmth', 'tender', 'gentle', 'vulnerab', 'intimate', 'resonance', 'feeling',
+      'bittersweet', 'nostalgia', 'reflect', 'contemplat', 'vulnerability',
+      'connect', 'meaning', 'weight',
+    ]
+    for (const s of emotionSignals) { if (lower.includes(s)) { emotionalImpact += 8; anyKeywordMatched = true } }
+
+    // Text length = engagement proxy
+    if (wordCount > 15) engagement += 5
+    if (wordCount > 30) engagement += 5
+    if (wordCount > 50) engagement += 5
+
+    // Sentence count = narrative structure
+    if (sentenceCount > 2) engagement += 3
+    if (sentenceCount > 5) engagement += 3
+
+    // Broad emotional vocabulary net
+    const emotionalVocab = [
+      'love', 'hate', 'fear', 'joy', 'sad', 'angry', 'hope', 'dream',
+      'heart', 'soul', 'gentle', 'soft', 'warm', 'cold', 'dark', 'light', 'beautiful',
+      'pain', 'hurt', 'comfort', 'yearn', 'ache', 'long', 'miss', 'grief', 'tear',
+      'smile', 'laugh', 'cry', 'weep', 'rage', 'fury', 'calm', 'peace',
+    ]
+    for (const v of emotionalVocab) { if (lower.includes(v)) emotionalImpact += 3 }
+
+    // If no keyword matched at all but text exists, derive from structure
+    if (!anyKeywordMatched && wordCount > 0) {
+      engagement += Math.min(15, Math.floor(wordCount / 4))
+      if (sentenceCount > 1) { tension += 5; emotionalImpact += 5 }
+    }
+
+    // Narrative-arc floor via scene index (early ~35–50%, mid ~60–75%, late ~45–55%)
+    let narrativeFloor = wordCount > 0 ? 15 : 0
+    if (sceneIndex !== undefined) {
+      const narrativeDefaults = [38, 42, 55, 62, 68, 72, 78, 82, 85, 88, 78, 65, 55, 48, 42]
+      const arcBase = narrativeDefaults[sceneIndex] ?? 45
+      narrativeFloor = Math.max(narrativeFloor, Math.round(arcBase * 0.45))
+    }
+
+    return {
+      engagement: Math.min(100, Math.max(narrativeFloor, Math.round(engagement))),
+      tension: Math.min(100, Math.max(narrativeFloor, Math.round(tension))),
+      emotionalImpact: Math.min(100, Math.max(narrativeFloor, Math.round(emotionalImpact))),
+    }
+  }
+
+  const DEFAULT_ARC: number[] = [35, 45, 50, 55, 60, 70, 65, 75, 85, 80, 45]
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  // Fix 1: Shots for the current scene
+  const shotsForCurrentScene: ShotInfo[] = useMemo(() => {
+    if (!activeTake) return []
+    const sceneId = activeTake.sceneId
+    const completedJobs = renderJobs.filter((j) => normalizeJobStatus(j.status) === 'complete')
+    const shotMap = new Map<number, string>()
+    const sorted = [...completedJobs].sort(
+      (a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime(),
+    )
+    for (const job of sorted) {
+      const jobSceneId = job.shot_id?.split('_shot_')[0] || ''
+      if (jobSceneId !== sceneId) continue
+      const match = job.shot_id?.match(/_shot_(\d+)$/)
+      if (!match) continue
+      const shotNum = parseInt(match[1], 10)
+      const url = job.output_payload?.asset_url
+      if (url && typeof url === 'string' && url.trim().length > 0 && !shotMap.has(shotNum)) {
+        shotMap.set(shotNum, url)
+      }
+    }
+    return Array.from(shotMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([shotNumber, videoUrl]) => ({ shotNumber, videoUrl }))
+  }, [activeTake, renderJobs])
+
+  // Takes within each shot (grouped render jobs by shot_id, sorted by created_at desc)
+  const shotTakes: Record<number, RenderJob[]> = useMemo(() => {
+    if (!activeTake) return {}
+    const sceneId = activeTake.sceneId
+    const completedJobs = renderJobs.filter((j) => normalizeJobStatus(j.status) === 'complete')
+    const map: Record<number, RenderJob[]> = {}
+    for (const job of completedJobs) {
+      const jobSceneId = job.shot_id?.split('_shot_')[0] || ''
+      if (jobSceneId !== sceneId) continue
+      const match = job.shot_id?.match(/_shot_(\d+)$/)
+      if (!match) continue
+      const shotNum = parseInt(match[1], 10)
+      const url = job.output_payload?.asset_url
+      if (url && typeof url === 'string' && url.trim().length > 0) {
+        if (!map[shotNum]) map[shotNum] = []
+        map[shotNum].push(job)
+      }
+    }
+    for (const takes of Object.values(map)) {
+      takes.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+    }
+    return map
+  }, [activeTake, renderJobs])
+
+  // Active video URL: composed scene takes priority, then shot take, then scene take
+  const activeVideoUrl = useMemo(() => {
+    if (sceneComposition?.composed_url) return sceneComposition.composed_url
+    const takes = shotTakes[activeShotNumber]
+    const job = takes?.[activeShotTakeIndex]
+    if (job?.output_payload?.asset_url) return job.output_payload.asset_url
+    return activeTake?.videoUrl || ''
+  }, [sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
+
+  // Fix 1: Reset shot number when scene changes
+  useEffect(() => {
+    setActiveShotNumber(1)
+  }, [activeTakeIndex])
+
+  // Fix 1: Ensure active shot is valid for current scene
+  useEffect(() => {
+    if (shotsForCurrentScene.length > 0) {
+      const validNumbers = shotsForCurrentScene.map((s) => s.shotNumber)
+      if (!validNumbers.includes(activeShotNumber) && validNumbers.length > 0) {
+        setActiveShotNumber(validNumbers[0])
+      }
+    }
+  }, [shotsForCurrentScene, activeShotNumber])
+
+  // Reset take index when shot changes
+  useEffect(() => {
+    setActiveShotTakeIndex(0)
+  }, [activeShotNumber])
+
+  /** True if cached simulation has valid audience_reactions (not empty/malformed). */
+  function isValidCacheEntry(sim: SceneAudienceSimulation | undefined): boolean {
+    return !!sim && Array.isArray(sim.audience_reactions) && sim.audience_reactions.length > 0
+  }
+
+  // Fix 3: Auto-load audience sim when scene changes
+  useEffect(() => {
+    if (!effectiveProjectId || !activeTake?.sceneId) return
+    const cached = sceneAudienceCache[activeTake.sceneId]
+    if (isValidCacheEntry(cached)) return
+    if (cached) console.log('[auto-load] invalidating stale cache for', activeTake.sceneId)
+    let cancelled = false
+    setSceneAudienceLoading(true)
+    console.log('[auto-load] fetching audience sim for scene', activeTake.sceneId)
+    simulateSceneAudience(effectiveProjectId, activeTake.sceneId)
+      .then((result) => {
+        if (!cancelled) {
+          setSceneAudienceCache((prev) => ({ ...prev, [activeTake.sceneId]: result }))
+        }
+      })
+      .catch((err) => {
+        console.warn('[auto-load] failed for', activeTake.sceneId, err)
+      })
+      .finally(() => {
+        if (!cancelled) setSceneAudienceLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [activeTake?.sceneId, effectiveProjectId, sceneAudienceCache])
+
+  // Fix 3: Preload adjacent scene audience sims
+  useEffect(() => {
+    if (!effectiveProjectId || scenes.length === 0) return
+    const indices = [activeTakeIndex - 1, activeTakeIndex + 1].filter(
+      (i) => i >= 0 && i < scenes.length,
+    )
+    for (const i of indices) {
+      const sceneId = scenes[i]?.scene_id
+      if (!sceneId || isValidCacheEntry(sceneAudienceCache[sceneId])) continue
+      console.log('[preload] fetching adjacent scene', sceneId)
+      simulateSceneAudience(effectiveProjectId, sceneId)
+        .then((result) => {
+          setSceneAudienceCache((prev) => ({ ...prev, [sceneId]: result }))
+        })
+        .catch((err) => {
+          console.warn('[preload] failed for', sceneId, err)
+        })
+    }
+  }, [activeTakeIndex, scenes, effectiveProjectId, sceneAudienceCache])
+
+  function getSegmentCache(): SceneAudienceMetrics {
+    const sim = activeTake?.sceneId ? sceneAudienceCache[activeTake.sceneId] : undefined
+    if (!sim) {
+      console.log('[getSegmentCache] no sim found for sceneId:', activeTake?.sceneId)
+      return { engagement: 0, tension: 0, emotionalImpact: 0 }
+    }
+    console.log('[getSegmentCache] using sim with', sim.audience_reactions?.length, 'reactions')
+    const segMap: Record<string, string> = { general: 'casual', cinephile: 'cinephile', genre_fan: 'genre' }
+    const match = sim.audience_reactions.find((r) =>
+      r.audience_type.toLowerCase().includes(segMap[audienceSegment] || audienceSegment),
+    )
+    const reaction = match || sim.audience_reactions[0]
+    if (!reaction) {
+      console.log('[getSegmentCache] no reaction found, returning 0s')
+      return { engagement: 0, tension: 0, emotionalImpact: 0 }
+    }
+    const text = reaction.likely_reaction + ' ' + reaction.reasoning
+    console.log('[getSegmentCache] reaction text:', text.slice(0, 250))
+    return deriveMetrics(text, activeTakeIndex)
+  }
+
+  function getEmotionalArc(): number[] {
+    return scenes.map((_, i) => {
+      const sid = scenes[i]?.scene_id
+      if (!sid) return DEFAULT_ARC[i] ?? 50
+      const analysis = emotionAnalysisCache[sid]
+      if (analysis) return analysis.general.emotional_impact
+      return DEFAULT_ARC[i] ?? 50
+    })
+  }
+
+  // Audience metrics from emotion analysis cache (Groq-powered real scores)
+  const audienceMetrics: SceneAudienceMetrics = useMemo(() => {
+    const analysis = activeTake?.sceneId ? emotionAnalysisCache[activeTake.sceneId] : undefined
+    if (analysis) {
+      const group = analysis[audienceSegment]
+      return {
+        engagement: group.engagement,
+        tension: group.tension,
+        emotionalImpact: group.emotional_impact,
+      }
+    }
+    return { engagement: 0, tension: 0, emotionalImpact: 0 }
+  }, [emotionAnalysisCache, activeTake?.sceneId, audienceSegment])
+
+  // Fix 2: Scene navigation
+  const handlePrevScene = useCallback(() => {
+    setActiveTakeIndex((prev) => (prev > 0 ? prev - 1 : prev))
+    setCurrentTime(0)
+    setShowTakeDropdown(false)
+  }, [])
+
+  const handleNextScene = useCallback(() => {
+    setActiveTakeIndex((prev) => (prev < sceneTakes.length - 1 ? prev + 1 : prev))
+    setCurrentTime(0)
+    setShowTakeDropdown(false)
+  }, [sceneTakes.length])
+
+  // ── Export handlers ───────────────────────────────────────────────────────
+  const handleExportMp4 = useCallback(async () => {
+    const url = activeVideoUrl
+    if (!url) {
+      setError('No render available to export')
+      return
+    }
+    setExporting(true)
+    setError('')
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      const projName = activeProject?.title?.toLowerCase().replace(/\s+/g, '-') || 'film'
+      const sceneNum = String(activeTakeIndex + 1).padStart(2, '0')
+      const shotNum = String(activeShotNumber).padStart(2, '0')
+      a.download = `${projName}-scene-${sceneNum}-shot-${shotNum}.mp4`
+      a.click()
+      URL.revokeObjectURL(blobUrl)
+      setSuccess('Video export downloaded')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }, [activeVideoUrl, activeProject, activeTakeIndex, activeShotNumber, sceneTakes, shotsForCurrentScene, activeTake])
+
+  const handleDownloadFinalPackage = useCallback(async () => {
+    if (!effectiveProjectId) return
+    setExporting(true)
+    setError('')
+    try {
+      const result = await fetchExportPackage(effectiveProjectId, 'festival-export')
+      const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${activeProject?.title || 'film'}-export.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setSuccess('Export package downloaded')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }, [effectiveProjectId, activeProject])
+
+  const handleShare = useCallback(async () => {
+    const shareUrl = `${window.location.origin}/studio/screening-room?project_id=${effectiveProjectId}`
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    } catch {
+      setError('Failed to copy share link')
+    }
+  }, [effectiveProjectId])
+
+  // ── Stitch film ───────────────────────────────────────────────────────────
+  const handleStitchFilm = useCallback(async () => {
+    if (!effectiveProjectId) return
+    setStitching(true)
+    setError('')
+    try {
+      await stitchShortFilm(effectiveProjectId, false)
+      setSuccess('Film stitched successfully!')
+      try {
+        const { package: pkg } = await getLatestFinalShortFilmPackageForProject(effectiveProjectId)
+        setFinalPackage(pkg)
+      } catch {
+        // ignore
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to stitch film'
-      setStitchingError(errorMessage)
-      setActionFeedback('')
-      console.error('[ScreeningRoom] Stitching failed:', err)
+      setError(err instanceof Error ? err.message : 'Stitch failed')
     } finally {
-      setStitchingFilm(false)
+      setStitching(false)
     }
-  }
+  }, [effectiveProjectId])
 
-  useEffect(() => {
-    if (!activeScene) return
-    console.info('[ScreeningRoom] preview_sources', {
-      scene_id: activeScene.scene_id,
-      output_url: activeSceneVideoUrl || '',
-      preview_url: firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '',
-      fallback_image: viewerImage || '',
-    })
-  }, [activeScene, activeSceneVideoUrl, firstVideoAssetByScene, viewerImage])
-
-  async function handleExportCutManifest() {
-    const safeProjectId = projectId || project?.project_id || 'local_project'
+  // ── Audience simulation ───────────────────────────────────────────────────
+  const handleSimulate = useCallback(async () => {
+    if (!effectiveProjectId) return
+    setSimulating(true)
+    setError('')
     try {
-      const payload = await fetchExportPackage(safeProjectId, 'cut-manifest')
-      downloadJson(`${safeProjectId}-cut-manifest.json`, payload)
-      setExportMessage('Export created')
-    } catch {
-      const fallback = buildLocalFallbackExport('cut-manifest')
-      downloadJson(`${safeProjectId}-cut-manifest-fallback.json`, fallback)
-      setExportMessage('Export created (local fallback)')
-    }
-  }
-
-  async function handleCreateFinalPackage() {
-    const safeProjectId = activeProjectId || project?.project_id || projectId || 'local_project'
-    const packageTitle = (project?.title?.trim() || 'Studio Cut').slice(0, 120)
-    try {
-      const created = await createFinalShortFilmPackage(safeProjectId, {
-        film_title: packageTitle,
-        metadata: {
-          package_origin: 'screening_room',
-          requested_at: new Date().toISOString(),
-        },
-      })
-      const nextPackage = created?.package || null
-      setLatestPackage(nextPackage)
-      const assemblyKind = typeof nextPackage?.metadata?.assembly_kind === 'string' ? String(nextPackage.metadata.assembly_kind) : ''
-      if (assemblyKind === 'assembled_manifest') {
-        setExportMessage('Final package manifest assembled from completed renders.')
-      } else if (assemblyKind === 'single_scene_preview') {
-        setExportMessage('Single-scene final film preview package created.')
-      } else {
-        setExportMessage('Final package created.')
+      const result = await simulateProjectAudience(effectiveProjectId)
+      setAudienceSim(result)
+      setSceneAudienceCache({})
+      const sId = activeTake?.sceneId
+      if (sId) {
+        const sceneResult = await simulateSceneAudience(effectiveProjectId, sId)
+        setSceneAudienceCache((prev) => ({ ...prev, [sId]: sceneResult }))
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : ''
-      setExportMessage(message || 'Could not create final package from completed renders.')
+      // Also refresh Groq-powered emotion analysis for all scenes
+      if (scenes.length > 0) {
+        const promises = scenes.map(async (sc) => {
+          try {
+            const analysis = await analyzeSceneEmotion(effectiveProjectId, sc.scene_id)
+            return { sceneId: sc.scene_id, analysis }
+          } catch {
+            return null
+          }
+        })
+        const results = await Promise.all(promises)
+        const newCache: Record<string, EmotionAnalysisResult> = {}
+        for (const r of results) {
+          if (r) newCache[r.sceneId] = r.analysis
+        }
+        setEmotionAnalysisCache(newCache)
+      }
+      setSuccess('Audience simulation complete')
+    } catch (err) {
+      console.error('[handleSimulate] failed:', err)
+      if (!isSceneNotFoundError(err)) {
+        setError(err instanceof Error ? err.message : 'Simulation failed')
+      }
+    } finally {
+      setSimulating(false)
     }
-  }
+  }, [effectiveProjectId, activeTake, scenes])
 
+  // ── Request co-director notes ─────────────────────────────────────────────
+  const handleRequestNotes = useCallback(async () => {
+    if (!effectiveProjectId) return
+    setRequestingNotes(true)
+    setError('')
+    try {
+      const curTake = sceneTakes[activeTakeIndex]
+      const sceneIndex = activeTakeIndex + 1
+      const sceneName = curTake?.sceneName || `Scene ${sceneIndex}`
+      const headingText = shotRationale?.rationale || 'No rationale available.'
+
+      const message = `You are watching SCENE ${sceneIndex}. The shot is: ${sceneName}. Context: ${headingText}. Offer a directorial note. Use cinematic language. No scores, ratings, or percentages. If uncertain, acknowledge it.`
+
+      const url = `/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/co-director/chat`
+      const payload = {
+        message,
+        specialist: 'director',
+        context: 'current_scene',
+        system_prompt: '',
+      }
+
+      console.log('[handleRequestNotes] URL:', url)
+      console.log('[handleRequestNotes] Payload:', JSON.stringify(payload, null, 2))
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json()
+      console.log('[handleRequestNotes] Raw response:', JSON.stringify(data, null, 2))
+
+      const replyText: string = data?.reply || 'No response from Co-Director.'
+      const note: CoDirectorNote = {
+        id: `note-${Date.now()}`,
+        agentName: 'Co-Director',
+        text: replyText,
+        timestamp: new Date().toISOString(),
+      }
+      setCoDirectorNotes([note])
+      setSuccess('Co-Director notes received')
+    } catch (err) {
+      console.error('[handleRequestNotes] Error:', err)
+      if (!isSceneNotFoundError(err)) {
+        setError(err instanceof Error ? err.message : 'Failed to get notes')
+      }
+    } finally {
+      setRequestingNotes(false)
+    }
+  }, [effectiveProjectId, sceneTakes, activeTakeIndex, shotRationale])
+
+  // ── Route availability (verified against backend) ─────────────────────────
+  // APPLY TO SHOT: PATCH /projects/{id}/scenes/{sid}/shots/{shid} — does NOT exist
+  // SEND TO PAGE:  PUT /projects/{id}/scenes/{sid} — exists via updateScene() (uses `notes` field)
+  // SAVE TO MEMORY: POST /projects/{id}/creative-memories — exists via saveCreativeDecisionMemory()
+  console.warn(
+    '[ScreeningRoom] Route check: PATCH /api/f51/studio/projects/{project_id}/scenes/{scene_id}/shots/{shot_id} — NOT FOUND. APPLY TO SHOT button will not render.',
+  )
+
+  // ── Note action handlers ─────────────────────────────────────────────────
+  const handleSendToPage = useCallback(async () => {
+    if (!effectiveProjectId || !activeTake?.sceneId || coDirectorNotes.length === 0) return
+    const note = coDirectorNotes[0]
+    try {
+      const result = await updateScene(effectiveProjectId, activeTake.sceneId, { notes: note.text })
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setSuccess('Note saved to scene in The Page')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save note to scene')
+    }
+  }, [effectiveProjectId, activeTake, coDirectorNotes])
+
+  const handleSaveToMemory = useCallback(async () => {
+    if (!effectiveProjectId || !activeTake?.sceneId || coDirectorNotes.length === 0) return
+    const note = coDirectorNotes[0]
+    try {
+      await saveCreativeDecisionMemory(effectiveProjectId, {
+        project_id: effectiveProjectId,
+        decision_type: 'creative_note',
+        user_note: note.text,
+        inferred_tradeoff: 'not_inferred',
+        inferred_tradeoff_explanation: 'Co-director observation from screening room',
+        source_context: {
+          scene_id: activeTake.sceneId,
+          screen_location: 'co_director_theater',
+        },
+        editable: true,
+        forgettable: true,
+      })
+      setSuccess("Saved to Director's Memory")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save to memory')
+    }
+  }, [effectiveProjectId, activeTake, coDirectorNotes])
+
+  const handleApplyToShot = useCallback(async () => {
+    if (!effectiveProjectId || !activeTake?.sceneId || coDirectorNotes.length === 0) return
+    const note = coDirectorNotes[0]
+    const params = new URLSearchParams({
+      project_id: effectiveProjectId,
+      scene: activeTake.sceneId,
+      shot: String(activeShotNumber),
+      codirector_note: note.text,
+    })
+    navigate(`/studio/previs?${params.toString()}`)
+  }, [effectiveProjectId, activeTake, coDirectorNotes, activeShotNumber, navigate])
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <>
-      <TheaterScene videoUrl={primaryVideoUrl} />
-      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto' }}>
-        <StudioShell title="Screening Room" subtitle="Playback and review of scene cuts and iteration outcomes." transparent>
-      <ProjectGuard>
-        <ProjectContextBar roomName="screening room" />
-        <RenderActivityPanel roomName="Screening Room" />
-        <CollaboratorPresenceIndicators collaboration={collaboration || null} />
-      <div className={`w-full overflow-visible ${isTheaterMode ? 'screening-theater-mode' : ''}`}>
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 space-y-5 text-zinc-100">
-          <section className="cinematic-panel studio-fade-in p-5">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">STEP 4: WATCH YOUR FILM</div>
-            <h2 className="flex items-center gap-2 text-xl font-semibold uppercase tracking-[0.14em] text-zinc-100"><MonitorPlay size={18} />Screening Room</h2>
-            <p className="mt-1 text-sm text-zinc-300">This is your current cut built from approved scenes.</p>
-            <div className="mt-2 text-xs uppercase tracking-[0.12em] text-zinc-300">
-              Current Cut: <span className="text-zinc-100 font-semibold">{currentCut?.name || currentCut?.cut_id || 'Default'}</span>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.12em]">
-              <div className="rounded border border-cyan-400/35 bg-cyan-500/10 px-3 py-1.5 flex items-center gap-3">
-                <span className="text-cyan-100 font-semibold">NEXT: REVIEW AND APPROVE SCENES IN PREVIS</span>
-                <span className="text-cyan-200">—</span>
-                <span className="rounded-full bg-cyan-400/25 px-2.5 py-0.5 text-[10px] font-bold text-cyan-50">
-                  {approvedSceneIds.size} approved
-                </span>
-              </div>
-              <span className="rounded border border-white/15 bg-black/25 px-2 py-1 text-zinc-300">Scenes in cut: {playlist.length}</span>
-              <span className="rounded border border-cyan-400/35 bg-cyan-500/10 px-2 py-1 text-cyan-200">Runtime estimate: {Math.max(0, playlist.length * 3)} min</span>
-            </div>
-            {previewAllScenes || approvedSceneIds.size === 0 ? (
-              <div className="mt-2 rounded border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-zinc-300">
-                This cut is built from available scenes.
-              </div>
-            ) : null}
-            {currentCut && playlist.length === 0 ? (
-              <div className="studio-empty-state mt-3 text-xs text-rose-200">
-                {activeSceneVideoUrl ? 'No scenes in current cut, but a hosted render preview is available.' : 'No scenes in current cut.'}
-                <div className="mt-2">
-                  <Link
-                    to={withProjectQuery('/studio/production-board', activeProjectId)}
-                    className="rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline"
-                  >
-                    Go to Production Board
-                  </Link>
+    <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
+      {/* 3D environment */}
+      <div style={{ position: 'absolute', inset: 0 }}>
+        <TheaterScene />
+      </div>
+
+      {/* UI overlay */}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+        <StudioShell title="Screening Room" subtitle="The Theater — Review and analyze your film" transparent>
+          <ProjectGuard>
+            <ProjectContextBar roomName="screening room" />
+
+            {/* Status messages */}
+            <div className="px-4 pt-2">
+              {error && (
+                <div className="mb-2 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
+                  {error}
                 </div>
-              </div>
-            ) : null}
-            {approvedSceneIds.size === 0 && !previewAllScenes ? (
-              <div className="studio-empty-state mt-3 text-xs text-amber-200">
-                No approved scenes yet. Approve scenes in Previs to build your cut.
-                <div className="mt-2">
+              )}
+              {success && (
+                <div className="mb-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
+                  {success}
+                </div>
+              )}
+            </div>
+
+            {/* ── TWO-PANEL LAYOUT ────────────────────────────────────────── */}
+            <div className="flex h-[calc(100vh-140px)] w-full gap-4 px-4 pb-4">
+              {/* ── LEFT: VIDEO PLAYER + CONTROLS ─────────────────────────── */}
+              <div className="flex flex-1 flex-col gap-3">
+                {/* PLAY FILM button (above nav, hidden during full film) */}
+                {!isFullFilm && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setPreviewAllScenes(true)
-                      setActionFeedback('Previewing all scenes')
+                    onClick={handlePlayFilm}
+                    disabled={scenes.length === 0}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] amber-glow disabled:opacity-40"
+                    style={{
+                      background: 'rgba(255,209,101,0.12)',
+                      color: 'var(--color-primary)',
+                      border: '1px solid rgba(255,209,101,0.25)',
                     }}
-                    className="rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100"
                   >
-                    Preview All Scenes Anyway
+                    <Play size={16} />
+                    PLAY FILM
                   </button>
-                </div>
-              </div>
-            ) : null}
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                title="Auto-play the current cut"
-                onClick={() => {
-                  setIsPlaying(true)
-                  setActionFeedback('Playback started')
-                }}
-                className={`rounded-lg border border-emerald-300/60 bg-emerald-500/22 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-50 shadow-[0_0_22px_rgba(16,185,129,0.22)] transition-all duration-200 hover:scale-[1.02] ${isPlaying ? 'playback-glow' : ''}`}
-              >
-                Play Full Cut
-              </button>
-              <button
-                type="button"
-                title="Pause playback"
-                onClick={() => {
-                  setIsPlaying(false)
-                  setActionFeedback('Playback paused')
-                }}
-                className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-zinc-200 transition-all duration-200 hover:scale-[1.02]"
-              >
-                Pause
-              </button>
-              <div className="text-xs uppercase tracking-[0.1em] text-zinc-300">
-                Current Scene: <span className="text-zinc-100 font-medium">{activeScene?.scene_id || 'none'}</span>
-              </div>
-              <div className="text-xs uppercase tracking-[0.1em] text-zinc-300">
-                Transition: <span className="font-semibold uppercase text-amber-200">{activeTransition?.transition || 'hold'}</span>
-              </div>
-              {!isPlaying ? (
-                <div className="rounded-full border border-zinc-600/50 bg-zinc-800/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300">
-                  PAUSED
-                </div>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  const targetIndex = playlist.findIndex((item) => cutAnalysis.weakMoments.has(item.scene_id))
-                  if (targetIndex >= 0) {
-                    setCurrentSceneIndex(targetIndex)
-                    setActionFeedback(`Jumped to weak scene ${playlist[targetIndex]?.scene_id || ''}`)
-                  } else {
-                    setActionFeedback('No weak scene markers found')
-                  }
-                }}
-                className="rounded-lg border border-rose-400/45 bg-rose-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-rose-200"
-              >
-                Jump to Weak Scene
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const targetIndex = playlist.findIndex((item) => cutAnalysis.strongMoments.has(item.scene_id))
-                  if (targetIndex >= 0) {
-                    setCurrentSceneIndex(targetIndex)
-                    setActionFeedback(`Jumped to strong scene ${playlist[targetIndex]?.scene_id || ''}`)
-                  } else {
-                    setActionFeedback('No strong scene markers found')
-                  }
-                }}
-                className="rounded-lg border border-emerald-400/45 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-200"
-              >
-                Jump to Strong Scene
-              </button>
-              <div className={`text-xs uppercase tracking-[0.12em] ${isPlaying ? 'text-emerald-300' : 'text-zinc-400'}`}>
-                {isPlaying ? 'playing' : 'paused'}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setActionFeedback('Creating cut manifest export')
-                  void handleExportCutManifest()
-                }}
-                className="rounded-lg border border-cyan-300/40 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-cyan-100"
-              >
-                Export Cut Manifest
-              </button>
-              <button
-                type="button"
-                onClick={() => { void handleStitchFilm() }}
-                disabled={stitchingFilm}
-                className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] ${
-                  stitchingFilm
-                    ? 'border-zinc-600/40 bg-zinc-700/20 text-zinc-400 cursor-not-allowed'
-                    : stitchedFilmUrl
-                      ? 'border-emerald-300/45 bg-emerald-500/14 text-emerald-100'
-                      : 'border-violet-300/45 bg-violet-500/14 text-violet-100'
-                }`}
-              >
-                {stitchingFilm ? 'Stitching...' : stitchedFilmUrl ? 'Film Stitched ✓' : 'Stitch Film'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { void toggleFullscreenMode() }}
-                className="rounded-lg border border-fuchsia-300/45 bg-fuchsia-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-fuchsia-100"
-              >
-                {isTheaterMode ? 'Exit Fullscreen' : 'Fullscreen Review'}
-              </button>
-              {pacingShiftDetected ? (
-                <div className="text-xs uppercase tracking-[0.12em] text-amber-300 border border-amber-400/50 rounded px-2 py-1">
-                  Pacing Shift Detected
-                </div>
-              ) : null}
-              {directorSignature ? (
-                <div className="text-xs uppercase tracking-[0.12em] text-fuchsia-200 border border-fuchsia-400/45 rounded px-2 py-1">
-                  Signature {(directorSignature.confidence * 100).toFixed(0)}%
-                  {directorSignature.metadata && directorSignature.metadata.insufficient_data ? ' · thin data' : ''}
-                </div>
-              ) : null}
-              {styleDriftIssues.length > 0 ? (
-                <div className="text-xs uppercase tracking-[0.12em] text-violet-200 border border-violet-400/45 rounded px-2 py-1">
-                  Drift issues {styleDriftIssues.length}
-                </div>
-              ) : null}
-            </div>
-            {actionFeedback ? <div className="mt-2 text-[11px] text-cyan-200">{actionFeedback}</div> : null}
-            {exportMessage ? <div className="mt-2 text-[11px] text-zinc-300">{exportMessage}</div> : null}
-            {stitchingError ? <div className="mt-2 text-[11px] text-rose-300 border border-rose-400/40 bg-rose-500/10 rounded px-2 py-1">{stitchingError}</div> : null}
-            {stitchedFilmUrl ? (
-              <div className="mt-2 text-[11px] text-emerald-300 border border-emerald-400/40 bg-emerald-500/10 rounded px-2 py-1">
-                ✓ Stitched film ready — playing complete film below
-              </div>
-            ) : playlist.length > 1 ? (
-              <div className="mt-2 text-[11px] text-amber-300 border border-amber-400/40 bg-amber-500/10 rounded px-2 py-1">
-                Multiple scenes available — click "Stitch Film" to create a complete film
-              </div>
-            ) : null}
-          </section>
+                )}
 
-          <ScreeningCinematicShowcase
-            projectId={activeProjectId || project?.project_id || ''}
-            projectTitle={project?.title || project?.project_id || 'Screening Session'}
-            heroPreviewUrl={viewerImage}
-            heroVideoUrl={activeSceneVideoUrl}
-            activeSceneId={activeScene?.scene_id || ''}
-            gateStatus={decisionGate?.gate_status || 'insufficient_data'}
-            decisionGate={decisionGate}
-            renderStatusLabel={activeRenderStatus.label}
-            runtimeEstimateLabel={`${Math.max(0, playlist.length * 3)} min`}
-            revisionCount={revisionTimeline.length}
-            renderJobsCount={renderJobs.length}
-            reviewsCount={decisionGate?.evidence?.review_count && typeof decisionGate.evidence.review_count === 'number' ? decisionGate.evidence.review_count : 0}
-            packagesCount={latestPackage ? 1 : 0}
-            continuityIssuesCount={continuityIssues.length}
-            styleDriftIssuesCount={styleDriftIssues.length}
-            memoryRecordsCount={cinematicMemory.length}
-            hasDirectorSignature={Boolean(directorSignature && !directorSignature.metadata?.insufficient_data)}
-            revisions={revisionTimeline}
-            onApproveCut={() => handleReviewDecision('approve')}
-            onRequestRevision={() => handleReviewDecision('revise')}
-            onCompareRevision={() => setActionFeedback('Select two revisions in the timeline to compare.')}
-            onExportPackage={() => {
-              setActionFeedback('Assembling final package from completed renders')
-              void handleCreateFinalPackage()
-            }}
-          />
-          <ScreeningTimelineIntelligencePanel
-            analysis={timelineAnalysis}
-            isLoading={timelineLoading}
-            error={timelineError}
-          />
-
-          <section className="grid grid-cols-1 gap-6 md:grid-cols-6 xl:grid-cols-12">
-            <div className="cinematic-panel lg:col-span-3 p-4">
-              <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Playlist</h3>
-              <div className="space-y-2 pr-1">
-                {playlist.map((item, index) => {
-                  const sceneStyleDrifts = styleDriftIssuesBySceneId.get(item.scene_id) || []
-                  return (
-                  <button
-                    key={`${item.scene_id}-${index}`}
-                    type="button"
-                    onClick={() => setCurrentSceneIndex(index)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left transition-all duration-200 ${
-                      index === currentSceneIndex
-                        ? 'border-amber-300/55 bg-amber-500/12 shadow-[0_0_20px_rgba(214,169,92,0.25)]'
-                        : 'border-white/10 bg-black/35 hover:border-white/25 hover:scale-[1.01]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-zinc-100">Scene {index + 1}</div>
-                      <span className={`inline-flex h-3 w-3 rounded-full border ${verdictTone(item.verdict)}`} />
-                    </div>
-                    <div className="mt-1 text-xs text-zinc-300">{item.scene_id}</div>
-                    {(() => {
-                      const thumbAsset = firstSuccessfulAssetByScene.get(item.scene_id)
-                      const thumbSrc =
-                        firstVideoAssetByScene.get(item.scene_id)?.thumbnail_url
-                        || thumbAsset?.url
-                        || (thumbAsset?.file_path && isBrowserSafePath(thumbAsset.file_path) ? thumbAsset.file_path : '')
-                        || getViewerImage(item.render_ids[0] || item.scene_id)
-                      if (!thumbSrc) {
-                        return (
-                          <div className="mt-2 h-12 w-full rounded border border-zinc-700/70 bg-zinc-900/60 px-2 py-2 text-[10px] text-zinc-400">
-                            No thumbnail available
-                          </div>
-                        )
-                      }
-                      return (
-                        <img
-                          src={thumbSrc}
-                          alt={`${item.scene_id} thumbnail`}
-                          className="mt-2 h-12 w-full rounded object-cover border border-zinc-700/70"
-                        />
-                      )
-                    })()}
-                    <div className="mt-1 flex items-center gap-1">
-                      {cutAnalysis.weakMoments.has(item.scene_id) ? (
-                        <span className="rounded-full border border-rose-400/60 bg-rose-500/15 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-rose-200">
-                          weak
-                        </span>
-                      ) : null}
-                      {cutAnalysis.strongMoments.has(item.scene_id) ? (
-                        <span className="rounded-full border border-emerald-400/60 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-emerald-200">
-                          strong
-                        </span>
-                      ) : null}
-                      {sceneStyleDrifts.length > 0 ? (
-                        <span className="rounded-full border border-violet-400/60 bg-violet-500/15 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-violet-200">
-                          {INTELLIGENCE_LABELS.styleDrift}
-                        </span>
-                      ) : directorSignature && !directorSignature.metadata?.insufficient_data && imageRenderAssets.some((a) => a.scene_id === item.scene_id) ? (
-                        <span className="rounded-full border border-emerald-400/50 bg-emerald-500/12 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-emerald-200">
-                          fits signature
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-1 text-xs text-zinc-400">Cut: {item.cut === 'original' ? 'Original' : 'Iteration'}</div>
-                    <div className={`mt-1 text-xs ${statusTone(item.status)}`}>Status: {item.status}</div>
-                    <div className="mt-1 text-xs text-cyan-300 uppercase">
-                      Transition: {sceneTransitions[index]?.transition || 'hold'}
-                    </div>
-                  </button>
-                )})}
-                {playlist.length === 0 && !activeSceneVideoUrl ? (
-                  <div className="text-sm text-zinc-400 border border-dashed border-zinc-700 rounded-lg px-3 py-4">
-                    <div>No cut available yet.</div>
-                    <Link
-                      to={projectId ? `/studio/project/${projectId}/previs` : '/studio/previs'}
-                      className="mt-2 inline-flex rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline"
+                {/* Full film progress indicator + STOP button */}
+                {isFullFilm && (
+                  <div className="flex items-center justify-between glass-panel rounded-xl px-4 py-2">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--color-primary)' }}>
+                      SCENE {activeTakeIndex + 1} of {scenes.length} — {scenes[activeTakeIndex]?.scene_name?.toUpperCase() || 'THE LAST TIDE'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleStopFilm}
+                      className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
+                      style={{ color: 'var(--color-on-surface-variant)' }}
                     >
-                      Go to Previs
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="lg:col-span-6 space-y-4">
-              <div ref={theaterViewportRef} className="cinematic-panel screening-theater-frame p-4">
-                <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Main Viewer</h3>
-                {(activeSceneVideoUrl || (activeScene && viewerImage)) ? (
-                  <div className="relative screening-cinema-screen overflow-hidden rounded-xl border border-white/15">
-                    {activeSceneVideoUrl ? (
-                      <video
-                        src={activeSceneVideoUrl}
-                        className={`aspect-video w-full object-cover transition-all duration-500 ${
-                          isPlaying ? 'scale-[1.01] opacity-100' : 'scale-100 opacity-95'
-                        }`}
-                        controls
-                        muted
-                        playsInline
-                        onLoadedData={() => {
-                          console.info('[ScreeningRoom] video_load_success', {
-                            scene_id: activeScene?.scene_id || 'hosted_preview',
-                            output_url: activeSceneVideoUrl,
-                            preview_url: activeScene?.scene_id ? (firstVideoAssetByScene.get(activeScene.scene_id)?.thumbnail_url || '') : '',
-                          })
-                        }}
-                        onError={() => {
-                          void handleActiveSceneVideoError()
-                        }}
-                      />
-                    ) : viewerImage ? (
-                      <img
-                        src={viewerImage}
-                        alt={`Screening preview for ${activeScene?.scene_id || 'hosted-preview'}`}
-                        className={`aspect-video w-full object-cover transition-all duration-500 ${
-                          isPlaying ? 'scale-[1.01] opacity-100' : 'scale-100 opacity-95'
-                        }`}
-                      />
-                    ) : (
-                      <div className="flex aspect-video w-full items-center justify-center bg-black/40 text-zinc-300">
-                        No rendered footage available yet.
-                      </div>
-                    )}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                    <div className="pointer-events-none absolute inset-0 screening-ambient-reflection" />
-                    <div className="absolute bottom-3 left-3 rounded border border-white/20 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-100">
-                      {activeScene?.scene_id || 'HOSTED PREVIEW'}
-                    </div>
-                    <div className="absolute top-3 right-3 flex items-center gap-2">
-                      <span title="Render status" className="rounded border border-cyan-300/45 bg-cyan-500/14 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100">
-                        {activeRenderStatus.label}
-                      </span>
-                      {activeScene ? (
-                        <>
-                          <span className="rounded border border-white/20 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-100">
-                            {activeCutLabel}
-                          </span>
-                          <span className={`rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${approvedLabel === 'Approved' ? 'border-emerald-400/60 bg-emerald-500/18 text-emerald-100' : 'border-amber-400/60 bg-amber-500/18 text-amber-100'}`}>
-                            {approvedLabel}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="rounded border border-white/20 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-100">
-                          HOSTED RENDER PREVIEW
-                        </span>
-                      )}
-                      <span className="rounded border border-fuchsia-300/45 bg-fuchsia-500/14 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-fuchsia-100">
-                        {activeSceneVideoUrl ? 'MOTION READY' : (activeMotionStatus?.status || 'MOTION NOT GENERATED')}
-                      </span>
-                      {!activeSceneVideoUrl ? (
-                        <span className="rounded border border-zinc-400/45 bg-zinc-700/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-200">
-                          STILL IMAGE FALLBACK
-                        </span>
-                      ) : null}
-                      {isWeakMoment ? (
-                        <span className="rounded border border-rose-400/60 bg-rose-500/18 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100">
-                          Weak Moment
-                        </span>
-                      ) : null}
-                      {isStrongMoment ? (
-                        <span className="rounded border border-emerald-400/60 bg-emerald-500/18 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100">
-                          Strong Moment
-                        </span>
-                      ) : null}
-                    </div>
-                    {activeRenderStatus.reason ? (
-                      <div className="absolute bottom-3 right-3 rounded border border-amber-300/45 bg-amber-500/12 px-2 py-1 text-[10px] text-amber-100">
-                        {activeRenderStatus.reason}
-                      </div>
-                    ) : null}
-                    {!activeSceneVideoUrl && activeMotionStatus?.reason ? (
-                      <div className="absolute bottom-10 right-3 rounded border border-amber-300/45 bg-amber-500/12 px-2 py-1 text-[10px] text-amber-100">
-                        Motion: {activeMotionStatus.reason}
-                      </div>
-                    ) : null}
-                    <div className="absolute left-3 top-3 rounded border border-white/20 bg-black/45 px-3 py-2 text-[10px] text-zinc-100">
-                      <div>Provider: <span className="text-cyan-200">{activeRenderStatus.label}</span></div>
-                      <div>Duration: <span className="text-zinc-100">{activeScene?.duration_estimate || 0}s</span></div>
-                      <div>Generation Time: <span className="text-zinc-100">{generationTimeLabel}</span></div>
-                      <div>Emotional Tone: <span className="text-zinc-100">{screeningSummary.dominant_tone || 'n/a'}</span></div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full aspect-video rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 grid place-items-center text-zinc-400">
-                    <div className="text-center">
-                      <div>No cut available yet.</div>
-                      <Link
-                        to={projectId ? `/studio/project/${projectId}/previs` : '/studio/previs'}
-                        className="mt-2 inline-flex rounded-md border border-cyan-300/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100 no-underline"
-                      >
-                        Go to Previs
-                      </Link>
-                    </div>
+                      <Pause size={12} />
+                      STOP
+                    </button>
                   </div>
                 )}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => handleReviewDecision('approve')} className="rounded-md border border-emerald-400/45 bg-emerald-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100">
-                    Approve
+
+                {/* Scene navigation bar */}
+                <div className="flex items-center justify-between glass-panel rounded-xl px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={handlePrevScene}
+                    disabled={activeTakeIndex === 0 || isFullFilm}
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10 disabled:opacity-30"
+                    style={{ color: 'var(--color-on-surface-variant)' }}
+                  >
+                    <ChevronLeft size={14} />
+                    <span className="hidden sm:inline">PREV</span>
                   </button>
-                  <button type="button" onClick={() => handleReviewDecision('revise')} className="rounded-md border border-amber-400/45 bg-amber-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
-                    Revise
-                  </button>
-                  <button type="button" onClick={() => handleReviewDecision('regenerate')} className="rounded-md border border-cyan-400/45 bg-cyan-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100">
-                    Regenerate
+                  <div className="flex items-center gap-2">
+                    {scenes.map((sc, idx) => {
+                      const status = getSceneStatus(sc.scene_id)
+                      return (
+                        <button
+                          key={sc.scene_id}
+                          type="button"
+                          onClick={() => { if (!isFullFilm) { setActiveTakeIndex(idx); setCurrentTime(0); setShowTakeDropdown(false) } }}
+                          className={`text-[10px] font-bold uppercase tracking-[0.12em] transition-all flex items-center gap-1.5 ${
+                            idx === activeTakeIndex
+                              ? 'text-primary'
+                              : 'text-white/30 hover:text-white/60'
+                          }`}
+                        >
+                          {sc.scene_name || `Scene ${idx + 1}`}
+                          <span
+                            className={`text-[8px] px-1 py-0.5 rounded border ${
+                              status === 'composed'
+                                ? 'bg-amber-900/60 text-amber-400 border-amber-700/40'
+                                : status === 'rendered'
+                                  ? 'bg-emerald-900/60 text-emerald-400 border-emerald-700/40'
+                                  : 'bg-white/5 text-white/20 border-white/5'
+                            }`}
+                          >
+                            {status === 'composed' ? 'COMPOSED' : status === 'rendered' ? 'RENDERED' : 'UNRENDERED'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNextScene}
+                    disabled={activeTakeIndex === scenes.length - 1 || isFullFilm}
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10 disabled:opacity-30"
+                    style={{ color: 'var(--color-on-surface-variant)' }}
+                  >
+                    <span className="hidden sm:inline">NEXT</span>
+                    <ChevronRight size={14} />
                   </button>
                 </div>
-                {activeScene ? (
-                  <section className="mt-4 rounded-lg border border-white/10 bg-black/35 p-3 text-[11px] text-zinc-200">
-                    <ScreeningIntelligencePanel
-                      sceneId={activeScene.scene_id}
-                      sceneContinuityIssueCount={activeSceneContinuityIssues.length}
-                      sceneStyleDriftCount={activeSceneStyleDrifts.length}
-                      relatedMemoryCount={cinematicMemory.length}
-                      isPackaged={Boolean(latestPackage?.package_status === 'packaged' || latestPackage?.package_status === 'approved')}
+
+                {/* Fix 1: SHOTS row */}
+                {shotsForCurrentScene.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {shotsForCurrentScene.map((s) => (
+                      <button
+                        key={s.shotNumber}
+                        type="button"
+                        onClick={() => {
+                          setActiveShotNumber(s.shotNumber)
+                          setActiveShotTakeIndex(0)
+                          setCurrentTime(0)
+                        }}
+                        className={`rounded border px-3 py-1 text-[11px] font-bold transition-all ${
+                          activeShotNumber === s.shotNumber
+                            ? 'border-amber-400 text-amber-400'
+                            : 'border-white/10 text-white/40 hover:border-white/30 hover:text-white/70'
+                        }`}
+                        style={{
+                          borderColor: activeShotNumber === s.shotNumber ? undefined : undefined,
+                        }}
+                      >
+                        Shot {s.shotNumber}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* TAKES sub-row */}
+                {shotTakes[activeShotNumber]?.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {shotTakes[activeShotNumber].map((job, idx) => (
+                      <button
+                        key={job.id || idx}
+                        type="button"
+                        onClick={() => {
+                          setActiveShotTakeIndex(idx)
+                          setCurrentTime(0)
+                        }}
+                        className={`rounded px-2 py-0.5 text-[10px] font-medium transition-all ${
+                          activeShotTakeIndex === idx
+                            ? 'border border-amber-400/70 text-amber-400'
+                            : 'text-[#6b7280] hover:text-white/70'
+                        }`}
+                        style={{ borderRadius: '4px' }}
+                      >
+                        Take {idx + 1}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Video player */}
+                <div
+                  className="glass-panel relative aspect-video w-full overflow-hidden rounded-xl isolate"
+                  onMouseEnter={() => setHoveringVideo(true)}
+                  onMouseLeave={() => setHoveringVideo(false)}
+                >
+                  {/* Video element */}
+                  {activeVideoUrl ? (
+                    <video
+                      key={`${activeTake?.sceneId || ''}-shot-${activeShotNumber}-${activeVideoUrl}`}
+                      ref={videoRef}
+                      src={activeVideoUrl}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{ zIndex: 1, opacity: 1, visibility: 'visible' }}
+                      onTimeUpdate={handleTimeUpdate}
+                      onLoadedMetadata={handleLoadedMetadata}
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                      onEnded={handleVideoEnded}
+                      onClick={togglePlay}
                     />
-                  </section>
-                ) : null}
-                {activeScene && (projectId || project?.project_id) ? (
-                  <DirectorMemoryCallbacks
-                    projectId={projectId || project?.project_id || ''}
-                    scene={activeScene as unknown as Record<string, unknown>}
-                    sceneIndex={currentSceneIndex}
-                  />
-                ) : null}
-              </div>
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ background: 'var(--color-surface-container-lowest)' }}>
+                      <MonitorPlay size={40} className="opacity-20" style={{ color: 'var(--color-on-surface-variant)' }} />
+                      <div className="text-center">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          No render available for this scene
+                        </div>
+                        <div className="mt-1 text-[10px] opacity-60" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          Render in Previs Bay first
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-              <div className="cinematic-panel p-4">
-                <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Timeline</h3>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {playlist.map((item, index) => (
+                  {/* Scene/Take label chip — top-left */}
+                  <div className="absolute left-3 top-3 z-10">
                     <button
-                      key={`timeline-${item.scene_id}-${index}`}
                       type="button"
-                      onClick={() => setCurrentSceneIndex(index)}
-                      className={`min-w-[82px] h-8 rounded border text-xs px-2 ${
-                        index === currentSceneIndex
-                          ? 'border-cyan-300/60 bg-cyan-500/20 text-cyan-100'
-                          : cutAnalysis.weakMoments.has(item.scene_id)
-                            ? 'border-rose-400/55 bg-rose-500/12 text-rose-100'
-                            : cutAnalysis.strongMoments.has(item.scene_id)
-                              ? 'border-emerald-400/55 bg-emerald-500/12 text-emerald-100'
-                              : 'border-zinc-700 bg-zinc-900/70 text-zinc-400'
-                      }`}
+                      onClick={() => setShowTakeDropdown((p) => !p)}
+                      className="status-chip flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em]"
+                      style={{
+                        background: 'rgba(0,0,0,0.7)',
+                        color: 'var(--color-on-surface)',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                      }}
                     >
-                      {index + 1}
+                      {activeTake
+                        ? `SCENE ${String(activeTakeIndex + 1).padStart(2, '0')} — SHOT ${String(activeShotNumber).padStart(2, '0')}`
+                        : 'NO SCENE'}
+                      <ChevronDown size={12} />
                     </button>
-                  ))}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.12em]">
-                  {playlist.map((item, index) => (
-                    <div key={`marker-${item.scene_id}-${index}`} className="flex items-center gap-1">
-                      <span className="text-zinc-500">{index + 1}</span>
-                      {cutAnalysis.weakMoments.has(item.scene_id) ? (
-                        <span className="h-2.5 w-2.5 rounded-full border border-rose-300/80 bg-rose-400/80" />
-                      ) : cutAnalysis.strongMoments.has(item.scene_id) ? (
-                        <span className="h-2.5 w-2.5 rounded-full border border-emerald-300/80 bg-emerald-400/80" />
-                      ) : (
-                        <span className="h-2.5 w-2.5 rounded-full border border-zinc-600/70 bg-zinc-700/80" />
-                      )}
+                    {showTakeDropdown && (
+                      <div className="glass-panel absolute left-0 top-full mt-1 max-h-60 w-64 overflow-y-auto rounded-xl py-1 shadow-2xl" style={{ zIndex: 50 }}>
+                        {sceneTakes.length === 0 ? (
+                          <div className="px-4 py-2 text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            No rendered scenes
+                          </div>
+                        ) : (
+                          sceneTakes.map((take, idx) => (
+                            <button
+                              key={take.sceneId}
+                              type="button"
+                              onClick={() => {
+                                setActiveTakeIndex(idx)
+                                setShowTakeDropdown(false)
+                                setCurrentTime(0)
+                              }}
+                              className={`flex w-full items-center gap-2 px-4 py-2 text-left text-[11px] transition-all hover:bg-white/5 ${
+                                idx === activeTakeIndex ? 'bg-primary/10' : ''
+                              }`}
+                              style={{ color: idx === activeTakeIndex ? 'var(--color-primary)' : 'var(--color-on-surface)' }}
+                            >
+                              <span className="status-chip rounded bg-white/10 px-1.5 py-0.5 text-[8px]">
+                                {String(idx + 1).padStart(2, '0')}
+                              </span>
+                              {take.sceneName}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Center play overlay */}
+                  {hoveringVideo && !isPlaying && !showFinOverlay && (
+                    <button
+                      type="button"
+                      onClick={togglePlay}
+                      className="glass-panel absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
+                      style={{ background: 'rgba(255,209,101,0.15)' }}
+                    >
+                      <Play size={28} style={{ color: 'var(--color-primary)' }} className="ml-1" />
+                    </button>
+                  )}
+
+                  {/* FIN overlay */}
+                  {showFinOverlay && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80">
+                      <div className="text-center">
+                        <div className="text-5xl font-bold tracking-[0.25em]" style={{ color: 'var(--color-primary)' }}>
+                          THE LAST TIDE
+                        </div>
+                        <div className="mt-4 text-2xl font-light tracking-[0.4em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          FIN
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-2 text-[10px] text-zinc-400">
-                  Red markers indicate weak moments, green markers indicate strong moments.
-                </div>
-              </div>
-
-              <div className="cinematic-panel p-4">
-                <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Screening Summary</h3>
-                <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 md:grid-cols-4">
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Total Scenes</div>
-                    <div className="font-semibold text-zinc-100">{screeningSummary.total_scenes}</div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Playable</div>
-                    <div className="font-semibold text-zinc-100">{screeningSummary.playable_scenes}</div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Avg Quality</div>
-                    <div className="font-semibold text-zinc-100">{screeningSummary.average_quality.toFixed(2)}</div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Dominant Tone</div>
-                    <div className="font-semibold text-zinc-100">{screeningSummary.dominant_tone}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="cinematic-panel p-4">
-                <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Visual Quality Summary</h3>
-                <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Avg Script Faithfulness</div>
-                    <div className="font-semibold text-zinc-100">{visualQualitySummary.averageFaithfulness.toFixed(3)}</div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Scenes At Risk</div>
-                    <div className="font-semibold text-zinc-100">{visualQualitySummary.riskSceneCount}</div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Provider Mix</div>
-                    <div className="font-semibold text-zinc-100">{renderAssetSummary.providers.join(', ') || 'local_image'}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="cinematic-panel p-4">
-                <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Sound Design</h3>
-                <div className="mb-2 text-[11px] text-amber-200">Audio planning only. No generated audio yet.</div>
-                <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
-                  <div className="rounded border border-white/10 bg-black/30 px-2 py-1">Cues: <span className="text-zinc-100">{audioSummary.total_cues}</span></div>
-                  <div className="rounded border border-white/10 bg-black/30 px-2 py-1">Planned Assets: <span className="text-zinc-100">{audioSummary.planned_assets}</span></div>
-                  <div className="rounded border border-white/10 bg-black/30 px-2 py-1">High Tension Scenes: <span className="text-zinc-100">{audioSummary.high_tension_scenes}</span></div>
-                  <div className="rounded border border-white/10 bg-black/30 px-2 py-1">Needs Design: <span className="text-zinc-100">{audioSummary.needs_audio_design ? 'YES' : 'NO'}</span></div>
-                </div>
-                <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Current Ambience</div>
-                    <div className="mt-1 text-zinc-100">{asString(activeSoundProfile.ambience) || 'not set'}</div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Audio Tension</div>
-                    <div className="mt-1 text-zinc-100">{asString(activeSoundProfile.audio_tension) || 'not set'}</div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Sound Motifs</div>
-                    <div className="mt-1 text-zinc-100">{asArray(activeSoundProfile.sound_motifs).map((v) => asString(v).trim()).filter(Boolean).join(', ') || 'none'}</div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Score Direction</div>
-                    <div className="mt-1 text-zinc-100">{asString(activeSoundProfile.score_direction) || 'not set'}</div>
-                  </div>
-                </div>
-                <div className="mt-3 rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-xs text-zinc-200">
-                  <div>Instrumentation: <span className="text-zinc-100">{scoreMap.dominant_instrumentation.join(', ') || 'none'}</span></div>
-                  <div>Recurring Motif: <span className="text-zinc-100">{scoreMap.recurring_audio_motif}</span></div>
-                </div>
-                <div className="mt-3 space-y-1 text-xs text-zinc-200">
-                  {activeAudioCues.length > 0 ? activeAudioCues.map((cue, idx) => (
-                    <div key={`${cue.scene_id}-${cue.cue_type}-${idx}`} className="rounded border border-white/10 bg-black/30 px-2 py-1">
-                      <span className="uppercase tracking-[0.1em] text-zinc-400">{cue.cue_type}</span>: {cue.description} ({cue.timing}, {(cue.intensity * 100).toFixed(0)}%)
-                    </div>
-                  )) : (
-                    <div className="text-zinc-400">No audio cues available for this scene.</div>
                   )}
                 </div>
-                <div className="mt-4">
-                  <h4 className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-400">Audio Timeline</h4>
-                  {activeAudioPlan.length > 0 ? (
-                    <div className="space-y-1 text-xs text-zinc-200">
-                      {activeAudioPlan.map((cue, idx) => (
-                        <div key={`${cue.cue_id}-${idx}`} className="rounded border border-white/10 bg-black/30 px-2 py-1">
-                          <span className="uppercase tracking-[0.1em] text-zinc-400">{cue.asset_type}</span>: {cue.prompt || 'planned cue'} · {cue.status}
+
+                {/* Playback controls bar */}
+                <div className="glass-panel rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    {/* LEFT: transport controls */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={handleSkipPrev}
+                        className="rounded p-1.5 transition-all hover:bg-white/10"
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                      >
+                        <SkipBack size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={togglePlay}
+                        className="rounded-full p-2.5 transition-all hover:scale-105"
+                        style={{
+                          background: 'rgba(255,209,101,0.15)',
+                          color: 'var(--color-primary)',
+                        }}
+                      >
+                        {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSkipNext}
+                        className="rounded p-1.5 transition-all hover:bg-white/10"
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                      >
+                        <SkipForward size={18} />
+                      </button>
+                    </div>
+
+                    {/* CENTER: timeline scrubber */}
+                    <div className="flex flex-1 items-center gap-2">
+                      <span className="font-mono text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        {formatTimecode(currentTime)}
+                      </span>
+                      <div
+                        ref={timelineRef}
+                        onClick={handleTimelineClick}
+                        className="relative h-6 flex-1 cursor-pointer"
+                      >
+                        {/* Track */}
+                        <div
+                          className="absolute top-1/2 h-1.5 w-full -translate-y-1/2 rounded-full"
+                          style={{
+                            background: 'linear-gradient(90deg, rgba(155,143,121,0.15), rgba(155,143,121,0.25), rgba(155,143,121,0.15))',
+                          }}
+                        />
+                        {/* Played portion */}
+                        <div
+                          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full amber-glow"
+                          style={{
+                            width: `${progressPercent}%`,
+                            background: 'var(--color-primary)',
+                          }}
+                        />
+                        {/* Scene markers */}
+                        {sceneTakes.map((_, idx) => {
+                          if (idx === 0 || sceneTakes.length === 0) return null
+                          const percent = (idx / sceneTakes.length) * 100
+                          return (
+                            <div
+                              key={idx}
+                              className="absolute top-1/2 h-3 w-px -translate-y-1/2"
+                              style={{ left: `${percent}%`, background: 'var(--color-on-surface-variant)', opacity: 0.4 }}
+                            />
+                          )
+                        })}
+                        {/* Weak scene indicators */}
+                        {weakSceneMarkers.map((marker, idx) => (
+                          <div
+                            key={`weak-${idx}`}
+                            className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+                            style={{
+                              left: `${marker.startPercent}%`,
+                              width: `${marker.endPercent - marker.startPercent}%`,
+                              background: 'rgba(244,63,94,0.4)',
+                            }}
+                          />
+                        ))}
+                        {/* Playhead */}
+                        <div
+                          className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full"
+                          style={{
+                            left: `${progressPercent}%`,
+                            background: 'var(--color-primary)',
+                            boxShadow: '0 0 6px rgba(255,209,101,0.6)',
+                          }}
+                        />
+                      </div>
+                      <span className="font-mono text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        {formatTimecode(duration)}
+                      </span>
+                    </div>
+
+                    {/* Separator */}
+                    <div className="h-6 w-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+                    {/* RIGHT GROUP */}
+                    <div className="flex items-center gap-2">
+                      {/* Jump to weak scene */}
+                      <button
+                        type="button"
+                        onClick={handleJumpToWeakScene}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
+                        style={{ color: 'var(--color-error)' }}
+                        title="Jump to weak scene"
+                      >
+                        <Brain size={14} />
+                        WEAK
+                      </button>
+
+                      {/* Playback rate */}
+                      <div className="flex items-center gap-0.5">
+                        {PLAYBACK_RATES.map((rate) => (
+                          <button
+                            key={rate}
+                            type="button"
+                            onClick={() => handleRateChange(rate)}
+                            className={`status-chip rounded px-1.5 py-0.5 text-[8px] font-bold transition-all ${
+                              playbackRate === rate
+                                ? 'bg-primary/15 text-primary'
+                                : 'hover:bg-white/8'
+                            }`}
+                            style={{
+                              color: playbackRate === rate ? undefined : 'var(--color-on-surface-variant)',
+                            }}
+                          >
+                            {rate}x
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Volume */}
+                      <div className="flex items-center gap-1">
+                        <Volume2 size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={volume}
+                          onChange={handleVolumeChange}
+                          className="h-1 w-16 cursor-pointer appearance-none rounded-full"
+                          style={{
+                            background: `linear-gradient(to right, var(--color-primary) ${volume}%, rgba(255,255,255,0.1) ${volume}%)`,
+                          }}
+                        />
+                      </div>
+
+                      {/* Export MP4 */}
+                      <button
+                        type="button"
+                        onClick={handleExportMp4}
+                        disabled={exporting}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10 disabled:opacity-50"
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                        title="Export MP4"
+                      >
+                        {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                        {exporting ? 'PREPARING...' : 'EXPORT'}
+                      </button>
+
+                      {/* Share */}
+                      <button
+                        type="button"
+                        onClick={handleShare}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
+                        style={{ color: shareCopied ? 'var(--color-secondary)' : 'var(--color-on-surface-variant)' }}
+                        title="Share"
+                      >
+                        {shareCopied ? <CheckCircle2 size={14} /> : <Share2 size={14} />}
+                        {shareCopied ? 'COPIED' : 'SHARE'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── RIGHT: ANALYSIS SIDEBAR (320px) ───────────────────────── */}
+              <div className="flex w-[320px] shrink-0 flex-col gap-3 overflow-y-auto">
+                {/* Why This Shot Matters */}
+                {shotRationale && !loadingRationale && (
+                  <div className="glass-panel rounded-xl border-l-2 p-4" style={{ borderLeftColor: 'var(--color-secondary)' }}>
+                    <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--color-secondary)' }}>
+                      WHY THIS SHOT MATTERS
+                    </div>
+                    <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
+                      {shotRationale.rationale}
+                    </p>
+                  </div>
+                )}
+
+                <div className="glass-panel rounded-xl p-4 space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>
+                      LIVE ANALYSIS
+                    </span>
+                    <span
+                      className="status-chip rounded px-1.5 py-0.5 text-[8px] font-bold"
+                      style={{ background: 'rgba(76,215,246,0.1)', color: 'var(--color-secondary)' }}
+                    >
+                      v2.1
+                    </span>
+                  </div>
+
+                  {/* Pacing metric */}
+                  <div className="rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      PACING
+                    </div>
+                    <div className="text-lg font-bold" style={{ color: 'var(--color-primary)' }}>
+                      Steady
+                    </div>
+                    <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      Rhythm holds tension well
+                    </div>
+                  </div>
+
+                  {/* Tension metric */}
+                  <div className="rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      TENSION
+                    </div>
+                    <div className="text-lg font-bold" style={{ color: 'var(--color-secondary)' }}>
+                      Building
+                    </div>
+                    <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      Escalates through Act 2
+                    </div>
+                  </div>
+
+                  {/* Emotional Curve (simplified) */}
+                  <div className="rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      EMOTIONAL CURVE
+                    </div>
+                    {(() => {
+                      const arc = getEmotionalArc()
+                      const w = 240, h = 80
+                      const padL = 4, padR = 4, padT = 4, padB = 16
+                      const plotW = w - padL - padR
+                      const plotH = h - padT - padB
+                      const xScale = (i: number) => padL + (i / (arc.length - 1)) * plotW
+                      const yScale = (v: number) => h - padB - (v / 100) * plotH
+                      const lineD = arc.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(v).toFixed(1)}`).join(' ')
+                      const currentX = xScale(activeTakeIndex)
+                      const currentY = yScale(arc[activeTakeIndex] || 50)
+                      return (
+                        <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
+                          {arc.map((v, i) => (
+                            <circle
+                              key={i}
+                              cx={xScale(i)}
+                              cy={yScale(v)}
+                              r={i === activeTakeIndex ? 5 : 2.5}
+                              fill={i === activeTakeIndex ? '#f59e0b' : 'rgba(255,255,255,0.4)'}
+                              stroke={i === activeTakeIndex ? '#fff' : 'none'}
+                              strokeWidth={i === activeTakeIndex ? 1.5 : 0}
+                            />
+                          ))}
+                          <path d={lineD} fill="none" stroke="#f59e0b" strokeWidth="1.5" opacity="0.8" />
+                          {arc.map((_, i) => (
+                            <text
+                              key={`label-${i}`}
+                              x={xScale(i)}
+                              y={h - 2}
+                              textAnchor="middle"
+                              fill="rgba(255,255,255,0.25)"
+                              fontSize="7"
+                              fontFamily="monospace"
+                            >
+                              {i + 1}
+                            </text>
+                          ))}
+                        </svg>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Audience Simulator */}
+                  <div className="rounded-lg border-l-2 border-t border-r border-b p-3" style={{ borderLeftColor: 'var(--color-secondary)', borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <Users size={14} style={{ color: 'var(--color-secondary)' }} />
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-secondary)' }}>
+                        EMOTIONAL AUDIENCE SIM
+                      </span>
+                      {sceneAudienceLoading && <Loader2 size={10} className="ml-1 animate-spin" style={{ color: 'var(--color-on-surface-variant)' }} />}
+                    </div>
+
+                    {/* Segment chips */}
+                    <div className="mb-3 flex gap-1">
+                      {AUDIENCE_SEGMENTS.map((seg) => (
+                        <button
+                          key={seg.key}
+                          type="button"
+                          onClick={() => setAudienceSegment(seg.key)}
+                          className={`status-chip flex-1 rounded border px-1.5 py-1 text-[8px] font-bold uppercase tracking-[0.08em] transition-all ${
+                            audienceSegment === seg.key
+                              ? 'border-secondary/50 bg-secondary/15 text-secondary'
+                              : 'hover:bg-white/8'
+                          }`}
+                          style={{
+                            borderColor: audienceSegment === seg.key ? undefined : 'rgba(255,255,255,0.08)',
+                            color: audienceSegment === seg.key ? undefined : 'var(--color-on-surface-variant)',
+                          }}
+                        >
+                          {seg.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Reaction bars */}
+                    <div className="space-y-2">
+                      {([
+                        { label: 'Engagement', value: audienceMetrics.engagement },
+                        { label: 'Tension', value: audienceMetrics.tension },
+                        { label: 'Emotional Impact', value: audienceMetrics.emotionalImpact },
+                      ]).map((metric) => (
+                        <div key={metric.label}>
+                          <div className="mb-0.5 flex items-center justify-between">
+                            <span className="text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                              {metric.label}
+                            </span>
+                            <span className="text-[9px] font-bold" style={{ color: 'var(--color-primary)' }}>
+                              {metric.value}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${metric.value}%`, background: 'var(--color-primary)' }}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSimulate}
+                      disabled={simulating || !effectiveProjectId}
+                      className="glass-panel mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                      style={{ color: 'var(--color-secondary)' }}
+                    >
+                      {simulating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      {simulating ? 'SIMULATING...' : 'SIMULATE'}
+                    </button>
+                  </div>
+
+                  {/* Co-Director Notes */}
+                  <div className="flex flex-col rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)', maxHeight: '340px' }}>
+                    <div className="mb-2 flex shrink-0 items-center gap-1.5">
+                      <Brain size={14} style={{ color: 'var(--color-primary)' }} />
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface)' }}>
+                        CO-DIRECTOR NOTES
+                      </span>
+                    </div>
+
+                    {coDirectorNotes.length === 0 ? (
+                      <div className="shrink-0 text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        No notes yet. Request analysis for insights.
+                      </div>
+                    ) : (
+                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+                        {coDirectorNotes.map((note) => (
+                          <div key={note.id} className="rounded border p-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                            <div className="mb-1 flex items-center gap-1.5">
+                              <span
+                                className="status-chip rounded px-1.5 py-0.5 text-[7px] font-bold"
+                                style={{ background: 'rgba(255,209,101,0.1)', color: 'var(--color-primary)' }}
+                              >
+                                {note.agentName}
+                              </span>
+                              <span className="text-[8px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                {new Date(note.timestamp).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
+                              {note.text}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {coDirectorNotes.length > 0 && (
+                      <div className="mt-2 flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick={handleApplyToShot}
+                          className="flex-1 rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
+                          style={{ borderColor: 'rgba(255,209,101,0.3)', color: 'var(--color-primary)' }}
+                        >
+                          APPLY TO SHOT
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSendToPage}
+                          className="flex-1 rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
+                          style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-on-surface-variant)' }}
+                        >
+                          SEND TO PAGE
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveToMemory}
+                          className="flex-1 rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
+                          style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-on-surface-variant)' }}
+                        >
+                          SAVE TO MEMORY
+                        </button>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleRequestNotes}
+                      disabled={requestingNotes || !effectiveProjectId}
+                      className="glass-panel mt-2 flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                      style={{ color: 'var(--color-on-surface-variant)' }}
+                    >
+                      {requestingNotes ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                      {requestingNotes ? 'ANALYZING...' : 'REQUEST NOTES'}
+                    </button>
+                  </div>
+
+                  {/* Stitch Film / Download Final */}
+                  {finalPackage ? (
+                    <button
+                      type="button"
+                      onClick={handleDownloadFinalPackage}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[12px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] amber-glow"
+                      style={{
+                        background: 'rgba(52,211,153,0.15)',
+                        color: '#4ade80',
+                        border: '1px solid rgba(52,211,153,0.3)',
+                      }}
+                    >
+                      <Download size={16} />
+                      DOWNLOAD FINAL MP4
+                    </button>
                   ) : (
-                    <div className="text-xs text-zinc-400">No planned audio assets for this scene yet.</div>
+                    <button
+                      type="button"
+                      onClick={handleStitchFilm}
+                      disabled={stitching || !effectiveProjectId}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[12px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50 amber-glow"
+                      style={{
+                        background: 'rgba(255,209,101,0.15)',
+                        color: 'var(--color-primary)',
+                        border: '1px solid rgba(255,209,101,0.3)',
+                      }}
+                    >
+                      {stitching ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          STITCHING...
+                        </>
+                      ) : (
+                        <>
+                          <Film size={16} />
+                          STITCH FILM
+                        </>
+                      )}
+                    </button>
                   )}
                 </div>
               </div>
-
-              <FilmMemoryPanel
-                data={filmMemoryData}
-                archivistStatus="Linking this cut to project semantic memory and continuity notes."
-              />
-
-              {!isPlaying && activeScene ? (
-                <div className="cinematic-panel p-4">
-                  <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Scene Feedback</h3>
-                  <div className="grid grid-cols-1 gap-3 text-xs md:grid-cols-3">
-                    <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                      <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Scene</div>
-                      <div className="font-semibold text-zinc-100">{activeScene.scene_id}</div>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                      <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Health Score</div>
-                      <div className="font-semibold text-zinc-100">{(activeSceneDiagnostics?.score ?? 0).toFixed(2)}</div>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                      <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Production State</div>
-                      <div className="font-semibold text-zinc-100">{activeSceneDiagnostics?.state || 'planned'}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-xs">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Issues</div>
-                    {activeSceneContinuityIssues.length > 0 ? (
-                      activeSceneContinuityIssues.slice(0, 4).map((issue, idx) => (
-                        <div key={`cont-${idx}`} className={`mt-1 ${issue.severity === 'high' ? 'text-red-300' : issue.severity === 'medium' ? 'text-amber-300' : 'text-zinc-300'}`}>
-                          • <span className="uppercase text-[9px]">{issue.issue_type.replace('_', ' ')}:</span> {issue.description}
-                        </div>
-                      ))
-                    ) : activeSceneDiagnostics?.issues.length ? (
-                      activeSceneDiagnostics.issues.slice(0, 4).map((issue, idx) => (
-                        <div key={`diag-${idx}`} className="mt-1 text-rose-200">- {issue}</div>
-                      ))
-                    ) : (
-                      <div className="mt-1 text-emerald-200">{INTELLIGENCE_EMPTY.noContinuityIssues}</div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
             </div>
-
-            <aside className="lg:col-span-3 space-y-4">
-              <section className="cinematic-panel p-3">
-                <TabGroup
-                  value={screeningInsightTab}
-                  onChange={(next) => setScreeningInsightTab(next)}
-                  options={[
-                    { id: 'flow', label: 'Flow' },
-                    { id: 'ending', label: 'Ending Impact' },
-                    { id: 'dread', label: 'Dread Curve' },
-                    { id: 'assets', label: 'Render Assets' },
-                    { id: 'structure', label: 'Film Structure' },
-                    { id: 'validation', label: 'Validation' },
-                    { id: 'continuity', label: 'Continuity' },
-                  ]}
-                />
-              </section>
-
-              <section className="cinematic-panel p-3">
-                <h3 className="text-[11px] uppercase tracking-[0.12em] text-zinc-300">{INTELLIGENCE_LABELS.semanticMemory} · references</h3>
-                {cinematicMemory.length === 0 ? (
-                  <div className="mt-2 text-xs text-zinc-500">{INTELLIGENCE_EMPTY.semanticSearchHint}</div>
-                ) : (
-                  <div className="mt-2 space-y-2 text-xs">
-                    <div className="rounded border border-white/10 bg-black/25 p-2 text-zinc-200">
-                      Highlights: {cinematicMemory.slice(0, 3).map((m) => m.summary || m.memory_id).join(' · ') || '—'}
-                    </div>
-                    <div className="rounded border border-white/10 bg-black/25 p-2 text-zinc-400">
-                      Linked reference assets: {Array.from(new Set(cinematicMemory.map((m) => m.asset_id))).slice(0, 6).join(', ') || '—'}
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              {screeningInsightTab === 'flow' ? (
-          <section className="cinematic-panel p-4">
-            <div className="mb-3 rounded-lg border border-cyan-300/25 bg-cyan-500/8 p-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-200">Where To Watch Outputs</div>
-              <div className="mt-2 grid gap-2 md:grid-cols-3">
-                <div className="rounded border border-white/10 bg-black/25 p-2">
-                  <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Clips</div>
-                  {renderJobs.filter((job) => typeof job.output_payload?.asset_url === 'string' && job.output_payload?.asset_url).length > 0 ? (
-                    <div className="mt-1 space-y-2 text-[11px]">
-                      {renderJobs
-                        .filter((job) => job.status === 'complete' && getPreferredAssetUrl(job))
-                        .slice(0, 3)
-                        .map((job) => {
-                          const assetUrl = normalizePlayableVideoUrl(getPreferredAssetUrl(job))
-                          const isTestShot = job.shot_id?.toLowerCase().includes('stress') || job.shot_id?.toLowerCase().includes('test')
-                          return (
-                          <div key={job.id} className="rounded border border-white/10 bg-black/30 p-1.5">
-                            <a href={assetUrl} target="_blank" rel="noreferrer" className="block text-cyan-300 break-all">
-                              {isTestShot && <span className="text-zinc-500 mr-1">[TEST]</span>}
-                              {job.shot_id} ({job.status})
-                            </a>
-                            <video
-                              controls
-                              preload="metadata"
-                              className="mt-1 aspect-video w-full rounded border border-white/10 bg-black"
-                              src={assetUrl}
-                            />
-                            {job.continuity_review?.drift_detected ? (
-                              <ContinuityDriftIndicator review={job.continuity_review} />
-                            ) : null}
-                          </div>
-                        )})}
-                    </div>
-                  ) : <div className="mt-1 text-[11px] text-zinc-300">No completed clips yet.</div>}
-                </div>
-                <div className="rounded border border-white/10 bg-black/25 p-2">
-                  <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Stitched Film</div>
-                  {latestPackage?.final_output_url && !String(latestPackage?.metadata?.assembly_kind || '').includes('manifest') ? (
-                    <a href={latestPackage.final_output_url} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] text-cyan-300 break-all">
-                      {String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film' ? 'Open final stitched film' : 'Open latest packaged output'}
-                    </a>
-                  ) : <div className="mt-1 text-[11px] text-zinc-300">No stitched film available yet.</div>}
-                </div>
-                <div className="rounded border border-white/10 bg-black/25 p-2">
-                  <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Final Package</div>
-                  {latestPackage ? (
-                    <div className="mt-1 text-[11px] text-zinc-200">
-                      status: {latestPackage.package_status}
-                      {String(latestPackage?.metadata?.assembly_kind || '') === 'assembled_manifest' ? ' · manifest assembled' : ''}
-                      {String(latestPackage?.metadata?.assembly_kind || '') === 'stitched_film' ? ' · stitched film ready' : ''}
-                    </div>
-                  ) : <div className="mt-1 text-[11px] text-zinc-300">No final package yet.</div>}
-                </div>
-              </div>
-            </div>
-                <details open={false}>
-                  <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-zinc-300">Flow</summary>
-                  <div className="mt-3 text-sm text-zinc-200">
-                    Flow Score: <span className="font-semibold text-amber-200">{sequenceFlow.flow_score.toFixed(3)}</span>
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    {sequenceFlow.issues.length > 0 ? (
-                      sequenceFlow.issues.map((issue, idx) => (
-                        <div key={`${issue}-${idx}`} className="text-xs text-amber-300">
-                          - {issue}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-xs text-emerald-300">No flow issues detected.</div>
-                    )}
-                  </div>
-                </details>
-                <div className="mt-4 rounded-lg border border-fuchsia-300/20 bg-fuchsia-500/8 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-fuchsia-200">AI Editing Intelligence (Advisory)</div>
-                  <div className="mt-2 space-y-2">
-                    {editingSuggestions.length > 0 ? (
-                      editingSuggestions.slice(0, 4).map((item, idx) => (
-                        <div key={`${item.suggestion_type}-${idx}`} className="rounded border border-white/10 bg-black/30 px-2 py-2 text-xs text-zinc-200">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-zinc-100">{item.title}</span>
-                            <span className="uppercase tracking-[0.12em] text-zinc-400">{item.priority}</span>
-                          </div>
-                          <div className="mt-1 text-zinc-200">{item.recommendation}</div>
-                          {item.rationale ? <div className="mt-1 text-zinc-400">{item.rationale}</div> : null}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-xs text-zinc-400">No editing recommendations available yet.</div>
-                    )}
-                  </div>
-            </div>
-            <div className="mt-4">
-              <CoDirectorCollaborationPanel room="screening" workflow={coDirectorWorkflow} />
-            </div>
-            <div className="mt-4">
-              <MultiUserCollaborationPanel projectId={projectId || project?.project_id || ''} room="screening-room" sceneId={activeScene?.scene_id} />
-            </div>
-          </section>
-              ) : null}
-
-              {screeningInsightTab === 'ending' ? (
-              <section className="cinematic-panel p-4">
-                <details open={false}>
-                  <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-zinc-300">Ending Impact</summary>
-                  <div className="mt-3 space-y-2 text-xs text-zinc-200">
-                    <div>Feeling: <span className="font-semibold text-zinc-100">{endingImpact.dominant_feeling}</span></div>
-                    <div>Impact Score: <span className="font-semibold text-zinc-100">{endingImpact.impact_score.toFixed(3)}</span></div>
-                    <div>Ending Zone: <span className="font-semibold text-zinc-100">{endingImpact.ending_zone_scene_ids.join(', ') || 'none'}</span></div>
-                  </div>
-                  <div className="mt-3 text-xs text-rose-200">{endingImpact.emotional_implication}</div>
-                </details>
-              </section>
-              ) : null}
-
-              {screeningInsightTab === 'dread' ? (
-              <section className="cinematic-panel p-4">
-                <details open={false}>
-                  <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-zinc-300">Dread Curve</summary>
-                  <div className="mt-3 space-y-2 pr-1">
-                    {dreadCurve.length > 0 ? dreadCurve.map((point, idx) => (
-                      <div key={`${point.scene_id}-${idx}`} className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-medium text-zinc-200">{point.scene_id}</span>
-                          <span className="uppercase tracking-[0.12em] text-zinc-400">{point.phase}</span>
-                        </div>
-                        <div className="mt-1 h-2 w-full rounded bg-zinc-800">
-                          <div
-                            className="h-2 rounded bg-rose-400/80"
-                            style={{ width: `${Math.max(0, Math.min(100, point.dread_score * 100))}%` }}
-                          />
-                        </div>
-                      </div>
-                    )) : (
-                      <div className="text-xs text-zinc-400">No dread curve available.</div>
-                    )}
-                  </div>
-                </details>
-              </section>
-              ) : null}
-
-              {screeningInsightTab === 'continuity' ? (
-                <SceneContinuityPanel
-                  filmId={activeProjectId || project?.project_id || ''}
-                  scenes={playlist.map((item) => ({ scene_id: item.scene_id }))}
-                  scenePairs={playlist.length >= 2
-                    ? playlist.slice(0, -1).map((item, i) => [item.scene_id, playlist[i + 1].scene_id] as [string, string])
-                    : []
-                  }
-                  onRevisionProposalAccepted={(proposal) => {
-                    console.log('[ScreeningRoom] revision proposal accepted', proposal)
-                  }}
-                />
-              ) : null}
-            </aside>
-          </section>
-
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-6 xl:grid-cols-12">
-            {screeningInsightTab === 'assets' ? (
-            <div className="cinematic-panel p-4 md:col-span-2 xl:col-span-4">
-              <details open={false}>
-                <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-zinc-300">Render Assets</summary>
-                <div className="mt-3 space-y-2 text-xs text-zinc-200">
-                  <div>Assets: <span className="text-zinc-100">{renderAssetSummary.total_assets}</span></div>
-                  <div>Success: <span className="text-emerald-300">{renderAssetSummary.successful_assets}</span></div>
-                  <div>Failed: <span className="text-rose-300">{renderAssetSummary.failed_assets}</span></div>
-                  <div>Providers: <span className="text-zinc-100">{renderAssetSummary.providers.join(', ') || 'none'}</span></div>
-                </div>
-              </details>
-            </div>
-            ) : null}
-
-            {screeningInsightTab === 'structure' ? (
-            <div className="cinematic-panel p-4 md:col-span-2 xl:col-span-4">
-              <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Film Structure</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {[1, 2, 3].map((actNum) => (
-                  <div key={`act-${actNum}`} className="flex items-center justify-between rounded border border-white/10 bg-black/35 px-2 py-1">
-                    <span>Act {actNum}: {filmStructure.acts.find((a) => a.act === actNum)?.scene_count ?? 0}</span>
-                  </div>
-                ))}
-                <div className="rounded border border-white/10 bg-black/35 px-2 py-1">Sequences: {filmStructure.sequences.length}</div>
-                <div className="rounded border border-white/10 bg-black/35 px-2 py-1 col-span-2">Total Scenes: {filmStructure.total_scenes}</div>
-              </div>
-            </div>
-            ) : null}
-
-            {screeningInsightTab === 'validation' ? (
-            <div className="cinematic-panel p-4 md:col-span-2 xl:col-span-4">
-              <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-zinc-300">Progress & Analysis</h3>
-              <div className="space-y-2 text-xs text-zinc-200">
-                <div>Completion: <span className="font-semibold text-zinc-100">{filmProgress.completion_percent.toFixed(2)}%</span></div>
-                <div>
-                  Ready To Screen:{' '}
-                  <span className={`font-semibold ${filmProgress.ready_to_screen ? 'text-emerald-300' : 'text-rose-300'}`}>
-                    {filmProgress.ready_to_screen ? 'YES' : 'NO'}
-                  </span>
-                </div>
-                <div className="pt-1 text-[11px] uppercase tracking-[0.1em] text-zinc-400">Issues</div>
-                {filmValidation.issues.length > 0 ? filmValidation.issues.map((issue, idx) => (
-                  <div key={`issue-${idx}`} className="text-rose-300">- {issue}</div>
-                )) : <div className="text-zinc-400">No structure issues reported.</div>}
-                <div className="pt-1 text-[11px] uppercase tracking-[0.1em] text-zinc-400">Strengths</div>
-                {filmValidation.strengths.map((strength, idx) => (
-                  <div key={`strength-${idx}`} className="text-emerald-300">+ {strength}</div>
-                ))}
-              </div>
-            </div>
-            ) : null}
-          </section>
-        </div>
-      </div>
-
-      {/* Revision Modal */}
-      {showRevisionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-zinc-100">Request Scene Revision</h3>
-            <p className="mt-2 text-sm text-zinc-400">
-              Describe the changes you'd like to see in this scene. The revision will be queued as a new render job.
-            </p>
-
-            <div className="mt-4 space-y-4">
-              {/* Revision Prompt */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Revision Instructions <span className="text-rose-400">*</span>
-                </label>
-                <textarea
-                  value={revisionPrompt}
-                  onChange={(e) => setRevisionPrompt(e.target.value)}
-                  placeholder="E.g., Adjust lighting to be warmer, slow down pacing in the middle section..."
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                  rows={4}
-                  disabled={revisionLoading}
-                />
-              </div>
-
-              {/* Revision Reason (optional) */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Reason (optional)
-                </label>
-                <input
-                  type="text"
-                  value={revisionReason}
-                  onChange={(e) => setRevisionReason(e.target.value)}
-                  placeholder="E.g., Continuity issue, pacing too fast, tone mismatch..."
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                  disabled={revisionLoading}
-                />
-              </div>
-
-              {/* Error Message */}
-              {revisionError && (
-                <div className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                  {revisionError}
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRevisionModal(false)
-                    setRevisionPrompt('')
-                    setRevisionReason('')
-                    setRevisionError('')
-                  }}
-                  disabled={revisionLoading}
-                  className="rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmitRevision}
-                  disabled={revisionLoading || !revisionPrompt.trim()}
-                  className="rounded-lg border border-amber-400/45 bg-amber-500/14 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {revisionLoading ? 'Submitting...' : 'Submit Revision'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      </ProjectGuard>
+          </ProjectGuard>
         </StudioShell>
       </div>
-    </>
+    </div>
   )
 }

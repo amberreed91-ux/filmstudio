@@ -45,6 +45,10 @@ from app.routes.audio import router as audio_router
 from app.routes.stitching import router as stitching_router
 from app.routes.export import router as final_export_router
 from app.routes.proactive import router as proactive_router
+from app.routes.co_director_chat import router as co_director_chat_router
+from app.routes.compose import router as compose_router
+from app.routes.emotion_analysis import router as emotion_analysis_router
+from app.routes.writers_intelligence import router as writers_intelligence_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
 from app.auth import AuthService, demo_login
@@ -66,7 +70,8 @@ auth_service = AuthService(storage)
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     logger.info("Starting Studio API")
-    logger.info("Runway API configured: %s", bool(os.getenv("RUNWAY_API_KEY", "").strip()))
+    runway_key = os.getenv("RUNWAYML_API_SECRET", "").strip() or os.getenv("RUNWAY_API_KEY", "").strip()
+    logger.info("Runway API configured: %s", bool(runway_key))
     
     # Initialize storage
     set_storage(storage)
@@ -114,7 +119,12 @@ async def lifespan(app: FastAPI):
     director_commentary_service._semantic_memory_service = semantic_memory_service
     semantic_search_service._storage = storage
     semantic_search_service._semantic_memory_service = semantic_memory_service
-    logger.info("Memory service initialized with storage")
+
+    # Initialize StudyMemoryService with storage
+    from app.services.study_memory_service import get_study_memory_service
+    _study_svc = get_study_memory_service()
+    _study_svc.storage = storage
+    logger.info("Study memory service initialized with storage")
     
     # Initialize short film review service with storage
     from app.services.short_film_review_service import short_film_review_service
@@ -241,6 +251,10 @@ app.include_router(audio_router)
 app.include_router(stitching_router)
 app.include_router(final_export_router)
 app.include_router(proactive_router)
+app.include_router(co_director_chat_router)
+app.include_router(compose_router)
+app.include_router(emotion_analysis_router)
+app.include_router(writers_intelligence_router)
 
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -275,6 +289,11 @@ def mock_video_sample():
 
 
 app.mount("/outputs", StaticFiles(directory=str(OUTPUTS_DIR)), name="outputs")
+
+# Mount static files for composed scene videos
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # WebSocket Connection Manager
 class ConnectionManager:

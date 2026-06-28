@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
+import logging
 import shutil
+
+logger = logging.getLogger(__name__)
 
 from app.services import render_service
 from app.services import render as render_module
@@ -109,6 +112,15 @@ async def get_render_job_status(job_id: str):
     """Poll render job status"""
     job = await render_service.get_job_status(job_id)
     return job
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_render_job(job_id: str):
+    """Delete a render job"""
+    result = render_service.delete_job(job_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "deleted"}
 
 
 @router.post("/jobs/{job_id}/cancel")
@@ -278,5 +290,70 @@ def backfill_project_state_render_jobs():
         storage=render_module._storage,
         render_service=render_service,
     )
+
+
+@router.post("/recover-output-urls")
+async def recover_render_output_urls():
+    """Find and fix render jobs with status='complete' but no output URL.
+    
+    For simulated/local jobs: regenerate the placeholder URL immediately.
+    For real provider jobs: set status to 'failed' since the URL is genuinely lost.
+    """
+    if render_module._storage is None:
+        raise HTTPException(status_code=503, detail="Render job storage is not initialized")
+    
+    SIMULATED_PLACEHOLDER = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    
+    jobs = render_module._storage.list_jobs(limit=5000)
+    recovered = 0
+    demoted = 0
+    skipped = 0
+    
+    for job in jobs:
+        if job.status != "complete":
+            continue
+        
+        has_url = (
+            job.output_payload
+            and isinstance(job.output_payload.asset_url, str)
+            and job.output_payload.asset_url.strip()
+        )
+        if has_url:
+            continue
+        
+        job_id = job.id
+        is_simulated = job.provider in ("simulated", "local")
+        
+        if is_simulated:
+            from app.models import RenderJobOutput
+            job.output_payload = RenderJobOutput(
+                asset_url=SIMULATED_PLACEHOLDER,
+                thumbnail_url=None,
+                metadata={"simulated": True, "provider": job.provider, "url": SIMULATED_PLACEHOLDER, "recovered": True},
+            )
+            job.error_message = None
+            job.completed_at = job.completed_at or datetime.now(timezone.utc).isoformat()
+            job.updated_at = datetime.now(timezone.utc).isoformat()
+            render_module._storage.save_job(job)
+            if job_id in render_service._jobs:
+                render_service._jobs[job_id] = job
+            recovered += 1
+            logger.info("RENDER_URL_RECOVERED | job=%s | provider=%s", job_id, job.provider)
+        else:
+            job.status = "failed"
+            job.error_message = "Job completed without output URL — demoted by recovery"
+            job.updated_at = datetime.now(timezone.utc).isoformat()
+            render_module._storage.save_job(job)
+            if job_id in render_service._jobs:
+                render_service._jobs[job_id] = job
+            demoted += 1
+            logger.info("RENDER_URL_DEMOTED | job=%s | provider=%s", job_id, job.provider)
+    
+    return {
+        "recovered": recovered,
+        "demoted": demoted,
+        "skipped": skipped,
+        "total_checked": recovered + demoted + skipped,
+    }
 
 

@@ -29,6 +29,7 @@ def test_render_service_falls_back_to_runway_api_key(monkeypatch) -> None:
 
 
 def test_render_service_missing_runway_api_key_results_in_none(monkeypatch) -> None:
+    monkeypatch.delenv("RUNWAYML_API_SECRET", raising=False)
     monkeypatch.delenv("RUNWAY_API_KEY", raising=False)
     monkeypatch.delenv("VIDEO_PROVIDER_API_KEY", raising=False)
 

@@ -141,43 +141,69 @@ def normalize_video_provider_response(
 
 
 class SimulatedProviderAdapter(RenderProviderAdapter):
-    """Simulated provider for testing and fallback - no real API calls"""
+    """Simulated provider for testing and fallback - no real API calls.
+
+    Progresses through job states on poll so the frontend pipeline
+    displays Loop 1 -> Loop 2 -> Compose -> MP4 completion.
+    Uses a public sample MP4 as placeholder output.
+    """
+
+    _PLACEHOLDER_VIDEO_URL = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
     def __init__(self, config: ProviderConfig):
         super().__init__(config)
 
     async def submit_job(self, job: RenderJobModel) -> RenderJobModel:
-        """Simulate job submission - completes immediately for testing"""
+        """Simulate job submission - starts async progression"""
         job.provider_job_id = f"sim-{job.id}"
-        job.status = "complete"  # Immediately complete for simulation
-        job.progress = 100
-        job.output_payload = RenderJobOutput(
-            asset_url=f"https://storage.example.com/assets/{job.id}.mp4",
-            thumbnail_url=f"https://storage.example.com/thumbnails/{job.id}.jpg",
-            metadata={"simulated": True, "provider": "simulated"}
-        )
+        job.status = "pending"
+        job.progress = 0
+        meta = job.metadata or {}
+        meta["simulated_start"] = datetime.now().isoformat()
+        job.metadata = meta
         job.created_at = datetime.now().isoformat()
-        job.completed_at = datetime.now().isoformat()
         job.updated_at = datetime.now().isoformat()
         return job
 
     async def get_job_status(self, job: RenderJobModel) -> RenderJobModel:
-        """Simulate status check - returns current state"""
+        """Simulate status check - progresses through stages based on elapsed time
+
+        Falls back to job.created_at when simulated_start metadata is
+        absent (e.g. after reload from DB where metadata is not stored).
+        """
+        meta = job.metadata or {}
+        start_str = meta.get("simulated_start")
+        if not start_str and job.created_at:
+            start_str = job.created_at
+        if start_str:
+            try:
+                start = datetime.fromisoformat(start_str)
+                elapsed = (datetime.now(start.tzinfo) - start).total_seconds()
+
+                if elapsed >= 6:
+                    job.status = "complete"
+                    job.progress = 100
+                    job.error_message = None
+                    job.output_payload = RenderJobOutput(
+                        asset_url=self._PLACEHOLDER_VIDEO_URL,
+                        thumbnail_url=None,
+                        metadata={
+                            "simulated": True,
+                            "provider": self.provider_id,
+                            "url": self._PLACEHOLDER_VIDEO_URL,
+                        },
+                    )
+                    job.completed_at = job.completed_at or datetime.now().isoformat()
+                elif elapsed >= 2:
+                    job.status = "rendering"
+                    job.progress = 50
+                else:
+                    job.status = "pending"
+                    job.progress = 0
+            except Exception:
+                pass
         job.updated_at = datetime.now().isoformat()
         return job
-
-    async def cancel_job(self, job: RenderJobModel) -> bool:
-        """Simulate job cancellation"""
-        if job.status in ("pending", "rendering"):
-            # Cancel any pending simulation task
-            task = self._simulation_tasks.get(job.id)
-            if task:
-                task.cancel()
-                del self._simulation_tasks[job.id]
-            job.status = "cancelled"
-            job.updated_at = datetime.now().isoformat()
-            return True
-        return False
 
     async def cancel_job(self, job: RenderJobModel) -> bool:
         """Simulate job cancellation"""
@@ -208,10 +234,10 @@ class SimulatedProviderAdapter(RenderProviderAdapter):
         """Simulated always available"""
         return ProviderStatus(
             provider_id=self.provider_id,
-            name="Simulated Provider",
+            name=self.config.name or "Simulated Provider",
             status="available",
             is_simulated=True,
-            capabilities=["video_generation", "image_to_video", "style_transfer"],
+            capabilities=self.config.capabilities or ["video_generation", "image_to_video", "style_transfer"],
             active_jobs=0,
             queued_jobs=0
         )
@@ -605,9 +631,22 @@ class RunwayAdapter(RenderProviderAdapter):
                 if isinstance(item, str) and item.strip():
                     return item.strip()
                 if isinstance(item, dict):
-                    value = item.get("video_url") or item.get("url")
+                    value = item.get("video_url") or item.get("url") or item.get("asset_url")
                     if isinstance(value, str) and value.strip():
                         return value.strip()
+        if isinstance(output, dict):
+            value = output.get("video_url") or output.get("url") or output.get("asset_url")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        artifacts = response.get("artifacts")
+        if isinstance(artifacts, list) and len(artifacts) > 0:
+            first = artifacts[0]
+            if isinstance(first, dict):
+                value = first.get("url") or first.get("video_url") or first.get("uri")
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            elif isinstance(first, str) and first.strip():
+                return first.strip()
         return None
 
     @staticmethod
@@ -855,6 +894,14 @@ class RunwayAdapter(RenderProviderAdapter):
                 return job
 
             video_url = self._extract_video_url(poll_response)
+            if not video_url:
+                output_val = poll_response.get("output")
+                if isinstance(output_val, dict):
+                    video_url = output_val.get("video_url") or output_val.get("url") or output_val.get("asset_url")
+                elif isinstance(output_val, list) and len(output_val) > 0:
+                    video_url = str(output_val[0]) if not isinstance(output_val[0], dict) else output_val[0].get("video_url") or output_val[0].get("url")
+                if not video_url:
+                    video_url = poll_response.get("url")
             logger.info("Runway extracted video_url: task_id=%s found=%s", task_id, bool(video_url))
             if not video_url:
                 job.status = "failed"
@@ -1019,16 +1066,20 @@ class RunwayAdapter(RenderProviderAdapter):
                 
                 # Enhanced URL extraction with fallback
                 if not video_url:
-                    # Try multiple fields
-                    output_list = response.get("output", [])
-                    if isinstance(output_list, list) and len(output_list) > 0:
-                        video_url = output_list[0]
+                    output_val = response.get("output")
+                    if isinstance(output_val, dict):
+                        video_url = output_val.get("video_url") or output_val.get("url") or output_val.get("asset_url")
+                    elif isinstance(output_val, list) and len(output_val) > 0:
+                        video_url = output_val[0] if isinstance(output_val[0], str) else None
                     
                     if not video_url:
                         artifacts = response.get("artifacts", [])
                         if isinstance(artifacts, list) and len(artifacts) > 0:
-                            if isinstance(artifacts[0], dict):
-                                video_url = artifacts[0].get("url")
+                            first = artifacts[0]
+                            if isinstance(first, dict):
+                                video_url = first.get("url") or first.get("video_url")
+                            elif isinstance(first, str):
+                                video_url = first
                     
                     if not video_url:
                         video_url = response.get("url")
@@ -1122,6 +1173,7 @@ class RunwayAdapter(RenderProviderAdapter):
 # Provider registry
 ADAPTER_REGISTRY: dict[str, type[RenderProviderAdapter]] = {
     "simulated": SimulatedProviderAdapter,
+    "local": SimulatedProviderAdapter,
     "higgsfield": HiggsfieldAdapter,
     "runway": RunwayAdapter,
     "generic": GenericVideoProviderAdapter,

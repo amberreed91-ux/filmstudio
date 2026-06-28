@@ -220,7 +220,7 @@ class GenerateShortFilmWorkflowService:
                 
                 try:
                     shot_timer = start_timer()
-                    parameters = {"ratio": ratio, "duration": max(1, min(duration, 10))}
+                    parameters = {"ratio": ratio, "duration": max(1, min(duration, 20))}
                     if use_mock_success:
                         parameters["use_mock_success"] = True
                     created_job = render_service.create_job(

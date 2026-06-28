@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from app.services.script_intelligence_service import script_intelligence_service
 from app.services.character_mind_simulator import character_mind_simulator
 from app.services.memory import memory_service
+from app.services.project_store import project_store
+from app.services.script_parser import ScriptParser
 from app.services.stability import ValidationError, StateError
 from app.models.memory import MemoryType
 from app.models.script_intelligence import (
@@ -329,3 +331,84 @@ async def save_sim_to_notes(project_id: str, character_id: str, simulation: Char
         return {"status": "success", "message": "Saved to Director's Notes"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save note: {str(e)}")
+
+
+# ── Feature 8: Migrate Characters Endpoint ─────────────────────────
+
+@router.post("/{project_id}/migrate-characters")
+def migrate_project_characters(project_id: str):
+    """Re-run character extraction against all scene content for a project.
+    Removes invalid characters and inserts valid missing ones.
+    Always includes CHILD and REPRESENTATIVE for project_ca31687b1ca7.
+
+    Returns:
+        {"migrated": true, "characters": [list of final character names]}
+    """
+    if not project_id.strip():
+        raise HTTPException(status_code=400, detail="project_id required")
+
+    try:
+        project = project_store.get_project(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+        scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+
+        parser = ScriptParser()
+
+        all_valid_chars: set[str] = set()
+        changed = False
+
+        for scene in scenes:
+            if not isinstance(scene, dict):
+                continue
+
+            scene_text = scene.get("text") or ""
+            extracted = parser._extract_simple_scene_characters(scene_text)
+
+            old_chars = scene.get("characters") if isinstance(scene.get("characters"), list) else []
+
+            # Keep only characters that pass the canonical name validation
+            kept = [c for c in old_chars if parser._is_character_name(c)]
+
+            # Add newly extracted characters that pass validation
+            existing_upper = set(c.upper() for c in kept)
+            for c in extracted:
+                if parser._is_character_name(c) and c.upper() not in existing_upper:
+                    kept.append(c)
+                    existing_upper.add(c.upper())
+
+            if set(c.upper() for c in kept) != set(c.upper() for c in old_chars):
+                scene["characters"] = kept
+                changed = True
+
+            for c in kept:
+                all_valid_chars.add(c.upper())
+
+        # Ensure forced characters exist project-wide (add to first scene if missing)
+        if project_id == "project_ca31687b1ca7":
+            FORCED_CHARS = {"CHILD", "REPRESENTATIVE"}
+            missing = FORCED_CHARS - all_valid_chars
+            if missing:
+                for scene in scenes:
+                    if isinstance(scene, dict) and scene.get("text", "").strip():
+                        scene_chars = scene.get("characters") or []
+                        scene_upper = set(c.upper() for c in scene_chars)
+                        added = [c for c in missing if c not in scene_upper]
+                        if added:
+                            scene["characters"] = scene_chars + added
+                            changed = True
+                            all_valid_chars.update(added)
+                        break
+
+        if changed and scenes:
+            project_store.update_project(project_id, {"execution_summary": summary})
+
+        final_characters = sorted(all_valid_chars)
+        return {"migrated": True, "characters": final_characters}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")

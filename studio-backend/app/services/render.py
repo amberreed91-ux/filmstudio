@@ -200,6 +200,16 @@ class RenderService:
             capabilities=["video_generation", "image_to_video", "style_transfer"]
         )
 
+        # Local provider for fallback when Runway is not configured
+        self._provider_configs["local"] = ProviderConfig(
+            provider_id="local",
+            name="Local (Simulated)",
+            enabled=True,
+            is_simulated=True,
+            requires=[],
+            capabilities=["video_generation", "image_to_video"]
+        )
+
         # Higgsfield placeholder
         self._provider_configs["higgsfield"] = ProviderConfig(
             provider_id="higgsfield",
@@ -258,10 +268,11 @@ class RenderService:
             elif not config.enabled or missing_requirements:
                 provider_mode = "unavailable"
 
+            api_key_configured = "api_key" not in missing_requirements
             ready_for_hosted_generation = bool(
                 config.enabled
                 and not config.is_simulated
-                and not missing_requirements
+                and api_key_configured
                 and not (provider_id == "runway" and test_mode == "mock_success")
             )
             is_mock = provider_mode == "mock_success" or config.is_simulated
@@ -301,6 +312,7 @@ class RenderService:
                 is_mock=is_mock,
                 enabled=config.enabled,
                 ready_for_hosted_generation=ready_for_hosted_generation,
+                api_key_configured=api_key_configured,
                 provider_mode=provider_mode,
                 missing_requirements=missing_requirements,
                 display_label=display_label,
@@ -323,14 +335,9 @@ class RenderService:
         return config
 
     def get_default_provider(self) -> str:
-        """Get the default provider (fallback to simulated)"""
-        runway = self._provider_configs.get("runway")
-        if runway and runway.enabled:
-            return "runway"
-        for provider_id, config in self._provider_configs.items():
-            if config.enabled:
-                return provider_id
-        return "simulated"
+        """Get the default provider based on available API keys"""
+        import os
+        return "runway" if (os.getenv("RUNWAY_API_KEY") or os.getenv("RUNWAYML_API_SECRET")) else "local"
 
     async def create_and_submit_job(
         self,
@@ -434,7 +441,7 @@ class RenderService:
                 raise ValueError(f"Unknown provider '{provider}'. Available providers: {list(self._provider_configs.keys())}")
         else:
             provider = self.get_default_provider()
-        
+
         # ── Replace generic prompts with real scene descriptions ──────────────
         # If prompt is generic or too short, fetch the actual scene description
         _scene_id = "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
@@ -469,6 +476,29 @@ class RenderService:
                                 _parts.append(_time_of_day)
                             if _tone:
                                 _parts.append(f"Mood: {_tone}")
+                            
+                            # ── Character description injection ──────────────
+                            _scene_chars = _scene.get("characters") or []
+                            if _scene_chars and _storage:
+                                _char_summaries = []
+                                for _char_name in _scene_chars:
+                                    _char_name_str = str(_char_name).strip()
+                                    if _char_name_str:
+                                        _char_record = _storage.get_character_by_name(
+                                            project_id, _char_name_str
+                                        )
+                                        if _char_record:
+                                            _vps = (_char_record.get("visual_prompt_summary") or "").strip()
+                                            if _vps:
+                                                _char_summaries.append(f"{_char_name_str} — {_vps}")
+                                if _char_summaries:
+                                    _parts.append("Characters present: " + "; ".join(_char_summaries))
+                                    logger.info(
+                                        "CHARACTER_PROMPT_INJECTION | scene=%s | chars=%d",
+                                        _scene_id,
+                                        len(_scene_chars),
+                                    )
+                            
                             _parts.append("Cinematic, film quality, single continuous shot.")
                             
                             # Build real prompt and cap at 512 characters
@@ -652,33 +682,66 @@ class RenderService:
             self._submit_locks.discard(job_id)
 
     async def get_job_status(self, job_id: str) -> RenderJobModel:
-        """Get job status with storage fallback, caching, and recovery"""
-        # Check in-memory cache first
+        """Get job status with storage fallback, caching, and recovery
+
+        For non-terminal jobs, delegates to the provider adapter so simulated
+        providers can progress through stages (pending → rendering → complete).
+        """
         job = self._jobs.get(job_id)
-        if job:
-            # For non-terminal jobs, check if we need to refresh from storage
-            if not job.is_terminal() and _storage:
-                try:
-                    # Only refresh from storage if last update was more than 30 seconds ago
-                    last_update = datetime.fromisoformat(job.updated_at.replace('Z', '+00:00'))
-                    if (datetime.now(last_update.tzinfo) - last_update).total_seconds() > 30:
-                        stored_job = _storage.get_job(job_id)
-                        if stored_job and stored_job.updated_at > job.updated_at:
-                            self._jobs[job_id] = stored_job
-                            job = stored_job
-                except Exception:
-                    # If refresh fails, use cached version
-                    pass
-            return job
-        
-        # Check storage fallback
-        if _storage:
+        if not job and _storage:
             job = _storage.get_job(job_id)
             if job:
                 self._jobs[job_id] = job
-                return job
-        
-        raise ValueError(f"Job {job_id} not found")
+
+        if not job:
+            raise ValueError(f"Job {job_id} not found")
+
+        # Delegate to adapter for live status on non-terminal jobs
+        if not job.is_terminal():
+            try:
+                config = self._provider_configs.get(job.provider)
+                if config:
+                    adapter = get_adapter(job.provider, config)
+                    updated = await adapter.get_job_status(job)
+                    updated.updated_at = datetime.now().isoformat()
+                    self._jobs[job_id] = updated
+                    _persist_job(updated)
+                    if updated.status != job.status:
+                        await _notify_update(job_id, updated.model_dump())
+                    return updated
+            except Exception as _exc:
+                logger.debug("Adapter status poll failed for %s: %s", job_id, _exc)
+
+        # Safeguard: if a job reports "complete" but has no output URL, demote to "failed"
+        # so the UI doesn't show false COMPLETE badges with no playable video.
+        if job.status == "complete":
+            has_url = (
+                job.output_payload
+                and isinstance(job.output_payload.asset_url, str)
+                and job.output_payload.asset_url.strip()
+            )
+            if not has_url:
+                logger.warning(
+                    "JOB_COMPLETE_WITHOUT_URL | job=%s | project=%s | shot=%s | demoting to failed",
+                    job.id, job.project_id, job.shot_id,
+                )
+                job.status = "failed"
+                job.error_message = "Job completed without output URL"
+                self._jobs[job_id] = job
+                _persist_job(job)
+
+        return job
+
+    def delete_job(self, job_id: str) -> bool:
+        """Delete a render job record from both memory and storage."""
+        existed = job_id in self._jobs
+        self._jobs.pop(job_id, None)
+        if _storage:
+            try:
+                _storage.delete_job(job_id)
+            except Exception as e:
+                logger.error(f"Failed to delete job {job_id} from storage: {e}")
+        return existed
 
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a job"""
@@ -880,11 +943,15 @@ class RenderService:
         return None
 
     def list_jobs(self, project_id: Optional[str] = None) -> list[RenderJobModel]:
-        """List all jobs, optionally filtered by project"""
-        jobs_by_id: dict[str, RenderJobModel] = {job.id: job for job in self._jobs.values()}
+        """List all jobs, optionally filtered by project.
+        
+        In-memory jobs take priority over persisted ones — this ensures
+        the output_payload from a just-completed job (e.g. simulated provider)
+        is not overwritten by a stale DB record that hasn't been updated yet.
+        """
+        jobs_by_id: dict[str, RenderJobModel] = {}
 
-        # Compatibility fallback: include persisted jobs when process memory is cold,
-        # which is common for seeded demo/runtime startup flows.
+        # Always load persisted jobs first as the baseline.
         if _storage:
             try:
                 persisted = _storage.list_jobs(project_id=project_id, limit=5000)
@@ -892,6 +959,10 @@ class RenderService:
                     jobs_by_id[job.id] = job
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("Failed to load persisted jobs for list_jobs: %s", exc)
+
+        # Then overlay in-memory jobs — these have the freshest state.
+        for job in self._jobs.values():
+            jobs_by_id[job.id] = job
 
         jobs = list(jobs_by_id.values())
         if project_id:
@@ -946,6 +1017,24 @@ class RenderService:
         updated.updated_at = updated.last_polled_at
 
         if updated.status == "complete":
+            # Safeguard: verify the completed job has an output URL before persisting
+            has_url = (
+                updated.output_payload
+                and isinstance(updated.output_payload.asset_url, str)
+                and updated.output_payload.asset_url.strip()
+            )
+            if not has_url:
+                logger.warning(
+                    "RECONCILE_COMPLETE_WITHOUT_URL | job=%s | project=%s | shot=%s | demoting to failed",
+                    job_id, job.project_id, job.shot_id,
+                )
+                updated.status = "failed"
+                updated.error_message = "Reconciled job completed without output URL"
+                updated.recovery_status = "recovery_failed"
+                self._jobs[job_id] = updated
+                _persist_job(updated)
+                return updated
+
             normalized = (
                 ((updated.output_payload or RenderJobOutput(asset_url="", thumbnail_url="", metadata={})).metadata or {})
                 .get("provider_response_normalized", {})
@@ -1253,7 +1342,10 @@ class RenderService:
                         self._jobs[job.id] = updated
                         _persist_job(updated)
                         if self._is_stale(updated) and not updated.is_terminal():
+                            updated.status = "failed"
+                            updated.error_message = "Stale job — exceeded render timeout after restart"
                             updated.recovery_status = "stale_recovered"
+                            updated.updated_at = datetime.now().isoformat()
                             _persist_job(updated)
                             stale_recovered += 1
                         recovered += 1
@@ -1285,12 +1377,22 @@ class RenderService:
             try:
                 active_jobs = self._get_jobs_by_status(POLL_STATUSES)
                 logger.info("POLLING_CYCLE | checking=%d jobs", len(active_jobs))
-                
+
                 for job in active_jobs:
-                    if job.provider != "runway":
-                        continue
                     try:
-                        await self.reconcile_completed_runway_task(job.id)
+                        # Hard timeout: any active job older than threshold is stuck
+                        created = self._parse_iso(job.created_at)
+                        if created and (datetime.now(created.tzinfo) - created).total_seconds() >= STALE_RENDER_THRESHOLD_SECONDS:
+                            job.status = "failed"
+                            job.error_message = "Stale job — exceeded render timeout"
+                            job.recovery_status = "stale_recovered"
+                            job.updated_at = datetime.now().isoformat()
+                            self._jobs[job.id] = job
+                            _persist_job(job)
+                            logger.info("POLLING_STALE_CANCEL | job=%s | provider=%s", job.id, job.provider)
+                            continue
+                        if job.provider == "runway":
+                            await self.reconcile_completed_runway_task(job.id)
                     except Exception as e:
                         logger.debug("Polling error for job %s: %s", job.id, e)
             except Exception as e:

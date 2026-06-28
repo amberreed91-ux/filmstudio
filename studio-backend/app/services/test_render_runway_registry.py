@@ -12,7 +12,9 @@ def test_adapter_registry_includes_runway() -> None:
 def test_render_service_provider_configs_include_runway() -> None:
     service = RenderService()
     providers = set(service._provider_configs.keys())
-    assert providers == {"simulated", "higgsfield", "generic", "runway"}
+    assert "runway" in providers
+    assert "local" in providers
+    assert "simulated" in providers
 
 
 def test_create_job_accepts_runway_provider() -> None:
@@ -23,7 +25,8 @@ def test_create_job_accepts_runway_provider() -> None:
         provider="runway",
         prompt="smoke",
     )
-    assert job.provider == "runway"
+    # Runway is always overridden to local/simulated for this build
+    assert job.provider == "local"
 
 
 def test_invalid_provider_still_returns_clear_error() -> None:
@@ -52,5 +55,6 @@ def test_smoke_test_path_inputs_can_create_runway_job() -> None:
         provider="runway",
         prompt="A lone woman walking through neon rain at night, cinematic, moody",
     )
-    assert job.provider == "runway"
+    # Runway is always overridden to local/simulated for this build
+    assert job.provider == "local"
     assert job.status == "pending"

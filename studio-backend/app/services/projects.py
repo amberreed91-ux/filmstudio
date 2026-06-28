@@ -12,6 +12,7 @@ from app.models import (
     ContinuityRegister, ContinuityIssue, StudyReference, RenderJobModel
 )
 from app.data.storage import StorageInterface
+from app.services.project_store import project_store
 from app.services.render import render_service
 from app.services.script_parser import parse_screenplay
 from app.services.crew import crew_service
@@ -783,7 +784,19 @@ class ReferenceStudyService:
     def __init__(self, storage=None):
         self.storage = storage
 
-    def study_reference_prompt(self, project_id: str, reference_prompt: str) -> tuple[StudyReference, Optional[str]]:
+    @staticmethod
+    def _derive_title_from_filename(filename: str) -> str:
+        import os
+        base = os.path.splitext(os.path.basename(filename))[0]
+        title = base.replace('_', ' ').replace('-', ' ').strip()
+        return title.title() if title else "Untitled"
+
+    def study_reference_prompt(
+        self,
+        project_id: str,
+        reference_prompt: str,
+        study_focus: str = "cinematography",
+    ) -> tuple[StudyReference, Optional[str]]:
         """
         Create a study reference and link it to a project.
         Returns tuple of (study_reference, error_message).
@@ -794,7 +807,7 @@ class ReferenceStudyService:
             content_type="text",
             rights_status="analysis_only",
             allowed_use="study_only",
-            study_focus="cinematography, editing, sound, production design",
+            study_focus=study_focus,
             source_stats={},
             extraction_status="complete",
             study_cards=[
@@ -821,22 +834,71 @@ class ReferenceStudyService:
                     project.reference_study_library = ReferenceStudyLibrary(studies=[])
                 project.reference_study_library.studies.append(study_ref)
                 self.storage.save_project(project)
+                try:
+                    project_store.save_project(project.model_dump(mode='json'))
+                except Exception:
+                    pass
             else:
                 return study_ref, f"Warning: Project '{project_id}' not found. Study created but not linked."
         
         return study_ref, None
 
-    def study_reference_upload(self, filename: str, content_type: str, rights_status: str, study_focus: str, notes: str) -> StudyReference:
-        return StudyReference(
+    async def study_reference_upload(
+        self,
+        project_id: str,
+        file,
+        rights_status: str,
+        study_focus: str,
+        notes: str,
+        derived_title: Optional[str] = None,
+        derived_summary: Optional[str] = None,
+    ) -> tuple[StudyReference, Optional[str]]:
+        """
+        Create a study reference from file upload and link it to a project.
+        Returns tuple of (study_reference, error_message).
+
+        For markdown files, derived_title/summary are extracted from H1 + first paragraph.
+        When title is not provided, it is derived from the filename.
+        """
+        filename = file.filename or "untitled"
+        content_type = file.content_type or "application/octet-stream"
+
+        # Derive title: use markdown H1 if available, fall back to filename-based title
+        title = derived_title if derived_title else self._derive_title_from_filename(filename)
+
+        final_filename = title
+        final_notes = derived_summary if derived_summary else notes
+        final_content_type = "text/markdown" if derived_title or derived_summary else content_type
+
+        study_ref = StudyReference(
             reference_id=f"study-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            filename=filename,
-            content_type=content_type,
+            filename=final_filename,
+            content_type=final_content_type,
             rights_status=rights_status,
             allowed_use="study_only" if rights_status != "licensed" else "production",
             study_focus=study_focus,
+            notes=final_notes,
             source_stats={},
             extraction_status="complete",
             study_cards=[],
             risk_register=[],
             next_actions=["Review extracted study cards", "Save to memory library"]
         )
+        
+        # Link to project's reference_study_library
+        if self.storage:
+            project = self.storage.get_project(project_id)
+            if project:
+                # Initialize reference_study_library if needed
+                if project.reference_study_library is None:
+                    project.reference_study_library = ReferenceStudyLibrary(studies=[])
+                project.reference_study_library.studies.append(study_ref)
+                self.storage.save_project(project)
+                try:
+                    project_store.save_project(project.model_dump(mode='json'))
+                except Exception:
+                    pass
+            else:
+                return study_ref, f"Warning: Project '{project_id}' not found. Study created but not linked."
+        
+        return study_ref, None

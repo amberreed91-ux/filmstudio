@@ -3,7 +3,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uuid
-import asyncio
+import re
 
 from app.models.universe_graph import UniverseNode, UniverseRelationship, UniverseGraph, AbsenceReport
 from app.services.director_memory_service import director_memory_service
@@ -12,6 +12,13 @@ from app.services.script_intelligence_service import script_intelligence_service
 from app.data.storage import get_storage
 
 logger = logging.getLogger("studio-universe-graph")
+
+THEME_KEYWORDS = {
+    "memory and loss": ["memory", "remember", "forget", "lost", "loss", "past", "father", "notebook"],
+    "community displacement": ["community", "neighbor", "family", "together", "home", "displace", "evacuate", "resident", "future"],
+    "environmental change": ["flood", "storm", "wave", "ocean", "sea", "water", "rise", "climate", "coastal", "shore", "tide", "wall"],
+    "the tide / ocean / water": ["tide", "wave", "ocean", "water", "sea", "shore", "beach", "fishing", "boat", "coastal"],
+}
 
 class UniverseGraphService:
     def __init__(self):
@@ -23,7 +30,6 @@ class UniverseGraphService:
         rels_raw = self.storage.get_universe_relationships(project_id)
 
         if not nodes_raw and not rels_raw:
-            # Auto-populate on first load
             return await self.auto_populate(project_id)
 
         nodes = []
@@ -33,8 +39,7 @@ class UniverseGraphService:
             nodes.append(UniverseNode(**n_copy))
 
         relationships = [UniverseRelationship(**r) for r in rels_raw]
-        
-        # Populate connected_nodes
+
         for node in nodes:
             connected = []
             for rel in relationships:
@@ -46,186 +51,245 @@ class UniverseGraphService:
 
         return UniverseGraph(project_id=project_id, nodes=nodes, relationships=relationships)
 
-    async def auto_populate(self, project_id: str) -> UniverseGraph:
-        logger.info(f"Auto-populating universe graph for project {project_id}")
-        
+    def _get_project_scenes(self, project_id: str) -> list[dict]:
+        project = self.storage.get_project(project_id)
+        if not project:
+            return []
+        if hasattr(project, "model_dump"):
+            data = project.model_dump(mode="json")
+        elif isinstance(project, dict):
+            data = project
+        else:
+            return []
+        summary = data.get("execution_summary") if isinstance(data.get("execution_summary"), dict) else {}
+        return summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+
+    def _extract_location_name(self, heading: str) -> str:
+        heading = heading.strip()
+        heading = re.sub(r"^(INT\.|EXT\.|INT/EXT\.)\s*", "", heading, flags=re.IGNORECASE).strip()
+        parts = heading.split(",")
+        return parts[0].strip().upper()
+
+    def _detect_themes(self, text: str) -> list[str]:
+        text_lower = text.lower()
+        found = []
+        for theme, keywords in THEME_KEYWORDS.items():
+            if any(kw in text_lower for kw in keywords):
+                found.append(theme)
+        return found
+
+    async def _populate_from_scenes(self, project_id: str, scenes: list[dict]) -> tuple[list[UniverseNode], list[UniverseRelationship]]:
         nodes = []
         rels = []
-        created_nodes = {} # name -> node_id
+        created_nodes: dict[str, str] = {}
 
-        # 1. Characters from Script Intelligence and Director Memory
-        try:
-            arc_analysis = await script_intelligence_service.analyze_character_arcs(project_id)
-            memory_data = director_memory_service.get_memory(project_id)
-            char_memory_entries = memory_data.get("characters", [])
+        character_scenes: dict[str, list[str]] = {}
+        location_scenes: dict[str, list[str]] = {}
+        all_text_parts: list[str] = []
 
-            for char_prof in arc_analysis.characters:
-                node_id = f"char-{uuid.uuid4().hex[:8]}"
-                
-                # Find matching memory entry
-                char_mem = next((c for c in char_memory_entries 
-                                if (c.get("character") or c.get("name") or "").lower() == char_prof.name.lower()), {})
-                
-                description = char_mem.get("backstory_notes") or ""
-                if not description and char_mem.get("personality_traits"):
-                    description = f"Character known for being {', '.join(char_mem['personality_traits'])}."
-                
-                node = UniverseNode(
-                    node_id=node_id,
-                    project_id=project_id,
-                    node_type="character",
-                    name=char_prof.name,
-                    description=description or "Established character in the story.",
-                    first_scene=char_prof.first_appearance_scene,
-                    last_scene=char_prof.scene_ids[-1] if char_prof.scene_ids else None,
-                    universe_tags=char_mem.get("tags", [])
-                )
-                nodes.append(node)
-                created_nodes[char_prof.name.lower()] = node_id
-                self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
+        for scene in scenes:
+            sid = scene.get("scene_id", "")
+            chars = scene.get("characters") if isinstance(scene.get("characters"), list) else []
+            heading = scene.get("heading") or scene.get("location") or ""
+            text = scene.get("text") or scene.get("description") or ""
+            all_text_parts.append(text)
 
-            # Add relationships from co-occurrence
-            for rel in arc_analysis.relationships:
-                from_id = created_nodes.get(rel.character_a.lower())
-                to_id = created_nodes.get(rel.character_b.lower())
-                if from_id and to_id:
-                    relationship_id = f"rel-{uuid.uuid4().hex[:8]}"
-                    universe_rel = UniverseRelationship(
-                        relationship_id=relationship_id,
-                        project_id=project_id,
-                        from_node=from_id,
-                        to_node=to_id,
-                        relationship_type="co-occurrence",
-                        description=f"Appeared in {rel.shared_scene_count} scenes together."
+            for char_name in chars:
+                char_key = char_name.strip().upper()
+                if not char_key:
+                    continue
+                if char_key not in character_scenes:
+                    character_scenes[char_key] = []
+                if sid not in character_scenes[char_key]:
+                    character_scenes[char_key].append(sid)
+
+            loc_name = self._extract_location_name(heading)
+            if loc_name:
+                if loc_name not in location_scenes:
+                    location_scenes[loc_name] = []
+                if sid not in location_scenes[loc_name]:
+                    location_scenes[loc_name].append(sid)
+
+        full_text = " ".join(all_text_parts)
+
+        for char_key, scene_ids in character_scenes.items():
+            node_id = f"char-{uuid.uuid4().hex[:8]}"
+            name = char_key.title()
+            node = UniverseNode(
+                node_id=node_id,
+                project_id=project_id,
+                node_type="character",
+                name=name,
+                description=f"{name} appears in {len(scene_ids)} scene(s).",
+                first_scene=scene_ids[0],
+                last_scene=scene_ids[-1],
+            )
+            nodes.append(node)
+            created_nodes[char_key] = node_id
+            self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
+
+        for loc_key, scene_ids in location_scenes.items():
+            if loc_key in created_nodes:
+                continue
+            node_id = f"loc-{uuid.uuid4().hex[:8]}"
+            name = loc_key.title()
+            node = UniverseNode(
+                node_id=node_id,
+                project_id=project_id,
+                node_type="location",
+                name=name,
+                description=f"A key location where {len(scene_ids)} scene(s) take place.",
+                first_scene=scene_ids[0],
+                last_scene=scene_ids[-1],
+            )
+            nodes.append(node)
+            created_nodes[loc_key] = node_id
+            self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
+
+        themes = self._detect_themes(full_text)
+        for theme in themes:
+            if theme.upper() in created_nodes:
+                continue
+            node_id = f"lore-{uuid.uuid4().hex[:8]}"
+            node = UniverseNode(
+                node_id=node_id,
+                project_id=project_id,
+                node_type="lore",
+                name=theme.title(),
+                description=f"Thematic element: {theme}",
+            )
+            nodes.append(node)
+            created_nodes[theme.upper()] = node_id
+            self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
+
+        for scene in scenes:
+            sid = scene.get("scene_id", "")
+            chars = scene.get("characters") if isinstance(scene.get("characters"), list) else []
+            heading = scene.get("heading") or scene.get("location") or ""
+            loc_name = self._extract_location_name(heading)
+
+            loc_id = created_nodes.get(loc_name)
+            for char_key in [c.strip().upper() for c in chars if c.strip()]:
+                char_id = created_nodes.get(char_key)
+                if char_id and loc_id:
+                    rel_exists = any(
+                        r.from_node == char_id and r.to_node == loc_id
+                        for r in rels
                     )
-                    rels.append(universe_rel)
-                    self.storage.save_universe_relationship(universe_rel.model_dump())
-        except Exception as e:
-            logger.warning(f"Character auto-population limited: {e}")
+                    if not rel_exists:
+                        rel_id = f"rel-{uuid.uuid4().hex[:8]}"
+                        rels.append(UniverseRelationship(
+                            relationship_id=rel_id,
+                            project_id=project_id,
+                            from_node=char_id,
+                            to_node=loc_id,
+                            relationship_type="appears_at",
+                            description=f"{char_key.title()} appears at {loc_name.title()} in {sid}.",
+                        ))
+                        self.storage.save_universe_relationship(rels[-1].model_dump())
 
-        # 2. Locations, Objects, and Lore from Scene Intelligence
-        try:
-            scene_data = self.scene_store._load()
-            records = scene_data.get("records", {})
-            
-            locations = {} # name -> {description, scenes}
-            objects = {} # name -> {description, scenes}
-            lore = {} # name -> {description, scenes}
-            
-            for scene_id, scene in records.items():
-                # Filter by project (assuming project_id matches film_title or we can't filter easily)
-                # In this project, scene_intelligence is often shared but we can try to find relevant scenes
-                scene_name = scene.get("scene_name", "").split("-")[0].strip()
-                if not scene_name: continue
-                
-                # Determine node type based on content
-                scene_desc = scene.get("director_notes", "") + " " + scene.get("scene_description", "")
-                scene_desc_lower = scene_desc.lower()
-                scene_name_lower = scene_name.lower()
-                
-                # Check if it's a location (contains INT/EXT or location keywords)
-                location_keywords = ["int.", "ext.", "interior", "exterior", "room", "house", "building", "street", "park", "office", "restaurant", "bar", "cafe", "kitchen", "bedroom", "bathroom", "living room", "hallway", "elevator", "lobby", "hotel", "hospital", "school", "church", "temple", "forest", "mountain", "beach", "river", "lake", "ocean", "desert", "city", "town", "village", "road", "highway", "bridge", "tunnel", "airport", "station", "platform", "train", "bus", "subway", "warehouse", "factory", "studio", "stage", "set", ""]
-                is_location = any(keyword in scene_desc_lower for keyword in location_keywords)
-                
-                # Check if it's an object (prop-like terms)
-                object_keywords = ["table", "chair", "desk", "bed", "door", "window", "phone", "computer", "car", "keys", "bag", "gun", "knife", "book", "pen", "paper", "glass", "cup", "bottle", "plate", "fork", "spoon", "knife", "watch", "ring", "necklace", "earring", "shoes", "clothes", "shirt", "pants", "jacket", "coat", "hat", "cap", "glasses", "camera", "microphone", "speaker", "television", "radio", "lamp", "light", "candle", "match", "cigarette", "food", "drink", "medicine", "pill", "bandage", "bandaid", "tool", "hammer", "screwdriver", "wrench", "drill", "saw", "nail", "screw", "bolt", "rope", "chain", "wire", "cable", "cord", "plug", "socket", "switch", "button", "lever", "handle", "knob", "dial", "meter", "gauge", "scale", "balance", "weight", "measure", "container", "box", "case", "bag", "pouch", "pocket", "wallet", "purse", "backpack", "suitcase", "luggage", "trunk", "crate", "barrel", "drum", "tank", "vessel", "bottle", "jar", "can", "tin", "bucket", "pail", "basket", "bin", "trash", "garbage", "waste", "recycle", "compost", "fertilizer", "soil", "dirt", "sand", "gravel", "rock", "stone", "brick", "concrete", "cement", "wood", "metal", "plastic", "glass", "paper", "cardboard", "fabric", "cloth", "leather", "rubber", "foam", "sponge", "towel", "rag", "cloth", "napkin", "tissue", "wipe", "brush", "comb", "mirror", "picture", "frame", "painting", "sculpture", "statue", "monument", "memorial", "plaque", "sign", "poster", "banner", "flag", "emblem", "symbol", "logo", "badge", "medal", "trophy", "award", "prize", "ribbon", "certificate", "document", "file", "folder", "envelope", "letter", "note", "memo", "message", "email", "text", "call", "phone", "mobile", "cell", "smartphone", "tablet", "laptop", "desktop", "monitor", "screen", "keyboard", "mouse", "trackpad", "printer", "scanner", "copier", "fax", "shredder", "stapler", "hole punch", "paper clip", "binder", "clip", "fastener", "tape", "glue", "adhesive", "sticker", "label", "tag", "marker", "highlighter", "pen", "pencil", "eraser", "sharpener", "ruler", "compass", "protractor", "calculator", "abacus", "cash register", "credit card", "debit card", "check", "cash", "money", "currency", "coin", "bill", "note", "receipt", "invoice", "ticket", "pass", "permit", "license", "id", "passport", "visa", "card", "key", "lock", "safe", "vault", "alarm", "sensor", "camera", "monitor", "screen", "display", "projector", "speaker", "microphone", "headphone", "earphone", "earbud", "headset", "earmuff", "earplug", "mask", "goggles", "glasses", "sunglasses", "contact", "lens", "frame", "case", "box", "bag", "pouch", "pocket", "wallet", "purse", "backpack", "suitcase", "luggage", "trunk", "crate", "barrel", "drum", "tank", "vessel", "bottle", "jar", "can", "tin", "bucket", "pail", "basket", "bin", "trash", "garbage", "waste", "recycle", "compost", "fertilizer", "soil", "dirt", "sand", "gravel", "rock", "stone", "brick", "concrete", "cement", "wood", "metal", "plastic", "glass", "paper", "cardboard", "fabric", "cloth", "leather", "rubber", "foam", "sponge", "towel", "rag", "cloth", "napkin", "tissue", "wipe", "brush", "comb", "mirror", "picture", "frame", "painting", "sculpture", "statue", "monument", "memorial", "plaque", "sign", "poster", "banner", "flag", "emblem", "symbol", "logo", "badge", "medal", "trophy", "award", "prize", "ribbon", "certificate", "document", "file", "folder", "envelope", "letter", "note", "memo", "message", "email", "text", "call", "phone", "mobile", "cell", "smartphone", "tablet", "laptop", "desktop", "monitor", "screen", "keyboard", "mouse", "trackpad", "printer", "scanner", "copier", "fax", "shredder", "stapler", "hole punch", "paper clip", "binder", "clip", "fastener", "tape", "glue", "adhesive", "sticker", "label", "tag", "marker", "highlighter", "pen", "pencil", "eraser", "sharpener", "ruler", "compass", "protractor", "calculator", "abacus", "cash register", "credit card", "debit card", "check", "cash", "money", "currency", "coin", "bill", "note", "receipt", "invoice", "ticket", "pass", "permit", "license", "id", "passport", "visa", "card", "key", "lock", "safe", "vault", "alarm", "sensor", "camera", "monitor", "screen", "display", "projector", "speaker", "microphone", "headphone", "earphone", "earbud", "headset", "earmuff", "earplug", "mask", "goggles", "glasses", "sunglasses", "contact", "lens"]
-                is_object = any(keyword in scene_name_lower for keyword in object_keywords)
-                
-                # Classification logic
-                if is_object:
-                    target_dict = objects
-                elif is_location:
-                    target_dict = locations
-                else:
-                    # Default to lore for scene titles that don't match location/object patterns
-                    target_dict = lore
-                
-                if scene_name not in target_dict:
-                    target_dict[scene_name] = {"description": scene.get("director_notes", ""), "scenes": [scene_id]}
-                else:
-                    if scene_id not in target_dict[scene_name]["scenes"]:
-                        target_dict[scene_name]["scenes"].append(scene_id)
-            
-            # Create location nodes
-            for loc_name, data in locations.items():
-                if loc_name.lower() in created_nodes: continue
-                
-                node_id = f"loc-{uuid.uuid4().hex[:8]}"
-                node = UniverseNode(
-                    node_id=node_id,
-                    project_id=project_id,
-                    node_type="location",
-                    name=loc_name,
-                    description=data["description"] or f"A key location where {len(data['scenes'])} scenes take place.",
-                    first_scene=data["scenes"][0],
-                    last_scene=data["scenes"][-1]
-                )
-                nodes.append(node)
-                created_nodes[loc_name.lower()] = node_id
-                self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
-            
-            # Create object nodes
-            for obj_name, data in objects.items():
-                if obj_name.lower() in created_nodes: continue
-                
-                node_id = f"obj-{uuid.uuid4().hex[:8]}"
-                node = UniverseNode(
-                    node_id=node_id,
-                    project_id=project_id,
-                    node_type="object",
-                    name=obj_name,
-                    description=data["description"] or "A significant prop or object in the story.",
-                    first_scene=data["scenes"][0],
-                    last_scene=data["scenes"][-1]
-                )
-                nodes.append(node)
-                created_nodes[obj_name.lower()] = node_id
-                self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
-            
-            # Create lore nodes
-            for lore_name, data in lore.items():
-                if lore_name.lower() in created_nodes: continue
-                
-                node_id = f"lore-{uuid.uuid4().hex[:8]}"
-                node = UniverseNode(
-                    node_id=node_id,
-                    project_id=project_id,
-                    node_type="lore",
-                    name=lore_name,
-                    description=data["description"] or "A thematic element or world-building fact.",
-                    first_scene=data["scenes"][0],
-                    last_scene=data["scenes"][-1]
-                )
-                nodes.append(node)
-                created_nodes[lore_name.lower()] = node_id
-                self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
-                
-        except Exception as e:
-            logger.warning(f"Scene-based node auto-population limited: {e}")
+            char_keys_in_scene = [c.strip().upper() for c in chars if c.strip()]
+            for i, c1 in enumerate(char_keys_in_scene):
+                for c2 in char_keys_in_scene[i + 1:]:
+                    id1 = created_nodes.get(c1)
+                    id2 = created_nodes.get(c2)
+                    if id1 and id2:
+                        rel_exists = any(
+                            (r.from_node == id1 and r.to_node == id2) or
+                            (r.from_node == id2 and r.to_node == id1)
+                            for r in rels
+                        )
+                        if not rel_exists:
+                            rel_id = f"rel-{uuid.uuid4().hex[:8]}"
+                            rels.append(UniverseRelationship(
+                                relationship_id=rel_id,
+                                project_id=project_id,
+                                from_node=id1,
+                                to_node=id2,
+                                relationship_type="co-occurrence",
+                                description=f"{c1.title()} and {c2.title()} appear together in {sid}.",
+                            ))
+                            self.storage.save_universe_relationship(rels[-1].model_dump())
 
-        # 3. Objects from Symbols in Director Memory
-        try:
-            memory_data = director_memory_service.get_memory(project_id)
-            symbols = memory_data.get("symbols", [])
-            for sym in symbols:
-                name = sym.get("symbol")
-                if not name or name.lower() in created_nodes: continue
-                
-                node_id = f"obj-{uuid.uuid4().hex[:8]}"
-                node = UniverseNode(
-                    node_id=node_id,
-                    project_id=project_id,
-                    node_type="object",
-                    name=name,
-                    description=sym.get("meaning", "") or "Significant prop or symbol."
-                )
-                nodes.append(node)
-                created_nodes[name.lower()] = node_id
-                self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
-        except Exception as e:
-            logger.warning(f"Object auto-population limited: {e}")
+        return nodes, rels
+
+    async def auto_populate(self, project_id: str) -> UniverseGraph:
+        logger.info(f"Auto-populating universe graph for project {project_id}")
+
+        self.storage.delete_universe_project_data(project_id)
+
+        nodes = []
+        rels = []
+
+        scenes = self._get_project_scenes(project_id)
+        if scenes:
+            scene_nodes, scene_rels = await self._populate_from_scenes(project_id, scenes)
+            nodes.extend(scene_nodes)
+            rels.extend(scene_rels)
+
+        if not nodes:
+            try:
+                arc_analysis = await script_intelligence_service.analyze_character_arcs(project_id)
+                memory_data = director_memory_service.get_memory(project_id)
+                char_memory_entries = memory_data.get("characters", [])
+                created_nodes = {}
+
+                for char_prof in arc_analysis.characters:
+                    node_id = f"char-{uuid.uuid4().hex[:8]}"
+                    char_mem = next((c for c in char_memory_entries
+                                    if (c.get("character") or c.get("name") or "").lower() == char_prof.name.lower()), {})
+                    description = char_mem.get("backstory_notes") or ""
+                    if not description and char_mem.get("personality_traits"):
+                        description = f"Character known for being {', '.join(char_mem['personality_traits'])}."
+                    node = UniverseNode(
+                        node_id=node_id,
+                        project_id=project_id,
+                        node_type="character",
+                        name=char_prof.name,
+                        description=description or "Established character in the story.",
+                        first_scene=char_prof.first_appearance_scene,
+                        last_scene=char_prof.scene_ids[-1] if char_prof.scene_ids else None,
+                        universe_tags=char_mem.get("tags", [])
+                    )
+                    nodes.append(node)
+                    created_nodes[char_prof.name.lower()] = node_id
+                    self.storage.save_universe_node(node.model_dump(exclude={"connected_nodes"}))
+
+                for rel in arc_analysis.relationships:
+                    from_id = created_nodes.get(rel.character_a.lower())
+                    to_id = created_nodes.get(rel.character_b.lower())
+                    if from_id and to_id:
+                        relationship_id = f"rel-{uuid.uuid4().hex[:8]}"
+                        universe_rel = UniverseRelationship(
+                            relationship_id=relationship_id,
+                            project_id=project_id,
+                            from_node=from_id,
+                            to_node=to_id,
+                            relationship_type="co-occurrence",
+                            description=f"Appeared in {rel.shared_scene_count} scenes together."
+                        )
+                        rels.append(universe_rel)
+                        self.storage.save_universe_relationship(universe_rel.model_dump())
+            except Exception as e:
+                logger.warning(f"Character arc auto-population limited: {e}")
 
         return UniverseGraph(project_id=project_id, nodes=nodes, relationships=rels)
+
+    def auto_populate_from_scenes(self, project_id: str) -> None:
+        scenes = self._get_project_scenes(project_id)
+        if not scenes:
+            logger.info(f"No scenes found for {project_id}, skipping sync auto-populate")
+            return
+        self.storage.delete_universe_project_data(project_id)
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            nodes, rels = loop.run_until_complete(self._populate_from_scenes(project_id, scenes))
+            loop.close()
+            logger.info(f"Auto-populated {len(nodes)} nodes and {len(rels)} relationships for {project_id}")
+        except Exception as e:
+            logger.warning(f"Sync auto-populate failed for {project_id}: {e}")
 
     def save_node(self, project_id: str, node: UniverseNode) -> bool:
         node.project_id = project_id
@@ -247,9 +311,7 @@ class UniverseGraphService:
         try:
             arc_analysis = await script_intelligence_service.analyze_character_arcs(project_id)
             absences = []
-            
             for gap in arc_analysis.arc_gaps:
-                # Find node_id for this character
                 node = next((n for n in graph.nodes if n.name.lower() == gap.character_name.lower()), None)
                 if node:
                     absences.append({
@@ -259,7 +321,6 @@ class UniverseGraphService:
                         "last_seen_scene": gap.gap_start_scene,
                         "advisory": gap.advisory
                     })
-            
             return AbsenceReport(project_id=project_id, absences=absences)
         except:
             return AbsenceReport(project_id=project_id, absences=[])
@@ -268,11 +329,10 @@ class UniverseGraphService:
         graph = await self.get_graph(project_id)
         bible = f"# Universe Bible: {project_id}\n\n"
         bible += f"*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n"
-        
+
         for ntype in ['character', 'location', 'object', 'lore']:
             type_nodes = [n for n in graph.nodes if n.node_type == ntype]
             if not type_nodes: continue
-            
             bible += f"## {ntype.title()}s\n\n"
             for node in type_nodes:
                 bible += f"### {node.name}\n"
@@ -282,13 +342,11 @@ class UniverseGraphService:
                     bible += f"- **First Appearance:** {node.first_scene}\n"
                 if node.last_scene:
                     bible += f"- **Last Appearance:** {node.last_scene}\n"
-                
-                # Connections
                 connected = [n.name for n in graph.nodes if n.node_id in node.connected_nodes]
                 if connected:
                     bible += f"- **Connections:** {', '.join(connected)}\n"
                 bible += "\n"
-        
+
         bible += "## Relationships\n\n"
         for rel in graph.relationships:
             from_node = next((n.name for n in graph.nodes if n.node_id == rel.from_node), rel.from_node)
@@ -297,7 +355,7 @@ class UniverseGraphService:
             if rel.description:
                 bible += f" ({rel.description})"
             bible += "\n"
-            
+
         return bible
 
 universe_graph_service = UniverseGraphService()

@@ -254,3 +254,40 @@ describe('resolveStudioApiBase', () => {
     expect(resolveStudioApiBase({ VITE_STUDIO_API_BASE: 'http://localhost:8012/' })).toBe('http://127.0.0.1:8010')
   })
 })
+
+describe('getSceneRationale', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('fetches rationale with correct URL', async () => {
+    const mockResponse = {
+      rationale: 'A melancholic scene at SHORELINE where MARA takes the frame.',
+      scene_context: { scene_id: 'scene_001', characters: ['MARA'], location: 'SHORELINE', emotional_tone: 'melancholic', scene_heading: 'EXT. SHORELINE - DAWN' },
+      emotional_context: { emotional_register: 'melancholic reflection', tonal_direction: 'escalating', active_motifs: [] },
+      scene_position: 1,
+      total_scenes: 5,
+    }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(mockResponse), { status: 200 }),
+    )
+
+    const { getSceneRationale } = await import('./studioApi')
+    const result = await getSceneRationale('proj-1', 'scene_001')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/f51/studio/projects/proj-1/scenes/scene_001/rationale')
+    expect(result.rationale).toBe(mockResponse.rationale)
+    expect(result.scene_position).toBe(1)
+  })
+
+  it('throws on 404', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Scene not found' }), { status: 404 }),
+    )
+
+    const { getSceneRationale } = await import('./studioApi')
+    await expect(getSceneRationale('proj-1', 'nonexistent')).rejects.toThrow()
+  })
+})
