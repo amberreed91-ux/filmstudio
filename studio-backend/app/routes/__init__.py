@@ -71,6 +71,11 @@ def get_overview():
 @overview_router.post("/demo-project")
 def create_demo_project(demo_id: Optional[str] = Form(None)):
     project = project_service.create_demo_project(demo_id)
+    # Ensure title is non-empty
+    if hasattr(project, 'title') and not (project.title or "").strip():
+        project.title = f"Demo Project {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+    elif isinstance(project, dict) and not (project.get('title') or "").strip():
+        project['title'] = f"Demo Project {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     _sync_to_project_store(project)
     return project
 
@@ -82,8 +87,56 @@ def ingest_script(
     render_provider: str = Form(...),
     script_text: str = Form(...)
 ):
-    project = project_service.ingest_script(title, creative_intent, render_provider, script_text)
+    # Validate required fields
+    title_clean = str(title or "").strip()
+    if not title_clean:
+        raise HTTPException(status_code=400, detail="Project title is required and cannot be empty")
+    
+    script_clean = str(script_text or "").strip()
+    if not script_clean:
+        raise HTTPException(status_code=400, detail="Script text is required and cannot be empty")
+    
+    project = project_service.ingest_script(title_clean, creative_intent, render_provider, script_clean)
     _sync_to_project_store(project)
+    
+    # Auto-generate scenes from the script text so execution_summary.scenes is populated
+    # This ensures the scene list is available when the user navigates to the workspace
+    try:
+        from app.services.script_parser import ScriptParser
+        from app.services.project_store import project_store
+        parser = ScriptParser()
+        project_id = project.project_id if hasattr(project, 'project_id') else project.get('project_id', '')
+        if project_id and script_text:
+            summary = parser.build_script_breakdown_bundle(script_text)
+            # Ensure scenes exist in the summary
+            scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+            if scenes:
+                scene_ids = [str(s.get("scene_id", "")).strip() for s in scenes if isinstance(s, dict)]
+                scene_ids = [sid for sid in scene_ids if sid]
+                project_store.update_project(project_id, {
+                    "script_text": script_text,
+                    "execution_summary": summary,
+                    "scene_review_status": {sid: "not_reviewed" for sid in scene_ids},
+                })
+                # Sync updated project to SQLite
+                updated = project_store.get_project(project_id)
+                if updated:
+                    _sync_to_project_store(updated)
+                # Auto-populate universe graph
+                try:
+                    from app.services.universe_graph_service import universe_graph_service
+                    universe_graph_service.auto_populate_from_scenes(project_id)
+                except Exception:
+                    pass
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Auto scene generation after ingest failed: %s", exc)
+    
+    # Return the updated project
+    if hasattr(project, 'project_id'):
+        updated = project_store.get_project(project.project_id)
+        if updated:
+            return updated
     return project
 
 
@@ -436,7 +489,9 @@ def generate_scene_storyboard(
     project_id: str,
     scene_id: str,
 ):
-    """Generate a storyboard image via Pollinations.ai"""
+    """Generate a storyboard image via Pollinations.ai with seed locking support"""
+    import random
+    
     current = project_store.get_project(project_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -452,24 +507,115 @@ def generate_scene_storyboard(
     time_of_day = (scene.get("time_of_day") or "").strip() or "day"
     description = (scene.get("description") or "").strip()
 
-    prompt = (
-        f"cinematic film storyboard, {location}, "
-        f"{time_of_day}, {description}, "
-        f"dark atmospheric, professional cinematography, "
-        f"16:9 aspect ratio, film noir"
+    # Get storage for character lookups and seed management
+    from app.data.storage import get_storage
+    storage = get_storage()
+
+    # ── Character visual description injection ──────────────────────────
+    # Fetch each character's visual_prompt_summary from the characters table
+    # and inject it into the prompt so character appearances are accurate.
+    # This mirrors the render.py fix but for Previs storyboard generation.
+    scene_characters = scene.get("characters") or []
+
+    # If no characters array, try to identify characters from scene text
+    # by matching against all project characters
+    if not scene_characters:
+        try:
+            all_chars = storage.get_characters(project_id)
+            scene_text_lower = (
+                str(scene.get("text") or "")
+                or str(scene.get("content") or "")
+                or str(scene.get("description") or "")
+                or str(scene.get("scene_text") or "")
+            ).lower()
+            for char in all_chars:
+                char_name = char.get("name", "")
+                if char_name and char_name.lower() in scene_text_lower:
+                    scene_characters.append(char_name)
+        except Exception:
+            pass
+
+    # Build character visual descriptions block
+    char_summaries: list[str] = []
+    for char_name in scene_characters:
+        char_name_str = str(char_name).strip()
+        if char_name_str:
+            try:
+                char_record = storage.get_character_by_name(project_id, char_name_str)
+                if char_record:
+                    vps = (char_record.get("visual_prompt_summary") or "").strip()
+                    if vps:
+                        char_summaries.append(f"{char_name_str}: {vps}")
+            except Exception:
+                pass
+
+    # Build prompt with character descriptions prioritized (character accuracy matters most)
+    if char_summaries:
+        char_block = "Characters: " + "; ".join(char_summaries)
+        prompt = (
+            f"cinematic film storyboard, {char_block}, "
+            f"{location}, {time_of_day}, {description}, "
+            f"dark atmospheric, professional cinematography, "
+            f"16:9 aspect ratio, film noir"
+        )
+        logger.info(
+            "PREVIS_CHARACTER_INJECTION | project=%s | scene=%s | chars=%d",
+            project_id,
+            scene_id,
+            len(char_summaries),
+        )
+    else:
+        prompt = (
+            f"cinematic film storyboard, {location}, "
+            f"{time_of_day}, {description}, "
+            f"dark atmospheric, professional cinematography, "
+            f"16:9 aspect ratio, film noir"
+        )
+
+    logger.info(
+        "PREVIS_PROMPT_BUILT | project=%s | scene=%s | prompt=%s",
+        project_id,
+        scene_id,
+        prompt,
     )
 
+    # Check for existing seed
+    existing_seed = storage.get_scene_previs_seed(project_id, scene_id)
+    
+    # Use existing seed if available, otherwise generate new one
+    if existing_seed is not None:
+        seed = existing_seed
+    else:
+        seed = random.randint(1, 999999)
+    
+    # Include seed in Pollinations.ai URL for visual consistency
     encoded = urllib.parse.quote(prompt)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=768&height=432&nologo=true"
+    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=768&height=432&nologo=true&seed={seed}"
 
     if not description:
         scene["description"] = f"{location} — {time_of_day}"
 
     scene["storyboard_image"] = image_url
+    scene["previs_seed"] = seed
     scene["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     summary["scenes"] = scenes
     project_store.update_project(project_id, {"execution_summary": summary})
+
+    # Save seed to database if this is a new seed
+    if existing_seed is None:
+        storage.save_previs_image(
+            project_id=project_id,
+            scene_id=scene_id,
+            shot_id=None,
+            image_path=image_url,
+            job_id=f"storyboard_{scene_id}",
+            status="complete",
+            prompt_used=prompt,
+            fallback=False,
+            previs_seed=seed,
+            seed_locked=False
+        )
 
     try:
         project = project_service.storage.get_project(project_id)
@@ -477,6 +623,7 @@ def generate_scene_storyboard(
             for shot in project.storyboard_wall:
                 if shot.shot_id == scene_id:
                     shot.storyboard_image = image_url
+                    shot.previs_seed = seed
                     if not shot.description.strip():
                         shot.description = f"{location} — {time_of_day}"
                     break
@@ -488,6 +635,39 @@ def generate_scene_storyboard(
     return {
         "image_url": image_url,
         "status": "complete",
+        "seed": seed,
+    }
+
+
+@projects_router.patch("/projects/{project_id}/scenes/{scene_id}/previs/seed")
+def toggle_previs_seed_lock(
+    project_id: str,
+    scene_id: str,
+    body: dict
+):
+    """Toggle seed lock status for a storyboard scene"""
+    from app.data.storage import get_storage
+    
+    locked = body.get("locked", False)
+    
+    # Validate project exists
+    current = project_store.get_project(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    storage = get_storage()
+    
+    # Update seed lock status
+    success = storage.update_previs_seed_lock(project_id, scene_id, locked)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to update seed lock status")
+    
+    # Get current seed
+    seed = storage.get_scene_previs_seed(project_id, scene_id)
+    
+    return {
+        "seed": seed,
+        "locked": locked,
     }
 
 

@@ -944,6 +944,46 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_scene_compositions_scene ON scene_compositions(scene_id);
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_scene_compositions_project_scene ON scene_compositions(project_id, scene_id);
             """),
+            (22, "Add films table for assembled full films", """
+                CREATE TABLE IF NOT EXISTS films (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    film_url TEXT NOT NULL,
+                    scene_count INTEGER NOT NULL DEFAULT 0,
+                    total_duration_seconds REAL,
+                    has_audio INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (project_id != ''),
+                    CHECK (film_url != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_films_project ON films(project_id);
+                CREATE INDEX IF NOT EXISTS idx_films_created ON films(created_at);
+            """),
+            (23, "Add shots table for render seed locking", """
+                CREATE TABLE IF NOT EXISTS shots (
+                    project_id TEXT NOT NULL,
+                    shot_id TEXT NOT NULL,
+                    seed INTEGER,
+                    seed_locked INTEGER NOT NULL DEFAULT 0 CHECK (seed_locked IN (0, 1)),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (project_id, shot_id),
+                    CHECK (project_id != ''),
+                    CHECK (shot_id != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_shots_project ON shots(project_id);
+            """),
+            (24, "Add seed locking to previs_images table", """
+                ALTER TABLE previs_images ADD COLUMN previs_seed INTEGER;
+                ALTER TABLE previs_images ADD COLUMN seed_locked INTEGER NOT NULL DEFAULT 0 CHECK (seed_locked IN (0, 1));
+                CREATE INDEX IF NOT EXISTS idx_previs_images_seed_locked ON previs_images(seed_locked);
+            """),
+            (25, "Add updated_at column to previs_images", """
+                ALTER TABLE previs_images ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -1063,11 +1103,53 @@ class DatabaseStorage:
     def save_project(self, project: StudioProject) -> StudioProject:
         project.updated_at = datetime.now().isoformat()
         now = datetime.now().isoformat()
-        payload = json.dumps(project.model_dump(mode='json'))
-
+        
+        # Merge with existing data to preserve any fields not in the model
+        new_data = project.model_dump(mode='json')
+        
+        def _smart_merge(existing: dict, new: dict) -> dict:
+            """Merge new data into existing, preserving non-empty existing values
+            when the new value is empty/default. This prevents model defaults
+            from overwriting real data that was set by other code paths."""
+            merged = dict(existing)
+            for key, new_val in new.items():
+                existing_val = existing.get(key)
+                # Always overwrite if existing is missing or None
+                if key not in existing or existing_val is None:
+                    merged[key] = new_val
+                    continue
+                # For strings: only overwrite if new value is non-empty
+                if isinstance(new_val, str) and not new_val and isinstance(existing_val, str) and existing_val:
+                    continue  # preserve existing non-empty string
+                # For lists: only overwrite if new value is non-empty
+                if isinstance(new_val, list) and len(new_val) == 0 and isinstance(existing_val, list) and len(existing_val) > 0:
+                    continue  # preserve existing non-empty list
+                # For dicts: only overwrite if new value is non-empty
+                if isinstance(new_val, dict) and len(new_val) == 0 and isinstance(existing_val, dict) and len(existing_val) > 0:
+                    continue  # preserve existing non-empty dict
+                # For all other cases, overwrite with new value
+                merged[key] = new_val
+            return merged
+        
         def _write():
             with self._get_connection() as conn:
                 cursor = conn.cursor()
+                
+                # Load existing data and merge
+                cursor.execute("SELECT data FROM projects WHERE project_id = ?", (project.project_id,))
+                row = cursor.fetchone()
+                if row and row["data"]:
+                    try:
+                        existing_data = json.loads(row["data"])
+                        # Smart merge: preserve existing non-empty values
+                        merged_data = _smart_merge(existing_data, new_data)
+                    except (json.JSONDecodeError, TypeError):
+                        merged_data = new_data
+                else:
+                    merged_data = new_data
+                
+                payload = json.dumps(merged_data)
+                
                 columns = [row["name"] for row in cursor.execute("PRAGMA table_info(projects)").fetchall()]
                 has_created_at = "created_at" in columns
                 has_updated_at = "updated_at" in columns
@@ -1126,6 +1208,7 @@ class DatabaseStorage:
             "universe_nodes",
             "study_memories",
             "scene_compositions",
+            "films",
             "render_jobs",
         ]
         try:
@@ -1152,6 +1235,32 @@ class DatabaseStorage:
             cursor = conn.cursor()
             cursor.execute("SELECT project_id FROM projects ORDER BY updated_at DESC")
             return [row["project_id"] for row in cursor.fetchall()]
+
+    def set_project_poster_url(self, project_id: str, poster_url: str) -> None:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(projects)")
+            columns = [row["name"] for row in cursor.fetchall()]
+            if "poster_url" not in columns:
+                cursor.execute("ALTER TABLE projects ADD COLUMN poster_url TEXT")
+            cursor.execute(
+                "UPDATE projects SET poster_url = ?, updated_at = ? WHERE project_id = ?",
+                (poster_url, datetime.now().isoformat(), project_id),
+            )
+            conn.commit()
+
+    def get_project_poster_url(self, project_id: str) -> str | None:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(projects)")
+            columns = [row["name"] for row in cursor.fetchall()]
+            if "poster_url" not in columns:
+                return None
+            cursor.execute("SELECT poster_url FROM projects WHERE project_id = ?", (project_id,))
+            row = cursor.fetchone()
+            if row and row["poster_url"]:
+                return row["poster_url"]
+            return None
 
     # Universe Knowledge Graph
     def get_universe_nodes(self, project_id: str) -> List[Dict[str, Any]]:
@@ -1375,6 +1484,67 @@ class DatabaseStorage:
                 return dict(row)
             return None
 
+    def list_scene_compositions_for_project(self, project_id: str) -> list[dict]:
+        """List all scene compositions for a project, ordered by scene_id."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT * FROM scene_compositions
+                   WHERE project_id = ?
+                   ORDER BY scene_id ASC""",
+                (project_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    # ── Films (assembled full films) ───────────────────────────────────────
+
+    def save_film(self, project_id: str, film_url: str, scene_count: int,
+                  total_duration_seconds: float | None = None,
+                  has_audio: bool = False) -> dict:
+        from datetime import datetime
+        now = datetime.now().isoformat()
+        film_id = f"film_{project_id}"
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT OR REPLACE INTO films
+                   (id, project_id, film_url, scene_count, total_duration_seconds, has_audio, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?,
+                           COALESCE((SELECT created_at FROM films WHERE id = ?), ?),
+                           ?)""",
+                (film_id, project_id, film_url, scene_count, total_duration_seconds,
+                 1 if has_audio else 0,
+                 film_id, now, now)
+            )
+            conn.commit()
+        return {
+            "id": film_id,
+            "project_id": project_id,
+            "film_url": film_url,
+            "scene_count": scene_count,
+            "total_duration_seconds": total_duration_seconds,
+            "has_audio": has_audio,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    def get_film(self, project_id: str) -> dict | None:
+        """Get the assembled film for a project, if one exists."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT * FROM films
+                   WHERE project_id = ?
+                   ORDER BY updated_at DESC LIMIT 1""",
+                (project_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                result = dict(row)
+                result["has_audio"] = bool(result.get("has_audio", 0))
+                return result
+            return None
+
     # Session management
     def create_session(self, session_id: str, user_id: str, ttl_seconds: int = 86400) -> bool:
         now = datetime.now()
@@ -1416,7 +1586,69 @@ class DatabaseStorage:
             return cursor.rowcount
 
     # ========================================================================
-    # MEMORY PERSISTENCE
+    # Shot Seed Persistence
+    # ========================================================================
+
+    def get_shot_seed(self, project_id: str, shot_id: str) -> Optional[dict]:
+        """Get the seed record for a shot, if one exists."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT project_id, shot_id, seed, seed_locked, created_at, updated_at
+                   FROM shots WHERE project_id = ? AND shot_id = ?""",
+                (project_id, shot_id),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def save_shot_seed(self, project_id: str, shot_id: str, seed: int, seed_locked: bool = False) -> dict:
+        """Upsert a seed record for a shot."""
+        now = datetime.now().isoformat()
+        lock_val = 1 if seed_locked else 0
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """INSERT OR REPLACE INTO shots
+                       (project_id, shot_id, seed, seed_locked, created_at, updated_at)
+                       VALUES (?, ?, ?, ?,
+                               COALESCE((SELECT created_at FROM shots WHERE project_id = ? AND shot_id = ?), ?),
+                               ?)""",
+                    (project_id, shot_id, seed, lock_val, project_id, shot_id, now, now),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_shot_seed", _write)
+        return {"project_id": project_id, "shot_id": shot_id, "seed": seed, "seed_locked": lock_val}
+
+    def update_shot_seed_lock(self, project_id: str, shot_id: str, seed: Optional[int] = None, seed_locked: Optional[bool] = None) -> bool:
+        """Update seed and/or lock status for a shot record."""
+        now = datetime.now().isoformat()
+        updates = ["updated_at = ?"]
+        params = [now]
+        if seed is not None:
+            updates.append("seed = ?")
+            params.append(seed)
+        if seed_locked is not None:
+            updates.append("seed_locked = ?")
+            params.append(1 if seed_locked else 0)
+        params.extend([project_id, shot_id])
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    f"UPDATE shots SET {', '.join(updates)} WHERE project_id = ? AND shot_id = ?",
+                    params,
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("update_shot_seed_lock", _write)
+        return True
+
+    # ========================================================================
+    # Director Intent Persistence
     # ========================================================================
 
     def save_memory_entry(self, entry: Dict) -> bool:
@@ -3845,7 +4077,9 @@ class DatabaseStorage:
         job_id: str,
         status: str,
         prompt_used: str,
-        fallback: bool
+        fallback: bool,
+        previs_seed: Optional[int] = None,
+        seed_locked: bool = False
     ) -> bool:
         """
         Save or update a previs image record.
@@ -3859,6 +4093,8 @@ class DatabaseStorage:
             status: Status (pending, complete, failed)
             prompt_used: The prompt used to generate the image
             fallback: Whether this is a fallback/placeholder image
+            previs_seed: Pollinations.ai seed for consistent generation
+            seed_locked: Whether to lock this seed for future regenerations
             
         Returns:
             True if saved successfully
@@ -3876,8 +4112,8 @@ class DatabaseStorage:
                 """
                 INSERT OR REPLACE INTO previs_images (
                     id, project_id, scene_id, shot_id, image_path,
-                    job_id, status, prompt_used, fallback, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    job_id, status, prompt_used, fallback, previs_seed, seed_locked, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     image_id,
@@ -3889,6 +4125,8 @@ class DatabaseStorage:
                     status,
                     prompt_used,
                     1 if fallback else 0,
+                    previs_seed,
+                    1 if seed_locked else 0,
                     now,
                     now,
                 ),
@@ -3932,18 +4170,21 @@ class DatabaseStorage:
             rows = cursor.fetchall()
             images = []
             for row in rows:
+                row_dict = dict(row)
                 images.append({
-                    "id": row["id"],
-                    "project_id": row["project_id"],
-                    "scene_id": row["scene_id"],
-                    "shot_id": row["shot_id"],
-                    "image_path": row["image_path"],
-                    "job_id": row["job_id"],
-                    "status": row["status"],
-                    "prompt_used": row["prompt_used"],
-                    "fallback": bool(row["fallback"]),
-                    "created_at": row["created_at"],
-                    "updated_at": row["updated_at"],
+                    "id": row_dict["id"],
+                    "project_id": row_dict["project_id"],
+                    "scene_id": row_dict["scene_id"],
+                    "shot_id": row_dict["shot_id"],
+                    "image_path": row_dict["image_path"],
+                    "job_id": row_dict["job_id"],
+                    "status": row_dict["status"],
+                    "prompt_used": row_dict["prompt_used"],
+                    "fallback": bool(row_dict["fallback"]),
+                    "previs_seed": row_dict.get("previs_seed"),
+                    "seed_locked": bool(row_dict.get("seed_locked", 0)),
+                    "created_at": row_dict["created_at"],
+                    "updated_at": row_dict.get("updated_at", row_dict["created_at"]),
                 })
             
             return images
@@ -3993,7 +4234,60 @@ class DatabaseStorage:
             conn.commit()
             return cursor.rowcount > 0
 
-    # ========================================================================
+    def get_scene_previs_seed(self, project_id: str, scene_id: str) -> Optional[int]:
+        """
+        Get the previs seed for a scene (returns seed if it exists, None otherwise).
+        
+        Args:
+            project_id: Project identifier
+            scene_id: Scene identifier
+            
+        Returns:
+            Seed integer if exists, None otherwise
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT previs_seed FROM previs_images
+                WHERE project_id = ? AND scene_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (project_id, scene_id),
+            )
+            row = cursor.fetchone()
+            return row["previs_seed"] if row else None
+
+    def update_previs_seed_lock(self, project_id: str, scene_id: str, locked: bool) -> bool:
+        """
+        Update the seed_locked status for a scene's previs image.
+        
+        Args:
+            project_id: Project identifier
+            scene_id: Scene identifier
+            locked: Whether to lock the seed
+            
+        Returns:
+            True if updated successfully
+        """
+        from datetime import datetime
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            
+            cursor.execute(
+                """
+                UPDATE previs_images
+                SET seed_locked = ?, updated_at = ?
+                WHERE project_id = ? AND scene_id = ?
+                """,
+                (1 if locked else 0, now, project_id, scene_id),
+            )
+            
+            conn.commit()
+            return cursor.rowcount > 0
     # STUDY MEMORIES (Active Memory persistence)
     # ========================================================================
 
@@ -4155,7 +4449,7 @@ class DatabaseStorage:
                         ),
                     )
                 conn.commit()
-                cursor.execute("SELECT * FROM characters WHERE id = ?", (char_id,))
+                cursor.execute("SELECT * FROM characters WHERE id = ? AND project_id = ?", (char_id, project_id))
                 return dict(cursor.fetchone())
 
         return self._execute_write_with_retry("save_character", _write)
@@ -4170,11 +4464,10 @@ class DatabaseStorage:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_character(self, character_id: str) -> dict | None:
-        """Get a single character by ID."""
+    def get_character(self, character_id: str, project_id: str) -> dict | None:
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""SELECT * FROM characters WHERE id = ?""", (character_id,))
+            cursor.execute("""SELECT * FROM characters WHERE id = ? AND project_id = ?""", (character_id, project_id))
             row = cursor.fetchone()
             return dict(row) if row else None
 
@@ -4189,11 +4482,11 @@ class DatabaseStorage:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    def delete_character(self, character_id: str) -> bool:
+    def delete_character(self, character_id: str, project_id: str) -> bool:
         """Delete a character record."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM characters WHERE id = ?", (character_id,))
+            cursor.execute("DELETE FROM characters WHERE id = ? AND project_id = ?", (character_id, project_id))
             conn.commit()
             return cursor.rowcount > 0
 

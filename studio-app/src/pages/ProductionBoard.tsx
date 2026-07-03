@@ -6,7 +6,9 @@ import {
   Edit3,
   Film,
   GripVertical,
+  Lock,
   Loader2,
+  LockOpen,
   Plus,
   RotateCcw,
   Scan,
@@ -29,6 +31,7 @@ import {
   reconcileRenderJob,
   retryRenderJobById,
   saveToDirectorsNotes,
+  togglePrevisSeedLock,
   triggerDebate,
   updateFilmCut,
   type CoDirectorDebateEntry,
@@ -200,6 +203,8 @@ export default function ProductionBoard() {
   // ── Scene card hover / generating ─────────────────────────────────────────
   const [generatingScenes, setGeneratingScenes] = useState<Set<string>>(new Set())
   const [hoveredSceneId, setHoveredSceneId] = useState<string | null>(null)
+  const [sceneSeeds, setSceneSeeds] = useState<Map<string, number>>(new Map())
+  const [lockedSeeds, setLockedSeeds] = useState<Map<string, boolean>>(new Map())
 
   // ── Persist project ID ────────────────────────────────────────────────────
   useEffect(() => {
@@ -406,6 +411,9 @@ export default function ProductionBoard() {
         const result = await generateSceneStoryboard(effectiveProjectId, sceneId)
         if (result.image_url) {
           setSuccess('Storyboard generated')
+          if (result.seed) {
+            setSceneSeeds((prev) => new Map(prev).set(sceneId, result.seed))
+          }
           await loadScenes()
         } else {
           setSuccess(`Storyboard generation started for ${sceneId}`)
@@ -421,6 +429,22 @@ export default function ProductionBoard() {
       }
     },
     [effectiveProjectId, generatingScenes, loadScenes],
+  )
+
+  const handleToggleSeedLock = useCallback(
+    async (sceneId: string, currentLocked: boolean) => {
+      if (!effectiveProjectId) return
+      try {
+        const result = await togglePrevisSeedLock(effectiveProjectId, sceneId, !currentLocked)
+        setLockedSeeds((prev) => new Map(prev).set(sceneId, result.locked))
+        if (result.seed) {
+          setSceneSeeds((prev) => new Map(prev).set(sceneId, result.seed))
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to update seed lock')
+      }
+    },
+    [effectiveProjectId],
   )
 
   // ── Readiness scan ────────────────────────────────────────────────────────
@@ -689,6 +713,31 @@ export default function ProductionBoard() {
                         >
                           {scene.description || 'No description yet'}
                         </div>
+                        {sceneSeeds.has(scene.scene_id) && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span
+                              className="text-[10px] font-mono"
+                              style={{ color: 'var(--color-on-surface-variant)' }}
+                            >
+                              Seed: {sceneSeeds.get(scene.scene_id)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleToggleSeedLock(scene.scene_id, lockedSeeds.get(scene.scene_id) ?? false)
+                              }}
+                              className="p-0.5 rounded hover:bg-surface-container-highest transition-colors"
+                              title={lockedSeeds.get(scene.scene_id) ? 'Unlock seed' : 'Lock seed'}
+                            >
+                              {lockedSeeds.get(scene.scene_id) ? (
+                                <Lock size={12} className="text-emerald-400" />
+                              ) : (
+                                <LockOpen size={12} style={{ color: 'var(--color-on-surface-variant)' }} />
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* Hover actions — bottom row */}

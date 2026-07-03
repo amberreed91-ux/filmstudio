@@ -227,6 +227,7 @@ class ScriptParser:
                     "time_of_day": time_of_day,
                     "characters": self._extract_simple_scene_characters(text_block),
                     "text": text_block,
+                    "description": text_block,
                     "emotional_tone": emotional_tone,
                 }
             )
@@ -13489,6 +13490,7 @@ class ScriptParser:
                     "time_of_day": title.split('-')[1].strip() if '-' in title and len(title.split('-')) > 1 else "",
                     "characters": self._extract_simple_scene_characters(text_block),
                     "text": text_block,
+                    "description": text_block,
                     "emotional_tone": emotional_tone,
                 })
             return scenes
@@ -13520,6 +13522,7 @@ class ScriptParser:
                     "time_of_day": title.split('-')[1].strip() if '-' in title and len(title.split('-')) > 1 else "",
                     "characters": self._extract_simple_scene_characters(text_block),
                     "text": text_block,
+                    "description": text_block,
                     "emotional_tone": emotional_tone,
                 })
             return scenes
@@ -13550,107 +13553,248 @@ class ScriptParser:
                 "time_of_day": "",
                 "characters": self._extract_simple_scene_characters(text_block),
                 "text": text_block,
+                "description": text_block,
                 "emotional_tone": emotional_tone,
             })
         
         return scenes
 
+    # Direction/cue phrases that are NEVER characters, even if ALL CAPS on their own line.
+    SCRIPT_DIRECTIONS = (
+        'FADE IN', 'FADE OUT', 'FADE TO', 'FADE TO BLACK',
+        'CUT TO', 'SMASH CUT', 'MATCH CUT', 'JUMP CUT', 'DISSOLVE TO',
+        'INTERCUT', 'MONTAGE', 'TITLE CARD', 'THE END', 'FIN',
+        'CONTINUED', "CONT'D", 'CONT\'D', 'CONTINUOUS', 'LATER',
+        'MOMENTS LATER', 'BACK TO', 'SUPER', 'OVER', 'MORE',
+        'ENDING', 'SUPPLIES', 'FINAL CONFRONTATION',
+        'THE HOMESTEAD', 'THE COUNTDOWN',
+    )
+
+    # Words that signal a scene heading / location rather than a speaker cue.
+    LOCATION_PREFIX_TOKENS = ('INT.', 'EXT.', 'INT./EXT.', 'I/E.', 'INT ', 'EXT ')
+    LOCATION_WORDS = {
+        'THE', 'A', 'AN',  # "THE HOMESTEAD", "THE COUNTDOWN" — definite-article heading
+        'DAY', 'NIGHT', 'MORNING', 'AFTERNOON', 'EVENING', 'DAWN', 'DUSK',
+        'LATER', 'CONTINUOUS', 'MOMENTS', 'END', 'BEGINNING',
+        'SCENE', 'ACT', 'CHAPTER',
+    }
+
+    # Words that, on their own, are never valid character names.
+    GENERIC_ROLES = {
+        'OWNER', 'OFFICER', 'GUARD', 'RESIDENT',
+        'CROWD', 'VOICE', 'MAN', 'WOMAN', 'BOY', 'GIRL',
+        'PERSON', 'STRANGER', 'NARRATOR', 'ANNOUNCER', 'NEWSCASTER',
+        'REPORTER', 'INTERVIEWER', 'DOCTOR', 'NURSE', 'COP', 'POLICE',
+        'SOLDIER', 'SAILOR', 'PILOT', 'DRIVER', 'PASSENGER', 'TOURIST',
+    }
+
+    INSTITUTION_KEYWORDS = {
+        'PROJECT', 'DEPARTMENT', 'COMMITTEE', 'BOARD', 'PROGRAM',
+        'FOUNDATION', 'AGENCY', 'BUREAU', 'COUNCIL', 'AUTHORITY',
+        'COMMISSION', 'DIVISION', 'OFFICE', 'SERVICE', 'CORPORATION',
+        'INCORPORATED', 'INC', 'LLC', 'ASSOCIATION', 'INSTITUTE',
+        'UNIVERSITY', 'COLLEGE', 'SCHOOL', 'HOSPITAL', 'LABORATORY',
+        'STUDIO', 'PRODUCTIONS', 'PICTURES', 'FILMS', 'ENTERTAINMENT',
+    }
+    # Common verbs that appear in stage directions / action lines, NOT in
+    # character speaker labels.  If a multi-word ALL-CAPS candidate has one
+    # of these as its second (or later) word it is almost certainly an action
+    # line like "DRE NOTICES" or "MAYA LOOKS AWAY" rather than a character cue.
+    ACTION_VERBS = {
+        'NOTICES', 'SEES', 'LOOKS', 'WALKS', 'RUNS', 'TURNS', 'SITS',
+        'STANDS', 'OPENS', 'CLOSES', 'PICKS', 'PUTS', 'PULLS', 'PUSHES',
+        'THROWS', 'CATCHES', 'HOLDS', 'DROPS', 'FINDS', 'LOSES', 'HEARS',
+        'FEELS', 'TOUCHES', 'GRABS', 'REACHES', 'STARES', 'GLANCES',
+        'WATCHES', 'LISTENS', 'NODS', 'SHAKES', 'SMILES', 'LAUGHS',
+        'SCREAMS', 'SHOUTS', 'WHISPERS', 'SIGHS', 'CRYING', 'WEEPING',
+        'FALLS', 'RISES', 'ENTERS', 'EXITS', 'APPROACHES', 'LEAVES',
+        'ARRIVES', 'DEPARTS', 'DRIVES', 'FLIES', 'SWIMS', 'JUMPS',
+        'CLIMBS', 'CRAWLS', 'SLIDES', 'ROLLS', 'STOPS', 'STARTS',
+        'BEGINS', 'ENDS', 'FINISHES', 'CONTINUES', 'WAITS', 'HESITATES',
+        'MOVES', 'STEPS', 'STRIDES', 'RUSHES', 'HURRIES', 'SLOWS',
+        'DISAPPEARS', 'VANISHES', 'APPEARS', 'EMERGES',
+        'RETURNS', 'FOLLOWS', 'LEADS', 'CHASES', 'ESCAPES', 'HIDES',
+        'REVEALS', 'DISCOVERS', 'REALIZES', 'REMEMBERS', 'FORGETS',
+        'UNDERSTANDS', 'KNOWS', 'THINKS', 'WONDERS', 'CONSIDERS',
+        'DECIDES', 'AGREES', 'REFUSES', 'DENIES', 'CONFESSES',
+        'ARGUES', 'FIGHTS', 'STRUGGLES', 'ATTACKS', 'DEFENDS', 'PROTECTS',
+        'SAVES', 'DESTROYS', 'CREATES', 'BUILDS', 'BREAKS', 'FIXES',
+        'READS', 'WRITES', 'SPEAKS', 'SAYS', 'TELLS', 'ASKS', 'ANSWERS',
+        'CALLS', 'REPLIES', 'RESPONDS', 'ORDERS', 'COMMANDS', 'WARNS',
+        'THREATENS', 'PROMISES', 'SWEARS', 'BEGS', 'PLEADS', 'OFFERS',
+        'GIVES', 'TAKES', 'RECEIVES', 'SENDS', 'DELIVERS', 'CARRIES',
+        'BRINGS', 'FETCHES', 'SHOWS', 'POINTS', 'GESTURES', 'WAVES',
+        'SALUTES', 'BOWS', 'KNEELS', 'PRAYS', 'MEDITATES', 'SLEEPS',
+        'WAKES', 'DREAMS', 'EATS', 'DRINKS', 'COOKS', 'BAKES',
+        'BURNS', 'FREEZES', 'MELTS', 'EXPLODES', 'COLLAPSES', 'CRASHES',
+        'SMASHES', 'CRACKS', 'SHATTERS', 'CUTS', 'SLICES', 'TEARS',
+        'RIPS', 'FOLDS', 'UNFOLDS', 'WRAPS', 'UNWRAPS', 'COVERS',
+        'UNCOVERS', 'LOCKS', 'UNLOCKS', 'KNOCKS', 'BANGS', 'SLAMS',
+        'HITS', 'PUNCHES', 'KICKS', 'SHOVES', 'PINS', 'TRIPS',
+        'FACES', 'CONFRONTS', 'CHALLENGES', 'DEFEATS', 'WINS',
+        'SURVIVES', 'DIES', 'KILLS',
+        'BETRAYS', 'TRUSTS', 'DOUBTS', 'SUSPECTS', 'INVESTIGATES',
+        'SEARCHES', 'EXPLORES', 'EXAMINES', 'INSPECTS', 'STUDIES',
+        'OBSERVES', 'IGNORES', 'AVOIDS', 'EVADES', 'CONCEALS',
+    }
+
+
+    def _is_valid_dialogue_character(self, candidate: str) -> bool:
+        """
+        Strict validator for character names extracted from dialogue cues.
+
+        A valid character name:
+        - is ALL CAPS, letters-only (no digits, punctuation beyond a single internal
+          space), and 1–3 words maximum
+        - is NOT a scene direction (FADE IN, CUT TO, etc.)
+        - is NOT a scene heading prefix (THE X, INT./EXT., etc.)
+        - is NOT a location/time marker
+        - is NOT a generic role noun used as a one-word label
+        - is NOT an institution/organization name
+        - must contain at least one alphabetic character
+        """
+        if not isinstance(candidate, str):
+            return False
+        name = candidate.strip()
+        if not name:
+            return False
+        # Strip trailing period(s) — character labels in screenplays are often written
+        # as e.g. "MAYA." but we still want to keep the name itself.
+        name = name.rstrip('.').strip()
+        if not name:
+            return False
+        # Must be ALL CAPS — no lowercase letters allowed in the candidate label.
+        if name != name.upper():
+            return False
+        # Must contain at least one letter (rules out pure punctuation / digits).
+        if not re.search(r'[A-Za-z]', name):
+            return False
+        # Letters and spaces only — no digits, hyphens, periods, slashes.
+        if not re.match(r'^[A-Z][A-Z\s]+$', name):
+            return False
+        # 1–3 words maximum.
+        words = name.split()
+        if len(words) < 1 or len(words) > 3:
+            return False
+        # Each word must be letters-only.
+        if not all(w.isalpha() for w in words):
+            return False
+        # Reject known directions.
+        upper_token = name
+        for direction in self.SCRIPT_DIRECTIONS:
+            if upper_token == direction or upper_token.startswith(direction + ' '):
+                return False
+        # Reject any candidate whose first word is a location-heading token
+        # (e.g. "THE HOMESTEAD", "THE COUNTDOWN", "THE ...").
+        first_word = words[0]
+        if first_word in self.LOCATION_WORDS:
+            return False
+        # Reject any candidate that contains a location/time marker anywhere.
+        upper_words = set(w.upper() for w in words)
+        if upper_words & (self.LOCATION_WORDS - {'THE', 'A', 'AN', 'SCENE', 'ACT', 'CHAPTER'}):
+            # Any time-of-day or transitional marker (DAY/NIGHT/LATER etc.) disqualifies.
+            return False
+        # Reject one-word generic roles used as a label.
+        if len(words) == 1 and first_word in self.GENERIC_ROLES:
+            return False
+        # Reject institution/organization keywords.
+        if upper_words & self.INSTITUTION_KEYWORDS:
+            return False
+        # Reject action-line / stage-direction phrases: if any word beyond
+        # the first is a common verb (NOTICES, SEES, LOOKS, ...) the candidate
+        # is almost certainly an action line like "DRE NOTICES" rather than
+        # a genuine character speaker label.
+        if len(words) > 1 and any(w in self.ACTION_VERBS for w in words[1:]):
+            return False
+        return True
+
     def _extract_simple_scene_characters(self, scene_text: str) -> List[str]:
         """
-        Extract unique character names from uppercase dialogue-cue style lines.
+        Extract unique character names from dialogue speaker labels.
 
-        This is deliberately heuristic and pattern-based only (no NLP).
-        Only promotes names that appear as genuine dialogue cues (ALL CAPS name
-        followed by parenthetical or dialogue line) in at least one scene.
+        Only promotes lines that are:
+          1. ALL CAPS on their own line (the speaker label)
+          2. Strictly 1–3 alphabetic words
+          3. NOT a scene direction (FADE IN, CUT TO, MONTAGE, etc.)
+          4. NOT a scene heading prefix (THE X, INT./EXT., DAY/NIGHT, etc.)
+          5. NOT a generic role noun (WOMAN, MAN, NARRATOR, ...)
+          6. Immediately followed by a dialogue line (parenthetical or mixed-case prose)
         """
         if not isinstance(scene_text, str) or not scene_text.strip():
             return []
 
-        EXCLUDED_PATTERNS = [
-            'FADE IN', 'FADE OUT', 'FADE TO', 'CUT TO', 'SMASH CUT',
-            'DISSOLVE TO', 'MATCH CUT', 'JUMP CUT',
-            'THE END', 'FIN',
-            'CONTINUED', "CONT'D", 'MORE', 'OVER', 'INTERCUT',
-            'BACK TO', 'LATER', 'CONTINUOUS', 'MOMENTS LATER',
-        ]
+        # Character label line — ALL CAPS, 1–3 words, letters/spaces only.
+        label_pattern = re.compile(r'^\s*([A-Z][A-Z][A-Z\s]{0,40})\s*$')
+        # Scene-heading line: must not be mistaken for a character.
+        simple_scene_heading = re.compile(
+            r'^\s*(?:SCENE\s+\d+\s*[:\-]\s*)?(?:\d+\.\s*)?'
+            r'(INT\.|EXT\.|INT\./EXT\.|I/E\.)\s+',
+            re.IGNORECASE,
+        )
 
-        # Institution/organization name patterns
-        INSTITUTION_KEYWORDS = {
-            'PROJECT', 'DEPARTMENT', 'COMMITTEE', 'BOARD', 'PROGRAM',
-            'FOUNDATION', 'AGENCY', 'BUREAU', 'COUNCIL', 'AUTHORITY',
-            'COMMISSION', 'DIVISION', 'OFFICE', 'SERVICE', 'CORPORATION',
-            'INCORPORATED', 'INC', 'LLC', 'ASSOCIATION', 'INSTITUTE',
-            'UNIVERSITY', 'COLLEGE', 'SCHOOL', 'HOSPITAL', 'LABORATORY',
-            'STUDIO', 'PRODUCTIONS', 'PICTURES', 'FILMS', 'ENTERTAINMENT',
-        }
-
-        # Generic role words — not character names unless they have dialogue
-        GENERIC_ROLES = {
-            'OWNER', 'OFFICER', 'GUARD', 'RESIDENT',
-            'CROWD', 'VOICE', 'MAN', 'WOMAN', 'BOY', 'GIRL',
-            'PERSON', 'STRANGER', 'NARRATOR', 'ANNOUNCER', 'NEWSCASTER',
-            'REPORTER', 'INTERVIEWER', 'DOCTOR', 'NURSE', 'COP', 'POLICE',
-            'SOLDIER', 'SAILOR', 'PILOT', 'DRIVER', 'PASSENGER', 'TOURIST',
-            'TITLE CARD',
-        }
-
-        def is_valid_character(name: str) -> bool:
-            name_clean = name.strip().rstrip('.')
-            if name_clean.upper() in [p.upper() for p in EXCLUDED_PATTERNS]:
-                return False
-            if name.strip().endswith('.'):
-                return False
-            if any(c.islower() for c in name):
-                return False
-            if len(name.split()) > 4:
-                return False
-            return True
-
-        def has_institution_pattern(name: str) -> bool:
-            words = name.upper().split()
-            return any(kw in words for kw in INSTITUTION_KEYWORDS)
-
-        def looks_like_title_card(name: str) -> bool:
-            return name.upper().startswith("TITLE CARD") or name.strip().startswith("TITLE CARD:")
-
-        def is_generic_role(name: str) -> bool:
-            names = [s.strip().rstrip('.') for s in name.strip().split() if s.strip()]
-            return len(names) == 1 and names[0].upper() in GENERIC_ROLES
-
-        skip_names = {
-            "CUT TO", "CUT TO:", "FADE IN", "FADE OUT", "FADE TO BLACK", "DISSOLVE TO",
-            "SMASH CUT", "THE END", "CONTINUED", "MORE", "SUPER", "TITLE", "MONTAGE",
-        }
-
-        line_pattern = re.compile(r'^\s*([A-Z][A-Z0-9\.\'\-\s]{0,40})(?:\s*\([^)]*\))?\s*$')
         lines = scene_text.splitlines()
         extracted: List[str] = []
-        seen = set()
+        seen: set = set()
 
         for idx, line in enumerate(lines):
             stripped = line.strip()
             if not stripped:
                 continue
-            match = line_pattern.match(stripped)
-            if not match:
+
+            upper_stripped = stripped.upper()
+
+            # 1) Reject INT./EXT. / numbered scene headings outright.
+            if simple_scene_heading.match(stripped):
+                continue
+            if upper_stripped.startswith(('INT.', 'EXT.', 'INT./EXT.', 'I/E.')):
                 continue
 
-            candidate = match.group(1).strip()
-            if not candidate or candidate != candidate.upper():
+            # 2) Reject script directions (FADE IN, CUT TO, MONTAGE, TITLE CARD, ...).
+            direction_matched = False
+            for direction in self.SCRIPT_DIRECTIONS:
+                if upper_stripped == direction or upper_stripped.startswith(direction + ' '):
+                    direction_matched = True
+                    break
+            if direction_matched:
                 continue
-            if not is_valid_character(candidate):
+
+            # 3) Reject any line whose first word is "THE"/"A"/"AN" — those are scene
+            #    headings like "THE HOMESTEAD", "THE COUNTDOWN", not character cues.
+            first_word = upper_stripped.split(' ', 1)[0]
+            if first_word in self.LOCATION_WORDS:
                 continue
-            if candidate in skip_names:
+
+            # 4) Reject lines that contain a time-of-day / transition marker anywhere
+            #    (DAY, NIGHT, LATER, MORNING, CONTINUOUS, etc.).
+            words_upper = upper_stripped.split()
+            if any(w in self.LOCATION_WORDS - {'THE', 'A', 'AN', 'SCENE', 'ACT', 'CHAPTER'} for w in words_upper):
                 continue
-            if len(candidate.split()) > 4:
+
+            # 5) The line must look like a dialogue label: ALL CAPS, 1–3 words,
+            #    letters/spaces only.
+            label_match = label_pattern.match(stripped)
+            if not label_match:
                 continue
-            if not re.search(r'[A-Z]', candidate):
+            candidate = label_match.group(1).strip()
+
+            # 6) Verify the NEXT non-empty line is dialogue (parenthetical or
+            #    mixed-case prose). This is the strongest signal that the candidate
+            #    is a genuine speaker cue rather than a stray heading.
+            is_dialogue = False
+            for j in range(idx + 1, len(lines)):
+                nxt = lines[j].strip()
+                if not nxt:
+                    continue
+                if nxt.startswith('('):
+                    is_dialogue = True
+                elif not (nxt == nxt.upper() and len(nxt) > 2):
+                    is_dialogue = True
+                break
+            if not is_dialogue:
                 continue
-            if looks_like_title_card(candidate):
-                continue
-            if has_institution_pattern(candidate):
-                continue
-            if is_generic_role(candidate):
+
+            # 7) Strict validity check on the candidate itself.
+            if not self._is_valid_dialogue_character(candidate):
                 continue
             if candidate in seen:
                 continue
@@ -13776,78 +13920,57 @@ class ScriptParser:
                 self.characters[current_character].dialogue_count += 1
 
     def _is_character_name(self, text: str) -> bool:
-        """Check if text looks like a character name"""
-        # Character names are typically:
-        # - ALL CAPS
-        # - 2-30 characters
-        # - May have (V.O.), (O.S.), (CONT'D) suffixes
-        text_upper = text.upper()
+        """Check if text looks like a character name.
 
-        EXCLUDED_PATTERNS = [
-            'FADE IN', 'FADE OUT', 'FADE TO', 'CUT TO', 'SMASH CUT',
-            'DISSOLVE TO', 'MATCH CUT', 'JUMP CUT',
-            'THE END', 'FIN',
-            'CONTINUED', "CONT'D", 'MORE', 'OVER', 'INTERCUT',
-            'BACK TO', 'LATER', 'CONTINUOUS', 'MOMENTS LATER',
-        ]
-
-        def is_valid_character(name: str) -> bool:
-            name_clean = name.strip().rstrip('.')
-            if name_clean.upper() in [p.upper() for p in EXCLUDED_PATTERNS]:
-                return False
-            if name.strip().endswith('.'):
-                return False
-            if any(c.islower() for c in name):
-                return False
-            if len(name.split()) > 4:
-                return False
-            return True
-
-        # Skip if too long (probably action description)
-        if len(text) > 30:
+        Delegates to the strict ``_is_valid_dialogue_character`` validator so
+        that both the old (``_extract_scenes`` / ``_extract_characters``) and
+        new (``_extract_simple_scene_characters``) code paths share the same
+        exclusion rules.  This prevents scene headings like "THE HOMESTEAD",
+        "THE COUNTDOWN", "ENDING", "SUPPLIES", "FINAL CONFRONTATION", or
+        "MAYA AND HER MOM" from being misidentified as character names.
+        """
+        if not isinstance(text, str):
+            return False
+        stripped = text.strip()
+        if not stripped:
             return False
 
-        # Skip common screenplay elements
-        skip_patterns = [
-            r'THE END',
-            r'FADE IN',
-            r'FADE OUT',
-            r'FADETO',
-            r'CUT TO',
-            r'DISSOLVE TO',
-            r'SMASH CUT',
-            r'MONTAGE',
-            r'TITLE:',
-            r'SUPER:',
-            r'CONTINUED',
-            r'MORE',
-        ]
-        for pattern in skip_patterns:
-            if re.match(pattern, text_upper):
-                return False
-
-        # Skip institution/organization names (multi-word like "COASTAL RENEWAL PROJECT")
-        INSTITUTION_WORDS = {'PROJECT', 'DEPARTMENT', 'RENEWAL', 'COMMITTEE', 'BOARD', 'PROGRAM', 'TIDE'}
-        name_words = set(w.strip().rstrip('.') for w in text_upper.split() if w.strip())
-        if name_words & INSTITUTION_WORDS:
+        # Reject overly long lines early (action descriptions, not names).
+        if len(stripped) > 30:
             return False
 
-        # Skip single-word generic role names (OWNER, etc.)
-        GENERIC_ROLE_WORDS = {'OWNER'}
-        clean_words = {w.rstrip('.') for w in name_words}
-        if len(clean_words) == 1 and clean_words.pop() in GENERIC_ROLE_WORDS:
+        # Reject INT./EXT. scene headings outright.
+        upper_stripped = stripped.upper()
+        if upper_stripped.startswith(('INT.', 'EXT.', 'INT./EXT.', 'I/E.')):
             return False
 
-        # Skip if contains lowercase
-        if text != text.upper():
-            # Allow parentheticals like "JOHN (V.O.)"
-            if '(' not in text or text.upper() != text.split('(')[0].strip():
-                return False
-
-        if not is_valid_character(text.strip().rstrip('.')):
+        # Reject lines that start with a scene heading prefix.
+        simple_scene_heading = re.compile(
+            r'^\s*(?:SCENE\s+\d+\s*[:\-]\s*)?(?:\d+\.\s*)?'
+            r'(INT\.|EXT\.|INT\./EXT\.|I/E\.)\s+',
+            re.IGNORECASE,
+        )
+        if simple_scene_heading.match(stripped):
             return False
 
-        return True
+        # Strip parenthetical suffixes like (V.O.), (O.S.), (CONT'D) before
+        # delegating to the strict validator.
+        candidate = re.sub(r'\s*\(.*?\)\s*$', '', stripped).strip()
+        if not candidate:
+            return False
+
+        # The candidate must be ALL CAPS — no lowercase letters.
+        if candidate != candidate.upper():
+            return False
+
+        # Delegate to the shared strict validator which checks:
+        # - 1-3 words max, letters only
+        # - not a script direction (FADE IN, CUT TO, MONTAGE, TITLE CARD, ...)
+        # - not a scene heading prefix (THE X, ...)
+        # - not a location/time marker (DAY, NIGHT, LATER, MORNING, ...)
+        # - not a generic role noun (MAN, WOMAN, NARRATOR, ...)
+        # - not an institution/organization name
+        return self._is_valid_dialogue_character(candidate)
 
     def _is_action_line(self, text: str) -> bool:
         """Check if text is an action/description line"""
@@ -13946,6 +14069,47 @@ def parse_screenplay(script_text: str) -> Dict[str, Any]:
         Dict with scenes, characters, locations, and source_stats
     """
     return script_parser.parse(script_text)
+
+
+def sanitize_scene_characters(characters):
+    """
+    Filter a scene character list, removing invalid entries that are
+    actually scene headings, script directions, or action lines.
+
+    Validation rules (reject if any match):
+      - first word is THE / A / AN
+      - matches common script directions (FADE IN, CUT TO, MONTAGE, ...)
+      - longer than 3 words
+      - rejected by the strict _is_valid_dialogue_character validator
+    """
+    if not isinstance(characters, list):
+        return []
+    cleaned = []
+    seen = set()
+    for name in characters:
+        if not isinstance(name, str):
+            continue
+        stripped = name.strip()
+        if not stripped:
+            continue
+        upper = stripped.upper()
+        words = upper.split()
+        # Reject if longer than 3 words
+        if len(words) > 3:
+            continue
+        # Reject if first word is THE / A / AN
+        if words and words[0] in ('THE', 'A', 'AN'):
+            continue
+        # Delegate to the strict parser validator for everything else
+        if not script_parser._is_valid_dialogue_character(upper):
+            continue
+        # Deduplicate (case-insensitive)
+        key = upper
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(stripped)
+    return cleaned
 
 
 # ================================================================================

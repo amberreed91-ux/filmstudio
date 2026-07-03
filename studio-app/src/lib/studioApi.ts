@@ -196,7 +196,7 @@ function normalizeStudioProject(raw: StudioProject): StudioProject {
   }
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
+export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const controller = new AbortController()
   const externalSignal = init?.signal
   // Default timeout: 30 seconds (increased from 8 seconds)
@@ -693,6 +693,7 @@ export type CreateScenePayload = {
   characters: string[]
   notes: string
   is_major_plot_point?: boolean
+  text?: string
 }
 
 export type UpdateScenePayload = Partial<CreateScenePayload>
@@ -864,6 +865,31 @@ export async function createCharacterSkeleton(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unable to create character',
+    }
+  }
+}
+
+export async function uploadCharacterDescriptor(
+  projectId: string,
+  characterId: string,
+  file: File,
+): Promise<{ character?: CharacterRecord; error?: string }> {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await fetchJson<{ character: CharacterRecord }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/upload-descriptor`,
+      {
+        method: 'POST',
+        body: formData,
+        timeoutMs: 60000, // 60 second timeout for LLM processing
+      },
+    )
+    return { character: response.character }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to upload character descriptor',
     }
   }
 }
@@ -1118,9 +1144,21 @@ export function studyReferenceUpload(projectId: string, file: File, options?: { 
 }
 
 export function generateSceneStoryboard(projectId: string, sceneId: string) {
-  return fetchJson<{ image_url: string; status: string }>(
+  return fetchJson<{ image_url: string; status: string; seed?: number }>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard`,
     { method: 'POST', timeoutMs: 30000 },
+  )
+}
+
+export function togglePrevisSeedLock(projectId: string, sceneId: string, locked: boolean) {
+  return fetchJson<{ seed: number | null; locked: boolean }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/previs/seed`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locked }),
+      timeoutMs: 5000,
+    },
   )
 }
 
@@ -1649,6 +1687,36 @@ export async function composeScene(projectId: string, sceneId: string): Promise<
 export async function getSceneComposition(projectId: string, sceneId: string): Promise<SceneComposition> {
   return fetchJson<SceneComposition>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/composition`,
+  )
+}
+
+// ── Film Assembly ───────────────────────────────────────────────────────────
+
+export type FilmAssemblyResponse = {
+  film_url: string
+  scene_count: number
+  total_duration_seconds: number | null
+  has_audio: boolean
+}
+
+export type AssemblyStatusResponse = {
+  scenes_with_compositions: number
+  scenes_total: number
+  film_assembled: boolean
+  film_url: string | null
+  has_audio: boolean
+}
+
+export async function assembleFilm(projectId: string): Promise<FilmAssemblyResponse> {
+  return fetchJson<FilmAssemblyResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/assemble-film`,
+    { method: 'POST', timeoutMs: 600000 },
+  )
+}
+
+export async function getAssemblyStatus(projectId: string): Promise<AssemblyStatusResponse> {
+  return fetchJson<AssemblyStatusResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/assembly-status`,
   )
 }
 
@@ -3809,5 +3877,31 @@ export async function getSceneRationale(
 ): Promise<SceneRationaleResponse> {
   return fetchJson<SceneRationaleResponse>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/rationale`,
+  )
+}
+
+// ── Audio Direction ────────────────────────────────────────────────────────
+
+export type ApplyAudioBriefResponse = {
+  status: string
+  prompt_used: string
+}
+
+export async function getSceneAudioBrief(
+  projectId: string,
+  sceneId: string,
+): Promise<SoundAdvisory> {
+  return fetchJson<SoundAdvisory>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/audio-brief`,
+  )
+}
+
+export async function applyAudioBrief(
+  projectId: string,
+  sceneId: string,
+): Promise<ApplyAudioBriefResponse> {
+  return fetchJson<ApplyAudioBriefResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/audio-brief/apply`,
+    { method: 'POST' },
   )
 }

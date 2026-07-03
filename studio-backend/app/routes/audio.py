@@ -5,15 +5,25 @@ POST /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/generate
 GET  /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/status
 GET  /api/f51/studio/projects/{project_id}/audio/status
 GET  /api/f51/studio/audio/capabilities
+GET  /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio-brief
+POST /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio-brief/apply
+
+New Pipeline Routes (Piper TTS + MusicGen + FFmpeg):
+POST /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/pipeline/generate
+GET  /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/pipeline/status
+GET  /api/f51/studio/audio/pipeline/capabilities
 """
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
+
+from app.models.script_intelligence import SoundAdvisory
 
 logger = logging.getLogger("audio-routes")
 
@@ -193,4 +203,222 @@ async def get_project_audio_status(project_id: str) -> Dict[str, Any]:
 async def get_audio_capabilities() -> Dict[str, Any]:
     """Return audio generation capabilities and mock mode status."""
     service = _get_service()
+    return service.capabilities()
+
+
+@router.get(
+    "/projects/{project_id}/scenes/{scene_id}/audio-brief",
+    response_model=SoundAdvisory,
+)
+async def get_audio_brief(project_id: str, scene_id: str):
+    """Generate an audio director brief for the scene using the LLM."""
+    from app.services.audio_director_service import generate_scene_audio_brief
+
+    try:
+        return await generate_scene_audio_brief(project_id, scene_id, None)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("AUDIO_BRIEF_FAILED | project=%s scene=%s | %s", project_id, scene_id, exc)
+        raise HTTPException(status_code=500, detail=f"Audio brief generation failed: {exc}") from exc
+
+
+@router.post("/projects/{project_id}/scenes/{scene_id}/audio-brief/apply")
+async def apply_audio_brief(project_id: str, scene_id: str):
+    """Generate an audio brief and queue score generation from its score_notes."""
+    from app.services.audio_director_service import generate_scene_audio_brief
+    from app.services.compose_service import generate_scene_score
+
+    try:
+        brief = await generate_scene_audio_brief(project_id, scene_id, None)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("AUDIO_BRIEF_APPLY_FAILED | project=%s scene=%s | %s", project_id, scene_id, exc)
+        raise HTTPException(status_code=500, detail=f"Audio brief generation failed: {exc}") from exc
+
+    try:
+        score_path = await generate_scene_score(project_id, scene_id, brief.score_notes)
+    except Exception as exc:
+        logger.error("AUDIO_BRIEF_SCORE_FAILED | project=%s scene=%s | %s", project_id, scene_id, exc)
+        raise HTTPException(status_code=500, detail=f"Score generation failed: {exc}") from exc
+
+    return {
+        "status": "queued",
+        "scene_id": scene_id,
+        "prompt_used": brief.score_notes,
+    }
+
+
+# ---------------------------------------------------------------------------
+# New Pipeline Routes (Piper TTS + MusicGen + FFmpeg)
+# ---------------------------------------------------------------------------
+
+class AudioPipelineRequest(BaseModel):
+    """Request body for the full audio pipeline."""
+    # Optional overrides — if omitted, data is pulled from scene's sound_advisory
+    mood: Optional[str] = None
+    score_notes: Optional[str] = None
+    ambient_notes: Optional[str] = None
+    instrumentation: Optional[str] = None
+    tempo: Optional[str] = None
+    silence_flag: Optional[bool] = None
+    # Video merge options
+    merge_onto_video: bool = True
+    replace_original_video: bool = False
+    # Duration estimate for score/ambient generation
+    estimated_duration_seconds: Optional[float] = None
+
+
+def _get_pipeline_service():
+    from app.services.audio_pipeline_service import audio_pipeline_service
+    return audio_pipeline_service
+
+
+def _resolve_scene_text(project_id: str, scene_id: str) -> str:
+    """Pull full scene text from storage for dialogue extraction."""
+    scene = _get_scene_data(project_id, scene_id)
+    if scene:
+        return (
+            scene.get("text")
+            or scene.get("content")
+            or scene.get("scene_text")
+            or scene.get("description")
+            or ""
+        )
+    return ""
+
+
+def _find_rendered_video(project_id: str, scene_id: str) -> Optional[Path]:
+    """
+    Find the rendered video file for a scene by checking render jobs.
+    Returns the path to the video file if found, None otherwise.
+    """
+    try:
+        from app.services.render import render_service
+        
+        # Look for completed render jobs for this scene
+        jobs = render_service.list_jobs(project_id)
+        for job in jobs:
+            # Check if this job is for the scene (shot_id contains scene_id)
+            if job.shot_id and scene_id in job.shot_id:
+                if job.status == "complete" and job.output_payload:
+                    asset_url = job.output_payload.asset_url
+                    if asset_url:
+                        # Convert URL to local path if it's a local file
+                        if asset_url.startswith("/outputs/"):
+                            # Local file path
+                            base_dir = Path(__file__).resolve().parents[2]
+                            local_path = base_dir / asset_url.lstrip("/")
+                            if local_path.exists():
+                                return local_path
+                        elif asset_url.startswith("http"):
+                            # Remote URL — can't merge locally without download
+                            logger.info(
+                                "Rendered video is remote URL: %s — skipping local merge",
+                                asset_url,
+                            )
+                            return None
+        return None
+    except Exception as exc:
+        logger.warning("Could not find rendered video for %s/%s: %s", project_id, scene_id, exc)
+        return None
+
+
+@router.post("/projects/{project_id}/scenes/{scene_id}/audio/generate")
+async def generate_scene_audio_pipeline(
+    project_id: str,
+    scene_id: str,
+    body: AudioPipelineRequest = AudioPipelineRequest(),
+) -> Dict[str, Any]:
+    """
+    Generate full audio pipeline for a scene using Piper TTS + MusicGen + FFmpeg.
+    
+    This route:
+    1. Extracts dialogue from scene script content
+    2. Generates dialogue with Piper TTS
+    3. Generates score/ambient with MusicGen-small
+    4. Mixes audio tracks with FFmpeg
+    5. Merges audio onto rendered video (if available)
+    
+    Returns the final video file path and generation status.
+    """
+    service = _get_pipeline_service()
+    
+    # Resolve scene data
+    scene = _get_scene_data(project_id, scene_id)
+    if not scene:
+        raise HTTPException(status_code=404, detail=f"Scene {scene_id} not found in project {project_id}")
+    
+    # Resolve sound advisory from scene storage, then apply overrides
+    advisory = _resolve_sound_advisory(project_id, scene_id)
+    scene_text = _resolve_scene_text(project_id, scene_id)
+    
+    mood = body.mood or advisory.get("mood", "")
+    score_notes = body.score_notes or advisory.get("score_notes", "")
+    ambient_notes = body.ambient_notes or advisory.get("ambient_notes", "")
+    instrumentation = body.instrumentation or advisory.get("instrumentation", "")
+    tempo = body.tempo or advisory.get("tempo", "")
+    silence_flag = body.silence_flag if body.silence_flag is not None else advisory.get("silence_flag", False)
+    
+    # Estimate duration from scene text length (rough heuristic: ~150 words per minute)
+    word_count = len(scene_text.split()) if scene_text else 0
+    estimated_duration = body.estimated_duration_seconds or max(10.0, min(60.0, word_count / 2.5))
+    
+    # Find rendered video if merge is requested
+    video_path = None
+    if body.merge_onto_video:
+        video_path = _find_rendered_video(project_id, scene_id)
+        if video_path:
+            logger.info(
+                "AUDIO_PIPELINE | Found rendered video: %s",
+                video_path,
+            )
+        else:
+            logger.info(
+                "AUDIO_PIPELINE | No rendered video found for %s/%s — audio-only output",
+                project_id, scene_id,
+            )
+    
+    logger.info(
+        "AUDIO_PIPELINE_GENERATE | project=%s scene=%s mock=%s merge=%s",
+        project_id, scene_id, service.capabilities()["mock_mode"], body.merge_onto_video,
+    )
+    
+    try:
+        result = await service.generate_full_pipeline(
+            scene_id=scene_id,
+            project_id=project_id,
+            scene_text=scene_text,
+            mood=mood,
+            score_notes=score_notes,
+            ambient_notes=ambient_notes,
+            instrumentation=instrumentation,
+            tempo=tempo,
+            silence_flag=silence_flag,
+            video_path=video_path,
+            estimated_duration_seconds=estimated_duration,
+        )
+        
+        return result
+        
+    except Exception as exc:
+        logger.error(
+            "AUDIO_PIPELINE_FAILED | project=%s scene=%s | %s",
+            project_id, scene_id, exc,
+        )
+        raise HTTPException(status_code=500, detail=f"Audio pipeline failed: {exc}") from exc
+
+
+@router.get("/projects/{project_id}/scenes/{scene_id}/audio/status")
+async def get_scene_audio_pipeline_status(project_id: str, scene_id: str) -> Dict[str, Any]:
+    """Return current audio pipeline status for a scene."""
+    service = _get_pipeline_service()
+    return service.get_scene_status(project_id, scene_id)
+
+
+@router.get("/audio/pipeline/capabilities")
+async def get_audio_pipeline_capabilities() -> Dict[str, Any]:
+    """Return audio pipeline capabilities and availability status."""
+    service = _get_pipeline_service()
     return service.capabilities()

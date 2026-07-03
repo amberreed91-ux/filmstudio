@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Film, User, ChevronDown, Volume2, VolumeX, Users, History } from 'lucide-react'
+import { Film, User, ChevronDown, Volume2, VolumeX, Users, History, Loader2, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useStudio } from '../context/StudioContext'
 import { useAudioUX } from '../context/AudioUXContext'
@@ -16,10 +16,10 @@ interface TopNavProps {
 
 export default function TopNav({ showProjectPicker }: TopNavProps) {
   const apiBaseUrl = STUDIO_API_BASE
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'available' | 'unavailable'>('checking')
+  const [health, setHealth] = useState<'live' | 'offline' | 'restarting'>('live')
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const { loading, project, overview, isDemoMode } = useStudio()
+  const { project, overview } = useStudio()
   const { muted, toggleMuted } = useAudioUX()
   const activeProject = project || overview?.latest_project || null
   const activeProjectId = resolveActiveProjectId({
@@ -34,48 +34,44 @@ export default function TopNav({ showProjectPicker }: TopNavProps) {
 
   useEffect(() => {
     let cancelled = false
+    const isRestarting = health === 'restarting'
+    const intervalMs = isRestarting ? 2000 : 10000
 
-    async function checkBackend() {
-      const normalizedBase = apiBaseUrl.replace(/\/+$/, '')
+    async function check() {
       try {
-        const healthResponse = await fetch(`${normalizedBase}/health`, { headers: { Accept: 'application/json' } })
-        if (healthResponse.ok) {
-          if (!cancelled) setBackendStatus('available')
-          return
+        const res = await fetch(`${apiBaseUrl.replace(/\/+$/, '')}/health`, {
+          headers: { Accept: 'application/json' },
+        })
+        if (!cancelled) {
+          if (res.ok) {
+            setHealth('live')
+          } else if (!isRestarting) {
+            setHealth('offline')
+          }
         }
       } catch {
-        // Fall back to the root Studio API probe below.
-      }
-
-      try {
-        const rootResponse = await fetch(`${normalizedBase}/`, { headers: { Accept: 'application/json' } })
-        const rootBody = await rootResponse.json().catch(() => null)
-        if (rootResponse.ok && rootBody?.message === 'Studio API running') {
-          if (!cancelled) setBackendStatus('available')
-          return
+        if (!cancelled && !isRestarting) {
+          setHealth('offline')
         }
-      } catch {
-        // The unavailable state below is the visible signal.
       }
-
-      if (!cancelled) setBackendStatus('unavailable')
     }
 
-    setBackendStatus('checking')
-    checkBackend()
+    check()
+    const id = setInterval(check, intervalMs)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [health, apiBaseUrl])
 
-    return () => {
-      cancelled = true
+  const handleRestart = async () => {
+    setHealth('restarting')
+    try {
+      await fetch(`${apiBaseUrl.replace(/\/+$/, '')}/api/f51/studio/admin/restart`, {
+        method: 'POST',
+        headers: { 'X-Admin-Token': 'studio-restart-2026' },
+      })
+    } catch {
+      // Server restarting - connection drop expected
     }
-  }, [apiBaseUrl])
-
-  const studioStatus = backendStatus === 'unavailable'
-    ? { label: 'Backend unavailable', color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }
-    : loading || backendStatus === 'checking'
-      ? { label: 'Syncing studio...', color: 'var(--accent-cyan)', background: 'rgba(0,200,255,0.1)', border: '1px solid rgba(0,200,255,0.2)' }
-      : isDemoMode
-        ? { label: 'Demo Mode', color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }
-        : { label: 'Studio connected', color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }
+  }
 
   function isRouteActive(routePath: string) {
     if (location.pathname === routePath) return true
@@ -262,12 +258,32 @@ export default function TopNav({ showProjectPicker }: TopNavProps) {
           >
             {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
           </button>
-          <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border border-[#1e1e1e] bg-[#1a1a1a]" style={{
-            color: studioStatus.color === '#22c55e' ? '#22c55e' : studioStatus.color,
-          }}>
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: studioStatus.color === '#22c55e' ? '#22c55e' : studioStatus.color }}></span>
-            <span>{studioStatus.label}</span>
-          </div>
+          {health === 'restarting' ? (
+            <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border border-[#1e1e1e] bg-[#1a1a1a] text-[#f59e0b]">
+              <Loader2 size={12} className="animate-spin" />
+              <span>RESTARTING...</span>
+            </div>
+          ) : health === 'offline' ? (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border border-[#ef4444] bg-[rgba(239,68,68,0.1)] text-[#ef4444]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444]" />
+                <span>OFFLINE</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRestart}
+                className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs border border-[#1e1e1e] bg-[#1a1a1a] text-[#888] hover:border-[#00d4aa] hover:text-white transition-colors"
+              >
+                <RefreshCw size={12} />
+                RESTART
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border border-[#1e1e1e] bg-[#1a1a1a] text-[#22c55e]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+              <span>LIVE</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border border-[#1e1e1e] bg-[#1a1a1a] text-[#888]">
             <User size={14} />
             <span>Admin</span>

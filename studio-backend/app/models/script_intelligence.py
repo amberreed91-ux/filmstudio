@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -182,3 +182,8 @@ class CharacterSimulationHistory(BaseModel):
     """Simulation history for a character."""
     character_id: str
     history: List[SimulationHistoryEntry] = Field(default_factory=list, max_items=5)
+
+
+SceneTransitionIntelligence.model_rebuild()
+SceneSoundIntelligence.model_rebuild()
+CharacterSimulationHistory.model_rebuild()

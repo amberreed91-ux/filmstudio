@@ -771,6 +771,11 @@ class RunwayAdapter(RenderProviderAdapter):
             prompt_image = job.input_payload.referenceAssets[0] if job.input_payload.referenceAssets else None
             ratio = self._normalize_ratio(job.input_payload.parameters.get("ratio"))
             duration = int(job.input_payload.parameters.get("duration") or 5)
+
+            # Extract seed from parameters if present
+            raw_seed = job.input_payload.parameters.get("seed")
+            seed_val = int(raw_seed) if raw_seed is not None else None
+
             if prompt_image:
                 endpoint = "/v1/image_to_video"
                 payload = {
@@ -788,6 +793,16 @@ class RunwayAdapter(RenderProviderAdapter):
                     "duration": duration,
                     "ratio": ratio,
                 }
+
+            # Inject seed into payload if present — supports seed parameter for
+            # visual consistency across shots.
+            if seed_val is not None:
+                payload["seed"] = seed_val
+                logger.info(
+                    "RUNWAY_SEED_INJECTED | task=%s | seed=%d",
+                    "image_to_video" if prompt_image else "text_to_video",
+                    seed_val,
+                )
             logger.info(
                 "TEMP_RUNWAY_DEBUG request endpoint=%s model=%s payload=%s payload_schema=%s",
                 endpoint,

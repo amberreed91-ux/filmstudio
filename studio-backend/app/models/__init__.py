@@ -231,6 +231,7 @@ class StudioProject(BaseModel):
     project_id: str
     title: str = ""
     updated_at: str = ""
+    script_text: str = ""
     source_stats: SourceStats = SourceStats()
     render_provider: Optional[RenderProvider] = None
     production_bible: Optional[ProductionBible] = None

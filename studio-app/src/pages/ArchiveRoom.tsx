@@ -769,6 +769,50 @@ export default function ArchiveRoom() {
                   <Plus size={12} />
                   IMPORT ASSET
                 </button>
+
+                {/* Readiness scan + Publish actions */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleReadinessScan()}
+                    disabled={scanning}
+                    className="glass-panel flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50"
+                    style={{ color: 'var(--color-primary)' }}
+                  >
+                    {scanning ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                    SCAN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handlePublish()}
+                    disabled={publishing}
+                    className="glass-panel flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50"
+                    style={{ color: 'var(--color-on-surface-variant)' }}
+                  >
+                    {publishing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    PUBLISH
+                  </button>
+                </div>
+
+                {/* Readiness issues */}
+                {readinessIssues.length > 0 && (
+                  <div className="space-y-1">
+                    {readinessIssues.map((issue) => (
+                      <div
+                        key={issue.id}
+                        className={`rounded px-2 py-1 text-[10px] ${
+                          issue.severity === 'error'
+                            ? 'bg-rose-500/10 text-rose-300'
+                            : issue.severity === 'warning'
+                              ? 'bg-amber-500/10 text-amber-300'
+                              : 'bg-sky-500/10 text-sky-300'
+                        }`}
+                      >
+                        {issue.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="glass-panel flex flex-col items-center justify-center rounded-xl py-16 text-center">

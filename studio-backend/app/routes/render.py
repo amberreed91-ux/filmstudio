@@ -24,6 +24,13 @@ class RenderBatchRequest(BaseModel):
     provider: Optional[str] = None
 
 
+# ── Seed locking models ───────────────────────────────────────────────────────
+
+class ShotSeedPayload(BaseModel):
+    """Seed lock/unlock payload: provide seed (integer) or null to clear."""
+    seed: Optional[int] = None
+
+
 # Provider management
 @router.get("/providers")
 def list_providers():
@@ -354,6 +361,53 @@ async def recover_render_output_urls():
         "demoted": demoted,
         "skipped": skipped,
         "total_checked": recovered + demoted + skipped,
+    }
+
+
+# ── Seed lock/unlock ──────────────────────────────────────────────────────────
+
+@router.patch("/projects/{project_id}/scenes/{scene_id}/shots/{shot_id}/seed")
+def update_shot_seed(project_id: str, scene_id: str, shot_id: str, payload: ShotSeedPayload):
+    """Lock or unlock a seed for a shot. Body: {"seed": integer or null}.
+    
+    - If seed is provided (non-null): sets that seed and locks it (seed_locked=true).
+    - If seed is null: sets seed_locked=false (unlocks), keeps existing seed.
+    - Returns the current shot seed state.
+    """
+    if render_module._storage is None:
+        raise HTTPException(status_code=503, detail="Render storage not initialized")
+
+    # Normalize shot_id: if caller passed just the short name, combine with scene_id
+    # e.g. shot_id="shot_001", scene_id="scene_001" => "scene_001_shot_001"
+    full_shot_id = shot_id
+    if not shot_id.startswith(scene_id) and scene_id:
+        full_shot_id = f"{scene_id}_{shot_id}"
+
+    if payload.seed is not None:
+        # Lock seed: set both seed and locked
+        render_module._storage.save_shot_seed(project_id, full_shot_id, payload.seed, seed_locked=True)
+        logger.info(
+            "SEED_LOCKED | project=%s | shot=%s | seed=%d",
+            project_id, full_shot_id, payload.seed,
+        )
+    else:
+        # Unlock: keep existing seed (if any), just unlock
+        existing = render_module._storage.get_shot_seed(project_id, full_shot_id)
+        current_seed = existing["seed"] if existing and existing.get("seed") is not None else None
+        render_module._storage.update_shot_seed_lock(project_id, full_shot_id, seed=current_seed, seed_locked=False)
+        logger.info(
+            "SEED_UNLOCKED | project=%s | shot=%s | seed=%s",
+            project_id, full_shot_id, current_seed,
+        )
+
+    result = render_module._storage.get_shot_seed(project_id, full_shot_id)
+    if not result:
+        return {"project_id": project_id, "shot_id": full_shot_id, "seed": None, "seed_locked": False}
+    return {
+        "project_id": result["project_id"],
+        "shot_id": result["shot_id"],
+        "seed": result["seed"],
+        "seed_locked": bool(result["seed_locked"]),
     }
 
 

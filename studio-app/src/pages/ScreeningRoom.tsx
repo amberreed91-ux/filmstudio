@@ -27,8 +27,13 @@ import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
 import {
   analyzeSceneEmotion,
+  applyAudioBrief,
+  assembleFilm,
   fetchExportPackage,
+  fetchJson,
+  getAssemblyStatus,
   getLatestFinalShortFilmPackageForProject,
+  getSceneAudioBrief,
   getSceneComposition,
   getSceneRationale,
   listRenderJobs,
@@ -38,12 +43,15 @@ import {
   simulateSceneAudience,
   stitchShortFilm,
   updateScene,
+  type ApplyAudioBriefResponse,
+  type AssemblyStatusResponse,
   type EmotionAnalysisResult,
   type FinalShortFilmPackage,
   type RenderJob,
   type Scene,
   type SceneComposition,
   type SceneRationaleResponse,
+  type SoundAdvisory,
 } from '../lib/studioApi'
 import type { ProjectAudienceSimulation, SceneAudienceSimulation } from '../types/audienceSimulator'
 import { normalizeJobStatus } from '../lib/jobStatus'
@@ -171,9 +179,23 @@ export default function ScreeningRoom() {
   // ── Scene composition cache (for status badges across all scenes) ────────
   const [sceneCompositionsCache, setSceneCompositionsCache] = useState<Record<string, SceneComposition | null>>({})
 
+  // ── Film assembly state ──────────────────────────────────────────────────
+  const [assemblyStatus, setAssemblyStatus] = useState<AssemblyStatusResponse | null>(null)
+  const [assembling, setAssembling] = useState(false)
+  const [assembledFilmUrl, setAssembledFilmUrl] = useState<string | null>(null)
+
   // ── Shot rationale ("Why this shot matters") ───────────────────────────────
   const [shotRationale, setShotRationale] = useState<SceneRationaleResponse | null>(null)
   const [loadingRationale, setLoadingRationale] = useState(false)
+
+  // ── Audio direction state ─────────────────────────────────────────────────
+  const [audioBrief, setAudioBrief] = useState<SoundAdvisory | null>(null)
+  const [audioBriefLoading, setAudioBriefLoading] = useState(false)
+
+  // ── Poster state ──────────────────────────────────────────────────────────
+  const [posterUrl, setPosterUrl] = useState<string | null>(null)
+  const [posterLoading, setPosterLoading] = useState(false)
+  const [posterGenerating, setPosterGenerating] = useState(false)
 
   useEffect(() => {
     const active = sceneTakes[activeTakeIndex]
@@ -192,6 +214,34 @@ export default function ScreeningRoom() {
       })
       .finally(() => {
         if (!cancelled) setLoadingRationale(false)
+      })
+    return () => { cancelled = true }
+  }, [activeTakeIndex, sceneTakes, effectiveProjectId])
+
+  // ── Auto-load audio brief when active scene changes ────────────────────────
+  useEffect(() => {
+    const active = sceneTakes[activeTakeIndex]
+    if (!active?.sceneId || !effectiveProjectId) {
+      setAudioBrief(null)
+      return
+    }
+    let cancelled = false
+    setAudioBriefLoading(true)
+    getSceneAudioBrief(effectiveProjectId, active.sceneId)
+      .then((brief) => {
+        if (!cancelled) setAudioBrief(brief)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : String(err)
+          if (!/404/.test(msg)) {
+            console.warn('[audio brief] auto-load failed:', msg)
+          }
+          setAudioBrief(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAudioBriefLoading(false)
       })
     return () => { cancelled = true }
   }, [activeTakeIndex, sceneTakes, effectiveProjectId])
@@ -347,6 +397,26 @@ export default function ScreeningRoom() {
     return () => { cancelled = true }
   }, [effectiveProjectId, scenes])
 
+  // ── Load assembly status ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!effectiveProjectId || scenes.length === 0) return
+    let cancelled = false
+    async function loadAssemblyStatus() {
+      try {
+        const status = await getAssemblyStatus(effectiveProjectId)
+        if (!cancelled) {
+          setAssemblyStatus(status)
+          if (status.film_assembled && status.film_url) {
+            setAssembledFilmUrl(status.film_url)
+          }
+        }
+      } catch {
+        // Assembly not available yet — that's fine
+      }
+    }
+    void loadAssemblyStatus()
+  }, [effectiveProjectId, scenes])
+
   const activeTake = sceneTakes[activeTakeIndex]
 
   // ── Emotion analysis cache (Groq) — load on scene change ─────────────────
@@ -442,13 +512,33 @@ export default function ScreeningRoom() {
   }, [weakSceneMarkers, duration])
 
   // ── Full film playback ────────────────────────────────────────────────────
+  const handleAssembleFilm = useCallback(async () => {
+    if (!effectiveProjectId || assembling) return
+    setAssembling(true)
+    setError('')
+    try {
+      const result = await assembleFilm(effectiveProjectId)
+      setAssembledFilmUrl(result.film_url)
+      setAssemblyStatus((prev) => prev ? { ...prev, film_assembled: true, film_url: result.film_url, has_audio: result.has_audio, scenes_with_compositions: result.scene_count, scenes_total: prev.scenes_total || result.scene_count } : undefined)
+      setSuccess(`Film assembled: ${result.scene_count} scenes${result.has_audio ? ' with audio' : ''}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to assemble film')
+    } finally {
+      setAssembling(false)
+    }
+  }, [effectiveProjectId, assembling])
+
   const handlePlayFilm = useCallback(() => {
     setActiveTakeIndex(0)
     setActiveShotNumber(1)
     setActiveShotTakeIndex(0)
     setCurrentTime(0)
     setIsFullFilm(true)
-  }, [])
+    // Force the active video URL to the assembled film if available
+    if (assembledFilmUrl) {
+      setCurrentTime(0)
+    }
+  }, [assembledFilmUrl])
 
   const handleStopFilm = useCallback(() => {
     setIsFullFilm(false)
@@ -629,14 +719,15 @@ export default function ScreeningRoom() {
     return map
   }, [activeTake, renderJobs])
 
-  // Active video URL: composed scene takes priority, then shot take, then scene take
+  // Active video URL: assembled film takes highest priority in full-film mode
   const activeVideoUrl = useMemo(() => {
+    if (isFullFilm && assembledFilmUrl) return assembledFilmUrl
     if (sceneComposition?.composed_url) return sceneComposition.composed_url
     const takes = shotTakes[activeShotNumber]
     const job = takes?.[activeShotTakeIndex]
     if (job?.output_payload?.asset_url) return job.output_payload.asset_url
     return activeTake?.videoUrl || ''
-  }, [sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
+  }, [isFullFilm, assembledFilmUrl, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
 
   // Fix 1: Reset shot number when scene changes
   useEffect(() => {
@@ -1000,9 +1091,64 @@ export default function ScreeningRoom() {
     navigate(`/studio/previs?${params.toString()}`)
   }, [effectiveProjectId, activeTake, coDirectorNotes, activeShotNumber, navigate])
 
+  // ── Audio direction handlers ──────────────────────────────────────────────
+  const handleGenerateBrief = useCallback(async () => {
+    if (!effectiveProjectId || !activeTake?.sceneId || audioBriefLoading) return
+    setError('')
+    setAudioBriefLoading(true)
+    try {
+      const brief = await getSceneAudioBrief(effectiveProjectId, activeTake.sceneId)
+      setAudioBrief(brief)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate audio direction')
+    } finally {
+      setAudioBriefLoading(false)
+    }
+  }, [effectiveProjectId, activeTake?.sceneId, audioBriefLoading])
+
+  const handleApplyAudioBrief = useCallback(async () => {
+    if (!effectiveProjectId || !activeTake?.sceneId || !audioBrief) return
+    setError('')
+    setSuccess('Audio direction queued for scene')
+    try {
+      await applyAudioBrief(effectiveProjectId, activeTake.sceneId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply audio direction')
+    }
+  }, [effectiveProjectId, activeTake?.sceneId, audioBrief])
+
+  // ── Poster handlers ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!effectiveProjectId) return
+    let cancelled = false
+    setPosterLoading(true)
+    fetchJson<{ poster_url: string }>(`/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/poster`)
+      .then((data) => { if (!cancelled) setPosterUrl(data.poster_url) })
+      .catch(() => { if (!cancelled) setPosterUrl(null) })
+      .finally(() => { if (!cancelled) setPosterLoading(false) })
+    return () => { cancelled = true }
+  }, [effectiveProjectId])
+
+  const handleGeneratePoster = useCallback(async () => {
+    if (!effectiveProjectId || posterGenerating) return
+    setError('')
+    setPosterGenerating(true)
+    try {
+      const data = await fetchJson<{ poster_url: string }>(
+        `/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/poster/generate`,
+        { method: 'POST' },
+      )
+      setPosterUrl(data.poster_url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate poster')
+    } finally {
+      setPosterGenerating(false)
+    }
+  }, [effectiveProjectId, posterGenerating])
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
+    <div style={{ position: 'relative', width: '100%', maxWidth: '100vw', height: '100vh', overflow: 'hidden' }}>
       {/* 3D environment */}
       <div style={{ position: 'absolute', inset: 0 }}>
         <TheaterScene />
@@ -1029,25 +1175,47 @@ export default function ScreeningRoom() {
             </div>
 
             {/* ── TWO-PANEL LAYOUT ────────────────────────────────────────── */}
-            <div className="flex h-[calc(100vh-140px)] w-full gap-4 px-4 pb-4">
+            <div className="flex h-[calc(100vh-140px)] w-full max-w-full gap-4 px-4 pb-4" style={{ overflowX: 'hidden' }}>
               {/* ── LEFT: VIDEO PLAYER + CONTROLS ─────────────────────────── */}
-              <div className="flex flex-1 flex-col gap-3">
-                {/* PLAY FILM button (above nav, hidden during full film) */}
+              <div className="flex flex-1 min-w-0 flex-col gap-3">
+                {/* PLAY FILM + ASSEMBLE FILM buttons (hidden during full film) */}
                 {!isFullFilm && (
-                  <button
-                    type="button"
-                    onClick={handlePlayFilm}
-                    disabled={scenes.length === 0}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] amber-glow disabled:opacity-40"
-                    style={{
-                      background: 'rgba(255,209,101,0.12)',
-                      color: 'var(--color-primary)',
-                      border: '1px solid rgba(255,209,101,0.25)',
-                    }}
-                  >
-                    <Play size={16} />
-                    PLAY FILM
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePlayFilm}
+                      disabled={scenes.length === 0}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] amber-glow disabled:opacity-40"
+                      style={{
+                        background: 'rgba(255,209,101,0.12)',
+                        color: 'var(--color-primary)',
+                        border: '1px solid rgba(255,209,101,0.25)',
+                      }}
+                    >
+                      <Play size={16} />
+                      {assembledFilmUrl ? 'PLAY ASSEMBLED FILM' : 'PLAY FILM'}
+                    </button>
+                    {!assemblyStatus?.film_assembled && (
+                      <button
+                        type="button"
+                        onClick={handleAssembleFilm}
+                        disabled={assembling || scenes.length === 0}
+                        className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-40"
+                        style={{
+                          background: 'rgba(255,255,255,0.06)',
+                          color: 'var(--color-primary)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                        }}
+                      >
+                        {assembling ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Film size={16} />
+                        )}
+                        {assembling ? 'ASSEMBLING...' : 'ASSEMBLE FILM'}
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* Full film progress indicator + STOP button */}
@@ -1069,7 +1237,7 @@ export default function ScreeningRoom() {
                 )}
 
                 {/* Scene navigation bar */}
-                <div className="flex items-center justify-between glass-panel rounded-xl px-3 py-2">
+                <div className="flex items-center gap-2 glass-panel rounded-xl px-3 py-2">
                   <button
                     type="button"
                     onClick={handlePrevScene}
@@ -1080,7 +1248,16 @@ export default function ScreeningRoom() {
                     <ChevronLeft size={14} />
                     <span className="hidden sm:inline">PREV</span>
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div
+                    className="flex-1 flex items-center gap-2 overflow-x-auto min-w-0"
+                    style={{
+                      width: 0,
+                      scrollbarWidth: 'none',
+                      WebkitOverflowScrolling: 'touch',
+                      scrollSnapType: 'x mandatory',
+                      scrollBehavior: 'smooth',
+                    }}
+                  >
                     {scenes.map((sc, idx) => {
                       const status = getSceneStatus(sc.scene_id)
                       return (
@@ -1093,6 +1270,7 @@ export default function ScreeningRoom() {
                               ? 'text-primary'
                               : 'text-white/30 hover:text-white/60'
                           }`}
+                          style={{ flexShrink: 0, scrollSnapAlign: 'start' }}
                         >
                           {sc.scene_name || `Scene ${idx + 1}`}
                           <span
@@ -1466,7 +1644,7 @@ export default function ScreeningRoom() {
               </div>
 
               {/* ── RIGHT: ANALYSIS SIDEBAR (320px) ───────────────────────── */}
-              <div className="flex w-[320px] shrink-0 flex-col gap-3 overflow-y-auto">
+              <div className="flex max-w-[320px] min-w-0 flex-col gap-3 overflow-y-auto">
                 {/* Why This Shot Matters */}
                 {shotRationale && !loadingRationale && (
                   <div className="glass-panel rounded-xl border-l-2 p-4" style={{ borderLeftColor: 'var(--color-secondary)' }}>
@@ -1712,6 +1890,152 @@ export default function ScreeningRoom() {
                       {requestingNotes ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
                       {requestingNotes ? 'ANALYZING...' : 'REQUEST NOTES'}
                     </button>
+                  </div>
+
+                  {/* AUDIO DIRECTION */}
+                  <div className="flex max-w-[320px] min-w-0 flex-col gap-3 overflow-y-auto">
+                    <div className="glass-panel rounded-xl p-4">
+                      <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        AUDIO DIRECTION
+                      </h3>
+
+                      {audioBriefLoading ? (
+                        <div className="flex flex-col items-center justify-center gap-2 py-6">
+                          <Loader2 size={18} className="animate-spin" style={{ color: 'var(--color-on-surface-variant)' }} />
+                          <span className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            Generating brief...
+                          </span>
+                        </div>
+                      ) : audioBrief ? (
+                        <div className="flex flex-col gap-2.5">
+                          {/* Status chips */}
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
+                              {audioBrief.mood}
+                            </span>
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
+                              {audioBrief.tempo}
+                            </span>
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
+                              {audioBrief.instrumentation}
+                            </span>
+                            {audioBrief.silence_flag && (
+                              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-300">
+                                SILENCE
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Score notes */}
+                          <div className="rounded-lg bg-white/5 p-2">
+                            <p className="text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>
+                              Score
+                            </p>
+                            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                              {audioBrief.score_notes}
+                            </p>
+                          </div>
+
+                          {/* Ambient notes */}
+                          <div className="rounded-lg bg-white/5 p-2">
+                            <p className="text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>
+                              Ambient
+                            </p>
+                            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                              {audioBrief.ambient_notes}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleApplyAudioBrief}
+                            className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01]"
+                            style={{
+                              background: 'rgba(255,255,255,0.06)',
+                              color: 'var(--color-primary)',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                            }}
+                          >
+                            APPLY TO SCENE
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] italic" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          No audio direction for this scene yet.
+                        </p>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleGenerateBrief}
+                        disabled={audioBriefLoading || !effectiveProjectId || !activeTake?.sceneId}
+                        className="glass-panel mt-3 flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                      >
+                        {audioBriefLoading ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" />
+                            GENERATING BRIEF...
+                          </>
+                        ) : (
+                          <>
+                            <Volume2 size={12} />
+                            GENERATE BRIEF
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* POSTER */}
+                  <div className="flex max-w-[320px] min-w-0 flex-col gap-3 overflow-y-auto">
+                    <div className="glass-panel rounded-xl p-4">
+                      <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        POSTER
+                      </h3>
+
+                      {posterLoading ? (
+                        <div className="flex flex-col items-center justify-center gap-2 py-6">
+                          <Loader2 size={18} className="animate-spin" style={{ color: 'var(--color-on-surface-variant)' }} />
+                          <span className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            Loading...
+                          </span>
+                        </div>
+                      ) : posterUrl ? (
+                        <div className="flex flex-col gap-2.5">
+                          <img
+                            src={posterUrl}
+                            alt="Project Poster"
+                            className="w-full rounded-lg"
+                            style={{ objectFit: 'cover', aspectRatio: '2/3' }}
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-[11px] italic" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          No poster generated yet.
+                        </p>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleGeneratePoster}
+                        disabled={posterGenerating || !effectiveProjectId}
+                        className="glass-panel mt-3 flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                      >
+                        {posterGenerating ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" />
+                            GENERATING POSTER...
+                          </>
+                        ) : (
+                          <>
+                            <Film size={12} />
+                            GENERATE POSTER
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Stitch Film / Download Final */}

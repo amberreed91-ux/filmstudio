@@ -9,6 +9,8 @@ import {
   Clock,
   History,
   Loader2,
+  Lock,
+  LockOpen,
   Play,
   RotateCcw,
   Shuffle,
@@ -24,11 +26,13 @@ import {
   deleteRenderJob,
   enhancePrevisPrompt,
   generatePrevisDirectorNotes,
+  generateSceneStoryboard,
   getScene,
   getSceneRationale,
   listRenderJobs,
   listScenes,
   recommendShotCount,
+  togglePrevisSeedLock,
   type RenderJob,
   type Scene,
   type SceneRationaleResponse,
@@ -39,75 +43,183 @@ import { persistActiveProjectId, withProjectQuery } from '../lib/projectContext'
 
 // ── Prompt Derivation ──────────────────────────────────────────────────────
 
-function derivePromptFromScene(scene: Scene): string {
+// Shot framing templates by position
+const SHOT_FRAMING_BY_POSITION: Record<number, string> = {
+  1: 'Wide establishing shot. Camera far back. Full environment visible. Characters small in frame. Sets the location and mood.',
+  2: 'Medium shot. Characters from waist up. Action and dialogue beginning. Environment still visible but characters dominant.',
+  3: 'Medium close-up. Character faces and upper body. Emotional beats. Reaction shots.',
+  4: 'Close-up or detail shot. Eyes, hands, specific objects. Intimate or tense moments.',
+}
+
+// Shot framing templates by script tag type
+const SHOT_FRAMING_BY_TAG: Record<string, string> = {
+  'S.H.': 'Establishing wide shot', // Scene Heading
+  ACT: 'Dynamic medium shot showing the action described', // Action
+  CHR: 'Character introduction shot, medium close on the named character', // Character cue
+  DLG: 'Over-the-shoulder or two-shot framing for conversation', // Dialogue
+  PAR: 'Close-up on expression or action described in parenthetical', // Parenthetical
+  TRN: 'Wide shot preparing for scene change, often environmental', // Transition
+}
+
+// Take variation instructions
+const TAKE_VARIATIONS: Record<number, string> = {
+  1: '', // Primary composition
+  2: 'Alternative angle: camera positioned 90 degrees from primary shot.',
+  3: 'Tighter framing: push in 30% closer than primary shot.',
+}
+
+function classifyScriptLineTag(line: string): string | null {
+  const trimmed = line.trim()
+
+  // S.H. (Scene Heading) — starts with INT. or EXT.
+  if (/^(INT\.|EXT\.)/i.test(trimmed)) return 'S.H.'
+
+  // CHR (Character cue) — ALL CAPS name followed by dialogue or action
+  if (/^[A-Z][A-Z\s.\-']{2,40}$/.test(trimmed) && !trimmed.startsWith('(')) return 'CHR'
+
+  // PAR (Parenthetical) — (action or emotion)
+  if (trimmed.startsWith('(') && trimmed.endsWith(')')) return 'PAR'
+
+  // TRN (Transition) — FADE IN, CUT TO, etc.
+  if (/^(FADE|CUT|DISSOLVE|WIPE)/i.test(trimmed)) return 'TRN'
+
+  // DLG (Dialogue) — mixed case, follows character cue
+  if (/[a-z]/.test(trimmed) && !/^[A-Z][A-Z\s.']{2,}/.test(trimmed)) return 'DLG'
+
+  // ACT (Action) — default for other mixed-case lines
+  if (/[a-z]/.test(trimmed)) return 'ACT'
+
+  return null
+}
+
+function segmentSceneText(sceneText: string, numShots: number): string[] {
+  if (!sceneText || !sceneText.trim()) return Array(numShots).fill('')
+
+  const lines = sceneText.split('\n').map((l) => l.trim()).filter(Boolean)
+
+  // Filter out scene headings and transitions (they belong to Shot 1)
+  const contentLines: string[] = []
+  const headingLines: string[] = []
+
+  for (const line of lines) {
+    const tag = classifyScriptLineTag(line)
+    if (tag === 'S.H.' || tag === 'TRN') {
+      headingLines.push(line)
+    } else {
+      contentLines.push(line)
+    }
+  }
+
+  // If only 1 shot, return full text
+  if (numShots === 1) return [[...headingLines, ...contentLines].join('\n')]
+
+  // Distribute content lines across shots
+  const linesPerShot = Math.max(1, Math.floor(contentLines.length / numShots))
+  const segments: string[] = []
+
+  for (let i = 0; i < numShots; i++) {
+    const startIdx = i * linesPerShot
+    const endIdx = i < numShots - 1 ? startIdx + linesPerShot : contentLines.length
+
+    // Shot 1 gets the heading
+    const shotLines = i === 0 ? [...headingLines, ...contentLines.slice(startIdx, endIdx)] : contentLines.slice(startIdx, endIdx)
+
+    segments.push(shotLines.join('\n'))
+  }
+
+  return segments
+}
+
+function determineShotType(shotNumber: number, segment: string): string {
+  // Check for dominant script tag in segment
+  const lines = segment.split('\n').map((l) => l.trim()).filter(Boolean)
+  const tagCounts: Record<string, number> = {}
+
+  for (const line of lines) {
+    const tag = classifyScriptLineTag(line)
+    if (tag) tagCounts[tag] = (tagCounts[tag] || 0) + 1
+  }
+
+  // Use most common tag if present
+  if (Object.keys(tagCounts).length > 0) {
+    const dominantTag = Object.keys(tagCounts).reduce((a, b) => (tagCounts[a] > tagCounts[b] ? a : b))
+    if (SHOT_FRAMING_BY_TAG[dominantTag]) return SHOT_FRAMING_BY_TAG[dominantTag]
+  }
+
+  // Fall back to position-based framing
+  if (SHOT_FRAMING_BY_POSITION[shotNumber]) return SHOT_FRAMING_BY_POSITION[shotNumber]
+
+  // Shot 4+ defaults to close-up
+  return SHOT_FRAMING_BY_POSITION[4]
+}
+
+function derivePromptFromScene(scene: Scene, shotNumber: number = 1, takeNumber: number = 1, totalShots: number = 1): string {
+  const sceneText = scene.text || ''
+  const location = (scene.location || '').trim()
+  const timeOfDay = (scene.time_of_day || '').trim()
+  const emotionalTone = (scene.emotional_tone || '').trim()
+
+  // Segment scene text by shot
+  const segments = segmentSceneText(sceneText, totalShots)
+  const shotSegment = segments[shotNumber - 1] || ''
+
+  // Determine shot type
+  const shotTypeDesc = determineShotType(shotNumber, shotSegment)
+
   const parts: string[] = []
 
-  // Location and time of day
-  const location = (scene.location || '').toLowerCase().trim()
-  const timeOfDay = (scene.time_of_day || '').toLowerCase().trim()
+  // 1. Shot type description
+  parts.push(shotTypeDesc)
+
+  // 2. Location and time of day
   if (location && timeOfDay) {
-    parts.push(`${location} at ${timeOfDay}.`)
+    parts.push(`${location}, ${timeOfDay}`)
   } else if (location) {
-    parts.push(`${location}.`)
+    parts.push(location)
   }
 
-  // Extract action lines and dialogue from full scene text
-  const sceneText = scene.text || ''
-  if (sceneText) {
-    const lines = sceneText.split('\n')
-    const actionLines: string[] = []
-    const dialogueExchanges: string[] = []
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim()
-      if (!line) continue
-
-      // Skip scene headings
-      if (/^(INT\.|EXT\.)/i.test(line)) continue
-      // Skip ALL CAPS transition/character cues (unless followed by dialogue)
-      if (/^[A-Z][A-Z\s\.\-\']{2,40}$/.test(line) && !line.includes('(')) {
-        // Check if next line is dialogue (not all caps)
-        const nextLine = lines[i + 1]?.trim() || ''
-        if (nextLine && !/^[A-Z][A-Z\s\.\']{2,40}$/.test(nextLine) && !nextLine.startsWith('(')) {
-          dialogueExchanges.push(`${line}: ${nextLine}`)
-          i++ // skip the dialogue line
-        }
-        continue
-      }
-      // Skip parentheticals
-      if (line.startsWith('(') && line.endsWith(')')) continue
-      // Skip remaining ALL CAPS lines
-      if (/^[A-Z][A-Z\s\.\-\']{2,}$/.test(line)) continue
-
-      // Action line (mixed case, non-empty)
-      if (/[a-z]/.test(line) && line.length > 10) {
-        actionLines.push(line)
-      }
-    }
-
-    // Use first 1-2 action lines for the visual
-    const action = actionLines.slice(0, 2).join(' ')
-    if (action) {
-      parts.push(action.endsWith('.') ? action : action + '.')
-    }
-
-    // If there is dialogue, add a V.O. reference
-    if (dialogueExchanges.length > 0) {
-      const firstDialogue = dialogueExchanges[0]
-      const charName = firstDialogue.split(':')[0]?.trim() || 'A character'
-      const dialogueText = firstDialogue.split(':').slice(1).join(':').trim()
-      if (dialogueText) {
-        const truncated = dialogueText.length > 80 ? dialogueText.slice(0, 77) + '...' : dialogueText
-        parts.push(`${charName} speaks: "${truncated}"`)
-      }
-    }
+  // 3. Relevant action segment
+  if (shotSegment) {
+    const actionLines = shotSegment
+      .split('\n')
+      .filter((line) => {
+        const tag = classifyScriptLineTag(line)
+        return tag === 'ACT' || tag === 'DLG' || tag === null
+      })
+    const actionText = actionLines.slice(0, 2).join(' ')
+    if (actionText) parts.push(actionText)
   }
 
-  if (parts.length === 0) {
-    return scene.heading || scene.scene_name || ''
+  // 4. Mood
+  if (emotionalTone) {
+    parts.push(`Mood: ${emotionalTone}`)
   }
 
-  return parts.join(' ')
+  // 5. Style suffix
+  parts.push('Cinematic, film quality, single continuous shot.')
+
+  // Join parts
+  let prompt = parts.join('. ')
+
+  // 6. Take variation (append for Take 2+)
+  const takeVariation = TAKE_VARIATIONS[takeNumber] || ''
+  if (takeVariation) {
+    prompt += ` ${takeVariation}`
+  }
+
+  // Truncate if needed (Runway limit ~512 chars)
+  if (prompt.length > 512) {
+    prompt = prompt.slice(0, 509) + '...'
+  }
+
+  return prompt
+}
+
+function getShotTypeLabel(shotNumber: number): string {
+  if (shotNumber === 1) return 'WIDE'
+  if (shotNumber === 2) return 'MEDIUM'
+  if (shotNumber === 3) return 'CLOSE'
+  return 'DETAIL'
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -246,6 +358,10 @@ export default function PrevisRoom() {
   // ── Shot rationale ("Why this shot matters") ───────────────────────────────
   const [shotRationale, setShotRationale] = useState<SceneRationaleResponse | null>(null)
   const [loadingRationale, setLoadingRationale] = useState(false)
+
+  // ── Seed management ────────────────────────────────────────────────────────
+  const [storyboardSeed, setStoryboardSeed] = useState<number | null>(null)
+  const [seedLocked, setSeedLocked] = useState(false)
 
   useEffect(() => {
     if (!selectedSceneId || !effectiveProjectId) {
@@ -426,7 +542,7 @@ export default function PrevisRoom() {
     setFocusedSceneId(scene.scene_id)
     setSelectedSceneId(scene.scene_id)
     setOriginalPrompt('')
-    const derived = derivePromptFromScene(scene)
+    const derived = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
     setPromptText(derived)
     // Apply co-director note from URL (from APPLY TO SHOT in Screening Room)
     if (codirectorNoteParam) {
@@ -439,7 +555,7 @@ export default function PrevisRoom() {
       const shotNum = parseInt(shotParam, 10)
       if (!isNaN(shotNum) && shotNum > 0) setActiveShotNumber(shotNum)
     }
-  }, [location.state, searchParams, scenes])
+  }, [location.state, searchParams, scenes, activeShotNumber, totalShots])
 
   // ── Load render jobs ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -516,13 +632,15 @@ export default function PrevisRoom() {
           // Add to render history
           const videoUrl = job.output_payload?.asset_url || job.output_url || undefined
           console.log('Video URL:', videoUrl)
-          const completedShotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
+          const completedShotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
           const completedShotNumber = completedShotNumMatch ? parseInt(completedShotNumMatch[1], 10) : activeShotNumber
+          const shotLabel = getShotTypeLabel(completedShotNumber)
+          const takeNumber = renderHistory.filter((t) => t.shot_number === completedShotNumber).length + 1
           setShotVideoUrls(prev => ({ ...prev, [completedShotNumber]: videoUrl || '' }))
           setRenderHistory((prev) => [
             {
               jobId: job.id,
-              sceneName: `Render ${prev.length + 1}`,
+              sceneName: `Shot ${completedShotNumber} Take ${takeNumber} (${shotLabel})`,
               duration: genConfig.duration,
               status: 'complete',
               prompt: promptText.slice(0, 100),
@@ -536,7 +654,7 @@ export default function PrevisRoom() {
           try {
             const noteResult = await generatePrevisDirectorNotes(effectiveProjectId!, {
               scene_id: selectedSceneId || '',
-              generation_context: `Duration: ${genConfig.duration}s, Engine: ${genConfig.model}, Resolution: ${genConfig.resolution}`,
+              generation_context: `Shot ${completedShotNumber} Take ${takeNumber} (${shotLabel}): Duration ${genConfig.duration}s, Engine: ${genConfig.model}, Resolution: ${genConfig.resolution}`,
             })
             setDirectorNotes((prev) => [
               {
@@ -551,7 +669,7 @@ export default function PrevisRoom() {
             setDirectorNotes((prev) => [
               {
                 id: `note-${Date.now()}`,
-                text: `Generation complete. Duration: ${genConfig.duration}s, Engine: ${genConfig.model}, Resolution: ${genConfig.resolution}`,
+                text: `Shot ${completedShotNumber} Take ${takeNumber} complete (${shotLabel}). Duration: ${genConfig.duration}s`,
                 timestamp: new Date().toISOString(),
               } as DirectorNote,
               ...prev,
@@ -559,7 +677,7 @@ export default function PrevisRoom() {
           }
           setRendering(false)
           setCurrentJobId(null)
-          setSuccess('Render complete!')
+          setSuccess(`Shot ${completedShotNumber} Take ${takeNumber} complete (${shotLabel})!`)
           if (pollTimerRef.current) clearInterval(pollTimerRef.current)
         } else if (status === 'failed') {
           setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'failed' })
@@ -597,6 +715,30 @@ export default function PrevisRoom() {
     setSelectedTakeByShot({})
     setTotalShots(1)
   }, [selectedSceneId, searchParams])
+
+  // ── Auto-populate prompt when scene is selected (fixes race condition) ─────
+  useEffect(() => {
+    if (!selectedSceneId || scenes.length === 0) return
+    // Skip if navigating from another room (already handled by location.state effect)
+    if (searchParams.get('codirector_note')) return
+    const scene = scenes.find((s) => s.scene_id === selectedSceneId)
+    if (!scene) return
+    // Only auto-populate if prompt is currently empty (avoid overwriting user input)
+    setPromptText((currentPrompt) => {
+      if (currentPrompt.trim()) return currentPrompt
+      return derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
+    })
+  }, [selectedSceneId, scenes, searchParams, activeShotNumber, totalShots])
+
+  // ── Update prompt when shot number changes ─────────────────────────────────
+  useEffect(() => {
+    if (!selectedSceneId || scenes.length === 0) return
+    const scene = scenes.find((s) => s.scene_id === selectedSceneId)
+    if (!scene) return
+    // Regenerate prompt for new shot
+    const newPrompt = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
+    setPromptText(newPrompt)
+  }, [activeShotNumber, selectedSceneId, scenes, totalShots])
 
   // ── Load history from render jobs ─────────────────────────────────────────
   useEffect(() => {
@@ -686,7 +828,16 @@ export default function PrevisRoom() {
     setPipelineStatus({ loop1: 'running', loop2: 'pending', compose: 'pending', mp4: 'pending' })
 
     try {
+      // Calculate take number for this shot
+      const existingTakes = renderHistory.filter((t) => t.shot_number === activeShotNumber)
+      const takeNumber = existingTakes.length + 1
+
       const shotId = `${selectedSceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`
+      const shotLabel = getShotTypeLabel(activeShotNumber)
+
+      // Use locked storyboard seed if available and locked, otherwise use genConfig seed or generate new
+      const seedToUse = (seedLocked && storyboardSeed !== null) ? storyboardSeed : (genConfig.seed ?? generateSeed())
+
       const job = await createJob(
         shotId,
         genConfig.model === 'Auto (Best Available)' ? undefined : genConfig.model.toLowerCase().replace(/\s+/g, '_'),
@@ -697,12 +848,17 @@ export default function PrevisRoom() {
           duration_seconds: genConfig.duration,
           fps: genConfig.fps,
           resolution: genConfig.resolution,
-          seed: genConfig.seed ?? generateSeed(),
+          seed: seedToUse,
+          shot_number: activeShotNumber,
+          take_number: takeNumber,
+          shot_type: shotLabel,
         },
       )
 
       const submitted = await submitJob(job.id)
       setCurrentJobId(submitted.id)
+
+      setSuccess(`Render queued — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})${seedLocked ? ' [Seed Locked]' : ''}`)
 
       // If job completed during submit (local/simulated/fast providers), handle immediately
       if (submitted.status === 'complete') {
@@ -717,7 +873,7 @@ export default function PrevisRoom() {
         setRenderHistory((prev) => [
           {
             jobId: submitted.id,
-            sceneName: `Render ${prev.length + 1}`,
+            sceneName: `Shot ${activeShotNumber} Take ${takeNumber}`,
             duration: genConfig.duration,
             status: 'complete',
             prompt: promptText.slice(0, 100),
@@ -730,7 +886,7 @@ export default function PrevisRoom() {
         try {
           const noteResult = await generatePrevisDirectorNotes(effectiveProjectId!, {
             scene_id: selectedSceneId || '',
-            generation_context: `Duration: ${genConfig.duration}s, Engine: ${genConfig.model}, Resolution: ${genConfig.resolution}`,
+            generation_context: `Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel}): Duration ${genConfig.duration}s, Engine: ${genConfig.model}, Resolution: ${genConfig.resolution}`,
           })
           setDirectorNotes((prev) => [
             {
@@ -744,21 +900,19 @@ export default function PrevisRoom() {
           setDirectorNotes((prev) => [
             {
               id: `note-${Date.now()}`,
-              text: `Generation complete. Duration: ${genConfig.duration}s, Engine: ${genConfig.model}, Resolution: ${genConfig.resolution}`,
+              text: `Shot ${activeShotNumber} Take ${takeNumber} complete (${shotLabel}). Duration: ${genConfig.duration}s`,
               timestamp: new Date().toISOString(),
             } as DirectorNote,
             ...prev,
           ].slice(0, 10))
         }
-      } else {
-        setSuccess('Render queued — monitoring pipeline...')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start render')
       setRendering(false)
       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
     }
-  }, [effectiveProjectId, promptText, genConfig, createJob, submitJob, selectedSceneId, activeShotNumber])
+  }, [effectiveProjectId, promptText, genConfig, createJob, submitJob, selectedSceneId, activeShotNumber, renderHistory, seedLocked, storyboardSeed])
 
   // ── Delete render job ────────────────────────────────────────────────────
   const handleDeleteRender = useCallback(async (jobId: string) => {
@@ -812,6 +966,47 @@ export default function PrevisRoom() {
       setLoadingShotCount(false)
     }
   }, [selectedSceneId, effectiveProjectId])
+
+  // ── Handle Generate Storyboard ─────────────────────────────────────────────
+  const handleGenerateStoryboard = useCallback(async () => {
+    if (!selectedSceneId || !effectiveProjectId) {
+      setError('Select a scene first')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const result = await generateSceneStoryboard(effectiveProjectId, selectedSceneId)
+      if (result.image_url) {
+        setSuccess('Storyboard generated')
+        if (result.seed) {
+          setStoryboardSeed(result.seed)
+        }
+        await loadScenes()
+      } else {
+        setSuccess(`Storyboard generation started for ${selectedSceneId}`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Storyboard generation failed')
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedSceneId, effectiveProjectId, loadScenes])
+
+  // ── Handle Toggle Seed Lock ────────────────────────────────────────────────
+  const handleToggleSeedLock = useCallback(async () => {
+    if (!selectedSceneId || !effectiveProjectId) return
+    try {
+      const result = await togglePrevisSeedLock(effectiveProjectId, selectedSceneId, !seedLocked)
+      setSeedLocked(result.locked)
+      if (result.seed) {
+        setStoryboardSeed(result.seed)
+      }
+      setSuccess(result.locked ? 'Seed locked' : 'Seed unlocked')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update seed lock')
+    }
+  }, [selectedSceneId, effectiveProjectId, seedLocked])
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1108,7 +1303,7 @@ export default function PrevisRoom() {
                         const scene = scenes.find((s) => s.scene_id === sceneId)
                         if (scene) {
                           setOriginalPrompt('')
-                          const derived = derivePromptFromScene(scene)
+                          const derived = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
                           setPromptText(derived)
                         }
                       }
@@ -1126,6 +1321,65 @@ export default function PrevisRoom() {
                   </select>
                 )}
               </div>
+
+              {/* ── Storyboard Generation + Seed Lock ─────────────────────────── */}
+              {selectedSceneId && (
+                <div className="glass-panel rounded-xl px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      STORYBOARD
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleGenerateStoryboard}
+                      disabled={loading}
+                      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                      style={{
+                        background: 'rgba(255,209,101,0.15)',
+                        color: 'var(--color-primary)',
+                        border: '1px solid rgba(255,209,101,0.3)',
+                      }}
+                    >
+                      {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      GENERATE
+                    </button>
+                  </div>
+                  
+                  {storyboardSeed !== null && (
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <span
+                        className="text-[10px] font-mono"
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                      >
+                        Seed: {storyboardSeed}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleToggleSeedLock}
+                        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
+                        style={{
+                          background: seedLocked ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.05)',
+                          color: seedLocked ? 'var(--color-tertiary)' : 'var(--color-on-surface-variant)',
+                          border: seedLocked ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                        }}
+                        title={seedLocked ? 'Unlock seed for random generation' : 'Lock seed for consistent regeneration'}
+                      >
+                        {seedLocked ? (
+                          <>
+                            <Lock size={10} />
+                            LOCKED
+                          </>
+                        ) : (
+                          <>
+                            <LockOpen size={10} />
+                            UNLOCKED
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* ── Why This Shot Matters (rationale) ──────────────────────── */}
               {shotRationale && !loadingRationale && (
@@ -1181,20 +1435,22 @@ export default function PrevisRoom() {
                 {shotNumbers.map((n) => (
                   <button
                     key={n}
-                    onClick={() => setActiveShotNumber(n)}
-                    className={`px-3 py-1 text-xs rounded border ${
+                    onClick={() => handleSelectShot(n)}
+                    className={`px-3 py-1.5 text-xs rounded border flex flex-col items-center ${
                       activeShotNumber === n
-                        ? 'border-amber-400 text-amber-400'
-                        : 'border-white/20 text-white/50'
+                        ? 'border-amber-400 text-amber-400 bg-amber-400/10'
+                        : 'border-white/20 text-white/50 hover:border-white/40'
                     }`}
                   >
-                    Shot {n}
+                    <span className="text-[10px] uppercase tracking-wider opacity-60">
+                      {getShotTypeLabel(n)}
+                    </span>
+                    <span className="font-semibold">Shot {n}</span>
                   </button>
                 ))}
                 <button
                   onClick={handleAddShot}
-                  className="px-3 py-1 text-xs rounded border border-white/20 
-                             text-white/50 hover:text-white/80"
+                  className="px-3 py-1 text-xs rounded border border-dashed border-white/20 text-white/40 hover:border-white/40"
                 >
                   + Add Shot
                 </button>

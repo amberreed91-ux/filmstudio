@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import BackendDownStatusBar from './BackendDownStatusBar'
 import { Link, matchPath, useLocation, useNavigate } from 'react-router-dom'
+import { useBackendHealth } from '../hooks/useBackendHealth'
 import {
   Clapperboard,
   FileEdit,
@@ -259,6 +260,7 @@ export default function StudioShell({ title, subtitle, transparent, children }: 
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [codirectorOpen, setCodirectorOpen] = useState(false)
+  const { healthy, restarting, restart } = useBackendHealth()
 
   // Sync render status from RenderActivityContext into zustand store
   useEffect(() => {
@@ -497,6 +499,52 @@ export default function StudioShell({ title, subtitle, transparent, children }: 
 
                 {/* Render status pill */}
                 {statusPill}
+
+                {/* Backend health pill + restart button */}
+                {restarting ? (
+                  <span
+                    className="status-chip flex items-center gap-1.5"
+                    style={{ color: '#ffd165', border: '1px solid rgba(255,209,101,0.3)' }}
+                  >
+                    <span className="inline-block w-3 h-3 animate-spin rounded-full border-2 border-[#ffd165] border-t-transparent" />
+                    RESTARTING…
+                  </span>
+                ) : healthy ? (
+                  <span
+                    className="status-chip"
+                    style={{ color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}
+                  >
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#4ade80] mr-1.5" />
+                    LIVE
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="status-chip"
+                      style={{ color: '#fff', background: 'rgba(220,38,38,0.85)', border: '1px solid rgba(220,38,38,0.5)' }}
+                    >
+                      OFFLINE
+                    </span>
+                    <button
+                      type="button"
+                      onClick={restart}
+                      className="status-chip cursor-pointer transition-colors"
+                      style={{
+                        color: '#fff',
+                        background: 'rgba(220,38,38,0.7)',
+                        border: '1px solid rgba(220,38,38,0.5)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(220,38,38,0.95)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(220,38,38,0.7)'
+                      }}
+                    >
+                      RESTART
+                    </button>
+                  </div>
+                )}
 
                 {/* Settings icon */}
                 <button type="button" className="flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">

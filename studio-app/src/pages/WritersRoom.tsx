@@ -45,6 +45,7 @@ import {
   triggerSceneDebate,
   updateCharacter,
   updateScene,
+  uploadCharacterDescriptor,
   type CharacterRecord,
   type CoDirectorDebateEntry,
   type CreateScenePayload,
@@ -160,6 +161,7 @@ export default function WritersRoom() {
   const [characters, setCharacters] = useState<CharacterRecord[]>([])
   const [charactersLoading, setCharactersLoading] = useState(false)
   const [charactersSaving, setCharactersSaving] = useState<Record<string, boolean>>({})
+  const [characterUploading, setCharacterUploading] = useState<Record<string, boolean>>({})
   const [newCharacterNames, setNewCharacterNames] = useState<string[]>([])
   const [editDrafts, setEditDrafts] = useState<Record<string, Partial<CharacterRecord>>>({})
 
@@ -228,7 +230,7 @@ export default function WritersRoom() {
         // If no active scene set, default to first
         if (!activeSceneId && result.scenes.length > 0) {
           setActiveSceneId(result.scenes[0].scene_id)
-          setScriptText(result.scenes[0].description || '')
+          setScriptText(result.scenes[0].text || result.scenes[0].description || '')
           setIsDirty(false)
         }
       }
@@ -289,7 +291,7 @@ export default function WritersRoom() {
       const scene = scenes.find((s) => s.scene_id === sceneId)
       if (scene) {
         setActiveSceneId(sceneId)
-        setScriptText(scene.description || '')
+        setScriptText(scene.text || scene.description || '')
         setIsDirty(false)
         setUndoStack([])
         setRedoStack([])
@@ -303,7 +305,7 @@ export default function WritersRoom() {
     if (!effectiveProjectId || !activeSceneId) return
     setIsSaving(true)
     try {
-      await updateScene(effectiveProjectId, activeSceneId, { description: scriptText })
+      await updateScene(effectiveProjectId, activeSceneId, { text: scriptText, description: scriptText })
       setLastSavedAt(new Date())
       setIsDirty(false)
     } catch (err) {
@@ -606,6 +608,46 @@ export default function WritersRoom() {
     setNewCharacterNames([])
     void loadCharacters()
   }, [effectiveProjectId, newCharacterNames, loadCharacters])
+
+  const handleUploadDescriptor = useCallback(
+    async (charId: string) => {
+      if (!effectiveProjectId) return
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.txt'
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0]
+        if (!file) return
+        setCharacterUploading((p) => ({ ...p, [charId]: true }))
+        setError('')
+        try {
+          const result = await uploadCharacterDescriptor(effectiveProjectId, charId, file)
+          if (result && result.character) {
+            const char = result.character
+            setCharacters((prev) => prev.map((c) => (c.id === charId ? char : c)))
+            setEditDrafts((p) => ({
+              ...p,
+              [charId]: {
+                look: char.look || '',
+                energy: char.energy || '',
+                visual_prompt_summary: char.visual_prompt_summary || '',
+                age: char.age || '',
+              },
+            }))
+            setSuccess(`Character "${char.name}" updated from descriptor`)
+          } else if (result && result.error) {
+            setError(result.error)
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to upload descriptor')
+        } finally {
+          setCharacterUploading((p) => ({ ...p, [charId]: false }))
+        }
+      }
+      input.click()
+    },
+    [effectiveProjectId],
+  )
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1303,26 +1345,47 @@ export default function WritersRoom() {
                                     </span>
                                   )}
                                 </div>
-                                {hasChanges && (
+                                <div className="flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => handleSaveCharacter(char.id)}
-                                    disabled={isSaving}
+                                    onClick={() => handleUploadDescriptor(char.id)}
+                                    disabled={characterUploading[char.id]}
                                     className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
                                     style={{
-                                      background: 'rgba(255,209,101,0.15)',
-                                      color: 'var(--color-primary)',
-                                      border: '1px solid rgba(255,209,101,0.3)',
+                                      background: 'rgba(76,175,80,0.15)',
+                                      color: '#4caf50',
+                                      border: '1px solid rgba(76,175,80,0.3)',
                                     }}
+                                    title="Upload .txt descriptor"
                                   >
-                                    {isSaving ? (
-                                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+                                    {characterUploading[char.id] ? (
+                                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-green-400 border-t-transparent" />
                                     ) : (
-                                      <Save size={10} />
+                                      <UploadCloud size={10} />
                                     )}
-                                    Save
+                                    Upload
                                   </button>
-                                )}
+                                  {hasChanges && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveCharacter(char.id)}
+                                      disabled={isSaving}
+                                      className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                                      style={{
+                                        background: 'rgba(255,209,101,0.15)',
+                                        color: 'var(--color-primary)',
+                                        border: '1px solid rgba(255,209,101,0.3)',
+                                      }}
+                                    >
+                                      {isSaving ? (
+                                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+                                      ) : (
+                                        <Save size={10} />
+                                      )}
+                                      Save
+                                    </button>
+                                  )}
+                                </div>
                               </div>
 
                               <div className="space-y-2">

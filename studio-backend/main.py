@@ -47,8 +47,10 @@ from app.routes.export import router as final_export_router
 from app.routes.proactive import router as proactive_router
 from app.routes.co_director_chat import router as co_director_chat_router
 from app.routes.compose import router as compose_router
+from app.routes.assembly import router as assembly_router
 from app.routes.emotion_analysis import router as emotion_analysis_router
 from app.routes.writers_intelligence import router as writers_intelligence_router
+from app.routes.admin import router as admin_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
 from app.auth import AuthService, demo_login
@@ -253,8 +255,10 @@ app.include_router(final_export_router)
 app.include_router(proactive_router)
 app.include_router(co_director_chat_router)
 app.include_router(compose_router)
+app.include_router(assembly_router)
 app.include_router(emotion_analysis_router)
 app.include_router(writers_intelligence_router)
+app.include_router(admin_router)
 
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)

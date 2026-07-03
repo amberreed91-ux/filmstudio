@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
 from app.services.project_store import project_store
-from app.services.script_parser import ScriptParser
+from app.services.script_parser import ScriptParser, sanitize_scene_characters
 from app.services.generate_short_film_workflow_service import generate_short_film_workflow_service
 from app.services.multi_user_collaboration_service import multi_user_collaboration_service
 from app.services.providers.config import get_provider_config
@@ -45,6 +45,7 @@ from app.services.director_memory_service import (
     ENTRY_KINDS as DIRECTOR_MEMORY_KINDS,
 )
 from app.services.shot_rationale_service import shot_rationale_service
+from app.services.poster_service import generate_poster
 from app.services.universe_graph_service import universe_graph_service
 from app.services.stability import (
     PlaybackError,
@@ -59,6 +60,7 @@ from app.services.stability import (
 )
 from app.data import get_storage
 from app.models import StudioProject
+from app.llm_client import call_llm
 from app.utils.helpers import as_non_empty_string, ensure_scene_fallback, scene_sequence_from_summary
 
 logger = logging.getLogger(__name__)
@@ -607,6 +609,9 @@ def generate_scenes(project_id: str, payload: GenerateScenesPayload):
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Sync to SQLite BEFORE universe auto-populate so scenes are readable from DB
+    _sync_project_to_canonical_store(updated)
+
     try:
         universe_graph_service.auto_populate_from_scenes(project_id)
     except Exception as exc:
@@ -1099,6 +1104,67 @@ def add_collaboration_co_direction_note(project_id: str, payload: CollaborationC
 # Scene CRUD Endpoints
 # ============================================================================
 
+def _extract_scene_description(text: str, max_chars: int = 200) -> str:
+    """Derive a short description from raw scene text.
+
+    Skips screenplay-style dialogue blocks (all-caps character cue lines
+    followed by their parenthetical/speech lines) and returns the first
+    action content up to *max_chars* characters.
+    """
+    if not text or not text.strip():
+        return ""
+
+    # Patterns that indicate non-action lines to skip
+    # Character cue: line that is ALL CAPS (optionally with parens) at start
+    import re as _re
+    char_cue_re = _re.compile(r"^\s{10,}[A-Z][A-Z\s'\.]+(\(.*\))?\s*$")
+    # Screenplay heading: INT./EXT. lines
+    heading_re = _re.compile(r"^\s*(INT|EXT)\b", _re.IGNORECASE)
+
+    action_lines: List[str] = []
+    skip_next = False  # True when we're inside a dialogue block
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            skip_next = False
+            continue
+        # Skip scene heading lines
+        if heading_re.match(line):
+            continue
+        # Skip all-caps character cue lines and the dialogue that follows
+        if char_cue_re.match(raw_line):
+            skip_next = True
+            continue
+        if skip_next:
+            # Parenthetical or dialogue — skip
+            if line.startswith("(") or raw_line.startswith(" " * 8):
+                continue
+            skip_next = False
+        # This is an action line
+        action_lines.append(line)
+
+    if not action_lines:
+        # Fallback: return first non-empty line regardless of type
+        for raw_line in text.splitlines():
+            stripped = raw_line.strip()
+            if stripped and not heading_re.match(stripped):
+                return stripped[:max_chars]
+        return ""
+
+    # Join action lines into sentences; take up to max_chars
+    combined = " ".join(action_lines)
+    if len(combined) <= max_chars:
+        return combined
+
+    # Trim at a sentence boundary if possible
+    truncated = combined[:max_chars]
+    last_period = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
+    if last_period > max_chars // 2:
+        return truncated[: last_period + 1]
+    return truncated.rstrip() + "…"
+
+
 @router.get("/projects/{project_id}/scenes")
 def list_project_scenes(project_id: str):
     """List all scenes for a project"""
@@ -1110,6 +1176,20 @@ def list_project_scenes(project_id: str):
     scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
     script_text = current.get("script_text") or ""
     
+    # Load previs images for this project to populate storyboard_image on scenes
+    previs_image_map: Dict[str, str] = {}
+    try:
+        storage = get_storage("sqlite")
+        if storage:
+            previs_images = storage.load_previs_images(project_id)
+            for img in previs_images:
+                if img.get("status") == "complete" and img.get("image_path"):
+                    scene_id = img.get("scene_id", "")
+                    if scene_id and scene_id not in previs_image_map:
+                        previs_image_map[scene_id] = img["image_path"]
+    except Exception as exc:
+        logger.debug("Could not load previs images for %s: %s", project_id, exc)
+    
     enriched = []
     for s in scenes:
         if not isinstance(s, dict):
@@ -1119,6 +1199,19 @@ def list_project_scenes(project_id: str):
             heading = scene.get("heading") or ""
             description = scene.get("description") or scene.get("script") or ""
             scene["text"] = (heading + "\n" + description) if description else heading
+        # Backfill description from scene text so the Production Board card
+        # shows real content instead of "No description yet".
+        # Script-parsed scenes store their content in `text`, not `description`.
+        if not scene.get("description") and scene.get("text"):
+            scene["description"] = _extract_scene_description(scene["text"])
+        # Sanitize characters: strip invalid entries (scene headings, script
+        # directions, action lines) that may have been stored by an older
+        # parser version.
+        scene["characters"] = sanitize_scene_characters(scene.get("characters"))
+        # Populate storyboard_image from previs_images table
+        scene_id = scene.get("scene_id", "")
+        if scene_id and scene_id in previs_image_map:
+            scene["storyboard_image"] = previs_image_map[scene_id]
         enriched.append(scene)
     
     return {"scenes": enriched}
@@ -2370,12 +2463,108 @@ class CharacterSkeletonPayload(BaseModel):
 @router.post("/projects/{project_id}/characters")
 def create_character_skeleton(project_id: str, payload: CharacterSkeletonPayload):
     """Create a skeleton character record (name only) for a detected character."""
+    INVALID_NAMES = {
+        'THE HOMESTEAD', 'THE COUNTDOWN', 'THE FIRST TIMELINE', 'THE SECOND CHANCE',
+        'THE WEIGHT OF KNOWING', 'THE APOCALYPSE BEGINS', 'THE LAST NORMAL DAYS',
+        'THE HOMESTEAD COMMUNITY', 'FINAL CONFRONTATION', 'MAYA AND HER MOM',
+        'DRE NOTICES', 'ENDING', 'SUPPLIES', 'CUT TO', 'FADE IN', 'FADE OUT',
+        'SMASH CUT', 'TITLE CARD', 'MONTAGE', 'INTERCUT',
+    }
+    name_upper = (payload.name or "").strip().upper()
+    if not name_upper or name_upper in INVALID_NAMES:
+        raise HTTPException(status_code=400, detail="Invalid character name")
+    first_word = name_upper.split()[0] if name_upper.split() else ""
+    if first_word in ("THE", "A", "AN", "INT.", "EXT."):
+        raise HTTPException(status_code=400, detail="Invalid character name")
     storage = get_storage("sqlite")
     existing = storage.get_character_by_name(project_id, payload.name)
     if existing:
         return {"character": existing}
     created = storage.save_character(project_id, payload.name, {"name": payload.name})
     return {"character": created}
+
+
+_CHARACTER_DESCRIPTOR_SYSTEM_PROMPT = (
+    "You are a film character analyst. Extract character information "
+    "from the provided text and return ONLY valid JSON with these exact "
+    "fields: name (string), age (string), look (string, physical appearance), "
+    "energy (string, personality and presence), core_wound (string), "
+    "visual_prompt_summary (string, one sentence suitable for AI image generation). "
+    "If a field cannot be determined, return an empty string."
+)
+
+
+def _strip_markdown_fences(raw: str) -> str:
+    """Remove markdown code fences (```json ... ``` or ``` ... ```) from LLM output."""
+    raw = raw.strip()
+    if raw.startswith("```"):
+        # Remove opening fence
+        first_newline = raw.find("\n")
+        if first_newline != -1:
+            raw = raw[first_newline + 1 :]
+        # Remove closing fence
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+    return raw
+
+
+@router.post("/projects/{project_id}/characters/{character_id}/upload-descriptor")
+async def upload_character_descriptor(
+    project_id: str,
+    character_id: str,
+    file: UploadFile = File(...),
+):
+    """Accept a .txt file, extract character info via Groq, and update the character record."""
+    storage = get_storage("sqlite")
+
+    existing = storage.get_character(character_id, project_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # Read the uploaded file
+    if not file.filename or not file.filename.endswith(".txt"):
+        raise HTTPException(status_code=400, detail="Only .txt files are accepted")
+
+    try:
+        raw_bytes = await file.read()
+        text_content = raw_bytes.decode("utf-8")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to read file: {exc}")
+
+    if not text_content.strip():
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    # Call Groq
+    try:
+        raw_response = await call_llm(
+            system_prompt=_CHARACTER_DESCRIPTOR_SYSTEM_PROMPT,
+            message=text_content,
+        )
+    except Exception as exc:
+        logger.error("Groq LLM call failed for character descriptor: %s", exc)
+        raise HTTPException(status_code=502, detail="AI analysis service unavailable")
+
+    # Strip markdown fences and parse JSON
+    cleaned = _strip_markdown_fences(raw_response)
+    try:
+        extracted = json.loads(cleaned)
+    except json.JSONDecodeError:
+        logger.error("Failed to parse Groq response as JSON: %s", raw_response[:500])
+        raise HTTPException(status_code=502, detail="AI returned invalid JSON")
+
+    # Only overwrite fields that are currently empty in the existing record
+    merged = dict(existing)
+    for field in ("name", "age", "look", "energy", "core_wound", "visual_prompt_summary"):
+        existing_val = merged.get(field)
+        new_val = extracted.get(field)
+        if new_val and not existing_val:
+            merged[field] = new_val
+
+    # Persist the merged character
+    char_name = merged.get("name") or existing.get("name") or "Unknown"
+    updated = storage.save_character(project_id, char_name, merged)
+
+    return {"character": updated}
 
 
 # ── Provider status + per-scene override ─────────────────────────────────────
@@ -2483,3 +2672,29 @@ def set_scene_provider_override(
         "provider_mode": mode,
         "per_scene_overrides": overrides,
     }
+
+
+@router.post("/projects/{project_id}/poster/generate")
+def generate_project_poster(project_id: str):
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        return generate_poster(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to generate poster for %s: %s", project_id, exc)
+        raise HTTPException(status_code=500, detail="Poster generation failed")
+
+
+@router.get("/projects/{project_id}/poster")
+def get_project_poster(project_id: str):
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    storage = get_storage("sqlite")
+    if storage is None:
+        raise HTTPException(status_code=500, detail="Storage not available")
+    url = storage.get_project_poster_url(project_id)
+    if not url:
+        raise HTTPException(status_code=404, detail="No poster generated yet")
+    return {"poster_url": url}

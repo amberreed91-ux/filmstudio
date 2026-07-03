@@ -46,21 +46,33 @@ class PrevisImageResponse(BaseModel):
 
 
 @router.post("/projects/{project_id}/previs/generate-scene/{scene_id}")
-async def generate_scene_previs(project_id: str, scene_id: str) -> PrevisGenerateResponse:
+async def generate_scene_previs(
+    project_id: str,
+    scene_id: str,
+    shot_number: int = 1,
+    take_number: int = 1,
+) -> PrevisGenerateResponse:
     """
-    Generate a preview image for a scene.
+    Generate a preview image for a scene shot.
     
     This endpoint:
     1. Fetches the scene from the database
-    2. Builds a cinematic prompt from scene data
+    2. Builds a shot-aware cinematic prompt using shot/take context
     3. Submits a render job to Runway
     4. Stores the job in previs_images table
     5. Returns immediately with pending status
     
     The image will be extracted from the video when the render completes.
+    
+    Args:
+        project_id: Project identifier
+        scene_id: Scene identifier
+        shot_number: Shot number within scene (1-based, default 1)
+        take_number: Take number for this shot (1-based, default 1)
     """
     from app.data.storage import get_storage
     from app.services.render import render_service
+    from app.services.shot_prompt_builder import build_shot_aware_prompt, get_shot_type_label
     
     storage = get_storage()
     
@@ -69,37 +81,40 @@ async def generate_scene_previs(project_id: str, scene_id: str) -> PrevisGenerat
     if not scene:
         raise HTTPException(status_code=404, detail=f"Scene {scene_id} not found")
     
-    # Build cinematic prompt from scene data
-    prompt_parts = []
+    # Fetch characters for prompt injection
+    try:
+        characters = storage.get_characters(project_id)
+    except Exception:
+        characters = []
     
-    if scene.get("description"):
-        prompt_parts.append(scene["description"])
+    # Build shot-aware prompt
+    prompt = build_shot_aware_prompt(
+        scene_data=scene,
+        shot_number=shot_number,
+        take_number=take_number,
+        all_characters=characters,
+        audio_brief=None,  # Can be extended later
+        max_length=512,
+    )
     
-    if scene.get("emotional_tone"):
-        prompt_parts.append(f"Tone: {scene['emotional_tone']}")
+    shot_label = get_shot_type_label(shot_number)
     
-    if scene.get("location"):
-        prompt_parts.append(f"Location: {scene['location']}")
-    
-    if scene.get("time_of_day"):
-        prompt_parts.append(f"Time: {scene['time_of_day']}")
-    
-    # Add cinematic style suffix
-    prompt_parts.append("Style: cinematic still, single frame, film photography, shallow depth of field")
-    
-    prompt = ". ".join(prompt_parts)
-    
-    # Cap at 512 characters for Runway
-    if len(prompt) > 512:
-        prompt = prompt[:509] + "..."
-    
-    logger.info(f"PREVIS_GENERATE | scene={scene_id} | prompt={prompt[:100]}...")
+    logger.info(
+        "PREVIS_GENERATE | scene=%s | shot=%d | take=%d | type=%s | prompt=%s",
+        scene_id,
+        shot_number,
+        take_number,
+        shot_label,
+        prompt[:100],
+    )
     
     # Create render job for previs (3 second minimum duration)
     try:
+        shot_id = f"{scene_id}_shot_{str(shot_number).zfill(3)}_take_{take_number}"
+        
         job = render_service.create_job(
             project_id=project_id,
-            shot_id=f"{scene_id}_previs",
+            shot_id=shot_id,
             provider="runway",
             prompt=prompt,
             reference_assets=[],
@@ -107,13 +122,13 @@ async def generate_scene_previs(project_id: str, scene_id: str) -> PrevisGenerat
         )
         
         # Submit the job
-        submitted_job = await render_service.submit_job(job.id)
+        await render_service.submit_job(job.id)
         
         # Store in previs_images table with pending status
         storage.save_previs_image(
             project_id=project_id,
             scene_id=scene_id,
-            shot_id=None,  # None for scene hero images
+            shot_id=shot_id,
             image_path="",  # Will be filled when complete
             job_id=job.id,
             status="pending",
@@ -121,17 +136,29 @@ async def generate_scene_previs(project_id: str, scene_id: str) -> PrevisGenerat
             fallback=False
         )
         
-        logger.info(f"PREVIS_JOB_CREATED | scene={scene_id} | job_id={job.id}")
+        logger.info(
+            "PREVIS_JOB_CREATED | scene=%s | shot=%d | take=%d | job_id=%s",
+            scene_id,
+            shot_number,
+            take_number,
+            job.id,
+        )
         
         return PrevisGenerateResponse(
             job_id=job.id,
             status="pending",
             scene_id=scene_id,
-            message="Preview generation started"
+            message=f"Preview generation started for Shot {shot_number}, Take {take_number} ({shot_label})"
         )
         
     except Exception as e:
-        logger.error(f"PREVIS_GENERATE_FAILED | scene={scene_id} | error={str(e)}")
+        logger.error(
+            "PREVIS_GENERATE_FAILED | scene=%s | shot=%d | take=%d | error=%s",
+            scene_id,
+            shot_number,
+            take_number,
+            str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Failed to generate preview: {str(e)}")
 
 

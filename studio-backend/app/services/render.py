@@ -145,6 +145,74 @@ def _log_audit(action: str, resource_type: str, resource_id: str, user_id: str =
             logger.error(f"Failed to log audit: {e}")
 
 
+# ── Prompt-budget constants ─────────────────────────────────────────────────
+# Runway (and most video providers) enforce a 512-character prompt limit.
+_PROMPT_BUDGET = 512
+_CINEMATIC_TAG = "Cinematic, film quality, single continuous shot."
+
+
+def _extract_visual_action(text: str, max_chars: int = 280) -> str:
+    """Extract visual action/description from scene text, stripping dialogue.
+
+    Screenplay format has character names in ALL CAPS on their own line
+    followed by dialogue.  Section headers (e.g. ``THE FIRST TIMELINE``)
+    are also ALL CAPS but longer.  This helper keeps only the action
+    paragraphs that describe what the camera sees — which is all that
+    matters for a video-generation prompt.
+    """
+    import re as _re
+
+    lines = text.split("\n")
+    action_parts: list[str] = []
+    skip_dialogue = False
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            # Blank line ends dialogue-skip mode
+            skip_dialogue = False
+            continue
+
+        # ── Character cue detection ──────────────────────────────────────
+        # Short ALL-CAPS line that looks like a character name.
+        # Strip parentheticals like "(V.O.)" before testing.
+        clean = _re.sub(r"\(.*?\)", "", stripped).strip().rstrip(".")
+        is_char_cue = (
+            len(stripped) < 35
+            and len(clean) >= 2
+            and clean.replace(" ", "").replace("'", "").isalpha()
+            and clean.isupper()
+            and not clean.startswith(("THE ", "ACT ", "INT ", "EXT ", "CUT ", "FADE"))
+        )
+        if is_char_cue:
+            skip_dialogue = True
+            continue
+
+        # ── Skip dialogue lines following a character cue ────────────────
+        if skip_dialogue:
+            # Parenthetical stage direction — skip
+            if stripped.startswith("(") and stripped.endswith(")"):
+                continue
+            # Dialogue text — skip (but a new ALL-CAPS cue resets)
+            continue
+
+        # ── Section headers (longer ALL-CAPS phrases) — skip ─────────────
+        if stripped.isupper() and len(stripped) > 15:
+            continue
+
+        action_parts.append(stripped)
+
+    result = " ".join(action_parts)
+    if len(result) > max_chars:
+        result = result[:max_chars]
+        # Truncate at last word boundary for clean cutoff
+        last_space = result.rfind(" ")
+        if last_space > int(max_chars * 0.6):
+            result = result[:last_space]
+
+    return result.strip()
+
+
 class RenderService:
     """Service for managing render jobs across providers"""
 
@@ -463,51 +531,202 @@ class RenderService:
                         None
                     )
                     if _scene:
-                        _description = str(_scene.get("description") or _scene.get("text") or "").strip()
+                        _heading = str(_scene.get("heading") or "").strip()
+                        # Pull scene text from any of the supported fields so the full
+                        # scene block (action lines + dialogue) feeds the render prompt,
+                        # not just the heading.
+                        _scene_text = (
+                            str(_scene.get("text") or "")
+                            or str(_scene.get("content") or "")
+                            or str(_scene.get("description") or "")
+                            or str(_scene.get("scene_text") or "")
+                        ).strip()
+                        _full_content = f"{_heading}\n{_scene_text}".strip() if _heading else _scene_text
                         _location = str(_scene.get("location") or "").strip()
                         _time_of_day = str(_scene.get("time_of_day") or "").strip()
                         _tone = str(_scene.get("emotional_tone") or "").strip()
-                        
-                        if _description:
-                            _parts = [_description]
-                            if _location:
-                                _parts.append(f"Location: {_location}")
-                            if _time_of_day:
-                                _parts.append(_time_of_day)
-                            if _tone:
-                                _parts.append(f"Mood: {_tone}")
-                            
-                            # ── Character description injection ──────────────
+
+                        # Fall back to project-level script_text when the scene record
+                        # itself has no content — this keeps the Board from showing
+                        # "No description yet" while the script clearly has content.
+                        if not _scene_text:
+                            try:
+                                _script_text = str(_project.get("script_text") or "").strip()
+                                if _script_text:
+                                    _scene_text = _script_text
+                                    _full_content = (
+                                        f"{_heading}\n{_scene_text}".strip()
+                                        if _heading
+                                        else _scene_text
+                                    )
+                            except Exception:
+                                pass
+
+                        if _full_content:
+                            # ── Budget-aware prompt assembly ─────────────────
+                            # Runway enforces a 512-char prompt limit.  The old
+                            # code dumped the entire scene text (often 1000+
+                            # chars) into the prompt and truncated at 512, which
+                            # dropped character descriptions and the cinematic
+                            # quality tag.  The new logic strips dialogue (useless
+                            # for video generation), then fits heading + visual
+                            # action + character descriptions + cinematic tag
+                            # within the budget.
+
+                            # 1. Build character visual descriptions FIRST
+                            #    so we can calculate the action text budget
+                            #    dynamically — character descriptions get
+                            #    priority for remaining space.
+                            _char_block = ""
+                            try:
+                                from app.data.storage import get_storage as _get_storage
+                                _active_storage = _get_storage()
+                            except Exception:
+                                _active_storage = _storage
                             _scene_chars = _scene.get("characters") or []
-                            if _scene_chars and _storage:
-                                _char_summaries = []
+                            if _scene_chars and _active_storage:
+                                _char_summaries: list[str] = []
                                 for _char_name in _scene_chars:
                                     _char_name_str = str(_char_name).strip()
                                     if _char_name_str:
-                                        _char_record = _storage.get_character_by_name(
+                                        _char_record = _active_storage.get_character_by_name(
                                             project_id, _char_name_str
                                         )
                                         if _char_record:
-                                            _vps = (_char_record.get("visual_prompt_summary") or "").strip()
+                                            _vps = (
+                                                _char_record.get("visual_prompt_summary")
+                                                or ""
+                                            ).strip()
                                             if _vps:
-                                                _char_summaries.append(f"{_char_name_str} — {_vps}")
+                                                _char_summaries.append(
+                                                    f"{_char_name_str}: {_vps}"
+                                                )
                                 if _char_summaries:
-                                    _parts.append("Characters present: " + "; ".join(_char_summaries))
+                                    _char_block = "Characters: " + "; ".join(_char_summaries)
                                     logger.info(
                                         "CHARACTER_PROMPT_INJECTION | scene=%s | chars=%d",
                                         _scene_id,
-                                        len(_scene_chars),
+                                        len(_char_summaries),
                                     )
-                            
-                            _parts.append("Cinematic, film quality, single continuous shot.")
-                            
-                            # Build real prompt and cap at 512 characters
-                            prompt = ". ".join(_parts)[:512]
+
+                            # 2. Calculate action text budget dynamically.
+                            #    Reserve space for heading + chars + cinematic tag
+                            #    so character descriptions are not truncated when
+                            #    the scene text is long.
+                            _reserved = len(_CINEMATIC_TAG) + 2  # ". " separator
+                            _available = _PROMPT_BUDGET - _reserved
+                            _char_reserve = min(len(_char_block), 250) + 2 if _char_block else 0
+                            _heading_len = len(_heading or "")
+                            _action_budget = _available - _heading_len - _char_reserve - 6  # separators
+                            _action_budget = max(100, min(280, _action_budget))
+
+                            # 3. Extract visual action (strip dialogue)
+                            _action_text = _extract_visual_action(
+                                _scene_text, max_chars=_action_budget
+                            ) if _scene_text else ""
+
+                            # 4. Assemble prompt in priority order within budget
+                            #    Priority: heading > action > characters > cinematic tag
+                            #    The cinematic tag is always reserved.
+
+                            def _smart_sep(parts: list[str]) -> str:
+                                """Return '. ' or ' ' to avoid double periods."""
+                                if not parts:
+                                    return ""
+                                last = parts[-1].rstrip()
+                                if last.endswith((".", "!", "?")):
+                                    return " "
+                                return ". "
+
+                            # Start with heading
+                            _prompt_parts: list[str] = []
+                            _used = 0
+
+                            if _heading:
+                                _prompt_parts.append(_heading)
+                                _used += len(_heading)
+
+                            # Add location if not already in heading
+                            _loc_suffix = ""
+                            if _location and _location.lower() not in (_heading or "").lower():
+                                _loc_suffix = f"Location: {_location}"
+
+                            # Add action text
+                            if _action_text:
+                                _sep = _smart_sep(_prompt_parts)
+                                _action_piece = f"{_sep}{_action_text}"
+                                if _used + len(_action_piece) <= _available:
+                                    _prompt_parts.append(_action_piece)
+                                    _used += len(_action_piece)
+                                else:
+                                    # Truncate action to fit
+                                    _room = _available - _used - len(_sep)
+                                    if _room > 40:
+                                        _truncated = _action_text[:_room]
+                                        _last_sp = _truncated.rfind(" ")
+                                        if _last_sp > int(_room * 0.6):
+                                            _truncated = _truncated[:_last_sp]
+                                        _prompt_parts.append(f"{_sep}{_truncated}")
+                                        _used += len(_sep) + len(_truncated)
+
+                            # Add location suffix if it fits
+                            if _loc_suffix:
+                                _sep = _smart_sep(_prompt_parts)
+                                _piece = f"{_sep}{_loc_suffix}"
+                                if _used + len(_piece) <= _available:
+                                    _prompt_parts.append(_piece)
+                                    _used += len(_piece)
+
+                            # Add time of day
+                            if _time_of_day:
+                                _sep = _smart_sep(_prompt_parts)
+                                _piece = f"{_sep}{_time_of_day}"
+                                if _used + len(_piece) <= _available:
+                                    _prompt_parts.append(_piece)
+                                    _used += len(_piece)
+
+                            # Add mood/tone
+                            if _tone:
+                                _sep = _smart_sep(_prompt_parts)
+                                _piece = f"{_sep}Mood: {_tone}"
+                                if _used + len(_piece) <= _available:
+                                    _prompt_parts.append(_piece)
+                                    _used += len(_piece)
+
+                            # Add character descriptions if they fit
+                            if _char_block:
+                                _sep = _smart_sep(_prompt_parts)
+                                _piece = f"{_sep}{_char_block}"
+                                if _used + len(_piece) <= _available:
+                                    _prompt_parts.append(_piece)
+                                    _used += len(_piece)
+                                else:
+                                    # Truncate character block to fit
+                                    _room = _available - _used - len(_sep)
+                                    if _room > 30:
+                                        _truncated = _char_block[:_room]
+                                        _last_sp = _truncated.rfind(" ")
+                                        if _last_sp > int(_room * 0.5):
+                                            _truncated = _truncated[:_last_sp]
+                                        _prompt_parts.append(f"{_sep}{_truncated}")
+                                        _used += len(_sep) + len(_truncated)
+
+                            # Always append cinematic tag (reserved space)
+                            _sep = _smart_sep(_prompt_parts)
+                            _prompt_parts.append(f"{_sep}{_CINEMATIC_TAG}")
+
+                            prompt = "".join(_prompt_parts)
+
+                            # Hard safety cap at provider limit
+                            if len(prompt) > _PROMPT_BUDGET:
+                                prompt = prompt[:_PROMPT_BUDGET - 3] + "..."
+
                             logger.info(
-                                "RENDER_PROMPT_FROM_SCENE | scene=%s | description_length=%d | prompt_length=%d",
+                                "RENDER_PROMPT_FROM_SCENE | scene=%s | content_length=%d | action_length=%d | prompt_length=%d",
                                 _scene_id,
-                                len(_description),
-                                len(prompt)
+                                len(_full_content),
+                                len(_action_text),
+                                len(prompt),
                             )
             except Exception as _exc:
                 logger.warning("Failed to fetch scene description for prompt: %s", _exc)
@@ -529,6 +748,91 @@ class RenderService:
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat()
         )
+
+        # ── Character visual description injection (non-generic prompts) ──────
+        # For prompts that already have content (e.g., from Previs Room's
+        # Generation Settings panel with duration/fps/resolution/seed), inject
+        # character visual descriptions so the video provider generates the
+        # correct character appearance.  This mirrors the storyboard/Pollinations
+        # fix but for the video render path.  Generic prompts are already
+        # handled by the block above; this covers the Previs Room render path.
+        if not _is_generic:
+            try:
+                from app.data.storage import get_storage as _get_storage
+                _active_storage = _get_storage()
+                _project = project_store.get_project(project_id)
+                _scene_chars: list[str] = []
+                if isinstance(_project, dict):
+                    _summary = _project.get("execution_summary") or {}
+                    _scenes = _summary.get("scenes") or []
+                    _scene = next(
+                        (s for s in _scenes if isinstance(s, dict) and s.get("scene_id") == _scene_id),
+                        None,
+                    )
+                    if _scene:
+                        _scene_chars = list(_scene.get("characters") or [])
+                        # If no characters array, try to identify from scene text
+                        if not _scene_chars:
+                            try:
+                                _all_chars = _active_storage.get_characters(project_id)
+                                _scene_text_lower = (
+                                    str(_scene.get("text") or "")
+                                    or str(_scene.get("content") or "")
+                                    or str(_scene.get("description") or "")
+                                    or str(_scene.get("scene_text") or "")
+                                ).lower()
+                                for _char in _all_chars:
+                                    _char_name = _char.get("name", "")
+                                    if _char_name and _char_name.lower() in _scene_text_lower:
+                                        _scene_chars.append(_char_name)
+                            except Exception:
+                                pass
+
+                if _scene_chars and _active_storage:
+                    _char_summaries: list[str] = []
+                    for _char_name in _scene_chars:
+                        _char_name_str = str(_char_name).strip()
+                        if _char_name_str:
+                            _char_record = _active_storage.get_character_by_name(
+                                project_id, _char_name_str
+                            )
+                            if _char_record:
+                                _vps = (
+                                    _char_record.get("visual_prompt_summary")
+                                    or ""
+                                ).strip()
+                                if _vps:
+                                    _char_summaries.append(
+                                        f"{_char_name_str}: {_vps}"
+                                    )
+                    if _char_summaries:
+                        _char_block = "Characters: " + "; ".join(_char_summaries)
+                        _current_prompt = job.input_payload.prompt or ""
+                        # Skip if characters already present (e.g., generic prompt path)
+                        if "Characters:" not in _current_prompt:
+                            _sep = ". " if not _current_prompt.rstrip().endswith((".", "!", "?")) else " "
+                            _new_prompt = f"{_current_prompt}{_sep}{_char_block}"
+                            # If over budget, truncate original prompt to fit characters
+                            if len(_new_prompt) > _PROMPT_BUDGET:
+                                _char_len = len(_sep) + len(_char_block)
+                                _orig_budget = _PROMPT_BUDGET - _char_len
+                                if _orig_budget > 50:
+                                    _truncated_orig = _current_prompt[:_orig_budget]
+                                    _last_sp = _truncated_orig.rfind(" ")
+                                    if _last_sp > int(_orig_budget * 0.6):
+                                        _truncated_orig = _truncated_orig[:_last_sp]
+                                    _new_prompt = f"{_truncated_orig}{_sep}{_char_block}"
+                                else:
+                                    # Not enough room for both; prioritize characters
+                                    _new_prompt = _char_block[:_PROMPT_BUDGET]
+                            job.input_payload.prompt = _new_prompt
+                            logger.info(
+                                "CHARACTER_PROMPT_INJECTION | scene=%s | chars=%d | source=previs_prompt",
+                                _scene_id,
+                                len(_char_summaries),
+                            )
+            except Exception as _exc:
+                logger.debug("Character injection for non-generic prompt skipped: %s", _exc)
 
         # ── Continuity context injection ──────────────────────────────────────
         # Derive scene_id from shot_id (e.g. "scene_001_shot_001" → "scene_001").
@@ -651,6 +955,31 @@ class RenderService:
 
             adapter = get_adapter(job.provider, config)
             logger.info(f"Submitting job {job_id} to provider {job.provider}")
+
+            # ── Seed locking: generate on first render, reuse on subsequent ──
+            try:
+                if _storage:
+                    shot_seed = _storage.get_shot_seed(job.project_id, job.shot_id)
+                    if shot_seed and shot_seed.get("seed") is not None:
+                        seed_val = int(shot_seed["seed"])
+                        logger.info(
+                            "SEED_REUSED | job=%s | shot=%s | seed=%d | locked=%s",
+                            job_id, job.shot_id, seed_val,
+                            bool(shot_seed.get("seed_locked")),
+                        )
+                    else:
+                        seed_val = int.from_bytes(os.urandom(4), byteorder="big", signed=False) % (2**31)
+                        _storage.save_shot_seed(job.project_id, job.shot_id, seed_val)
+                        logger.info(
+                            "SEED_GENERATED | job=%s | shot=%s | seed=%d",
+                            job_id, job.shot_id, seed_val,
+                        )
+                    if job.input_payload and job.input_payload.parameters:
+                        job.input_payload.parameters["seed"] = seed_val
+                    elif job.input_payload:
+                        job.input_payload.parameters = {"seed": seed_val}
+            except Exception as _exc:
+                logger.debug("Seed injection skipped for %s: %s", job_id, _exc)
             
             job.recovery_status = "active"
             submitted_job = await adapter.submit_job(job)

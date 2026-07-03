@@ -321,6 +321,7 @@ class AudioGenerationService:
         project_id: str,
         mood: str,
         score_notes: str,
+        prompt: str | None = None,
     ) -> Dict[str, Any]:
         """Generate score track using Stable Audio Open."""
         out_path = self._track_path(project_id, scene_id, "score")
@@ -335,24 +336,27 @@ class AudioGenerationService:
                 "advisory": "Mock mode — diffusers/StableAudioPipeline not installed. Install with: pip install diffusers scipy soundfile",
             }
 
-        # Build prompt from mood + score_notes
-        parts = [p.strip() for p in [mood, score_notes] if p and p.strip()]
-        prompt = ", ".join(parts) if parts else "cinematic orchestral score, emotional, atmospheric"
-        prompt += ", cinematic, film score"
+        # Build prompt from mood + score_notes, or use provided prompt
+        if prompt:
+            prompt_to_use = prompt
+        else:
+            parts = [p.strip() for p in [mood, score_notes] if p and p.strip()]
+            prompt_to_use = ", ".join(parts) if parts else "cinematic orchestral score, emotional, atmospheric"
+            prompt_to_use += ", cinematic, film score"
 
         try:
             await self._load_stable_audio()
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 None,
-                lambda: self._generate_stable_audio_track(prompt, out_path, duration_s=30),
+                lambda: self._generate_stable_audio_track(prompt_to_use, out_path, duration_s=30),
             )
             return {
                 "track": "score",
                 "status": TrackStatus.COMPLETE,
                 "file_path": str(out_path),
                 "file_url": self._file_url(out_path),
-                "prompt_used": prompt,
+                "prompt_used": prompt_to_use,
                 "advisory": "Score rendered via Stable Audio Open (30s).",
             }
         except Exception as exc:
