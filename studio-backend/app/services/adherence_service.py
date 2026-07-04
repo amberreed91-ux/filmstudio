@@ -192,10 +192,12 @@ class AdherenceService:
         else:
             verdict = "manual_review"
         
-        # Identify failed slots (score < 50)
+        # Identify failed slots (score <= 70)
+        # Changed from < 50 to align with correctable range (50-79)
+        # Any dimension scoring 70 or below is a correction candidate
         failed_slots = [
             dim for dim, score_obj in dimensions.items()
-            if score_obj.score < 50
+            if score_obj.score <= 70
         ]
         
         score_result = AdherenceScore(
@@ -365,13 +367,32 @@ class AdherenceService:
             if op.op == "replace":
                 new_slots[op.slot] = op.new_text
             elif op.op == "strengthen":
-                # Prepend emphasis without replacing
-                current = new_slots.get(op.slot, "")
-                new_slots[op.slot] = f"{op.new_text}. {current}".strip()
+                # Prepend emphasis without replacing, preserving original text exactly once.
+                # Same dedup guard as prepend_emphasis: the LLM may already include
+                # the original slot text in new_text.
+                current = new_slots.get(op.slot, "").strip()
+                if not current:
+                    # Empty slot — just use new_text
+                    new_slots[op.slot] = op.new_text.strip()
+                elif current.lower() in op.new_text.lower():
+                    # new_text already contains the original (case-insensitive) — use it as-is
+                    new_slots[op.slot] = op.new_text.strip()
+                else:
+                    new_slots[op.slot] = f"{op.new_text}. {current}".strip()
             elif op.op == "prepend_emphasis":
-                # Add emphasis at start
-                current = new_slots.get(op.slot, "")
-                new_slots[op.slot] = f"{op.new_text}, {current}".strip()
+                # Add emphasis at start, preserving original text exactly once.
+                # The LLM may already include the original slot text in new_text
+                # (it's instructed to "prescribe desired behavior"), so we check
+                # for overlap to avoid appending the original a second time.
+                current = new_slots.get(op.slot, "").strip()
+                if not current:
+                    # Empty slot — just use new_text (no trailing comma)
+                    new_slots[op.slot] = op.new_text.strip()
+                elif current.lower() in op.new_text.lower():
+                    # new_text already contains the original (case-insensitive) — use it as-is
+                    new_slots[op.slot] = op.new_text.strip()
+                else:
+                    new_slots[op.slot] = f"{op.new_text}, {current}".strip()
             
             # Check if we exceeded budget
             current_length = _calculate_length(new_slots)
@@ -654,7 +675,7 @@ Respond ONLY with valid JSON matching this exact schema:
         """
         # Build prompt for Groq
         failed_list = "\n".join([
-            f"- {dim['slot']}: Expected '{dim['expected']}', Observed '{dim['observed']}' ({dim['evidence']})"
+            f"- {dim['slot']}: {dim['evidence']}"
             for dim in failed_dimensions
         ])
         
@@ -663,27 +684,30 @@ Respond ONLY with valid JSON matching this exact schema:
             for key, value in current_slots.items()
         ])
         
-        system_prompt = """You are a prompt engineer fixing video generation prompts. You analyze expected vs observed descriptions from vision scoring and generate precise correction operations.
+        system_prompt = """You are a prompt engineer fixing video generation prompts. You analyze vision scoring evidence to understand what went wrong and generate precise correction operations to fix it.
 
 Rules:
-1. Only generate ops for failed dimensions (score < 50)
-2. Choose the right operation type:
-   - "replace": completely replace the slot text (use when observed is completely wrong)
-   - "strengthen": prepend emphasis without replacing (use when direction is right but needs more weight)
-   - "prepend_emphasis": add clarifying phrase at start (use when detail is missing)
-3. Calculate char_delta accurately (new_text length - old_text length)
-4. Be specific in reason - explain what gap you're fixing
-5. Respect character budget - don't exceed chars_remaining
-6. Respond ONLY with valid JSON matching the exact schema
+1. Only generate ops for failed dimensions
+2. Focus on what SHOULD happen, not what went wrong - you're prescribing the fix, not describing the failure
+3. For character/action consistency issues: emphasize continuous behavior (e.g., "continuously playing", "maintaining focus throughout")
+4. For camera/lighting issues: strengthen the technical directive (e.g., "smooth push-in", "consistent soft lighting")
+5. Choose the right operation type:
+   - "replace": completely replace the slot text (use when current text is completely wrong)
+   - "strengthen": prepend emphasis without replacing (use when direction is right but needs more weight)  
+   - "prepend_emphasis": add clarifying phrase at start (use for continuity emphasis)
+6. Calculate char_delta accurately (new_text length - old_text length)
+7. Be specific in reason - explain what gap you're fixing
+8. Respect character budget - don't exceed chars_remaining
+9. Respond ONLY with valid JSON matching the exact schema
 
 Response schema:
 {
   "ops": [
     {
-      "slot": "dimension_name",
+      "slot": "dimension_name or 'description' for monolithic prompts",
       "op": "replace|strengthen|prepend_emphasis",
       "old_text": "current text",
-      "new_text": "corrected text",
+      "new_text": "corrected text that prescribes desired behavior",
       "reason": "why this fixes the issue",
       "char_delta": 0
     }
@@ -699,7 +723,11 @@ Current slots:
 
 Available character budget: {chars_remaining}
 
-Generate correction operations to fix the failed dimensions. Only create ops for the failed slots listed above."""
+Generate correction operations to fix the failed dimensions. 
+
+IMPORTANT: If the current slots only contain a single "description" slot (not separate character_state, action, etc.), 
+then target "description" with your ops, not the dimension names. The dimension names are what FAILED, but the slot name 
+is where you apply the fix. If you see structured slots (character_state, action, camera, etc.), then use those slot names."""
 
         # Default token budget for corrector - should be enough for typical correction JSON
         DEFAULT_MAX_OUTPUT_TOKENS = 2048

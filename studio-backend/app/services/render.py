@@ -86,6 +86,42 @@ async def _run_continuity_review(job: RenderJobModel) -> None:
         logger.debug("Continuity review skipped for job %s: %s", job.id, exc)
 
 
+async def _run_render_quality_check(job: RenderJobModel) -> None:
+    """
+    Run prompt adherence and keyframe quality check after a job completes.
+    Records result in render_attempts table for retry decision analysis.
+    Never raises — silent fallback on any error.
+    """
+    try:
+        from app.services.render_retry_service import render_retry_service
+        
+        output_url = ""
+        if job.output_payload:
+            output_url = str(job.output_payload.asset_url or "").strip()
+        
+        if not output_url:
+            logger.debug("Skipping quality check for job %s: no output URL", job.id)
+            return
+        
+        # Record the render attempt with quality analysis
+        await render_retry_service.record_render_attempt(
+            project_id=job.project_id,
+            shot_id=job.shot_id,
+            job_id=job.id,
+            output_url=output_url,
+            prompt=job.prompt or "",
+        )
+        
+        logger.info(
+            "RENDER_QUALITY_CHECK_COMPLETE | job=%s | project=%s | shot=%s",
+            job.id,
+            job.project_id,
+            job.shot_id,
+        )
+    except Exception as exc:
+        logger.debug("Render quality check skipped for job %s: %s", job.id, exc)
+
+
 async def _notify_update(job_id: str, job_data: dict):
     """Notify subscribers of job update"""
     if _job_update_callback:
@@ -563,21 +599,14 @@ class RenderService:
                                 pass
 
                         if _full_content:
-                            # ── Budget-aware prompt assembly ─────────────────
-                            # Runway enforces a 512-char prompt limit.  The old
-                            # code dumped the entire scene text (often 1000+
-                            # chars) into the prompt and truncated at 512, which
-                            # dropped character descriptions and the cinematic
-                            # quality tag.  The new logic strips dialogue (useless
-                            # for video generation), then fits heading + visual
-                            # action + character descriptions + cinematic tag
-                            # within the budget.
+                            # ── Slotted prompt assembly via build_slotted_prompt() ──
+                            # Replaces the old monolithic string concatenation with
+                            # the fixed-slot builder that enforces per-slot character
+                            # budgets (character_state/action/environment/camera/lighting)
+                            # and guarantees the assembled prompt never exceeds 512 chars.
 
-                            # 1. Build character visual descriptions FIRST
-                            #    so we can calculate the action text budget
-                            #    dynamically — character descriptions get
-                            #    priority for remaining space.
-                            _char_block = ""
+                            # 1. Build character visual descriptions from storage
+                            _char_visuals = ""
                             try:
                                 from app.data.storage import get_storage as _get_storage
                                 _active_storage = _get_storage()
@@ -602,131 +631,57 @@ class RenderService:
                                                     f"{_char_name_str}: {_vps}"
                                                 )
                                 if _char_summaries:
-                                    _char_block = "Characters: " + "; ".join(_char_summaries)
+                                    _char_visuals = "; ".join(_char_summaries)
                                     logger.info(
                                         "CHARACTER_PROMPT_INJECTION | scene=%s | chars=%d",
                                         _scene_id,
                                         len(_char_summaries),
                                     )
 
-                            # 2. Calculate action text budget dynamically.
-                            #    Reserve space for heading + chars + cinematic tag
-                            #    so character descriptions are not truncated when
-                            #    the scene text is long.
-                            _reserved = len(_CINEMATIC_TAG) + 2  # ". " separator
-                            _available = _PROMPT_BUDGET - _reserved
-                            _char_reserve = min(len(_char_block), 250) + 2 if _char_block else 0
-                            _heading_len = len(_heading or "")
-                            _action_budget = _available - _heading_len - _char_reserve - 6  # separators
-                            _action_budget = max(100, min(280, _action_budget))
-
-                            # 3. Extract visual action (strip dialogue)
+                            # 2. Extract visual action (strip dialogue)
+                            from app.services.shot_prompt_builder import SLOT_BUDGETS
                             _action_text = _extract_visual_action(
-                                _scene_text, max_chars=_action_budget
+                                _scene_text, max_chars=SLOT_BUDGETS["action"]
                             ) if _scene_text else ""
 
-                            # 4. Assemble prompt in priority order within budget
-                            #    Priority: heading > action > characters > cinematic tag
-                            #    The cinematic tag is always reserved.
+                            # 3. Derive shot_number from shot_id for camera defaults
+                            #    e.g. "scene_001_shot_003" → 3
+                            _shot_number = 1
+                            try:
+                                _shot_suffix = shot_id.rsplit("_shot_", 1)
+                                if len(_shot_suffix) == 2:
+                                    _shot_number = int(_shot_suffix[1])
+                            except (ValueError, IndexError):
+                                pass
 
-                            def _smart_sep(parts: list[str]) -> str:
-                                """Return '. ' or ' ' to avoid double periods."""
-                                if not parts:
-                                    return ""
-                                last = parts[-1].rstrip()
-                                if last.endswith((".", "!", "?")):
-                                    return " "
-                                return ". "
+                            # 4. Map scene data to the 5 slots
+                            #    environment: location (or heading if no location)
+                            _environment = _location or _heading or ""
+                            #    lighting: time_of_day + tone (lighting implied by time)
+                            _lighting = " ".join(
+                                p for p in [_time_of_day, _tone] if p
+                            ).strip()
 
-                            # Start with heading
-                            _prompt_parts: list[str] = []
-                            _used = 0
-
-                            if _heading:
-                                _prompt_parts.append(_heading)
-                                _used += len(_heading)
-
-                            # Add location if not already in heading
-                            _loc_suffix = ""
-                            if _location and _location.lower() not in (_heading or "").lower():
-                                _loc_suffix = f"Location: {_location}"
-
-                            # Add action text
-                            if _action_text:
-                                _sep = _smart_sep(_prompt_parts)
-                                _action_piece = f"{_sep}{_action_text}"
-                                if _used + len(_action_piece) <= _available:
-                                    _prompt_parts.append(_action_piece)
-                                    _used += len(_action_piece)
-                                else:
-                                    # Truncate action to fit
-                                    _room = _available - _used - len(_sep)
-                                    if _room > 40:
-                                        _truncated = _action_text[:_room]
-                                        _last_sp = _truncated.rfind(" ")
-                                        if _last_sp > int(_room * 0.6):
-                                            _truncated = _truncated[:_last_sp]
-                                        _prompt_parts.append(f"{_sep}{_truncated}")
-                                        _used += len(_sep) + len(_truncated)
-
-                            # Add location suffix if it fits
-                            if _loc_suffix:
-                                _sep = _smart_sep(_prompt_parts)
-                                _piece = f"{_sep}{_loc_suffix}"
-                                if _used + len(_piece) <= _available:
-                                    _prompt_parts.append(_piece)
-                                    _used += len(_piece)
-
-                            # Add time of day
-                            if _time_of_day:
-                                _sep = _smart_sep(_prompt_parts)
-                                _piece = f"{_sep}{_time_of_day}"
-                                if _used + len(_piece) <= _available:
-                                    _prompt_parts.append(_piece)
-                                    _used += len(_piece)
-
-                            # Add mood/tone
-                            if _tone:
-                                _sep = _smart_sep(_prompt_parts)
-                                _piece = f"{_sep}Mood: {_tone}"
-                                if _used + len(_piece) <= _available:
-                                    _prompt_parts.append(_piece)
-                                    _used += len(_piece)
-
-                            # Add character descriptions if they fit
-                            if _char_block:
-                                _sep = _smart_sep(_prompt_parts)
-                                _piece = f"{_sep}{_char_block}"
-                                if _used + len(_piece) <= _available:
-                                    _prompt_parts.append(_piece)
-                                    _used += len(_piece)
-                                else:
-                                    # Truncate character block to fit
-                                    _room = _available - _used - len(_sep)
-                                    if _room > 30:
-                                        _truncated = _char_block[:_room]
-                                        _last_sp = _truncated.rfind(" ")
-                                        if _last_sp > int(_room * 0.5):
-                                            _truncated = _truncated[:_last_sp]
-                                        _prompt_parts.append(f"{_sep}{_truncated}")
-                                        _used += len(_sep) + len(_truncated)
-
-                            # Always append cinematic tag (reserved space)
-                            _sep = _smart_sep(_prompt_parts)
-                            _prompt_parts.append(f"{_sep}{_CINEMATIC_TAG}")
-
-                            prompt = "".join(_prompt_parts)
-
-                            # Hard safety cap at provider limit
-                            if len(prompt) > _PROMPT_BUDGET:
-                                prompt = prompt[:_PROMPT_BUDGET - 3] + "..."
+                            # 5. Build the slotted prompt
+                            from app.services.shot_prompt_builder import build_slotted_prompt
+                            _slotted = build_slotted_prompt(
+                                scene_data=_scene,
+                                shot_number=_shot_number,
+                                character_visual_canon=_char_visuals,
+                                action_text=_action_text,
+                                environment_motifs=_environment,
+                                camera_direction="",  # let builder default from shot_number
+                                lighting_direction=_lighting,
+                            )
+                            prompt = _slotted["prompt"]
 
                             logger.info(
-                                "RENDER_PROMPT_FROM_SCENE | scene=%s | content_length=%d | action_length=%d | prompt_length=%d",
+                                "RENDER_PROMPT_FROM_SCENE | scene=%s | content_length=%d | action_length=%d | prompt_length=%d | slots=%s",
                                 _scene_id,
                                 len(_full_content),
                                 len(_action_text),
                                 len(prompt),
+                                {k: len(v) for k, v in _slotted["slots"].items()},
                             )
             except Exception as _exc:
                 logger.warning("Failed to fetch scene description for prompt: %s", _exc)
@@ -1033,8 +988,20 @@ class RenderService:
                     adapter = get_adapter(job.provider, config)
                     updated = await adapter.get_job_status(job)
                     updated.updated_at = datetime.now().isoformat()
+                    
+                    # Detect transition to complete status
+                    transitioned_to_complete = (
+                        job.status != "complete" and updated.status == "complete"
+                    )
+                    
                     self._jobs[job_id] = updated
                     _persist_job(updated)
+                    
+                    # Run completion hooks on status transition
+                    if transitioned_to_complete:
+                        await _run_continuity_review(updated)
+                        await _run_render_quality_check(updated)
+                    
                     if updated.status != job.status:
                         await _notify_update(job_id, updated.model_dump())
                     return updated
@@ -1382,6 +1349,7 @@ class RenderService:
                 updated.completed_at = updated.last_polled_at
 
             await _run_continuity_review(updated)
+            await _run_render_quality_check(updated)
             self._jobs[job_id] = updated
             _persist_job(updated)
             await _notify_update(job_id, updated.model_dump())
@@ -1664,6 +1632,7 @@ class RenderService:
                         if updated.status == "complete":
                             updated.recovery_status = "recovered_terminal"
                             await _run_continuity_review(updated)
+                            await _run_render_quality_check(updated)
                         elif updated.is_terminal():
                             updated.recovery_status = "recovery_failed"
                         else:

@@ -1,0 +1,47 @@
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/services/adherence_service.py:24: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+================================================================================
+FULL RETRY LOOP TEST
+================================================================================
+
+ATTEMPT 1 (already scored):
+  Shot: scene_001_shot_001
+  Job: job-20260528170029-c5ca66d8-scene_001_shot_001
+  Prompt: A displaced musician uncovers a citywide memory glitch one song at a time
+  Score: 77.5 (from previous test)
+  Verdict: correctable
+  Failed dimensions: character_state (50), action (50)
+
+================================================================================
+STEP 1: Generate Corrective Diff
+================================================================================
+
+✓ Generated corrective diff with 0 operation(s)
+
+================================================================================
+STEP 2: Apply Diff to Get Corrected Prompt
+================================================================================
+
+Original: A displaced musician uncovers a citywide memory glitch one song at a time
+Corrected: A displaced musician uncovers a citywide memory glitch one song at a time
+
+================================================================================
+STEP 3: Get Original Seed
+================================================================================
+
+✓ Original seed: 12345
+
+================================================================================
+STEP 4: Submit NEW Render with Corrected Prompt (LOCKED SEED)
+================================================================================
+
+⚠️  This will submit a real Runway render job ($0.05)
+
+Proceed with render submission? [y/N]: 

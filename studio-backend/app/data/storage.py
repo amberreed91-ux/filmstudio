@@ -4569,6 +4569,107 @@ class DatabaseStorage:
         known = {c["name"].upper() for c in self.get_characters(project_id)}
         return [c for c in scene_characters if c.upper() not in known]
 
+    # ── Render Attempts Management ────────────────────────────────────────────
+
+    def list_render_attempts(
+        self,
+        project_id: Optional[str] = None,
+        shot_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """
+        List render attempts, optionally filtered by project/shot.
+        
+        Args:
+            project_id: Optional project ID filter (ignored if column doesn't exist)
+            shot_id: Optional shot ID filter
+            limit: Maximum number of attempts to return
+            
+        Returns:
+            List of render attempt dicts with parsed JSON fields
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if project_id column exists
+            cursor.execute("PRAGMA table_info(render_attempts)")
+            columns_info = cursor.fetchall()
+            has_project_id = any(col[1] == "project_id" for col in columns_info)
+            
+            query = "SELECT * FROM render_attempts WHERE 1=1"
+            params = []
+            
+            if project_id and has_project_id:
+                query += " AND project_id = ?"
+                params.append(project_id)
+            
+            if shot_id:
+                query += " AND shot_id = ?"
+                params.append(shot_id)
+            
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            columns = [desc[0] for desc in cursor.description]
+            
+            attempts = []
+            for row in cursor.fetchall():
+                attempt = dict(zip(columns, row))
+                
+                # Parse JSON fields
+                if attempt.get("score_json"):
+                    try:
+                        attempt["score_json"] = json.loads(attempt["score_json"])
+                    except:
+                        pass
+                
+                if attempt.get("diff_json"):
+                    try:
+                        attempt["diff_json"] = json.loads(attempt["diff_json"])
+                    except:
+                        pass
+                
+                # Normalize field name
+                if "attempt_n" in attempt:
+                    attempt["attempt_number"] = attempt["attempt_n"]
+                
+                attempts.append(attempt)
+            
+            return attempts
+
+    def get_render_attempt(self, attempt_id: str) -> Optional[dict]:
+        """Get a single render attempt by ID"""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM render_attempts WHERE id = ?", (attempt_id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return None
+            
+            columns = [desc[0] for desc in cursor.description]
+            attempt = dict(zip(columns, row))
+            
+            # Parse JSON fields
+            if attempt.get("score_json"):
+                try:
+                    attempt["score_json"] = json.loads(attempt["score_json"])
+                except:
+                    pass
+            
+            if attempt.get("diff_json"):
+                try:
+                    attempt["diff_json"] = json.loads(attempt["diff_json"])
+                except:
+                    pass
+            
+            # Normalize field name
+            if "attempt_n" in attempt:
+                attempt["attempt_number"] = attempt["attempt_n"]
+            
+            return attempt
+
 
 class JsonFileStorage:
     """Legacy file-based JSON storage - kept for backwards compatibility only"""
