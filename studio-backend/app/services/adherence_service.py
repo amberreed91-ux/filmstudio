@@ -5,19 +5,24 @@ Scores rendered shots against extracted frames (10%, 50%, 90% of duration) using
 vision-capable models to detect drift across dimensions: character_state, action,
 camera, lighting, environment_persistence.
 
-NOTE: Vision model selection is configurable. Fine-grained consistency judgments
-(e.g., "is this the same weathered hand as attempt 1") require stronger vision
-models than Groq's default. This is worth one non-Groq API call per render given
-how much the system depends on scoring accuracy.
+NOTE: Vision model selection is configurable. Default is Gemini 2.5 Flash (free tier)
+for prototyping. Fine-grained consistency judgments may benefit from upgrading to
+Gemini Pro (paid) or GPT-4o/Claude via ADHERENCE_VISION_PROVIDER config if Flash's
+judgments prove insufficient for production use.
 """
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
 import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+
+import google.generativeai as genai
+from groq import Groq
 
 logger = logging.getLogger("adherence_service")
 
@@ -89,10 +94,12 @@ class AdherenceService:
     
     def __init__(self, storage=None):
         self._storage = storage
-        # TODO: Make vision model provider configurable
-        # Default to stronger vision model for consistency judgments
-        self._vision_provider = os.getenv("ADHERENCE_VISION_PROVIDER", "openai")
-        self._vision_model = os.getenv("ADHERENCE_VISION_MODEL", "gpt-4o")
+        # NOTE: Using Gemini 2.5 Flash as default - free tier for prototyping.
+        # For production fine-grained consistency judgments (e.g., "is this the same
+        # weathered hand as attempt 1"), consider upgrading to Gemini Pro (paid) or
+        # GPT-4o/Claude via ADHERENCE_VISION_PROVIDER config if needed.
+        self._vision_provider = os.getenv("ADHERENCE_VISION_PROVIDER", "gemini")
+        self._vision_model = os.getenv("ADHERENCE_VISION_MODEL", "gemini-2.5-flash")
         
     async def score_render_attempt(
         self,
@@ -455,14 +462,12 @@ class AdherenceService:
         """
         Call vision model to score frames against expectations.
         
-        NOTE: This should use a stronger vision model than Groq's default for
-        fine-grained consistency judgments. Configurable via ADHERENCE_VISION_PROVIDER.
+        NOTE: Currently using Gemini 2.5 Flash (free tier). For production fine-grained
+        consistency judgments, consider upgrading to Gemini Pro or GPT-4o/Claude via
+        ADHERENCE_VISION_PROVIDER config if Flash's judgments prove insufficient.
         
         Returns dict matching the required JSON schema.
         """
-        # TODO: Implement actual vision model call
-        # For now, return mock structure
-        
         # Build prompt for vision model
         prompt = f"""You are a film continuity expert. Score this rendered shot against the script expectations.
 
@@ -487,53 +492,151 @@ Respond ONLY with valid JSON matching this exact schema:
   "temporal_drift": {{"start_score": 0-100, "end_score": 0-100}}
 }}"""
         
-        # Mock response for now
-        # TODO: Replace with actual vision model call
-        logger.warning(
-            "MOCK_VISION_CALL | provider=%s | model=%s | frames=%d",
+        # Load frames as PIL Image objects for Gemini
+        import PIL.Image
+        frame_images = []
+        for frame_path in frames:
+            try:
+                img = PIL.Image.open(frame_path)
+                frame_images.append(img)
+            except Exception as e:
+                logger.error(f"Failed to load frame {frame_path}: {e}")
+                raise ValueError(f"Could not read frame: {frame_path}")
+        
+        # Build content parts for Gemini API
+        content_parts = []
+        for idx, img in enumerate(frame_images):
+            content_parts.append(f"Frame {idx + 1} ({['10%', '50%', '90%'][idx]} of shot):")
+            content_parts.append(img)
+        
+        # Add the analysis prompt after all images
+        content_parts.append(prompt)
+        
+        # Call Gemini vision model (sync call in thread pool)
+        # Default token budget is generous (4096) because a full 5-dimension
+        # response with detailed evidence/expected/observed text on every field
+        # can easily exceed the previous 2048 limit, causing mid-response
+        # truncation and "Unterminated string" JSON parse errors.
+        DEFAULT_MAX_OUTPUT_TOKENS = 4096
+        RETRY_MAX_OUTPUT_TOKENS = 8192
+
+        def _sync_vision_call(max_output_tokens: int):
+            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+            model = genai.GenerativeModel(self._vision_model)
+            response = model.generate_content(
+                content_parts,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.3,  # Lower temp for structured output
+                    max_output_tokens=max_output_tokens,
+                ),
+            )
+            return response
+
+        def _extract_text(response) -> str:
+            """Safely extract text from a Gemini response object."""
+            try:
+                return response.text
+            except (AttributeError, ValueError) as e:
+                # response.text can raise ValueError if no candidates have content
+                logger.warning("VISION_RESPONSE_TEXT_UNAVAILABLE | error=%s", e)
+                if response.candidates:
+                    parts = response.candidates[0].content.parts
+                    return "".join(p.text for p in parts if hasattr(p, "text"))
+                raise
+
+        def _finish_reason_name(response) -> str:
+            """Extract a human-readable finish_reason from the response."""
+            try:
+                fr = response.candidates[0].finish_reason
+                # finish_reason may be an enum (e.g., FinishReason.MAX_TOKENS) or int
+                return str(fr)
+            except (IndexError, AttributeError):
+                return "UNKNOWN"
+
+        def _is_truncated(response) -> bool:
+            """Check if the response was truncated due to max_output_tokens."""
+            reason = _finish_reason_name(response)
+            # Gemini finish_reason values: STOP, MAX_TOKENS, SAFETY, RECITATION, OTHER
+            # MAX_TOKENS (2) indicates the response was cut off at the token limit.
+            # The str() representation may be the enum name ("FinishReason.MAX_TOKENS")
+            # or just the integer value ("2") depending on the SDK version.
+            reason_upper = reason.upper()
+            return "MAX_TOKENS" in reason_upper or reason_upper == "2"
+
+        logger.info(
+            "VISION_API_CALL | provider=%s | model=%s | frames=%d | max_output_tokens=%d",
             self._vision_provider,
             self._vision_model,
             len(frames),
+            DEFAULT_MAX_OUTPUT_TOKENS,
         )
-        
-        return {
-            "dimensions": {
-                "character_state": {
-                    "score": 85,
-                    "evidence": "Character appearance matches expected visual canon",
-                    "expected": expected_character,
-                    "observed": "Matches expected character description",
-                },
-                "action": {
-                    "score": 90,
-                    "evidence": "Action clearly executed as described",
-                    "expected": expected_action,
-                    "observed": "Action matches expectation",
-                },
-                "camera": {
-                    "score": 88,
-                    "evidence": "Camera framing and movement as specified",
-                    "expected": expected_camera,
-                    "observed": "Camera work matches direction",
-                },
-                "lighting": {
-                    "score": 92,
-                    "evidence": "Lighting mood consistent with direction",
-                    "expected": expected_lighting,
-                    "observed": "Lighting matches expectation",
-                },
-                "environment_persistence": {
-                    "score": 87,
-                    "evidence": "Environment elements persist across frames",
-                    "expected": expected_environment,
-                    "observed": "Environment consistent",
-                },
-            },
-            "temporal_drift": {
-                "start_score": 90,
-                "end_score": 85,
-            },
-        }
+
+        try:
+            response = await asyncio.to_thread(_sync_vision_call, DEFAULT_MAX_OUTPUT_TOKENS)
+            finish_reason = _finish_reason_name(response)
+
+            # Check for truncation and retry once with a higher token limit
+            if _is_truncated(response):
+                logger.warning(
+                    "VISION_RESPONSE_TRUNCATED | finish_reason=%s | max_output_tokens=%d | "
+                    "retrying with %d tokens",
+                    finish_reason,
+                    DEFAULT_MAX_OUTPUT_TOKENS,
+                    RETRY_MAX_OUTPUT_TOKENS,
+                )
+                response = await asyncio.to_thread(_sync_vision_call, RETRY_MAX_OUTPUT_TOKENS)
+                finish_reason = _finish_reason_name(response)
+
+                if _is_truncated(response):
+                    logger.error(
+                        "VISION_RESPONSE_STILL_TRUNCATED | finish_reason=%s | max_output_tokens=%d | "
+                        "response may be incomplete",
+                        finish_reason,
+                        RETRY_MAX_OUTPUT_TOKENS,
+                    )
+            else:
+                logger.info("VISION_FINISH_REASON | reason=%s", finish_reason)
+
+            response_text = _extract_text(response)
+
+            # Parse JSON response
+            # Try to extract JSON from markdown code blocks if present
+            if "```json" in response_text:
+                json_start = response_text.find("```json") + 7
+                json_end = response_text.find("```", json_start)
+                response_text = response_text[json_start:json_end].strip()
+            elif "```" in response_text:
+                json_start = response_text.find("```") + 3
+                json_end = response_text.find("```", json_start)
+                response_text = response_text[json_start:json_end].strip()
+
+            result = json.loads(response_text)
+
+            # Validate schema
+            required_keys = ["dimensions", "temporal_drift"]
+            if not all(key in result for key in required_keys):
+                raise ValueError(f"Missing required keys in vision response: {required_keys}")
+
+            required_dimensions = ["character_state", "action", "camera", "lighting", "environment_persistence"]
+            if not all(dim in result["dimensions"] for dim in required_dimensions):
+                raise ValueError(f"Missing required dimensions: {required_dimensions}")
+
+            logger.info(
+                "VISION_API_SUCCESS | frames=%d | response_length=%d | finish_reason=%s",
+                len(frames),
+                len(response_text),
+                finish_reason,
+            )
+
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse vision model JSON response: {e}")
+            logger.error(f"Raw response (first 500 chars): {response_text[:500]}")
+            raise ValueError(f"Vision model returned invalid JSON: {e}")
+        except Exception as e:
+            logger.error(f"Vision API call failed: {e}")
+            raise
     
     async def _call_groq_corrector(
         self,

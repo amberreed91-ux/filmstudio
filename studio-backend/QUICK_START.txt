@@ -1,0 +1,136 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   ADHERENCE VISION SCORING - QUICK START                  ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 1. SETUP                                                                   │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  export GROQ_API_KEY="your_groq_api_key_here"
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 2. EXTRACT FRAMES FROM VIDEO                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  Using ffmpeg to extract at 10%, 50%, 90%:
+
+  ffmpeg -ss 1.0 -i video.mp4 -frames:v 1 -q:v 2 frame_10pct.jpg
+  ffmpeg -ss 5.0 -i video.mp4 -frames:v 1 -q:v 2 frame_50pct.jpg
+  ffmpeg -ss 9.0 -i video.mp4 -frames:v 1 -q:v 2 frame_90pct.jpg
+
+  (Adjust -ss times based on your video duration)
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 3. RUN MANUAL TEST                                                         │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  cd studio-backend
+
+  python manual_adherence_check.py \
+      --frames frame_10pct.jpg frame_50pct.jpg frame_90pct.jpg \
+      --character "weathered hand, pale skin" \
+      --action "reaching toward artifact" \
+      --camera "extreme closeup" \
+      --lighting "dim candlelight" \
+      --environment "stone pedestal"
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 4. EXPECTED OUTPUT                                                         │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  ══════════════════════════════════════════════════════════════════════════
+  ADHERENCE SCORE REPORT
+  ══════════════════════════════════════════════════════════════════════════
+  Shot ID: manual_test
+  Attempt: 1
+  Overall Adherence Score: 82.5/100
+  Verdict: PASS
+
+  DIMENSION SCORES:
+  ────────────────────────────────────────────────────────────────────────────
+
+  CHARACTER STATE: 85.0/100
+    Expected:  weathered hand, pale skin
+    Observed:  Pale hand with visible veining
+    Evidence:  Hand matches description clearly
+
+  [...more dimensions...]
+
+  TEMPORAL DRIFT:
+  ────────────────────────────────────────────────────────────────────────────
+    Start (10%): 85.0/100
+    End (90%):   78.0/100
+    Delta:       -7.0
+  ══════════════════════════════════════════════════════════════════════════
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ALTERNATIVE: USE AUTOMATED WORKFLOW                                        │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  The EXAMPLE_TEST_WORKFLOW.sh script automates frame extraction:
+
+  ./EXAMPLE_TEST_WORKFLOW.sh video.mp4
+
+  It will:
+  1. Extract frames automatically
+  2. Prompt you for expected slot text
+  3. Run the adherence check
+  4. Show results
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ FILES CREATED                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  manual_adherence_check.py            - Main test script
+  MANUAL_ADHERENCE_CHECK_README.md     - Full usage guide
+  ADHERENCE_GROQ_IMPLEMENTATION.md     - Technical details
+  ADHERENCE_IMPLEMENTATION_SUMMARY.txt - Quick reference
+  EXAMPLE_TEST_WORKFLOW.sh             - Automated test workflow
+  QUICK_START.txt                      - This file
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ WHAT WAS CHANGED                                                           │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  app/services/adherence_service.py:
+    ✓ Switched from OpenAI to Groq (llama-3.2-90b-vision-preview)
+    ✓ Implemented real vision API call in _call_vision_model()
+    ✓ Added comment noting Groq is placeholder for stronger models
+
+  requirements.txt:
+    ✓ Added groq>=0.4.0
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ IMPORTANT NOTES                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  ⚠️  Groq is explicitly noted as a PLACEHOLDER in the code comments.
+      For production, swap in GPT-4o or Claude via environment variables:
+
+      export ADHERENCE_VISION_PROVIDER="openai"
+      export ADHERENCE_VISION_MODEL="gpt-4o"
+
+  ⚠️  NOT YET IMPLEMENTED:
+      - Retry loop with corrective diffs
+      - Database persistence
+      - Render pipeline integration
+      - KeyframeExtractionService integration
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ TROUBLESHOOTING                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  "GROQ_API_KEY not found"
+    → Set: export GROQ_API_KEY="your_key"
+
+  "Frame file not found"
+    → Check paths are correct and files exist
+
+  "Vision model returned invalid JSON"
+    → Check logs for raw response
+    → Try clearer/higher-quality images
+    → Consider switching to stronger model
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                          READY TO TEST!                                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
