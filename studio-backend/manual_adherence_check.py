@@ -98,6 +98,38 @@ def format_adherence_score(score: AdherenceScore) -> str:
     return "\n".join(lines)
 
 
+def format_corrective_diff(diff, current_slots: dict[str, str]) -> str:
+    """Format a CorrectiveDiff for human-readable output."""
+    from app.services.adherence_service import CorrectiveDiff
+    
+    lines = []
+    lines.append("=" * 80)
+    lines.append(f"CORRECTIVE DIFF")
+    lines.append("=" * 80)
+    lines.append(f"Base Attempt: {diff.base_attempt}")
+    lines.append(f"Seed Locked: {diff.seed_locked}")
+    lines.append(f"Operations: {len(diff.ops)}")
+    lines.append(f"Characters Remaining: {diff.chars_remaining}")
+    lines.append("")
+    
+    if not diff.ops:
+        lines.append("No correction operations needed.")
+    else:
+        lines.append("CORRECTION OPERATIONS:")
+        lines.append("-" * 80)
+        for idx, op in enumerate(diff.ops, 1):
+            lines.append(f"\nOperation {idx}: {op.slot.upper().replace('_', ' ')}")
+            lines.append(f"  Type: {op.op}")
+            lines.append(f"  Old Text: {op.old_text}")
+            lines.append(f"  New Text: {op.new_text}")
+            lines.append(f"  Reason: {op.reason}")
+            lines.append(f"  Char Delta: {op.char_delta:+d}")
+    
+    lines.append("")
+    lines.append("=" * 80)
+    return "\n".join(lines)
+
+
 async def run_adherence_check(
     frames: list[str],
     character_state: str,
@@ -279,6 +311,60 @@ Example:
             print()
             print(format_adherence_score(score))
             print()
+        
+        # If verdict is correctable, generate and display corrective diff
+        if score.verdict == "correctable":
+            logger.info("Verdict is CORRECTABLE - generating corrective diff...")
+            
+            # Build current slots from the inputs
+            current_slots = {
+                "character_state": args.character,
+                "action": args.action,
+                "camera": args.camera,
+                "lighting": args.lighting,
+                "environment_persistence": args.environment,
+            }
+            
+            # Check if GROQ_API_KEY is available
+            if not os.getenv("GROQ_API_KEY"):
+                logger.warning(
+                    "GROQ_API_KEY not found - cannot generate corrective diff. "
+                    "Set GROQ_API_KEY to enable diff generation."
+                )
+            else:
+                # Generate corrective diff
+                service = AdherenceService()
+                diff = asyncio.run(
+                    service.generate_corrective_diff(
+                        score=score,
+                        current_slots=current_slots,
+                        chars_remaining=200,  # Default reserve budget
+                    )
+                )
+                
+                if args.json:
+                    # Add diff to JSON output
+                    output["corrective_diff"] = {
+                        "base_attempt": diff.base_attempt,
+                        "seed_locked": diff.seed_locked,
+                        "chars_remaining": diff.chars_remaining,
+                        "ops": [
+                            {
+                                "slot": op.slot,
+                                "op": op.op,
+                                "old_text": op.old_text,
+                                "new_text": op.new_text,
+                                "reason": op.reason,
+                                "char_delta": op.char_delta,
+                            }
+                            for op in diff.ops
+                        ],
+                    }
+                    print(json.dumps(output, indent=2))
+                else:
+                    # Output human-readable diff report
+                    print(format_corrective_diff(diff, current_slots))
+                    print()
         
         # Exit with code based on verdict
         if score.verdict == "pass":

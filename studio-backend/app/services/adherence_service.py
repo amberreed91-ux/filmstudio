@@ -648,6 +648,7 @@ Respond ONLY with valid JSON matching this exact schema:
         Call Groq to generate correction operations.
         
         Cheap call - only sees expected/observed text, not video.
+        Uses Llama 3.3 70B for text-only reasoning over scoring gaps.
         
         Returns dict with ops and updated chars_remaining.
         """
@@ -657,60 +658,148 @@ Respond ONLY with valid JSON matching this exact schema:
             for dim in failed_dimensions
         ])
         
-        prompt = f"""You are a prompt engineer fixing video generation prompts.
+        current_slots_formatted = "\n".join([
+            f"  {key}: {value}"
+            for key, value in current_slots.items()
+        ])
+        
+        system_prompt = """You are a prompt engineer fixing video generation prompts. You analyze expected vs observed descriptions from vision scoring and generate precise correction operations.
 
-These dimensions failed in the render:
-{failed_list}
+Rules:
+1. Only generate ops for failed dimensions (score < 50)
+2. Choose the right operation type:
+   - "replace": completely replace the slot text (use when observed is completely wrong)
+   - "strengthen": prepend emphasis without replacing (use when direction is right but needs more weight)
+   - "prepend_emphasis": add clarifying phrase at start (use when detail is missing)
+3. Calculate char_delta accurately (new_text length - old_text length)
+4. Be specific in reason - explain what gap you're fixing
+5. Respect character budget - don't exceed chars_remaining
+6. Respond ONLY with valid JSON matching the exact schema
 
-Current slots:
-{json.dumps(current_slots, indent=2)}
-
-Available character budget: {chars_remaining}
-
-Generate correction operations. For each failed dimension, choose:
-- "replace": completely replace the slot text
-- "strengthen": prepend emphasis phrase without replacing
-- "prepend_emphasis": add clarifying phrase at start
-
-Respond ONLY with valid JSON:
-{{
+Response schema:
+{
   "ops": [
-    {{
+    {
       "slot": "dimension_name",
       "op": "replace|strengthen|prepend_emphasis",
       "old_text": "current text",
       "new_text": "corrected text",
       "reason": "why this fixes the issue",
       "char_delta": 0
-    }}
+    }
   ],
-  "chars_remaining": {chars_remaining}
-}}"""
+  "chars_remaining": <updated_budget>
+}"""
         
-        # Mock response for now
-        # TODO: Replace with actual Groq call
-        logger.warning(
-            "MOCK_GROQ_CORRECTOR | failed_dims=%d | chars_remaining=%d",
+        user_prompt = f"""These dimensions failed in the render:
+{failed_list}
+
+Current slots:
+{current_slots_formatted}
+
+Available character budget: {chars_remaining}
+
+Generate correction operations to fix the failed dimensions. Only create ops for the failed slots listed above."""
+
+        # Default token budget for corrector - should be enough for typical correction JSON
+        DEFAULT_MAX_OUTPUT_TOKENS = 2048
+        RETRY_MAX_OUTPUT_TOKENS = 4096
+
+        def _sync_groq_call(max_tokens: int) -> tuple[str, str]:
+            """Make synchronous Groq API call and return (response_text, finish_reason)."""
+            client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=max_tokens,
+                temperature=0.3,  # Lower temp for structured output
+                response_format={"type": "json_object"},  # Force JSON mode
+            )
+            content = response.choices[0].message.content
+            finish_reason = response.choices[0].finish_reason
+            return content, finish_reason
+
+        logger.info(
+            "GROQ_CORRECTOR_CALL | failed_dims=%d | chars_remaining=%d | max_output_tokens=%d",
             len(failed_dimensions),
             chars_remaining,
+            DEFAULT_MAX_OUTPUT_TOKENS,
         )
-        
-        # Generate mock ops
-        ops = []
-        for dim in failed_dimensions:
-            ops.append({
-                "slot": dim["slot"],
-                "op": "strengthen",
-                "old_text": dim["expected"],
-                "new_text": f"Emphasize: {dim['expected']}",
-                "reason": f"Strengthen {dim['slot']} to match observed discrepancy",
-                "char_delta": len(f"Emphasize: ") + 2,
-            })
-        
-        return {
-            "ops": ops,
-            "chars_remaining": chars_remaining - sum(op["char_delta"] for op in ops),
-        }
+
+        try:
+            response_text, finish_reason = await asyncio.to_thread(
+                _sync_groq_call, DEFAULT_MAX_OUTPUT_TOKENS
+            )
+            
+            # Check for truncation (finish_reason will be "length" if truncated)
+            if finish_reason == "length":
+                logger.warning(
+                    "GROQ_CORRECTOR_TRUNCATED | finish_reason=%s | max_output_tokens=%d | "
+                    "retrying with %d tokens",
+                    finish_reason,
+                    DEFAULT_MAX_OUTPUT_TOKENS,
+                    RETRY_MAX_OUTPUT_TOKENS,
+                )
+                response_text, finish_reason = await asyncio.to_thread(
+                    _sync_groq_call, RETRY_MAX_OUTPUT_TOKENS
+                )
+                
+                if finish_reason == "length":
+                    logger.error(
+                        "GROQ_CORRECTOR_STILL_TRUNCATED | finish_reason=%s | max_output_tokens=%d | "
+                        "response may be incomplete",
+                        finish_reason,
+                        RETRY_MAX_OUTPUT_TOKENS,
+                    )
+            else:
+                logger.info("GROQ_CORRECTOR_FINISH_REASON | reason=%s", finish_reason)
+
+            # Parse JSON response
+            result = json.loads(response_text)
+
+            # Validate schema
+            if "ops" not in result:
+                raise ValueError("Missing 'ops' key in Groq corrector response")
+            
+            if "chars_remaining" not in result:
+                # Calculate it ourselves if model didn't provide it
+                total_delta = sum(op.get("char_delta", 0) for op in result["ops"])
+                result["chars_remaining"] = chars_remaining - total_delta
+                logger.warning(
+                    "GROQ_CORRECTOR_MISSING_CHARS_REMAINING | calculated=%d",
+                    result["chars_remaining"]
+                )
+
+            # Validate each op has required fields
+            required_op_fields = ["slot", "op", "old_text", "new_text", "reason", "char_delta"]
+            for idx, op in enumerate(result["ops"]):
+                missing = [field for field in required_op_fields if field not in op]
+                if missing:
+                    raise ValueError(f"Op {idx} missing required fields: {missing}")
+                
+                # Validate op type
+                if op["op"] not in ["replace", "strengthen", "prepend_emphasis"]:
+                    raise ValueError(f"Invalid op type: {op['op']}")
+
+            logger.info(
+                "GROQ_CORRECTOR_SUCCESS | ops=%d | chars_remaining=%d | finish_reason=%s",
+                len(result["ops"]),
+                result["chars_remaining"],
+                finish_reason,
+            )
+
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Groq corrector JSON response: {e}")
+            logger.error(f"Raw response (first 500 chars): {response_text[:500]}")
+            raise ValueError(f"Groq corrector returned invalid JSON: {e}")
+        except Exception as e:
+            logger.error(f"Groq corrector API call failed: {e}")
+            raise
 
 
 adherence_service = AdherenceService()
