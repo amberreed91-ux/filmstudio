@@ -3,6 +3,8 @@ Shot-aware prompt builder for previs generation.
 
 Generates unique, cinematically intelligent prompts for each shot/take combination
 based on shot position, script tag type, and take variation.
+
+Phase 2: Fixed-slot prompt assembly with character budgets and slot-addressable structure.
 """
 
 import logging
@@ -10,6 +12,20 @@ import re
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+# Fixed slot character budgets (Runway weights early tokens more heavily)
+SLOT_BUDGETS = {
+    "character_state": 140,      # Visual canon only — hands, face, build — never character names
+    "action": 110,                # One action per shot, not multiple
+    "environment_persistence": 100,  # Recurring motifs/settings that must not drop out
+    "camera": 70,                 # Controlled vocabulary: wide/medium/close, static/dolly/pan
+    "lighting": 60,               # Controlled vocabulary where possible
+    "reserve": 32,                # Unallocated headroom for corrections later
+}
+
+# Total must never exceed Runway's 512-char hard limit
+MAX_PROMPT_LENGTH = 512
 
 
 # Shot framing templates by position
@@ -315,3 +331,129 @@ def get_shot_type_label(shot_number: int) -> str:
         return "CLOSE"
     else:
         return "DETAIL"
+
+
+def _truncate_to_budget(text: str, budget: int) -> str:
+    """Truncate text to fit within character budget."""
+    if len(text) <= budget:
+        return text
+    return text[:budget - 3] + "..."
+
+
+def build_slotted_prompt(
+    scene_data: dict,
+    shot_number: int,
+    character_visual_canon: str = "",
+    action_text: str = "",
+    environment_motifs: str = "",
+    camera_direction: str = "",
+    lighting_direction: str = "",
+) -> dict:
+    """
+    Build a fixed-slot prompt with strict character budgets.
+    
+    Slots are assembled in priority order (most-emphasized first, as Runway weights early tokens more):
+    1. character_state (140 chars) - visual canon only, no character names
+    2. action (110 chars) - one action per shot
+    3. environment_persistence (100 chars) - recurring motifs/settings
+    4. camera (70 chars) - controlled vocabulary
+    5. lighting (60 chars) - controlled vocabulary
+    6. reserve (32 chars) - unallocated headroom for corrections
+    
+    Args:
+        scene_data: Scene dict with metadata
+        shot_number: Shot number (1-based)
+        character_visual_canon: Visual description of characters (hands, face, build)
+        action_text: Primary action for this shot
+        environment_motifs: Recurring environmental elements
+        camera_direction: Camera framing/movement
+        lighting_direction: Lighting mood/style
+    
+    Returns:
+        dict with:
+            - "prompt": assembled prompt string (<=512 chars)
+            - "slots": dict of {slot_name: text} for slot-level addressing
+            - "budget_used": total characters used
+            - "budget_remaining": characters remaining
+    """
+    from app.services.script_parser import sanitize_render_slot
+    
+    # Build slots with budget enforcement
+    slots = {}
+    
+    # 1. character_state (140 chars) - visual canon only
+    if character_visual_canon:
+        sanitized = sanitize_render_slot("character_state", character_visual_canon)
+        slots["character_state"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["character_state"])
+    else:
+        slots["character_state"] = ""
+    
+    # 2. action (110 chars) - one action per shot
+    if action_text:
+        sanitized = sanitize_render_slot("action", action_text)
+        slots["action"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["action"])
+    else:
+        slots["action"] = ""
+    
+    # 3. environment_persistence (100 chars) - recurring motifs
+    if environment_motifs:
+        sanitized = sanitize_render_slot("environment_persistence", environment_motifs)
+        slots["environment_persistence"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["environment_persistence"])
+    else:
+        slots["environment_persistence"] = ""
+    
+    # 4. camera (70 chars) - controlled vocabulary
+    if camera_direction:
+        sanitized = sanitize_render_slot("camera", camera_direction)
+        slots["camera"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["camera"])
+    else:
+        # Default based on shot number
+        shot_type = _determine_shot_type(shot_number, "")
+        slots["camera"] = _truncate_to_budget(shot_type, SLOT_BUDGETS["camera"])
+    
+    # 5. lighting (60 chars) - controlled vocabulary
+    if lighting_direction:
+        sanitized = sanitize_render_slot("lighting", lighting_direction)
+        slots["lighting"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["lighting"])
+    else:
+        slots["lighting"] = ""
+    
+    # 6. reserve (32 chars) - leave empty for now (correction headroom)
+    slots["reserve"] = ""
+    
+    # Assemble prompt from non-empty slots
+    parts = [text for text in [
+        slots["character_state"],
+        slots["action"],
+        slots["environment_persistence"],
+        slots["camera"],
+        slots["lighting"],
+    ] if text]
+    
+    # Join with ". " and add cinematic suffix
+    if parts:
+        base_prompt = ". ".join(parts) + ". Cinematic, film quality."
+    else:
+        base_prompt = "Cinematic shot. Film quality."
+    
+    # Ensure we never exceed 512 chars
+    if len(base_prompt) > MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"]:
+        base_prompt = base_prompt[:MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"] - 3] + "..."
+    
+    budget_used = len(base_prompt)
+    budget_remaining = MAX_PROMPT_LENGTH - budget_used
+    
+    logger.info(
+        "SLOTTED_PROMPT_BUILT | shot=%d | budget_used=%d | budget_remaining=%d",
+        shot_number,
+        budget_used,
+        budget_remaining,
+    )
+    
+    return {
+        "prompt": base_prompt,
+        "slots": slots,
+        "budget_used": budget_used,
+        "budget_remaining": budget_remaining,
+    }
+

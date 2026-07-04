@@ -984,6 +984,25 @@ class DatabaseStorage:
             (25, "Add updated_at column to previs_images", """
                 ALTER TABLE previs_images ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
             """),
+            (26, "Add render_attempts table for prompt-adherence tracking", """
+                CREATE TABLE IF NOT EXISTS render_attempts (
+                    shot_id TEXT NOT NULL,
+                    attempt_n INTEGER NOT NULL,
+                    prompt_text TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    adherence_score REAL,
+                    score_json TEXT,
+                    diff_json TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (shot_id, attempt_n),
+                    CHECK (shot_id != ''),
+                    CHECK (provider != ''),
+                    CHECK (attempt_n >= 1)
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_render_attempts_shot ON render_attempts(shot_id);
+                CREATE INDEX IF NOT EXISTS idx_render_attempts_created ON render_attempts(created_at);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")

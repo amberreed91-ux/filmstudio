@@ -14112,6 +14112,76 @@ def sanitize_scene_characters(characters):
     return cleaned
 
 
+def sanitize_render_slot(slot_name: str, text: str) -> str:
+    """
+    Sanitize render prompt slot text by stripping scene-heading tokens that could leak
+    from ScriptParser output into render prompts.
+    
+    Removes:
+      - INT./EXT. prefixes and variations
+      - Time-of-day markers (DAY, NIGHT, MORNING, etc.)
+      - Transition markers (CUT TO, FADE IN, DISSOLVE TO, etc.)
+      - Scene heading prefixes (THE, A, AN followed by location names)
+    
+    This prevents render prompts from containing structural script tokens like
+    "INT. OCEAN - DAY" when they should only contain visual descriptions.
+    
+    Args:
+        slot_name: Name of the prompt slot (for logging)
+        text: Raw text to sanitize
+    
+    Returns:
+        Sanitized text with scene headings and transitions removed
+    """
+    if not isinstance(text, str):
+        return ""
+    
+    # Blocklist of scene heading and transition tokens
+    SCENE_HEADING_TOKENS = {
+        'INT.', 'EXT.', 'INT./EXT.', 'I/E.', 'INT ', 'EXT ',
+        'DAY', 'NIGHT', 'MORNING', 'AFTERNOON', 'EVENING', 'DAWN', 'DUSK',
+        'CONTINUOUS', 'LATER', 'MOMENTS LATER',
+    }
+    
+    TRANSITION_TOKENS = {
+        'FADE IN', 'FADE OUT', 'FADE TO', 'FADE TO BLACK',
+        'CUT TO', 'SMASH CUT', 'MATCH CUT', 'JUMP CUT', 'DISSOLVE TO',
+        'INTERCUT', 'MONTAGE', 'TITLE CARD', 'THE END', 'FIN',
+        'CONTINUED', "CONT'D", 'CONT\'D', 'BACK TO', 'SUPER',
+    }
+    
+    TIME_OF_DAY_WORDS = ['DAY', 'NIGHT', 'MORNING', 'AFTERNOON', 'EVENING', 'DAWN', 'DUSK']
+    
+    # Remove leading/trailing whitespace
+    cleaned = text.strip()
+    
+    # Remove scene heading prefixes (INT./EXT. at start of line)
+    cleaned = re.sub(r'^\s*(?:INT\.|EXT\.|INT\./EXT\.|I/E\.)\s+', '', cleaned, flags=re.IGNORECASE)
+    
+    # Remove time-of-day suffixes (e.g., "- DAY", "- NIGHT")
+    cleaned = re.sub(r'\s*[-–—]\s*(?:' + '|'.join(TIME_OF_DAY_WORDS) + r')\s*$', '', cleaned, flags=re.IGNORECASE)
+    
+    # Remove time-of-day words appearing alone or with "at" (e.g., "at dusk", "at night")
+    for time_word in TIME_OF_DAY_WORDS:
+        # Remove "at TIME_WORD" pattern
+        pattern = r'\bat\s+' + time_word + r'\b'
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+    
+    # Remove transition tokens (case-insensitive, whole word/phrase)
+    for token in TRANSITION_TOKENS:
+        # Match token as whole phrase
+        pattern = r'\b' + re.escape(token) + r'\b'
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+    
+    # Remove leading articles before location names (e.g., "THE OCEAN" -> "OCEAN")
+    cleaned = re.sub(r'^\s*(?:THE|A|AN)\s+', '', cleaned, flags=re.IGNORECASE)
+    
+    # Clean up multiple spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    
+    return cleaned.strip()
+
+
 # ================================================================================
 # FILM STRUCTURE AND MEMORY EXTRACTION
 # ================================================================================
