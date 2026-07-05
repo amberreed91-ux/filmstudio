@@ -367,9 +367,9 @@ class AdherenceService:
             if op.op == "replace":
                 new_slots[op.slot] = op.new_text
             elif op.op == "strengthen":
-                # Prepend emphasis without replacing, preserving original text exactly once.
-                # Same dedup guard as prepend_emphasis: the LLM may already include
-                # the original slot text in new_text.
+                # ADD emphasis while preserving original, but only if new_text is truly additive.
+                # If new_text appears to be a complete rewrite/paraphrase of the original content,
+                # treat it as a replace instead to avoid redundancy.
                 current = new_slots.get(op.slot, "").strip()
                 if not current:
                     # Empty slot — just use new_text
@@ -378,7 +378,29 @@ class AdherenceService:
                     # new_text already contains the original (case-insensitive) — use it as-is
                     new_slots[op.slot] = op.new_text.strip()
                 else:
-                    new_slots[op.slot] = f"{op.new_text}. {current}".strip()
+                    # Check if new_text is a paraphrase by comparing key content words
+                    # If they share significant overlap, it's likely a rewrite, not an addition
+                    import re
+                    def _extract_content_words(text):
+                        # Extract meaningful words (not punctuation or stopwords)
+                        words = re.findall(r'\b\w{4,}\b', text.lower())  # 4+ char words
+                        return set(words)
+                    
+                    current_words = _extract_content_words(current)
+                    new_words = _extract_content_words(op.new_text)
+                    
+                    # If 60%+ of current words appear in new_text, it's a paraphrase
+                    if current_words and len(current_words & new_words) / len(current_words) >= 0.6:
+                        # Paraphrase detected - use new_text only
+                        new_slots[op.slot] = op.new_text.strip()
+                        logger.info(
+                            "STRENGTHEN_AS_REPLACE | slot=%s | reason=paraphrase_detected | overlap=%d%%",
+                            op.slot,
+                            int(100 * len(current_words & new_words) / len(current_words))
+                        )
+                    else:
+                        # Truly additive - prepend new emphasis
+                        new_slots[op.slot] = f"{op.new_text}. {current}".strip()
             elif op.op == "prepend_emphasis":
                 # Add emphasis at start, preserving original text exactly once.
                 # The LLM may already include the original slot text in new_text
@@ -688,13 +710,17 @@ Respond ONLY with valid JSON matching this exact schema:
 
 Rules:
 1. Only generate ops for failed dimensions
-2. Focus on what SHOULD happen, not what went wrong - you're prescribing the fix, not describing the failure
-3. For character/action consistency issues: emphasize continuous behavior (e.g., "continuously playing", "maintaining focus throughout")
+2. CRITICAL: Prescribe what you WANT to see, never describe what's missing or what went wrong. 
+   - BAD: "No specific character is present" or "character state was not observed"
+   - GOOD: "People visible at human scale, faces and gestures clearly shown, interacting closely"
+   - BAD: "No specific action was expected"  
+   - GOOD: "Vendors actively serving customers, people laughing and talking, continuous human activity"
+3. For character/action consistency issues: prescribe specific visible human elements and continuous behavior
 4. For camera/lighting issues: strengthen the technical directive (e.g., "smooth push-in", "consistent soft lighting")
 5. Choose the right operation type:
-   - "replace": completely replace the slot text (use when current text is completely wrong)
-   - "strengthen": prepend emphasis without replacing (use when direction is right but needs more weight)  
-   - "prepend_emphasis": add clarifying phrase at start (use for continuity emphasis)
+   - "replace": completely replace the slot text (use when current text is empty or completely wrong, or when new_text is a complete rewrite)
+   - "strengthen": ONLY use when you want to ADD emphasis while keeping original text. If your new_text already covers the same content as old_text (even paraphrased), use "replace" instead
+   - "prepend_emphasis": add short clarifying phrase at start (use for continuity emphasis like "Throughout the shot,")
 6. Calculate char_delta accurately (new_text length - old_text length)
 7. Be specific in reason - explain what gap you're fixing
 8. Respect character budget - don't exceed chars_remaining
