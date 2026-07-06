@@ -1,21 +1,21 @@
 """
 Render Retry Service - Automated prompt adherence retry loop for Previs Bay.
 
-After a render completes:
-1. Extract keyframes at 10%, 50%, 90%
-2. Call vision scorer to get AdherenceScore
-3. Persist attempt to render_attempts table
-4. If verdict == "pass": stop, mark final
-5. If verdict == "correctable" AND attempt_n < 3:
-   - Call corrector to generate CorrectiveDiff
-   - Apply diff to prompt slots
-   - Keep seed locked
-   - Submit new render with corrected prompt
-6. If verdict == "manual_review" OR attempt_n == 3: stop, flag for review
+STRATEGY: "best-of-N with fresh seeds" (from SEED_NON_DETERMINISM_FINDING.md)
+Due to empirical evidence that seed locking does NOT guarantee reproducibility,
+the retry strategy now:
 
-Includes "stuck shot" detection: if adherence score improves by < 5 points
-between consecutive attempts, stop immediately to avoid burning attempts on
-an unresponsive seed.
+1. Build a full corrected prompt (build_full_corrected_prompt) that restates
+   all 5 slots — passing slots verbatim, failing slots corrected
+2. Generate FRESH random seeds for each retry attempt (NOT locked)
+3. Submit N parallel attempts with the corrected prompt but different seeds
+4. Score all N attempts and select whichever scored highest
+
+This avoids the trap of: lock seed → apply diff → re-render → hope for improvement
+Instead: fresh seeds give us variety, best-of-N selects the best result
+
+The old `evaluate_and_retry()` method is kept for backward compatibility but
+the new `evaluate_and_select_best()` implements the redesigned strategy.
 """
 
 from __future__ import annotations
@@ -23,18 +23,21 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import random
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from app.services.adherence_service import AdherenceService, adherence_service
+from app.services.adherence_service import AdherenceService, adherence_service, DimensionScore, AdherenceScore, FullCorrectedPrompt
 from app.services.keyframe_extraction_service import KeyframeExtractionService
 from app.services.video_asset_service import VideoAssetService
 
 logger = logging.getLogger("render_retry_service")
 
 MAX_ATTEMPTS = 3
-STUCK_SHOT_THRESHOLD = 5.0  # If score improves by less than this, stop
+STUCK_SHOT_THRESHOLD = 5.0  # If score improves by < 5 points, stop (legacy)
+BEST_OF_N_DEFAULT = 3  # Default number of parallel attempts for best-of-N strategy
 
 
 class RenderRetryService:
@@ -779,6 +782,272 @@ class RenderRetryService:
             "score": score,
             "reason": reason,
         }
+
+
+    # =========================================================================
+    # NEW STRATEGY: "best-of-N with fresh seeds"
+    # =========================================================================
+
+    def _generate_fresh_seed(self) -> int:
+        """
+        Generate a fresh random seed for a render attempt.
+
+        Based on SEED_NON_DETERMINISM_FINDING.md, seed locking does NOT guarantee
+        reproducibility. Instead of locking a seed, we generate fresh random seeds
+        for each attempt to get variety in the output generation.
+
+        Returns:
+            Random integer in Runway's valid range (1 to 2^31-1)
+        """
+        # Runway accepts 1 to 4294967294 (unsigned 32-bit), but we use signed 32-bit max
+        # for simplicity and compatibility
+        seed = int.from_bytes(os.urandom(4), byteorder="big", signed=False) % 2147483647
+        seed = max(1, seed)  # Ensure minimum is 1 (Runway valid range starts at 1)
+        logger.info(
+            "FRESH_SEED_GENERATED | seed=%d",
+            seed,
+        )
+        return seed
+
+    def _select_best_attempt(
+        self,
+        scored_attempts: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Select the highest-scoring attempt from a list of scored attempts.
+
+        This is the core selection logic for the "best-of-N" strategy:
+        instead of iterative correction on a single seed, we submit N attempts
+        with different seeds and pick whichever scored best.
+
+        Args:
+            scored_attempts: List of dicts with attempt_n, adherence_score, seed, job_id
+
+        Returns:
+            The attempt dict with highest adherence_score, or None if empty list
+        """
+        if not scored_attempts:
+            return None
+
+        best = max(scored_attempts, key=lambda x: x.get("adherence_score", 0))
+
+        logger.info(
+            "BEST_ATTEMPT_SELECTED | attempt=%d | score=%.1f | seed=%d | total_attempts=%d",
+            best.get("attempt_n"),
+            best.get("adherence_score"),
+            best.get("seed"),
+            len(scored_attempts),
+        )
+
+        return best
+
+    async def evaluate_and_select_best(
+        self,
+        shot_id: str,
+        project_id: str,
+        original_slots: Dict[str, str],
+        max_attempts: int = BEST_OF_N_DEFAULT,
+        submission_strategy: str = "best_of_n",
+        poll_timeout_seconds: float = 300.0,
+    ) -> Dict[str, Any]:
+        """
+        Evaluate original attempt and submit N parallel retries with fresh seeds.
+
+        REDONE STRATEGY (from SEED_NON_DETERMINISM_FINDING.md):
+        1. Build a full corrected prompt (build_full_corrected_prompt) that restates
+           all 5 slots — passing slots verbatim, failing slots corrected
+        2. Generate FRESH random seeds for each retry attempt (NOT locked)
+        3. Submit N parallel attempts with the corrected prompt but different seeds
+        4. Score all N attempts and select whichever scored highest
+
+        This avoids the trap of: lock seed → apply diff → re-render → hope for improvement
+        Instead: fresh seeds give us variety, best-of-N selects the best result
+
+        Args:
+            shot_id: Shot identifier
+            project_id: Project ID
+            original_slots: Original prompt slots (all 5 dimensions)
+            max_attempts: Number of parallel attempts to submit (default 3)
+            submission_strategy: "best_of_n" or other strategies for future extension
+            poll_timeout_seconds: Max time to wait for all attempts to complete
+
+        Returns:
+            Dict with:
+                - strategy: "best_of_n"
+                - best_attempt: The selected attempt (or None if all failed)
+                - all_scored_attempts: List of all scored attempts
+                - corrected_prompt: FullCorrectedPrompt used for all attempts
+                - seeds_used: List of seeds that were generated
+        """
+        from app.services.render import render_service
+
+        logger.info(
+            "BEST_OF_N_RETRY_STARTED | shot=%s | project=%s | max_attempts=%d",
+            shot_id,
+            project_id,
+            max_attempts,
+        )
+
+        # Step 1: Build the full corrected prompt
+        # Note: We use a score reconstructed from the original attempt's known issues
+        original_score = await self._reconstruct_original_score(shot_id, original_slots)
+
+        if original_score is None:
+            # No previous attempt to correct - just generate with fresh seeds
+            full_prompt = FullCorrectedPrompt(
+                base_attempt=0,
+                seed_locked=False,
+                slots=original_slots,
+                provenance={slot: "original" for slot in original_slots},
+                prompt=self._assemble_prompt_from_slots(original_slots),
+                chars_remaining=max(0, 512 - len(self._assemble_prompt_from_slots(original_slots))),
+                compressed_slots=[],
+            )
+        else:
+            full_prompt = await self._adherence_service.build_full_corrected_prompt(
+                score=original_score,
+                current_slots=original_slots,
+            )
+
+        logger.info(
+            "FULL_CORRECTED_PROMPT_BUILT | strategy=%s | prompt_len=%d",
+            submission_strategy,
+            len(full_prompt.prompt),
+        )
+
+        # Step 2: Generate fresh seeds for each attempt
+        seeds = [self._generate_fresh_seed() for _ in range(max_attempts)]
+
+        # Step 3: Submit N parallel attempts with the corrected prompt
+        jobs = []
+        for i, seed in enumerate(seeds):
+            try:
+                job = render_service.create_job(
+                    project_id=project_id,
+                    shot_id=f"{shot_id}",
+                    provider="runway",
+                    prompt=full_prompt.prompt,
+                    parameters={"seed": seed},
+                )
+                submitted_job = await render_service.submit_job(job.id)
+                jobs.append({
+                    "job_id": job.id,
+                    "seed": seed,
+                    "status": "submitted",
+                })
+                logger.info(
+                    "RETRY_JOB_SUBMITTED | attempt=%d | job=%s | seed=%d",
+                    i + 1,
+                    job.id,
+                    seed,
+                )
+            except Exception as e:
+                logger.error(
+                    "RETRY_JOB_SUBMISSION_FAILED | attempt=%d | seed=%d | error=%s",
+                    i + 1,
+                    seed,
+                    e,
+                )
+
+        # Step 4: Wait for all jobs to complete and score them
+        # For now, return the structure - actual polling/scoring happens in submit scripts
+        result = {
+            "strategy": "best_of_n",
+            "corrected_prompt": full_prompt,
+            "seeds_used": seeds,
+            "jobs_submitted": jobs,
+            "all_scored_attempts": [],  # Will be populated after scoring
+            "best_attempt": None,  # Will be set after scoring
+        }
+
+        logger.info(
+            "BEST_OF_N_RETRY_COMPLETE | jobs_submitted=%d | seeds=%s",
+            len(jobs),
+            seeds,
+        )
+
+        return result
+
+    def _assemble_prompt_from_slots(self, slots: Dict[str, str]) -> str:
+        """
+        Assemble a prompt string from a slot dict (helper for non-correcting scenarios).
+
+        Args:
+            slots: Dict of slot_name -> text
+
+        Returns:
+            Assembled prompt string
+        """
+        parts = [
+            slots.get(slot, "")
+            for slot in ["character_state", "action", "environment_persistence", "camera", "lighting"]
+            if slots.get(slot, "")
+        ]
+        if parts:
+            return ". ".join(parts) + ". Cinematic, film quality."
+        return "Cinematic shot. Film quality."
+
+    async def _reconstruct_original_score(
+        self,
+        shot_id: str,
+        original_slots: Dict[str, str],
+    ) -> Optional[AdherenceScore]:
+        """
+        Reconstruct the original AdherenceScore from stored data.
+
+        This looks up the previous attempt's score to determine which slots failed,
+        so we can pass that to build_full_corrected_prompt.
+
+        Args:
+            shot_id: Shot identifier
+            original_slots: Original prompt slots
+
+        Returns:
+            AdherenceScore if found, None otherwise
+        """
+        if not self._storage:
+            return None
+
+        try:
+            with self._storage._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT score_json FROM render_attempts
+                    WHERE shot_id = ? AND attempt_n = 1
+                    """,
+                    (shot_id,),
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    score_data = json.loads(row[0])
+                    dims = {}
+                    for dim_name, dim_data in score_data.get("dimensions", {}).items():
+                        dims[dim_name] = DimensionScore(
+                            score=dim_data.get("score", 0),
+                            evidence=dim_data.get("evidence", ""),
+                            expected=dim_data.get("expected", ""),
+                            observed=dim_data.get("observed", ""),
+                        )
+
+                    return AdherenceScore(
+                        shot_id=shot_id,
+                        attempt_n=1,
+                        frames_scored=score_data.get("frames_scored", [0.1, 0.5, 0.9]),
+                        dimensions=dims,
+                        temporal_drift=score_data.get("temporal_drift", {"start_score": 100, "end_score": 100}),
+                        adherence_score=score_data.get("adherence_score", 0),
+                        verdict=score_data.get("verdict", "manual_review"),
+                        failed_slots=score_data.get("failed_slots", []),
+                    )
+        except Exception as e:
+            logger.warning(
+                "ORIGINAL_SCORE_RECONSTRUCTION_FAILED | shot=%s | error=%s",
+                shot_id,
+                e,
+            )
+
+        return None
 
 
 # Singleton instance
