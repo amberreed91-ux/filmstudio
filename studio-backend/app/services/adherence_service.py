@@ -84,6 +84,34 @@ class CorrectiveDiff:
     chars_remaining: int
 
 
+@dataclass
+class FullCorrectedPrompt:
+    """
+    Full corrected prompt with all 5 slots restated and provenance tracking.
+
+    Implements the full-prompt regeneration strategy from SEED_NON_DETERMINISM_FINDING.md.
+    Instead of patching only failing slots via diff operations (which relies on the
+    seed to preserve passing dimensions), this structure carries a COMPLETE prompt
+    that explicitly restates all 5 slots:
+
+    - Passing slots → carried forward VERBATIM (exact original text)
+    - Failing slots → corrected by the Groq corrector
+
+    The `provenance` dict records which slots were touched on each attempt:
+    - "carried_forward" for verbatim passing slots
+    - "corrected" for failing slots that were rewritten
+
+    This allows render_attempts to show which slots were touched on each attempt.
+    """
+    base_attempt: int
+    seed_locked: bool
+    slots: Dict[str, str]  # Final slot dict (all 5 slots)
+    provenance: Dict[str, str]  # slot -> "carried_forward" | "corrected"
+    prompt: str  # Assembled prompt string (<=512 chars)
+    chars_remaining: int
+    compressed_slots: List[str]  # Slots that were compressed due to budget
+
+
 class AdherenceService:
     """
     Scores rendered shots against prompt expectations using vision model.
@@ -492,7 +520,403 @@ class AdherenceService:
                 )
         
         return new_slots
-    
+
+    # ------------------------------------------------------------------
+    # Full-prompt regeneration (SEED_NON_DETERMINISM_FINDING.md redesign)
+    # ------------------------------------------------------------------
+
+    # Compression priority for passing slots under budget pressure.
+    # Lowest priority (compressed first) → highest priority (protected longest).
+    # Failing slots are NEVER compressed.
+    PASSING_SLOT_COMPRESSION_ORDER = [
+        "lighting",
+        "camera",
+        "environment_persistence",
+        "action",
+        "character_state",
+    ]
+
+    # The 5 canonical slots, in assembly order (matches build_slotted_prompt)
+    ALL_SLOTS = [
+        "character_state",
+        "action",
+        "environment_persistence",
+        "camera",
+        "lighting",
+    ]
+
+    async def build_full_corrected_prompt(
+        self,
+        score: AdherenceScore,
+        current_slots: Dict[str, str],
+        max_prompt_length: int = 512,
+    ) -> FullCorrectedPrompt:
+        """
+        Build a complete corrected prompt that restates ALL 5 slots.
+
+        Implements the full-prompt regeneration strategy from
+        SEED_NON_DETERMINISM_FINDING.md. Instead of patching only failing slots
+        via diff operations (which relies on the seed to preserve passing
+        dimensions), this method assembles a COMPLETE prompt that explicitly
+        restates all 5 slots:
+
+        - Passing slots → carried forward VERBATIM (exact original text)
+        - Failing slots → corrected by the Groq corrector
+
+        Design decisions (resolving the open questions from the finding):
+        1. Verbatim: passing slots are copied character-for-character from
+           current_slots. Paraphrasing was rejected because it already caused
+           a semantic-duplication bug earlier tonight.
+        2. Budget pressure: if the full restated prompt exceeds max_prompt_length,
+           passing slots are compressed first (priority order: lighting < camera
+           < environment < action < character). Failing slots are NEVER compressed.
+        3. Provenance: each slot is tagged "carried_forward" or "corrected" in
+           the provenance dict so render_attempts can show which slots were
+           touched on each attempt.
+        4. The Groq corrector receives ALL 5 slots (not just failed ones) and
+           explicitly outputs all 5, marking each as carried_forward or corrected.
+           We then OVERRIDE passing slots with verbatim original text regardless
+           of what the LLM returned, to guarantee no paraphrasing drift.
+
+        Args:
+            score: AdherenceScore with per-dimension scores and failed_slots
+            current_slots: Current prompt slots (the original successful text
+                           for passing slots is preserved verbatim from here)
+            max_prompt_length: Hard char limit for the assembled prompt (default 512)
+
+        Returns:
+            FullCorrectedPrompt with slots, provenance, assembled prompt, and
+            compression metadata.
+        """
+        # Step 1: Call the full corrector with ALL 5 slots + pass/fail status
+        corrector_result = await self._call_groq_full_corrector(
+            score=score,
+            current_slots=current_slots,
+        )
+
+        # Step 2: Assemble final slots with verbatim enforcement
+        #   - Passing slots: VERBATIM from current_slots (ignore LLM's version)
+        #   - Failing slots: use the corrector's corrected text
+        final_slots: Dict[str, str] = {}
+        provenance: Dict[str, str] = {}
+
+        for slot in self.ALL_SLOTS:
+            if slot in score.failed_slots:
+                # Failing slot — use corrected text from the corrector
+                corrected_text = corrector_result.get("slots", {}).get(slot, "")
+                if not corrected_text:
+                    # Fallback: if corrector didn't return this slot, keep original
+                    corrected_text = current_slots.get(slot, "")
+                final_slots[slot] = corrected_text
+                provenance[slot] = "corrected"
+            else:
+                # Passing slot — VERBATIM from current_slots
+                final_slots[slot] = current_slots.get(slot, "")
+                provenance[slot] = "carried_forward"
+
+        # Step 3: Assemble the prompt string
+        prompt = self._assemble_prompt(final_slots)
+
+        # Step 4: Budget enforcement — compress passing slots first if over limit
+        compressed_slots: List[str] = []
+        if len(prompt) > max_prompt_length:
+            final_slots, prompt, compressed_slots = self._compress_for_budget(
+                slots=final_slots,
+                failed_slots=score.failed_slots,
+                max_prompt_length=max_prompt_length,
+            )
+
+        chars_remaining = max_prompt_length - len(prompt)
+
+        logger.info(
+            "FULL_CORRECTED_PROMPT_BUILT | shot=%s | attempt=%d | "
+            "carried_forward=%d | corrected=%d | compressed=%d | "
+            "prompt_len=%d | chars_remaining=%d",
+            score.shot_id,
+            score.attempt_n,
+            sum(1 for v in provenance.values() if v == "carried_forward"),
+            sum(1 for v in provenance.values() if v == "corrected"),
+            len(compressed_slots),
+            len(prompt),
+            chars_remaining,
+        )
+
+        return FullCorrectedPrompt(
+            base_attempt=score.attempt_n,
+            seed_locked=True,
+            slots=final_slots,
+            provenance=provenance,
+            prompt=prompt,
+            chars_remaining=chars_remaining,
+            compressed_slots=compressed_slots,
+        )
+
+    def _assemble_prompt(self, slots: Dict[str, str]) -> str:
+        """
+        Assemble a prompt string from a slot dict.
+
+        Follows the same assembly order as build_slotted_prompt:
+        character_state, action, environment_persistence, camera, lighting.
+        Joins with ". " and appends the cinematic suffix.
+        """
+        parts = [
+            slots.get(slot, "")
+            for slot in self.ALL_SLOTS
+            if slots.get(slot, "")
+        ]
+        if parts:
+            return ". ".join(parts) + ". Cinematic, film quality."
+        return "Cinematic shot. Film quality."
+
+    def _compress_for_budget(
+        self,
+        slots: Dict[str, str],
+        failed_slots: List[str],
+        max_prompt_length: int,
+    ) -> tuple[Dict[str, str], str, List[str]]:
+        """
+        Compress passing slots to fit within the char budget.
+
+        Compression priority (compressed first → protected last):
+            lighting < camera < environment < action < character
+
+        Failing slots are NEVER compressed — they contain the corrected content
+        that we need to fix the render.
+
+        Args:
+            slots: Current slot dict
+            failed_slots: List of failing slot names (protected from compression)
+            max_prompt_length: Hard char limit
+
+        Returns:
+            Tuple of (compressed_slots_dict, assembled_prompt, list_of_compressed_slot_names)
+        """
+        compressed_slots = dict(slots)  # work on a copy
+        compressed_names: List[str] = []
+
+        prompt = self._assemble_prompt(compressed_slots)
+
+        while len(prompt) > max_prompt_length:
+            overage = len(prompt) - max_prompt_length
+            compressed_something = False
+
+            for slot in self.PASSING_SLOT_COMPRESSION_ORDER:
+                # Never compress a failing slot
+                if slot in failed_slots:
+                    continue
+
+                current_text = compressed_slots.get(slot, "")
+                if not current_text or len(current_text) <= 20:
+                    continue
+
+                # Compress: remove overage + 10-char buffer, floor at 20 chars
+                target_length = max(20, len(current_text) - overage - 10)
+                if target_length >= len(current_text):
+                    continue  # can't help
+
+                compressed_slots[slot] = current_text[:target_length] + "..."
+                compressed_names.append(slot)
+                compressed_something = True
+
+                logger.info(
+                    "FULL_PROMPT_SLOT_COMPRESSED | slot=%s | from=%d | to=%d | "
+                    "overage=%d",
+                    slot,
+                    len(current_text),
+                    len(compressed_slots[slot]),
+                    overage,
+                )
+
+                # Recalculate prompt length after this compression
+                prompt = self._assemble_prompt(compressed_slots)
+                if len(prompt) <= max_prompt_length:
+                    break
+
+            if not compressed_something:
+                # No passing slot could be compressed further.
+                # Last resort: hard-truncate the assembled prompt.
+                logger.warning(
+                    "FULL_PROMPT_HARD_TRUNCATE | prompt_len=%d | max=%d | "
+                    "no_passing_slots_compressible",
+                    len(prompt),
+                    max_prompt_length,
+                )
+                prompt = prompt[: max_prompt_length - 3] + "..."
+                break
+
+        return compressed_slots, prompt, compressed_names
+
+    async def _call_groq_full_corrector(
+        self,
+        score: AdherenceScore,
+        current_slots: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """
+        Call Groq to generate corrected text for ALL 5 slots.
+
+        Unlike _call_groq_corrector (which only sees failed dimensions), this
+        call receives ALL 5 slots with their pass/fail status and per-dimension
+        scores. The corrector outputs all 5 slots, marking each as
+        "carried_forward" or "corrected".
+
+        Note: We do NOT trust the LLM's text for passing slots — build_full_corrected_prompt()
+        overrides passing slots with verbatim original text regardless of what
+        the LLM returns. The LLM's carried_forward text is informational only.
+        We DO trust the LLM's corrected text for failing slots.
+
+        Returns dict with:
+            - "slots": {slot_name: text} for all 5 slots
+            - "provenance": {slot_name: "carried_forward" | "corrected"}
+        """
+        # Build per-slot status for the corrector
+        slot_status_lines = []
+        for slot in self.ALL_SLOTS:
+            dim_score = score.dimensions.get(slot)
+            current_text = current_slots.get(slot, "")
+            if slot in score.failed_slots:
+                status = "FAILED"
+                evidence = dim_score.evidence if dim_score else ""
+                observed = dim_score.observed if dim_score else ""
+                slot_status_lines.append(
+                    f"  {slot} [FAILED] (score={dim_score.score if dim_score else 0}): "
+                    f'current="{current_text}" | observed="{observed}" | '
+                    f"evidence={evidence}"
+                )
+            else:
+                status = "PASSED"
+                slot_status_lines.append(
+                    f"  {slot} [PASSED] (score={dim_score.score if dim_score else 100}): "
+                    f'current="{current_text}"'
+                )
+
+        slot_status = "\n".join(slot_status_lines)
+
+        system_prompt = """You are a prompt engineer fixing video generation prompts using full-prompt regeneration.
+
+You receive ALL 5 prompt slots with their pass/fail status. You must output ALL 5 slots in your response, marking each as "carried_forward" or "corrected".
+
+Rules:
+1. For PASSED slots: mark them "carried_forward" and echo the current text. (The system will use the verbatim original regardless, so this is informational.)
+2. For FAILED slots: mark them "corrected" and provide new text that prescribes what you WANT to see.
+   - BAD: "No specific character is present" or "character state was not observed"
+   - GOOD: "People visible at human scale, faces and gestures clearly shown, interacting closely"
+   - BAD: "No specific action was expected"
+   - GOOD: "Vendors actively serving customers, people laughing and talking, continuous human activity"
+3. For character/action consistency issues: prescribe specific visible human elements and continuous behavior.
+4. For camera/lighting issues: strengthen the technical directive (e.g., "smooth push-in", "consistent soft lighting").
+5. Keep each slot within its character budget:
+   - character_state: 140 chars
+   - action: 110 chars
+   - environment_persistence: 100 chars
+   - camera: 70 chars
+   - lighting: 60 chars
+6. Respond ONLY with valid JSON matching the exact schema.
+
+Response schema:
+{
+  "slots": {
+    "character_state": {"text": "...", "source": "carried_forward|corrected"},
+    "action": {"text": "...", "source": "carried_forward|corrected"},
+    "environment_persistence": {"text": "...", "source": "carried_forward|corrected"},
+    "camera": {"text": "...", "source": "carried_forward|corrected"},
+    "lighting": {"text": "...", "source": "carried_forward|corrected"}
+  },
+  "provenance": {
+    "character_state": "carried_forward|corrected",
+    "action": "carried_forward|corrected",
+    "environment_persistence": "carried_forward|corrected",
+    "camera": "carried_forward|corrected",
+    "lighting": "carried_forward|corrected"
+  }
+}"""
+
+        user_prompt = f"""Here are all 5 prompt slots with their render scoring status:
+
+{slot_status}
+
+Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the current text. For FAILED slots, mark "corrected" and write new text that prescribes the desired visual behavior."""
+
+        DEFAULT_MAX_OUTPUT_TOKENS = 2048
+        RETRY_MAX_OUTPUT_TOKENS = 4096
+
+        def _sync_groq_call(max_tokens: int) -> tuple[str, str]:
+            """Make synchronous Groq API call and return (response_text, finish_reason)."""
+            client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content
+            finish_reason = response.choices[0].finish_reason
+            return content, finish_reason
+
+        logger.info(
+            "GROQ_FULL_CORRECTOR_CALL | failed=%d | total_slots=5 | max_output_tokens=%d",
+            len(score.failed_slots),
+            DEFAULT_MAX_OUTPUT_TOKENS,
+        )
+
+        try:
+            response_text, finish_reason = await asyncio.to_thread(
+                _sync_groq_call, DEFAULT_MAX_OUTPUT_TOKENS
+            )
+
+            if finish_reason == "length":
+                logger.warning(
+                    "GROQ_FULL_CORRECTOR_TRUNCATED | finish_reason=%s | retrying with %d tokens",
+                    finish_reason,
+                    RETRY_MAX_OUTPUT_TOKENS,
+                )
+                response_text, finish_reason = await asyncio.to_thread(
+                    _sync_groq_call, RETRY_MAX_OUTPUT_TOKENS
+                )
+
+            result = json.loads(response_text)
+
+            # Validate schema
+            if "slots" not in result:
+                raise ValueError("Missing 'slots' key in Groq full corrector response")
+
+            # Flatten the nested structure into {slot: text}
+            flattened: Dict[str, str] = {}
+            for slot in self.ALL_SLOTS:
+                slot_data = result["slots"].get(slot, {})
+                if isinstance(slot_data, dict):
+                    flattened[slot] = slot_data.get("text", "")
+                else:
+                    # Handle case where LLM returns plain string instead of dict
+                    flattened[slot] = str(slot_data)
+
+            # Use provenance from result if present, else derive from failed_slots
+            provenance = result.get("provenance", {})
+            if not provenance:
+                provenance = {
+                    slot: ("corrected" if slot in score.failed_slots else "carried_forward")
+                    for slot in self.ALL_SLOTS
+                }
+
+            logger.info(
+                "GROQ_FULL_CORRECTOR_SUCCESS | slots=%d | finish_reason=%s",
+                len(flattened),
+                finish_reason,
+            )
+
+            return {"slots": flattened, "provenance": provenance}
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Groq full corrector JSON response: {e}")
+            logger.error(f"Raw response (first 500 chars): {response_text[:500]}")
+            raise ValueError(f"Groq full corrector returned invalid JSON: {e}")
+        except Exception as e:
+            logger.error(f"Groq full corrector API call failed: {e}")
+            raise
+
     async def _call_vision_model(
         self,
         frames: List[str],
