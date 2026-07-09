@@ -1,0 +1,170 @@
+═══════════════════════════════════════════════════════════════════════════════
+ADHERENCE VISION MODEL IMPLEMENTATION - QUICK REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+WHAT WAS DONE:
+--------------
+
+1. ✅ Switched vision provider from OpenAI/GPT-4o to Groq's llama-4-scout-17b-16e-instruct
+2. ✅ Implemented real vision API call in AdherenceService._call_vision_model()
+3. ✅ Created standalone manual test script: manual_adherence_check.py
+4. ✅ Added code comment noting Groq is a placeholder for stronger models
+5. ✅ Added groq>=0.4.0 to requirements.txt
+
+WHAT WAS NOT DONE (as requested):
+----------------------------------
+
+❌ Retry loop with corrective diffs
+❌ Database persistence of adherence scores  
+❌ Render pipeline integration
+❌ KeyframeExtractionService integration
+❌ Real Groq corrector implementation (_call_groq_corrector still mocked)
+
+═══════════════════════════════════════════════════════════════════════════════
+HOW TO TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+PREREQUISITES:
+1. Set GROQ_API_KEY environment variable
+2. Have 3 frame images extracted from a video (10%, 50%, 90% positions)
+
+RUN THE SCRIPT:
+
+  cd studio-backend
+  
+  python manual_adherence_check.py \
+      --frames frame1.jpg frame2.jpg frame3.jpg \
+      --character "weathered hand, pale skin, visible veins" \
+      --action "reaching slowly toward ancient artifact" \
+      --camera "extreme closeup, shallow focus" \
+      --lighting "dim candlelight, warm amber glow" \
+      --environment "dusty stone pedestal, gothic chamber"
+
+EXPECTED OUTPUT:
+
+  ════════════════════════════════════════════════════════════════════════════
+  ADHERENCE SCORE REPORT
+  ════════════════════════════════════════════════════════════════════════════
+  Shot ID: manual_test
+  Attempt: 1
+  Overall Adherence Score: 82.5/100
+  Verdict: PASS
+  
+  DIMENSION SCORES:
+  ─────────────────────────────────────────────────────────────────────────────
+  
+  CHARACTER STATE: 85.0/100
+    Expected:  weathered hand, pale skin, visible veins
+    Observed:  Pale hand with visible veining, weathered texture
+    Evidence:  Hand matches description with clear vein visibility
+  
+  [... more dimensions ...]
+  
+  TEMPORAL DRIFT:
+  ─────────────────────────────────────────────────────────────────────────────
+    Start (10%): 85.0/100
+    End (90%):   78.0/100
+    Delta:       -7.0
+  ════════════════════════════════════════════════════════════════════════════
+
+EXIT CODES:
+  0 = Pass (score ≥ 80)
+  1 = Correctable (50 ≤ score < 80)
+  2 = Manual review (score < 50)
+  3 = Error occurred
+
+═══════════════════════════════════════════════════════════════════════════════
+FILES CHANGED
+═══════════════════════════════════════════════════════════════════════════════
+
+MODIFIED:
+  studio-backend/app/services/adherence_service.py
+    - Added imports: asyncio, base64, Groq
+    - Changed default provider to "groq"
+    - Changed default model to "llama-3.2-90b-vision-preview"
+    - Added placeholder comment about stronger models
+    - Replaced mock _call_vision_model() with real Groq API implementation
+    - Encodes frames as base64
+    - Constructs OpenAI-compatible messages with image_url
+    - Calls Groq API in thread pool
+    - Parses JSON response with validation
+    - Full error handling and logging
+
+  studio-backend/requirements.txt
+    - Added: groq>=0.4.0
+
+CREATED:
+  studio-backend/manual_adherence_check.py
+    - Standalone CLI script for manual testing
+    - Takes frame paths and expected slot text as arguments
+    - Calls AdherenceService.score_render_attempt() directly
+    - Prints human-readable report or JSON output
+    - Exit codes based on verdict
+
+  studio-backend/MANUAL_ADHERENCE_CHECK_README.md
+    - Comprehensive usage guide
+    - Troubleshooting tips
+    - Example workflows
+
+  studio-backend/ADHERENCE_GROQ_IMPLEMENTATION.md
+    - Detailed implementation documentation
+    - Code examples and architecture notes
+    - Configuration guide
+
+  studio-backend/ADHERENCE_IMPLEMENTATION_SUMMARY.txt
+    - This file - quick reference guide
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPORTANT NOTES
+═══════════════════════════════════════════════════════════════════════════════
+
+⚠️  GROQ IS A PLACEHOLDER:
+    The code includes an explicit comment that Groq's llama-3.2-90b-vision-preview
+    is NOT intended as the permanent choice. For production fine-grained consistency
+    judgments (e.g., "is this the same weathered hand as attempt 1"), swap in
+    GPT-4o or Claude via ADHERENCE_VISION_PROVIDER environment variable.
+
+🔧 CONFIGURATION:
+    Vision provider is configurable via environment variables:
+    
+    export ADHERENCE_VISION_PROVIDER="groq"   # or "openai", "anthropic"
+    export ADHERENCE_VISION_MODEL="llama-3.2-90b-vision-preview"
+    
+    Note: Only Groq is currently implemented in the code.
+
+📝 CODE COMMENT LOCATION:
+    The placeholder note is in adherence_service.py at line ~96:
+    
+    # NOTE: Using Groq's llama-3.2-90b-vision-preview as placeholder.
+    # For production fine-grained consistency judgments (e.g., "is this the same
+    # weathered hand as attempt 1"), swap in a stronger vision model like GPT-4o
+    # or Claude via ADHERENCE_VISION_PROVIDER once available.
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Set GROQ_API_KEY environment variable
+□ Extract 3 frames from a test video (use ffmpeg or similar)
+□ Run manual_adherence_check.py with real frames and expected text
+□ Verify output shows dimension scores with evidence
+□ Check that temporal drift is calculated
+□ Confirm verdict is assigned correctly based on score
+□ Test --json flag for machine-readable output
+□ Verify exit codes match verdict
+
+═══════════════════════════════════════════════════════════════════════════════
+NEXT STEPS (when ready)
+═══════════════════════════════════════════════════════════════════════════════
+
+When you're ready to build the full pipeline:
+
+1. Integrate KeyframeExtractionService to auto-extract frames
+2. Implement real Groq corrector in _call_groq_corrector()
+3. Build retry loop that applies corrective diffs
+4. Persist AdherenceScore objects to database
+5. Wire into render pipeline to score every attempt
+6. Evaluate Groq vs GPT-4o quality on real renders
+7. Tune VERDICT_PASS_THRESHOLD based on results
+
+═══════════════════════════════════════════════════════════════════════════════

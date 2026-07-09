@@ -1,0 +1,68 @@
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/services/adherence_service.py:24: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x111e14590>
+Unclosed connector
+connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0x111e1d2d0>, 366725.530040875)])']
+connector: <aiohttp.connector.TCPConnector object at 0x111e14a10>
+Failed to extract frames for quality check | job=job-20260528170029-c5ca66d8-scene_001_shot_001 | error=Video asset not found
+Environment check:
+  GROQ_API_KEY: ✓ loaded
+  GEMINI_API_KEY: ✓ loaded
+  RUNWAYML_API_SECRET: ✓ loaded
+
+================================================================================
+REAL JOB TEST: render_retry_service.record_render_attempt()
+================================================================================
+
+✓ Storage initialized
+
+Found job:
+  ID: job-20260528170029-c5ca66d8-scene_001_shot_001
+  Project: project_8013c013e286
+  Shot: scene_001_shot_001
+  Status: complete
+  Provider: runway
+  Output URL: https://dnznrvs05pmza.cloudfront.net/e01ccdc4-e7ed-47aa-b99b-50fdae45775b.mp4?_j...
+  Prompt: Cinematic shot for scene_001: A displaced musician uncovers a citywide memory glitch one song at a t
+
+================================================================================
+RECORDING RENDER ATTEMPT with REAL API CALLS
+================================================================================
+
+⚠️  This will:
+   1. Refresh the CloudFront URL (POST /jobs/{job_id}/refresh-url)
+   2. Download the video
+   3. Extract keyframes
+   4. Call Groq API for prompt adherence scoring
+   5. Call Gemini API for keyframe quality analysis
+   6. Persist results to render_attempts table
+
+Proceeding in 3 seconds...
+
+✓ Render attempt recorded successfully
+
+Result:
+  Attempt ID: None
+  Job ID: None
+  Attempt Number: None
+  Adherence Score: None
+
+================================================================================
+QUERYING DATABASE
+================================================================================
+
+✓ Found 0 attempt(s) for shot scene_001_shot_001
+
+⚠️  No attempts found!
+================================================================================
+✅ REAL JOB TEST COMPLETE
+================================================================================
+

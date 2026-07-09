@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/shared/bin/tqdm",
+  "revisions": [
+    {
+      "revision_id": "4fd5d005-94b8-4742-97af-2c4f63bb0922",
+      "metadata": {
+        "timestamp": "2026-06-17T10:11:34.935676",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 235,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:11:34.935676"
+    }
+  ]
+}

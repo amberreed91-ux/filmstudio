@@ -1,0 +1,34 @@
+{
+  "file_name": "tests/venvs/shared/.base_ready",
+  "revisions": [
+    {
+      "revision_id": "606e61ce-b7f0-4725-9522-ca11f506b5ab",
+      "metadata": {
+        "timestamp": "2026-06-17T10:08:59.582733",
+        "type": "cache_version",
+        "source": "deleted",
+        "size": 0,
+        "is_reverted": false,
+        "is_deleted": true,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": "File deleted (deleted)"
+      },
+      "saved_at": "2026-06-17T10:08:59.582733"
+    },
+    {
+      "revision_id": "c4d9e4d2-674c-4be0-ade9-bdfb49322439",
+      "metadata": {
+        "timestamp": "2026-06-17T10:08:29.083267",
+        "type": "cache_version",
+        "source": "initial_from_disk",
+        "size": 0,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:08:29.083267"
+    }
+  ]
+}

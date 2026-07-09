@@ -1,0 +1,33 @@
+{
+  "file_name": "tests/smoke_sfx.py",
+  "revisions": [
+    {
+      "revision_id": "17f31e04-4009-4d01-bc54-79bf1df3e2ce",
+      "metadata": {
+        "timestamp": "2026-06-17T10:00:43.846435",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 6304,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-17T10:00:43.846435"
+    },
+    {
+      "revision_id": "20323ffa-617c-4c3e-92f9-cc7d1c4af8ab",
+      "metadata": {
+        "timestamp": "2026-06-17T08:27:07.104255",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 5864,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T08:27:07.104255"
+    }
+  ]
+}

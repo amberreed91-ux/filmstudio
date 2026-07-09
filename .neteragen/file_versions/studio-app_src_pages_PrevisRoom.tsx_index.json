@@ -1,0 +1,47 @@
+{
+  "file_name": "studio-app/src/pages/PrevisRoom.tsx",
+  "revisions": [
+    {
+      "revision_id": "f65405d7-ec24-4a1c-b5a2-273b7eebd922",
+      "metadata": {
+        "timestamp": "2026-06-15T15:56:47.997999",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 166351,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T15:56:47.997999"
+    },
+    {
+      "revision_id": "5c246539-4f4d-4147-89fa-d7240eb3ddee",
+      "metadata": {
+        "timestamp": "2026-06-15T15:56:39.550528",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 165591,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T15:56:39.550528"
+    },
+    {
+      "revision_id": "ef2da87b-f0ae-4fe5-ae28-e9cd0f134737",
+      "metadata": {
+        "timestamp": "2026-06-15T15:56:39.547340",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 165521,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-15T15:56:39.547340"
+    }
+  ]
+}

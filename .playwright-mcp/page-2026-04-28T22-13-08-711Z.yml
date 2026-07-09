@@ -1,0 +1,132 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Production Board" [ref=e6] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e7]
+        - generic [ref=e9]: Production Board
+      - generic [ref=e10]: Track execution readiness, dependencies, and queue health across active scenes.
+    - navigation [ref=e11]:
+      - link "Lobby" [ref=e12] [cursor=pointer]:
+        - /url: /studio/lobby
+      - link "Studio Dashboard" [ref=e13] [cursor=pointer]:
+        - /url: /studio/overview
+      - link "Writer's Room" [ref=e14] [cursor=pointer]:
+        - /url: /studio/writers-room
+      - link "Production Board" [ref=e15] [cursor=pointer]:
+        - /url: /studio/production-board
+      - link "Screening Room" [ref=e16] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - link "Archive" [ref=e17] [cursor=pointer]:
+        - /url: /studio/archive
+      - link "Script Ingestion" [ref=e18] [cursor=pointer]:
+        - /url: /studio/ingest
+      - link "Project Slate" [ref=e19] [cursor=pointer]:
+        - /url: /studio/slate
+      - link "Approval Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/dashboard
+      - link "Study Room" [ref=e21] [cursor=pointer]:
+        - /url: /studio/study-room
+      - link "Crew Ops" [ref=e22] [cursor=pointer]:
+        - /url: /studio/scheduler
+      - link "Cost Manager" [ref=e23] [cursor=pointer]:
+        - /url: /studio/cost
+    - generic [ref=e24]:
+      - generic [ref=e27]: Syncing studio...
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: Admin | FilmOS
+  - generic [ref=e33]:
+    - link "Home" [ref=e34] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e35]
+      - text: Home
+    - generic [ref=e38]:
+      - img [ref=e39]
+      - link "Studio Lobby" [ref=e41] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e42]:
+      - img [ref=e43]
+      - generic [ref=e45]: Production Board
+  - generic [ref=e46]:
+    - generic [ref=e47]:
+      - generic [ref=e48]: Production Board
+      - generic [ref=e49]: Track execution readiness, dependencies, and queue health across active scenes.
+    - generic [ref=e50]:
+      - button "Back" [ref=e51] [cursor=pointer]:
+        - img [ref=e52]
+        - text: Back
+      - link "Studio Home" [ref=e54] [cursor=pointer]:
+        - /url: /studio
+      - link "Open Previs Room" [ref=e55] [cursor=pointer]:
+        - /url: /studio/previs
+        - text: Open Previs Room
+        - img [ref=e56]
+      - link "Open Screening Room" [ref=e58] [cursor=pointer]:
+        - /url: /studio/screening-room
+        - text: Open Screening Room
+        - img [ref=e59]
+  - generic [ref=e61]:
+    - link "Overview" [ref=e62] [cursor=pointer]:
+      - /url: /studio/overview
+      - text: Overview
+    - link "Writer's Room" [ref=e64] [cursor=pointer]:
+      - /url: /studio/writers-room
+      - text: Writer's Room
+    - link "Study Room" [ref=e66] [cursor=pointer]:
+      - /url: /studio/study-room
+      - text: Study Room
+    - link "Previs Room" [ref=e68] [cursor=pointer]:
+      - /url: /studio/previs
+      - text: Previs Room
+    - link "Production Board" [ref=e70] [cursor=pointer]:
+      - /url: /studio/production-board
+      - text: Production Board
+    - link "Screening Room" [ref=e72] [cursor=pointer]:
+      - /url: /studio/screening-room
+      - text: Screening Room
+    - link "Archive" [ref=e74] [cursor=pointer]:
+      - /url: /studio/archive
+      - text: Archive
+  - generic [ref=e76]:
+    - generic [ref=e77]: Script
+    - generic [ref=e78]: Scenes
+    - generic [ref=e79]: Previs
+    - generic [ref=e80]: Review
+    - generic [ref=e81]: Cut
+    - generic [ref=e82]: Archive
+  - generic [ref=e83]:
+    - generic [ref=e84]: Next Step
+    - generic [ref=e85]: Watch your film
+    - generic [ref=e86]:
+      - link "Open Screening Room" [ref=e87] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - generic [ref=e88]: "approved scenes: 1"
+  - main [ref=e89]:
+    - generic [ref=e91]:
+      - generic [ref=e92]:
+        - generic [ref=e93]: "STEP 3: TRACK PROGRESS"
+        - heading "Production Board" [level=2] [ref=e94]
+        - paragraph [ref=e95]: Live scene control surface for cut health, blockers, and lock readiness.
+        - generic [ref=e96]:
+          - generic [ref=e97]: "Approved Scenes: 1"
+          - generic [ref=e98]: "Needs Attention: 0"
+        - generic [ref=e99]:
+          - generic [ref=e100]: "Next Step:"
+          - generic [ref=e101]: Review Scene Queue
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104]: Total Scenes
+            - generic [ref=e105]: "0"
+          - generic [ref=e106]:
+            - generic [ref=e107]: Locked
+            - generic [ref=e108]: "0"
+          - generic [ref=e109]:
+            - generic [ref=e110]: In Progress
+            - generic [ref=e111]: "0"
+          - generic [ref=e112]:
+            - generic [ref=e113]: Blocked
+            - generic [ref=e114]: "0"
+      - generic [ref=e115]:
+        - heading "Scene Queue" [level=3] [ref=e116]
+        - generic [ref=e118]: No scenes to track yet.

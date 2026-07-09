@@ -1,0 +1,16 @@
+{
+  "file_name": "tests/venvs/music/bin/activate",
+  "revision_id": "3c0dd3a8-72ff-466d-bd43-3f74b984531f",
+  "metadata": {
+    "timestamp": "2026-06-17T08:27:51.225662",
+    "type": "cache_version",
+    "source": "initial_create",
+    "size": 1754,
+    "is_reverted": false,
+    "git_branch_name": "backend-expansion-dependency-slicing",
+    "agent_name": "Cody",
+    "description": null
+  },
+  "content": "# This file must be used with \"source bin/activate\" *from bash*\n# you cannot run it directly\n\ndeactivate () {\n    # reset old environment variables\n    if [ -n \"${_OLD_VIRTUAL_PATH:-}\" ] ; then\n        PATH=\"${_OLD_VIRTUAL_PATH:-}\"\n        export PATH\n        unset _OLD_VIRTUAL_PATH\n    fi\n    if [ -n \"${_OLD_VIRTUAL_PYTHONHOME:-}\" ] ; then\n        PYTHONHOME=\"${_OLD_VIRTUAL_PYTHONHOME:-}\"\n        export PYTHONHOME\n        unset _OLD_VIRTUAL_PYTHONHOME\n    fi\n\n    # Call hash to forget past commands. Without forgetting\n    # past commands the $PATH changes we made may not be respected\n    hash -r 2> /dev/null\n\n    if [ -n \"${_OLD_VIRTUAL_PS1:-}\" ] ; then\n        PS1=\"${_OLD_VIRTUAL_PS1:-}\"\n        export PS1\n        unset _OLD_VIRTUAL_PS1\n    fi\n\n    unset VIRTUAL_ENV\n    unset VIRTUAL_ENV_PROMPT\n    if [ ! \"${1:-}\" = \"nondestructive\" ] ; then\n    # Self destruct!\n        unset -f deactivate\n    fi\n}\n\n# unset irrelevant variables\ndeactivate nondestructive\n\nVIRTUAL_ENV=\"/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/tests/venvs/music\"\nexport VIRTUAL_ENV\n\n_OLD_VIRTUAL_PATH=\"$PATH\"\nPATH=\"$VIRTUAL_ENV/bin:$PATH\"\nexport PATH\n\n# unset PYTHONHOME if set\n# this will fail if PYTHONHOME is set to the empty string (which is bad anyway)\n# could use `if (set -u; : $PYTHONHOME) ;` in bash\nif [ -n \"${PYTHONHOME:-}\" ] ; then\n    _OLD_VIRTUAL_PYTHONHOME=\"${PYTHONHOME:-}\"\n    unset PYTHONHOME\nfi\n\nif [ -z \"${VIRTUAL_ENV_DISABLE_PROMPT:-}\" ] ; then\n    _OLD_VIRTUAL_PS1=\"${PS1:-}\"\n    PS1=\"(music) ${PS1:-}\"\n    export PS1\n    VIRTUAL_ENV_PROMPT=\"(music) \"\n    export VIRTUAL_ENV_PROMPT\nfi\n\n# Call hash to forget past commands. Without forgetting\n# past commands the $PATH changes we made may not be respected\nhash -r 2> /dev/null\n",
+  "saved_at": "2026-06-17T08:27:51.225662"
+}

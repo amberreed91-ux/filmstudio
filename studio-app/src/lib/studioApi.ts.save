@@ -1,0 +1,224 @@
+export type StudioOverview = {
+  build?: string
+  projects: Array<{
+    project_id: string
+    title?: string
+    updated_at?: string
+    scene_count?: number
+    shot_count?: number
+  }>
+  latest_project?: StudioProject | null
+}
+
+export type StudioProject = {
+  project_id: string
+  title?: string
+  updated_at?: string
+  source_stats?: {
+    scene_count?: number
+    shot_count?: number
+    render_count?: number
+    character_count?: number
+    word_count?: number
+    target_runtime_minutes?: number | null
+    source_filename?: string | null
+  }
+  render_provider?: {
+    provider_name?: string
+    provider_model?: string
+    status?: string
+    mode?: string
+  }
+  production_bible?: {
+    creative_intent?: string
+  }
+  render_provider_integrations?: Array<{
+    provider?: string
+    selected?: boolean
+    status?: string
+    live_generation?: string
+    requires?: string[]
+  }>
+  crew_agents?: Array<Record<string, unknown>>
+  shot_approval_gates?: Array<Record<string, unknown>>
+  storyboard_wall?: Array<Record<string, unknown>>
+  render_queue?: Array<Record<string, unknown>>
+  rights_safety_clearance_board?: Record<string, unknown>
+  reference_study_library?: Record<string, unknown>
+  interactive_modules?: Record<string, unknown>
+  producer_dashboard?: Record<string, unknown>
+  project_dashboard?: {
+    cards?: Array<Record<string, unknown>>
+  }
+  agent_activity_timeline?: Array<Record<string, unknown>>
+  continuity_register?: Record<string, unknown>
+  risk_register?: Array<string>
+  next_actions?: Array<string>
+}
+
+export type StudyReferenceStudy = {
+  reference_id: string
+  filename: string
+  content_type: string
+  rights_status: string
+  allowed_use: string
+  study_focus: string
+  source_stats: Record<string, unknown>
+  extraction_status: string
+  study_cards: Array<{
+    agent: string
+    department: string
+    study_focus: string
+    observations_to_make?: string[]
+    reusable_principles?: string[]
+    forbidden_uses?: string[]
+    handoff_to?: string[]
+  }>
+  risk_register: string[]
+  next_actions: string[]
+}
+
+const API_BASE = ''
+
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        ...(init?.headers || {}),
+      },
+    })
+    clearTimeout(timeout)
+    const text = await response.text()
+    const body = text ? JSON.parse(text) : null
+    if (!response.ok) {
+      const detail = body?.detail || body?.message || text || `HTTP ${response.status}`
+      throw new Error(detail)
+    }
+    return body as T
+  } catch (err) {
+    clearTimeout(timeout)
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Request timed out after 8 seconds. The backend may be unreachable.')
+    }
+    throw err
+  }
+}
+
+export function getStudioOverview() {
+  return fetchJson<StudioOverview>('/api/f51/studio/overview')
+}
+
+export function getStudioProject(projectId: string) {
+  return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}`)
+}
+
+export function createDemoProject(demoId = 'neon_aftertaste') {
+  const form = new FormData()
+  form.append('demo_id', demoId)
+  return fetchJson<StudioProject>('/api/f51/studio/demo-project', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export function ingestScript(payload: {
+  title: string
+  creative_intent: string
+  render_provider: string
+  script_text: string
+}) {
+  return fetchJson<StudioProject>('/api/f51/studio/ingest-script', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: payload.title,
+      creative_intent: payload.creative_intent,
+      render_provider: payload.render_provider,
+      script_text: payload.script_text,
+    }),
+  })
+}
+
+export function studyReferencePrompt(referencePrompt: string) {
+  const form = new FormData()
+  form.append('reference_prompt', referencePrompt)
+  form.append('rights_status', 'analysis_only')
+  form.append('study_focus', 'cinematography, editing, sound, and production design')
+  return fetchJson<StudyReferenceStudy>('/api/f51/studio/study-reference-prompt', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export function studyReferenceUpload(file: File, options?: { rightsStatus?: string; studyFocus?: string; notes?: string }) {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('rights_status', options?.rightsStatus || 'analysis_only')
+  form.append('study_focus', options?.studyFocus || 'cinematography, editing, sound, and production design')
+  form.append('notes', options?.notes || '')
+  return fetchJson<StudyReferenceStudy>('/api/f51/studio/study-reference', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export function simulateScreening(projectId: string) {
+  return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/simulate-screening`, {
+    method: 'POST',
+  })
+}
+
+export function reviewShot(projectId: string, shotId: string, decision: string, note = '') {
+  return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/review-shot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shot_id: shotId, decision, note }),
+  })
+}
+
+export function recordDailiesSelect(
+  projectId: string,
+  renderId: string,
+  selected: boolean,
+  score = 0,
+  qcNote = '',
+) {
+  return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/dailies-select`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ render_id: renderId, selected, score, qc_note: qcNote }),
+  })
+}
+
+export function retryRenderJob(projectId: string, renderId: string) {
+  return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/retry-render/${encodeURIComponent(renderId)}`, {
+    method: 'POST',
+  })
+}
+
+export function setRenderMode(projectId: string, liveMode: boolean, providerName?: string) {
+  return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ live_mode: liveMode, provider_name: providerName || '' }),
+  })
+}
+
+export const studioApi = {
+  overview: getStudioOverview,
+  getProject: getStudioProject,
+  createDemoProject,
+  ingestScript,
+  studyReferencePrompt,
+  studyReferenceUpload,
+  simulateScreening,
+  reviewShot,
+  recordDailiesSelect,
+  retryRenderJob,
+  setRenderMode,
+}

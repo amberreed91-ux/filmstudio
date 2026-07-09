@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/shared/bin/convert-caffe2-to-onnx",
+  "revisions": [
+    {
+      "revision_id": "baee2040-ef3f-41c0-ada2-dd13510ee1d1",
+      "metadata": {
+        "timestamp": "2026-06-17T10:10:56.445410",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 280,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:10:56.445410"
+    }
+  ]
+}

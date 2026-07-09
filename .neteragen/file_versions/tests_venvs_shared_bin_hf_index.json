@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/shared/bin/hf",
+  "revisions": [
+    {
+      "revision_id": "1ba759f2-9037-485f-a2fc-fd6293838da6",
+      "metadata": {
+        "timestamp": "2026-06-17T10:13:56.427307",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 249,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:13:56.427307"
+    }
+  ]
+}

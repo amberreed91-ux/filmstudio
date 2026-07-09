@@ -1,0 +1,33 @@
+{
+  "file_name": "studio-app/vite.config.ts",
+  "revisions": [
+    {
+      "revision_id": "9d1a0e0e-c6ad-477c-b9bd-5fbc279c36b6",
+      "metadata": {
+        "timestamp": "2026-06-15T16:46:13.982835",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 600,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:46:13.982835"
+    },
+    {
+      "revision_id": "4c2e6afe-6c06-4225-a597-f0455cff81e8",
+      "metadata": {
+        "timestamp": "2026-06-15T16:46:13.982176",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 291,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": null
+      },
+      "saved_at": "2026-06-15T16:46:13.982176"
+    }
+  ]
+}

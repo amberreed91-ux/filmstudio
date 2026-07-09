@@ -1,0 +1,307 @@
+- generic [ref=e132]:
+  - banner [ref=e133]:
+    - generic [ref=e134]:
+      - link "Rough Previs Room" [ref=e135] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e136]
+        - generic [ref=e138]: Rough Previs Room
+      - generic [ref=e139]: Read-only continuity and scene-previs inspection over the current execution bundle.
+    - navigation [ref=e140]:
+      - link "Lobby" [ref=e141] [cursor=pointer]:
+        - /url: /studio/lobby
+      - link "Studio Dashboard" [ref=e142] [cursor=pointer]:
+        - /url: /studio/overview
+      - link "Writer's Room" [ref=e143] [cursor=pointer]:
+        - /url: /studio/writers-room
+      - link "Production Board" [ref=e144] [cursor=pointer]:
+        - /url: /studio/production-board
+      - link "Screening Room" [ref=e145] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - link "Archive" [ref=e146] [cursor=pointer]:
+        - /url: /studio/archive
+      - link "Script Ingestion" [ref=e147] [cursor=pointer]:
+        - /url: /studio/ingest
+      - link "Project Slate" [ref=e148] [cursor=pointer]:
+        - /url: /studio/slate
+      - link "Approval Room" [ref=e149] [cursor=pointer]:
+        - /url: /studio/dashboard
+      - link "Study Room" [ref=e150] [cursor=pointer]:
+        - /url: /studio/study-room
+      - link "Crew Ops" [ref=e151] [cursor=pointer]:
+        - /url: /studio/scheduler
+      - link "Cost Manager" [ref=e152] [cursor=pointer]:
+        - /url: /studio/cost
+      - link "Workspace" [ref=e153] [cursor=pointer]:
+        - /url: /studio/project/phase80_full_test
+    - generic [ref=e154]:
+      - generic [ref=e157]: Studio connected
+      - generic [ref=e158]:
+        - img [ref=e159]
+        - generic [ref=e162]: Admin | FilmOS
+  - generic [ref=e163]:
+    - link "Home" [ref=e164] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e165]
+      - text: Home
+    - generic [ref=e168]:
+      - img [ref=e169]
+      - link "Studio Dashboard" [ref=e171] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e172]:
+      - img [ref=e173]
+      - generic [ref=e175]: Rough Previs Room
+  - generic [ref=e176]:
+    - generic [ref=e177]:
+      - generic [ref=e178]: Rough Previs Room
+      - generic [ref=e179]: Read-only continuity and scene-previs inspection over the current execution bundle.
+    - generic [ref=e180]:
+      - button "Back" [ref=e181] [cursor=pointer]:
+        - img [ref=e182]
+        - text: Back
+      - link "Studio Home" [ref=e184] [cursor=pointer]:
+        - /url: /studio
+      - link "Back to Slate" [ref=e185] [cursor=pointer]:
+        - /url: /studio/slate
+        - text: Back to Slate
+        - img [ref=e186]
+      - link "Approval Room" [ref=e188] [cursor=pointer]:
+        - /url: /studio/dashboard
+        - text: Approval Room
+        - img [ref=e189]
+  - generic [ref=e191]:
+    - link "Overview" [ref=e192] [cursor=pointer]:
+      - /url: /studio/overview
+      - text: Overview
+    - link "Writer's Room" [ref=e194] [cursor=pointer]:
+      - /url: /studio/writers-room
+      - text: Writer's Room
+    - link "Study Room" [ref=e196] [cursor=pointer]:
+      - /url: /studio/study-room
+      - text: Study Room
+    - link "Previs Room Active" [ref=e198] [cursor=pointer]:
+      - /url: /studio/previs
+      - text: Previs Room
+      - generic [ref=e200]: Active
+    - link "Production Board" [ref=e201] [cursor=pointer]:
+      - /url: /studio/production-board
+      - text: Production Board
+    - link "Screening Room" [ref=e203] [cursor=pointer]:
+      - /url: /studio/screening-room
+      - text: Screening Room
+    - link "Archive" [ref=e205] [cursor=pointer]:
+      - /url: /studio/archive
+      - text: Archive
+  - generic [ref=e207]:
+    - generic [ref=e208]: Script
+    - generic [ref=e209]: Scenes
+    - generic [ref=e210]: Previs
+    - generic [ref=e211]: Review
+    - generic [ref=e212]: Cut
+    - generic [ref=e213]: Archive
+  - generic [ref=e214]:
+    - generic [ref=e215]: Next Step
+    - generic [ref=e216]: Review and refine your scenes
+    - generic [ref=e217]:
+      - link "Open Previs" [ref=e218] [cursor=pointer]:
+        - /url: /studio/previs
+      - generic [ref=e219]: "approved scenes: 0"
+  - main [ref=e220]:
+    - generic [ref=e222]:
+      - generic [ref=e223]:
+        - generic [ref=e224]: "STEP 2: REVIEW YOUR SCENES"
+        - generic [ref=e225]: Improve scenes and approve the ones you want in your film.
+      - generic [ref=e226]:
+        - generic [ref=e227]:
+          - heading "Cinematic Timeline" [level=2] [ref=e228]
+          - generic [ref=e229]: 3 scenes
+        - generic [ref=e230]:
+          - button "scene_001 scene_001 not_available drawn · 0%" [ref=e231]:
+            - img "scene_001" [ref=e233]
+            - generic [ref=e234]:
+              - generic [ref=e235]: scene_001
+              - generic [ref=e236]: not_available
+              - generic [ref=e237]: drawn · 0%
+          - button "scene_002 scene_002 not_available ENDING ZONE drawn · 0%" [ref=e239]:
+            - img "scene_002" [ref=e241]
+            - generic [ref=e242]:
+              - generic [ref=e243]: scene_002
+              - generic [ref=e244]: not_available
+              - generic [ref=e245]: ENDING ZONE
+              - generic [ref=e246]: drawn · 0%
+          - button "scene_003 scene_003 not_available ENDING ZONE drawn · 0%" [ref=e248]:
+            - img "scene_003" [ref=e250]
+            - generic [ref=e251]:
+              - generic [ref=e252]: scene_003
+              - generic [ref=e253]: not_available
+              - generic [ref=e254]: ENDING ZONE
+              - generic [ref=e255]: drawn · 0%
+      - generic [ref=e257]:
+        - generic [ref=e258]:
+          - button "Regenerate Scene" [ref=e259]
+          - button "Improve Tension" [ref=e260]
+          - button "Improve Visuals" [active] [ref=e261]
+          - button "Fix Continuity" [ref=e262]
+          - button "Approve Scene" [ref=e263]
+        - generic [ref=e264]:
+          - generic [ref=e265]: "Iteration Active: ITERATION_1"
+          - generic [ref=e266]: Needs Review
+      - generic [ref=e267]:
+        - button "Original" [ref=e268]
+        - button "Iteration 1" [ref=e269]
+        - button "Iteration 2" [ref=e270]
+      - generic [ref=e271]:
+        - generic [ref=e272]:
+          - article [ref=e273]:
+            - img "shot_001" [ref=e274]
+            - generic [ref=e275]:
+              - generic [ref=e276]:
+                - generic [ref=e277]: "ITERATION: ITERATION_1 PASS"
+                - generic [ref=e278]: scene_001
+                - generic [ref=e279]: "Motif: drawn (0%)"
+                - generic [ref=e280]: "Iteration Active: ITERATION_1"
+                - generic [ref=e281]: LOCAL PREVIS
+              - generic [ref=e282]: not_available
+            - generic [ref=e284]: Needs Work
+          - generic [ref=e285]:
+            - heading "Iteration Strip" [level=3] [ref=e286]
+            - generic [ref=e287]:
+              - button "ORIGINAL ORIGINAL ORIGINAL CUT" [ref=e288]:
+                - img "ORIGINAL" [ref=e290]
+                - generic [ref=e291]:
+                  - generic [ref=e292]: ORIGINAL
+                  - generic [ref=e293]: ORIGINAL CUT
+              - button "ITERATION 1 ITERATION 1 ITERATION" [ref=e294]:
+                - img "ITERATION 1" [ref=e296]
+                - generic [ref=e297]:
+                  - generic [ref=e298]: ITERATION 1
+                  - generic [ref=e299]: ITERATION
+              - button "ITERATION 2 ITERATION 2 ITERATION" [ref=e300]:
+                - img "ITERATION 2" [ref=e302]
+                - generic [ref=e303]:
+                  - generic [ref=e304]: ITERATION 2
+                  - generic [ref=e305]: ITERATION
+          - generic [ref=e306]:
+            - generic [ref=e307]:
+              - heading "Active Cut" [level=3] [ref=e308]
+              - button "Commit This Version" [ref=e309]
+            - generic [ref=e310]:
+              - generic [ref=e311]: "Current Cut: ITERATION_1"
+              - generic [ref=e312]: "Committed Cut: ORIGINAL"
+              - generic [ref=e313]: "Reason: not committed"
+              - generic [ref=e314]: "Timestamp: not committed"
+          - generic [ref=e315]:
+            - heading "Render Assets" [level=3] [ref=e316]
+            - generic [ref=e317]:
+              - generic [ref=e318]: "Total: 0"
+              - generic [ref=e319]: "Success: 0"
+              - generic [ref=e320]: "Failed: 0"
+            - generic [ref=e321]: "Providers: none"
+          - group [ref=e323]:
+            - generic "Visual Bible" [ref=e324] [cursor=pointer]
+            - generic [ref=e325]:
+              - generic [ref=e326]: "Palette: none"
+              - generic [ref=e327]: "Lighting: none"
+              - generic [ref=e328]: "Camera: none"
+              - generic [ref=e329]: "Tone: none"
+          - group [ref=e331]:
+            - generic "Prompt Warnings" [ref=e332] [cursor=pointer]
+            - generic [ref=e334]: No prompt warnings.
+          - generic [ref=e335]:
+            - heading "Before vs After" [level=3] [ref=e336]
+            - generic [ref=e337]:
+              - generic [ref=e338]:
+                - generic [ref=e339]: Improvements
+                - list [ref=e340]:
+                  - listitem [ref=e341]: No improvements recorded.
+              - generic [ref=e342]:
+                - generic [ref=e343]: Regressions
+                - list [ref=e344]:
+                  - listitem [ref=e345]: No regressions recorded.
+          - generic [ref=e346]:
+            - heading "Story Direction" [level=3] [ref=e347]
+            - generic [ref=e348]:
+              - generic [ref=e349]: "Tone: none"
+              - generic [ref=e350]: "Pacing: none"
+              - generic [ref=e351]: "Continuity: normal"
+          - generic [ref=e352]:
+            - heading "Active Cut Influence" [level=3] [ref=e353]
+            - paragraph [ref=e354]: Your last decision is pushing the film toward a none, none-paced tone
+            - generic [ref=e355]: "motif strength: stable"
+          - generic [ref=e356]:
+            - heading "Shot Film Strip" [level=3] [ref=e357]
+            - button "shot_001 shot_001 complete" [ref=e359]:
+              - img "shot_001" [ref=e361]
+              - generic [ref=e362]:
+                - generic [ref=e363]: shot_001
+                - generic [ref=e364]: complete
+          - group [ref=e366]:
+            - generic "Shot Intent + Prompt" [ref=e367] [cursor=pointer]
+            - generic [ref=e368]:
+              - generic [ref=e369]:
+                - generic [ref=e370]: "Framing: n/a"
+                - generic [ref=e371]: "Camera: n/a"
+                - generic [ref=e372]: "Lighting: n/a"
+                - generic [ref=e373]: "Mood: n/a"
+                - generic [ref=e374]: "Motif: n/a"
+              - generic [ref=e375]:
+                - generic [ref=e376]:
+                  - generic [ref=e377]: Base Prompt
+                  - generic [ref=e378]: n/a
+                - generic [ref=e379]:
+                  - generic [ref=e380]: Style Tags
+                  - generic [ref=e381]: n/a
+                - generic [ref=e382]:
+                  - generic [ref=e383]: Prompt Quality
+                  - generic [ref=e384]: "Score: 0.000"
+                  - generic [ref=e385]: No issues
+                - generic [ref=e386]:
+                  - generic [ref=e387]: Consistency
+                  - generic [ref=e388]: Drift Detected
+                  - generic [ref=e389]: "Motif: missing / drift"
+        - complementary [ref=e390]:
+          - heading "Director Panel" [level=3] [ref=e391]
+          - generic [ref=e392]:
+            - button "Regenerate Scene" [ref=e393]
+            - button "Increase Tension" [ref=e394]
+            - button "Improve Visuals" [ref=e395]
+            - button "Fix Continuity" [ref=e396]
+            - button "Improve Flow" [ref=e397]
+          - generic [ref=e398]: "Last Action: Improve Visuals"
+          - generic [ref=e399]: "Active Intervention: Improve Visuals"
+          - generic [ref=e400]: not available
+          - generic [ref=e401]:
+            - generic [ref=e402]:
+              - generic [ref=e403]: Coherence
+              - generic [ref=e404]: n/a
+            - generic [ref=e405]:
+              - generic [ref=e406]: Progression
+              - generic [ref=e407]: n/a
+            - generic [ref=e408]:
+              - generic [ref=e409]: Continuity
+              - generic [ref=e410]: n/a
+          - generic [ref=e411]:
+            - button "Director" [ref=e412]
+            - button "Suggestions" [ref=e413]
+            - button "Prompt" [ref=e414]
+            - button "Continuity" [ref=e415]
+            - button "Debug" [ref=e416]
+          - generic [ref=e418]:
+            - generic [ref=e419]:
+              - generic [ref=e420]: Director Verdict
+              - generic [ref=e421]: "Verdict: not available"
+              - generic [ref=e422]: "Reason: No verdict reason supplied."
+              - generic [ref=e423]: "Flow: not available"
+            - generic [ref=e424]:
+              - generic [ref=e425]: What Works
+              - list [ref=e426]:
+                - listitem [ref=e427]: • Baseline visual continuity is present
+            - generic [ref=e428]:
+              - generic [ref=e429]: What Breaks
+              - list [ref=e430]:
+                - listitem [ref=e431]: • Escalation opportunities remain
+      - generic [ref=e433]:
+        - generic [ref=e434]:
+          - heading "Playback Mini Timeline" [level=3] [ref=e435]
+          - link "Back to workspace" [ref=e436] [cursor=pointer]:
+            - /url: /studio/slate
+        - generic [ref=e440]: render_001

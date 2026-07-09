@@ -1,0 +1,236 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - link "Writer's Room" [ref=e7] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e8]
+        - generic [ref=e10]: Writer's Room
+      - generic [ref=e11]: Create and manage your film scenes
+    - navigation [ref=e12]:
+      - link "Home" [ref=e13] [cursor=pointer]:
+        - /url: /studio/lobby?project_id=project_eb5a87327aba
+      - link "Overview" [ref=e14] [cursor=pointer]:
+        - /url: /studio/overview?project_id=project_eb5a87327aba
+      - link "Write" [ref=e15] [cursor=pointer]:
+        - /url: /studio/writers-room?project_id=project_eb5a87327aba
+      - link "Scenes" [ref=e16] [cursor=pointer]:
+        - /url: /studio/production-board?project_id=project_eb5a87327aba
+      - link "Watch" [ref=e17] [cursor=pointer]:
+        - /url: /studio/screening-room?project_id=project_eb5a87327aba
+      - link "Archive" [ref=e18] [cursor=pointer]:
+        - /url: /studio/archive?project_id=project_eb5a87327aba
+      - link "Project Slate" [ref=e19] [cursor=pointer]:
+        - /url: /studio/slate?project_id=project_eb5a87327aba
+      - link "Previs Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/previs?project_id=project_eb5a87327aba
+      - link "Approval Room" [ref=e21] [cursor=pointer]:
+        - /url: /studio/approval-room?project_id=project_eb5a87327aba
+      - link "Study Room" [ref=e22] [cursor=pointer]:
+        - /url: /studio/study-room?project_id=project_eb5a87327aba
+      - link "Crew Ops" [ref=e23] [cursor=pointer]:
+        - /url: /studio/scheduler?project_id=project_eb5a87327aba
+      - link "Cost Manager" [ref=e24] [cursor=pointer]:
+        - /url: /studio/cost?project_id=project_eb5a87327aba
+      - link "Workspace" [ref=e25] [cursor=pointer]:
+        - /url: /studio/project/project_eb5a87327aba?project_id=project_eb5a87327aba
+    - generic [ref=e26]:
+      - button "Audio Off" [ref=e27]:
+        - img [ref=e28]
+        - generic [ref=e32]: Audio Off
+      - generic [ref=e35]: Studio connected
+      - generic [ref=e36]:
+        - img [ref=e37]
+        - generic [ref=e40]: Admin | FilmOS
+  - generic [ref=e41]:
+    - link "Home" [ref=e42] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e43]
+      - text: Home
+    - generic [ref=e46]:
+      - img [ref=e47]
+      - link "Studio Lobby" [ref=e49] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e50]:
+      - img [ref=e51]
+      - generic [ref=e53]: Write
+  - generic [ref=e55]:
+    - generic [ref=e56]: "Room: Writer's Room"
+    - generic [ref=e57]: "Current Step: Script"
+    - generic [ref=e58]: "Next: Start by adding a script in Writer’s Room"
+    - generic [ref=e59]: "Approved: 0"
+    - button "Open ▾" [ref=e60]
+  - main [ref=e61]:
+    - generic [ref=e62]:
+      - generic [ref=e101]:
+        - generic [ref=e102]:
+          - generic [ref=e103]: Naomi
+          - generic [ref=e104]: writer's room
+        - button "Switch film" [ref=e105] [cursor=pointer]
+      - generic [ref=e107]:
+        - generic [ref=e110]:
+          - generic [ref=e111]: Current Project
+          - heading "Naomi" [level=2] [ref=e112]:
+            - img [ref=e113]
+            - text: Naomi
+          - paragraph [ref=e116]: "Project ID: project_eb5a87327aba"
+        - generic [ref=e237]: Failed to fetch
+        - generic [ref=e117]:
+          - generic [ref=e118]:
+            - heading "Option A — Upload Script" [level=3] [ref=e119]
+            - paragraph [ref=e120]: Have a script? Upload it and we'll break it into scenes.
+          - generic [ref=e121]:
+            - generic [ref=e122]:
+              - generic [ref=e123]: Upload Script File
+              - generic [ref=e124]:
+                - generic [ref=e125] [cursor=pointer]:
+                  - img [ref=e126]
+                  - text: Choose File (.txt, .pdf)
+                - generic [ref=e130]: or paste your script below
+            - generic [ref=e131]:
+              - generic [ref=e132]: Paste Your Script Here
+              - 'textbox "Paste your script here... Example format: SCENE 1: INT. COFFEE SHOP - DAY A woman sits alone at a corner table, reading a worn paperback. The café is nearly empty. Rain streaks the window behind her. SCENE 2: EXT. STREET - NIGHT She walks through the rain, umbrella forgotten. The city lights blur in the downpour." [ref=e133]':
+                - /placeholder: "Paste your script here...\n\nExample format:\n\nSCENE 1: INT. COFFEE SHOP - DAY\nA woman sits alone at a corner table, reading a worn paperback. The café is nearly empty. Rain streaks the window behind her.\n\nSCENE 2: EXT. STREET - NIGHT\nShe walks through the rain, umbrella forgotten. The city lights blur in the downpour."
+            - button "Import Script" [disabled] [ref=e134]:
+              - img [ref=e135]
+              - text: Import Script
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - heading "Option B — Add Scenes Manually" [level=3] [ref=e140]
+            - paragraph [ref=e141]: Building from scratch? Add scenes one by one.
+          - button "Add Scene" [ref=e142]:
+            - img [ref=e143]
+            - text: Add Scene
+        - generic [ref=e144]:
+          - generic [ref=e146]:
+            - heading "Your Scenes (3)" [level=3] [ref=e147]
+            - paragraph [ref=e148]: All scenes from script upload and manual entry
+          - generic [ref=e149]:
+            - generic [ref=e151]:
+              - generic [ref=e152]:
+                - heading [level=4]
+                - paragraph
+                - generic [ref=e153]:
+                  - generic [ref=e154]: COFFEE SHOP
+                  - generic [ref=e155]: DAY
+                  - generic [ref=e156]: quiet, isolated, contemplative.
+              - generic [ref=e157]:
+                - button "Edit scene" [ref=e158]:
+                  - img [ref=e159]
+                - button "Delete scene" [ref=e161]:
+                  - img [ref=e162]
+            - generic [ref=e166]:
+              - generic [ref=e167]:
+                - heading [level=4]
+                - paragraph
+                - generic [ref=e168]:
+                  - generic [ref=e169]: STREET
+                  - generic [ref=e170]: NIGHT
+                  - generic [ref=e171]: uneasy, exposed, transitional.
+              - generic [ref=e172]:
+                - button "Edit scene" [ref=e173]:
+                  - img [ref=e174]
+                - button "Delete scene" [ref=e176]:
+                  - img [ref=e177]
+            - generic [ref=e181]:
+              - generic [ref=e182]:
+                - heading [level=4]
+                - paragraph
+                - generic [ref=e183]:
+                  - generic [ref=e184]: APARTMENT
+                  - generic [ref=e185]: NIGHT
+                  - generic [ref=e186]: dread, stillness, arriving at something.
+              - generic [ref=e187]:
+                - button "Edit scene" [ref=e188]:
+                  - img [ref=e189]
+                - button "Delete scene" [ref=e191]:
+                  - img [ref=e192]
+          - generic [ref=e195]:
+            - generic [ref=e196]: Ready to Continue?
+            - 'button "Next: Go to Storyboard / Scenes Room" [ref=e197]'
+        - generic [ref=e198]:
+          - generic [ref=e199]:
+            - heading "Add New Scene" [level=3] [ref=e200]
+            - button "Close form" [ref=e201]:
+              - img [ref=e202]
+          - generic [ref=e205]:
+            - generic [ref=e206]:
+              - generic [ref=e207]: Scene Name *
+              - textbox "e.g., Opening Scene, The Confrontation" [ref=e208]: Scene One
+            - generic [ref=e209]:
+              - generic [ref=e210]: Description
+              - textbox "Describe what happens in this scene..." [ref=e211]: A lone figure enters a quiet room and pauses at the window.
+            - generic [ref=e212]:
+              - generic [ref=e213]:
+                - generic [ref=e214]: Location
+                - textbox "e.g., INT. APARTMENT, EXT. STREET" [ref=e215]: INT. APARTMENT
+              - generic [ref=e216]:
+                - generic [ref=e217]: Time of Day
+                - combobox [ref=e218]:
+                  - option "Day" [selected]
+                  - option "Night"
+                  - option "Dawn"
+                  - option "Dusk"
+                  - option "Morning"
+                  - option "Afternoon"
+                  - option "Evening"
+            - generic [ref=e219]:
+              - generic [ref=e220]: Emotional Tone
+              - combobox [ref=e221]:
+                - option "Neutral" [selected]
+                - option "Tense"
+                - option "Joyful"
+                - option "Melancholic"
+                - option "Suspenseful"
+                - option "Romantic"
+                - option "Dramatic"
+                - option "Comedic"
+                - option "Mysterious"
+            - generic [ref=e222]:
+              - generic [ref=e223]: Characters
+              - generic [ref=e224]:
+                - textbox "Add character name and press Enter" [ref=e225]
+                - button "Add" [ref=e226]
+            - generic [ref=e227]:
+              - generic [ref=e228]: Notes
+              - textbox "Additional notes or ideas for this scene..." [ref=e229]: Seeded for generate-button reproduction.
+            - generic [ref=e230]:
+              - button "Create Scene" [ref=e231]:
+                - img [ref=e232]
+                - text: Create Scene
+              - button "Cancel" [ref=e236]
+  - complementary "AI Crew Presence" [ref=e65]:
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - generic [ref=e68]: AI Crew Presence
+        - generic [ref=e69]: radio link stable
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - generic [ref=e72]: D
+          - generic [ref=e73]:
+            - generic [ref=e74]: Director
+            - generic [ref=e75]: Director adjusting pacing...
+          - generic [ref=e76]: ...
+        - generic [ref=e77]:
+          - generic [ref=e78]: W
+          - generic [ref=e79]:
+            - generic [ref=e80]: Writer
+            - generic [ref=e81]: Writer refining dramatic beats...
+          - generic [ref=e82]: ...
+        - generic [ref=e83]:
+          - generic [ref=e84]: M
+          - generic [ref=e85]:
+            - generic [ref=e86]: Memory Archivist
+            - generic [ref=e87]: Memory Archivist checking continuity...
+          - generic [ref=e88]: ...
+        - generic [ref=e89]:
+          - generic [ref=e90]: E
+          - generic [ref=e91]:
+            - generic [ref=e92]: Evaluator
+            - generic [ref=e93]: Evaluator scoring scene coherence...
+          - generic [ref=e94]: ...
+        - generic [ref=e95]:
+          - generic [ref=e96]: P
+          - generic [ref=e97]:
+            - generic [ref=e98]: Provider Router
+            - generic [ref=e99]: Provider Router selecting Runway...
+          - generic [ref=e100]: ...

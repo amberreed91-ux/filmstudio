@@ -1,0 +1,172 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Screening Room" [ref=e6] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e7]
+        - generic [ref=e9]: Screening Room
+      - generic [ref=e10]: Playback and review of scene cuts and iteration outcomes.
+    - navigation [ref=e11]:
+      - link "Lobby" [ref=e12] [cursor=pointer]:
+        - /url: /studio/lobby
+      - link "Studio Dashboard" [ref=e13] [cursor=pointer]:
+        - /url: /studio/overview
+      - link "Writer's Room" [ref=e14] [cursor=pointer]:
+        - /url: /studio/writers-room
+      - link "Production Board" [ref=e15] [cursor=pointer]:
+        - /url: /studio/production-board
+      - link "Screening Room" [ref=e16] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - link "Archive" [ref=e17] [cursor=pointer]:
+        - /url: /studio/archive
+      - link "Script Ingestion" [ref=e18] [cursor=pointer]:
+        - /url: /studio/ingest
+      - link "Project Slate" [ref=e19] [cursor=pointer]:
+        - /url: /studio/slate
+      - link "Approval Room" [ref=e20] [cursor=pointer]:
+        - /url: /studio/dashboard
+      - link "Study Room" [ref=e21] [cursor=pointer]:
+        - /url: /studio/study-room
+      - link "Crew Ops" [ref=e22] [cursor=pointer]:
+        - /url: /studio/scheduler
+      - link "Cost Manager" [ref=e23] [cursor=pointer]:
+        - /url: /studio/cost
+    - generic [ref=e24]:
+      - generic [ref=e27]: Syncing studio...
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: Admin | FilmOS
+  - generic [ref=e33]:
+    - link "Home" [ref=e34] [cursor=pointer]:
+      - /url: /studio
+      - img [ref=e35]
+      - text: Home
+    - generic [ref=e38]:
+      - img [ref=e39]
+      - link "Studio Lobby" [ref=e41] [cursor=pointer]:
+        - /url: /studio
+    - generic [ref=e42]:
+      - img [ref=e43]
+      - generic [ref=e45]: Screening Room
+  - generic [ref=e46]:
+    - generic [ref=e47]:
+      - generic [ref=e48]: Screening Room
+      - generic [ref=e49]: Playback and review of scene cuts and iteration outcomes.
+    - generic [ref=e50]:
+      - button "Back" [ref=e51] [cursor=pointer]:
+        - img [ref=e52]
+        - text: Back
+      - link "Studio Home" [ref=e54] [cursor=pointer]:
+        - /url: /studio
+      - link "Open Previs Room" [ref=e55] [cursor=pointer]:
+        - /url: /studio/previs
+        - text: Open Previs Room
+        - img [ref=e56]
+      - link "Open Archive" [ref=e58] [cursor=pointer]:
+        - /url: /studio/archive
+        - text: Open Archive
+        - img [ref=e59]
+  - generic [ref=e61]:
+    - link "Overview" [ref=e62] [cursor=pointer]:
+      - /url: /studio/overview
+      - text: Overview
+    - link "Writer's Room" [ref=e64] [cursor=pointer]:
+      - /url: /studio/writers-room
+      - text: Writer's Room
+    - link "Study Room" [ref=e66] [cursor=pointer]:
+      - /url: /studio/study-room
+      - text: Study Room
+    - link "Previs Room" [ref=e68] [cursor=pointer]:
+      - /url: /studio/previs
+      - text: Previs Room
+    - link "Production Board" [ref=e70] [cursor=pointer]:
+      - /url: /studio/production-board
+      - text: Production Board
+    - link "Screening Room" [ref=e72] [cursor=pointer]:
+      - /url: /studio/screening-room
+      - text: Screening Room
+    - link "Archive" [ref=e74] [cursor=pointer]:
+      - /url: /studio/archive
+      - text: Archive
+  - generic [ref=e76]:
+    - generic [ref=e77]: Script
+    - generic [ref=e78]: Scenes
+    - generic [ref=e79]: Previs
+    - generic [ref=e80]: Review
+    - generic [ref=e81]: Cut
+    - generic [ref=e82]: Archive
+  - generic [ref=e83]:
+    - generic [ref=e84]: Next Step
+    - generic [ref=e85]: Watch your film
+    - generic [ref=e86]:
+      - link "Open Screening Room" [ref=e87] [cursor=pointer]:
+        - /url: /studio/screening-room
+      - generic [ref=e88]: "approved scenes: 1"
+  - main [ref=e89]:
+    - generic [ref=e91]:
+      - generic [ref=e92]:
+        - generic [ref=e93]: "STEP 4: WATCH YOUR FILM"
+        - heading "Screening Room" [level=2] [ref=e94]
+        - paragraph [ref=e95]: This is your current cut built from approved scenes.
+        - generic [ref=e96]:
+          - button "Play Full Cut" [ref=e97]
+          - button "Pause" [ref=e98]
+          - generic [ref=e99]: "Current Scene: none"
+          - generic [ref=e100]: "Transition: hold"
+          - button "Jump to Weak Scene" [ref=e101]
+          - button "Jump to Strong Scene" [ref=e102]
+          - generic [ref=e103]: paused
+      - generic [ref=e104]:
+        - generic [ref=e105]:
+          - heading "Playlist" [level=3] [ref=e106]
+          - generic [ref=e108]: No cut available yet
+        - generic [ref=e109]:
+          - generic [ref=e110]:
+            - heading "Main Viewer" [level=3] [ref=e111]
+            - generic [ref=e112]: No cut available yet
+          - generic [ref=e113]:
+            - heading "Timeline" [level=3] [ref=e114]
+            - generic [ref=e116]: Red markers indicate weak moments, green markers indicate strong moments.
+          - generic [ref=e117]:
+            - heading "Screening Summary" [level=3] [ref=e118]
+            - generic [ref=e119]:
+              - generic [ref=e120]:
+                - generic [ref=e121]: Total Scenes
+                - generic [ref=e122]: "0"
+              - generic [ref=e123]:
+                - generic [ref=e124]: Playable
+                - generic [ref=e125]: "0"
+              - generic [ref=e126]:
+                - generic [ref=e127]: Avg Quality
+                - generic [ref=e128]: "0.00"
+              - generic [ref=e129]:
+                - generic [ref=e130]: Dominant Tone
+                - generic [ref=e131]: none
+        - complementary [ref=e132]:
+          - group [ref=e134]:
+            - generic "Flow" [ref=e135] [cursor=pointer]
+          - group [ref=e137]:
+            - generic "Ending Impact" [ref=e138] [cursor=pointer]
+          - group [ref=e140]:
+            - generic "Dread Curve" [ref=e141] [cursor=pointer]
+      - generic [ref=e142]:
+        - group [ref=e144]:
+          - generic "Render Assets" [ref=e145] [cursor=pointer]
+        - generic [ref=e146]:
+          - heading "Film Structure" [level=3] [ref=e147]
+          - generic [ref=e148]:
+            - generic [ref=e149]: "Act 1: 0"
+            - generic [ref=e150]: "Act 2: 0"
+            - generic [ref=e151]: "Act 3: 0"
+            - generic [ref=e152]: "Sequences: 0"
+            - generic [ref=e153]: "Total Scenes: 0"
+        - generic [ref=e154]:
+          - heading "Progress & Analysis" [level=3] [ref=e155]
+          - generic [ref=e156]:
+            - generic [ref=e157]:
+              - text: "Completion:"
+              - generic [ref=e158]: 0.00%
+            - generic [ref=e159]: "Ready To Screen: NO"
+            - generic [ref=e160]: Issues
+            - generic [ref=e161]: No structure issues reported.
+            - generic [ref=e162]: Strengths

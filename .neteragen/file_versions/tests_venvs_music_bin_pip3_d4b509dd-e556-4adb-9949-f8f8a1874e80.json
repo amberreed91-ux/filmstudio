@@ -1,0 +1,16 @@
+{
+  "file_name": "tests/venvs/music/bin/pip3",
+  "revision_id": "d4b509dd-e556-4adb-9949-f8f8a1874e80",
+  "metadata": {
+    "timestamp": "2026-06-17T08:27:51.150384",
+    "type": "cache_version",
+    "source": "initial_create",
+    "size": 300,
+    "is_reverted": false,
+    "git_branch_name": "backend-expansion-dependency-slicing",
+    "agent_name": "Cody",
+    "description": null
+  },
+  "content": "#!/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/tests/venvs/music/bin/python3\n# -*- coding: utf-8 -*-\nimport re\nimport sys\nfrom pip._internal.cli.main import main\nif __name__ == '__main__':\n    sys.argv[0] = re.sub(r'(-script\\.pyw|\\.exe)?$', '', sys.argv[0])\n    sys.exit(main())\n",
+  "saved_at": "2026-06-17T08:27:51.150384"
+}

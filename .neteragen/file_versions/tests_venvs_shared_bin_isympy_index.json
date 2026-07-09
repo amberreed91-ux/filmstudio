@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/shared/bin/isympy",
+  "revisions": [
+    {
+      "revision_id": "ab078b50-6cdc-40cd-b8c8-04014b5011ac",
+      "metadata": {
+        "timestamp": "2026-06-17T10:01:18.888100",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 233,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:01:18.888100"
+    }
+  ]
+}

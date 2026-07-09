@@ -1,0 +1,5 @@
+- main [ref=e4]:
+  - paragraph [ref=e5]: LANDING PAGE ACTIVE
+  - heading "STUDIO" [level=1] [ref=e6]
+  - paragraph [ref=e7]: Direct. Shape. Remember.
+  - button "Enter Studio" [ref=e8] [cursor=pointer]

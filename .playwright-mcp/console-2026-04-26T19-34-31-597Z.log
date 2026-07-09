@@ -1,0 +1,64 @@
+[     112ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5001/studio/node_modules/.vite/deps/react-dom_client.js?v=02e6b73d:14336
+[  197169ms] [ERROR] The final argument passed to %s changed size between renders. The order and size of this array must remain constant.
+
+Previous: %s
+Incoming: %s useEffect [async function loadProject(projectId, options) {
+		if (!projectId) return;
+		setLoading(true);
+		setError(null);
+		try {
+			const current = await getStudioProject(projectId, { sessionId: options?.sessionId ?? null });
+			setProject(current);
+			window.localStorage.setItem(STORAGE_KEY, current.project_id);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+			throw err;
+		} finally {
+			setLoading(false);
+		}
+	}, phase80_full_test, phase80_full_test, ] [async function loadProject(projectId, options) {
+		if (!projectId) return;
+		setLoading(true);
+		setError(null);
+		try {
+			const current = await getStudioProject(projectId, { sessionId: options?.sessionId ?? null });
+			setProject(current);
+			window.localStorage.setItem(STORAGE_KEY, current.project_id);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+			throw err;
+		} finally {
+			setLoading(false);
+		}
+	}, phase80_full_test, ] @ http://127.0.0.1:5001/studio/@vite/client:509
+[  202762ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  204373ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  210161ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  213161ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  216125ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  222125ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  226658ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  227442ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  236552ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  244242ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  247864ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  248219ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  255138ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  258503ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  261315ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  263666ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  266383ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  267124ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  268208ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  270819ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  272144ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  274780ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  275360ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  277087ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  279684ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  284821ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  293084ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  293520ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  300998ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  304544ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509
+[  310150ms] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. @ http://127.0.0.1:5001/studio/@vite/client:509

@@ -1,0 +1,16 @@
+{
+  "file_name": "tests/venvs/shared/bin/idna",
+  "revision_id": "f459336c-708f-46ef-b5db-40f7375c019f",
+  "metadata": {
+    "timestamp": "2026-06-17T10:12:49.054541",
+    "type": "cache_version",
+    "source": "initial_create",
+    "size": 235,
+    "is_reverted": false,
+    "git_branch_name": "backend-expansion-dependency-slicing",
+    "agent_name": "Cody",
+    "description": null
+  },
+  "content": "#!/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/tests/venvs/shared/bin/python3\nimport sys\nfrom idna.cli import main\nif __name__ == '__main__':\n    sys.argv[0] = sys.argv[0].removesuffix('.exe')\n    sys.exit(main())\n",
+  "saved_at": "2026-06-17T10:12:49.054541"
+}

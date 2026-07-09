@@ -1,0 +1,33 @@
+{
+  "file_name": "studio-app/src/pages/StudioOverview.tsx",
+  "revisions": [
+    {
+      "revision_id": "eb14ff61-03ca-49bd-a0fc-db5d243da95a",
+      "metadata": {
+        "timestamp": "2026-06-15T16:32:54.759913",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 41922,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:32:54.759913"
+    },
+    {
+      "revision_id": "88151b64-3124-4cf8-b4f5-51cc9fe2e207",
+      "metadata": {
+        "timestamp": "2026-06-15T16:32:54.758426",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 43863,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": null
+      },
+      "saved_at": "2026-06-15T16:32:54.758426"
+    }
+  ]
+}

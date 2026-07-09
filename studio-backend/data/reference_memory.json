@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "updated_at": "2026-06-30T21:12:41.381247Z",
+  "projects": {
+    "test_v2_project": {
+      "visual_patterns": [],
+      "pacing_patterns": [],
+      "motif_patterns": [],
+      "tone_patterns": [],
+      "references": [
+        {
+          "reference_id": "ref_001",
+          "file_name": "sample_ref.txt",
+          "reference_type": "note",
+          "study_prompt": "Focus on dread pacing and motif escalation",
+          "patterns": {
+            "visual": [
+              "Use constrained framing around threat space."
+            ],
+            "pacing": [
+              "Delay reveal one beat longer than expected."
+            ],
+            "motif": [
+              "Escalate motif from static mark to active threat."
+            ],
+            "tone": [
+              "Keep dread grounded in physical space."
+            ]
+          },
+          "confidence": 0.75,
+          "usage_count": 0,
+          "last_used": null,
+          "status": "staged",
+          "source_reference": "sample_ref.txt",
+          "stored_at": "2026-06-11T21:29:28.504960Z"
+        }
+      ]
+    },
+    "default_project": {
+      "visual_patterns": [],
+      "pacing_patterns": [],
+      "motif_patterns": [],
+      "tone_patterns": [],
+      "references": []
+    },
+    "no_memory_project": {
+      "visual_patterns": [],
+      "pacing_patterns": [],
+      "motif_patterns": [],
+      "tone_patterns": [],
+      "references": []
+    }
+  }
+}

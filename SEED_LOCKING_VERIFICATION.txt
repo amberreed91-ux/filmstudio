@@ -1,0 +1,77 @@
+SEED LOCKING FEATURE VERIFICATION CHECKLIST
+============================================
+
+✅ BACKEND IMPLEMENTATION
+  ✓ Database migrations 24 & 25 applied
+  ✓ Storage layer methods updated (save_previs_image, load_previs_images, get_scene_previs_seed, update_previs_seed_lock)
+  ✓ Storyboard generation endpoint updated to:
+    - Generate random seed on first generation
+    - Reuse seed on regeneration
+    - Include seed in Pollinations.ai URL
+    - Return seed in response
+  ✓ New PATCH endpoint for seed locking
+  ✓ Backend code compiles successfully
+
+✅ FRONTEND IMPLEMENTATION
+  ✓ API integration updated (generateSceneStoryboard, togglePrevisSeedLock)
+  ✓ ProductionBoard component updated with:
+    - sceneSeeds state (Map<string, number>)
+    - lockedSeeds state (Map<string, boolean>)
+    - handleGenerateStoryboard captures seed
+    - handleToggleSeedLock toggles lock state
+    - Seed display below image
+    - Lock/unlock button with visual indicators
+  ✓ Frontend builds successfully
+
+✅ TESTING & VERIFICATION
+  ✓ Storage layer tests passed
+  ✓ Database migrations verified
+  ✓ Lock/unlock operations work correctly
+  ✓ Seed persistence confirmed
+  ✓ URL generation includes seed parameter
+
+TESTING INSTRUCTIONS FOR PROJECT_3DBA9330F43A
+==============================================
+
+1. Generate a storyboard for Scene 1:
+   - Go to ProductionBoard (Scenes tab)
+   - Click "Generate Storyboard" on Scene 1
+   - Note the seed value displayed (e.g., "Seed: 482931")
+
+2. Verify seed reuse:
+   - Click "Generate Storyboard" again
+   - Confirm same seed is shown
+   - Image should be identical
+
+3. Lock the seed:
+   - Click the lock icon next to the seed
+   - Icon turns green/emerald
+   - Text may show "SEED LOCKED"
+
+4. Regenerate with locked seed:
+   - Click "Generate Storyboard" again
+   - Same seed should be used
+   - Image remains consistent
+   - Seed value unchanged in UI
+
+5. Unlock the seed:
+   - Click lock icon (now green)
+   - Icon returns to gray/neutral
+   - Next regeneration will use new seed
+
+IMPLEMENTATION NOTES
+====================
+
+- Seed values: random integer 1–999,999
+- Storage: persisted in database (previs_images table)
+- Scope: per-scene (each scene has own seed)
+- Pollinations URL format: https://image.pollinations.ai/prompt/{encoded}?width=768&height=432&nologo=true&seed={seed}
+- Manual control: user must click lock button to enable seed reuse
+- Auto-reuse: once locked, seed automatically reused on regenerations
+- Visual indicators: lock icon shows state (green=locked, gray=unlocked)
+
+CONSTRAINT
+==========
+
+This feature only applies to Pollinations.ai storyboard generation endpoint.
+It does NOT affect Runway Gen-3 video render jobs (different system).

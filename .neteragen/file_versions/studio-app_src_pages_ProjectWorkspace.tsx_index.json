@@ -1,0 +1,61 @@
+{
+  "file_name": "studio-app/src/pages/ProjectWorkspace.tsx",
+  "revisions": [
+    {
+      "revision_id": "4aac8ea5-8076-495f-bc07-f62642d598db",
+      "metadata": {
+        "timestamp": "2026-06-15T16:22:35.463341",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 42873,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:22:35.463341"
+    },
+    {
+      "revision_id": "e7e96e8b-3387-464c-a4a8-c63e677c61cc",
+      "metadata": {
+        "timestamp": "2026-06-15T16:22:29.411274",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 42451,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:22:29.411274"
+    },
+    {
+      "revision_id": "53a289a9-1aa1-48ac-a1f8-47d78d8e39be",
+      "metadata": {
+        "timestamp": "2026-06-15T16:22:14.962484",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 42044,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:22:14.962484"
+    },
+    {
+      "revision_id": "40b5566e-ded2-4328-bb1e-6473a37c10a0",
+      "metadata": {
+        "timestamp": "2026-06-15T16:22:14.958133",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 41895,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-15T16:22:14.958133"
+    }
+  ]
+}

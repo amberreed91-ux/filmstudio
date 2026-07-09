@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/shared/bin/pip",
+  "revisions": [
+    {
+      "revision_id": "ae430d92-4236-41bc-bff4-be0d08fd94b8",
+      "metadata": {
+        "timestamp": "2026-06-17T10:00:58.872013",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 301,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:00:58.872013"
+    }
+  ]
+}

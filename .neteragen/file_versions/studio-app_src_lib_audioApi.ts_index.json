@@ -1,0 +1,33 @@
+{
+  "file_name": "studio-app/src/lib/audioApi.ts",
+  "revisions": [
+    {
+      "revision_id": "6ad989c4-a631-4f77-8baa-0f84077919f2",
+      "metadata": {
+        "timestamp": "2026-06-15T15:55:23.098905",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 2912,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T15:55:23.098905"
+    },
+    {
+      "revision_id": "146f7095-43d3-4f5a-86f9-f04314eb0131",
+      "metadata": {
+        "timestamp": "2026-06-15T15:55:23.097912",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 0,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-15T15:55:23.097912"
+    }
+  ]
+}

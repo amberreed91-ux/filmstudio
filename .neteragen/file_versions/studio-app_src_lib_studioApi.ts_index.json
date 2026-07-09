@@ -1,0 +1,33 @@
+{
+  "file_name": "studio-app/src/lib/studioApi.ts",
+  "revisions": [
+    {
+      "revision_id": "2c8a30dc-9d4b-4ced-9bc4-f850f5c3d4f1",
+      "metadata": {
+        "timestamp": "2026-06-15T16:46:35.187701",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 109611,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": ""
+      },
+      "saved_at": "2026-06-15T16:46:35.187701"
+    },
+    {
+      "revision_id": "1341dceb-4c03-4ed4-8be7-c273fe24bff2",
+      "metadata": {
+        "timestamp": "2026-06-15T16:46:35.185957",
+        "type": "cache_version",
+        "source": "ToolTextFileEdit",
+        "size": 109570,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Jace",
+        "description": null
+      },
+      "saved_at": "2026-06-15T16:46:35.185957"
+    }
+  ]
+}

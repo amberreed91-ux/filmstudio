@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/shared/bin/encodec",
+  "revisions": [
+    {
+      "revision_id": "e4ea973b-e76e-4454-83a3-fb25968c2829",
+      "metadata": {
+        "timestamp": "2026-06-17T10:13:55.300219",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 243,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:13:55.300219"
+    }
+  ]
+}

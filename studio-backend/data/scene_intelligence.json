@@ -1,0 +1,866 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-29T09:10:34.319235Z",
+  "records": {
+    "codex_e2e_metadata_scene_001": {
+      "scene_id": "codex_e2e_metadata_scene_001",
+      "film_title": "Codex Verification Reel",
+      "scene_name": "Metadata Only Kitchen Test",
+      "intent": "Verify metadata appears before any video upload.",
+      "emotional_beat_arc": [
+        "quiet setup",
+        "visible confirmation"
+      ],
+      "camera_logic": [
+        "static verification frame",
+        "readable table row"
+      ],
+      "pacing_curve": [
+        "instant import",
+        "immediate render"
+      ],
+      "director_notes": "Metadata-only references must appear without touching a dropdown.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:21:07.059131Z",
+      "updated_at": "2026-04-30T04:21:07.059131Z"
+    },
+    "codex_e2e_metadata_scene_1777522893856": {
+      "scene_id": "codex_e2e_metadata_scene_1777522893856",
+      "film_title": "Codex Verification Reel",
+      "scene_name": "Metadata Only Kitchen Test",
+      "intent": "Verify metadata appears before any video upload.",
+      "emotional_beat_arc": [
+        "quiet setup",
+        "visible confirmation"
+      ],
+      "camera_logic": [
+        "static verification frame",
+        "readable table row"
+      ],
+      "pacing_curve": [
+        "instant import",
+        "immediate render"
+      ],
+      "director_notes": "Metadata-only references must appear without touching a dropdown.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:21:35.223095Z",
+      "updated_at": "2026-04-30T04:21:35.223095Z"
+    },
+    "marriage_story_apartment_argument": {
+      "scene_id": "marriage_story_apartment_argument",
+      "film_title": "Marriage Story",
+      "scene_name": "Apartment argument",
+      "intent": "Strip civility away until love becomes harm.",
+      "emotional_beat_arc": [
+        "restraint",
+        "accusation",
+        "eruption",
+        "collapse",
+        "regret"
+      ],
+      "camera_logic": [
+        "tight coverage",
+        "minimal escape",
+        "actor driven blocking",
+        "intimate closeups"
+      ],
+      "pacing_curve": [
+        "slow simmer",
+        "sharp spike",
+        "emotional crash"
+      ],
+      "director_notes": "Let silence hurt as much as dialogue. Keep the camera honest, not decorative.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "black_swan_mirror_hallucinations": {
+      "scene_id": "black_swan_mirror_hallucinations",
+      "film_title": "Black Swan",
+      "scene_name": "Mirror hallucinations",
+      "intent": "Visualize identity fracture.",
+      "emotional_beat_arc": [
+        "unease",
+        "paranoia",
+        "terror",
+        "surrender"
+      ],
+      "camera_logic": [
+        "reflections",
+        "handheld instability",
+        "distorted subjectivity",
+        "fragmented identity framing"
+      ],
+      "pacing_curve": [
+        "creeping dread",
+        "sudden rupture"
+      ],
+      "director_notes": "Reality should feel almost normal, then deeply wrong.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "social_network_deposition_cross_cutting": {
+      "scene_id": "social_network_deposition_cross_cutting",
+      "film_title": "The Social Network",
+      "scene_name": "Deposition cross cutting",
+      "intent": "Reveal truth through competing narratives.",
+      "emotional_beat_arc": [
+        "detachment",
+        "irritation",
+        "defensiveness",
+        "ego exposure"
+      ],
+      "camera_logic": [
+        "sterile deposition framing",
+        "flashback contrast",
+        "sharp editorial rhythm"
+      ],
+      "pacing_curve": [
+        "fast",
+        "rhythmic",
+        "verbally aggressive"
+      ],
+      "director_notes": "Dialogue is combat. Editing is the blade.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "manchester_by_the_sea_police_station": {
+      "scene_id": "manchester_by_the_sea_police_station",
+      "film_title": "Manchester by the Sea",
+      "scene_name": "Police station scene",
+      "intent": "Show grief as unbearable fact.",
+      "emotional_beat_arc": [
+        "numbness",
+        "realization",
+        "implosion",
+        "self destruction"
+      ],
+      "camera_logic": [
+        "static framing",
+        "observational distance",
+        "emotional restraint"
+      ],
+      "pacing_curve": [
+        "flatline",
+        "violent spike",
+        "silence"
+      ],
+      "director_notes": "Do not glamorize pain. Let restraint make the moment worse.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "mad_max_fury_road_desert_chase": {
+      "scene_id": "mad_max_fury_road_desert_chase",
+      "film_title": "Mad Max: Fury Road",
+      "scene_name": "Desert chase",
+      "intent": "Tell story through movement and survival.",
+      "emotional_beat_arc": [
+        "urgency",
+        "chaos",
+        "escalation",
+        "near collapse",
+        "recovery"
+      ],
+      "camera_logic": [
+        "centered action",
+        "readable geography",
+        "kinetic framing",
+        "wide impact shots"
+      ],
+      "pacing_curve": [
+        "relentless",
+        "micro breath beats",
+        "renewed escalation"
+      ],
+      "director_notes": "Chaos must still be legible.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "john_wick_nightclub_fight": {
+      "scene_id": "john_wick_nightclub_fight",
+      "film_title": "John Wick",
+      "scene_name": "Nightclub fight",
+      "intent": "Turn violence into controlled choreography.",
+      "emotional_beat_arc": [
+        "focus",
+        "escalation",
+        "dominance",
+        "exhaustion"
+      ],
+      "camera_logic": [
+        "wide action coverage",
+        "fluid tracking",
+        "neon contrast",
+        "body readable framing"
+      ],
+      "pacing_curve": [
+        "pulsing waves",
+        "kill rhythm",
+        "reset"
+      ],
+      "director_notes": "Action is dance with consequences.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "dark_knight_truck_flip": {
+      "scene_id": "dark_knight_truck_flip",
+      "film_title": "The Dark Knight",
+      "scene_name": "Truck flip",
+      "intent": "Escalate chaos into mythic spectacle.",
+      "emotional_beat_arc": [
+        "pursuit",
+        "danger",
+        "shock",
+        "awe"
+      ],
+      "camera_logic": [
+        "wide practical stunt framing",
+        "clean impact geography",
+        "large scale composition"
+      ],
+      "pacing_curve": [
+        "build",
+        "payoff",
+        "continuation"
+      ],
+      "director_notes": "Earn the spectacle before detonating it.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "mission_impossible_fallout_helicopter_chase": {
+      "scene_id": "mission_impossible_fallout_helicopter_chase",
+      "film_title": "Mission: Impossible Fallout",
+      "scene_name": "Helicopter chase",
+      "intent": "Push physical risk into heroic obsession.",
+      "emotional_beat_arc": [
+        "pursuit",
+        "peril",
+        "loss of control",
+        "impossible recovery"
+      ],
+      "camera_logic": [
+        "aerial scale",
+        "cockpit intimacy",
+        "spatial clarity",
+        "real stunt emphasis"
+      ],
+      "pacing_curve": [
+        "rising danger",
+        "peak intensity",
+        "breathless resolution"
+      ],
+      "director_notes": "The audience must feel the stunt is real.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "hereditary_dinner_table": {
+      "scene_id": "hereditary_dinner_table",
+      "film_title": "Hereditary",
+      "scene_name": "Dinner table",
+      "intent": "Make family trauma feel like horror.",
+      "emotional_beat_arc": [
+        "suppression",
+        "resentment",
+        "eruption",
+        "damage"
+      ],
+      "camera_logic": [
+        "locked framing",
+        "suffocating closeups",
+        "domestic claustrophobia"
+      ],
+      "pacing_curve": [
+        "slow burn",
+        "explosion",
+        "aftershock"
+      ],
+      "director_notes": "The monster is what nobody has said yet.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "the_shining_hallway_tracking": {
+      "scene_id": "the_shining_hallway_tracking",
+      "film_title": "The Shining",
+      "scene_name": "Hallway tracking",
+      "intent": "Turn space into dread.",
+      "emotional_beat_arc": [
+        "calm",
+        "unease",
+        "anticipation",
+        "fear"
+      ],
+      "camera_logic": [
+        "symmetrical tracking",
+        "hypnotic repetition",
+        "steady movement",
+        "spatial unease"
+      ],
+      "pacing_curve": [
+        "steady",
+        "creeping",
+        "inevitable"
+      ],
+      "director_notes": "Repetition becomes threat.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "it_follows_slow_threat_approach": {
+      "scene_id": "it_follows_slow_threat_approach",
+      "film_title": "It Follows",
+      "scene_name": "Slow threat approach",
+      "intent": "Make inevitability terrifying.",
+      "emotional_beat_arc": [
+        "awareness",
+        "denial",
+        "dread",
+        "panic"
+      ],
+      "camera_logic": [
+        "wide frames",
+        "background scanning",
+        "patient movement",
+        "negative space"
+      ],
+      "pacing_curve": [
+        "slow pressure",
+        "sudden flight"
+      ],
+      "director_notes": "Fear lives in the distance.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "the_conjuring_clap_scene": {
+      "scene_id": "the_conjuring_clap_scene",
+      "film_title": "The Conjuring",
+      "scene_name": "Clap scene",
+      "intent": "Weaponize darkness and anticipation.",
+      "emotional_beat_arc": [
+        "playfulness",
+        "uncertainty",
+        "dread",
+        "shock"
+      ],
+      "camera_logic": [
+        "negative space",
+        "sound cue emphasis",
+        "hidden threat framing"
+      ],
+      "pacing_curve": [
+        "quiet setup",
+        "delayed jump",
+        "release"
+      ],
+      "director_notes": "The audience should fear what they cannot see.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "superbad_mclovin_cops": {
+      "scene_id": "superbad_mclovin_cops",
+      "film_title": "Superbad",
+      "scene_name": "McLovin cops",
+      "intent": "Build absurdity through fake authority.",
+      "emotional_beat_arc": [
+        "panic",
+        "confusion",
+        "bonding",
+        "chaos"
+      ],
+      "camera_logic": [
+        "loose comic coverage",
+        "reaction emphasis",
+        "performance first framing"
+      ],
+      "pacing_curve": [
+        "escalating stupidity",
+        "pause",
+        "renewed escalation"
+      ],
+      "director_notes": "Comedy comes from commitment, not winking.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "the_office_jim_reaction_shots": {
+      "scene_id": "the_office_jim_reaction_shots",
+      "film_title": "The Office",
+      "scene_name": "Jim reaction shots",
+      "intent": "Let the audience share silent judgment.",
+      "emotional_beat_arc": [
+        "disbelief",
+        "restraint",
+        "deadpan release"
+      ],
+      "camera_logic": [
+        "direct camera glance",
+        "documentary interruption",
+        "reaction framing"
+      ],
+      "pacing_curve": [
+        "quick beat",
+        "pause",
+        "punchline"
+      ],
+      "director_notes": "The look is the joke.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "bridesmaids_chaos_sequence": {
+      "scene_id": "bridesmaids_chaos_sequence",
+      "film_title": "Bridesmaids",
+      "scene_name": "Chaos sequence",
+      "intent": "Turn social pressure into physical disaster.",
+      "emotional_beat_arc": [
+        "denial",
+        "embarrassment",
+        "collapse",
+        "humiliation"
+      ],
+      "camera_logic": [
+        "ensemble coverage",
+        "escalating reaction shots",
+        "physical comedy framing"
+      ],
+      "pacing_curve": [
+        "comic escalation",
+        "chaos peak",
+        "exhausted aftermath"
+      ],
+      "director_notes": "Make the nightmare socially specific.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "step_brothers_interview": {
+      "scene_id": "step_brothers_interview",
+      "film_title": "Step Brothers",
+      "scene_name": "Interview",
+      "intent": "Expose arrested development through delusional confidence.",
+      "emotional_beat_arc": [
+        "confidence",
+        "awkwardness",
+        "sabotage",
+        "absurdity"
+      ],
+      "camera_logic": [
+        "simple comedy framing",
+        "performance first coverage",
+        "reaction timing"
+      ],
+      "pacing_curve": [
+        "steady setup",
+        "cringe spikes"
+      ],
+      "director_notes": "Let stupidity breathe.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "before_sunrise_train_talk": {
+      "scene_id": "before_sunrise_train_talk",
+      "film_title": "Before Sunrise",
+      "scene_name": "Train talk",
+      "intent": "Capture connection forming in real time.",
+      "emotional_beat_arc": [
+        "curiosity",
+        "openness",
+        "intimacy",
+        "possibility"
+      ],
+      "camera_logic": [
+        "naturalistic two shots",
+        "gentle intimacy",
+        "conversational framing"
+      ],
+      "pacing_curve": [
+        "relaxed",
+        "conversational",
+        "emotionally accumulating"
+      ],
+      "director_notes": "Chemistry is the plot.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "pride_and_prejudice_hand_flex": {
+      "scene_id": "pride_and_prejudice_hand_flex",
+      "film_title": "Pride and Prejudice",
+      "scene_name": "Hand flex",
+      "intent": "Externalize restrained desire.",
+      "emotional_beat_arc": [
+        "courtesy",
+        "contact",
+        "shock",
+        "repression"
+      ],
+      "camera_logic": [
+        "insert detail",
+        "body language focus",
+        "gesture as confession"
+      ],
+      "pacing_curve": [
+        "tiny moment",
+        "huge emotional echo"
+      ],
+      "director_notes": "The smallest gesture can scream.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "la_la_land_planetarium": {
+      "scene_id": "la_la_land_planetarium",
+      "film_title": "La La Land",
+      "scene_name": "Planetarium",
+      "intent": "Turn romance into cinematic dream logic.",
+      "emotional_beat_arc": [
+        "wonder",
+        "surrender",
+        "transcendence"
+      ],
+      "camera_logic": [
+        "floating movement",
+        "theatrical lighting",
+        "fantasy space",
+        "romantic abstraction"
+      ],
+      "pacing_curve": [
+        "graceful lift",
+        "suspended magic"
+      ],
+      "director_notes": "Emotion becomes gravity free.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "call_me_by_your_name_ending": {
+      "scene_id": "call_me_by_your_name_ending",
+      "film_title": "Call Me by Your Name",
+      "scene_name": "Ending",
+      "intent": "Hold on grief without rescue.",
+      "emotional_beat_arc": [
+        "memory",
+        "heartbreak",
+        "acceptance",
+        "devastation"
+      ],
+      "camera_logic": [
+        "static closeup",
+        "held duration",
+        "face as landscape"
+      ],
+      "pacing_curve": [
+        "slow",
+        "unbroken",
+        "emotionally cumulative"
+      ],
+      "director_notes": "Do not cut away. Make us stay.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "everything_everywhere_multiverse_scene": {
+      "scene_id": "everything_everywhere_multiverse_scene",
+      "film_title": "Everything Everywhere All at Once",
+      "scene_name": "Multiverse scene",
+      "intent": "Make chaos emotional, not random.",
+      "emotional_beat_arc": [
+        "confusion",
+        "overload",
+        "absurdity",
+        "revelation"
+      ],
+      "camera_logic": [
+        "rapid visual language shifts",
+        "genre hopping",
+        "match cuts",
+        "emotional anchoring"
+      ],
+      "pacing_curve": [
+        "hyperactive",
+        "fractured",
+        "emotionally focused"
+      ],
+      "director_notes": "The madness must orbit the character wound.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "the_lighthouse_general_reference": {
+      "scene_id": "the_lighthouse_general_reference",
+      "film_title": "The Lighthouse",
+      "scene_name": "General style reference",
+      "intent": "Trap masculinity, madness, and myth in one pressure cooker.",
+      "emotional_beat_arc": [
+        "irritation",
+        "dominance games",
+        "paranoia",
+        "collapse"
+      ],
+      "camera_logic": [
+        "square frame",
+        "stark contrast",
+        "claustrophobic blocking",
+        "mythic composition"
+      ],
+      "pacing_curve": [
+        "oppressive repetition",
+        "manic surges"
+      ],
+      "director_notes": "Make the frame feel cursed.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "under_the_skin_general_reference": {
+      "scene_id": "under_the_skin_general_reference",
+      "film_title": "Under the Skin",
+      "scene_name": "General style reference",
+      "intent": "Observe humanity from alien distance.",
+      "emotional_beat_arc": [
+        "detachment",
+        "curiosity",
+        "confusion",
+        "vulnerability"
+      ],
+      "camera_logic": [
+        "cold observational framing",
+        "long takes",
+        "alien perspective",
+        "emotional distance"
+      ],
+      "pacing_curve": [
+        "slow",
+        "hypnotic",
+        "unsettling"
+      ],
+      "director_notes": "Remove explanation. Let behavior become mystery.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "midsommar_general_reference": {
+      "scene_id": "midsommar_general_reference",
+      "film_title": "Midsommar",
+      "scene_name": "General style reference",
+      "intent": "Make daylight horror emotionally seductive.",
+      "emotional_beat_arc": [
+        "grief",
+        "disorientation",
+        "belonging",
+        "surrender"
+      ],
+      "camera_logic": [
+        "bright symmetry",
+        "ritual framing",
+        "controlled unease",
+        "daylight horror"
+      ],
+      "pacing_curve": [
+        "slow ceremonial escalation"
+      ],
+      "director_notes": "Beauty should make the horror worse.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "inglourious_basterds_opening": {
+      "scene_id": "inglourious_basterds_opening",
+      "film_title": "Inglourious Basterds",
+      "scene_name": "Opening",
+      "intent": "Turn politeness into terror.",
+      "emotional_beat_arc": [
+        "calm",
+        "suspicion",
+        "dread",
+        "reveal",
+        "violence"
+      ],
+      "camera_logic": [
+        "patient push ins",
+        "power framing",
+        "delayed reveal",
+        "dialogue tension"
+      ],
+      "pacing_curve": [
+        "slow burn",
+        "unbearable tension",
+        "sudden release"
+      ],
+      "director_notes": "Language is the weapon.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "pulp_fiction_general_reference": {
+      "scene_id": "pulp_fiction_general_reference",
+      "film_title": "Pulp Fiction",
+      "scene_name": "General style reference",
+      "intent": "Make character rhythm more important than plot order.",
+      "emotional_beat_arc": [
+        "coolness",
+        "absurdity",
+        "threat",
+        "reversal"
+      ],
+      "camera_logic": [
+        "conversational framing",
+        "stylized stillness",
+        "sudden violence",
+        "rhythmic blocking"
+      ],
+      "pacing_curve": [
+        "loose talk",
+        "sharp rupture"
+      ],
+      "director_notes": "Let scenes wander until danger snaps them awake.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "twelve_angry_men_jury_deliberation": {
+      "scene_id": "twelve_angry_men_jury_deliberation",
+      "film_title": "12 Angry Men",
+      "scene_name": "Jury deliberation",
+      "intent": "Show truth emerging through pressure.",
+      "emotional_beat_arc": [
+        "certainty",
+        "doubt",
+        "conflict",
+        "moral shift"
+      ],
+      "camera_logic": [
+        "room geography",
+        "tightening lenses",
+        "increasing claustrophobia",
+        "power blocking"
+      ],
+      "pacing_curve": [
+        "debate escalation",
+        "pressure waves"
+      ],
+      "director_notes": "The room should shrink as certainty dies.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "no_country_for_old_men_coin_flip": {
+      "scene_id": "no_country_for_old_men_coin_flip",
+      "film_title": "No Country for Old Men",
+      "scene_name": "Coin flip scene",
+      "intent": "Make chance feel like doom.",
+      "emotional_beat_arc": [
+        "politeness",
+        "confusion",
+        "dread",
+        "existential terror"
+      ],
+      "camera_logic": [
+        "static tension",
+        "closeups",
+        "object focus",
+        "silence"
+      ],
+      "pacing_curve": [
+        "slow",
+        "stretched",
+        "suffocating"
+      ],
+      "director_notes": "Silence is the predator.",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-04-30T04:33:01.571722Z",
+      "updated_at": "2026-04-30T04:33:01.571722Z"
+    },
+    "scene_901": {
+      "scene_id": "scene_901",
+      "film_title": "Study Import",
+      "scene_name": "Office",
+      "intent": "Desk scene",
+      "emotional_beat_arc": [
+        "calm"
+      ],
+      "camera_logic": [
+        "static"
+      ],
+      "pacing_curve": [
+        "steady"
+      ],
+      "director_notes": "Hold frame",
+      "media_status": "metadata_only",
+      "video_file": null,
+      "source_type": "json_metadata",
+      "created_at": "2026-05-24T13:15:06.613818Z",
+      "updated_at": "2026-05-29T09:10:34.319235Z"
+    }
+  }
+}

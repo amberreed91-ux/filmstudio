@@ -1,0 +1,50 @@
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/services/adherence_service.py:24: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x1133d14d0>
+Unclosed connector
+connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0x1135f4c50>, 366859.623323291)])']
+connector: <aiohttp.connector.TCPConnector object at 0x111e037d0>
+Traceback (most recent call last):
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/test_adherence_direct.py", line 117, in main
+    score = await adherence_service.score_render_attempt(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/services/adherence_service.py", line 126, in score_render_attempt
+    raise ValueError(f"Expected 3 frames, got {len(extracted_frames)}")
+ValueError: Expected 3 frames, got 0
+================================================================================
+DIRECT ADHERENCE TEST (no keyframes)
+================================================================================
+
+Environment:
+  GROQ_API_KEY: ✓
+
+Job: job-20260528170029-c5ca66d8-scene_001_shot_001
+Shot: scene_001_shot_001
+Status: complete
+URL: https://dnznrvs05pmza.cloudfront.net/e01ccdc4-e7ed-47aa-b99b-50fdae45775b.mp4?_j...
+
+Prompt: A displaced musician uncovers a citywide memory glitch one song at a time
+
+================================================================================
+DOWNLOADING VIDEO
+================================================================================
+
+Refreshing URL...
+✓ URL refreshed
+
+Downloading from: https://dnznrvs05pmza.cloudfront.net/e01ccdc4-e7ed-47aa-b99b-50fdae45775b.mp4?_j...
+✓ Downloaded 1979494 bytes to /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/test_downloads/scene_001_shot_001_test.mp4
+
+================================================================================
+CALLING GROQ API FOR ADHERENCE SCORING
+================================================================================
+
+✗ Adherence scoring failed: Expected 3 frames, got 0

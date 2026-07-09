@@ -1,0 +1,19 @@
+{
+  "file_name": "tests/venvs/shared/bin/num2words",
+  "revisions": [
+    {
+      "revision_id": "8228dc45-5315-4e20-9f8c-ada6c19aea17",
+      "metadata": {
+        "timestamp": "2026-06-17T10:12:44.592930",
+        "type": "cache_version",
+        "source": "initial_create",
+        "size": 3053,
+        "is_reverted": false,
+        "git_branch_name": "backend-expansion-dependency-slicing",
+        "agent_name": "Cody",
+        "description": null
+      },
+      "saved_at": "2026-06-17T10:12:44.592930"
+    }
+  ]
+}
