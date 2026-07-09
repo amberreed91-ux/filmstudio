@@ -52,6 +52,8 @@ from app.models.scene_intelligence import (
     SceneIntelligenceRecord,
 )
 
+from app.models.consistency import ConsistencyPayload
+
 
 class SourceStats(BaseModel):
     scene_count: int = 0
@@ -274,6 +276,7 @@ class RenderJobInput(BaseModel):
     prompt: str = ""
     referenceAssets: list[str] = []
     parameters: dict = {}
+    consistency_payload: Optional[ConsistencyPayload] = None
 
 
 class RenderJobOutput(BaseModel):

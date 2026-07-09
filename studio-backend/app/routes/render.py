@@ -169,6 +169,26 @@ async def get_render_job_outputs(job_id: str):
     return await render_service.get_job_outputs(job_id)
 
 
+@router.get("/projects/{project_id}/shots/{shot_id}/recommended-duration")
+def get_recommended_shot_duration(
+    project_id: str,
+    shot_id: str,
+    pacing: Optional[str] = None,
+):
+    """Recommend a render duration for a shot based on its scene dialogue.
+
+    Advisory-only: surfaces the number without changing any existing render
+    behaviour. See ShotDurationEstimatorService for the estimation method.
+    """
+    from app.services.shot_duration_estimator_service import shot_duration_estimator_service
+    try:
+        return shot_duration_estimator_service.estimate_for_shot(
+            project_id=project_id, shot_id=shot_id, pacing=pacing,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.get("/jobs")
 def list_render_jobs(project_id: Optional[str] = None):
     """List all render jobs, optionally filtered by project"""

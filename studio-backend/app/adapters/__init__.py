@@ -23,6 +23,13 @@ class RunwayAPIError(Exception):
         self.response_headers = response_headers
         self.response_body = response_body
 
+# Allowed Runway model IDs for per-request overrides via
+# input_payload.parameters.model. Sourced from the model strings already
+# referenced in this repo (default RUNWAY_MODEL + tests). The configured
+# RUNWAY_MODEL env default is operator-controlled and is NOT validated here;
+# only caller-supplied per-request overrides are gated by this allowlist.
+ALLOWED_RUNWAY_MODELS = frozenset({"gen4.5", "gen6", "gen3"})
+
 class RenderProviderAdapter(ABC):
     """Abstract base class for render provider adapters"""
 
@@ -590,7 +597,27 @@ class RunwayAdapter(RenderProviderAdapter):
                 )
                 return {"raw_body": body_text}
 
-    def _runway_model(self) -> str:
+    def _runway_model(self, job: Optional[RenderJobModel] = None) -> str:
+        if job is not None:
+            params = getattr(job.input_payload, "parameters", None)
+            if isinstance(params, dict) and "model" in params:
+                requested = str(params["model"]).strip()
+                if requested not in ALLOWED_RUNWAY_MODELS:
+                    raise ValueError(
+                        f"Unsupported Runway model '{requested}'. "
+                        f"Allowed models: {sorted(ALLOWED_RUNWAY_MODELS)}"
+                    )
+                return requested
+        return os.getenv("RUNWAY_MODEL", "gen4.5").strip() or "gen4.5"
+
+    def _runway_model_for_metadata(self, job: Optional[RenderJobModel] = None) -> str:
+        # Non-raising model read for error/metadata construction only. Mirrors
+        # _runway_model() but never validates, so a rejected override cannot
+        # re-raise while an except handler is already building failure metadata.
+        if job is not None:
+            params = getattr(job.input_payload, "parameters", None)
+            if isinstance(params, dict) and "model" in params:
+                return str(params["model"]).strip()
         return os.getenv("RUNWAY_MODEL", "gen4.5").strip() or "gen4.5"
 
     def _runway_timeout_seconds(self) -> int:
@@ -704,7 +731,7 @@ class RunwayAdapter(RenderProviderAdapter):
                                 "output": {"video_url": None, "status": "failed"},
                                 "metadata": {
                                     "task_id": None,
-                                    "model": self._runway_model(),
+                                    "model": self._runway_model(job),
                                     "provider_mode": "test_mode",
                                     "error": self._error_metadata("test_mode_not_allowed", job.error_message),
                                 },
@@ -723,7 +750,7 @@ class RunwayAdapter(RenderProviderAdapter):
                     "output": {"video_url": video_url, "status": "completed"},
                     "metadata": {
                         "task_id": job.provider_job_id,
-                        "model": self._runway_model(),
+                        "model": self._runway_model(job),
                         "provider_mode": "mock_success",
                         "mock_video_blocker": "non_video_placeholder",
                     },
@@ -755,7 +782,7 @@ class RunwayAdapter(RenderProviderAdapter):
                             "output": {"video_url": None, "status": "failed"},
                             "metadata": {
                                 "task_id": None,
-                                "model": self._runway_model(),
+                                "model": self._runway_model(job),
                                 "provider_mode": "hosted_api",
                                 "error": self._error_metadata("missing_api_key", "Missing Runway API key"),
                             },
@@ -765,10 +792,33 @@ class RunwayAdapter(RenderProviderAdapter):
                 job.updated_at = datetime.now().isoformat()
                 return job
 
-            model = self._runway_model()
+            model = self._runway_model(job)
             timeout_seconds = self._runway_timeout_seconds()
             started = asyncio.get_running_loop().time()
             prompt_image = job.input_payload.referenceAssets[0] if job.input_payload.referenceAssets else None
+
+            # ── Loop 2: ConsistencyPayload override ─────────────────────────
+            # When a job carries a ConsistencyPayload, to_runway() selects the
+            # highest-weight character_full ref as the init image (overriding
+            # referenceAssets[0]) and folds all other refs' fallback_text into
+            # the promptText.  Absent consistency_payload → zero regression.
+            _consistency_data = getattr(job.input_payload, 'consistency_payload', None)
+            if _consistency_data is not None:
+                from app.models.consistency import ConsistencyPayload as _CP, to_runway as _to_runway
+                _cp_obj = _CP(**_consistency_data) if isinstance(_consistency_data, dict) else _consistency_data
+                _additions = _to_runway(_cp_obj)
+                if "promptImage" in _additions:
+                    prompt_image = _additions["promptImage"]
+                if "promptTextExtra" in _additions:
+                    _existing = str(job.input_payload.prompt)
+                    job.input_payload.prompt = _existing + "; " + _additions["promptTextExtra"]
+                    logger.info(
+                        "CONSISTENCY_PAYLOAD_MERGED | job=%s | promptImage=%s | promptTextExtra_len=%d",
+                        job.id,
+                        bool("promptImage" in _additions),
+                        len(_additions["promptTextExtra"]),
+                    )
+
             ratio = self._normalize_ratio(job.input_payload.parameters.get("ratio"))
             duration = int(job.input_payload.parameters.get("duration") or 5)
 
@@ -846,29 +896,26 @@ class RunwayAdapter(RenderProviderAdapter):
                 poll_response = await self._runway_request("GET", f"/v1/tasks/{task_id}")
                 poll_status = str(poll_response.get("status", "")).strip().lower()
                 logger.info("Runway polling status: task_id=%s status=%s", task_id, poll_status or "unknown")
-                if poll_status in {"completed", "succeeded", "failed", "error", "cancelled"}:
+                if poll_status in {"completed", "succeeded", "failed", "error", "cancelled", "throttled"}:
                     break
                 if asyncio.get_running_loop().time() - started >= timeout_seconds:
                     timeout_message = f"Runway task polling timed out after {timeout_seconds}s"
-                    # Keep job in rendering so callers can continue polling/reconcile
-                    # against the captured provider task id.
-                    job.status = "rendering"
-                    job.error_message = None
+                    job.status = "failed"
+                    job.error_message = timeout_message
                     
-                    # Add timeout metadata to track when timeout occurred
                     if not hasattr(job, 'metadata') or job.metadata is None:
                         job.metadata = {}
                     job.metadata["timeout_at"] = datetime.now(datetime.now().astimezone().tzinfo).isoformat()
                     job.metadata["timeout_note"] = (
-                        "Runway submission timed out after 5 minutes. "
-                        "Background polling will continue checking for completion."
+                        f"Runway submission timed out after {timeout_seconds}s. "
+                        "Job marked as failed — retry or reconcile if the task completes upstream."
                     )
                     
                     normalized = {
                         "provider": "runway",
                         "task": "video_generation",
-                        "status": "processing",
-                        "output": {"video_url": None, "status": "processing"},
+                        "status": "failed",
+                        "output": {"video_url": None, "status": "failed"},
                         "metadata": {
                             "task_id": task_id,
                             "model": model,
@@ -880,14 +927,14 @@ class RunwayAdapter(RenderProviderAdapter):
                     job.output_payload = RenderJobOutput(asset_url="", thumbnail_url="", metadata={"provider_response_normalized": normalized})
                     job.updated_at = datetime.now().isoformat()
                     logger.info(
-                        "Runway job %s timed out after %ds, background polling will continue",
+                        "Runway job %s timed out after %ds, marked as failed",
                         job.id,
                         timeout_seconds
                     )
                     return job
                 await asyncio.sleep(1)
 
-            terminal_failed = poll_status in {"failed", "error", "cancelled"}
+            terminal_failed = poll_status in {"failed", "error", "cancelled", "throttled"}
             if terminal_failed:
                 message = str(poll_response.get("error") or poll_response.get("message") or "Runway task failed")
                 job.status = "failed"
@@ -968,7 +1015,7 @@ class RunwayAdapter(RenderProviderAdapter):
                     "endpoint": exc.endpoint,
                     "headers": exc.response_headers,
                     "body": exc.response_body,
-                    "model": self._runway_model(),
+                    "model": self._runway_model_for_metadata(job),
                 },
             )
             job.status = "failed"
@@ -985,7 +1032,7 @@ class RunwayAdapter(RenderProviderAdapter):
                         "output": {"video_url": None, "status": "failed"},
                         "metadata": {
                             "task_id": job.provider_job_id,
-                            "model": self._runway_model(),
+                            "model": self._runway_model_for_metadata(job),
                             "provider_mode": "hosted_api",
                             "error": error,
                         },
@@ -1009,7 +1056,7 @@ class RunwayAdapter(RenderProviderAdapter):
                         "output": {"video_url": None, "status": "failed"},
                         "metadata": {
                             "task_id": job.provider_job_id,
-                            "model": self._runway_model(),
+                            "model": self._runway_model_for_metadata(job),
                             "provider_mode": "hosted_api",
                             "error": self._error_metadata(error_type, job.error_message),
                         },
@@ -1032,7 +1079,7 @@ class RunwayAdapter(RenderProviderAdapter):
                             "task": "video_generation",
                             "status": "completed",
                             "output": {"video_url": video_url, "status": "completed"},
-                            "metadata": {"task_id": job.provider_job_id, "model": self._runway_model(), "provider_mode": "mock_success"},
+                            "metadata": {"task_id": job.provider_job_id, "model": self._runway_model(job), "provider_mode": "mock_success"},
                         }
                     },
                 )
@@ -1118,7 +1165,7 @@ class RunwayAdapter(RenderProviderAdapter):
                             "output": {"video_url": video_url, "status": "completed"},
                             "metadata": {
                                 "task_id": job.provider_job_id,
-                                "model": self._runway_model(),
+                                "model": self._runway_model(job),
                                 "provider_mode": "hosted_api",
                                 "raw_response": response,
                             },

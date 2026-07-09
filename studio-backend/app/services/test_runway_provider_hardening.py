@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import certifi
+import pytest
 
-from app.adapters import RunwayAdapter, normalize_video_provider_response
+from app.adapters import RunwayAdapter, normalize_video_provider_response, ALLOWED_RUNWAY_MODELS
 from app.models import ProviderConfig, RenderJobInput, RenderJobModel
+from app.models.consistency import ConsistencyPayload, ReferenceAsset
 from app.services.render import RenderService
 
 
@@ -195,8 +197,9 @@ def test_runway_timeout_is_failed(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
     job = asyncio.run(adapter.submit_job(_job()))
-    assert job.status == "rendering"
-    assert job.error_message is None
+    assert job.status == "failed"
+    assert job.error_message is not None
+    assert "timed out" in job.error_message
     assert job.provider_job_id == "rw-123"
     assert poll_calls["count"] > 0
     timeout_meta = job.output_payload.metadata["provider_response_normalized"]["metadata"]["timeout"]
@@ -380,3 +383,174 @@ def test_render_provider_test_mode_mock_success_rejected_in_production(monkeypat
     assert job.status == "failed"
     error = job.output_payload.metadata["provider_response_normalized"]["metadata"]["error"]
     assert error["error_type"] == "test_mode_not_allowed"
+
+
+def test_runway_submit_job_with_consistency_payload_overrides_image_text(monkeypatch):
+    """A job with a ConsistencyPayload gets promptImage from the highest-weight
+    character_full ref (not referenceAssets[0]) and promptText is extended with
+    fallback_text from remaining refs."""
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.referenceAssets = ["https://old-path/image.jpg"]
+    job.input_payload.consistency_payload = ConsistencyPayload(
+        project_id="proj-1",
+        refs=[
+            ReferenceAsset(ref_id="face", kind="character_face",
+                           image_url="https://example.com/face.jpg",
+                           project_id="proj-1"),
+            ReferenceAsset(ref_id="full", kind="character_full",
+                           image_url="https://example.com/full.jpg",
+                           project_id="proj-1"),
+            ReferenceAsset(ref_id="env", kind="environment",
+                           image_url="https://example.com/env.jpg",
+                           project_id="proj-1"),
+        ],
+        mode="identity_lock",
+        weights={"full": 1.0, "face": 0.3, "env": 0.1},
+        fallback_text={
+            "face": "close-up facial reference",
+            "env": "outdoor lighting, golden hour",
+        },
+    )
+    calls: list[tuple[str, str, dict | None]] = []
+
+    async def _fake_request(method, path, payload=None, params=None):
+        calls.append((method, path, payload))
+        if method == "GET" and path == "/v1/organization":
+            return {"id": "org_123"}
+        if method == "POST":
+            assert path == "/v1/image_to_video", \
+                f"expected image_to_video, got {path}"
+            return {"id": "rw-cp-1", "status": "queued"}
+        return {"status": "completed",
+                "output": [{"url": "https://cdn.runway/video.mp4"}]}
+
+    monkeypatch.setattr(adapter, "_runway_request", _fake_request)
+    result = asyncio.run(adapter.submit_job(job))
+    assert result.status == "complete"
+
+    post_entries = [
+        (m, p, pl) for m, p, pl in calls
+        if m == "POST"
+    ]
+    assert len(post_entries) == 1
+    _method, _path, payload = post_entries[0]
+    assert payload["promptImage"] == "https://example.com/full.jpg"
+    assert "close-up facial reference" in payload["promptText"]
+    assert "outdoor lighting, golden hour" in payload["promptText"]
+    assert "must NOT appear" not in payload["promptText"]
+
+
+def test_runway_submit_job_without_consistency_payload_unchanged(monkeypatch):
+    """Zero regression: a job without consistency_payload behaves exactly
+    as before — referenceAssets[0] → promptImage, prompt is untouched."""
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.referenceAssets = ["https://legacy/image.jpg"]
+    calls: list[tuple[str, str, dict | None]] = []
+
+    async def _fake_request(method, path, payload=None, params=None):
+        calls.append((method, path, payload))
+        if method == "GET" and path == "/v1/organization":
+            return {"id": "org_123"}
+        if method == "POST":
+            assert path == "/v1/image_to_video"
+            return {"id": "rw-legacy-1", "status": "queued"}
+        return {"status": "completed",
+                "output": [{"url": "https://cdn.runway/video.mp4"}]}
+
+    monkeypatch.setattr(adapter, "_runway_request", _fake_request)
+    result = asyncio.run(adapter.submit_job(job))
+    assert result.status == "complete"
+
+    post_entries = [
+        (m, p, pl) for m, p, pl in calls if m == "POST"
+    ]
+    assert len(post_entries) == 1
+    _method, _path, payload = post_entries[0]
+    assert payload["promptImage"] == "https://legacy/image.jpg"
+    assert payload["promptText"] == "A cinematic dolly shot"
+
+
+def test_runway_model_per_request_override_via_parameters(monkeypatch):
+    monkeypatch.delenv("RUNWAY_MODEL", raising=False)
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.parameters["model"] = "gen6"
+    assert adapter._runway_model(job) == "gen6"
+
+
+def test_runway_model_per_request_override_falls_back_to_env_when_no_parameter(monkeypatch):
+    monkeypatch.setenv("RUNWAY_MODEL", "veo3")
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    assert "model" not in job.input_payload.parameters
+    assert adapter._runway_model(job) == "veo3"
+
+
+def test_runway_model_per_request_override_falls_back_to_default_when_no_parameter_no_env(monkeypatch):
+    monkeypatch.delenv("RUNWAY_MODEL", raising=False)
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    assert "model" not in job.input_payload.parameters
+    assert adapter._runway_model(job) == "gen4.5"
+
+
+def test_runway_model_without_job_arg_still_works(monkeypatch):
+    monkeypatch.delenv("RUNWAY_MODEL", raising=False)
+    adapter = RunwayAdapter(_cfg())
+    assert adapter._runway_model() == "gen4.5"
+
+
+def test_runway_model_override_reaches_payload(monkeypatch):
+    monkeypatch.delenv("RUNWAY_MODEL", raising=False)
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.parameters["model"] = "gen3"
+    captured_payload: dict = {}
+
+    async def _fake_request(method, path, payload=None, params=None):
+        if method == "GET" and path == "/v1/organization":
+            return {"id": "org_123"}
+        if method == "POST":
+            captured_payload.update(payload or {})
+            return {"id": "rw-model-test", "status": "queued"}
+        return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
+
+    monkeypatch.setattr(adapter, "_runway_request", _fake_request)
+    result = asyncio.run(adapter.submit_job(job))
+    assert result.status == "complete"
+    assert captured_payload["model"] == "gen3"
+
+
+def test_runway_model_rejects_invalid_per_request_override(monkeypatch):
+    monkeypatch.delenv("RUNWAY_MODEL", raising=False)
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.parameters["model"] = "bogus-model"
+    with pytest.raises(ValueError) as exc_info:
+        adapter._runway_model(job)
+    message = str(exc_info.value)
+    assert "bogus-model" in message
+    for allowed in ALLOWED_RUNWAY_MODELS:
+        assert allowed in message
+
+
+def test_runway_model_invalid_override_fails_submit_without_provider_call(monkeypatch):
+    monkeypatch.delenv("RUNWAY_MODEL", raising=False)
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.parameters["model"] = "bogus-model"
+    provider_was_called = {"hit": False}
+
+    async def _fail_if_called(method, path, payload=None, params=None):
+        provider_was_called["hit"] = True
+        raise AssertionError("provider call must not happen for an invalid model override")
+
+    monkeypatch.setattr(adapter, "_runway_request", _fail_if_called)
+    monkeypatch.setattr(adapter, "_is_local_or_test_env", lambda: True)
+    result = asyncio.run(adapter.submit_job(job))
+    assert result.status == "failed"
+    assert provider_was_called["hit"] is False
+    assert "bogus-model" in (result.error_message or "")
+    assert "Allowed models" in (result.error_message or "")
