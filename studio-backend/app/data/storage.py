@@ -1003,6 +1003,83 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_render_attempts_shot ON render_attempts(shot_id);
                 CREATE INDEX IF NOT EXISTS idx_render_attempts_created ON render_attempts(created_at);
             """),
+            (28, "Add standing_corrections table for slot-level auto-correction rules", """
+                CREATE TABLE IF NOT EXISTS standing_corrections (
+                    correction_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    slot TEXT NOT NULL,
+                    trigger_json TEXT NOT NULL DEFAULT '{}',
+                    injection_text TEXT NOT NULL,
+                    confidence REAL NOT NULL DEFAULT 0.5
+                        CHECK (confidence >= 0.0 AND confidence <= 1.0),
+                    hits INTEGER NOT NULL DEFAULT 0
+                        CHECK (hits >= 0),
+                    misses INTEGER NOT NULL DEFAULT 0
+                        CHECK (misses >= 0),
+                    last_applied TEXT,
+                    status TEXT NOT NULL DEFAULT 'active'
+                        CHECK (status IN ('active', 'probation', 'retired')),
+                    CHECK (project_id != ''),
+                    CHECK (slot != ''),
+                    CHECK (injection_text != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_standing_corrections_project
+                    ON standing_corrections(project_id);
+                CREATE INDEX IF NOT EXISTS idx_standing_corrections_slot
+                    ON standing_corrections(project_id, slot);
+                CREATE INDEX IF NOT EXISTS idx_standing_corrections_status
+                    ON standing_corrections(status);
+            """),
+            (29, "Add superseded_by column to standing_corrections for merge traceability", """
+                ALTER TABLE standing_corrections
+                ADD COLUMN superseded_by TEXT;
+            """),
+            (30, "Add reference_assets table for confirmed reference-asset persistence", """
+                CREATE TABLE IF NOT EXISTS reference_assets (
+                    ref_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    kind TEXT NOT NULL
+                        CHECK (kind IN ('character_face', 'character_full', 'environment', 'style')),
+                    image_url TEXT NOT NULL,
+                    embedding TEXT,
+                    source_shot_id TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    CHECK (project_id != ''),
+                    CHECK (image_url != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_reference_assets_project
+                    ON reference_assets(project_id);
+                CREATE INDEX IF NOT EXISTS idx_reference_assets_source_shot
+                    ON reference_assets(project_id, source_shot_id);
+            """),
+            (27, "Add appearance_core/notes/description_status to characters and character_stagings table", """
+                ALTER TABLE characters ADD COLUMN appearance_core TEXT;
+                ALTER TABLE characters ADD COLUMN appearance_notes TEXT;
+                ALTER TABLE characters ADD COLUMN description_status TEXT NOT NULL DEFAULT 'legacy'
+                    CHECK (description_status IN ('legacy','migrated','verified'));
+
+                CREATE TABLE IF NOT EXISTS character_stagings (
+                    id TEXT PRIMARY KEY,
+                    character_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL,
+                    shot_id TEXT,
+                    staging_prompt TEXT NOT NULL,
+                    appearance_override TEXT,
+                    source TEXT NOT NULL DEFAULT 'manual',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
+                    UNIQUE (character_id, scene_id, shot_id),
+                    CHECK (character_id != ''),
+                    CHECK (scene_id != ''),
+                    CHECK (staging_prompt != '')
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_character_stagings_lookup
+                    ON character_stagings(character_id, scene_id, shot_id);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -4415,7 +4492,13 @@ class DatabaseStorage:
     # ------------------------------------------------------------------
 
     def save_character(self, project_id: str, name: str, data: dict) -> dict:
-        """Upsert a character record. Matches on (project_id, name)."""
+        """Upsert a character record. Matches on (project_id, name).
+
+        Handles the Phase 1 dual-read columns (appearance_core, appearance_notes,
+        description_status) introduced by migration #27. These columns are
+        optional — callers that do not provide them preserve existing values
+        (on update) or receive schema defaults (on insert).
+        """
         now = datetime.now().isoformat()
         _new_id = data.get("id") or f"chr_{uuid4().hex[:12]}"
 
@@ -4432,7 +4515,11 @@ class DatabaseStorage:
                     char_id = existing["id"]
                     cursor.execute(
                         """UPDATE characters SET age=?, look=?, energy=?, core_wound=?,
-                           core_desire=?, relationship_notes=?, visual_prompt_summary=?, updated_at=?
+                           core_desire=?, relationship_notes=?, visual_prompt_summary=?,
+                           appearance_core=COALESCE(?, appearance_core),
+                           appearance_notes=COALESCE(?, appearance_notes),
+                           description_status=COALESCE(?, description_status),
+                           updated_at=?
                            WHERE id=?""",
                         (
                             data.get("age"),
@@ -4442,6 +4529,9 @@ class DatabaseStorage:
                             data.get("core_desire"),
                             data.get("relationship_notes"),
                             data.get("visual_prompt_summary"),
+                            data.get("appearance_core"),
+                            data.get("appearance_notes"),
+                            data.get("description_status"),
                             now,
                             char_id,
                         ),
@@ -4450,8 +4540,10 @@ class DatabaseStorage:
                     char_id = _new_id
                     cursor.execute(
                         """INSERT INTO characters (id, project_id, name, age, look, energy,
-                           core_wound, core_desire, relationship_notes, visual_prompt_summary, created_at, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           core_wound, core_desire, relationship_notes, visual_prompt_summary,
+                           appearance_core, appearance_notes, description_status,
+                           created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             char_id,
                             project_id,
@@ -4463,6 +4555,9 @@ class DatabaseStorage:
                             data.get("core_desire"),
                             data.get("relationship_notes"),
                             data.get("visual_prompt_summary"),
+                            data.get("appearance_core"),
+                            data.get("appearance_notes"),
+                            data.get("description_status") or "legacy",
                             now,
                             now,
                         ),
@@ -4472,6 +4567,97 @@ class DatabaseStorage:
                 return dict(cursor.fetchone())
 
         return self._execute_write_with_retry("save_character", _write)
+
+    # ── Character Stagings (Phase 1: scene-aware character staging) ──────────
+
+    def get_character_staging(
+        self,
+        character_id: str,
+        scene_id: str,
+        shot_id: str | None,
+    ) -> dict | None:
+        """Look up the most specific character staging record.
+
+        Resolution order (§4.1):
+        1. Exact (character_id, scene_id, shot_id)
+        2. Scene-level (character_id, scene_id, NULL shot_id)
+
+        Returns the staging dict or None when no staging exists (legacy path).
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if shot_id:
+                cursor.execute(
+                    """SELECT * FROM character_stagings
+                       WHERE character_id = ? AND scene_id = ? AND shot_id = ?""",
+                    (character_id, scene_id, shot_id),
+                )
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+            cursor.execute(
+                """SELECT * FROM character_stagings
+                   WHERE character_id = ? AND scene_id = ? AND shot_id IS NULL""",
+                (character_id, scene_id),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def save_character_staging(self, staging: dict) -> dict:
+        """Upsert a character staging record.
+
+        Matches on the UNIQUE(character_id, scene_id, shot_id) constraint.
+        """
+        now = datetime.now().isoformat()
+        character_id = staging["character_id"]
+        scene_id = staging["scene_id"]
+        shot_id = staging.get("shot_id")
+        staging_prompt = staging["staging_prompt"]
+        appearance_override = staging.get("appearance_override")
+        source = staging.get("source") or "manual"
+        staging_id = staging.get("id") or f"cstg_{uuid4().hex[:12]}"
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """SELECT id FROM character_stagings
+                       WHERE character_id = ? AND scene_id = ?
+                         AND (shot_id IS ? OR shot_id = ?)""",
+                    (character_id, scene_id, shot_id, shot_id),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    staging_id = existing["id"]
+                    cursor.execute(
+                        """UPDATE character_stagings
+                           SET staging_prompt=?, appearance_override=?, source=?, updated_at=?
+                           WHERE id=?""",
+                        (staging_prompt, appearance_override, source, now, staging_id),
+                    )
+                else:
+                    cursor.execute(
+                        """INSERT INTO character_stagings
+                           (id, character_id, scene_id, shot_id, staging_prompt,
+                            appearance_override, source, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            staging_id,
+                            character_id,
+                            scene_id,
+                            shot_id,
+                            staging_prompt,
+                            appearance_override,
+                            source,
+                            now,
+                            now,
+                        ),
+                    )
+                conn.commit()
+                cursor.execute("SELECT * FROM character_stagings WHERE id = ?", (staging_id,))
+                return dict(cursor.fetchone())
+
+        return self._execute_write_with_retry("save_character_staging", _write)
 
     def get_characters(self, project_id: str) -> list[dict]:
         """Get all character records for a project."""
@@ -4669,6 +4855,210 @@ class DatabaseStorage:
                 attempt["attempt_number"] = attempt["attempt_n"]
             
             return attempt
+
+    # ── Standing Corrections ──────────────────────────────────────────────────
+
+    def list_standing_corrections(
+        self,
+        project_id: str,
+        slot: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """List standing corrections for a project, optionally filtered by slot/status."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM standing_corrections WHERE project_id = ?"
+            params: list = [project_id]
+
+            if slot:
+                query += " AND slot = ?"
+                params.append(slot)
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+
+            query += " ORDER BY confidence DESC, hits DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, params)
+            columns = [desc[0] for desc in cursor.description]
+
+            corrections = []
+            for row in cursor.fetchall():
+                corr = dict(zip(columns, row))
+                if corr.get("trigger_json"):
+                    try:
+                        corr["trigger_json"] = json.loads(corr["trigger_json"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                corrections.append(corr)
+
+            return corrections
+
+    def get_standing_correction(self, correction_id: str) -> dict | None:
+        """Get a single standing correction by ID."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM standing_corrections WHERE correction_id = ?",
+                (correction_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            columns = [desc[0] for desc in cursor.description]
+            corr = dict(zip(columns, row))
+            if corr.get("trigger_json"):
+                try:
+                    corr["trigger_json"] = json.loads(corr["trigger_json"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            return corr
+
+    def save_standing_correction(self, correction: dict) -> bool:
+        """Insert or update a standing correction.
+
+        This is the ONLY storage path for creating standing correction rows.
+        The service layer must enforce the propose-then-confirm gate — no
+        service method may call this without an explicit confirm action.
+        """
+        correction_id = correction.get("correction_id", "")
+        if not correction_id:
+            return False
+
+        trigger_json = correction.get("trigger_json", {})
+        if isinstance(trigger_json, dict):
+            trigger_json = json.dumps(trigger_json)
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO standing_corrections
+                    (correction_id, project_id, slot, trigger_json, injection_text,
+                     confidence, hits, misses, last_applied, status, superseded_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        correction_id,
+                        correction.get("project_id", ""),
+                        correction.get("slot", ""),
+                        trigger_json,
+                        correction.get("injection_text", ""),
+                        correction.get("confidence", 0.5),
+                        correction.get("hits", 0),
+                        correction.get("misses", 0),
+                        correction.get("last_applied"),
+                        correction.get("status", "active"),
+                        correction.get("superseded_by"),
+                    ),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_standing_correction", _write)
+        return True
+
+    # ── Reference Assets ──────────────────────────────────────────────────────
+
+    def save_reference_asset(self, asset: dict) -> bool:
+        """Insert or update a confirmed reference asset.
+
+        This is the ONLY storage path for creating reference_asset rows.
+        The route layer must enforce the propose-then-confirm gate — no
+        code path may call this without an explicit confirm action.
+        """
+        ref_id = asset.get("ref_id", "")
+        if not ref_id:
+            return False
+
+        embedding = asset.get("embedding")
+        if isinstance(embedding, list):
+            embedding = json.dumps(embedding)
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO reference_assets
+                    (ref_id, project_id, kind, image_url, embedding,
+                     source_shot_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        ref_id,
+                        asset.get("project_id", ""),
+                        asset.get("kind", "character_full"),
+                        asset.get("image_url", ""),
+                        embedding,
+                        asset.get("source_shot_id"),
+                        asset.get("created_at"),
+                    ),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_reference_asset", _write)
+        return True
+
+    def list_reference_assets(
+        self,
+        project_id: str,
+        kind: str | None = None,
+        source_shot_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """List confirmed reference assets for a project, optionally filtered."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM reference_assets WHERE project_id = ?"
+            params: list = [project_id]
+
+            if kind:
+                query += " AND kind = ?"
+                params.append(kind)
+            if source_shot_id:
+                query += " AND source_shot_id = ?"
+                params.append(source_shot_id)
+
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, params)
+            columns = [desc[0] for desc in cursor.description]
+
+            assets = []
+            for row in cursor.fetchall():
+                asset = dict(zip(columns, row))
+                if asset.get("embedding"):
+                    try:
+                        asset["embedding"] = json.loads(asset["embedding"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                assets.append(asset)
+
+            return assets
+
+    def get_reference_asset(self, ref_id: str) -> dict | None:
+        """Get a single reference asset by ID."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM reference_assets WHERE ref_id = ?",
+                (ref_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            columns = [desc[0] for desc in cursor.description]
+            asset = dict(zip(columns, row))
+            if asset.get("embedding"):
+                try:
+                    asset["embedding"] = json.loads(asset["embedding"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            return asset
 
 
 class JsonFileStorage:
