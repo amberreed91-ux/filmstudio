@@ -122,41 +122,179 @@ def _write_silence_wav(path: Path, duration_seconds: float = 1.0, sample_rate: i
 # Dialogue extraction from screenplay format
 # ---------------------------------------------------------------------------
 
-def _extract_dialogue_lines(scene_text: str) -> List[Dict[str, str]]:
+_SCENE_HEADING_RE = re.compile(
+    r"^(INT\.?|EXT\.?|INT\.\s*/\s*EXT\.?|EXT\.\s*/\s*INT\.?|CUT\s+TO:|FADE|SCENE|ACT|DISSOLVE|SMASH)",
+    re.IGNORECASE,
+)
+_PARENTHETICAL_RE = re.compile(r"\(.*?\)")
+_VOCATIVE_PUNCT = ".,!?:;"
+_ACTION_PRONOUNS = ("HE ", "SHE ", "THEY ")
+
+# Action-line openers that begin with "A (long )?<pause-noun>" — classic
+# screenplay beat/pause directions ("A long beat.", "A long silence.",
+# "A pause.", "A moment."). These are never spoken dialogue in this corpus.
+# The noun set is deliberately curated so real dialogue like "A nightmare."
+# (scene_013, DRE) is NOT flagged. A broad "The <noun> <verb>" rule is
+# intentionally excluded: real dialogue starts that way in this corpus
+# ("The nightmare showed me who we became.", "The kind you wake up from
+# different.", "The first time the world ended, I lost everything.").
+_ACTION_PAUSE_NOUNS = ("beat", "silence", "pause", "moment", "stillness", "breath")
+_ACTION_PAUSE_OPENER_RE = re.compile(
+    r"^A\s+(?:long\s+)?(" + "|".join(_ACTION_PAUSE_NOUNS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _is_scene_heading(line: str) -> bool:
+    """Detect screenplay scene headings (INT./EXT./CUT TO:/FADE/SCENE/ACT/DISSOLVE/SMASH)."""
+    return bool(_SCENE_HEADING_RE.match(line.strip()))
+
+
+def _is_all_caps_section_header(line: str, known_characters: set[str] | None) -> bool:
+    """Detect ALL-CAPS section headers that are NOT valid character cues.
+
+    A real character cue reduces (after stripping V.O./CONT'D parentheticals) to
+    a single token that matches a known character. A multi-word all-caps line with
+    no parenthetical suffix is a section header (THE SECOND CHANCE, FINAL
+    CONFRONTATION, MAYA AND HER MOM). A single-word all-caps line that is not a
+    known character is also treated as a header (SUPPLIES, ENDING).
+    """
+    stripped = line.strip()
+    without_parens = _PARENTHETICAL_RE.sub("", stripped).strip().rstrip(".")
+    if not without_parens or not without_parens.replace(" ", "").replace("'", "").isalpha():
+        return False
+    if not without_parens.isupper():
+        return False
+    if known_characters and without_parens.upper() in known_characters:
+        return False
+    # Multi-word all-caps with no surviving parenthetical suffix = section header.
+    if " " in without_parens:
+        return True
+    # Single-word all-caps not in the character list = likely a header (SUPPLIES).
+    if known_characters:
+        return True
+    return False
+
+
+def _is_action_line(line: str, known_characters: set[str] | None) -> bool:
+    """Detect action/description lines that should end a dialogue block.
+
+    Signals (high precision, designed not to clip vocative dialogue):
+      * Starts with a known character name followed by a non-vocative word
+        ("Maya is killed." -> action; "Maya. You're my people." -> vocative dialogue).
+      * Starts with a third-person action pronoun (HE/SHE/THEY) followed by a word.
+        (IT/WE/YOU/I are excluded because real dialogue starts with those in this
+        corpus: "It remembers everything.", "We understand this is difficult.").
+      * Opens with "A (long )?<pause-noun>" — a classic screenplay beat/pause
+        direction ("A long beat.", "A long silence.", "A pause."). The noun set
+        is curated (beat/silence/pause/moment/stillness/breath) so real dialogue
+        like "A nightmare." (scene_013, DRE) is NOT flagged. A broad
+        "The <noun> <verb>" rule is intentionally excluded because real dialogue
+        starts that way in this corpus ("The nightmare showed me who we became.",
+        "The kind you wake up from different.", "The first time the world
+        ended, I lost everything.").
+    """
+    stripped = line.strip()
+    if not stripped:
+        return False
+    first_word = stripped.split(None, 1)
+    if not first_word:
+        return False
+    raw_first = first_word[0]
+    rest = first_word[1] if len(first_word) > 1 else ""
+    bare = raw_first.rstrip(_VOCATIVE_PUNCT)
+
+    if known_characters:
+        for name in known_characters:
+            if bare.upper() == name.upper():
+                if not rest:
+                    return False
+                # If the name had trailing vocative punctuation in the original
+                # ("Maya." / "Maya,") it is a vocative address, not action.
+                if len(raw_first) > len(bare):
+                    return False
+                # No trailing punct on the name: "Maya is killed." -> action.
+                if rest[0] not in _VOCATIVE_PUNCT:
+                    return True
+                return False
+    upper = stripped.upper()
+    for pron in _ACTION_PRONOUNS:
+        if upper.startswith(pron):
+            tail = stripped[len(pron):].strip()
+            if tail and not tail[0] in _VOCATIVE_PUNCT:
+                return True
+    # Screenplay beat/pause openers: "A long beat.", "A long silence.", "A pause."
+    if _ACTION_PAUSE_OPENER_RE.match(stripped):
+        return True
+    return False
+
+
+def _extract_dialogue_lines(
+    scene_text: str,
+    characters: List[str] | None = None,
+) -> List[Dict[str, str]]:
     """
     Extract dialogue lines from screenplay-formatted text.
-    
+
     Screenplay format:
         CHARACTER_NAME
         Dialogue line here.
-        
+
         ANOTHER_CHARACTER
         Another line.
-    
+
     Returns list of dicts with 'character' and 'text' keys.
+
+    ``characters`` (optional) is the scene's known character list. When supplied,
+    it is used to (a) reject false character cues that are actually ALL-CAPS
+    section headers (SUPPLIES, FINAL CONFRONTATION) and (b) detect action/
+    description lines that begin with a character name ("Maya is killed.") and
+    should end the dialogue block rather than be absorbed as spoken text. Without
+    it the parser falls back to structural terminators only (scene headings and
+    multi-word ALL-CAPS headers), which is weaker but backward compatible.
     """
     if not scene_text:
         return []
-    
+
+    known: set[str] | None = (
+        {re.sub(r"\s*\(.*?\)\s*", "", c).strip().upper() for c in characters if isinstance(c, str) and c.strip()}
+        if characters
+        else None
+    )
+
+    def _flush() -> None:
+        nonlocal current_character, current_dialogue
+        if current_character and current_dialogue:
+            dialogue_lines.append({
+                "character": current_character,
+                "text": " ".join(current_dialogue).strip(),
+            })
+        current_character = None
+        current_dialogue = []
+
     lines = scene_text.split("\n")
     dialogue_lines: List[Dict[str, str]] = []
     current_character: Optional[str] = None
     current_dialogue: List[str] = []
-    
+
     for line in lines:
         stripped = line.strip()
-        
+
         # Skip empty lines (they end dialogue blocks)
         if not stripped:
-            if current_character and current_dialogue:
-                dialogue_lines.append({
-                    "character": current_character,
-                    "text": " ".join(current_dialogue).strip(),
-                })
-                current_character = None
-                current_dialogue = []
+            _flush()
             continue
-        
+
+        # Scene headings always terminate the current dialogue block.
+        if _is_scene_heading(stripped):
+            _flush()
+            continue
+
+        # ALL-CAPS section headers terminate the block and are never cues.
+        if _is_all_caps_section_header(stripped, known):
+            _flush()
+            continue
+
         # Check if this is a character cue (ALL CAPS, short line, not a section header)
         # Character cues are typically < 35 chars and don't start with common headers
         clean = re.sub(r"\(.*?\)", "", stripped).strip().rstrip(".")
@@ -167,30 +305,30 @@ def _extract_dialogue_lines(scene_text: str) -> List[Dict[str, str]]:
             and clean.isupper()
             and not clean.startswith(("THE ", "ACT ", "INT ", "EXT ", "CUT ", "FADE", "SCENE"))
         )
-        
+        # When the character list is available, reject cues that are not known
+        # characters (catches SUPPLIES, ENDING, IT RETURNS., etc.).
+        if is_char_cue and known is not None:
+            is_char_cue = clean.upper() in known
+
         if is_char_cue:
             # Save previous dialogue if any
-            if current_character and current_dialogue:
-                dialogue_lines.append({
-                    "character": current_character,
-                    "text": " ".join(current_dialogue).strip(),
-                })
+            _flush()
             current_character = clean
             current_dialogue = []
         elif current_character:
+            # Action/description line: ends the dialogue block, is NOT dialogue.
+            if _is_action_line(stripped, known):
+                _flush()
+                continue
             # Skip parenthetical stage directions
             if stripped.startswith("(") and stripped.endswith(")"):
                 continue
             # This is dialogue text
             current_dialogue.append(stripped)
-    
+
     # Don't forget the last dialogue block
-    if current_character and current_dialogue:
-        dialogue_lines.append({
-            "character": current_character,
-            "text": " ".join(current_dialogue).strip(),
-        })
-    
+    _flush()
+
     return dialogue_lines
 
 
@@ -313,6 +451,82 @@ class AudioPipelineService:
             return f"/outputs/{rel.as_posix()}"
         except ValueError:
             return str(path)
+
+    # ------------------------------------------------------------------
+    # FFprobe media analysis helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _probe_media_duration(path: Path) -> float | None:
+        """Probe media file duration in seconds via ffprobe. Returns None on failure."""
+        ffprobe_bin = shutil.which("ffprobe")
+        if not ffprobe_bin:
+            return None
+        cmd = [
+            ffprobe_bin, "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+            str(path),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if proc.returncode != 0:
+            return None
+        try:
+            payload = json.loads(proc.stdout or "{}")
+            duration = float((payload.get("format") or {}).get("duration") or 0.0)
+            return duration if duration > 0 else None
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _probe_audio_info(path: Path) -> tuple[int, int] | None:
+        """Probe audio sample_rate and channels via ffprobe.
+
+        Returns (sample_rate, channels) or None if ffprobe fails.
+        """
+        ffprobe_bin = shutil.which("ffprobe")
+        if not ffprobe_bin:
+            return None
+        cmd = [
+            ffprobe_bin, "-v", "quiet",
+            "-print_format", "json",
+            "-show_streams",
+            "-select_streams", "a:0",
+            str(path),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if proc.returncode != 0:
+            return None
+        try:
+            payload = json.loads(proc.stdout or "{}")
+            streams = payload.get("streams") or []
+            if not streams:
+                return None
+            s = streams[0]
+            return (int(s["sample_rate"]), int(s["channels"]))
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _compute_aac_bitrate(sample_rate: int, channels: int) -> str:
+        """Compute a sample-rate-aware AAC bitrate string (e.g. '48k').
+
+        The previous code hardcoded 192k, which is impossible for mono 22050 Hz
+        AAC — FFmpeg silently clamps it (observed: 94k actual for a 192k request
+        on 22050 Hz mono).  We derive a bitrate proportional to the actual source
+        bandwidth (~2 bits per Hz per channel), rounded to the nearest 32k and
+        clamped to [48, 192]:
+
+          mono 22050 Hz  →  48k   (was: 192k requested, 94k actual — clamped)
+          mono 44100 Hz  →  96k
+          stereo 44100   → 192k
+
+        Bumping to stereo/44100 would be lossy upsampling with zero quality
+        benefit since mix_audio_tracks already produces mono 22050 Hz.
+        """
+        raw_kbps = int(sample_rate * channels * 2 / 1000)
+        rounded = max(48, min(192, ((raw_kbps + 16) // 32) * 32))
+        return f"{rounded}k"
 
     # ------------------------------------------------------------------
     # Piper TTS dialogue generation
@@ -816,13 +1030,38 @@ class AudioPipelineService:
         video_path: Path,
         audio_path: Path,
         replace_original: bool = False,
+        on_audio_overrun: str = "error",
     ) -> Dict[str, Any]:
         """
         Merge mixed audio onto rendered video clip using FFmpeg.
-        
+
         If replace_original is True, overwrites the original video file.
         Otherwise, saves alongside with '_audio' suffix.
+
+        on_audio_overrun controls behaviour when audio duration exceeds video
+        duration (the normal case when dialogue is longer than the rendered
+        clip):
+
+          "error"           — Fail loudly. Report both durations. Do NOT
+                              silently truncate or freeze.  (Default — safe
+                              until a product decision is made.)
+
+          "freeze_last_frame" — Extend the video by cloning the last frame for
+                                the overrun duration using tpad, then merge the
+                                full audio.  Re-encodes video (libx264) because
+                                filters require re-encoding.
+
+          "trim_audio"      — Not yet implemented.  Returns a clear error so
+                              the config surface exists but the behaviour is
+                              deferred until trim semantics are decided.
         """
+        valid_modes = {"error", "freeze_last_frame", "trim_audio"}
+        if on_audio_overrun not in valid_modes:
+            raise ValueError(
+                f"on_audio_overrun must be one of {sorted(valid_modes)}, "
+                f"got '{on_audio_overrun}'"
+            )
+
         if not video_path.exists():
             return {
                 "track": "final_video",
@@ -856,24 +1095,127 @@ class AudioPipelineService:
             out_path = video_path.parent / f"{video_path.stem}_audio{video_path.suffix}"
             temp_path = None
 
-        # FFmpeg command to merge audio onto video
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(video_path),
-            "-i", str(audio_path),
-            "-c:v", "copy",  # Copy video stream without re-encoding
-            "-c:a", "aac",   # Encode audio as AAC
-            "-b:a", "192k",  # Audio bitrate
-            "-map", "0:v:0",  # Take video from first input
-            "-map", "1:a:0",  # Take audio from second input
-            "-shortest",      # End when shortest stream ends
-            str(temp_path if temp_path else out_path),
-        ]
+        # ------------------------------------------------------------------
+        # Probe durations and audio info before building the command
+        # ------------------------------------------------------------------
+        video_dur = self._probe_media_duration(video_path)
+        audio_dur = self._probe_media_duration(audio_path)
+        audio_info = self._probe_audio_info(audio_path)
+
+        # Compute sample-rate-aware AAC bitrate instead of hardcoded 192k.
+        # 192k is impossible for mono 22050 Hz AAC — FFmpeg silently clamps it.
+        if audio_info:
+            sample_rate, channels = audio_info
+        else:
+            sample_rate, channels = 22050, 1
+        bitrate = self._compute_aac_bitrate(sample_rate, channels)
 
         logger.info(
-            "VIDEO_AUDIO_MERGE | scene=%s | video=%s | audio=%s | replace=%s",
+            "VIDEO_AUDIO_MERGE | scene=%s | video=%s | audio=%s | replace=%s | "
+            "video_dur=%s | audio_dur=%s | audio_sr=%d | audio_ch=%d | "
+            "bitrate=%s | on_audio_overrun=%s",
             scene_id, video_path.name, audio_path.name, replace_original,
+            f"{video_dur:.3f}" if video_dur else "N/A",
+            f"{audio_dur:.3f}" if audio_dur else "N/A",
+            sample_rate, channels, bitrate, on_audio_overrun,
         )
+
+        # ------------------------------------------------------------------
+        # Detect audio overrun: audio longer than video
+        # ------------------------------------------------------------------
+        audio_overrun = (
+            video_dur is not None
+            and audio_dur is not None
+            and audio_dur > video_dur
+        )
+
+        if audio_overrun:
+            overrun_seconds = audio_dur - video_dur
+            logger.warning(
+                "AUDIO_OVERRUN_DETECTED | scene=%s | video_dur=%.3fs | "
+                "audio_dur=%.3fs | overrun=%.3fs | mode=%s",
+                scene_id, video_dur, audio_dur, overrun_seconds, on_audio_overrun,
+            )
+
+            if on_audio_overrun == "error":
+                return {
+                    "track": "final_video",
+                    "status": TrackStatus.FAILED,
+                    "file_path": str(video_path),
+                    "error": (
+                        f"Audio duration ({audio_dur:.2f}s) exceeds video "
+                        f"duration ({video_dur:.2f}s) by {overrun_seconds:.2f}s. "
+                        f"on_audio_overrun='error' — refusing to silently "
+                        f"truncate dialogue. Use 'freeze_last_frame' to extend "
+                        f"the video with a cloned last frame, or 'trim_audio' "
+                        f"(not yet implemented)."
+                    ),
+                    "advisory": (
+                        "Audio overrun detected — merge aborted to prevent "
+                        "silent dialogue truncation."
+                    ),
+                    "video_duration": video_dur,
+                    "audio_duration": audio_dur,
+                    "overrun_seconds": overrun_seconds,
+                    "on_audio_overrun": on_audio_overrun,
+                }
+
+            if on_audio_overrun == "trim_audio":
+                return {
+                    "track": "final_video",
+                    "status": TrackStatus.FAILED,
+                    "file_path": str(video_path),
+                    "error": (
+                        f"on_audio_overrun='trim_audio' is not yet implemented. "
+                        f"Audio ({audio_dur:.2f}s) exceeds video "
+                        f"({video_dur:.2f}s) by {overrun_seconds:.2f}s. "
+                        f"Trimming dialogue is lossy — awaiting decision on "
+                        f"trim semantics before implementation."
+                    ),
+                    "advisory": "trim_audio mode not implemented — merge aborted.",
+                    "video_duration": video_dur,
+                    "audio_duration": audio_dur,
+                    "overrun_seconds": overrun_seconds,
+                    "on_audio_overrun": on_audio_overrun,
+                }
+
+            # on_audio_overrun == "freeze_last_frame"
+            # Extend video by cloning the last frame for the overrun duration
+            # using tpad, then merge full audio.  This requires re-encoding
+            # the video stream (libx264) because -c:v copy is incompatible
+            # with filter_complex.  No -shortest: the tpad makes video match
+            # audio duration, so both streams end together.
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(video_path),
+                "-i", str(audio_path),
+                "-filter_complex",
+                f"[0:v]tpad=stop_mode=clone:stop_duration={overrun_seconds:.6f}[vout]",
+                "-map", "[vout]",
+                "-map", "1:a:0",
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "18",
+                "-c:a", "aac",
+                "-b:a", bitrate,
+                "-pix_fmt", "yuv420p",
+                str(temp_path if temp_path else out_path),
+            ]
+        else:
+            # Normal case: audio fits within video (or durations unknown).
+            # Use -c:v copy (fast, lossless) and -shortest to end at audio.
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(video_path),
+                "-i", str(audio_path),
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", bitrate,
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-shortest",
+                str(temp_path if temp_path else out_path),
+            ]
 
         try:
             loop = asyncio.get_event_loop()
@@ -881,14 +1223,14 @@ class AudioPipelineService:
                 None,
                 lambda: subprocess.run(cmd, capture_output=True, text=True),
             )
-            
+
             if result.returncode != 0:
                 logger.error("FFmpeg merge failed: %s", result.stderr)
                 return {
                     "track": "final_video",
                     "status": TrackStatus.FAILED,
                     "file_path": str(video_path),
-                    "error": result.stderr[:200],
+                    "error": result.stderr[:500],
                     "advisory": "FFmpeg merge failed — original video returned.",
                 }
 
@@ -896,12 +1238,26 @@ class AudioPipelineService:
             if temp_path and temp_path.exists():
                 shutil.move(str(temp_path), str(out_path))
 
+            # Probe output to confirm audio was preserved
+            output_dur = self._probe_media_duration(out_path)
+            audio_preserved = (
+                output_dur is not None
+                and audio_dur is not None
+                and output_dur >= audio_dur - 0.1
+            )
+
             return {
                 "track": "final_video",
                 "status": TrackStatus.COMPLETE,
                 "file_path": str(out_path),
                 "file_url": self._file_url(out_path),
                 "replaced_original": replace_original,
+                "video_duration": video_dur,
+                "audio_duration": audio_dur,
+                "output_duration": output_dur,
+                "audio_overrun": audio_overrun,
+                "audio_preserved": audio_preserved,
+                "on_audio_overrun": on_audio_overrun,
                 "advisory": f"Audio merged onto video via FFmpeg. Output: {out_path.name}",
             }
         except Exception as exc:
@@ -933,6 +1289,7 @@ class AudioPipelineService:
         silence_flag: bool = False,
         video_path: Path | None = None,
         estimated_duration_seconds: float = 15.0,
+        on_audio_overrun: str = "error",
     ) -> Dict[str, Any]:
         """
         Run the full audio generation pipeline:
@@ -1005,7 +1362,9 @@ class AudioPipelineService:
                 self._jobs[job_id]["steps"]["merge"]["status"] = TrackStatus.GENERATING
                 mixed_path = Path(mix_result.get("file_path", ""))
                 merge_result = await self.merge_audio_onto_video(
-                    project_id, scene_id, video_path, mixed_path, replace_original=False,
+                    project_id, scene_id, video_path, mixed_path,
+                    replace_original=False,
+                    on_audio_overrun=on_audio_overrun,
                 )
             self._jobs[job_id]["steps"]["merge"] = merge_result
 
