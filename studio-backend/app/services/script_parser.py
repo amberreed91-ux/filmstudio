@@ -7148,6 +7148,19 @@ class ScriptParser:
                 ]
 
             scene_dict = scene_data if isinstance(scene_data, dict) else {}
+
+            shot_specs = scene_dict.get("shot_specs")
+            if isinstance(shot_specs, list) and shot_specs:
+                split_candidates = self._build_shot_candidates_from_specs(
+                    clean_scene_id,
+                    source_refs,
+                    shot_specs,
+                    scene_dict,
+                )
+                if split_candidates:
+                    shot_candidates.extend(split_candidates)
+                    continue
+
             multi_shot_enabled = (
                 scene_dict.get("multi_shot_enabled") is True
                 or str(scene_dict.get("shot_mode") or "").strip().lower() == "multi"
@@ -7196,6 +7209,74 @@ class ScriptParser:
             shot_candidates.append(single_candidate)
 
         return shot_candidates
+
+    def _build_shot_candidates_from_specs(
+        self,
+        scene_id: str,
+        source_refs: List[str],
+        shot_specs: Any,
+        scene_dict: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """
+        Materialize N shot candidates from explicit per-scene split specs.
+
+        Each spec is a dict that may carry: shot_type, dialogue_line_range,
+        speakers, estimated_seconds, recommended_seconds, split_reason.
+        Shot IDs use numeric suffixes (shot_{scene_id}_001, _002, ...).
+        Identity context/drift warnings are forwarded like the other paths.
+        """
+        candidates: List[Dict[str, Any]] = []
+        index = 0
+        for spec in shot_specs:
+            if not isinstance(spec, dict):
+                continue
+            index += 1
+            shot_type_value = spec.get("shot_type")
+            candidate: Dict[str, Any] = {
+                "scene_id": scene_id,
+                "shot_id": f"shot_{scene_id}_{index:03d}",
+                "source_refs": list(source_refs),
+                "shot_type": shot_type_value.strip()
+                if isinstance(shot_type_value, str) and shot_type_value.strip()
+                else "general",
+            }
+            dialogue_line_range = spec.get("dialogue_line_range")
+            if isinstance(dialogue_line_range, dict):
+                start_value = dialogue_line_range.get("start")
+                end_value = dialogue_line_range.get("end")
+                candidate["dialogue_line_range"] = {
+                    "start": int(start_value) if isinstance(start_value, int) else 0,
+                    "end": int(end_value) if isinstance(end_value, int) else 0,
+                }
+            speakers = spec.get("speakers")
+            if isinstance(speakers, list):
+                candidate["speakers"] = [
+                    str(speaker).strip()
+                    for speaker in speakers
+                    if isinstance(speaker, str) and speaker.strip()
+                ]
+            for key in ("estimated_seconds", "recommended_seconds"):
+                value = spec.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+                    candidate[key] = value
+            split_reason = spec.get("split_reason")
+            if isinstance(split_reason, str) and split_reason.strip():
+                candidate["split_reason"] = split_reason.strip()
+
+            if isinstance(scene_dict.get("provider_identity_context"), dict):
+                identity_context = scene_dict.get("provider_identity_context") or {}
+                if identity_context:
+                    candidate["provider_identity_context"] = identity_context
+            if isinstance(scene_dict.get("identity_drift_warnings"), list):
+                warnings = [
+                    str(item).strip()
+                    for item in scene_dict.get("identity_drift_warnings", [])
+                    if str(item).strip()
+                ]
+                if warnings:
+                    candidate["identity_drift_warnings"] = warnings
+            candidates.append(candidate)
+        return candidates
 
     def build_scene_render_jobs(
         self,
