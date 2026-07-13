@@ -1080,6 +1080,10 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_character_stagings_lookup
                     ON character_stagings(character_id, scene_id, shot_id);
             """),
+            (31, "Add elevenlabs_voice_id and elevenlabs_voice_name to characters", """
+                ALTER TABLE characters ADD COLUMN elevenlabs_voice_id TEXT;
+                ALTER TABLE characters ADD COLUMN elevenlabs_voice_name TEXT;
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -4519,6 +4523,8 @@ class DatabaseStorage:
                            appearance_core=COALESCE(?, appearance_core),
                            appearance_notes=COALESCE(?, appearance_notes),
                            description_status=COALESCE(?, description_status),
+                           elevenlabs_voice_id=COALESCE(?, elevenlabs_voice_id),
+                           elevenlabs_voice_name=COALESCE(?, elevenlabs_voice_name),
                            updated_at=?
                            WHERE id=?""",
                         (
@@ -4532,6 +4538,8 @@ class DatabaseStorage:
                             data.get("appearance_core"),
                             data.get("appearance_notes"),
                             data.get("description_status"),
+                            data.get("elevenlabs_voice_id"),
+                            data.get("elevenlabs_voice_name"),
                             now,
                             char_id,
                         ),
@@ -4542,8 +4550,9 @@ class DatabaseStorage:
                         """INSERT INTO characters (id, project_id, name, age, look, energy,
                            core_wound, core_desire, relationship_notes, visual_prompt_summary,
                            appearance_core, appearance_notes, description_status,
+                           elevenlabs_voice_id, elevenlabs_voice_name,
                            created_at, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             char_id,
                             project_id,
@@ -4558,6 +4567,8 @@ class DatabaseStorage:
                             data.get("appearance_core"),
                             data.get("appearance_notes"),
                             data.get("description_status") or "legacy",
+                            data.get("elevenlabs_voice_id"),
+                            data.get("elevenlabs_voice_name"),
                             now,
                             now,
                         ),
@@ -4618,6 +4629,7 @@ class DatabaseStorage:
         staging_id = staging.get("id") or f"cstg_{uuid4().hex[:12]}"
 
         def _write():
+            nonlocal staging_id
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
@@ -4694,6 +4706,56 @@ class DatabaseStorage:
             cursor.execute("DELETE FROM characters WHERE id = ? AND project_id = ?", (character_id, project_id))
             conn.commit()
             return cursor.rowcount > 0
+
+    def get_character_voice_by_name(self, project_id: str, name: str) -> str | None:
+        """Look up a character's assigned ElevenLabs voice ID by project + name.
+
+        Returns the ``elevenlabs_voice_id`` value or ``None`` when no
+        assignment exists (or the character is not found).
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT elevenlabs_voice_id FROM characters
+                   WHERE project_id = ? AND name = ?
+                   AND elevenlabs_voice_id IS NOT NULL
+                   AND elevenlabs_voice_id != ''""",
+                (project_id, name),
+            )
+            row = cursor.fetchone()
+            return row["elevenlabs_voice_id"] if row else None
+
+    def set_character_voice(
+        self,
+        character_id: str,
+        project_id: str,
+        voice_id: str,
+        voice_name: str | None = None,
+    ) -> dict | None:
+        """Set the ElevenLabs voice assignment for a character.
+
+        Pass ``voice_id=""`` to clear the assignment.
+        """
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """UPDATE characters
+                   SET elevenlabs_voice_id=?, elevenlabs_voice_name=?,
+                       updated_at=?
+                   WHERE id=? AND project_id=?""",
+                (voice_id or None, voice_name or None, now, character_id, project_id),
+            )
+            if cursor.rowcount == 0:
+                conn.commit()
+                return None
+            conn.commit()
+            cursor.execute(
+                "SELECT * FROM characters WHERE id = ? AND project_id = ?",
+                (character_id, project_id),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     def seed_demo_characters(self, project_id: str) -> int:
         """Seed character descriptions for the demo project. Idempotent."""

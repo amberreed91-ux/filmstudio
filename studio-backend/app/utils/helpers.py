@@ -1,6 +1,34 @@
 """Shared utility functions for Studio backend."""
 
+import re
 from typing import Any, Dict, List
+
+
+# Matches a scene_id token of the form ``scene_<digits>`` embedded anywhere
+# in a shot_id. Both known shot_id formats carry this token:
+#   * Old (manual):     scene_002_shot_001
+#   * New (auto-split): shot_scene_002_001
+_SCENE_ID_RE = re.compile(r"scene_\d+")
+
+
+def derive_scene_id_from_shot_id(shot_id: str) -> str:
+    """Derive a ``scene_id`` from a ``shot_id``.
+
+    Supports both shot_id formats produced by the pipeline:
+      * Old (manual):       scene_002_shot_001  -> scene_002
+      * New (auto-split):   shot_scene_002_001  -> scene_002
+
+    The ``scene_<digits>`` token is located *anywhere* inside the shot_id so
+    that future shot_id formats only need to update this single function.
+    Falls back to the legacy first-two-segments heuristic when no scene token
+    is found, and to the raw shot_id when it contains no underscore.
+    """
+    if not shot_id:
+        return shot_id
+    match = _SCENE_ID_RE.search(shot_id)
+    if match:
+        return match.group(0)
+    return "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
 
 
 def as_non_empty_string(value: Any) -> str:

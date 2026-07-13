@@ -8,6 +8,7 @@ from app.models import (
 )
 from app.adapters import RenderProviderAdapter, get_adapter, ADAPTER_REGISTRY
 from app.services.project_store import project_store
+from app.utils.helpers import derive_scene_id_from_shot_id
 import logging
 import asyncio
 
@@ -60,7 +61,7 @@ async def _run_continuity_review(job: RenderJobModel) -> None:
             output_url = str(job.output_payload.asset_url or "").strip()
         # Derive scene_id from shot_id (e.g. "scene_001_shot_001" → "scene_001")
         shot_id = job.shot_id or ""
-        scene_id = "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+        scene_id = derive_scene_id_from_shot_id(shot_id)
         review = await _cont_svc.review_render_output(
             scene_id=scene_id,
             film_id=job.project_id,
@@ -539,9 +540,7 @@ class RenderService:
         # passed one, which takes precedence).
         if provider is None:
             try:
-                _scene_id_for_override = (
-                    "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
-                )
+                _scene_id_for_override = derive_scene_id_from_shot_id(shot_id)
                 _project = project_store.get_project(project_id)
                 if isinstance(_project, dict):
                     _overrides = _project.get("provider_overrides") or {}
@@ -573,7 +572,7 @@ class RenderService:
 
         # ── Replace generic prompts with real scene descriptions ──────────────
         # If prompt is generic or too short, fetch the actual scene description
-        _scene_id = "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+        _scene_id = derive_scene_id_from_shot_id(shot_id)
         job_id = f"job-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}-{shot_id}"
         _is_generic = (
             not prompt.strip()
@@ -640,6 +639,9 @@ class RenderService:
                                 _active_storage = _storage
                             _scene_chars = _scene.get("characters") or []
                             if _scene_chars and _active_storage:
+                                from app.services.character_staging_service import (
+                                    resolve_character_prompt as _resolve_char_prompt,
+                                )
                                 _char_summaries: list[str] = []
                                 for _char_name in _scene_chars:
                                     _char_name_str = str(_char_name).strip()
@@ -648,14 +650,25 @@ class RenderService:
                                             project_id, _char_name_str
                                         )
                                         if _char_record:
-                                            _vps = (
-                                                _char_record.get("visual_prompt_summary")
-                                                or ""
-                                            ).strip()
-                                            if _vps:
-                                                _char_summaries.append(
-                                                    f"{_char_name_str}: {_vps}"
+                                            try:
+                                                _resolved = _resolve_char_prompt(
+                                                    _char_record,
+                                                    _scene_id,
+                                                    shot_id,
+                                                    _active_storage,
                                                 )
+                                            except Exception:
+                                                _vps = (
+                                                    _char_record.get("visual_prompt_summary")
+                                                    or ""
+                                                ).strip()
+                                                _resolved = (
+                                                    f"{_char_name_str}: {_vps}"
+                                                    if _vps
+                                                    else ""
+                                                )
+                                            if _resolved and _resolved != _char_name_str:
+                                                _char_summaries.append(_resolved)
                                 if _char_summaries:
                                     _char_visuals = "; ".join(_char_summaries)
                                     logger.info(
@@ -802,6 +815,9 @@ class RenderService:
                                 pass
 
                 if _scene_chars and _active_storage:
+                    from app.services.character_staging_service import (
+                        resolve_character_prompt as _resolve_char_prompt,
+                    )
                     _char_summaries: list[str] = []
                     for _char_name in _scene_chars:
                         _char_name_str = str(_char_name).strip()
@@ -810,14 +826,25 @@ class RenderService:
                                 project_id, _char_name_str
                             )
                             if _char_record:
-                                _vps = (
-                                    _char_record.get("visual_prompt_summary")
-                                    or ""
-                                ).strip()
-                                if _vps:
-                                    _char_summaries.append(
-                                        f"{_char_name_str}: {_vps}"
+                                try:
+                                    _resolved = _resolve_char_prompt(
+                                        _char_record,
+                                        _scene_id,
+                                        shot_id,
+                                        _active_storage,
                                     )
+                                except Exception:
+                                    _vps = (
+                                        _char_record.get("visual_prompt_summary")
+                                        or ""
+                                    ).strip()
+                                    _resolved = (
+                                        f"{_char_name_str}: {_vps}"
+                                        if _vps
+                                        else ""
+                                    )
+                                if _resolved and _resolved != _char_name_str:
+                                    _char_summaries.append(_resolved)
                     if _char_summaries:
                         _char_block = "Characters: " + "; ".join(_char_summaries)
                         _current_prompt = job.input_payload.prompt or ""
@@ -857,7 +884,7 @@ class RenderService:
             from app.utils.director_intent_injection import build_director_intent_prefix
             from app.data.storage import get_storage
             
-            _scene_id = "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+            _scene_id = derive_scene_id_from_shot_id(shot_id)
             _ctx = _cont_svc.build_prompt_context(scene_id=_scene_id, film_id=project_id)
             _has_context = bool(
                 _ctx.get("emotional_register")
