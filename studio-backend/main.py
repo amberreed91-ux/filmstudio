@@ -51,6 +51,7 @@ from app.routes.assembly import router as assembly_router
 from app.routes.emotion_analysis import router as emotion_analysis_router
 from app.routes.writers_intelligence import router as writers_intelligence_router
 from app.routes.admin import router as admin_router
+from app.routes.standing_corrections import router as standing_corrections_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
 from app.auth import AuthService, demo_login
@@ -150,6 +151,11 @@ async def lifespan(app: FastAPI):
     final_short_film_package_service._video_asset_service = video_asset_service
     video_asset_service._storage = storage
     logger.info("Final short film package service initialized with storage and other services")
+    
+    # Initialize standing corrections service with storage
+    from app.services.standing_corrections_service import standing_corrections_service
+    standing_corrections_service._storage = storage
+    logger.info("Standing corrections service initialized with storage")
     
     # Start background polling task for active Runway jobs
     asyncio.create_task(render_service.poll_active_runway_jobs())
@@ -259,6 +265,7 @@ app.include_router(assembly_router)
 app.include_router(emotion_analysis_router)
 app.include_router(writers_intelligence_router)
 app.include_router(admin_router)
+app.include_router(standing_corrections_router)
 
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)

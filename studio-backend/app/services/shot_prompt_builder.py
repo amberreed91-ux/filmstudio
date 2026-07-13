@@ -340,6 +340,31 @@ def _truncate_to_budget(text: str, budget: int) -> str:
     return text[:budget - 3] + "..."
 
 
+_SLOT_ASSEMBLY_ORDER = (
+    "character_state",
+    "action",
+    "environment_persistence",
+    "camera",
+    "lighting",
+)
+
+
+def reassemble_prompt_from_slots(slots: dict) -> str:
+    """Re-assemble prompt string from a slots dict.
+
+    Shared by build_slotted_prompt and post-injection re-assembly so there
+    is a single prompt-construction path, not a parallel one.
+    """
+    parts = [slots[s] for s in _SLOT_ASSEMBLY_ORDER if slots.get(s)]
+    if parts:
+        base_prompt = ". ".join(parts) + ". Cinematic, film quality."
+    else:
+        base_prompt = "Cinematic shot. Film quality."
+    if len(base_prompt) > MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"]:
+        base_prompt = base_prompt[:MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"] - 3] + "..."
+    return base_prompt
+
+
 def build_slotted_prompt(
     scene_data: dict,
     shot_number: int,
@@ -421,24 +446,8 @@ def build_slotted_prompt(
     # 6. reserve (32 chars) - leave empty for now (correction headroom)
     slots["reserve"] = ""
     
-    # Assemble prompt from non-empty slots
-    parts = [text for text in [
-        slots["character_state"],
-        slots["action"],
-        slots["environment_persistence"],
-        slots["camera"],
-        slots["lighting"],
-    ] if text]
-    
-    # Join with ". " and add cinematic suffix
-    if parts:
-        base_prompt = ". ".join(parts) + ". Cinematic, film quality."
-    else:
-        base_prompt = "Cinematic shot. Film quality."
-    
-    # Ensure we never exceed 512 chars
-    if len(base_prompt) > MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"]:
-        base_prompt = base_prompt[:MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"] - 3] + "..."
+    # Assemble prompt from non-empty slots (shared reassembly path)
+    base_prompt = reassemble_prompt_from_slots(slots)
     
     budget_used = len(base_prompt)
     budget_remaining = MAX_PROMPT_LENGTH - budget_used

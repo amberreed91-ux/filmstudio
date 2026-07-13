@@ -104,14 +104,39 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
             return
         
         # Record the render attempt with quality analysis
-        await render_retry_service.record_render_attempt(
+        _qa_result = await render_retry_service.record_render_attempt(
             project_id=job.project_id,
             shot_id=job.shot_id,
             job_id=job.id,
             output_url=output_url,
             prompt=job.prompt or "",
         )
-        
+
+        # ── Standing corrections lifecycle (Phase 4) ───────────────────
+        # After adherence scoring completes and the attempt is persisted to
+        # render_attempts, update hits/misses/confidence for any corrections
+        # that were injected for this job_id.
+        _sc_score_json = (
+            _qa_result.get("score_json")
+            if isinstance(_qa_result, dict) else None
+        )
+        if _sc_score_json:
+            try:
+                from app.services.standing_corrections_service import (
+                    standing_corrections_service as _sc_svc,
+                )
+                _sc_svc.record_render_outcome(
+                    project_id=job.project_id,
+                    shot_id=job.shot_id,
+                    job_id=job.id,
+                    score_json=_sc_score_json,
+                )
+            except Exception as _sc_exc:
+                logger.debug(
+                    "Standing corrections lifecycle skipped for job %s: %s",
+                    job.id, _sc_exc,
+                )
+
         logger.info(
             "RENDER_QUALITY_CHECK_COMPLETE | job=%s | project=%s | shot=%s",
             job.id,
@@ -549,6 +574,7 @@ class RenderService:
         # ── Replace generic prompts with real scene descriptions ──────────────
         # If prompt is generic or too short, fetch the actual scene description
         _scene_id = "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+        job_id = f"job-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}-{shot_id}"
         _is_generic = (
             not prompt.strip()
             or len(prompt.strip()) < 50
@@ -675,6 +701,40 @@ class RenderService:
                             )
                             prompt = _slotted["prompt"]
 
+                            # ── Standing corrections injection (Phase 3) ─────
+                            # Mutates _slotted["slots"] in place. Only re-assembles
+                            # the prompt if corrections were actually applied —
+                            # no change to prompt construction when no corrections
+                            # match.
+                            from app.services.standing_corrections_service import (
+                                standing_corrections_service as _sc_svc,
+                            )
+                            from app.services.shot_prompt_builder import (
+                                SLOT_BUDGETS, _truncate_to_budget,
+                                reassemble_prompt_from_slots, _SLOT_ASSEMBLY_ORDER,
+                            )
+                            from app.services.script_parser import sanitize_render_slot
+                            _sc_applied = _sc_svc.inject_into_slots(
+                                project_id=project_id,
+                                slots=_slotted["slots"],
+                                shot_context={
+                                    "shot_id": shot_id,
+                                    "shot_number": _shot_number,
+                                },
+                                job_id=job_id,
+                            )
+                            if _sc_applied:
+                                for _slot_name in _SLOT_ASSEMBLY_ORDER:
+                                    _slot_val = _slotted["slots"].get(_slot_name, "")
+                                    if _slot_val:
+                                        _slot_val = sanitize_render_slot(_slot_name, _slot_val)
+                                        _slotted["slots"][_slot_name] = _truncate_to_budget(
+                                            _slot_val, SLOT_BUDGETS[_slot_name]
+                                        )
+                                _reassembled = reassemble_prompt_from_slots(_slotted["slots"])
+                                if _reassembled != "Cinematic shot. Film quality.":
+                                    prompt = _reassembled
+
                             logger.info(
                                 "RENDER_PROMPT_FROM_SCENE | scene=%s | content_length=%d | action_length=%d | prompt_length=%d | slots=%s",
                                 _scene_id,
@@ -685,9 +745,7 @@ class RenderService:
                             )
             except Exception as _exc:
                 logger.warning("Failed to fetch scene description for prompt: %s", _exc)
-        
-        job_id = f"job-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}-{shot_id}"
-        
+
         job = RenderJobModel(
             id=job_id,
             project_id=project_id,
