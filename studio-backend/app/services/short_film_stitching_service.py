@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import ssl
 import subprocess
 import tempfile
@@ -84,6 +85,17 @@ class ShortFilmStitchingService:
 
         return sorted(clips, key=_rank)
 
+    def collect_completed_scene_outputs(self, project: Dict[str, Any], scene_id: str) -> List[Dict[str, str]]:
+        """Collect completed rendered shot outputs for one scene in shot order."""
+        clean_scene_id = self._string(scene_id).strip()
+        if not clean_scene_id:
+            return []
+        return [
+            clip
+            for clip in self.collect_completed_project_outputs(project)
+            if self._string(clip.get("scene_id")).strip() == clean_scene_id
+        ]
+
     def download_or_stream_clips_safely(self, clips: List[Dict[str, str]], work_dir: Path) -> List[Path]:
         ssl_context = self._build_ssl_context()
         files: List[Path] = []
@@ -96,6 +108,12 @@ class ShortFilmStitchingService:
                 self.generate_simulated_video_clip(target, index)
                 files.append(target)
                 continue
+            local_path = self._resolve_local_output_path(url)
+            if local_path is not None:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(local_path, target)
+                files.append(target)
+                continue
             with urllib.request.urlopen(url, timeout=60, context=ssl_context) as response:
                 target.write_bytes(response.read())
             files.append(target)
@@ -105,6 +123,27 @@ class ShortFilmStitchingService:
     def _is_simulated_asset_url(url: str) -> bool:
         parsed = urlparse(url)
         return parsed.netloc == "storage.example.com" and parsed.path.startswith("/assets/")
+
+    def _resolve_local_output_path(self, url_or_path: str) -> Path | None:
+        value = self._string(url_or_path).strip()
+        if not value:
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme and parsed.scheme != "file":
+            return None
+        if parsed.scheme == "file":
+            candidate = Path(parsed.path)
+            return candidate if candidate.exists() else None
+        if value.startswith("/outputs/"):
+            candidate = self.outputs_root.parent / value.lstrip("/")
+            return candidate if candidate.exists() else None
+        if value.startswith("outputs/"):
+            candidate = self.outputs_root.parent / value
+            return candidate if candidate.exists() else None
+        candidate = Path(value)
+        if candidate.is_absolute():
+            return candidate if candidate.exists() else None
+        return None
 
     def generate_simulated_video_clip(self, target: Path, index: int) -> Path:
         ffmpeg_bin = shutil_which("ffmpeg")
@@ -456,16 +495,26 @@ class ShortFilmStitchingService:
         cmd: List[str] = [ffmpeg_bin, "-y", "-i", str(video_path)]
         if soundtrack_config.loop_to_duration:
             cmd.extend(["-stream_loop", "-1"])
+        has_existing_audio = self._probe_has_audio_stream(video_path)
+        if has_existing_audio:
+            filter_complex = (
+                f"[1:a]{afilter}[bgm];"
+                "[0:a:0][bgm]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+            )
+            audio_map = "[aout]"
+        else:
+            filter_complex = f"[1:a]{afilter}[bgm]"
+            audio_map = "[bgm]"
         cmd.extend(
             [
                 "-i",
                 str(audio_path),
                 "-filter_complex",
-                f"[1:a]{afilter}[bgm]",
+                filter_complex,
                 "-map",
                 "0:v:0",
                 "-map",
-                "[bgm]",
+                audio_map,
                 "-c:v",
                 "copy",
                 "-c:a",
@@ -526,6 +575,144 @@ class ShortFilmStitchingService:
             end_card_config=EndCardConfig(),
             soundtrack_config=SoundtrackConfig(),
         )
+
+    def stitch_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        project: Dict[str, Any],
+        overwrite: bool = False,
+        soundtrack_config: SoundtrackConfig | None = None,
+    ) -> Dict[str, Any]:
+        clean_scene_id = self._string(scene_id).strip()
+        output_path = self.outputs_root / "scene_assemblies" / f"{project_id}_{clean_scene_id}.mp4"
+        soundtrack_path = self.outputs_root / "scene_assemblies" / f"{project_id}_{clean_scene_id}_with_audio.mp4"
+        clips = self.collect_completed_scene_outputs(project, clean_scene_id)
+        if not clips:
+            payload = self.build_stitch_result_payload(
+                project_id=project_id,
+                clip_count=0,
+                output_path=output_path,
+                status="failed",
+                blocker="no_completed_scene_outputs",
+            )
+            payload["scene_id"] = clean_scene_id
+            return payload
+
+        if output_path.exists() and not overwrite:
+            existing_path = soundtrack_path if soundtrack_config and soundtrack_config.enabled and soundtrack_path.exists() else output_path
+            payload = self.build_stitch_result_payload(
+                project_id=project_id,
+                clip_count=len(clips),
+                output_path=existing_path,
+                status="existing",
+            )
+            payload["scene_id"] = clean_scene_id
+            payload["shot_ids"] = [clip["shot_id"] for clip in clips]
+            return payload
+
+        with tempfile.TemporaryDirectory(prefix=f"stitch_{project_id}_{clean_scene_id}_") as temp_dir:
+            work_dir = Path(temp_dir)
+            try:
+                clip_paths = self.download_or_stream_clips_safely(clips, work_dir)
+            except Exception as exc:
+                payload = self.build_stitch_result_payload(
+                    project_id=project_id,
+                    clip_count=len(clips),
+                    output_path=output_path,
+                    status="failed",
+                    blocker="clip_download_failed",
+                    error_message=str(exc),
+                )
+                payload["scene_id"] = clean_scene_id
+                return payload
+
+            concat_list = self.build_ffmpeg_concat_list(clip_paths, work_dir)
+            stitch_result = self.stitch_clips(concat_list, output_path, transcode=False)
+            if stitch_result.get("status") != "completed":
+                payload = self.build_stitch_result_payload(
+                    project_id=project_id,
+                    clip_count=len(clips),
+                    output_path=output_path,
+                    status="failed",
+                    blocker=self._string(stitch_result.get("blocker")) or "stitch_failed",
+                    error_message=self._string(stitch_result.get("error_message")) or None,
+                )
+                payload["scene_id"] = clean_scene_id
+                return payload
+
+        validation = self.validate_output_file(output_path)
+        if not validation.get("valid"):
+            payload = self.build_stitch_result_payload(
+                project_id=project_id,
+                clip_count=len(clips),
+                output_path=output_path,
+                status="failed",
+                blocker=self._string(validation.get("blocker")) or "output_invalid",
+            )
+            payload["scene_id"] = clean_scene_id
+            return payload
+
+        final_path = output_path
+        if soundtrack_config and soundtrack_config.enabled:
+            with tempfile.TemporaryDirectory(prefix=f"mix_{project_id}_{clean_scene_id}_") as temp_dir:
+                work_dir = Path(temp_dir)
+                video_duration = self._probe_duration_seconds(output_path) or 0.0
+                source_audio, audio_blocker = self.validate_audio_source(
+                    work_dir=work_dir,
+                    soundtrack_config=soundtrack_config,
+                    video_duration_seconds=video_duration,
+                )
+                if not source_audio:
+                    payload = self.build_stitch_result_payload(
+                        project_id=project_id,
+                        clip_count=len(clips),
+                        output_path=soundtrack_path,
+                        status="failed",
+                        blocker=audio_blocker or "missing_audio_source",
+                    )
+                    payload["scene_id"] = clean_scene_id
+                    return payload
+                mix_result = self.mix_audio_into_video(
+                    video_path=output_path,
+                    audio_path=source_audio,
+                    output_path=soundtrack_path,
+                    soundtrack_config=soundtrack_config,
+                    video_duration_seconds=video_duration,
+                )
+                if mix_result.get("status") != "completed":
+                    payload = self.build_stitch_result_payload(
+                        project_id=project_id,
+                        clip_count=len(clips),
+                        output_path=soundtrack_path,
+                        status="failed",
+                        blocker=self._string(mix_result.get("blocker")) or "audio_mix_failed",
+                        error_message=self._string(mix_result.get("error_message")) or None,
+                    )
+                    payload["scene_id"] = clean_scene_id
+                    return payload
+            final_validation = self.validate_final_audio_video_output(soundtrack_path)
+            if not final_validation.get("valid"):
+                payload = self.build_stitch_result_payload(
+                    project_id=project_id,
+                    clip_count=len(clips),
+                    output_path=soundtrack_path,
+                    status="failed",
+                    blocker=self._string(final_validation.get("blocker")) or "final_audio_validation_failed",
+                )
+                payload["scene_id"] = clean_scene_id
+                return payload
+            final_path = soundtrack_path
+
+        payload = self.build_stitch_result_payload(
+            project_id=project_id,
+            clip_count=len(clips),
+            output_path=final_path,
+            status="completed",
+        )
+        payload["scene_id"] = clean_scene_id
+        payload["shot_ids"] = [clip["shot_id"] for clip in clips]
+        return payload
 
     def stitch_project_with_cards(
         self,

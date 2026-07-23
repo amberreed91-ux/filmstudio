@@ -54,6 +54,7 @@ class FinalShortFilmPackageService:
             'scene_count': 0,
             'shot_count': 0,
         }
+        scene_ids: set[str] = set()
         
         if self._render_service:
             # Get all render jobs for the project
@@ -67,10 +68,45 @@ class FinalShortFilmPackageService:
                     shot_id = job.shot_id
                     if '_' in shot_id:
                         scene_id = shot_id.split('_')[0] + '_' + shot_id.split('_')[1]
-                        if scene_id not in metadata.get('scenes', set()):
-                            metadata.setdefault('scenes', set()).add(scene_id)
-                            metadata['scene_count'] = len(metadata['scenes'])
+                        scene_ids.add(scene_id)
+                        metadata['scene_count'] = len(scene_ids)
                     metadata['shot_count'] = len(set(job.id for job in jobs))
+
+        project = self._load_project_data(project_id)
+        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+        scene_rows = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+        for scene in scene_rows:
+            if isinstance(scene, dict) and str(scene.get("scene_id") or "").strip():
+                scene_ids.add(str(scene.get("scene_id")).strip())
+
+        assembly_rows = summary.get("scene_pipeline_assemblies") if isinstance(summary.get("scene_pipeline_assemblies"), list) else []
+        assembly_shot_ids: set[str] = set()
+        for row in assembly_rows:
+            if not isinstance(row, dict):
+                continue
+            status = str(row.get("status") or "").strip().lower()
+            output_url = str(row.get("output_url") or "").strip()
+            if status not in {"complete", "completed", "existing"} or not output_url:
+                continue
+            scene_id = str(row.get("scene_id") or "").strip()
+            if scene_id:
+                scene_ids.add(scene_id)
+            assembly_id = str(row.get("assembly_id") or "").strip()
+            if assembly_id and assembly_id not in metadata["render_job_ids"]:
+                metadata["render_job_ids"].append(assembly_id)
+            raw_shot_ids = row.get("shot_ids")
+            if isinstance(raw_shot_ids, list):
+                for shot_id in raw_shot_ids:
+                    if isinstance(shot_id, str) and shot_id.strip():
+                        assembly_shot_ids.add(shot_id.strip())
+            elif row.get("clip_count"):
+                for index in range(int(row.get("clip_count") or 0)):
+                    assembly_shot_ids.add(f"{scene_id or assembly_id}_clip_{index + 1}")
+
+        if scene_ids:
+            metadata["scene_count"] = max(metadata["scene_count"], len(scene_ids))
+        if assembly_shot_ids:
+            metadata["shot_count"] = max(metadata["shot_count"], len(assembly_shot_ids))
         
         return metadata
 
@@ -96,6 +132,27 @@ class FinalShortFilmPackageService:
         revisions = self._revision_service.list_revisions_for_project(project_id)
         completed_revisions = [r.revision_id for r in revisions if r.status == 'complete']
         return completed_revisions
+
+    def _load_project_data(self, project_id: str) -> Dict[str, Any]:
+        try:
+            from app.services.project_store import project_store
+
+            project = project_store.get_project(project_id)
+            if isinstance(project, dict):
+                return project
+        except Exception:
+            pass
+
+        if self._storage and hasattr(self._storage, "get_project"):
+            try:
+                project = self._storage.get_project(project_id)
+                if isinstance(project, dict):
+                    return project
+                if hasattr(project, "model_dump"):
+                    return project.model_dump(mode="json")
+            except Exception:
+                pass
+        return {}
 
     def create_package_from_project(
         self,
@@ -207,9 +264,7 @@ class FinalShortFilmPackageService:
                 )
 
         try:
-            from app.services.project_store import project_store
-
-            project = project_store.get_project(project_id) or {}
+            project = self._load_project_data(project_id)
             summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
             summary_jobs = summary.get("one_button_render_jobs") if isinstance(summary.get("one_button_render_jobs"), list) else []
             for row in summary_jobs:
@@ -229,6 +284,27 @@ class FinalShortFilmPackageService:
                         "created_at": str(row.get("created_at") or "").strip(),
                         "updated_at": str(row.get("updated_at") or "").strip(),
                         "completed_at": str(row.get("completed_at") or "").strip(),
+                    }
+                )
+            assembly_rows = summary.get("scene_pipeline_assemblies") if isinstance(summary.get("scene_pipeline_assemblies"), list) else []
+            for row in assembly_rows:
+                if not isinstance(row, dict):
+                    continue
+                status = str(row.get("status") or "").strip().lower()
+                output_url = str(row.get("output_url") or "").strip()
+                if status not in {"complete", "completed", "existing"} or not output_url:
+                    continue
+                clips.append(
+                    {
+                        "job_id": str(row.get("assembly_id") or f"{project_id}_{row.get('scene_id', '')}").strip(),
+                        "shot_id": str(row.get("scene_id") or "").strip(),
+                        "provider": "scene_pipeline",
+                        "provider_mode": str(row.get("provider_mode") or "scene_pipeline").strip().lower(),
+                        "output_url": output_url,
+                        "created_at": str(row.get("created_at") or "").strip(),
+                        "updated_at": str(row.get("updated_at") or "").strip(),
+                        "completed_at": str(row.get("completed_at") or row.get("updated_at") or "").strip(),
+                        "source": "scene_pipeline_assembly",
                     }
                 )
         except Exception:
@@ -301,7 +377,8 @@ class FinalShortFilmPackageService:
             return False
 
         hosted_clips = [clip for clip in clips if _is_hosted_clip(clip)]
-        preferred_clips = hosted_clips or clips
+        scene_pipeline_clips = [clip for clip in clips if str(clip.get("source") or "") == "scene_pipeline_assembly"]
+        preferred_clips = scene_pipeline_clips or hosted_clips or clips
         ordered_preferred = sorted(preferred_clips, key=self._clip_sort_key)
         latest_clip = ordered_preferred[-1]
 

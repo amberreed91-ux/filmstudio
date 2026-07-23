@@ -179,6 +179,56 @@ async def test_honest_assembly_note_partial(export_service, sample_project):
 
 
 @pytest.mark.asyncio
+async def test_manifest_includes_scene_pipeline_assembly(export_service, storage):
+    project = StudioProject(
+        project_id="assembled_scene_project",
+        title="Assembled Scene Film",
+        execution_summary={
+            "scenes": [
+                {
+                    "scene_id": "scene_003",
+                    "title": "Scene 3",
+                    "shots": [
+                        {"shot_id": "shot_scene_003_001", "status": "complete", "output_url": "/outputs/renders/shot_001.mp4"},
+                        {"shot_id": "shot_scene_003_002", "status": "complete", "output_url": "/outputs/renders/shot_002.mp4"},
+                    ],
+                }
+            ],
+            "scene_pipeline_assemblies": [
+                {
+                    "assembly_id": "assembled_scene_project_scene_003",
+                    "scene_id": "scene_003",
+                    "status": "complete",
+                    "output_url": "/outputs/scene_assemblies/assembled_scene_project_scene_003_with_audio.mp4",
+                    "duration_seconds": 5.5,
+                    "clip_count": 2,
+                    "shot_ids": ["shot_scene_003_001", "shot_scene_003_002"],
+                    "score_ambient_provider": "manual_post_render",
+                    "soundtrack_status": "manual_post_render",
+                    "updated_at": "2026-07-18T05:05:15+00:00",
+                }
+            ],
+        },
+    )
+    storage.save_project(project)
+
+    package = await export_service.build_export_package(
+        project_id="assembled_scene_project",
+        include_continuity_report=False,
+        include_render_lineage=False,
+        include_director_notes=False,
+    )
+
+    scene = package["manifest"]["scenes"][0]
+    assembly = scene["scene_pipeline_assembly"]
+    assert assembly["output_url"] == "/outputs/scene_assemblies/assembled_scene_project_scene_003_with_audio.mp4"
+    assert assembly["clip_count"] == 2
+    assert assembly["soundtrack_status"] == "manual_post_render"
+    assert "completed scene-pipeline assemblies" in package["honest_assembly_note"]
+    assert "2 stitched shot clips" in package["honest_assembly_note"]
+
+
+@pytest.mark.asyncio
 async def test_honest_assembly_note_empty(export_service, storage):
     """Test honest assembly note when no renders complete."""
     # Create project with no completed renders

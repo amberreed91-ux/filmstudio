@@ -491,20 +491,81 @@ class TestCombinedStrategyStructure:
         """The result should always include the strategy key."""
         service = RenderRetryService()
 
-        # We can't easily mock the full chain, but we can verify the
-        # result structure contract
-        result = await service.evaluate_and_select_best(
-            shot_id="test_shot",
-            project_id="test_project",
-            original_slots=ORIGINAL_SLOTS,
-            max_attempts=1,  # Just 1 attempt for structural test
-            submission_strategy="combined_reorder_and_fresh_seeds",
-        )
-        # This will likely fail on render submission, but the structure
-        # should still be returned from the error path
+        with patch("app.services.render.render_service") as mock_render_service:
+            mock_render_service.get_default_provider.return_value = "happyhorse"
+            mock_job = MagicMock()
+            mock_job.id = "job-test"
+            mock_render_service.create_job.return_value = mock_job
+            mock_render_service.submit_job = AsyncMock(return_value=mock_job)
+
+            result = await service.evaluate_and_select_best(
+                shot_id="test_shot",
+                project_id="test_project",
+                original_slots=ORIGINAL_SLOTS,
+                max_attempts=1,
+                submission_strategy="combined_reorder_and_fresh_seeds",
+            )
+
         assert "strategy" in result
         assert result["strategy"] == "combined_reorder_and_fresh_seeds"
         assert "best_attempt" in result
+        mock_render_service.create_job.assert_called_once()
+        assert mock_render_service.create_job.call_args.kwargs["provider"] == "happyhorse"
+        params = mock_render_service.create_job.call_args.kwargs["parameters"]
+        assert params["prompt_slots"] == ORIGINAL_SLOTS
+        assert params["retry_strategy"] == "combined_reorder_and_fresh_seeds"
+        assert params["skip_character_injection"] is True
+
+    @pytest.mark.asyncio
+    async def test_reorders_retry_prompt_from_previous_score(self):
+        """Previous adherence scores should move weak slots earlier in retries."""
+        service = RenderRetryService()
+        original_score = AdherenceScore(
+            shot_id="test_shot",
+            attempt_n=1,
+            frames_scored=[0.1, 0.5, 0.9],
+            dimensions=ATTEMPT9_DIMS,
+            temporal_drift={"start_score": 20.0, "end_score": 20.0},
+            adherence_score=19.0,
+            verdict="correctable",
+            failed_slots=["action", "lighting", "character_state", "environment_persistence"],
+        )
+        corrected = FullCorrectedPrompt(
+            base_attempt=1,
+            seed_locked=True,
+            slots=ORIGINAL_SLOTS,
+            provenance={slot: "carried_forward" for slot in ORIGINAL_SLOTS},
+            prompt=service._assemble_prompt_from_slots(ORIGINAL_SLOTS),
+            chars_remaining=100,
+            compressed_slots=[],
+        )
+
+        service._reconstruct_original_score = AsyncMock(return_value=original_score)
+        service._adherence_service = MagicMock()
+        service._adherence_service.build_full_corrected_prompt = AsyncMock(return_value=corrected)
+
+        with patch("app.services.render.render_service") as mock_render_service:
+            mock_render_service.get_default_provider.return_value = "happyhorse"
+            mock_job = MagicMock()
+            mock_job.id = "job-reordered"
+            mock_render_service.create_job.return_value = mock_job
+            mock_render_service.submit_job = AsyncMock(return_value=mock_job)
+
+            result = await service.evaluate_and_select_best(
+                shot_id="test_shot",
+                project_id="test_project",
+                original_slots=ORIGINAL_SLOTS,
+                max_attempts=1,
+                submission_strategy="combined_reorder_and_fresh_seeds",
+            )
+
+        params = mock_render_service.create_job.call_args.kwargs["parameters"]
+        assert params["slot_order"] == EXPECTED_REORDER_ATTEMPT9
+        assert params["reorder_reason"]["action"].startswith("moved_early")
+        assert mock_render_service.create_job.call_args.kwargs["prompt"].startswith(
+            ORIGINAL_SLOTS["action"]
+        )
+        assert result["corrected_prompt"].slot_order == EXPECTED_REORDER_ATTEMPT9
 
 
 # =============================================================================

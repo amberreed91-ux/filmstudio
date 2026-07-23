@@ -283,6 +283,9 @@ class EnhancePromptResponse(BaseModel):
     enhanced_prompt: str
     original_prompt: str
     study_memories_used: int
+    scene_context_used: bool
+    character_profiles_used: int
+    enhancement_attempts: int
 
 
 class DirectorNoteRequest(BaseModel):
@@ -306,9 +309,66 @@ class ShotCountResponse(BaseModel):
     study_memories_used: int
 
 
+class GenerationSettingsRequest(BaseModel):
+    scene_id: str
+    shot_number: int = 1
+    shot_type: str = "wide"
+
+
+class GenerationSettingsRecommendation(BaseModel):
+    duration_seconds: int
+    fps: int
+    resolution: str
+    model: Optional[str] = None
+
+
+class ProviderDurationConstraintResponse(BaseModel):
+    provider: str
+    supports_custom_duration: bool
+    valid_durations_seconds: List[int]
+    nearest_valid_duration_seconds: int
+    advisory: str
+
+
+class GenerationSettingsResponse(BaseModel):
+    scene_id: str
+    shot_number: int
+    recommended: GenerationSettingsRecommendation
+    duration_constraint: ProviderDurationConstraintResponse
+    reasoning: str
+    study_memories_used: int
+
+
 def _get_llm():
-    from app.llm_client import call_llm
-    return call_llm
+    """Return the fallback-aware LLM callable used by the enhance service.
+
+    Matches the ``LLMCallable`` contract (str-returning) so the prompt
+    enhancement service contract is unchanged, while still racing Qwen
+    against an internal timeout and falling back to OpenRouter on a policy block
+    or hang.
+    """
+    from app.llm_client import call_llm_with_fallback
+    return call_llm_with_fallback
+
+
+def _get_llm_with_fallback():
+    """Return the tuple-returning fallback helper for routes that log provider."""
+    from app.llm_client import get_llm_completion_with_fallback
+    return get_llm_completion_with_fallback
+
+
+def _get_prompt_enhancement_service():
+    from app.services.previs_prompt_enhancement_service import (
+        previs_prompt_enhancement_service,
+    )
+    return previs_prompt_enhancement_service
+
+
+def _get_generation_settings_service():
+    from app.services.previs_generation_settings_service import (
+        previs_generation_settings_service,
+    )
+    return previs_generation_settings_service
 
 
 @router.post("/projects/{project_id}/previs/enhance-prompt")
@@ -322,37 +382,53 @@ async def enhance_prompt(
     Fetches categorized Director's Memory (STYLE, TONE, PACING) and the full
     scene script, then calls the LLM to produce an enriched render prompt.
     """
-    from app.services.study_context import build_study_context_block, fetch_active_memories
-
-    context_block = build_study_context_block(project_id, body.scene_id)
-    memories = fetch_active_memories(project_id)
-    mem_count = memories.get("raw_count", 0)
-
-    system_prompt = (
-        "You are a cinematographer's assistant. Your job is to enhance a text-to-video "
-        "prompt by weaving in scene context and the director's established creative memory.\n\n"
-        f"{context_block}\n\n"
-        "Rules:\n"
-        "- Preserve original intent; enrich, do not replace\n"
-        "- Use cinematic language — mood, lighting, camera movement, composition\n"
-        "- Keep the enhanced prompt under 400 characters\n"
-        "- Output ONLY the enhanced prompt — no explanation, no labels"
-    )
-
-    user_message = f"Original prompt: {body.prompt_text}"
-
     try:
-        call_llm = _get_llm()
-        reply = await call_llm(system_prompt, user_message, max_tokens=512)
-        enhanced = reply.strip().strip('"').strip("'")
+        result = await _get_prompt_enhancement_service().enhance(
+            project_id=project_id,
+            scene_id=body.scene_id,
+            prompt_text=body.prompt_text,
+            llm=_get_llm(),
+        )
     except Exception as exc:
-        logger.error("ENHANCE_PROMPT_FAILED | project=%s | %s", project_id, exc)
-        enhanced = body.prompt_text
+        from app.services.stability import StabilityError
+
+        if isinstance(exc, StabilityError):
+            if exc.error_type == "validation_error":
+                raise HTTPException(status_code=422, detail=exc.to_dict()) from exc
+            if exc.metadata and exc.metadata.get("openrouter_error"):
+                logger.warning(
+                    "Both providers failed for enhance-prompt, returning original prompt | "
+                    "project_id=%s qwen=%s openrouter=%s provider=none",
+                    project_id,
+                    exc.metadata.get("qwen_error"),
+                    exc.metadata.get("openrouter_error"),
+                )
+                return EnhancePromptResponse(
+                    enhanced_prompt=body.prompt_text,
+                    original_prompt=body.prompt_text,
+                    study_memories_used=0,
+                    scene_context_used=False,
+                    character_profiles_used=0,
+                    enhancement_attempts=0,
+                )
+            logger.error(
+                "project_id=%s job_id=- provider=qwen stage=%s "
+                "duration_ms=0 error_type=%s metadata=%s",
+                project_id,
+                exc.stage,
+                exc.error_type,
+                exc.metadata,
+            )
+            raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
+        raise
 
     return EnhancePromptResponse(
-        enhanced_prompt=enhanced or body.prompt_text,
-        original_prompt=body.prompt_text,
-        study_memories_used=mem_count,
+        enhanced_prompt=result.enhanced_prompt,
+        original_prompt=result.original_prompt,
+        study_memories_used=result.memory_entries_supplied,
+        scene_context_used=result.scene_content_supplied,
+        character_profiles_used=result.character_profiles_supplied,
+        enhancement_attempts=result.attempts,
     )
 
 
@@ -388,8 +464,13 @@ async def previs_director_notes(
     user_message = f"The previs generation is complete.\n\n{gen_context}"
 
     try:
-        call_llm = _get_llm()
-        reply = await call_llm(system_prompt, user_message, max_tokens=512)
+        llm_with_fallback = _get_llm_with_fallback()
+        reply, provider = await llm_with_fallback(system_prompt, user_message, max_tokens=512)
+        logger.info(
+            "project_id=%s job_id=- provider=%s stage=previs_director_notes duration_ms=0",
+            project_id,
+            provider,
+        )
         notes = reply.strip()
     except Exception as exc:
         logger.error("DIRECTOR_NOTES_FAILED | project=%s | %s", project_id, exc)
@@ -434,8 +515,13 @@ async def recommend_shot_count(
     user_message = "Based on the scene content and creative memory, how many shots do you recommend?"
 
     try:
-        call_llm = _get_llm()
-        reply = await call_llm(system_prompt, user_message, max_tokens=512)
+        llm_with_fallback = _get_llm_with_fallback()
+        reply, provider = await llm_with_fallback(system_prompt, user_message, max_tokens=512)
+        logger.info(
+            "project_id=%s job_id=- provider=%s stage=previs_shot_count duration_ms=0",
+            project_id,
+            provider,
+        )
         import json as _json
         result = _json.loads(reply.strip())
         shot_count = int(result.get("shot_count", 3))
@@ -451,4 +537,91 @@ async def recommend_shot_count(
         recommended_shot_count=shot_count,
         reasoning=reasoning,
         study_memories_used=mem_count,
+    )
+
+
+@router.post("/projects/{project_id}/previs/generation-settings")
+async def recommend_generation_settings(
+    project_id: str,
+    body: GenerationSettingsRequest,
+) -> GenerationSettingsResponse:
+    """
+    Recommend per-shot generation settings (duration/fps/resolution/model).
+
+    Reasons over shot type, scene pacing (reusing PacingInsight when already
+    computable), dialogue density, and whether the shot is an establishing
+    shot. Routes the LLM call through the provider-fallback helper so a
+    blocked/slow Qwen call falls back to OpenRouter instead of hanging to the
+    frontend's 30s timeout.
+    """
+    try:
+        result = await _get_generation_settings_service().recommend(
+            project_id=project_id,
+            scene_id=body.scene_id,
+            shot_number=body.shot_number,
+            shot_type=body.shot_type,
+            llm_with_fallback=_get_llm_with_fallback(),
+        )
+    except Exception as exc:
+        from app.services.stability import StabilityError
+
+        if isinstance(exc, StabilityError):
+            if exc.error_type == "validation_error":
+                raise HTTPException(status_code=422, detail=exc.to_dict()) from exc
+            if exc.metadata and exc.metadata.get("openrouter_error"):
+                logger.warning(
+                    "Both providers failed for generation-settings, returning defaults | "
+                    "project_id=%s qwen=%s openrouter=%s provider=none",
+                    project_id,
+                    exc.metadata.get("qwen_error"),
+                    exc.metadata.get("openrouter_error"),
+                )
+                return GenerationSettingsResponse(
+                    scene_id=body.scene_id,
+                    shot_number=body.shot_number,
+                    recommended=GenerationSettingsRecommendation(
+                        duration_seconds=8,
+                        fps=16,
+                        resolution="720p",
+                        model=None,
+                    ),
+                    duration_constraint=ProviderDurationConstraintResponse(
+                        provider="Auto (Best Available)",
+                        supports_custom_duration=True,
+                        valid_durations_seconds=[4, 8, 12, 16, 20],
+                        nearest_valid_duration_seconds=8,
+                        advisory="Providers were unavailable, so the closest editable default is shown.",
+                    ),
+                    reasoning="Default settings applied — providers unavailable.",
+                    study_memories_used=0,
+                )
+            logger.error(
+                "project_id=%s job_id=- provider=qwen stage=%s "
+                "duration_ms=0 error_type=%s metadata=%s",
+                project_id,
+                exc.stage,
+                exc.error_type,
+                exc.metadata,
+            )
+            raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
+        raise
+
+    return GenerationSettingsResponse(
+        scene_id=result.scene_id,
+        shot_number=result.shot_number,
+        recommended=GenerationSettingsRecommendation(
+            duration_seconds=result.recommended.duration_seconds,
+            fps=result.recommended.fps,
+            resolution=result.recommended.resolution,
+            model=result.recommended.model,
+        ),
+        duration_constraint=ProviderDurationConstraintResponse(
+            provider=result.duration_constraint.provider,
+            supports_custom_duration=result.duration_constraint.supports_custom_duration,
+            valid_durations_seconds=list(result.duration_constraint.valid_durations_seconds),
+            nearest_valid_duration_seconds=result.duration_constraint.nearest_valid_duration_seconds,
+            advisory=result.duration_constraint.advisory,
+        ),
+        reasoning=result.reasoning,
+        study_memories_used=result.study_memories_used,
     )

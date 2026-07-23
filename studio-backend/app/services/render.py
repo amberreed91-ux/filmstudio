@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Awaitable
+from typing import Any, Optional, Callable, Awaitable
 from datetime import datetime
 import os
 import uuid
@@ -6,8 +6,11 @@ from app.models import (
     RenderJobModel, RenderJobInput, RenderJobOutput, RenderAsset,
     ProviderConfig, ProviderStatus, StudioProject
 )
+from app.models.consistency import ConsistencyPayload, ReferenceAsset
 from app.adapters import RenderProviderAdapter, get_adapter, ADAPTER_REGISTRY
+from app.config import get_settings
 from app.services.project_store import project_store
+from app.services.shared.dashscope_client import DashScopeConfigError, get_dashscope_config
 from app.utils.helpers import derive_scene_id_from_shot_id
 import logging
 import asyncio
@@ -103,6 +106,19 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
         if not output_url:
             logger.debug("Skipping quality check for job %s: no output URL", job.id)
             return
+
+        _expected_slots = None
+        try:
+            _parameters = job.input_payload.parameters if job.input_payload else {}
+            if isinstance(_parameters, dict):
+                _slots = _parameters.get("prompt_slots")
+                if isinstance(_slots, dict):
+                    _expected_slots = {
+                        str(_slot): str(_value or "")
+                        for _slot, _value in _slots.items()
+                    }
+        except Exception:
+            _expected_slots = None
         
         # Record the render attempt with quality analysis
         _qa_result = await render_retry_service.record_render_attempt(
@@ -110,7 +126,8 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
             shot_id=job.shot_id,
             job_id=job.id,
             output_url=output_url,
-            prompt=job.prompt or "",
+            prompt=(job.input_payload.prompt if job.input_payload else "") or "",
+            expected_slots=_expected_slots,
         )
 
         # ── Standing corrections lifecycle (Phase 4) ───────────────────
@@ -121,6 +138,16 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
             _qa_result.get("score_json")
             if isinstance(_qa_result, dict) else None
         )
+        if isinstance(_sc_score_json, dict):
+            job.metadata = dict(job.metadata or {})
+            job.metadata["adherence_review"] = {
+                "verdict": _sc_score_json.get("verdict"),
+                "failed_slots": _sc_score_json.get("failed_slots") or [],
+                "advisory_note": _sc_score_json.get("advisory_note") or "",
+                "outcome": _sc_score_json.get("outcome") or "",
+            }
+            _persist_job(job)
+
         if _sc_score_json:
             try:
                 from app.services.standing_corrections_service import (
@@ -137,6 +164,60 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
                     "Standing corrections lifecycle skipped for job %s: %s",
                     job.id, _sc_exc,
                 )
+
+        try:
+            _parameters = job.input_payload.parameters if job.input_payload else {}
+            _is_adherence_retry = bool(
+                isinstance(_parameters, dict)
+                and (
+                    _parameters.get("retry_strategy")
+                    or _parameters.get("adherence_retry_parent_job_id")
+                )
+            )
+            _failed_slots = (
+                _sc_score_json.get("failed_slots")
+                if isinstance(_sc_score_json, dict) else []
+            )
+            _can_retry = (
+                isinstance(_parameters, dict)
+                and bool(_expected_slots)
+                and bool(_failed_slots)
+                and not _is_adherence_retry
+            )
+            if _can_retry:
+                _max_retries = int(os.getenv("ADHERENCE_AUTO_RETRY_MAX", "2") or "2")
+                _max_retries = max(0, min(_max_retries, 5))
+                if _max_retries > 0:
+                    _retry_result = await render_retry_service.evaluate_and_select_best(
+                        shot_id=job.shot_id,
+                        project_id=job.project_id,
+                        original_slots=_expected_slots,
+                        max_attempts=_max_retries,
+                        submission_strategy="combined_reorder_and_fresh_seeds",
+                        source_job_id=job.id,
+                        cascade_depth=1,
+                    )
+                    job.metadata = dict(job.metadata or {})
+                    job.metadata["adherence_retry_cascade"] = {
+                        "triggered": True,
+                        "max_retries": _max_retries,
+                        "source_job_id": job.id,
+                        "jobs_submitted": _retry_result.get("jobs_submitted", []),
+                        "mismatch_description": _sc_score_json.get("mismatch_description", ""),
+                    }
+                    _persist_job(job)
+                    logger.info(
+                        "ADHERENCE_RETRY_CASCADE_TRIGGERED | job=%s | shot=%s | retries=%d | failed_slots=%s",
+                        job.id,
+                        job.shot_id,
+                        _max_retries,
+                        _failed_slots,
+                    )
+        except Exception as _retry_exc:
+            logger.debug(
+                "Adherence retry cascade skipped for job %s: %s",
+                job.id, _retry_exc,
+            )
 
         logger.info(
             "RENDER_QUALITY_CHECK_COMPLETE | job=%s | project=%s | shot=%s",
@@ -286,6 +367,70 @@ class RenderService:
         self._batches: dict[str, dict] = {}
         self._initialize_providers()
 
+    def _build_reference_consistency_payload(self, project_id: str) -> ConsistencyPayload | None:
+        """Build an identity-lock payload from confirmed project reference assets."""
+        try:
+            storage = _storage
+            if storage is None:
+                from app.data.storage import get_storage
+
+                storage = get_storage("sqlite")
+            if storage is None or not hasattr(storage, "list_reference_assets"):
+                return None
+            raw_refs = storage.list_reference_assets(project_id=project_id, limit=12)
+        except Exception as exc:
+            logger.debug("Reference consistency lookup skipped for %s: %s", project_id, exc)
+            return None
+
+        refs: list[ReferenceAsset] = []
+        weights: dict[str, float] = {}
+        fallback_text: dict[str, str] = {}
+        kind_weights = {
+            "character_full": 1.0,
+            "character_face": 0.55,
+            "environment": 0.25,
+            "style": 0.15,
+        }
+        for raw in raw_refs:
+            if not isinstance(raw, dict):
+                continue
+            ref_id = str(raw.get("ref_id") or "").strip()
+            kind = str(raw.get("kind") or "").strip()
+            image_url = str(raw.get("image_url") or "").strip()
+            if not ref_id or not image_url or kind not in kind_weights:
+                continue
+            try:
+                ref = ReferenceAsset(
+                    ref_id=ref_id,
+                    kind=kind,  # type: ignore[arg-type]
+                    image_url=image_url,
+                    embedding=raw.get("embedding") if isinstance(raw.get("embedding"), list) else None,
+                    source_shot_id=raw.get("source_shot_id"),
+                    project_id=project_id,
+                )
+            except Exception:
+                continue
+            refs.append(ref)
+            weights[ref.ref_id] = kind_weights[kind]
+            if kind == "character_face":
+                fallback_text[ref.ref_id] = "preserve facial identity from confirmed character reference"
+            elif kind == "character_full":
+                fallback_text[ref.ref_id] = "preserve full-body character silhouette and wardrobe continuity"
+            elif kind == "environment":
+                fallback_text[ref.ref_id] = "preserve environment layout, lighting, and spatial continuity"
+            elif kind == "style":
+                fallback_text[ref.ref_id] = "preserve project visual style reference"
+
+        if not refs:
+            return None
+        return ConsistencyPayload(
+            project_id=project_id,
+            refs=refs,
+            weights=weights,
+            mode="identity_lock",
+            fallback_text=fallback_text,
+        )
+
     def _initialize_providers(self):
         """Initialize default provider configurations"""
         runway_api_key = (
@@ -318,6 +463,29 @@ class RenderService:
             api_endpoint=runway_api_endpoint or "https://api.dev.runwayml.com",
             requires=["api_key"],
             capabilities=["video_generation", "image_to_video"],
+        )
+
+        try:
+            dashscope_config = get_dashscope_config()
+            dashscope_api_key = dashscope_config.api_key
+            dashscope_api_endpoint = dashscope_config.workspace_base_url or dashscope_config.native_api_base_url
+        except DashScopeConfigError:
+            dashscope_api_key = ""
+            dashscope_region = os.getenv("DASHSCOPE_REGION", "intl").strip().lower()
+            dashscope_api_endpoint = (
+                "https://dashscope.aliyuncs.com/api/v1"
+                if dashscope_region == "beijing"
+                else "https://dashscope-intl.aliyuncs.com/api/v1"
+            )
+        self._provider_configs["happyhorse"] = ProviderConfig(
+            provider_id="happyhorse",
+            name="HappyHorse",
+            enabled=True,
+            is_simulated=False,
+            api_key=dashscope_api_key or None,
+            api_endpoint=dashscope_api_endpoint,
+            requires=["api_key"],
+            capabilities=["video_generation", "text_to_video"],
         )
 
         # Simulated provider remains available fallback.
@@ -465,9 +633,11 @@ class RenderService:
         return config
 
     def get_default_provider(self) -> str:
-        """Get the default provider based on available API keys"""
-        import os
-        return "runway" if (os.getenv("RUNWAY_API_KEY") or os.getenv("RUNWAYML_API_SECRET")) else "local"
+        """Get the env-selected default render provider."""
+        selected = os.getenv("RENDER_VIDEO_PROVIDER", get_settings().render_video_provider or "happyhorse").strip().lower()
+        if selected in self._provider_configs:
+            return selected
+        return "happyhorse"
 
     async def create_and_submit_job(
         self,
@@ -547,11 +717,7 @@ class RenderService:
                     if isinstance(_overrides, dict):
                         _override_mode = _overrides.get(_scene_id_for_override)
                         if _override_mode == "hosted_api":
-                            # Use the first non-simulated enabled provider.
-                            for _pid, _cfg in self._provider_configs.items():
-                                if _cfg.enabled and not _cfg.is_simulated:
-                                    provider = _pid
-                                    break
+                            provider = self.get_default_provider()
                         elif _override_mode in ("simulated", "mock_success"):
                             provider = "simulated"
             except Exception:
@@ -580,6 +746,7 @@ class RenderService:
             or "Generate scene" in prompt
             or "Cinematic quality" in prompt
         )
+        _prompt_slots_for_adherence: dict[str, str] | None = None
         
         if _is_generic:
             try:
@@ -747,6 +914,11 @@ class RenderService:
                                 _reassembled = reassemble_prompt_from_slots(_slotted["slots"])
                                 if _reassembled != "Cinematic shot. Film quality.":
                                     prompt = _reassembled
+                            _prompt_slots_for_adherence = {
+                                str(_slot_name): str(_slot_value or "")
+                                for _slot_name, _slot_value in (_slotted.get("slots") or {}).items()
+                                if _slot_name != "reserve"
+                            }
 
                             logger.info(
                                 "RENDER_PROMPT_FROM_SCENE | scene=%s | content_length=%d | action_length=%d | prompt_length=%d | slots=%s",
@@ -759,6 +931,19 @@ class RenderService:
             except Exception as _exc:
                 logger.warning("Failed to fetch scene description for prompt: %s", _exc)
 
+        _consistency_payload = self._build_reference_consistency_payload(project_id)
+        if _consistency_payload is not None:
+            logger.info(
+                "REFERENCE_CONSISTENCY_ATTACHED | project=%s | shot=%s | refs=%d",
+                project_id,
+                shot_id,
+                len(_consistency_payload.refs),
+            )
+
+        _input_parameters = dict(parameters or {})
+        if _prompt_slots_for_adherence:
+            _input_parameters["prompt_slots"] = _prompt_slots_for_adherence
+
         job = RenderJobModel(
             id=job_id,
             project_id=project_id,
@@ -769,7 +954,8 @@ class RenderService:
                 shot_id=shot_id,
                 prompt=prompt,
                 referenceAssets=reference_assets or [],
-                parameters=parameters or {}
+                parameters=_input_parameters,
+                consistency_payload=_consistency_payload,
             ),
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat()
@@ -782,7 +968,11 @@ class RenderService:
         # correct character appearance.  This mirrors the storyboard/Pollinations
         # fix but for the video render path.  Generic prompts are already
         # handled by the block above; this covers the Previs Room render path.
-        if not _is_generic:
+        _skip_character_injection = bool(
+            isinstance(parameters, dict)
+            and parameters.get("skip_character_injection")
+        )
+        if not _is_generic and not _skip_character_injection:
             try:
                 from app.data.storage import get_storage as _get_storage
                 _active_storage = _get_storage()
@@ -873,6 +1063,113 @@ class RenderService:
                             )
             except Exception as _exc:
                 logger.debug("Character injection for non-generic prompt skipped: %s", _exc)
+
+        if (
+            isinstance(parameters, dict)
+            and parameters.get("structured_prompt")
+            and not job.input_payload.parameters.get("prompt_slots")
+        ):
+            try:
+                from app.services.shot_prompt_builder import build_slotted_prompt
+
+                _current_prompt = job.input_payload.prompt or ""
+                _action_text = _current_prompt
+                _char_visuals = ""
+                if "Characters:" in _current_prompt:
+                    _action_text, _char_visuals = _current_prompt.split("Characters:", 1)
+                    _action_text = _action_text.strip()
+                    _char_visuals = _char_visuals.strip()
+
+                _scene_for_slots: dict[str, Any] = {}
+                try:
+                    _project = project_store.get_project(project_id)
+                    if isinstance(_project, dict):
+                        _summary = _project.get("execution_summary") or {}
+                        _scenes = _summary.get("scenes") or []
+                        _scene_for_slots = next(
+                            (
+                                s for s in _scenes
+                                if isinstance(s, dict)
+                                and s.get("scene_id") == _scene_id
+                            ),
+                            {},
+                        )
+                except Exception:
+                    _scene_for_slots = {}
+
+                _shot_number = 1
+                try:
+                    _shot_suffix = shot_id.rsplit("_shot_", 1)
+                    if len(_shot_suffix) == 2:
+                        _shot_number = int(_shot_suffix[1])
+                except (ValueError, IndexError):
+                    pass
+
+                _environment = (
+                    str(_scene_for_slots.get("location") or "").strip()
+                    or str(_scene_for_slots.get("heading") or "").strip()
+                )
+                _lighting = " ".join(
+                    p for p in [
+                        str(_scene_for_slots.get("time_of_day") or "").strip(),
+                        str(_scene_for_slots.get("emotional_tone") or "").strip(),
+                    ]
+                    if p
+                )
+                _slotted = build_slotted_prompt(
+                    scene_data=_scene_for_slots,
+                    shot_number=_shot_number,
+                    character_visual_canon=_char_visuals,
+                    action_text=_action_text,
+                    environment_motifs=_environment,
+                    camera_direction="",
+                    lighting_direction=_lighting,
+                )
+                from app.services.standing_corrections_service import (
+                    standing_corrections_service as _sc_svc,
+                )
+                from app.services.shot_prompt_builder import (
+                    SLOT_BUDGETS, _truncate_to_budget,
+                    reassemble_prompt_from_slots, _SLOT_ASSEMBLY_ORDER,
+                )
+                from app.services.script_parser import sanitize_render_slot
+
+                _sc_applied = _sc_svc.inject_into_slots(
+                    project_id=project_id,
+                    slots=_slotted["slots"],
+                    shot_context={
+                        "shot_id": shot_id,
+                        "shot_number": _shot_number,
+                    },
+                    job_id=job_id,
+                )
+                if _sc_applied:
+                    for _slot_name in _SLOT_ASSEMBLY_ORDER:
+                        _slot_val = _slotted["slots"].get(_slot_name, "")
+                        if _slot_val:
+                            _slot_val = sanitize_render_slot(_slot_name, _slot_val)
+                            _slotted["slots"][_slot_name] = _truncate_to_budget(
+                                _slot_val, SLOT_BUDGETS[_slot_name]
+                            )
+
+                job.input_payload.prompt = _slotted["prompt"]
+                if _sc_applied:
+                    _reassembled = reassemble_prompt_from_slots(_slotted["slots"])
+                    if _reassembled != "Cinematic shot. Film quality.":
+                        job.input_payload.prompt = _reassembled
+                job.input_payload.parameters["prompt_slots"] = {
+                    str(_slot): str(_value or "")
+                    for _slot, _value in (_slotted.get("slots") or {}).items()
+                    if _slot != "reserve"
+                }
+                logger.info(
+                    "STRUCTURED_PREVIS_PROMPT_APPLIED | job=%s | scene=%s | slots=%s",
+                    job_id,
+                    _scene_id,
+                    {k: len(v) for k, v in job.input_payload.parameters["prompt_slots"].items()},
+                )
+            except Exception as _exc:
+                logger.debug("Structured prompt assembly skipped for job %s: %s", job_id, _exc)
 
         # ── Continuity context injection ──────────────────────────────────────
         # Derive scene_id from shot_id (e.g. "scene_001_shot_001" → "scene_001").
@@ -994,6 +1291,7 @@ class RenderService:
                 logger.warning(f"Provider {job.provider} not found, falling back to simulated")
 
             adapter = get_adapter(job.provider, config)
+            previous_status = job.status
             logger.info(f"Submitting job {job_id} to provider {job.provider}")
 
             # ── Seed locking: generate on first render, reuse on subsequent ──
@@ -1035,6 +1333,10 @@ class RenderService:
             self._jobs[job_id] = submitted_job
             _persist_job(submitted_job)
             _log_audit("submit_job", "render_job", job_id, details=f"provider={submitted_job.provider}")
+
+            if submitted_job.status == "complete" and previous_status != "complete":
+                await _run_continuity_review(submitted_job)
+                await _run_render_quality_check(submitted_job)
             
             await _notify_update(job_id, submitted_job.model_dump())
             return submitted_job

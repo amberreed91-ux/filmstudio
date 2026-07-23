@@ -427,3 +427,60 @@ class TestPathBGracefulFallback:
             f"Fallback should include raw vps {CHAR_VPS!r}.\n"
             f"Full: {outgoing!r}"
         )
+
+
+class TestPathBFullAdherencePayload:
+    """Exercise the actual create_job payload with staging + structured slots
+    + standing corrections + reference consistency active together."""
+
+    def test_multi_character_structured_prompt_carries_all_live_adherence_inputs(
+        self,
+        isolated_render,
+    ):
+        from app.models.standing_corrections import StandingCorrection
+
+        db, project_id, service = isolated_render
+
+        maya = db.get_character_by_name(project_id, CHAR_NAME)
+        dre = db.get_character_by_name(project_id, DRE_NAME)
+        _seed_scene_staging(db, maya["id"], "scene_002")
+        _seed_scene_staging(
+            db,
+            dre["id"],
+            "scene_002",
+            staging_prompt="cannot meet Maya's eyes",
+        )
+        db.save_reference_asset({
+            "ref_id": "ref_maya_full",
+            "project_id": project_id,
+            "kind": "character_full",
+            "image_url": "https://example.test/maya-reference.png",
+            "source_shot_id": "scene_001_shot_001",
+            "created_at": "2026-07-23T00:00:00",
+        })
+        db.save_standing_correction(StandingCorrection(
+            correction_id="sc_path_b_camera",
+            project_id=project_id,
+            slot="camera",
+            trigger_json={"shot_id": "scene_002_shot_001"},
+            injection_text="Keep both characters readable in the frame",
+        ).model_dump(mode="json"))
+
+        job = service.create_job(
+            project_id=project_id,
+            shot_id="scene_002_shot_001",
+            prompt=NON_GENERIC_PROMPT,
+            parameters={"structured_prompt": True},
+        )
+
+        outgoing = job.input_payload.prompt
+        slots = job.input_payload.parameters["prompt_slots"]
+
+        assert STAGING_NOTE in outgoing
+        assert "cannot meet Maya's eyes" in outgoing
+        assert CHAR_NAME in outgoing
+        assert DRE_NAME in outgoing
+        assert "Keep both characters readable in the frame" in outgoing
+        assert "Keep both characters readable in the frame" in slots["camera"]
+        assert job.input_payload.consistency_payload is not None
+        assert job.input_payload.consistency_payload.refs[0].ref_id == "ref_maya_full"

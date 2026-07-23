@@ -43,6 +43,28 @@ def get_scene_intelligence(scene_id: str):
 def build_scene_animation_prompt(scene_id: str):
     record = scene_intelligence_store.get_record(scene_id)
     if record is None:
+        from app.services.project_store import project_store
+
+        projects = project_store.list_projects()
+        for proj in projects:
+            scenes = (proj.get("execution_summary") or {}).get("scenes") or []
+            scenes += (proj.get("scenes") or [])
+            for sc in scenes:
+                if isinstance(sc, dict) and sc.get("scene_id") == scene_id:
+                    record = {
+                        "scene_id": scene_id,
+                        "film_title": proj.get("title") or "Untitled",
+                        "scene_name": sc.get("name") or sc.get("scene_name") or scene_id,
+                        "intent": sc.get("intent") or "",
+                        "emotional_beat_arc": [],
+                        "camera_logic": [],
+                        "pacing_curve": [],
+                        "director_notes": sc.get("director_notes") or "",
+                    }
+                    break
+            if record is not None:
+                break
+    if record is None:
         raise HTTPException(status_code=404, detail="Scene intelligence record not found")
     return animation_prompt_builder_service.build_payload(record)
 

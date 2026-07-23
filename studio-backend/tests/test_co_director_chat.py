@@ -199,3 +199,35 @@ class TestCoDirectorChat:
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         data = response.json()
         assert len(data["reply"]) > 0
+
+    def test_writer_route_sends_real_scene_text_and_clear_classification(self):
+        """The HTTP request path includes canonical screenplay text, not only counts."""
+        with patch(
+            "app.routes.co_director_chat._call_llm",
+            new_callable=AsyncMock,
+        ) as mock_llm:
+            mock_llm.return_value = (
+                "Maya's Chicago walk can carry more emotional consequence if the "
+                "families and Lake Michigan sunset remain inviting before her voice-over "
+                "names the fire. That contrast makes the rooftop choice feel inherited "
+                "from a specific lost city rather than stated as a general survival theme."
+            )
+            response = client.post(
+                "/api/f51/studio/projects/project_3dba9330f43a/co-director/chat",
+                json={
+                    "specialist": "writer",
+                    "message": "How can I make scenes more emotionally triggering?",
+                    "context": "current_scene",
+                    "scene_id": "scene_001",
+                    "system_prompt": "You are the Writer.",
+                },
+            )
+
+        assert response.status_code == 200
+        system_prompt, user_message = mock_llm.await_args.args
+        assert "DOWNTOWN CHICAGO" in system_prompt
+        assert "People think the end of the world is fire" in system_prompt
+        assert "Request classification: CLEAR" in system_prompt
+        assert "How can I make scenes more emotionally triggering?" in user_message
+        assert response.json()["scene_excerpts_used"] == 1
+        assert response.json()["request_classification"] == "CLEAR"

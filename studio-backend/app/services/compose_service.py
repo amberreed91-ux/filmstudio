@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import re
 import subprocess
 import tempfile
 from datetime import datetime
@@ -12,6 +11,10 @@ import httpx
 
 from app.data.storage import get_storage
 from app.models import RenderJobModel
+from app.utils.helpers import (
+    derive_scene_id_from_shot_id,
+    derive_shot_number_from_shot_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,16 +44,23 @@ def check_ffmpeg() -> None:
 
 
 def _extract_shot_number(shot_id: str) -> int:
-    """Extract numeric shot number from a shot_id like 'scene_001_shot_003'."""
-    match = re.search(r"_shot_(\d+)$", shot_id)
-    if match:
-        return int(match[1])
-    return 0
+    """Extract shot order from manual and auto-split shot IDs."""
+    return derive_shot_number_from_shot_id(shot_id)
 
 
 def _scene_id_from_shot_id(shot_id: str) -> str:
-    """Extract scene ID from a shot_id like 'scene_001_shot_003'."""
-    return shot_id.split("_shot_")[0] if "_shot_" in shot_id else ""
+    """Extract scene ID from manual and auto-split shot IDs."""
+    return derive_scene_id_from_shot_id(shot_id)
+
+
+async def compose_scene_for_delivery(project_id: str, scene_id: str) -> dict:
+    """Canonical scene delivery path: per-shot CosyVoice bake then assembly."""
+    from app.services.scene_assembly_service import scene_assembly_service
+
+    return await scene_assembly_service.assemble_completed_scene(
+        project_id=project_id,
+        scene_id=scene_id,
+    )
 
 
 async def compose_scene(project_id: str, scene_id: str) -> dict:

@@ -11,6 +11,7 @@ import {
 import {
   listElevenLabsVoices,
   setCharacterVoice,
+  type CastingVoiceProvider,
   type ElevenLabsVoice,
 } from '../lib/studioApi'
 
@@ -22,12 +23,46 @@ type VoicePickerProps = {
   characterName: string
   currentVoiceId: string | null
   currentVoiceName: string | null
-  onAssigned: (voiceId: string, voiceName: string) => void
+  currentProvider?: CastingVoiceProvider | null
+  currentSourceType?: string | null
+  currentStylePrompt?: string | null
+  onAssigned: (
+    voiceId: string,
+    voiceName: string,
+    provider: CastingVoiceProvider,
+    sourceType?: string,
+    stylePrompt?: string,
+  ) => void
 }
 
 const GENDER_OPTIONS = ['', 'male', 'female']
 const AGE_OPTIONS = ['', 'young', 'middle aged', 'old']
 const ACCENT_OPTIONS = ['', 'american', 'british', 'african', 'indian', 'australian']
+const PROVIDER_OPTIONS: Array<{ id: CastingVoiceProvider; label: string }> = [
+  { id: 'cosyvoice', label: 'CosyVoice' },
+  { id: 'elevenlabs', label: 'ElevenLabs' },
+  { id: 'fish_audio', label: 'Fish Audio' },
+]
+const COSYVOICE_OPTIONS = [
+  {
+    voice_id: 'Cherry',
+    name: 'Cherry',
+    source_type: 'system',
+    description: 'Qwen instruct system voice, suitable for natural dialogue tests.',
+  },
+  {
+    voice_id: 'Chelsie',
+    name: 'Chelsie',
+    source_type: 'system',
+    description: 'Qwen instruct system voice with a brighter conversational read.',
+  },
+  {
+    voice_id: 'Ethan',
+    name: 'Ethan',
+    source_type: 'system',
+    description: 'Qwen instruct system voice for grounded male dialogue.',
+  },
+]
 
 export default function VoicePicker({
   isOpen,
@@ -37,11 +72,15 @@ export default function VoicePicker({
   characterName,
   currentVoiceId,
   currentVoiceName,
+  currentProvider,
+  currentSourceType,
+  currentStylePrompt,
   onAssigned,
 }: VoicePickerProps) {
   const [voices, setVoices] = useState<ElevenLabsVoice[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [provider, setProvider] = useState<CastingVoiceProvider>(currentProvider || 'cosyvoice')
   const [searchQuery, setSearchQuery] = useState('')
   const [genderFilter, setGenderFilter] = useState('')
   const [ageFilter, setAgeFilter] = useState('')
@@ -49,6 +88,9 @@ export default function VoicePicker({
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [assignedId, setAssignedId] = useState<string | null>(currentVoiceId)
+  const [manualVoiceId, setManualVoiceId] = useState('')
+  const [manualVoiceName, setManualVoiceName] = useState('')
+  const [manualStylePrompt, setManualStylePrompt] = useState('')
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -72,9 +114,21 @@ export default function VoicePicker({
   useEffect(() => {
     if (isOpen) {
       setAssignedId(currentVoiceId)
+      setProvider(currentProvider || 'cosyvoice')
+      setManualVoiceId(currentVoiceId || '')
+      setManualVoiceName(currentVoiceName || '')
+      setManualStylePrompt(currentStylePrompt || '')
+      if ((currentProvider || 'cosyvoice') === 'elevenlabs') {
+        void loadVoices()
+      }
+    }
+  }, [isOpen, currentProvider, currentStylePrompt, currentVoiceId, currentVoiceName, loadVoices])
+
+  useEffect(() => {
+    if (isOpen && provider === 'elevenlabs' && voices.length === 0) {
       void loadVoices()
     }
-  }, [isOpen, currentVoiceId, loadVoices])
+  }, [isOpen, loadVoices, provider, voices.length])
 
   useEffect(() => {
     return () => {
@@ -108,8 +162,7 @@ export default function VoicePicker({
     setPlayingId(voice.voice_id)
   }
 
-  const handleAssign = async (voice: ElevenLabsVoice) => {
-    console.log('ASSIGN clicked', voice.voice_id, characterId)
+  const handleAssignElevenLabs = async (voice: ElevenLabsVoice) => {
     setAssigningId(voice.voice_id)
     setError('')
     try {
@@ -118,12 +171,51 @@ export default function VoicePicker({
         characterId,
         voice.voice_id,
         voice.name,
+        'elevenlabs',
+        'library',
       )
       if (assignError) {
         setError(assignError)
       } else {
         setAssignedId(voice.voice_id)
-        onAssigned(voice.voice_id, voice.name)
+        onAssigned(voice.voice_id, voice.name, 'elevenlabs', 'library')
+      }
+    } catch {
+      setError('Failed to assign voice')
+    } finally {
+      setAssigningId(null)
+    }
+  }
+
+  const handleAssignProviderVoice = async (
+    voiceId: string,
+    voiceName: string,
+    sourceType: string,
+    stylePrompt?: string,
+  ) => {
+    const cleanVoiceId = voiceId.trim()
+    const cleanVoiceName = voiceName.trim() || cleanVoiceId
+    if (!cleanVoiceId) {
+      setError('Enter a voice ID before assigning')
+      return
+    }
+    setAssigningId(cleanVoiceId)
+    setError('')
+    try {
+      const { error: assignError } = await setCharacterVoice(
+        projectId,
+        characterId,
+        cleanVoiceId,
+        cleanVoiceName,
+        provider,
+        sourceType,
+        stylePrompt,
+      )
+      if (assignError) {
+        setError(assignError)
+      } else {
+        setAssignedId(cleanVoiceId)
+        onAssigned(cleanVoiceId, cleanVoiceName, provider, sourceType, stylePrompt)
       }
     } catch {
       setError('Failed to assign voice')
@@ -141,12 +233,13 @@ export default function VoicePicker({
         characterId,
         '',
         '',
+        currentProvider || provider,
       )
       if (clearError) {
         setError(clearError)
       } else {
         setAssignedId(null)
-        onAssigned('', '')
+        onAssigned('', '', currentProvider || provider)
       }
     } catch {
       setError('Failed to clear voice')
@@ -203,7 +296,8 @@ export default function VoicePicker({
             <div className="flex items-center gap-2">
               <Volume2 size={14} className="text-cyan-300" />
               <span className="text-xs text-cyan-100">
-                Assigned: <span className="font-semibold">{currentVoiceName || voices.find(v => v.voice_id === assignedId)?.name || 'Unknown'}</span>
+                Assigned: <span className="font-semibold">{currentVoiceName || voices.find(v => v.voice_id === assignedId)?.name || assignedId}</span>
+                <span className="ml-2 text-cyan-200/70">{currentProvider || provider}</span>
               </span>
             </div>
             <button
@@ -217,8 +311,131 @@ export default function VoicePicker({
           </div>
         )}
 
+        <div className="mb-4 flex rounded-lg border border-zinc-800 bg-zinc-950/70 p-1">
+          {PROVIDER_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => {
+                setProvider(option.id)
+                setError('')
+              }}
+              className={`flex-1 rounded-md px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors ${
+                provider === option.id
+                  ? 'bg-cyan-500/18 text-cyan-100'
+                  : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {provider === 'cosyvoice' && (
+          <div className="mb-4 space-y-2">
+            {COSYVOICE_OPTIONS.map((voice) => {
+              const isAssigned = assignedId === voice.voice_id && (currentProvider || provider) === 'cosyvoice'
+              const isAssigning = assigningId === voice.voice_id
+              return (
+                <div
+                  key={voice.voice_id}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${
+                    isAssigned
+                      ? 'border-cyan-400/40 bg-cyan-500/8'
+                      : 'border-zinc-800 bg-zinc-900/40'
+                  }`}
+                >
+                  <div>
+                    <div className="text-sm font-medium text-zinc-100">{voice.name}</div>
+                    <div className="mt-0.5 text-[11px] text-zinc-500">{voice.description}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAssignProviderVoice(voice.voice_id, voice.name, voice.source_type)}
+                    disabled={isAssigning}
+                    className="flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200 disabled:opacity-50"
+                  >
+                    {isAssigned ? <Check size={12} /> : isAssigning ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                    {isAssigned ? 'Assigned' : 'Assign'}
+                  </button>
+                </div>
+              )
+            })}
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/35 p-3">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+                Cloned or Designed Voice
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  type="text"
+                  value={manualVoiceId}
+                  onChange={(e) => setManualVoiceId(e.target.value)}
+                  placeholder="Voice ID"
+                  className="rounded-md border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-cyan-400/50"
+                />
+                <input
+                  type="text"
+                  value={manualVoiceName}
+                  onChange={(e) => setManualVoiceName(e.target.value)}
+                  placeholder="Display name"
+                  className="rounded-md border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-cyan-400/50"
+                />
+              </div>
+              <textarea
+                value={manualStylePrompt}
+                onChange={(e) => setManualStylePrompt(e.target.value)}
+                placeholder="Voice style prompt"
+                rows={2}
+                className="mt-2 w-full resize-none rounded-md border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-cyan-400/50"
+              />
+              <button
+                type="button"
+                onClick={() => handleAssignProviderVoice(manualVoiceId, manualVoiceName, currentSourceType || 'voice_design', manualStylePrompt)}
+                disabled={assigningId === manualVoiceId}
+                className="mt-2 flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/12 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200 disabled:opacity-50"
+              >
+                {assigningId === manualVoiceId ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                Assign Voice ID
+              </button>
+            </div>
+          </div>
+        )}
+
+        {provider === 'fish_audio' && (
+          <div className="mb-4 rounded-lg border border-zinc-800 bg-zinc-900/35 p-3">
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+              Fish Audio Candidate
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                type="text"
+                value={manualVoiceId}
+                onChange={(e) => setManualVoiceId(e.target.value)}
+                placeholder="Fish reference ID"
+                className="rounded-md border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-cyan-400/50"
+              />
+              <input
+                type="text"
+                value={manualVoiceName}
+                onChange={(e) => setManualVoiceName(e.target.value)}
+                placeholder="Display name"
+                className="rounded-md border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-cyan-400/50"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => handleAssignProviderVoice(manualVoiceId, manualVoiceName, 'clone')}
+              disabled={assigningId === manualVoiceId}
+              className="mt-2 flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/12 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200 disabled:opacity-50"
+            >
+              {assigningId === manualVoiceId ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              Assign Candidate
+            </button>
+          </div>
+        )}
+
         {/* Search + Filters */}
-        <div className="mb-3 space-y-2">
+        {provider === 'elevenlabs' && <div className="mb-3 space-y-2">
           <div className="relative">
             <Search
               size={14}
@@ -270,7 +487,7 @@ export default function VoicePicker({
               {filtered.length} voice{filtered.length !== 1 ? 's' : ''}
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Error */}
         {error && (
@@ -280,7 +497,7 @@ export default function VoicePicker({
         )}
 
         {/* Voice list */}
-        <div className="max-h-[400px] space-y-1.5 overflow-y-auto pr-1">
+        {provider === 'elevenlabs' && <div className="max-h-[400px] space-y-1.5 overflow-y-auto pr-1">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 size={20} className="animate-spin text-cyan-300" />
@@ -361,11 +578,11 @@ export default function VoicePicker({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => handleAssign(voice)}
+                      onClick={() => handleAssignElevenLabs(voice)}
                       disabled={isAssigning}
                       className="flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200 transition-all hover:scale-[1.02] disabled:opacity-50"
                     >
-                      {isAssigning === voice.voice_id ? (
+                      {isAssigning ? (
                         <Loader2 size={12} className="animate-spin" />
                       ) : (
                         <Check size={12} />
@@ -377,7 +594,7 @@ export default function VoicePicker({
               )
             })
           )}
-        </div>
+        </div>}
 
         {/* Footer */}
         <div className="mt-4 flex justify-end">

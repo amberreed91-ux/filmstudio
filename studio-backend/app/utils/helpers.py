@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 #   * Old (manual):     scene_002_shot_001
 #   * New (auto-split): shot_scene_002_001
 _SCENE_ID_RE = re.compile(r"scene_\d+")
+_SHOT_NUMBER_RE = re.compile(r"_(\d+)$")
 
 
 def derive_scene_id_from_shot_id(shot_id: str) -> str:
@@ -29,6 +30,14 @@ def derive_scene_id_from_shot_id(shot_id: str) -> str:
     if match:
         return match.group(0)
     return "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
+
+
+def derive_shot_number_from_shot_id(shot_id: str) -> int:
+    """Return the trailing shot ordinal for manual and auto-split IDs."""
+    if not shot_id:
+        return 0
+    match = _SHOT_NUMBER_RE.search(shot_id)
+    return int(match.group(1)) if match else 0
 
 
 def as_non_empty_string(value: Any) -> str:

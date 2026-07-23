@@ -210,6 +210,42 @@ class TestSetCharacterVoice:
         # Verify persistence
         retrieved = temp_db.get_character_voice_by_name("proj-1", "MARA")
         assert retrieved == "v789"
+        casting = temp_db.get_character_voice_casting_by_name("proj-1", "MARA", "elevenlabs")
+        assert casting["voice_id"] == "v789"
+        assert casting["voice_provider"] == "elevenlabs"
+
+    def test_set_cosyvoice_casting_assignment(self, temp_db, client):
+        """Setting a CosyVoice casting assignment persists provider-aware fields."""
+        created = temp_db.save_character("proj-1", "DRE", {})
+        response = client.put(
+            f"/api/f51/studio/projects/proj-1/characters/{created['id']}/voice",
+            json={
+                "provider": "cosyvoice",
+                "voice_id": "cosyvoice-dre-clone-001",
+                "voice_name": "Dre clone",
+                "source_type": "clone",
+                "style_prompt": "warm, guarded Chicago cadence",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["voice_provider"] == "cosyvoice"
+        assert body["voice_id"] == "cosyvoice-dre-clone-001"
+        assert body["voice_source_type"] == "clone"
+        assert body["voice_style_prompt"] == "warm, guarded Chicago cadence"
+        assert body["elevenlabs_voice_id"] is None
+
+    def test_rejects_unknown_casting_provider(self, temp_db, client):
+        """Unknown voice provider is rejected before persistence."""
+        created = temp_db.save_character("proj-1", "DRE", {})
+        response = client.put(
+            f"/api/f51/studio/projects/proj-1/characters/{created['id']}/voice",
+            json={"provider": "unknown", "voice_id": "v1"},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["error_type"] == "validation_error"
 
     def test_update_voice_assignment(self, temp_db, client):
         """Updating an existing voice assignment replaces the old value."""

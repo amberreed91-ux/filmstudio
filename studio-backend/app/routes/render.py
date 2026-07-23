@@ -31,6 +31,12 @@ class ShotSeedPayload(BaseModel):
     seed: Optional[int] = None
 
 
+class AdherenceRetryRequest(BaseModel):
+    """Explicit active adherence retry request."""
+    max_attempts: int = Field(default=3, ge=1, le=5)
+    submission_strategy: str = "combined_reorder_and_fresh_seeds"
+
+
 # Provider management
 @router.get("/providers")
 def list_providers():
@@ -144,6 +150,35 @@ async def retry_render_job(job_id: str):
     """Retry a failed render job"""
     job = await render_service.retry_job(job_id)
     return job
+
+
+@router.post("/jobs/{job_id}/adherence-retry")
+async def retry_render_job_for_adherence(
+    job_id: str,
+    payload: AdherenceRetryRequest = AdherenceRetryRequest(),
+):
+    """Run the explicit prompt-adherence retry loop for a completed render."""
+    job = render_service.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    parameters = job.input_payload.parameters if job.input_payload else {}
+    slots = parameters.get("prompt_slots") if isinstance(parameters, dict) else None
+    if not isinstance(slots, dict) or not slots:
+        raise HTTPException(
+            status_code=422,
+            detail="Render job does not have structured prompt_slots for adherence retry",
+        )
+
+    from app.services.render_retry_service import render_retry_service
+
+    return await render_retry_service.evaluate_and_select_best(
+        shot_id=job.shot_id,
+        project_id=job.project_id,
+        original_slots={str(key): str(value or "") for key, value in slots.items()},
+        max_attempts=payload.max_attempts,
+        submission_strategy=payload.submission_strategy,
+    )
 
 
 @router.post("/jobs/{job_id}/reconcile")
@@ -429,5 +464,4 @@ def update_shot_seed(project_id: str, scene_id: str, shot_id: str, payload: Shot
         "seed": result["seed"],
         "seed_locked": bool(result["seed_locked"]),
     }
-
 

@@ -340,6 +340,52 @@ def _truncate_to_budget(text: str, budget: int) -> str:
     return text[:budget - 3] + "..."
 
 
+def _compress_character_segment(segment: str, budget: int) -> str:
+    """Compress one character segment while preserving shot-specific staging."""
+    segment = segment.strip()
+    if len(segment) <= budget:
+        return segment
+
+    marker = "In this shot:"
+    if marker in segment:
+        name = segment.split(":", 1)[0].strip()
+        staging = segment.split(marker, 1)[1].strip()
+        if name and staging:
+            return _truncate_to_budget(f"{name}: {marker} {staging}", budget)
+
+    return _truncate_to_budget(segment, budget)
+
+
+def _fit_character_state_to_budget(text: str, budget: int) -> str:
+    """Fit character_state without allowing early cast members to erase later ones."""
+    if len(text) <= budget:
+        return text
+
+    segments = [segment.strip() for segment in text.split(";") if segment.strip()]
+    if len(segments) <= 1:
+        return _truncate_to_budget(text, budget)
+
+    separator_len = 2 * (len(segments) - 1)
+    segment_budget = max(24, (budget - separator_len) // len(segments))
+    compressed = [
+        _compress_character_segment(segment, segment_budget)
+        for segment in segments
+    ]
+    joined = "; ".join(compressed)
+    if len(joined) <= budget:
+        return joined
+
+    while len(joined) > budget and segment_budget > 24:
+        segment_budget -= 1
+        compressed = [
+            _compress_character_segment(segment, segment_budget)
+            for segment in segments
+        ]
+        joined = "; ".join(compressed)
+
+    return joined if len(joined) <= budget else _truncate_to_budget(joined, budget)
+
+
 _SLOT_ASSEMBLY_ORDER = (
     "character_state",
     "action",
@@ -409,7 +455,10 @@ def build_slotted_prompt(
     # 1. character_state (140 chars) - visual canon only
     if character_visual_canon:
         sanitized = sanitize_render_slot("character_state", character_visual_canon)
-        slots["character_state"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["character_state"])
+        slots["character_state"] = _fit_character_state_to_budget(
+            sanitized,
+            SLOT_BUDGETS["character_state"],
+        )
     else:
         slots["character_state"] = ""
     
@@ -465,4 +514,3 @@ def build_slotted_prompt(
         "budget_used": budget_used,
         "budget_remaining": budget_remaining,
     }
-

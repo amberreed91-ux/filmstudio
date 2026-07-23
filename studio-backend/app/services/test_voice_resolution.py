@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from app.services import audio_pipeline_service as aps
-from app.services.audio_pipeline_service import _resolve_elevenlabs_voice_id
+from app.services.audio_pipeline_service import _resolve_cosyvoice_voice_id, _resolve_elevenlabs_voice_id
 from app.data.storage import DatabaseStorage
 
 
@@ -193,3 +193,65 @@ class TestStorageVoiceMethods:
         assert updated["elevenlabs_voice_id"] == "v123"
         assert updated["elevenlabs_voice_name"] == "Rachel"
         assert updated["look"] == "New look description"
+
+
+class TestProviderAwareCastingResolution:
+    """Verify Casting assignments feed CosyVoice voice resolution."""
+
+    def test_cosyvoice_casting_assignment_wins_over_env_default(self, temp_storage, monkeypatch):
+        monkeypatch.setenv("COSYVOICE_DEFAULT_VOICE", "Cherry")
+        created = temp_storage.save_character("proj-1", "DRE", {})
+        temp_storage.set_character_voice_casting(
+            created["id"],
+            "proj-1",
+            provider="cosyvoice",
+            voice_id="cosyvoice-dre-clone-001",
+            voice_name="Dre clone",
+            source_type="clone",
+            style_prompt="warm, guarded Chicago cadence",
+        )
+
+        result = _resolve_cosyvoice_voice_id("DRE", project_id="proj-1")
+
+        assert result == "cosyvoice-dre-clone-001"
+
+    def test_cosyvoice_resolution_ignores_other_provider_casting(self, temp_storage, monkeypatch):
+        monkeypatch.setenv("COSYVOICE_DEFAULT_VOICE", "Cherry")
+        created = temp_storage.save_character("proj-1", "DRE", {})
+        temp_storage.set_character_voice_casting(
+            created["id"],
+            "proj-1",
+            provider="fish_audio",
+            voice_id="fish-dre-voice",
+            voice_name="Dre Fish",
+        )
+
+        result = _resolve_cosyvoice_voice_id("DRE", project_id="proj-1")
+
+        assert result == "Cherry"
+
+    def test_set_and_get_provider_aware_casting_by_name(self, temp_storage):
+        created = temp_storage.save_character("proj-1", "MAYA", {})
+        temp_storage.set_character_voice_casting(
+            created["id"],
+            "proj-1",
+            provider="cosyvoice",
+            voice_id="qwen-designed-maya",
+            voice_name="Maya designed voice",
+            source_type="voice_design",
+            style_prompt="steady but carrying dread",
+        )
+
+        casting = temp_storage.get_character_voice_casting_by_name(
+            "proj-1",
+            "MAYA",
+            provider="cosyvoice",
+        )
+
+        assert casting == {
+            "voice_provider": "cosyvoice",
+            "voice_id": "qwen-designed-maya",
+            "voice_name": "Maya designed voice",
+            "voice_source_type": "voice_design",
+            "voice_style_prompt": "steady but carrying dread",
+        }

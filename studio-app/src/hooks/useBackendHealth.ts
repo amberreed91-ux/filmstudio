@@ -4,7 +4,32 @@ import { STUDIO_API_BASE } from '../lib/studioApi'
 const NORMAL_POLL_MS = 8_000
 const RESTART_POLL_MS = 2_000
 const HEALTH_TIMEOUT_MS = 4_000
+const RESTART_TIMEOUT_MS = 45_000
 const ADMIN_TOKEN = 'studio-restart-2026'
+export const BACKEND_RESTART_PATH = '/__studio/backend/restart'
+
+export async function requestBackendRestart(
+  fetchImpl: typeof fetch = fetch,
+): Promise<'supervisor' | 'backend'> {
+  try {
+    const response = await fetchImpl(BACKEND_RESTART_PATH, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Token': ADMIN_TOKEN,
+      },
+    })
+    if (response.ok) return 'supervisor'
+  } catch {
+    // Fall through to deployments that expose only the backend restart route.
+  }
+
+  await fetchImpl(`${STUDIO_API_BASE}/api/f51/studio/admin/restart`, {
+    method: 'POST',
+    headers: { 'X-Admin-Token': ADMIN_TOKEN },
+  })
+  return 'backend'
+}
 
 export interface BackendHealthState {
   /** true when GET /health returns 2xx */
@@ -27,6 +52,8 @@ export function useBackendHealth(): BackendHealthState {
   const [healthy, setHealthy] = useState(true)
   const [restarting, setRestarting] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const restartPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
 
   /* ── single health probe ─────────────────────────────────────────── */
@@ -61,6 +88,10 @@ export function useBackendHealth(): BackendHealthState {
         if (ok) {
           setRestarting((prev) => {
             if (prev) {
+              if (restartTimeoutRef.current) {
+                clearTimeout(restartTimeoutRef.current)
+                restartTimeoutRef.current = null
+              }
               // switch back to normal poll rate
               startPolling(NORMAL_POLL_MS)
               return false
@@ -80,6 +111,8 @@ export function useBackendHealth(): BackendHealthState {
     return () => {
       mountedRef.current = false
       if (intervalRef.current) clearInterval(intervalRef.current)
+      if (restartPollTimerRef.current) clearTimeout(restartPollTimerRef.current)
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -89,21 +122,23 @@ export function useBackendHealth(): BackendHealthState {
     setRestarting(true)
     setHealthy(false)
 
-    // Fire-and-forget the restart POST (server will die immediately)
-    fetch(`${STUDIO_API_BASE}/api/f51/studio/admin/restart`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Token': ADMIN_TOKEN,
-      },
-    }).catch(() => {
-      /* expected — server terminates the connection */
+    // This endpoint belongs to Vite, which remains reachable while the Python
+    // backend is down. A backend cannot restart itself after it has stopped.
+    requestBackendRestart().catch(() => {
+      /* health polling below will keep the UI in the recoverable offline state */
     })
 
     // Switch to fast polling after a short grace period for the process to die
-    setTimeout(() => {
+    restartPollTimerRef.current = setTimeout(() => {
       if (mountedRef.current) startPolling(RESTART_POLL_MS)
     }, 1_500)
+
+    // Never strand the control in RESTARTING if startup fails.
+    restartTimeoutRef.current = setTimeout(() => {
+      if (!mountedRef.current) return
+      setRestarting(false)
+      startPolling(NORMAL_POLL_MS)
+    }, RESTART_TIMEOUT_MS)
   }, [startPolling])
 
   return { healthy, restarting, restart }

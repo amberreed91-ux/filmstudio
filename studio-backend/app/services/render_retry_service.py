@@ -38,6 +38,14 @@ logger = logging.getLogger("render_retry_service")
 MAX_ATTEMPTS = 3
 STUCK_SHOT_THRESHOLD = 5.0  # If score improves by < 5 points, stop (legacy)
 BEST_OF_N_DEFAULT = 3  # Default number of parallel attempts for best-of-N strategy
+AUTO_RETRY_DEFAULT = 2
+ALL_SLOTS = [
+    "character_state",
+    "action",
+    "environment_persistence",
+    "camera",
+    "lighting",
+]
 
 
 class RenderRetryService:
@@ -77,6 +85,74 @@ class RenderRetryService:
         """Set the storage instance (for dependency injection)"""
         self._storage = storage
 
+    @staticmethod
+    def _dimension_label(slot: str) -> str:
+        labels = {
+            "character_state": "Character presence",
+            "action": "Action",
+            "camera": "Camera language",
+            "lighting": "Light and tone",
+            "environment_persistence": "Setting continuity",
+        }
+        return labels.get(slot, slot.replace("_", " ").title())
+
+    def build_advisory_note(self, score_json: Optional[Dict[str, Any]]) -> str:
+        """Turn a structured adherence result into Studio Brain advisory language."""
+        if not isinstance(score_json, dict):
+            return ""
+
+        dimensions = score_json.get("dimensions") or {}
+        failed_slots = [
+            str(slot)
+            for slot in (score_json.get("failed_slots") or [])
+            if isinstance(slot, str)
+        ]
+        if not failed_slots:
+            return (
+                "No prompt-adherence mismatch surfaced across the sampled frames; "
+                "the blocking, setting, and tonal register stay close enough for review."
+            )
+
+        notes: list[str] = []
+        for slot in failed_slots[:2]:
+            dim = dimensions.get(slot) if isinstance(dimensions, dict) else None
+            if not isinstance(dim, dict):
+                continue
+            observed = str(dim.get("observed") or "").strip()
+            expected = str(dim.get("expected") or "").strip()
+            label = self._dimension_label(slot)
+            if observed and expected:
+                notes.append(f"{label}: the frame reads as {observed}, while the shot asks for {expected}.")
+            elif observed:
+                notes.append(f"{label}: the frame reads as {observed}.")
+            elif expected:
+                notes.append(f"{label}: the shot asks for {expected}, but the frame does not make it legible.")
+
+        if not notes:
+            notes.append("The render drifts from the intended shot language in a way worth correcting before review.")
+
+        if len(failed_slots) > 2:
+            notes.append("The correction should stay focused; fix the clearest mismatch before widening the note.")
+
+        return " ".join(notes)
+
+    def _mismatch_description(self, score_json: Optional[Dict[str, Any]]) -> str:
+        if not isinstance(score_json, dict):
+            return ""
+        failed_slots = score_json.get("failed_slots") or []
+        dimensions = score_json.get("dimensions") or {}
+        descriptions: list[str] = []
+        for slot in failed_slots:
+            dim = dimensions.get(slot) if isinstance(dimensions, dict) else None
+            if isinstance(dim, dict):
+                observed = str(dim.get("observed") or "").strip()
+                expected = str(dim.get("expected") or "").strip()
+                if observed and expected:
+                    descriptions.append(f"{slot}: expected {expected}; observed {observed}")
+                elif observed or expected:
+                    descriptions.append(f"{slot}: {observed or expected}")
+        return " | ".join(descriptions)
+
     async def record_render_attempt(
         self,
         project_id: str,
@@ -84,6 +160,7 @@ class RenderRetryService:
         job_id: str,
         output_url: str,
         prompt: str,
+        expected_slots: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Record a completed render attempt with quality analysis (passive observation only).
@@ -133,6 +210,28 @@ class RenderRetryService:
         # Extract keyframes
         try:
             asset_id = f"{shot_id}_{job_id}"
+            if self._video_asset_service:
+                from app.models.video_assets import VideoAsset
+
+                now = datetime.now().isoformat()
+                self._video_asset_service._save_asset(VideoAsset(
+                    asset_id=asset_id,
+                    project_id=project_id,
+                    source_type="local_file",
+                    local_path=video_path,
+                    title=f"Render attempt {attempt_number} for {shot_id}",
+                    description="Downloaded provider output for adherence scoring",
+                    file_size_bytes=Path(video_path).stat().st_size,
+                    status="available",
+                    created_at=now,
+                    updated_at=now,
+                    metadata={
+                        "job_id": job_id,
+                        "shot_id": shot_id,
+                        "attempt_number": attempt_number,
+                        "source_url": output_url,
+                    },
+                ))
             frame_paths = await self.extract_representative_frames(
                 video_path=video_path,
                 asset_id=asset_id,
@@ -150,8 +249,7 @@ class RenderRetryService:
         adherence_score = None
         if self._adherence_service:
             try:
-                # Parse prompt slots if available (simplified for now)
-                prompt_slots = {"description": prompt}
+                prompt_slots = expected_slots or {"description": prompt}
                 
                 score = await self._adherence_service.score_render_attempt(
                     shot_id=shot_id,
@@ -180,6 +278,15 @@ class RenderRetryService:
                     "verdict": score.verdict,
                     "failed_slots": score.failed_slots,
                 }
+                advisory_note = self.build_advisory_note(score_json)
+                score_json["advisory_note"] = advisory_note
+                score_json["mismatch_description"] = self._mismatch_description(score_json)
+                score_json["retry_number"] = max(attempt_number - 1, 0)
+                score_json["outcome"] = (
+                    "matched"
+                    if not score.failed_slots
+                    else ("correctable_mismatch" if score.verdict == "correctable" else score.verdict)
+                )
             except Exception as e:
                 logger.warning(
                     "Adherence scoring failed for job %s: %s",
@@ -220,6 +327,10 @@ class RenderRetryService:
             diff_json=diff_json,
             job_id=job_id,
             project_id=project_id,
+            mismatch_description=score_json.get("mismatch_description") if score_json else None,
+            retry_number=score_json.get("retry_number") if score_json else None,
+            outcome=score_json.get("outcome") if score_json else None,
+            advisory_note=score_json.get("advisory_note") if score_json else None,
         )
         
         logger.info(
@@ -260,7 +371,7 @@ class RenderRetryService:
             Local file path to downloaded video
         """
         import aiohttp
-        import os
+        import shutil
         from pathlib import Path
         
         # Refresh URL if job_id provided (prevents 403 on expired CloudFront URLs)
@@ -287,6 +398,21 @@ class RenderRetryService:
         outputs_root = Path(__file__).resolve().parents[2] / "outputs"
         renders_dir = outputs_root / "renders" / project_id
         renders_dir.mkdir(parents=True, exist_ok=True)
+
+        if video_url.startswith("/outputs/"):
+            source_path = outputs_root / video_url.removeprefix("/outputs/")
+            if not source_path.exists() or not source_path.is_file():
+                raise ValueError(f"Generated output not found: {video_url}")
+            local_path = renders_dir / source_path.name
+            if source_path.resolve() != local_path.resolve():
+                shutil.copy2(source_path, local_path)
+            logger.info(
+                "LOCAL_RENDER_VIDEO_REGISTERED | shot=%s | source=%s | local_path=%s",
+                shot_id,
+                source_path,
+                local_path,
+            )
+            return str(local_path)
         
         # Generate local filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -376,6 +502,10 @@ class RenderRetryService:
         diff_json: Optional[Dict[str, Any]] = None,
         job_id: Optional[str] = None,
         project_id: Optional[str] = None,
+        mismatch_description: Optional[str] = None,
+        retry_number: Optional[int] = None,
+        outcome: Optional[str] = None,
+        advisory_note: Optional[str] = None,
     ) -> str:
         """
         Persist render attempt to render_attempts table.
@@ -433,6 +563,22 @@ class RenderRetryService:
                 if "project_id" in available_columns and project_id:
                     columns.append("project_id")
                     values.append(project_id)
+
+                if "mismatch_description" in available_columns and mismatch_description:
+                    columns.append("mismatch_description")
+                    values.append(mismatch_description)
+
+                if "retry_number" in available_columns and retry_number is not None:
+                    columns.append("retry_number")
+                    values.append(int(retry_number))
+
+                if "outcome" in available_columns and outcome:
+                    columns.append("outcome")
+                    values.append(outcome)
+
+                if "advisory_note" in available_columns and advisory_note:
+                    columns.append("advisory_note")
+                    values.append(advisory_note)
                 
                 attempt_id = f"{shot_id}_{attempt_n}"
                 if "id" in available_columns:
@@ -849,6 +995,8 @@ class RenderRetryService:
         max_attempts: int = BEST_OF_N_DEFAULT,
         submission_strategy: str = "best_of_n",
         poll_timeout_seconds: float = 300.0,
+        source_job_id: Optional[str] = None,
+        cascade_depth: int = 1,
     ) -> Dict[str, Any]:
         """
         Evaluate original attempt and submit N parallel retries with fresh seeds.
@@ -908,6 +1056,25 @@ class RenderRetryService:
                 score=original_score,
                 current_slots=original_slots,
             )
+            slot_order = self._reorder_slots_by_failure(original_score.dimensions)
+            full_prompt.prompt = self._assemble_prompt_from_slots(
+                full_prompt.slots,
+                slot_order,
+            )
+            full_prompt.slot_order = slot_order
+            full_prompt.reorder_reason = {
+                slot: (
+                    "moved_early_for_attempt_%d_failure_score_%s"
+                    % (
+                        original_score.attempt_n,
+                        original_score.dimensions[slot].score
+                        if slot in original_score.dimensions else "missing",
+                    )
+                )
+                for slot in slot_order
+                if slot in original_score.failed_slots
+            }
+            full_prompt.chars_remaining = max(0, 512 - len(full_prompt.prompt))
 
         logger.info(
             "FULL_CORRECTED_PROMPT_BUILT | strategy=%s | prompt_len=%d",
@@ -925,9 +1092,18 @@ class RenderRetryService:
                 job = render_service.create_job(
                     project_id=project_id,
                     shot_id=f"{shot_id}",
-                    provider="runway",
+                    provider=render_service.get_default_provider(),
                     prompt=full_prompt.prompt,
-                    parameters={"seed": seed},
+                    parameters={
+                        "seed": seed,
+                        "prompt_slots": full_prompt.slots,
+                        "slot_order": full_prompt.slot_order,
+                        "reorder_reason": full_prompt.reorder_reason,
+                        "retry_strategy": submission_strategy,
+                        "adherence_retry_parent_job_id": source_job_id,
+                        "adherence_retry_cascade_depth": cascade_depth,
+                        "skip_character_injection": True,
+                    },
                 )
                 submitted_job = await render_service.submit_job(job.id)
                 jobs.append({
@@ -952,7 +1128,7 @@ class RenderRetryService:
         # Step 4: Wait for all jobs to complete and score them
         # For now, return the structure - actual polling/scoring happens in submit scripts
         result = {
-            "strategy": "best_of_n",
+            "strategy": submission_strategy,
             "corrected_prompt": full_prompt,
             "seeds_used": seeds,
             "jobs_submitted": jobs,
@@ -968,24 +1144,43 @@ class RenderRetryService:
 
         return result
 
-    def _assemble_prompt_from_slots(self, slots: Dict[str, str]) -> str:
+    def _assemble_prompt_from_slots(self, slots: Dict[str, str], order: Optional[List[str]] = None) -> str:
         """
         Assemble a prompt string from a slot dict (helper for non-correcting scenarios).
 
         Args:
             slots: Dict of slot_name -> text
+            order: Optional list of slot names to determine assembly order.
 
         Returns:
             Assembled prompt string
         """
+        slot_order = order or ALL_SLOTS
         parts = [
             slots.get(slot, "")
-            for slot in ["character_state", "action", "environment_persistence", "camera", "lighting"]
+            for slot in slot_order
             if slots.get(slot, "")
         ]
         if parts:
             return ". ".join(parts) + ". Cinematic, film quality."
         return "Cinematic shot. Film quality."
+
+    def _reorder_slots_by_failure(self, dimension_scores: Dict[str, DimensionScore]) -> List[str]:
+        """
+        Order prompt slots from weakest-scoring to strongest-scoring.
+
+        Ties preserve ALL_SLOTS order, which keeps behavior stable across runs.
+        Missing scores are treated as passing so unscored slots do not jump ahead
+        of known failures.
+        """
+        return sorted(
+            ALL_SLOTS,
+            key=lambda slot: (
+                dimension_scores[slot].score
+                if slot in dimension_scores and dimension_scores[slot] is not None
+                else 100
+            ),
+        )
 
     async def _reconstruct_original_score(
         self,

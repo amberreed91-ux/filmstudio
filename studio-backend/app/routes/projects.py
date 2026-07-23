@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import asyncio
 import json
+import os
 import sqlite3
 import logging
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ from app.services.providers.config import get_provider_config
 from app.services import render_service
 from app.services.cinematic_scene_stitching_service import cinematic_scene_stitching_service
 from app.services.full_film_assembly_service import full_film_assembly_service
+from app.services.scene_production_pipeline_service import scene_production_pipeline_service
 from app.services.short_film_stitching_service import short_film_stitching_service
 from app.services.video_asset_service import video_asset_service
 from app.services.video_metadata_matching_service import video_metadata_matching_service
@@ -355,6 +357,17 @@ class StitchShortFilmPayload(BaseModel):
     title_card: Dict[str, Any] = Field(default_factory=dict)
     end_card: Dict[str, Any] = Field(default_factory=dict)
     soundtrack: Dict[str, Any] = Field(default_factory=dict)
+
+
+class StitchScenePayload(BaseModel):
+    overwrite: bool = False
+    soundtrack: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GenerateScenePipelinePayload(StitchScenePayload):
+    provider: Optional[str] = None
+    on_audio_overrun: str = "freeze_last_frame"
+    score_ambient_provider: Optional[str] = None
 
 
 class CollaborationSessionPayload(BaseModel):
@@ -760,6 +773,129 @@ def stitch_short_film(project_id: str, payload: StitchShortFilmPayload):
         stage="stitch_short_film",
         duration_ms=elapsed_ms(timer),
         extra={"overwrite": bool(payload.overwrite)},
+    )
+    return result
+
+
+@router.post("/projects/{project_id}/scenes/{scene_id}/stitch")
+def stitch_scene(project_id: str, scene_id: str, payload: StitchScenePayload):
+    timer = start_timer()
+    current = _load_project_from_store(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    soundtrack_raw = payload.soundtrack if isinstance(payload.soundtrack, dict) else {}
+    from app.models import SoundtrackConfig
+
+    soundtrack_enabled = bool(soundtrack_raw.get("enabled"))
+    soundtrack_source_type = str(soundtrack_raw.get("audio_source_type") or "").strip().lower()
+    allow_generated_placeholder = soundtrack_source_type in {"generated_placeholder", "generated", "none"}
+    if soundtrack_enabled and not allow_generated_placeholder and not (
+        as_non_empty_string(soundtrack_raw.get("audio_url"))
+        or as_non_empty_string(soundtrack_raw.get("local_audio_path"))
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=ValidationError("Scene soundtrack enabled but missing audio source", stage="soundtrack").to_dict(),
+        )
+
+    result = short_film_stitching_service.stitch_scene(
+        project_id=project_id,
+        scene_id=scene_id,
+        project=current,
+        overwrite=bool(payload.overwrite),
+        soundtrack_config=SoundtrackConfig(
+            enabled=bool(soundtrack_raw.get("enabled")),
+            audio_source_type=str(soundtrack_raw.get("audio_source_type") or "none"),
+            audio_url=str(soundtrack_raw.get("audio_url") or ""),
+            local_audio_path=str(soundtrack_raw.get("local_audio_path") or ""),
+            volume=float(soundtrack_raw.get("volume") or 0.25),
+            fade_in_seconds=float(soundtrack_raw.get("fade_in_seconds") or 1.0),
+            fade_out_seconds=float(soundtrack_raw.get("fade_out_seconds") or 1.0),
+            loop_to_duration=bool(soundtrack_raw.get("loop_to_duration", True)),
+            style_label=str(soundtrack_raw.get("style_label") or ""),
+        ),
+    )
+    if not isinstance(result, dict):
+        raise HTTPException(
+            status_code=500,
+            detail=PlaybackError("Scene stitching returned invalid payload", stage="scene_stitching").to_dict(),
+        )
+    log_stage_event(
+        project_id=project_id,
+        job_id=None,
+        provider=None,
+        stage="stitch_scene",
+        duration_ms=elapsed_ms(timer),
+        extra={"scene_id": scene_id, "overwrite": bool(payload.overwrite)},
+    )
+    return result
+
+
+@router.post("/projects/{project_id}/scenes/{scene_id}/pipeline/generate")
+async def generate_scene_pipeline(project_id: str, scene_id: str, payload: GenerateScenePipelinePayload):
+    timer = start_timer()
+    current = _load_project_from_store(project_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    soundtrack_raw = payload.soundtrack if isinstance(payload.soundtrack, dict) else {}
+    soundtrack_source_type = str(soundtrack_raw.get("audio_source_type") or "").strip().lower()
+    allow_generated_placeholder = soundtrack_source_type in {"generated_placeholder", "generated", "none", ""}
+    score_provider = str(payload.score_ambient_provider or "").strip().lower().replace("-", "_")
+    manual_score_requested = score_provider in {"manual", "manual_post", "manual_post_render", "post_render"}
+    if bool(soundtrack_raw.get("enabled")) and not allow_generated_placeholder and not (
+        as_non_empty_string(soundtrack_raw.get("audio_url"))
+        or as_non_empty_string(soundtrack_raw.get("local_audio_path"))
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=ValidationError(
+                "Scene soundtrack enabled but missing audio source",
+                stage="scene_soundtrack" if manual_score_requested else "soundtrack",
+            ).to_dict(),
+        )
+
+    from app.models import SoundtrackConfig
+
+    try:
+        result = await scene_production_pipeline_service.generate_scene(
+            project_id=project_id,
+            scene_id=scene_id,
+            project=current,
+            provider=payload.provider,
+            overwrite=bool(payload.overwrite),
+            on_audio_overrun=payload.on_audio_overrun,
+            score_ambient_provider=payload.score_ambient_provider,
+            soundtrack_config=SoundtrackConfig(
+                enabled=bool(soundtrack_raw.get("enabled")),
+                audio_source_type=str(soundtrack_raw.get("audio_source_type") or "none"),
+                audio_url=str(soundtrack_raw.get("audio_url") or ""),
+                local_audio_path=str(soundtrack_raw.get("local_audio_path") or ""),
+                volume=float(soundtrack_raw.get("volume") or 0.25),
+                fade_in_seconds=float(soundtrack_raw.get("fade_in_seconds") or 1.0),
+                fade_out_seconds=float(soundtrack_raw.get("fade_out_seconds") or 1.0),
+                loop_to_duration=bool(soundtrack_raw.get("loop_to_duration", True)),
+                style_label=str(soundtrack_raw.get("style_label") or ""),
+            ),
+            save_project=lambda updated: project_store.update_project(
+                project_id,
+                {"execution_summary": updated.get("execution_summary", {})},
+            ),
+        )
+    except StabilityError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_dict())
+
+    updated = _load_project_from_store(project_id)
+    if isinstance(updated, dict):
+        _sync_project_to_canonical_store(updated)
+
+    log_stage_event(
+        project_id=project_id,
+        job_id=None,
+        provider=payload.provider,
+        stage="generate_scene_pipeline",
+        duration_ms=elapsed_ms(timer),
+        extra={"scene_id": scene_id, "overwrite": bool(payload.overwrite)},
     )
     return result
 
@@ -1178,6 +1314,7 @@ def list_project_scenes(project_id: str):
     
     # Load previs images for this project to populate storyboard_image on scenes
     previs_image_map: Dict[str, str] = {}
+    previs_shot_image_map: Dict[str, Dict[str, str]] = {}
     try:
         storage = get_storage("sqlite")
         if storage:
@@ -1185,6 +1322,11 @@ def list_project_scenes(project_id: str):
             for img in previs_images:
                 if img.get("status") == "complete" and img.get("image_path"):
                     scene_id = img.get("scene_id", "")
+                    shot_id = img.get("shot_id")
+                    if scene_id and isinstance(shot_id, str) and shot_id.strip():
+                        previs_shot_image_map.setdefault(scene_id, {})
+                        if shot_id not in previs_shot_image_map[scene_id]:
+                            previs_shot_image_map[scene_id][shot_id] = img["image_path"]
                     if scene_id and scene_id not in previs_image_map:
                         previs_image_map[scene_id] = img["image_path"]
     except Exception as exc:
@@ -1212,6 +1354,8 @@ def list_project_scenes(project_id: str):
         scene_id = scene.get("scene_id", "")
         if scene_id and scene_id in previs_image_map:
             scene["storyboard_image"] = previs_image_map[scene_id]
+        if scene_id and scene_id in previs_shot_image_map:
+            scene["storyboard_images"] = previs_shot_image_map[scene_id]
         enriched.append(scene)
     
     return {"scenes": enriched}
@@ -2698,3 +2842,191 @@ def get_project_poster(project_id: str):
     if not url:
         raise HTTPException(status_code=404, detail="No poster generated yet")
     return {"poster_url": url}
+
+
+# ── ElevenLabs Voice Casting ──────────────────────────────────────────────────
+
+class VoiceAssignmentPayload(BaseModel):
+    voice_id: str
+    voice_name: str | None = None
+    provider: str = "elevenlabs"
+    source_type: str | None = None
+    style_prompt: str | None = None
+
+
+class VoiceAssignmentResponse(BaseModel):
+    character_id: str
+    project_id: str
+    voice_provider: str | None = None
+    voice_id: str | None = None
+    voice_name: str | None = None
+    voice_source_type: str | None = None
+    voice_style_prompt: str | None = None
+    elevenlabs_voice_id: str | None = None
+    elevenlabs_voice_name: str | None = None
+
+
+VALID_CASTING_VOICE_PROVIDERS = {"cosyvoice", "fish_audio", "elevenlabs"}
+
+
+@router.get("/projects/{project_id}/elevenlabs/voices")
+def list_elevenlabs_voices(project_id: str, category: str | None = None):
+    """Proxy ElevenLabs List Voices API — keeps the API key server-side.
+
+    Returns a normalized list of voices with ``voice_id``, ``name``,
+    ``preview_url``, and ``labels`` (gender / age / accent) for
+    frontend filtering.  The ``category`` query param filters by voice
+    category (e.g. ``premade``).
+    """
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="ElevenLabs API key not configured. Set ELEVENLABS_API_KEY.",
+        )
+
+    import urllib.request
+    import urllib.error
+
+    url = "https://api.elevenlabs.io/v1/voices"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "xi-api-key": api_key,
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        logger.error("ELEVENLABS_VOICES_PROXY | http_error=%s", exc.code)
+        raise HTTPException(
+            status_code=502,
+            detail=f"ElevenLabs API returned HTTP {exc.code}",
+        )
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        logger.error("ELEVENLABS_VOICES_PROXY | network_error=%s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach ElevenLabs API",
+        )
+
+    voices_raw = raw.get("voices", []) if isinstance(raw, dict) else []
+
+    normalized: list[dict] = []
+    for v in voices_raw:
+        if not isinstance(v, dict):
+            continue
+        v_category = v.get("category", "")
+        if category and v_category != category:
+            continue
+        labels = v.get("labels") or {}
+        if not isinstance(labels, dict):
+            labels = {}
+        normalized.append({
+            "voice_id": v.get("voice_id", ""),
+            "name": v.get("name", ""),
+            "category": v_category,
+            "preview_url": v.get("preview_url", ""),
+            "labels": {
+                "gender": labels.get("gender", ""),
+                "age": labels.get("age", ""),
+                "accent": labels.get("accent", ""),
+                "use_case": labels.get("use_case", ""),
+                "description": labels.get("description", ""),
+            },
+        })
+
+    return {"voices": normalized, "count": len(normalized)}
+
+
+@router.get("/projects/{project_id}/characters/{character_id}/voice")
+def get_character_voice(project_id: str, character_id: str):
+    """Get the project Casting voice assignment for a character."""
+    storage = get_storage("sqlite")
+    character = storage.get_character(character_id, project_id)
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return {
+        "character_id": character_id,
+        "project_id": project_id,
+        "voice_provider": character.get("voice_provider"),
+        "voice_id": character.get("voice_id"),
+        "voice_name": character.get("voice_name"),
+        "voice_source_type": character.get("voice_source_type"),
+        "voice_style_prompt": character.get("voice_style_prompt"),
+        "elevenlabs_voice_id": character.get("elevenlabs_voice_id"),
+        "elevenlabs_voice_name": character.get("elevenlabs_voice_name"),
+    }
+
+
+@router.put("/projects/{project_id}/characters/{character_id}/voice")
+def set_character_voice(project_id: str, character_id: str, payload: VoiceAssignmentPayload):
+    """Set the project Casting voice assignment for a character.
+
+    Pass ``voice_id=""`` to clear the assignment.
+    """
+    storage = get_storage("sqlite")
+    character = storage.get_character(character_id, project_id)
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    provider = (payload.provider or "elevenlabs").strip().lower()
+    if provider not in VALID_CASTING_VOICE_PROVIDERS:
+        raise HTTPException(
+            status_code=400,
+            detail=ValidationError(
+                f"Unsupported Casting voice provider: {provider}",
+                stage="voice_casting",
+                metadata={"valid_providers": sorted(VALID_CASTING_VOICE_PROVIDERS)},
+            ).to_dict(),
+        )
+    if provider == "elevenlabs":
+        updated = storage.set_character_voice(
+            character_id,
+            project_id,
+            payload.voice_id,
+            payload.voice_name,
+        )
+        if updated and hasattr(storage, "set_character_voice_casting"):
+            updated = storage.set_character_voice_casting(
+                character_id=character_id,
+                project_id=project_id,
+                provider=provider,
+                voice_id=payload.voice_id,
+                voice_name=payload.voice_name,
+                source_type=payload.source_type or "library",
+                style_prompt=payload.style_prompt,
+            )
+    else:
+        if not hasattr(storage, "set_character_voice_casting"):
+            raise HTTPException(
+                status_code=500,
+                detail=PersistenceError("Provider-aware voice casting storage unavailable", stage="voice_casting").to_dict(),
+            )
+        updated = storage.set_character_voice_casting(
+            character_id=character_id,
+            project_id=project_id,
+            provider=provider,
+            voice_id=payload.voice_id,
+            voice_name=payload.voice_name,
+            source_type=payload.source_type,
+            style_prompt=payload.style_prompt,
+        )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return {
+        "character_id": character_id,
+        "project_id": project_id,
+        "voice_provider": updated.get("voice_provider"),
+        "voice_id": updated.get("voice_id"),
+        "voice_name": updated.get("voice_name"),
+        "voice_source_type": updated.get("voice_source_type"),
+        "voice_style_prompt": updated.get("voice_style_prompt"),
+        "elevenlabs_voice_id": updated.get("elevenlabs_voice_id"),
+        "elevenlabs_voice_name": updated.get("elevenlabs_voice_name"),
+    }

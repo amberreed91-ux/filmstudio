@@ -198,6 +198,33 @@ def test_build_slotted_prompt_budget_enforcement():
     assert len(slots["environment_persistence"]) <= SLOT_BUDGETS["environment_persistence"]
 
 
+def test_build_slotted_prompt_preserves_multi_character_staging_when_budgeted():
+    """Multi-character staging should survive character_state compression."""
+    character_visuals = (
+        "DRE: A black man in his early 30s with a broad build, medium brown skin, "
+        "and a short grown-out fade. In this shot: DRE holds grief in his jaw; "
+        "MAYA: A South Asian woman in her late 20s with tired eyes, dark curls, "
+        "and a weathered denim jacket. In this shot: MAYA grips the photograph"
+    )
+
+    result = build_slotted_prompt(
+        scene_data={},
+        shot_number=1,
+        character_visual_canon=character_visuals,
+        action_text="They stand in the apartment doorway.",
+        environment_motifs="Apartment hallway",
+    )
+
+    character_state = result["slots"]["character_state"]
+    prompt = result["prompt"]
+
+    assert len(character_state) <= SLOT_BUDGETS["character_state"]
+    assert "DRE" in character_state
+    assert "MAYA" in character_state
+    assert "DRE holds grief" in prompt
+    assert "MAYA grips" in prompt
+
+
 # ================================================================================
 # SANITIZE RENDER SLOT TESTS
 # ================================================================================

@@ -93,6 +93,19 @@ def test_current_default_is_surfaced():
     assert result["current_default_seconds"] == CURRENT_DEFAULT_DURATION_SECONDS
 
 
+def test_provider_duration_constraint_returns_nearest_supported_option():
+    from app.services.previs_generation_settings_service import (
+        PrevisGenerationSettingsService,
+    )
+
+    constraint = PrevisGenerationSettingsService.provider_duration_constraint("Wan 2.2", 7)
+    assert constraint.provider == "Wan 2.2"
+    assert constraint.supports_custom_duration is True
+    assert constraint.valid_durations_seconds == (4, 8, 12, 16, 20)
+    assert constraint.nearest_valid_duration_seconds == 8
+    assert "starting rhythm" in constraint.advisory
+
+
 # ── Scene / shot resolution ─────────────────────────────────────────────────
 
 def test_resolve_scene_id_from_shot_id_formats():

@@ -26,20 +26,36 @@ import {
   deleteRenderJob,
   enhancePrevisPrompt,
   generatePrevisDirectorNotes,
+  generateScenePipeline,
   generateSceneStoryboard,
   getScene,
   getSceneRationale,
   listRenderJobs,
   listScenes,
+  recommendGenerationSettings,
   recommendShotCount,
+  retryRenderJobForAdherence,
   togglePrevisSeedLock,
   type RenderJob,
   type Scene,
+  type StoryboardImageProvider,
+  type ScenePipelineGenerateResult,
   type SceneRationaleResponse,
   type ShotCountResponse,
+  type GenerationSettingsResponse,
 } from '../lib/studioApi'
 import { normalizeJobStatus } from '../lib/jobStatus'
 import { persistActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import {
+  buildPrevisScenePipelinePayload,
+  canGeneratePrevisScenePipeline,
+  type PrevisSceneScoreMode,
+} from '../lib/scenePipeline'
+import {
+  chooseDurationForProvider,
+  initialStoryboardImageState,
+  type StoryboardImageStatus,
+} from '../lib/previsStoryboard'
 
 // ── Prompt Derivation ──────────────────────────────────────────────────────
 
@@ -225,7 +241,7 @@ function getShotTypeLabel(shotNumber: number): string {
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type RenderEngine = 'Wan 2.2' | 'LTX-Video' | 'Auto (Best Available)'
-type DurationOption = 4 | 8 | 12 | 16 | 20
+type DurationOption = number
 type FpsOption = 8 | 12 | 16 | 24
 type ResolutionOption = '480p' | '720p' | '1080p'
 
@@ -260,6 +276,7 @@ interface HistoryEntry {
   status: string
   prompt: string
   shot_number: number
+  hasPromptSlots?: boolean
   thumbnailUrl?: string
   videoUrl?: string
 }
@@ -268,6 +285,37 @@ type DirectorNote = {
   id: string
   text: string
   timestamp: string
+}
+
+type ScenePipelineAssembly = {
+  scene_id?: string
+  status?: string
+  output_url?: string
+  output_path?: string
+  duration_seconds?: number
+  clip_count?: number
+  shot_ids?: string[]
+  score_ambient_provider?: string
+  soundtrack_status?: string
+  updated_at?: string
+}
+
+type StoryboardLoadState = StoryboardImageStatus
+
+type ShotPlanningDetails = {
+  title: string
+  purpose: string
+  framing: string
+  camera: string
+  blocking: string
+  composition: string
+  atmosphere: string
+  production: string
+  continuity: string
+  sound: string
+  transition: string
+  plannedDuration: string
+  rationale: string
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -294,11 +342,66 @@ function generateSeed(): number {
   return Math.floor(Math.random() * 10_000_000)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function toScenePipelineAssembly(value: unknown): ScenePipelineAssembly | null {
+  if (!isRecord(value)) return null
+  return {
+    scene_id: typeof value.scene_id === 'string' ? value.scene_id : undefined,
+    status: typeof value.status === 'string' ? value.status : undefined,
+    output_url: typeof value.output_url === 'string' ? value.output_url : undefined,
+    output_path: typeof value.output_path === 'string' ? value.output_path : undefined,
+    duration_seconds: typeof value.duration_seconds === 'number' ? value.duration_seconds : undefined,
+    clip_count: typeof value.clip_count === 'number' ? value.clip_count : undefined,
+    shot_ids: Array.isArray(value.shot_ids) ? value.shot_ids.filter((item): item is string => typeof item === 'string') : undefined,
+    score_ambient_provider: typeof value.score_ambient_provider === 'string' ? value.score_ambient_provider : undefined,
+    soundtrack_status: typeof value.soundtrack_status === 'string' ? value.soundtrack_status : undefined,
+    updated_at: typeof value.updated_at === 'string' ? value.updated_at : undefined,
+  }
+}
+
+function sceneAssemblyTime(value?: string): number {
+  if (!value) return 0
+  const time = Date.parse(value)
+  return Number.isFinite(time) ? time : 0
+}
+
+function buildShotPlanningDetails(
+  scene: Scene | null,
+  shotNumber: number,
+  totalShots: number,
+  duration: number,
+  rationale?: string,
+): ShotPlanningDetails {
+  const shotLabel = getShotTypeLabel(shotNumber)
+  const segment = scene ? segmentSceneText(scene.text || scene.description || '', Math.max(1, totalShots))[shotNumber - 1] || '' : ''
+  const location = [scene?.location, scene?.time_of_day].filter(Boolean).join(', ')
+  return {
+    title: `Shot ${shotNumber}: ${shotLabel.toLowerCase()} beat`,
+    purpose: scene?.emotional_tone
+      ? `Hold the scene's ${scene.emotional_tone} pressure without overexplaining it.`
+      : 'Clarify the story beat and leave room for the actor or visual idea to carry it.',
+    framing: determineShotType(shotNumber, segment),
+    camera: shotNumber === 1 ? 'Patient, observational camera; let geography register.' : 'Camera choice should follow the emotional turn, not decorate it.',
+    blocking: segment ? segment.slice(0, 180) : 'Define who moves, who stays still, and what changes by the end of the shot.',
+    composition: shotNumber <= 2 ? 'Anchor the subject against the space so the viewer understands pressure and distance.' : 'Keep the focal point specific: face, hand, object, or absence.',
+    atmosphere: scene?.emotional_tone ? `Light and color should support ${scene.emotional_tone}, with atmosphere serving tension.` : 'Use light, color, and atmosphere to underline the beat.',
+    production: location || 'Note location constraints, practical effects, props, wardrobe continuity, and blocking hazards.',
+    continuity: 'Track recurring motifs, character placement, eyelines, and emotional continuity from the previous beat.',
+    sound: 'Mark dialogue, voice-over, music, silence, or environmental sound that changes the shot rhythm.',
+    transition: shotNumber === 1 ? 'Enter from the prior scene with enough orientation to land the new space.' : 'Cut in on the pressure point and leave before the beat explains itself twice.',
+    plannedDuration: `${duration}`,
+    rationale: rationale || 'This shot matters when it changes what the audience understands, feels, or anticipates.',
+  }
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function PrevisRoom() {
   const { projectId } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
   const navigate = useNavigate()
@@ -334,6 +437,13 @@ export default function PrevisRoom() {
   const [promptText, setPromptText] = useState('')
   const [originalPrompt, setOriginalPrompt] = useState('')
   const [selectedSceneId, setSelectedSceneId] = useState('')
+
+  useEffect(() => {
+    if (!selectedSceneId || searchParams.get('scene') === selectedSceneId) return
+    const next = new URLSearchParams(searchParams)
+    next.set('scene', selectedSceneId)
+    setSearchParams(next, { replace: true })
+  }, [selectedSceneId, searchParams, setSearchParams])
   const [coDirectorNoteApplied, setCoDirectorNoteApplied] = useState(false)
   const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null)
   const [enhancingPrompt, setEnhancingPrompt] = useState(false)
@@ -355,6 +465,11 @@ export default function PrevisRoom() {
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
   const [composing, setComposing] = useState(false)
   const [composedUrl, setComposedUrl] = useState<string | null>(null)
+  const [scenePipelineRunning, setScenePipelineRunning] = useState(false)
+  const [scenePipelineResult, setScenePipelineResult] = useState<ScenePipelineGenerateResult | null>(null)
+  const [sceneScoreMode, setSceneScoreMode] = useState<PrevisSceneScoreMode>('none')
+  const [manualScorePath, setManualScorePath] = useState('')
+  const [adherenceRetryingJobId, setAdherenceRetryingJobId] = useState<string | null>(null)
   // ── Shot rationale ("Why this shot matters") ───────────────────────────────
   const [shotRationale, setShotRationale] = useState<SceneRationaleResponse | null>(null)
   const [loadingRationale, setLoadingRationale] = useState(false)
@@ -362,6 +477,13 @@ export default function PrevisRoom() {
   // ── Seed management ────────────────────────────────────────────────────────
   const [storyboardSeed, setStoryboardSeed] = useState<number | null>(null)
   const [seedLocked, setSeedLocked] = useState(false)
+  const [storyboardProvider, setStoryboardProvider] = useState<StoryboardImageProvider>('qwen-image-max')
+  const [storyboardImagesByShot, setStoryboardImagesByShot] = useState<Record<number, string>>({})
+  const [storyboardImageStates, setStoryboardImageStates] = useState<Record<number, StoryboardLoadState>>({})
+  const [storyboardRetryNonce, setStoryboardRetryNonce] = useState<Record<number, number>>({})
+  const [settingsRecommendation, setSettingsRecommendation] = useState<GenerationSettingsResponse | null>(null)
+  const [durationDraft, setDurationDraft] = useState('4')
+  const [shotPlanningOverrides, setShotPlanningOverrides] = useState<Record<number, Partial<ShotPlanningDetails>>>({})
 
   useEffect(() => {
     if (!selectedSceneId || !effectiveProjectId) {
@@ -388,6 +510,7 @@ export default function PrevisRoom() {
   const [totalShots, setTotalShots] = useState(1)
   const [shotCountRec, setShotCountRec] = useState<ShotCountResponse | null>(null)
   const [loadingShotCount, setLoadingShotCount] = useState(false)
+  const [recommendingSettings, setRecommendingSettings] = useState(false)
   const [enhancedPrompt, setEnhancedPrompt] = useState(false)
   const [selectedTakeByShot, setSelectedTakeByShot] = useState<Record<number, number>>({})
   const [shotVideoUrls, setShotVideoUrls] = useState<Record<number, string>>({})
@@ -408,8 +531,51 @@ export default function PrevisRoom() {
     return Array.from({ length: count }, (_, i) => i + 1)
   }, [renderJobs, selectedSceneId, totalShots])
 
+  const persistedRenderHistory = useMemo<HistoryEntry[]>(() => {
+    if (!selectedSceneId) return []
+    return renderJobs
+      .filter((job) => {
+        const sceneId = job.shot_id?.split('_shot_')[0] || ''
+        return sceneId === selectedSceneId && normalizeJobStatus(job.status) === 'complete'
+      })
+      .map((job) => {
+        const shotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
+        const shotNumber = shotNumMatch ? parseInt(shotNumMatch[1], 10) : 1
+        const parameters = job.input_payload?.parameters || {}
+        const duration = typeof parameters.duration_seconds === 'number'
+          ? parameters.duration_seconds
+          : genConfig.duration
+        const takeNumber = typeof parameters.take_number === 'number'
+          ? parameters.take_number
+          : 1
+        return {
+          jobId: job.id,
+          sceneName: `Shot ${shotNumber} Take ${takeNumber}`,
+          duration,
+          status: normalizeJobStatus(job.status),
+          prompt: (job.input_payload?.prompt || '').slice(0, 100),
+          shot_number: shotNumber,
+          hasPromptSlots: Boolean(parameters.prompt_slots),
+          thumbnailUrl: job.output_payload?.thumbnail_url || job.preview_url || undefined,
+          videoUrl: job.output_payload?.asset_url || job.output_url || undefined,
+        }
+      })
+      .sort((a, b) => b.jobId.localeCompare(a.jobId))
+  }, [renderJobs, selectedSceneId, genConfig.duration])
+
+  const visibleRenderHistory = useMemo<HistoryEntry[]>(() => {
+    const seen = new Set<string>()
+    const merged: HistoryEntry[] = []
+    for (const entry of [...renderHistory, ...persistedRenderHistory]) {
+      if (seen.has(entry.jobId)) continue
+      seen.add(entry.jobId)
+      merged.push(entry)
+    }
+    return merged
+  }, [renderHistory, persistedRenderHistory])
+
   const takes = useMemo(() =>
-    renderHistory
+    visibleRenderHistory
       .filter((t) => t.shot_number === activeShotNumber)
       .slice(0, 3)
       .map((entry, idx) => ({
@@ -417,8 +583,89 @@ export default function PrevisRoom() {
         videoUrl: entry.videoUrl || null,
         jobId: entry.jobId,
       })),
-    [renderHistory, activeShotNumber],
+    [visibleRenderHistory, activeShotNumber],
   )
+
+  const persistedSceneAssembly = useMemo(() => {
+    const summary = activeProject?.execution_summary
+    if (!isRecord(summary) || !Array.isArray(summary.scene_pipeline_assemblies) || !selectedSceneId) return null
+    const assemblies = summary.scene_pipeline_assemblies
+      .map(toScenePipelineAssembly)
+      .filter((assembly): assembly is ScenePipelineAssembly => assembly !== null && assembly.scene_id === selectedSceneId)
+      .sort((a, b) => sceneAssemblyTime(b.updated_at) - sceneAssemblyTime(a.updated_at))
+    return assemblies.find((assembly) => assembly.status === 'complete') || assemblies[0] || null
+  }, [activeProject?.execution_summary, selectedSceneId])
+
+  const latestScenePipelineAssembly = useMemo(() => {
+    return toScenePipelineAssembly(scenePipelineResult?.assembly) || persistedSceneAssembly
+  }, [scenePipelineResult?.assembly, persistedSceneAssembly])
+
+  const selectedScene = useMemo(
+    () => scenes.find((scene) => scene.scene_id === selectedSceneId) || null,
+    [scenes, selectedSceneId],
+  )
+
+  const activeStoryboardShotId = useMemo(
+    () => selectedSceneId ? `${selectedSceneId}_shot_${String(activeShotNumber).padStart(3, '0')}` : '',
+    [selectedSceneId, activeShotNumber],
+  )
+
+  const currentStoryboardImageUrl = useMemo(() => {
+    const persistedShotImage = activeStoryboardShotId
+      ? selectedScene?.storyboard_images?.[activeStoryboardShotId]
+      : undefined
+    return storyboardImagesByShot[activeShotNumber]
+      || persistedShotImage
+      || (activeShotNumber === 1 ? selectedScene?.storyboard_image : undefined)
+      || ''
+  }, [activeStoryboardShotId, activeShotNumber, selectedScene, storyboardImagesByShot])
+
+  const activeStoryboardState = storyboardImageStates[activeShotNumber]
+    || initialStoryboardImageState(currentStoryboardImageUrl, loading)
+
+  const activeShotPlanningDetails = useMemo(() => {
+    const derived = buildShotPlanningDetails(
+      selectedScene,
+      activeShotNumber,
+      totalShots,
+      genConfig.duration,
+      shotRationale?.rationale,
+    )
+    return { ...derived, ...(shotPlanningOverrides[activeShotNumber] || {}) }
+  }, [activeShotNumber, genConfig.duration, selectedScene, shotPlanningOverrides, shotRationale?.rationale, totalShots])
+
+  const updateShotPlanningDetail = useCallback((field: keyof ShotPlanningDetails, value: string) => {
+    setShotPlanningOverrides((prev) => ({
+      ...prev,
+      [activeShotNumber]: {
+        ...(prev[activeShotNumber] || {}),
+        [field]: value,
+      },
+    }))
+  }, [activeShotNumber])
+
+  useEffect(() => {
+    setDurationDraft(String(genConfig.duration))
+  }, [genConfig.duration])
+
+  useEffect(() => {
+    if (!currentStoryboardImageUrl) {
+      setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: initialStoryboardImageState(undefined, loading) }))
+      return
+    }
+    setStoryboardImageStates((prev) => {
+      const existing = prev[activeShotNumber]
+      if (existing === 'ready' || existing === 'failed') return prev
+      return { ...prev, [activeShotNumber]: 'loading' }
+    })
+  }, [activeShotNumber, currentStoryboardImageUrl, loading])
+
+  const scenePipelineOutputUrl = useMemo(() => {
+    return scenePipelineResult?.output_url
+      || scenePipelineResult?.stitch?.output_url
+      || latestScenePipelineAssembly?.output_url
+      || null
+  }, [scenePipelineResult, latestScenePipelineAssembly])
 
   const currentVideoUrl = useMemo(() => {
     const selectedTakeNum = selectedTakeByShot[activeShotNumber]
@@ -428,8 +675,8 @@ export default function PrevisRoom() {
     }
     const firstTakeWithUrl = takes.find(t => t.videoUrl)
     if (firstTakeWithUrl?.videoUrl) return firstTakeWithUrl.videoUrl
-    return shotVideoUrls[activeShotNumber] || null
-  }, [selectedTakeByShot, activeShotNumber, takes, shotVideoUrls])
+    return shotVideoUrls[activeShotNumber] || composedUrl || scenePipelineOutputUrl || null
+  }, [selectedTakeByShot, activeShotNumber, takes, shotVideoUrls, composedUrl, scenePipelineOutputUrl])
 
   const activeTakeNumber = useMemo(() => {
     const explicit = selectedTakeByShot[activeShotNumber]
@@ -458,6 +705,7 @@ export default function PrevisRoom() {
 
   const handleSelectShot = useCallback((shotNum: number) => {
     setActiveShotNumber(shotNum)
+    setSettingsRecommendation(null)
   }, [])
 
   // ── Compose button check ──────────────────────────────────────────────────
@@ -497,6 +745,33 @@ export default function PrevisRoom() {
       setComposing(false)
     }
   }, [selectedSceneId, effectiveProjectId, composing])
+
+  const handleGenerateScenePipeline = useCallback(async () => {
+    if (!selectedSceneId || !effectiveProjectId || scenePipelineRunning) return
+    setScenePipelineRunning(true)
+    setScenePipelineResult(null)
+    setError('')
+    setPipelineStatus((prev) => ({ ...prev, compose: 'running', mp4: 'running' }))
+    try {
+      const response = await generateScenePipeline(
+        effectiveProjectId,
+        selectedSceneId,
+        buildPrevisScenePipelinePayload(sceneScoreMode, manualScorePath),
+      )
+      if (response.error || !response.result) {
+        throw new Error(response.error || 'Scene generation failed')
+      }
+      setScenePipelineResult(response.result)
+      setComposedUrl(response.result.output_url || response.result.stitch?.output_url || null)
+      setPipelineStatus((prev) => ({ ...prev, compose: 'done', mp4: 'done' }))
+      setSuccess(`Scene pipeline complete — ${response.result.stitch?.clip_count ?? response.result.shots.length} shot${(response.result.stitch?.clip_count ?? response.result.shots.length) === 1 ? '' : 's'} assembled`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Scene pipeline failed')
+      setPipelineStatus((prev) => ({ ...prev, compose: 'failed', mp4: 'failed' }))
+    } finally {
+      setScenePipelineRunning(false)
+    }
+  }, [selectedSceneId, effectiveProjectId, scenePipelineRunning, manualScorePath, sceneScoreMode])
 
   // ── Polling ref ───────────────────────────────────────────────────────────
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -635,7 +910,7 @@ export default function PrevisRoom() {
           const completedShotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
           const completedShotNumber = completedShotNumMatch ? parseInt(completedShotNumMatch[1], 10) : activeShotNumber
           const shotLabel = getShotTypeLabel(completedShotNumber)
-          const takeNumber = renderHistory.filter((t) => t.shot_number === completedShotNumber).length + 1
+          const takeNumber = visibleRenderHistory.filter((t) => t.shot_number === completedShotNumber).length + 1
           setShotVideoUrls(prev => ({ ...prev, [completedShotNumber]: videoUrl || '' }))
           setRenderHistory((prev) => [
             {
@@ -645,6 +920,7 @@ export default function PrevisRoom() {
               status: 'complete',
               prompt: promptText.slice(0, 100),
               shot_number: completedShotNumber,
+              hasPromptSlots: Boolean(job.input_payload?.parameters?.prompt_slots),
               thumbnailUrl: job.output_payload?.thumbnail_url || job.preview_url || undefined,
               videoUrl,
             },
@@ -701,7 +977,7 @@ export default function PrevisRoom() {
       cancelled = true
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
     }
-  }, [currentJobId, rendering, effectiveProjectId, genConfig.duration, genConfig.model, genConfig.resolution, promptText])
+  }, [currentJobId, rendering, effectiveProjectId, genConfig.duration, genConfig.model, genConfig.resolution, promptText, activeShotNumber, selectedSceneId, visibleRenderHistory])
 
   // ── Reset scene-local state on scene switch ────────────────────────────────
   useEffect(() => {
@@ -712,6 +988,7 @@ export default function PrevisRoom() {
     setPromptText('')
     setOriginalPrompt('')
     setShotCountRec(null)
+    setSettingsRecommendation(null)
     setSelectedTakeByShot({})
     setTotalShots(1)
   }, [selectedSceneId, searchParams])
@@ -763,6 +1040,7 @@ export default function PrevisRoom() {
         status: 'complete',
         prompt: job.output_payload?.metadata?.prompt as string || job.input_payload?.prompt || '',
         shot_number,
+        hasPromptSlots: Boolean(job.input_payload?.parameters?.prompt_slots),
         thumbnailUrl: job.output_payload?.thumbnail_url || job.preview_url || undefined,
         videoUrl: historyVideoUrl,
       } as HistoryEntry
@@ -803,7 +1081,15 @@ export default function PrevisRoom() {
       })
       setPromptText(result.enhanced_prompt)
       setEnhancedPrompt(true)
-      setSuccess(`Prompt enhanced (${result.study_memories_used} study memories used)`)
+      const memoryLabel = result.study_memories_used === 1 ? 'memory' : 'memories'
+      const contextParts = [
+        `${result.study_memories_used} Study ${memoryLabel} supplied`,
+        result.scene_context_used ? 'scene text supplied' : '',
+        result.character_profiles_used > 0
+          ? `${result.character_profiles_used} character ${result.character_profiles_used === 1 ? 'profile' : 'profiles'} supplied`
+          : '',
+      ].filter(Boolean)
+      setSuccess(`Prompt materially enhanced (${contextParts.join(' · ')})`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Enhancement failed')
     } finally {
@@ -829,7 +1115,7 @@ export default function PrevisRoom() {
 
     try {
       // Calculate take number for this shot
-      const existingTakes = renderHistory.filter((t) => t.shot_number === activeShotNumber)
+      const existingTakes = visibleRenderHistory.filter((t) => t.shot_number === activeShotNumber)
       const takeNumber = existingTakes.length + 1
 
       const shotId = `${selectedSceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`
@@ -852,6 +1138,7 @@ export default function PrevisRoom() {
           shot_number: activeShotNumber,
           take_number: takeNumber,
           shot_type: shotLabel,
+          structured_prompt: true,
         },
       )
 
@@ -878,6 +1165,7 @@ export default function PrevisRoom() {
             status: 'complete',
             prompt: promptText.slice(0, 100),
             shot_number: activeShotNumber,
+            hasPromptSlots: Boolean(submitted.input_payload?.parameters?.prompt_slots),
             thumbnailUrl: submitted.output_payload?.thumbnail_url || submitted.preview_url || undefined,
             videoUrl: immediateVideoUrl,
           },
@@ -912,7 +1200,7 @@ export default function PrevisRoom() {
       setRendering(false)
       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
     }
-  }, [effectiveProjectId, promptText, genConfig, createJob, submitJob, selectedSceneId, activeShotNumber, renderHistory, seedLocked, storyboardSeed])
+  }, [effectiveProjectId, promptText, genConfig, createJob, submitJob, selectedSceneId, activeShotNumber, visibleRenderHistory, seedLocked, storyboardSeed])
 
   // ── Delete render job ────────────────────────────────────────────────────
   const handleDeleteRender = useCallback(async (jobId: string) => {
@@ -929,11 +1217,35 @@ export default function PrevisRoom() {
         }
         return prev.filter((e) => e.jobId !== jobId)
       })
+      setRenderJobs((prev) => prev.filter((job) => job.id !== jobId))
       setSuccess('Take deleted')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete take')
     }
   }, [])
+
+  const handleAdherenceRetry = useCallback(async (jobId: string) => {
+    if (adherenceRetryingJobId) return
+    setAdherenceRetryingJobId(jobId)
+    setError('')
+    try {
+      const result = await retryRenderJobForAdherence(jobId)
+      const submittedCount = result.jobs_submitted?.length ?? 0
+      setSuccess(
+        submittedCount > 0
+          ? `Adherence retry queued (${submittedCount} fresh attempt${submittedCount === 1 ? '' : 's'})`
+          : 'Adherence retry prepared, but no attempts were submitted',
+      )
+      if (effectiveProjectId) {
+        const jobs = await listRenderJobs(effectiveProjectId)
+        setRenderJobs(Array.isArray(jobs) ? jobs : [])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Adherence retry failed')
+    } finally {
+      setAdherenceRetryingJobId(null)
+    }
+  }, [adherenceRetryingJobId, effectiveProjectId])
 
   // ── Load prompt from history ─────────────────────────────────────────────
   const handleLoadHistoryPrompt = useCallback(
@@ -967,6 +1279,77 @@ export default function PrevisRoom() {
     }
   }, [selectedSceneId, effectiveProjectId])
 
+  // ── Per-shot Generation Settings Recommendation ─────────────────────
+  const handleRecommendSettings = useCallback(async () => {
+    if (!selectedSceneId) {
+      setError('Select a scene first')
+      return
+    }
+    if (!effectiveProjectId) {
+      setError('No active project')
+      return
+    }
+    setRecommendingSettings(true)
+    setError('')
+    try {
+      const shotType = (() => {
+        const label = getShotTypeLabel(activeShotNumber)
+        if (label === 'WIDE') return 'wide'
+        if (label === 'MEDIUM') return 'medium'
+        if (label === 'CLOSE') return 'close'
+        return 'detail'
+      })()
+      const result: GenerationSettingsResponse = await recommendGenerationSettings(
+        effectiveProjectId,
+        {
+          scene_id: selectedSceneId,
+          shot_number: activeShotNumber,
+          shot_type: shotType,
+        },
+      )
+      const rec = result.recommended
+      setSettingsRecommendation(result)
+      setDurationDraft(String(rec.duration_seconds))
+      setSuccess(`Suggested duration for Shot ${activeShotNumber}: ${rec.duration_seconds}s`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation settings recommendation failed')
+    } finally {
+      setRecommendingSettings(false)
+    }
+  }, [selectedSceneId, effectiveProjectId, activeShotNumber])
+
+  const applyRecommendedSettings = useCallback((durationSeconds?: number) => {
+    if (!settingsRecommendation) return
+    const rec = settingsRecommendation.recommended
+    const constraint = settingsRecommendation.duration_constraint
+    const requested = Number.isFinite(durationSeconds) ? Number(durationSeconds) : rec.duration_seconds
+    const nextDuration = chooseDurationForProvider(requested, constraint, genConfig.duration)
+    setGenConfig((prev) => ({
+      ...prev,
+      duration: nextDuration,
+      fps: (FPS_OPTIONS.includes(rec.fps as FpsOption)
+        ? rec.fps
+        : prev.fps) as FpsOption,
+      resolution: (RESOLUTIONS.includes(rec.resolution as ResolutionOption)
+        ? rec.resolution
+        : prev.resolution) as ResolutionOption,
+      model: rec.model && ENGINES.includes(rec.model as RenderEngine)
+        ? (rec.model as RenderEngine)
+        : prev.model,
+    }))
+    setDurationDraft(String(nextDuration))
+    setSuccess(`Duration set to ${nextDuration}s for Shot ${activeShotNumber}`)
+  }, [activeShotNumber, genConfig.duration, settingsRecommendation])
+
+  const adjustRecommendedDuration = useCallback((delta: number) => {
+    const base = parseInt(durationDraft, 10)
+    const next = Math.max(1, Math.min(60, (Number.isFinite(base) ? base : genConfig.duration) + delta))
+    setDurationDraft(String(next))
+    applyRecommendedSettings(next)
+  }, [applyRecommendedSettings, durationDraft, genConfig.duration])
+
+  // ── UI Elements ───────────────────────────────────────────────────────
+
   // ── Handle Generate Storyboard ─────────────────────────────────────────────
   const handleGenerateStoryboard = useCallback(async () => {
     if (!selectedSceneId || !effectiveProjectId) {
@@ -975,23 +1358,35 @@ export default function PrevisRoom() {
     }
     setLoading(true)
     setError('')
+    const requestedShotNumber = activeShotNumber
+    setStoryboardImageStates((prev) => ({ ...prev, [requestedShotNumber]: 'generating' }))
     try {
-      const result = await generateSceneStoryboard(effectiveProjectId, selectedSceneId)
+      const result = await generateSceneStoryboard(effectiveProjectId, selectedSceneId, storyboardProvider, requestedShotNumber)
       if (result.image_url) {
-        setSuccess('Storyboard generated')
+        const responseShotNumber = result.shot_number || requestedShotNumber
+        if (responseShotNumber === requestedShotNumber) {
+          setStoryboardImagesByShot((prev) => ({ ...prev, [requestedShotNumber]: result.image_url }))
+          setStoryboardImageStates((prev) => ({
+            ...prev,
+            [requestedShotNumber]: result.image_state === 'ready' ? 'loading' : 'unavailable',
+          }))
+        }
+        setSuccess(`Storyboard generated with ${result.model || result.provider || storyboardProvider}`)
         if (result.seed) {
           setStoryboardSeed(result.seed)
         }
         await loadScenes()
       } else {
+        setStoryboardImageStates((prev) => ({ ...prev, [requestedShotNumber]: 'generating' }))
         setSuccess(`Storyboard generation started for ${selectedSceneId}`)
       }
     } catch (err) {
+      setStoryboardImageStates((prev) => ({ ...prev, [requestedShotNumber]: 'failed' }))
       setError(err instanceof Error ? err.message : 'Storyboard generation failed')
     } finally {
       setLoading(false)
     }
-  }, [selectedSceneId, effectiveProjectId, loadScenes])
+  }, [selectedSceneId, effectiveProjectId, storyboardProvider, loadScenes, activeShotNumber])
 
   // ── Handle Toggle Seed Lock ────────────────────────────────────────────────
   const handleToggleSeedLock = useCallback(async () => {
@@ -1084,6 +1479,71 @@ export default function PrevisRoom() {
                 </div>
                 {genConfig.duration >= 12 && (
                   <div className="mt-1 text-[10px] text-warning">⚠ Long generations may take 10+ minutes on CPU</div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRecommendSettings}
+                  disabled={!selectedSceneId || recommendingSettings}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:opacity-50"
+                  style={{ borderColor: 'rgba(255,209,101,0.25)', color: 'var(--color-primary)', background: 'rgba(255,209,101,0.08)' }}
+                >
+                  {recommendingSettings ? <Loader2 size={12} className="animate-spin" /> : <Clock size={12} />}
+                  Suggest Duration
+                </button>
+                {settingsRecommendation && (
+                  <div className="mt-2 rounded-lg border p-2.5" style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+                    <div className="text-[10px] font-semibold" style={{ color: 'var(--color-on-surface)' }}>
+                      Suggested duration: {settingsRecommendation.recommended.duration_seconds} seconds
+                    </div>
+                    <p className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      {settingsRecommendation.reasoning}
+                    </p>
+                    <p className="mt-1 text-[9px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      {settingsRecommendation.duration_constraint.advisory}
+                    </p>
+                    {!settingsRecommendation.duration_constraint.supports_custom_duration && (
+                      <div className="mt-1 text-[9px]" style={{ color: 'var(--color-secondary)' }}>
+                        Nearest available option: {settingsRecommendation.duration_constraint.nearest_valid_duration_seconds}s
+                      </div>
+                    )}
+                    <div className="mt-2 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => adjustRecommendedDuration(-1)}
+                        className="rounded border px-2 py-1 text-[10px]"
+                        style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}
+                      >
+                        Shorten
+                      </button>
+                      <input
+                        aria-label="Edit planned shot duration"
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={durationDraft}
+                        onChange={(event) => setDurationDraft(event.target.value)}
+                        onBlur={() => applyRecommendedSettings(parseInt(durationDraft, 10))}
+                        className="cyber-input min-w-0 flex-1 rounded px-2 py-1 text-center text-[10px] outline-none"
+                        style={{ color: 'var(--color-on-surface)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => adjustRecommendedDuration(1)}
+                        className="rounded border px-2 py-1 text-[10px]"
+                        style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}
+                      >
+                        Lengthen
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => applyRecommendedSettings(parseInt(durationDraft, 10))}
+                      className="mt-2 w-full rounded border px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em]"
+                      style={{ borderColor: 'rgba(52,211,153,0.28)', color: 'var(--color-tertiary)', background: 'rgba(52,211,153,0.08)' }}
+                    >
+                      Accept Duration
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1261,6 +1721,68 @@ export default function PrevisRoom() {
                   </div>
                 )}
               </div>
+
+              <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
+                  SCENE PIPELINE
+                </div>
+                <select
+                  value={sceneScoreMode}
+                  onChange={(e) => setSceneScoreMode(e.target.value as PrevisSceneScoreMode)}
+                  className="cyber-input w-full rounded px-2 py-1 text-xs outline-none"
+                  style={{ color: 'var(--color-on-surface)' }}
+                >
+                  <option value="none">Dialogue only</option>
+                  <option value="manual_post_render">Manual post-render score</option>
+                </select>
+                {sceneScoreMode === 'manual_post_render' ? (
+                  <input
+                    type="text"
+                    value={manualScorePath}
+                    onChange={(e) => setManualScorePath(e.target.value)}
+                    placeholder="Manual score path"
+                    className="cyber-input w-full rounded px-2 py-1 text-xs outline-none"
+                    style={{ color: 'var(--color-on-surface)' }}
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateScenePipeline()}
+                  disabled={
+                    !selectedSceneId
+                    || !effectiveProjectId
+                    || scenePipelineRunning
+                    || !canGeneratePrevisScenePipeline(sceneScoreMode, manualScorePath)
+                  }
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    borderColor: 'rgba(34,211,238,0.35)',
+                    color: 'var(--color-primary)',
+                    background: 'rgba(34,211,238,0.08)',
+                  }}
+                >
+                  {scenePipelineRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                  {scenePipelineRunning ? 'Generating' : 'Generate Scene'}
+                </button>
+                {scenePipelineResult || latestScenePipelineAssembly ? (
+                  <div className="space-y-1 text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                    <div>Status: {scenePipelineResult?.status || latestScenePipelineAssembly?.status || 'saved'}</div>
+                    <div>
+                      Shots: {scenePipelineResult?.stitch?.clip_count
+                        ?? latestScenePipelineAssembly?.clip_count
+                        ?? latestScenePipelineAssembly?.shot_ids?.length
+                        ?? scenePipelineResult?.shots.length
+                        ?? 0}
+                    </div>
+                    {latestScenePipelineAssembly?.duration_seconds ? (
+                      <div>Duration: {latestScenePipelineAssembly.duration_seconds.toFixed(2)}s</div>
+                    ) : null}
+                    {scenePipelineResult?.soundtrack_status || latestScenePipelineAssembly?.soundtrack_status ? (
+                      <div>Score: {scenePipelineResult?.soundtrack_status || latestScenePipelineAssembly?.soundtrack_status}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -1271,19 +1793,69 @@ export default function PrevisRoom() {
               {/* ── PREVIEW PANEL ─────────────────────────────────────────── */}
               <div className="glass-panel relative aspect-video w-full overflow-hidden rounded-xl" style={{ background: 'var(--color-surface-container-lowest)' }}>
                 <div className="relative w-full h-full bg-black">
-                  <video
-                    key={currentVideoUrl}
-                    src={currentVideoUrl ?? undefined}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    onError={(e) => console.error('Video error:', e.currentTarget.src)}
-                  />
-                  {!currentVideoUrl && (
-                    <div className="absolute inset-0 flex items-center justify-center text-white/20 text-sm">
-                      No render yet
+                  {currentVideoUrl ? (
+                    <video
+                      key={currentVideoUrl}
+                      src={currentVideoUrl}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      onError={(e) => console.error('Video error:', e.currentTarget.src)}
+                    />
+                  ) : currentStoryboardImageUrl ? (
+                    <>
+                      <img
+                        key={`${currentStoryboardImageUrl}-${storyboardRetryNonce[activeShotNumber] || 0}`}
+                        src={currentStoryboardImageUrl}
+                        alt={`Storyboard still for shot ${activeShotNumber}`}
+                        className={`absolute inset-0 h-full w-full object-cover transition-opacity ${activeStoryboardState === 'ready' ? 'opacity-100' : 'opacity-35'}`}
+                        onLoad={() => setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'ready' }))}
+                        onError={() => {
+                          console.warn('Storyboard image failed to load', {
+                            projectId: effectiveProjectId,
+                            sceneId: selectedSceneId,
+                            shotId: activeStoryboardShotId,
+                            url: currentStoryboardImageUrl,
+                          })
+                          setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'failed' }))
+                        }}
+                      />
+                      {activeStoryboardState !== 'ready' && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 px-6 text-center">
+                          {activeStoryboardState === 'loading' || activeStoryboardState === 'generating' ? (
+                            <Loader2 size={18} className="animate-spin text-amber-300" />
+                          ) : (
+                            <Camera size={18} className="text-white/35" />
+                          )}
+                          <div className="text-xs text-white/70">
+                            {activeStoryboardState === 'generating'
+                              ? 'Storyboard generation in progress'
+                              : activeStoryboardState === 'failed'
+                                ? 'Storyboard image temporarily unavailable'
+                                : 'Loading storyboard still'}
+                          </div>
+                          {activeStoryboardState === 'failed' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'loading' }))
+                                setStoryboardRetryNonce((prev) => ({ ...prev, [activeShotNumber]: (prev[activeShotNumber] || 0) + 1 }))
+                              }}
+                              className="rounded border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200"
+                              style={{ borderColor: 'rgba(255,209,101,0.28)', background: 'rgba(255,209,101,0.08)' }}
+                            >
+                              Retry Image
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/35 text-sm">
+                      <Camera size={20} />
+                      <span>No storyboard still or render yet</span>
                     </div>
                   )}
                 </div>
@@ -1329,20 +1901,31 @@ export default function PrevisRoom() {
                     <span className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
                       STORYBOARD
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleGenerateStoryboard}
-                      disabled={loading}
-                      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
-                      style={{
-                        background: 'rgba(255,209,101,0.15)',
-                        color: 'var(--color-primary)',
-                        border: '1px solid rgba(255,209,101,0.3)',
-                      }}
-                    >
-                      {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                      GENERATE
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={storyboardProvider}
+                        onChange={(event) => setStoryboardProvider(event.target.value as StoryboardImageProvider)}
+                        className="cyber-input rounded px-2 py-1 text-[10px] outline-none"
+                        style={{ color: 'var(--color-on-surface)' }}
+                      >
+                        <option value="qwen-image-max">Qwen Max</option>
+                        <option value="pollinations">Legacy</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleGenerateStoryboard}
+                        disabled={loading}
+                        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                        style={{
+                          background: 'rgba(255,209,101,0.15)',
+                          color: 'var(--color-primary)',
+                          border: '1px solid rgba(255,209,101,0.3)',
+                        }}
+                      >
+                        {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        GENERATE
+                      </button>
+                    </div>
                   </div>
                   
                   {storyboardSeed !== null && (
@@ -1456,6 +2039,46 @@ export default function PrevisRoom() {
                 </button>
               </div>
             </div>
+
+            {selectedSceneId && (
+              <div className="px-4 pt-3">
+                <details className="rounded-xl border bg-black/20 p-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                  <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-secondary)' }}>
+                    Shot Planning Details
+                  </summary>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    {([
+                      ['title', 'Shot number and title'],
+                      ['purpose', 'Story or emotional purpose'],
+                      ['framing', 'Shot type and framing'],
+                      ['camera', 'Camera angle, movement, and lens'],
+                      ['blocking', 'Subject blocking and action'],
+                      ['composition', 'Composition and focal point'],
+                      ['atmosphere', 'Lighting, color, and atmosphere'],
+                      ['production', 'Location and production notes'],
+                      ['continuity', 'Continuity or motif notes'],
+                      ['sound', 'Dialogue, sound, or music cues'],
+                      ['transition', 'Transition in and out'],
+                      ['plannedDuration', 'Editable planned duration'],
+                      ['rationale', 'Why this shot matters'],
+                    ] as Array<[keyof ShotPlanningDetails, string]>).map(([field, label]) => (
+                      <label key={field} className={field === 'rationale' ? 'md:col-span-2' : ''}>
+                        <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          {label}
+                        </span>
+                        <textarea
+                          value={activeShotPlanningDetails[field]}
+                          onChange={(event) => updateShotPlanningDetail(field, event.target.value)}
+                          rows={field === 'rationale' ? 2 : 3}
+                          className="cyber-input w-full resize-y rounded px-2 py-1.5 text-[11px] leading-relaxed outline-none"
+                          style={{ color: 'var(--color-on-surface)' }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
 
             {/* RENDER HISTORY FILMSTRIP */}
             <div className="px-4 pt-3">
@@ -1630,13 +2253,13 @@ export default function PrevisRoom() {
                 </span>
               </div>
 
-              {renderHistory.length === 0 ? (
+              {visibleRenderHistory.length === 0 ? (
                 <div className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
                   No previous renders.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {renderHistory.map((entry) => (
+                  {visibleRenderHistory.map((entry) => (
                     <div
                       key={entry.jobId}
                       className="relative"
@@ -1685,6 +2308,27 @@ export default function PrevisRoom() {
                       >
                         <X size={12} />
                       </button>
+                      {entry.status === 'complete' && entry.hasPromptSlots && (
+                        <button
+                          type="button"
+                          onClick={() => void handleAdherenceRetry(entry.jobId)}
+                          disabled={adherenceRetryingJobId === entry.jobId}
+                          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-wait disabled:opacity-60"
+                          style={{
+                            borderColor: 'rgba(34,211,238,0.28)',
+                            color: 'var(--color-secondary)',
+                            background: 'rgba(34,211,238,0.07)',
+                          }}
+                          title="Queue fresh prompt-adherence retries with failed slots moved earlier"
+                        >
+                          {adherenceRetryingJobId === entry.jobId ? (
+                            <Loader2 size={10} className="animate-spin" />
+                          ) : (
+                            <RotateCcw size={10} />
+                          )}
+                          {adherenceRetryingJobId === entry.jobId ? 'Queueing' : 'Adherence Retry'}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

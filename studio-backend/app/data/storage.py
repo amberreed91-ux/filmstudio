@@ -1084,6 +1084,19 @@ class DatabaseStorage:
                 ALTER TABLE characters ADD COLUMN elevenlabs_voice_id TEXT;
                 ALTER TABLE characters ADD COLUMN elevenlabs_voice_name TEXT;
             """),
+            (32, "Add provider-aware voice casting columns to characters", """
+                ALTER TABLE characters ADD COLUMN voice_provider TEXT;
+                ALTER TABLE characters ADD COLUMN voice_id TEXT;
+                ALTER TABLE characters ADD COLUMN voice_name TEXT;
+                ALTER TABLE characters ADD COLUMN voice_source_type TEXT;
+                ALTER TABLE characters ADD COLUMN voice_style_prompt TEXT;
+            """),
+            (33, "Add adherence review history columns to render_attempts", """
+                ALTER TABLE render_attempts ADD COLUMN mismatch_description TEXT;
+                ALTER TABLE render_attempts ADD COLUMN retry_number INTEGER DEFAULT 0;
+                ALTER TABLE render_attempts ADD COLUMN outcome TEXT;
+                ALTER TABLE render_attempts ADD COLUMN advisory_note TEXT;
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -4525,6 +4538,11 @@ class DatabaseStorage:
                            description_status=COALESCE(?, description_status),
                            elevenlabs_voice_id=COALESCE(?, elevenlabs_voice_id),
                            elevenlabs_voice_name=COALESCE(?, elevenlabs_voice_name),
+                           voice_provider=COALESCE(?, voice_provider),
+                           voice_id=COALESCE(?, voice_id),
+                           voice_name=COALESCE(?, voice_name),
+                           voice_source_type=COALESCE(?, voice_source_type),
+                           voice_style_prompt=COALESCE(?, voice_style_prompt),
                            updated_at=?
                            WHERE id=?""",
                         (
@@ -4540,6 +4558,11 @@ class DatabaseStorage:
                             data.get("description_status"),
                             data.get("elevenlabs_voice_id"),
                             data.get("elevenlabs_voice_name"),
+                            data.get("voice_provider"),
+                            data.get("voice_id"),
+                            data.get("voice_name"),
+                            data.get("voice_source_type"),
+                            data.get("voice_style_prompt"),
                             now,
                             char_id,
                         ),
@@ -4551,8 +4574,9 @@ class DatabaseStorage:
                            core_wound, core_desire, relationship_notes, visual_prompt_summary,
                            appearance_core, appearance_notes, description_status,
                            elevenlabs_voice_id, elevenlabs_voice_name,
+                           voice_provider, voice_id, voice_name, voice_source_type, voice_style_prompt,
                            created_at, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             char_id,
                             project_id,
@@ -4569,6 +4593,11 @@ class DatabaseStorage:
                             data.get("description_status") or "legacy",
                             data.get("elevenlabs_voice_id"),
                             data.get("elevenlabs_voice_name"),
+                            data.get("voice_provider"),
+                            data.get("voice_id"),
+                            data.get("voice_name"),
+                            data.get("voice_source_type"),
+                            data.get("voice_style_prompt"),
                             now,
                             now,
                         ),
@@ -4725,6 +4754,29 @@ class DatabaseStorage:
             row = cursor.fetchone()
             return row["elevenlabs_voice_id"] if row else None
 
+    def get_character_voice_casting_by_name(
+        self,
+        project_id: str,
+        name: str,
+        provider: str | None = None,
+    ) -> dict | None:
+        """Look up a provider-aware character voice casting by project + name."""
+        clean_provider = (provider or "").strip().lower()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            query = """SELECT voice_provider, voice_id, voice_name, voice_source_type, voice_style_prompt
+                       FROM characters
+                       WHERE project_id = ? AND name = ?
+                       AND voice_id IS NOT NULL
+                       AND voice_id != ''"""
+            params: list[Any] = [project_id, name]
+            if clean_provider:
+                query += " AND LOWER(COALESCE(voice_provider, '')) = ?"
+                params.append(clean_provider)
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
     def set_character_voice(
         self,
         character_id: str,
@@ -4745,6 +4797,49 @@ class DatabaseStorage:
                        updated_at=?
                    WHERE id=? AND project_id=?""",
                 (voice_id or None, voice_name or None, now, character_id, project_id),
+            )
+            if cursor.rowcount == 0:
+                conn.commit()
+                return None
+            conn.commit()
+            cursor.execute(
+                "SELECT * FROM characters WHERE id = ? AND project_id = ?",
+                (character_id, project_id),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def set_character_voice_casting(
+        self,
+        character_id: str,
+        project_id: str,
+        provider: str,
+        voice_id: str,
+        voice_name: str | None = None,
+        source_type: str | None = None,
+        style_prompt: str | None = None,
+    ) -> dict | None:
+        """Set provider-aware project Casting voice assignment for a character."""
+        now = datetime.now().isoformat()
+        clean_provider = (provider or "").strip().lower() or None
+        clean_voice_id = (voice_id or "").strip() or None
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """UPDATE characters
+                   SET voice_provider=?, voice_id=?, voice_name=?,
+                       voice_source_type=?, voice_style_prompt=?, updated_at=?
+                   WHERE id=? AND project_id=?""",
+                (
+                    clean_provider,
+                    clean_voice_id,
+                    voice_name or None,
+                    source_type or None,
+                    style_prompt or None,
+                    now,
+                    character_id,
+                    project_id,
+                ),
             )
             if cursor.rowcount == 0:
                 conn.commit()

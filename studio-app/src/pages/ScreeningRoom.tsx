@@ -93,6 +93,17 @@ interface ShotInfo {
   videoUrl?: string
 }
 
+type ScenePipelineAssembly = {
+  scene_id?: string
+  status?: string
+  output_url?: string
+  duration_seconds?: number
+  clip_count?: number
+  shot_ids?: string[]
+  soundtrack_status?: string
+  updated_at?: string
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const PLAYBACK_RATES: PlaybackRate[] = [0.5, 1, 1.5, 2]
@@ -111,6 +122,30 @@ function formatTimecode(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function toScenePipelineAssembly(value: unknown): ScenePipelineAssembly | null {
+  if (!isRecord(value)) return null
+  return {
+    scene_id: typeof value.scene_id === 'string' ? value.scene_id : undefined,
+    status: typeof value.status === 'string' ? value.status : undefined,
+    output_url: typeof value.output_url === 'string' ? value.output_url : undefined,
+    duration_seconds: typeof value.duration_seconds === 'number' ? value.duration_seconds : undefined,
+    clip_count: typeof value.clip_count === 'number' ? value.clip_count : undefined,
+    shot_ids: Array.isArray(value.shot_ids) ? value.shot_ids.filter((item): item is string => typeof item === 'string') : undefined,
+    soundtrack_status: typeof value.soundtrack_status === 'string' ? value.soundtrack_status : undefined,
+    updated_at: typeof value.updated_at === 'string' ? value.updated_at : undefined,
+  }
+}
+
+function sceneAssemblyTime(value?: string): number {
+  if (!value) return 0
+  const time = Date.parse(value)
+  return Number.isFinite(time) ? time : 0
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -196,6 +231,22 @@ export default function ScreeningRoom() {
   const [posterUrl, setPosterUrl] = useState<string | null>(null)
   const [posterLoading, setPosterLoading] = useState(false)
   const [posterGenerating, setPosterGenerating] = useState(false)
+
+  const scenePipelineAssemblies = useMemo(() => {
+    const summary = activeProject?.execution_summary
+    if (!isRecord(summary) || !Array.isArray(summary.scene_pipeline_assemblies)) return {}
+    const assemblies = summary.scene_pipeline_assemblies
+      .map(toScenePipelineAssembly)
+      .filter((assembly): assembly is ScenePipelineAssembly => assembly !== null && Boolean(assembly.scene_id))
+      .sort((a, b) => sceneAssemblyTime(b.updated_at) - sceneAssemblyTime(a.updated_at))
+    const byScene: Record<string, ScenePipelineAssembly> = {}
+    for (const assembly of assemblies) {
+      const sceneId = assembly.scene_id
+      if (!sceneId || byScene[sceneId]) continue
+      byScene[sceneId] = assembly
+    }
+    return byScene
+  }, [activeProject?.execution_summary])
 
   useEffect(() => {
     const active = sceneTakes[activeTakeIndex]
@@ -312,6 +363,7 @@ export default function ScreeningRoom() {
     if (scenes.length === 0) return
     const completedJobs = renderJobs.filter((j) => normalizeJobStatus(j.status) === 'complete')
     const takes: SceneTake[] = scenes.map((scene, index) => {
+      const sceneAssembly = scenePipelineAssemblies[scene.scene_id]
       const matchingJobs = completedJobs.filter((j) => {
         const shotId = j.shot_id || j.input_payload?.shot_id || ''
         const jobSceneId = shotId.split('_shot_')[0] || ''
@@ -326,17 +378,17 @@ export default function ScreeningRoom() {
         const url = j.output_payload?.asset_url
         return typeof url === 'string' && url.trim().length > 0
       })
-      const videoUrl = jobWithUrl?.output_payload?.asset_url || undefined
+      const videoUrl = sceneAssembly?.output_url || jobWithUrl?.output_payload?.asset_url || undefined
       return {
         sceneId: scene.scene_id,
         sceneName: scene.scene_name || `Scene ${index + 1}`,
-        takeNumber: matchingJobs.length,
+        takeNumber: sceneAssembly ? Math.max(1, sceneAssembly.clip_count || sceneAssembly.shot_ids?.length || matchingJobs.length) : matchingJobs.length,
         videoUrl,
-        duration: 4,
+        duration: sceneAssembly?.duration_seconds || 4,
       }
     })
     setSceneTakes(takes)
-  }, [scenes, renderJobs])
+  }, [scenes, renderJobs, scenePipelineAssemblies])
 
   // ── Load final package ────────────────────────────────────────────────────
   useEffect(() => {
@@ -574,6 +626,7 @@ export default function ScreeningRoom() {
 
   // ── Scene status badge helper ─────────────────────────────────────────────
   function getSceneStatus(sceneId: string): 'composed' | 'rendered' | 'unrendered' {
+    if (scenePipelineAssemblies[sceneId]?.output_url) return 'composed'
     if (sceneCompositionsCache[sceneId]) return 'composed'
     const hasRender = renderJobs.some((j) => {
       const jobSceneId = j.shot_id?.split('_shot_')[0] || ''
@@ -719,15 +772,18 @@ export default function ScreeningRoom() {
     return map
   }, [activeTake, renderJobs])
 
+  const activeScenePipelineAssembly = activeTake?.sceneId ? scenePipelineAssemblies[activeTake.sceneId] : undefined
+
   // Active video URL: assembled film takes highest priority in full-film mode
   const activeVideoUrl = useMemo(() => {
     if (isFullFilm && assembledFilmUrl) return assembledFilmUrl
+    if (activeScenePipelineAssembly?.output_url) return activeScenePipelineAssembly.output_url
     if (sceneComposition?.composed_url) return sceneComposition.composed_url
     const takes = shotTakes[activeShotNumber]
     const job = takes?.[activeShotTakeIndex]
     if (job?.output_payload?.asset_url) return job.output_payload.asset_url
     return activeTake?.videoUrl || ''
-  }, [isFullFilm, assembledFilmUrl, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
+  }, [isFullFilm, assembledFilmUrl, activeScenePipelineAssembly, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
 
   // Fix 1: Reset shot number when scene changes
   useEffect(() => {

@@ -1,20 +1,35 @@
 from __future__ import annotations
 
-from app.adapters import ADAPTER_REGISTRY, RunwayAdapter
+from app.adapters import ADAPTER_REGISTRY, HappyHorseAdapter, RunwayAdapter
 from app.services.render import RenderService
 
 
 def test_adapter_registry_includes_runway() -> None:
     assert "runway" in ADAPTER_REGISTRY
     assert ADAPTER_REGISTRY["runway"] is RunwayAdapter
+    assert "happyhorse" in ADAPTER_REGISTRY
+    assert ADAPTER_REGISTRY["happyhorse"] is HappyHorseAdapter
 
 
 def test_render_service_provider_configs_include_runway() -> None:
     service = RenderService()
     providers = set(service._provider_configs.keys())
     assert "runway" in providers
+    assert "happyhorse" in providers
     assert "local" in providers
     assert "simulated" in providers
+
+
+def test_default_provider_is_happyhorse(monkeypatch) -> None:
+    monkeypatch.delenv("RENDER_VIDEO_PROVIDER", raising=False)
+    service = RenderService()
+    assert service.get_default_provider() == "happyhorse"
+
+
+def test_default_provider_can_be_overridden_to_runway(monkeypatch) -> None:
+    monkeypatch.setenv("RENDER_VIDEO_PROVIDER", "runway")
+    service = RenderService()
+    assert service.get_default_provider() == "runway"
 
 
 def test_create_job_accepts_runway_provider() -> None:
@@ -25,8 +40,7 @@ def test_create_job_accepts_runway_provider() -> None:
         provider="runway",
         prompt="smoke",
     )
-    # Runway is always overridden to local/simulated for this build
-    assert job.provider == "local"
+    assert job.provider == "runway"
 
 
 def test_invalid_provider_still_returns_clear_error() -> None:
@@ -55,6 +69,5 @@ def test_smoke_test_path_inputs_can_create_runway_job() -> None:
         provider="runway",
         prompt="A lone woman walking through neon rain at night, cinematic, moody",
     )
-    # Runway is always overridden to local/simulated for this build
-    assert job.provider == "local"
+    assert job.provider == "runway"
     assert job.status == "pending"

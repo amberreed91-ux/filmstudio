@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.data.storage import get_storage
-from app.llm_client import call_llm
+from app.llm_client import get_llm_completion_with_fallback
 from app.services.project_store import project_store
 
 logger = logging.getLogger("writers-intelligence")
@@ -113,7 +113,14 @@ async def simulate_character_mind(project_id: str, request: CharacterMindRequest
         logger.info("Character mind simulation: project=%s character=%s scene=%s",
                      project_id, char_name, request.scene_id)
 
-        simulation = await call_llm(system_prompt, user_prompt)
+        simulation, provider = await get_llm_completion_with_fallback(
+            system_prompt, user_prompt
+        )
+        logger.info(
+            "project_id=%s job_id=- provider=%s stage=character_mind duration_ms=0",
+            project_id,
+            provider,
+        )
 
         return CharacterMindResponse(
             simulation=simulation,
@@ -161,9 +168,18 @@ async def debate_scene(project_id: str, request: DebateRequest):
 
         logger.info("Scene debate: project=%s scene=%s", project_id, request.scene_id)
 
-        restraint, urgency = await asyncio.gather(
-            call_llm(restraint_system, user_prompt),
-            call_llm(urgency_system, user_prompt),
+        # Each perspective races Qwen against the internal timeout and falls
+        # back to Groq independently, so a single blocked provider call no
+        # longer hangs the whole Intelligence tab to the frontend's 30s.
+        (restraint, restraint_provider), (urgency, urgency_provider) = await asyncio.gather(
+            get_llm_completion_with_fallback(restraint_system, user_prompt),
+            get_llm_completion_with_fallback(urgency_system, user_prompt),
+        )
+        logger.info(
+            "project_id=%s job_id=- provider=%s/%s stage=scene_debate duration_ms=0",
+            project_id,
+            restraint_provider,
+            urgency_provider,
         )
 
         return DebateResponse(

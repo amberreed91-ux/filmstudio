@@ -196,7 +196,7 @@ function normalizeStudioProject(raw: StudioProject): StudioProject {
   }
 }
 
-export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
+export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutMs?: number; timeoutLabel?: string }): Promise<T> {
   const controller = new AbortController()
   const externalSignal = init?.signal
   // Default timeout: 30 seconds (increased from 8 seconds)
@@ -214,7 +214,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
   }
 
   try {
-    const { timeoutMs, ...rest } = init || {}
+    const { timeoutMs, timeoutLabel, ...rest } = init || {}
     const response = await fetch(`${STUDIO_API_BASE}${path}`, {
       ...rest,
       signal,
@@ -264,7 +264,12 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
       if (externalSignal?.aborted) {
         throw new Error('Request aborted.')
       }
-      throw new Error('Render timed out — job may still be processing')
+      // Contextual per feature instead of always saying "Render timed out"
+      // (which was actively misleading for non-render calls like AI Enhance
+      // Prompt, Shot Count, and Intelligence). The label lets render-polling
+      // callers keep the render-specific framing.
+      const label = init?.timeoutLabel ?? 'Request'
+      throw new Error(`${label} timed out — the call may still be processing`)
     }
     // Log all API errors to console for debugging
     console.error(`[Studio API Error] ${path}:`, err)
@@ -456,6 +461,8 @@ export type ShortFilmStitchResult = {
   clip_count: number
   output_path: string
   output_url: string
+  scene_id?: string
+  shot_ids?: string[]
   duration_seconds?: number
   status: string
   blocker?: string
@@ -481,7 +488,7 @@ export type EndCardConfig = {
 
 export type SoundtrackConfig = {
   enabled: boolean
-  audio_source_type: 'none' | 'local_file' | 'generated_placeholder'
+  audio_source_type: 'none' | 'local_file' | 'generated_placeholder' | 'audio_url'
   audio_url?: string
   local_audio_path?: string
   volume?: number
@@ -489,6 +496,28 @@ export type SoundtrackConfig = {
   fade_out_seconds?: number
   loop_to_duration?: boolean
   style_label?: string
+}
+
+export type SceneScoreAmbientProvider = 'none' | 'manual_post_render' | 'ace_step' | 'musicgen'
+
+export type ScenePipelineGeneratePayload = {
+  provider?: string | null
+  overwrite?: boolean
+  on_audio_overrun?: 'error' | 'freeze_last_frame' | 'trim_audio'
+  score_ambient_provider?: SceneScoreAmbientProvider
+  soundtrack?: Partial<SoundtrackConfig>
+}
+
+export type ScenePipelineGenerateResult = {
+  status: string
+  project_id: string
+  scene_id: string
+  shots: Array<Record<string, unknown>>
+  stitch: ShortFilmStitchResult
+  assembly?: Record<string, unknown>
+  output_url?: string
+  score_ambient_provider?: SceneScoreAmbientProvider | string
+  soundtrack_status?: string
 }
 
 export async function listProjects(): Promise<{ projects: PersistedProjectState[]; error?: string }> {
@@ -664,6 +693,7 @@ export type Scene = {
   updated_at: string
   status: string
   storyboard_image?: string
+  storyboard_images?: Record<string, string>
   sound_advisory?: SoundAdvisory
   transition_advisory?: TransitionAdvisory
   comments?: SceneComment[]
@@ -806,6 +836,13 @@ export type CharacterRecord = {
   core_desire: string | null
   relationship_notes: string | null
   visual_prompt_summary: string | null
+  voice_provider: CastingVoiceProvider | null
+  voice_id: string | null
+  voice_name: string | null
+  voice_source_type: string | null
+  voice_style_prompt: string | null
+  elevenlabs_voice_id: string | null
+  elevenlabs_voice_name: string | null
   created_at: string
   updated_at: string
 }
@@ -890,6 +927,104 @@ export async function uploadCharacterDescriptor(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unable to upload character descriptor',
+    }
+  }
+}
+
+// ── Voice Casting ────────────────────────────────────────────────────────────
+
+export type CastingVoiceProvider = 'cosyvoice' | 'fish_audio' | 'elevenlabs'
+
+export type ElevenLabsVoiceLabels = {
+  gender: string
+  age: string
+  accent: string
+  use_case: string
+  description: string
+}
+
+export type ElevenLabsVoice = {
+  voice_id: string
+  name: string
+  category: string
+  preview_url: string
+  labels: ElevenLabsVoiceLabels
+}
+
+export type VoiceAssignment = {
+  character_id: string
+  project_id: string
+  voice_provider: CastingVoiceProvider | null
+  voice_id: string | null
+  voice_name: string | null
+  voice_source_type: string | null
+  voice_style_prompt: string | null
+  elevenlabs_voice_id: string | null
+  elevenlabs_voice_name: string | null
+}
+
+export async function listElevenLabsVoices(
+  projectId: string,
+  category?: string,
+): Promise<{ voices: ElevenLabsVoice[]; error?: string }> {
+  try {
+    const params = category ? `?category=${encodeURIComponent(category)}` : ''
+    const response = await fetchJson<{ voices: ElevenLabsVoice[]; count: number }>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/elevenlabs/voices${params}`,
+    )
+    return { voices: response.voices || [] }
+  } catch (error) {
+    return {
+      voices: [],
+      error: error instanceof Error ? error.message : 'Unable to list voices',
+    }
+  }
+}
+
+export async function getCharacterVoice(
+  projectId: string,
+  characterId: string,
+): Promise<{ assignment?: VoiceAssignment; error?: string }> {
+  try {
+    const response = await fetchJson<VoiceAssignment>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/voice`,
+    )
+    return { assignment: response }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to get voice assignment',
+    }
+  }
+}
+
+export async function setCharacterVoice(
+  projectId: string,
+  characterId: string,
+  voiceId: string,
+  voiceName?: string,
+  provider: CastingVoiceProvider = 'elevenlabs',
+  sourceType?: string,
+  stylePrompt?: string,
+): Promise<{ assignment?: VoiceAssignment; error?: string }> {
+  try {
+    const response = await fetchJson<VoiceAssignment>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/voice`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          voice_id: voiceId,
+          voice_name: voiceName,
+          source_type: sourceType,
+          style_prompt: stylePrompt,
+        }),
+      },
+    )
+    return { assignment: response }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to set voice assignment',
     }
   }
 }
@@ -1006,6 +1141,35 @@ export async function stitchShortFilm(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unable to stitch short film',
+    }
+  }
+}
+
+export async function generateScenePipeline(
+  projectId: string,
+  sceneId: string,
+  payload: ScenePipelineGeneratePayload = {},
+): Promise<{ result?: ScenePipelineGenerateResult; error?: string }> {
+  try {
+    const result = await fetchJson<ScenePipelineGenerateResult>(
+      `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/pipeline/generate`,
+      {
+        timeoutMs: 20 * 60 * 1000,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: payload.provider ?? null,
+          overwrite: Boolean(payload.overwrite),
+          on_audio_overrun: payload.on_audio_overrun || 'freeze_last_frame',
+          score_ambient_provider: payload.score_ambient_provider || 'none',
+          soundtrack: payload.soundtrack || {},
+        }),
+      },
+    )
+    return { result }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to generate scene pipeline',
     }
   }
 }
@@ -1143,9 +1307,30 @@ export function studyReferenceUpload(projectId: string, file: File, options?: { 
   })
 }
 
-export function generateSceneStoryboard(projectId: string, sceneId: string) {
-  return fetchJson<{ image_url: string; status: string; seed?: number }>(
-    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard`,
+export type StoryboardImageProvider = 'qwen-image-max' | 'pollinations'
+
+export function generateSceneStoryboard(
+  projectId: string,
+  sceneId: string,
+  provider: StoryboardImageProvider = 'qwen-image-max',
+  shotNumber = 1,
+) {
+  const params = new URLSearchParams({ provider, shot_number: String(Math.max(1, shotNumber)) })
+  return fetchJson<{
+    image_url: string
+    status: string
+    seed?: number
+    provider?: string
+    model?: string
+    image_state?: string
+    retryable?: boolean
+    message?: string
+    scene_id?: string
+    shot_id?: string | null
+    shot_number?: number
+    job_id?: string
+  }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard?${params.toString()}`,
     { method: 'POST', timeoutMs: 30000 },
   )
 }
@@ -1346,6 +1531,9 @@ export type EnhancePromptResponse = {
   enhanced_prompt: string
   original_prompt: string
   study_memories_used: number
+  scene_context_used: boolean
+  character_profiles_used: number
+  enhancement_attempts: number
 }
 
 export async function enhancePrevisPrompt(
@@ -1358,6 +1546,7 @@ export async function enhancePrevisPrompt(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      timeoutLabel: 'AI Enhance Prompt',
     },
   )
 }
@@ -1382,6 +1571,7 @@ export async function generatePrevisDirectorNotes(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      timeoutLabel: 'Director notes',
     },
   )
 }
@@ -1407,6 +1597,54 @@ export async function recommendShotCount(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      timeoutLabel: 'Shot count recommendation',
+    },
+  )
+}
+
+// ── Per-shot Generation Settings Recommendation ────────────────────────────
+
+export type GenerationSettingsRequest = {
+  scene_id: string
+  shot_number: number
+  shot_type: string
+}
+
+export type GenerationSettingsRecommendation = {
+  duration_seconds: number
+  fps: number
+  resolution: string
+  model: string | null
+}
+
+export type ProviderDurationConstraint = {
+  provider: string
+  supports_custom_duration: boolean
+  valid_durations_seconds: number[]
+  nearest_valid_duration_seconds: number
+  advisory: string
+}
+
+export type GenerationSettingsResponse = {
+  scene_id: string
+  shot_number: number
+  recommended: GenerationSettingsRecommendation
+  duration_constraint: ProviderDurationConstraint
+  reasoning: string
+  study_memories_used: number
+}
+
+export async function recommendGenerationSettings(
+  projectId: string,
+  payload: GenerationSettingsRequest,
+): Promise<GenerationSettingsResponse> {
+  return fetchJson<GenerationSettingsResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/generation-settings`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      timeoutLabel: 'Generation settings recommendation',
     },
   )
 }
@@ -1630,13 +1868,35 @@ export function retryRenderJobById(jobId: string) {
   })
 }
 
+export type AdherenceRetryResult = {
+  strategy: string
+  jobs_submitted: Array<{ job_id: string; seed: number; status: string }>
+  seeds_used?: number[]
+  best_attempt?: Record<string, unknown> | null
+  all_scored_attempts?: Array<Record<string, unknown>>
+}
+
+export function retryRenderJobForAdherence(
+  jobId: string,
+  maxAttempts = 3,
+) {
+  return fetchJson<AdherenceRetryResult>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/adherence-retry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      max_attempts: maxAttempts,
+      submission_strategy: 'combined_reorder_and_fresh_seeds',
+    }),
+  })
+}
+
 export function getRenderJobOutputs(jobId: string) {
   return fetchJson<RenderAsset[]>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/outputs`)
 }
 
 export function listRenderJobs(projectId?: string, init?: RequestInit) {
   const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''
-  return fetchJson<RenderJob[]>('/api/f51/studio/render/jobs' + query, init)
+  return fetchJson<RenderJob[]>('/api/f51/studio/render/jobs' + query, { ...init, timeoutLabel: 'Render' })
 }
 
 export function getRenderDiagnostics(projectId?: string, init?: RequestInit) {
@@ -1742,6 +2002,7 @@ export const studioApi = {
   getRenderJobStatus,
   cancelRenderJob,
   retryRenderJobById,
+  retryRenderJobForAdherence,
   getRenderJobOutputs,
   listRenderJobs,
   getRenderDiagnostics,
@@ -3717,6 +3978,7 @@ export async function simulateCharacterMind(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      timeoutLabel: 'Character mind simulation',
     },
   )
 }
@@ -3731,6 +3993,7 @@ export async function triggerSceneDebate(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      timeoutLabel: 'Scene debate',
     },
   )
 }

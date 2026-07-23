@@ -123,6 +123,16 @@ async def lifespan(app: FastAPI):
     semantic_search_service._storage = storage
     semantic_search_service._semantic_memory_service = semantic_memory_service
 
+    # Initialize render retry / adherence quality loop with runtime services.
+    from app.services.render_retry_service import render_retry_service
+    from app.services.adherence_service import adherence_service
+    render_retry_service.set_storage(storage)
+    render_retry_service._adherence_service = adherence_service
+    render_retry_service._keyframe_service = keyframe_extraction_service
+    render_retry_service._video_asset_service = video_asset_service
+    adherence_service._storage = storage
+    logger.info("Render retry/adherence service initialized with storage and media services")
+
     # Initialize StudyMemoryService with storage
     from app.services.study_memory_service import get_study_memory_service
     _study_svc = get_study_memory_service()

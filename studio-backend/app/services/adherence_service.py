@@ -5,23 +5,20 @@ Scores rendered shots against extracted frames (10%, 50%, 90% of duration) using
 vision-capable models to detect drift across dimensions: character_state, action,
 camera, lighting, environment_persistence.
 
-NOTE: Vision model selection is configurable. Default is Gemini 2.5 Flash (free tier)
-for prototyping. Fine-grained consistency judgments may benefit from upgrading to
-Gemini Pro (paid) or GPT-4o/Claude via ADHERENCE_VISION_PROVIDER config if Flash's
-judgments prove insufficient for production use.
+NOTE: Vision model selection is configurable. Default is Qwen-VL through
+DashScope. The prior Gemini path remains available only when explicitly selected
+via ADHERENCE_VISION_PROVIDER.
 """
 
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-import google.generativeai as genai
 from groq import Groq
 
 logger = logging.getLogger("adherence_service")
@@ -110,6 +107,8 @@ class FullCorrectedPrompt:
     prompt: str  # Assembled prompt string (<=512 chars)
     chars_remaining: int
     compressed_slots: List[str]  # Slots that were compressed due to budget
+    slot_order: List[str] | None = None
+    reorder_reason: Dict[str, str] | None = None
 
 
 class AdherenceService:
@@ -122,12 +121,13 @@ class AdherenceService:
     
     def __init__(self, storage=None):
         self._storage = storage
-        # NOTE: Using Gemini 2.5 Flash as default - free tier for prototyping.
-        # For production fine-grained consistency judgments (e.g., "is this the same
-        # weathered hand as attempt 1"), consider upgrading to Gemini Pro (paid) or
-        # GPT-4o/Claude via ADHERENCE_VISION_PROVIDER config if needed.
-        self._vision_provider = os.getenv("ADHERENCE_VISION_PROVIDER", "gemini")
-        self._vision_model = os.getenv("ADHERENCE_VISION_MODEL", "gemini-2.5-flash")
+        self._vision_provider = os.getenv("ADHERENCE_VISION_PROVIDER", "qwen").strip().lower()
+        default_model = (
+            "gemini-2.5-flash"
+            if self._vision_provider == "gemini"
+            else "qwen-vl-max"
+        )
+        self._vision_model = os.getenv("ADHERENCE_VISION_MODEL", default_model).strip()
         
     async def score_render_attempt(
         self,
@@ -929,12 +929,23 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
         """
         Call vision model to score frames against expectations.
         
-        NOTE: Currently using Gemini 2.5 Flash (free tier). For production fine-grained
-        consistency judgments, consider upgrading to Gemini Pro or GPT-4o/Claude via
-        ADHERENCE_VISION_PROVIDER config if Flash's judgments prove insufficient.
-        
         Returns dict matching the required JSON schema.
         """
+        if self._vision_provider in {"qwen", "qwen-vl", "dashscope"}:
+            from app.services.vision.qwen_vision_service import QwenVisionService
+
+            service = QwenVisionService(model=self._vision_model or "qwen-vl-max")
+            return await service.score_adherence(
+                frames=frames,
+                expected_character=expected_character,
+                expected_action=expected_action,
+                expected_camera=expected_camera,
+                expected_lighting=expected_lighting,
+                expected_environment=expected_environment,
+            )
+
+        import google.generativeai as genai
+
         # Build prompt for vision model
         prompt = f"""You are a film continuity expert. Score this rendered shot against the script expectations.
 

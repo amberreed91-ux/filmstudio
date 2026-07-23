@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
+import {
+  buildCoDirectorChatPayload,
+  formatMemoryProvenance,
+  type CoDirectorContext as Context,
+  type CoDirectorSceneSummary as SceneSummary,
+  type CoDirectorSpecialist as Specialist,
+} from '../lib/coDirectorDrawerContext'
 import {
   Clapperboard,
   Edit3,
@@ -12,9 +20,6 @@ import {
   ArrowLeftRight,
   Filter,
 } from 'lucide-react'
-
-type Specialist = 'director' | 'writer' | 'memory_archivist' | 'evaluator' | 'provider_router'
-type Context = 'current_scene' | 'full_script' | 'project_overview' | 'custom'
 
 interface Message {
   role: 'user' | 'agent'
@@ -71,12 +76,6 @@ function countMemoryEntries(bundle: DirectorMemoryBundle | null | undefined): nu
   return total
 }
 
-interface SceneSummary {
-  scene_id: string
-  scene_name: string
-  location?: string
-}
-
 interface ProjectScenesResponse {
   scenes?: SceneSummary[]
 }
@@ -84,10 +83,11 @@ interface ProjectScenesResponse {
 function deriveSceneContextLabel(
   context: Context,
   scenes: SceneSummary[] | undefined,
+  activeSceneId?: string,
 ): string {
   if (context === 'current_scene') {
     if (!scenes || scenes.length === 0) return 'CURRENT SCENE'
-    const idx = scenes.findIndex((s) => s.scene_id)
+    const idx = scenes.findIndex((s) => s.scene_id === activeSceneId)
     const scene = idx >= 0 ? scenes[idx] : scenes[0]
     const num = String(idx >= 0 ? idx + 1 : 1).padStart(2, '0')
     const title = scene.location || scene.scene_name || scene.scene_id
@@ -99,12 +99,14 @@ function deriveSceneContextLabel(
 }
 
 export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, activeRoomName }: CoDirectorDrawerProps) {
+  const location = useLocation()
   const [specialist, setSpecialist] = useState<Specialist>('director')
   const [context, setContext] = useState<Context>('current_scene')
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [showContextMenu, setShowContextMenu] = useState(false)
+  const [lastMemoryEntriesSupplied, setLastMemoryEntriesSupplied] = useState<number | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -145,7 +147,8 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
     retry: 0,
   })
 
-  const contextLabel = deriveSceneContextLabel(context, scenesQuery.data?.scenes)
+  const activeSceneId = new URLSearchParams(location.search).get('scene') || undefined
+  const contextLabel = deriveSceneContextLabel(context, scenesQuery.data?.scenes, activeSceneId)
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -158,6 +161,7 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
   useEffect(() => {
     setMessages([])
     setInput('')
+    setLastMemoryEntriesSupplied(null)
   }, [specialist])
 
   // Close on Escape
@@ -187,13 +191,15 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
     setLoading(true)
 
     try {
-      const payload: Record<string, unknown> = {
+      const payload = buildCoDirectorChatPayload({
         specialist,
         message: trimmed,
         context,
-        project_id: activeProjectId,
-        system_prompt: activeSpecialistData.prompt,
-      }
+        projectId: activeProjectId,
+        systemPrompt: activeSpecialistData.prompt,
+        scenes: scenesQuery.data?.scenes,
+        activeSceneId,
+      })
 
       const res = await fetch(
         `/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? '')}/co-director/chat`,
@@ -206,10 +212,20 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
 
       const data = await res.json().catch(() => null)
 
-      let replyText = "I'm here — tell me more about your intent."
+      if (!res.ok) {
+        throw new Error(String(data?.detail || `Co-Director request failed (${res.status})`))
+      }
+
+      let replyText = ''
       if (data?.reply) replyText = String(data.reply)
       else if (data?.message) replyText = String(data.message)
       else if (data?.response) replyText = String(data.response)
+      if (!replyText.trim()) {
+        throw new Error('Co-Director returned an empty response')
+      }
+      setLastMemoryEntriesSupplied(
+        typeof data?.memory_entries_used === 'number' ? data.memory_entries_used : null,
+      )
 
       const agentMsg: Message = {
         role: 'agent',
@@ -221,7 +237,7 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
     } catch {
       const agentMsg: Message = {
         role: 'agent',
-        text: "I'm not sure how to answer that. Could you rephrase?",
+        text: 'The Co-Director could not respond just now. Please retry when the service is available.',
         specialist,
         timestamp: Date.now(),
       }
@@ -321,7 +337,7 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
               <div className="px-5 pb-2 relative z-10">
                 <span className="font-status-xs text-on-surface-variant inline-flex items-center gap-1.5">
                   <MemoryStick size={11} />
-                  Director's Memory active — {memoryEntries} {memoryEntries === 1 ? 'entry' : 'entries'} in context
+                  {formatMemoryProvenance(memoryEntries, lastMemoryEntriesSupplied)}
                 </span>
               </div>
             )}

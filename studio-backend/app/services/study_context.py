@@ -13,6 +13,8 @@ Used by:
 from __future__ import annotations
 
 import logging
+import re
+from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 from app.data import get_storage
@@ -21,6 +23,20 @@ from app.services.director_memory_service import director_memory_service
 from app.services.study_memory_service import get_study_memory_service
 
 logger = logging.getLogger("study-context")
+
+
+@dataclass(frozen=True)
+class StudyContextSnapshot:
+    """The exact context assembled for one generation request."""
+
+    block: str
+    memory_entries: tuple[tuple[str, str], ...]
+    scene_content_included: bool
+    character_count: int
+
+    @property
+    def memory_entries_supplied(self) -> int:
+        return len(self.memory_entries)
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +159,6 @@ def fetch_active_memories(
     """
     # Source 1: Director's Memory (JSON-backed, user-saved)
     bundle = director_memory_service.get_memory(project_id)
-    total = sum(len(v) for v in bundle.values())
     categorized = _categorize_memories(bundle)
 
     # Source 2: study_memories table (SQLite-backed, auto-extracted)
@@ -155,13 +170,78 @@ def fetch_active_memories(
             for item in db_memories.get(key, []):
                 if item not in categorized[key]:
                     categorized[key].append(item)
-        total += db_memories.get("raw_count", 0)
     except Exception as exc:
         logger.debug("Could not load study_memories: %s", exc)
 
-    categorized["raw_count"] = total
-    categorized["found"] = total > 0
+    for key in ("style", "tone", "pacing"):
+        # A memory can exist in both the JSON director-memory bundle and the
+        # SQLite Study table. It is supplied only once to a model request.
+        categorized[key] = list(dict.fromkeys(categorized.get(key, [])))
+
+    included_count = sum(len(categorized[key]) for key in ("style", "tone", "pacing"))
+    categorized["raw_count"] = included_count
+    categorized["included_count"] = included_count
+    categorized["found"] = included_count > 0
     return categorized
+
+
+def select_relevant_memory_entries(
+    project_id: str,
+    query: str,
+    *,
+    max_entries: int = 8,
+) -> list[tuple[str, str]]:
+    """Return the bounded memory entries that will actually enter a prompt.
+
+    Relevance is intentionally lexical and inspectable. Category diversity is
+    preserved so a generic question still receives visual, tonal, and pacing
+    evidence instead of whichever records happen to be stored first.
+    """
+    memories = fetch_active_memories(project_id)
+    candidates = [
+        (category, text)
+        for category in ("style", "tone", "pacing")
+        for text in memories.get(category, [])
+        if str(text).strip()
+    ]
+    if max_entries <= 0:
+        return []
+    if len(candidates) <= max_entries:
+        return candidates
+
+    query_words = {
+        word
+        for word in re.findall(r"[a-z0-9']+", str(query).lower())
+        if len(word) >= 4
+    }
+    craft_words = {
+        "camera", "composition", "frame", "framing", "lens", "light",
+        "lighting", "color", "visual", "movement", "location", "blocking",
+        "rhythm", "pacing", "tone", "mood", "sound", "production",
+    }
+
+    def score(item: tuple[str, str]) -> tuple[int, int]:
+        category, text = item
+        words = set(re.findall(r"[a-z0-9']+", text.lower()))
+        direct = len(query_words & words)
+        craft = len(craft_words & words)
+        # Visual craft is especially actionable for prompt enhancement, while
+        # tone and pacing each receive a small diversity prior.
+        prior = 2 if category == "style" else 1
+        return direct * 4 + min(craft, 4) + prior, -candidates.index(item)
+
+    selected: list[tuple[str, str]] = []
+    for category in ("style", "tone", "pacing"):
+        category_rows = [item for item in candidates if item[0] == category]
+        if category_rows:
+            selected.append(max(category_rows, key=score))
+
+    for item in sorted(candidates, key=score, reverse=True):
+        if item not in selected:
+            selected.append(item)
+        if len(selected) >= max_entries:
+            break
+    return selected[:max_entries]
 
 
 def fetch_scene_content(
@@ -240,14 +320,30 @@ def build_study_context_block(
 
     This is the main entry point for injecting Study context into LLM calls.
     """
+    return build_study_context(project_id, scene_id).block
+
+
+def build_study_context(
+    project_id: str,
+    scene_id: str | None = None,
+    *,
+    relevance_query: str = "",
+    max_memories: int = 8,
+) -> StudyContextSnapshot:
+    """Build context and provenance from the same immutable snapshot."""
     blocks: List[str] = []
 
     # 1. Active memories
-    memories = fetch_active_memories(project_id)
-    if memories["found"]:
+    scene_text = fetch_scene_content(project_id, scene_id) if scene_id else ""
+    entries = select_relevant_memory_entries(
+        project_id,
+        f"{relevance_query}\n{scene_text}",
+        max_entries=max_memories,
+    )
+    if entries:
         mem_blocks: List[str] = []
         for category, label in [("style", "LEARNED STYLE"), ("tone", "TONE RULES"), ("pacing", "PACING")]:
-            items = memories.get(category, [])
+            items = [text for entry_category, text in entries if entry_category == category]
             if items:
                 mem_blocks.append(f"--- {label} ---\n" + "\n".join(f"- {item}" for item in items))
         if mem_blocks:
@@ -257,14 +353,18 @@ def build_study_context_block(
     char_block = build_characters_context_block(project_id)
     if char_block:
         blocks.append(char_block)
+    character_count = max(0, len(char_block.splitlines()) - 1) if char_block else 0
 
     # 3. Scene content
-    if scene_id:
-        scene_text = fetch_scene_content(project_id, scene_id)
-        if scene_text:
-            blocks.append(f"CURRENT SCENE:\n{scene_text}")
+    if scene_text:
+        blocks.append(f"CURRENT SCENE:\n{scene_text}")
 
-    return "\n\n".join(blocks)
+    return StudyContextSnapshot(
+        block="\n\n".join(blocks),
+        memory_entries=tuple(entries),
+        scene_content_included=bool(scene_text),
+        character_count=character_count,
+    )
 
 
 def build_characters_context_block(project_id: str) -> str:

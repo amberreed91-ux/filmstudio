@@ -502,6 +502,88 @@ def test_empty_diff_returns_unchanged_slots(adherence_service, base_slots):
     assert result_slots == base_slots
 
 
+@pytest.mark.asyncio
+async def test_qwen_vision_result_feeds_loop1_scoring(monkeypatch, base_slots):
+    """Qwen raw result matches the scoring contract Loop 3 consumes."""
+    monkeypatch.setenv("ADHERENCE_VISION_PROVIDER", "qwen")
+    monkeypatch.setenv("ADHERENCE_VISION_MODEL", "qwen-vl-max")
+
+    captured = {}
+
+    class FakeQwenVisionService:
+        def __init__(self, model):
+            captured["model"] = model
+
+        async def score_adherence(self, **kwargs):
+            captured.update(kwargs)
+            return {
+                "dimensions": {
+                    "character_state": {
+                        "score": 42,
+                        "evidence": "Hands read smooth rather than weathered",
+                        "expected": kwargs["expected_character"],
+                        "observed": "Smooth hands visible",
+                    },
+                    "action": {
+                        "score": 76,
+                        "evidence": "Walking is present, produce inspection is weak",
+                        "expected": kwargs["expected_action"],
+                        "observed": "Walking through market",
+                    },
+                    "camera": {
+                        "score": 82,
+                        "evidence": "Medium framing holds",
+                        "expected": kwargs["expected_camera"],
+                        "observed": "Medium handheld shot",
+                    },
+                    "lighting": {
+                        "score": 71,
+                        "evidence": "Contrast is slightly softer than requested",
+                        "expected": kwargs["expected_lighting"],
+                        "observed": "Moderate daylight contrast",
+                    },
+                    "environment_persistence": {
+                        "score": 45,
+                        "evidence": "Neon market environment drops out late",
+                        "expected": kwargs["expected_environment"],
+                        "observed": "Plain street by final frame",
+                    },
+                },
+                "temporal_drift": {"start_score": 65, "end_score": 48},
+            }
+
+    monkeypatch.setattr(
+        "app.services.vision.qwen_vision_service.QwenVisionService",
+        FakeQwenVisionService,
+    )
+
+    service = AdherenceService()
+    score = await service.score_render_attempt(
+        shot_id="shot_qwen",
+        attempt_n=1,
+        video_url="https://example.test/render.mp4",
+        expected_slots=base_slots,
+        extracted_frames=["frame_10.jpg", "frame_50.jpg", "frame_90.jpg"],
+    )
+
+    expected_score = (
+        42 * DIMENSION_WEIGHTS["character_state"]
+        + 76 * DIMENSION_WEIGHTS["action"]
+        + 82 * DIMENSION_WEIGHTS["camera"]
+        + 71 * DIMENSION_WEIGHTS["lighting"]
+        + 45 * DIMENSION_WEIGHTS["environment_persistence"]
+    )
+
+    assert captured["model"] == "qwen-vl-max"
+    assert captured["frames"] == ["frame_10.jpg", "frame_50.jpg", "frame_90.jpg"]
+    assert captured["expected_character"] == base_slots["character_state"]
+    assert score.adherence_score == pytest.approx(expected_score)
+    assert score.verdict == "correctable"
+    assert score.failed_slots == ["character_state", "environment_persistence"]
+    assert score.dimensions["character_state"].observed == "Smooth hands visible"
+    assert score.temporal_drift == {"start_score": 65, "end_score": 48}
+
+
 # ================================================================================
 # INTEGRATION TESTS
 # ================================================================================

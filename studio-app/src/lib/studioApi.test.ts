@@ -5,10 +5,141 @@ import {
   getTimelineIntelligence,
   getProjectDecisionGate,
   getStudioProject,
+  enhancePrevisPrompt,
+  generateSceneStoryboard,
+  generateScenePipeline,
+  recommendGenerationSettings,
   refreshRenderJobOutputUrl,
+  retryRenderJobForAdherence,
   resolveStudioApiBase,
   seedDemoStudioProject,
 } from './studioApi'
+
+describe('enhancePrevisPrompt', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('preserves exact context-supplied provenance from the API response', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          enhanced_prompt: 'A materially richer Chicago shot.',
+          original_prompt: 'A Chicago shot.',
+          study_memories_used: 8,
+          scene_context_used: true,
+          character_profiles_used: 2,
+          enhancement_attempts: 2,
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await enhancePrevisPrompt('film-1', {
+      scene_id: 'scene_001',
+      prompt_text: 'A Chicago shot.',
+    })
+
+    expect(result.study_memories_used).toBe(8)
+    expect(result.scene_context_used).toBe(true)
+    expect(result.enhancement_attempts).toBe(2)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/projects/film-1/previs/enhance-prompt')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      scene_id: 'scene_001',
+      prompt_text: 'A Chicago shot.',
+    })
+  })
+})
+
+describe('generateSceneStoryboard', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('defaults storyboard generation to Qwen Image Max', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          image_url: '/previs-assets/proj-1/scene_001_storyboard_qwen.png',
+          status: 'complete',
+          provider: 'dashscope',
+          model: 'qwen-image-max',
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await generateSceneStoryboard('proj-1', 'scene_001', 'qwen-image-max', 2)
+
+    expect(result.model).toBe('qwen-image-max')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/projects/proj-1/scenes/scene_001/storyboard?provider=qwen-image-max')
+    expect(String(url)).toContain('shot_number=2')
+    expect((init?.method || '').toUpperCase()).toBe('POST')
+  })
+
+  it('can request the legacy storyboard provider', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          image_url: 'https://image.pollinations.ai/prompt/test',
+          status: 'complete',
+          provider: 'pollinations',
+          model: 'pollinations.ai',
+        }),
+        { status: 200 },
+      ),
+    )
+
+    await generateSceneStoryboard('proj-1', 'scene_001', 'pollinations')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('provider=pollinations')
+  })
+})
+
+describe('recommendGenerationSettings', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('returns duration constraints with the recommendation', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          scene_id: 'scene_001',
+          shot_number: 2,
+          recommended: {
+            duration_seconds: 6,
+            fps: 16,
+            resolution: '720p',
+            model: 'Wan 2.2',
+          },
+          duration_constraint: {
+            provider: 'Wan 2.2',
+            supports_custom_duration: true,
+            valid_durations_seconds: [4, 8, 12, 16, 20],
+            nearest_valid_duration_seconds: 8,
+            advisory: 'Editable.',
+          },
+          reasoning: 'Enough time for the push-in to register.',
+          study_memories_used: 1,
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await recommendGenerationSettings('proj-1', {
+      scene_id: 'scene_001',
+      shot_number: 2,
+      shot_type: 'close',
+    })
+
+    expect(result.duration_constraint.nearest_valid_duration_seconds).toBe(8)
+    expect(result.reasoning).toContain('push-in')
+  })
+})
 
 describe('getStudioProject', () => {
   afterEach(() => {
@@ -168,6 +299,81 @@ describe('getEditorialRevisionIntelligence', () => {
   })
 })
 
+describe('generateScenePipeline', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('calls the scene pipeline endpoint with manual post-render soundtrack payload', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'complete',
+          project_id: 'proj-scene',
+          scene_id: 'scene_003',
+          shots: [],
+          stitch: {
+            project_id: 'proj-scene',
+            scene_id: 'scene_003',
+            clip_count: 2,
+            output_path: '/tmp/scene.mp4',
+            output_url: '/outputs/scene.mp4',
+            status: 'completed',
+          },
+          output_url: '/outputs/scene.mp4',
+          score_ambient_provider: 'manual_post_render',
+          soundtrack_status: 'manual_post_render',
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const response = await generateScenePipeline('proj-scene', 'scene_003', {
+      provider: 'happyhorse',
+      overwrite: true,
+      score_ambient_provider: 'manual_post_render',
+      soundtrack: {
+        enabled: true,
+        audio_source_type: 'local_file',
+        local_audio_path: '/tmp/score.wav',
+        volume: 0.18,
+      },
+    })
+
+    expect(response.result?.status).toBe('complete')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/f51/studio/projects/proj-scene/scenes/scene_003/pipeline/generate')
+    expect(init?.method).toBe('POST')
+    const body = JSON.parse(String(init?.body))
+    expect(body).toEqual({
+      provider: 'happyhorse',
+      overwrite: true,
+      on_audio_overrun: 'freeze_last_frame',
+      score_ambient_provider: 'manual_post_render',
+      soundtrack: {
+        enabled: true,
+        audio_source_type: 'local_file',
+        local_audio_path: '/tmp/score.wav',
+        volume: 0.18,
+      },
+    })
+  })
+
+  it('returns an error object when scene pipeline generation fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Scene soundtrack enabled but missing audio source' }), { status: 400 }),
+    )
+
+    const response = await generateScenePipeline('proj-scene', 'scene_003', {
+      score_ambient_provider: 'manual_post_render',
+      soundtrack: { enabled: true, audio_source_type: 'local_file' },
+    })
+
+    expect(response.error).toContain('Scene soundtrack enabled but missing audio source')
+    expect(response.result).toBeUndefined()
+  })
+})
+
 describe('clip revision API helpers', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -210,6 +416,28 @@ describe('render refresh helper', () => {
   })
 })
 
+describe('retryRenderJobForAdherence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('posts to the explicit adherence retry endpoint with combined strategy', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ strategy: 'combined_reorder_and_fresh_seeds', jobs_submitted: [] }), { status: 200 }),
+    )
+
+    await retryRenderJobForAdherence('job-adherence', 2)
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/f51/studio/render/jobs/job-adherence/adherence-retry')
+    expect((init?.method || '').toUpperCase()).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      max_attempts: 2,
+      submission_strategy: 'combined_reorder_and_fresh_seeds',
+    })
+  })
+})
+
 describe('seed demo studio project helper', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -241,17 +469,17 @@ describe('seed demo studio project helper', () => {
 })
 
 describe('resolveStudioApiBase', () => {
-  it('defaults to localhost 8010 when no env is provided', () => {
-    expect(resolveStudioApiBase({})).toBe('http://127.0.0.1:8010')
+  it('defaults to relative URLs when no env is provided', () => {
+    expect(resolveStudioApiBase({})).toBe('')
   })
 
   it('prefers configured VITE_API_BASE_URL when provided', () => {
     expect(resolveStudioApiBase({ VITE_API_BASE_URL: 'http://10.1.2.3:9000/' })).toBe('http://10.1.2.3:9000')
   })
 
-  it('normalizes stale local 8012 configuration to 8010', () => {
-    expect(resolveStudioApiBase({ VITE_API_BASE_URL: 'http://127.0.0.1:8012' })).toBe('http://127.0.0.1:8010')
-    expect(resolveStudioApiBase({ VITE_STUDIO_API_BASE: 'http://localhost:8012/' })).toBe('http://127.0.0.1:8010')
+  it('normalizes stale local 8012 configuration to relative proxy URLs', () => {
+    expect(resolveStudioApiBase({ VITE_API_BASE_URL: 'http://127.0.0.1:8012' })).toBe('')
+    expect(resolveStudioApiBase({ VITE_STUDIO_API_BASE: 'http://localhost:8012/' })).toBe('')
   })
 })
 

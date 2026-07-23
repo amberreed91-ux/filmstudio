@@ -31,14 +31,14 @@ describe('VoicePicker', () => {
 
   it('renders search input', () => {
     const html = renderToStaticMarkup(
-      <VoicePicker {...defaultProps} />,
+      <VoicePicker {...defaultProps} currentProvider="elevenlabs" />,
     )
     expect(html).toContain('Search voices by name')
   })
 
   it('renders gender, age, and accent filter dropdowns', () => {
     const html = renderToStaticMarkup(
-      <VoicePicker {...defaultProps} />,
+      <VoicePicker {...defaultProps} currentProvider="elevenlabs" />,
     )
     expect(html).toContain('All Genders')
     expect(html).toContain('All Ages')
@@ -58,6 +58,7 @@ describe('VoicePicker', () => {
         {...defaultProps}
         currentVoiceId="v123"
         currentVoiceName="Rachel"
+        currentProvider="elevenlabs"
       />,
     )
     expect(html).toContain('Assigned')
@@ -70,14 +71,24 @@ describe('VoicePicker', () => {
         {...defaultProps}
         currentVoiceId="v123"
         currentVoiceName="Rachel"
+        currentProvider="elevenlabs"
       />,
     )
     expect(html).toContain('Clear')
   })
 
-  it('shows empty state message when no voices loaded', () => {
+  it('renders CosyVoice as the default casting provider', () => {
     const html = renderToStaticMarkup(
       <VoicePicker {...defaultProps} />,
+    )
+    expect(html).toContain('CosyVoice')
+    expect(html).toContain('Cloned or Designed Voice')
+    expect(html).toContain('Cherry')
+  })
+
+  it('shows empty state message when no ElevenLabs voices loaded', () => {
+    const html = renderToStaticMarkup(
+      <VoicePicker {...defaultProps} currentProvider="elevenlabs" />,
     )
     expect(html).toContain('No voices available')
   })

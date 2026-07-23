@@ -480,6 +480,67 @@ def test_create_package_from_completed_renders_falls_back_to_execution_summary(t
     assert package.metadata.get("assembly_kind") == "single_scene_preview"
 
 
+def test_create_package_prefers_scene_pipeline_assembly_over_older_shot_rows(tmp_path: Path, monkeypatch):
+    storage = _make_storage(tmp_path)
+    service = _make_service(storage)
+    service._outputs_root = tmp_path / "outputs"
+    assembly_output = service._outputs_root / "scene_assemblies" / "project-summary_scene_003_with_audio.mp4"
+    assembly_output.parent.mkdir(parents=True, exist_ok=True)
+    assembly_output.write_text("dummy scene assembly")
+
+    class EmptyRenderService:
+        def list_jobs(self, project_id: str):
+            return []
+
+    service._render_service = EmptyRenderService()
+
+    from app.services import project_store as project_store_module
+
+    monkeypatch.setattr(
+        project_store_module.project_store,
+        "get_project",
+        lambda _project_id: {
+            "execution_summary": {
+                "one_button_render_jobs": [
+                    {
+                        "job_id": "summary-job-1",
+                        "status": "complete",
+                        "output_url": "https://cdn.example.com/summary-shot.mp4",
+                        "provider_mode": "hosted_api",
+                        "updated_at": "2026-07-18T04:00:00+00:00",
+                    }
+                ],
+                "scene_pipeline_assemblies": [
+                    {
+                        "assembly_id": "project-summary_scene_003",
+                        "scene_id": "scene_003",
+                        "status": "complete",
+                        "output_url": "/outputs/scene_assemblies/project-summary_scene_003_with_audio.mp4",
+                        "duration_seconds": 5.5,
+                        "clip_count": 2,
+                        "shot_ids": ["shot_scene_003_001", "shot_scene_003_002"],
+                        "soundtrack_status": "manual_post_render",
+                        "updated_at": "2026-07-18T05:00:00+00:00",
+                    }
+                ],
+            }
+        },
+    )
+
+    package = service.create_package_from_completed_renders(
+        project_id="project-summary",
+        film_title="Scene Assembly Fallback",
+    )
+
+    assert package.final_output_url == "/outputs/scene_assemblies/project-summary_scene_003_with_audio.mp4"
+    assert package.metadata.get("assembly_kind") == "single_scene_preview"
+    assert package.metadata.get("source_render_job_ids") == ["project-summary_scene_003"]
+    assert package.metadata.get("clip_urls") == ["/outputs/scene_assemblies/project-summary_scene_003_with_audio.mp4"]
+    assert package.scene_count == 1
+    assert package.shot_count == 2
+    assert package.render_job_ids == ["project-summary_scene_003"]
+
+
 def test_final_package_registers_video_asset(tmp_path: Path):
     storage = _make_storage(tmp_path)
     service = _make_service(storage)

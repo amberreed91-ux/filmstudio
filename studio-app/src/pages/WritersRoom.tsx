@@ -13,6 +13,7 @@ import {
   Italic,
   MemoryStick,
   MessageSquare,
+  Mic,
   Plus,
   UserCheck,
   Redo2,
@@ -27,6 +28,7 @@ import {
 import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
+import VoicePicker from '../components/VoicePicker'
 import { useStudio } from '../context/StudioContext'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
 import WritersDebateModal from '../components/WritersDebateModal'
@@ -107,7 +109,7 @@ function timeAgo(date: Date): string {
 
 export default function WritersRoom() {
   const { projectId } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryProjectId = searchParams.get('project_id') || ''
   const navigate = useNavigate()
   const { activeProject, activeProjectId } = useStudio()
@@ -130,6 +132,13 @@ export default function WritersRoom() {
   const [isDirty, setIsDirty] = useState(false)
   const [showExportDropdown, setShowExportDropdown] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null)
+
+  useEffect(() => {
+    if (!activeSceneId || searchParams.get('scene') === activeSceneId) return
+    const next = new URLSearchParams(searchParams)
+    next.set('scene', activeSceneId)
+    setSearchParams(next, { replace: true })
+  }, [activeSceneId, searchParams, setSearchParams])
 
   // Undo/redo stack
   const [undoStack, setUndoStack] = useState<string[]>([])
@@ -164,6 +173,14 @@ export default function WritersRoom() {
   const [characterUploading, setCharacterUploading] = useState<Record<string, boolean>>({})
   const [newCharacterNames, setNewCharacterNames] = useState<string[]>([])
   const [editDrafts, setEditDrafts] = useState<Record<string, Partial<CharacterRecord>>>({})
+  const [voicePickerChar, setVoicePickerChar] = useState<CharacterRecord | null>(null)
+  const [voiceUpdates, setVoiceUpdates] = useState<Record<string, {
+    voiceId: string
+    voiceName: string
+    provider?: CharacterRecord['voice_provider']
+    sourceType?: string | null
+    stylePrompt?: string | null
+  }>>({})
 
   // ── Imports state ─────────────────────────────────────────────────────────
   const [recentImports, setRecentImports] = useState<ImportRow[]>([])
@@ -1388,6 +1405,40 @@ export default function WritersRoom() {
                                 </div>
                               </div>
 
+                              {/* Voice assignment */}
+                              <div className="mb-2 flex items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/30 px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <Mic size={12} style={{ color: 'var(--color-on-surface-variant)' }} />
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
+                                    Voice
+                                  </span>
+                                  <span className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                    {voiceUpdates[char.id]?.voiceName
+                                      || char.voice_name
+                                      || char.elevenlabs_voice_name
+                                      || 'Not cast'}
+                                    {(voiceUpdates[char.id]?.provider || char.voice_provider) && (
+                                      <span className="ml-1 opacity-70">
+                                        ({voiceUpdates[char.id]?.provider || char.voice_provider})
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setVoicePickerChar(char)}
+                                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
+                                  style={{
+                                    background: 'rgba(6,182,212,0.12)',
+                                    color: '#22d3ee',
+                                    border: '1px solid rgba(6,182,212,0.25)',
+                                  }}
+                                >
+                                  <Mic size={10} />
+                                  Cast
+                                </button>
+                              </div>
+
                               <div className="space-y-2">
                                 <div>
                                   <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
@@ -1468,6 +1519,44 @@ export default function WritersRoom() {
                 urgency={sceneDebateResult.urgency}
                 sceneId={sceneDebateResult.scene_id}
                 onDismiss={() => setSceneDebateResult(null)}
+              />
+            )}
+
+            {/* Voice Picker Modal */}
+            {voicePickerChar && (
+              <VoicePicker
+                isOpen={!!voicePickerChar}
+                onClose={() => setVoicePickerChar(null)}
+                projectId={effectiveProjectId || ''}
+                characterId={voicePickerChar.id}
+                characterName={voicePickerChar.name}
+                currentVoiceId={voiceUpdates[voicePickerChar.id]?.voiceId || voicePickerChar.voice_id || voicePickerChar.elevenlabs_voice_id || null}
+                currentVoiceName={voiceUpdates[voicePickerChar.id]?.voiceName || voicePickerChar.voice_name || voicePickerChar.elevenlabs_voice_name || null}
+                currentProvider={voiceUpdates[voicePickerChar.id]?.provider || voicePickerChar.voice_provider || null}
+                currentSourceType={voiceUpdates[voicePickerChar.id]?.sourceType || voicePickerChar.voice_source_type || null}
+                currentStylePrompt={voiceUpdates[voicePickerChar.id]?.stylePrompt || voicePickerChar.voice_style_prompt || null}
+                onAssigned={(voiceId, voiceName, provider, sourceType, stylePrompt) => {
+                  setVoiceUpdates((p) => ({
+                    ...p,
+                    [voicePickerChar.id]: { voiceId, voiceName, provider, sourceType, stylePrompt },
+                  }))
+                  setCharacters((prev) =>
+                    prev.map((c) =>
+                      c.id === voicePickerChar.id
+                        ? {
+                          ...c,
+                          voice_provider: voiceId ? provider : null,
+                          voice_id: voiceId || null,
+                          voice_name: voiceName || null,
+                          voice_source_type: voiceId ? sourceType || null : null,
+                          voice_style_prompt: voiceId ? stylePrompt || null : null,
+                          elevenlabs_voice_id: provider === 'elevenlabs' ? voiceId || null : c.elevenlabs_voice_id,
+                          elevenlabs_voice_name: provider === 'elevenlabs' ? voiceName || null : c.elevenlabs_voice_name,
+                        }
+                        : c,
+                    ),
+                  )
+                }}
               />
             )}
           </ProjectGuard>

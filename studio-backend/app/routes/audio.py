@@ -8,7 +8,7 @@ GET  /api/f51/studio/audio/capabilities
 GET  /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio-brief
 POST /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio-brief/apply
 
-New Pipeline Routes (Piper TTS + MusicGen + FFmpeg):
+New Pipeline Routes (CosyVoice/Qwen-TTS + optional score/ambient + FFmpeg):
 POST /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/pipeline/generate
 GET  /api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/pipeline/status
 GET  /api/f51/studio/audio/pipeline/capabilities
@@ -251,7 +251,7 @@ async def apply_audio_brief(project_id: str, scene_id: str):
 
 
 # ---------------------------------------------------------------------------
-# New Pipeline Routes (Piper TTS + MusicGen + FFmpeg)
+# New Pipeline Routes (CosyVoice/Qwen-TTS + optional score/ambient + FFmpeg)
 # ---------------------------------------------------------------------------
 
 class AudioPipelineRequest(BaseModel):
@@ -287,6 +287,70 @@ def _resolve_scene_text(project_id: str, scene_id: str) -> str:
             or ""
         )
     return ""
+
+
+def _is_placeholder_dialogue_line(text: str) -> bool:
+    """Detect scaffold dialogue rows that should not override screenplay text."""
+    normalized = " ".join(str(text or "").strip().lower().split())
+    return normalized.endswith("carries the beat with restrained subtext.")
+
+
+def _resolve_scene_dialogue_lines(project_id: str, scene_id: str) -> list[dict[str, str]] | None:
+    """Pull structured dialogue lines for this scene when execution summary has them."""
+    try:
+        from app.services.project_store import project_store
+
+        project = project_store.get_project(project_id)
+        if not project or not isinstance(project, dict):
+            return None
+        summary = project.get("execution_summary") or {}
+        raw_lines = summary.get("dialogue_lines")
+        if not isinstance(raw_lines, list):
+            return None
+
+        resolved: list[dict[str, str]] = []
+        for line in raw_lines:
+            if not isinstance(line, dict) or line.get("scene_id") != scene_id:
+                continue
+            text = str(line.get("text") or "").strip()
+            if not text:
+                continue
+            if _is_placeholder_dialogue_line(text):
+                continue
+            character = str(
+                line.get("character_name")
+                or line.get("character")
+                or line.get("character_id")
+                or "Narrator"
+            ).strip()
+            resolved_line = {
+                "character": character,
+                "text": text,
+            }
+            for key in ("line_id", "emotional_subtext", "pacing_tag", "voice_style_hint"):
+                if line.get(key):
+                    resolved_line[key] = str(line[key])
+            resolved.append(resolved_line)
+        return resolved or None
+    except Exception as exc:
+        logger.warning("Could not load dialogue lines for %s/%s: %s", project_id, scene_id, exc)
+        return None
+
+
+def _resolve_scene_dialogue_context(scene: Dict[str, Any]) -> dict[str, Any]:
+    """Extract scene-level emotional context for per-line voice direction."""
+    sound_profile = scene.get("sound_profile") if isinstance(scene.get("sound_profile"), dict) else {}
+    director_notes = scene.get("director_notes") if isinstance(scene.get("director_notes"), dict) else {}
+    suggested_changes = director_notes.get("suggested_changes") if isinstance(director_notes, dict) else []
+    director_note = ""
+    if isinstance(suggested_changes, list) and suggested_changes:
+        director_note = str(suggested_changes[0])
+    return {
+        "emotional_tone": scene.get("emotional_tone") or scene.get("emotional_tone_label") or "",
+        "audio_tension": sound_profile.get("audio_tension") or "",
+        "scene_mood": sound_profile.get("silence_strategy") or "",
+        "director_note": director_note,
+    }
 
 
 def _find_rendered_video(project_id: str, scene_id: str) -> Optional[Path]:
@@ -332,12 +396,12 @@ async def generate_scene_audio_pipeline(
     body: AudioPipelineRequest = AudioPipelineRequest(),
 ) -> Dict[str, Any]:
     """
-    Generate full audio pipeline for a scene using Piper TTS + MusicGen + FFmpeg.
+    Generate full audio pipeline for a scene using configured audio providers + FFmpeg.
     
     This route:
     1. Extracts dialogue from scene script content
-    2. Generates dialogue with Piper TTS
-    3. Generates score/ambient with MusicGen-small
+    2. Generates dialogue with the default dialogue provider
+    3. Generates score/ambient with the default score/ambient provider
     4. Mixes audio tracks with FFmpeg
     5. Merges audio onto rendered video (if available)
     
@@ -353,6 +417,9 @@ async def generate_scene_audio_pipeline(
     # Resolve sound advisory from scene storage, then apply overrides
     advisory = _resolve_sound_advisory(project_id, scene_id)
     scene_text = _resolve_scene_text(project_id, scene_id)
+    dialogue_lines = _resolve_scene_dialogue_lines(project_id, scene_id)
+    characters = scene.get("characters") if isinstance(scene.get("characters"), list) else None
+    dialogue_context = _resolve_scene_dialogue_context(scene)
     
     mood = body.mood or advisory.get("mood", "")
     score_notes = body.score_notes or advisory.get("score_notes", "")
@@ -398,6 +465,9 @@ async def generate_scene_audio_pipeline(
             silence_flag=silence_flag,
             video_path=video_path,
             estimated_duration_seconds=estimated_duration,
+            characters=characters,
+            dialogue_lines=dialogue_lines,
+            scene_context=dialogue_context,
         )
         
         return result

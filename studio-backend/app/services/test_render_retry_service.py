@@ -40,6 +40,10 @@ def temp_storage(tmp_path):
             adherence_score REAL,
             score_json TEXT,
             diff_json TEXT,
+            mismatch_description TEXT,
+            retry_number INTEGER DEFAULT 0,
+            outcome TEXT,
+            advisory_note TEXT,
             created_at TEXT NOT NULL,
             PRIMARY KEY (shot_id, attempt_n)
         )
@@ -84,6 +88,26 @@ def mock_keyframe_service():
     """Create mock keyframe service."""
     service = MagicMock()
     return service
+
+
+def test_build_advisory_note_flags_specific_mismatch_without_scores(retry_service):
+    score_json = {
+        "failed_slots": ["lighting"],
+        "dimensions": {
+            "lighting": {
+                "expected": "dusk, sodium streetlight tension",
+                "observed": "clean daytime brightness",
+            }
+        },
+    }
+
+    note = retry_service.build_advisory_note(score_json)
+
+    assert "Light and tone" in note
+    assert "clean daytime brightness" in note
+    assert "dusk, sodium streetlight tension" in note
+    assert "93" not in note
+    assert "%" not in note
 
 
 @pytest.fixture
@@ -232,6 +256,136 @@ def manual_review_score():
         verdict="manual_review",
         failed_slots=["character_state", "action", "camera", "lighting"],
     )
+
+
+@pytest.mark.asyncio
+async def test_record_render_attempt_uses_structured_expected_slots(
+    retry_service,
+    mock_adherence_service,
+    passing_score,
+):
+    """Completed-render scoring must receive all structured prompt slots."""
+    expected_slots = {
+        "character_state": "DRE and MAYA staged in doorway",
+        "action": "Maya grips the photograph",
+        "environment_persistence": "Homestead hallway",
+        "camera": "Wide establishing shot",
+        "lighting": "Low practical light",
+    }
+    retry_service._storage.list_render_attempts = MagicMock(return_value=[])
+    retry_service.download_runway_video = AsyncMock(return_value="/tmp/render.mp4")
+    retry_service.extract_representative_frames = AsyncMock(
+        return_value=["/tmp/f1.jpg", "/tmp/f2.jpg", "/tmp/f3.jpg"]
+    )
+    mock_adherence_service.score_render_attempt.return_value = passing_score
+
+    await retry_service.record_render_attempt(
+        project_id="proj_001",
+        shot_id="shot_001",
+        job_id="job_001",
+        output_url="https://example.com/video.mp4",
+        prompt="Full provider prompt",
+        expected_slots=expected_slots,
+    )
+
+    mock_adherence_service.score_render_attempt.assert_awaited_once()
+    kwargs = mock_adherence_service.score_render_attempt.await_args.kwargs
+    assert kwargs["expected_slots"] == expected_slots
+    assert "description" not in kwargs["expected_slots"]
+
+
+@pytest.mark.asyncio
+async def test_record_render_attempt_persists_review_revision_history(
+    retry_service,
+    mock_adherence_service,
+    correctable_score,
+    temp_storage,
+):
+    retry_service._storage.list_render_attempts = MagicMock(return_value=[
+        {"shot_id": "shot_002", "attempt_n": 1}
+    ])
+    retry_service.download_runway_video = AsyncMock(return_value="/tmp/render.mp4")
+    retry_service.extract_representative_frames = AsyncMock(
+        return_value=["/tmp/f1.jpg", "/tmp/f2.jpg", "/tmp/f3.jpg"]
+    )
+    mock_adherence_service.score_render_attempt.return_value = correctable_score
+
+    await retry_service.record_render_attempt(
+        project_id="proj_001",
+        shot_id="shot_002",
+        job_id="job_002_retry",
+        output_url="https://example.com/video.mp4",
+        prompt="Full provider prompt",
+        expected_slots={
+            "character_state": "Weathered man in tattered coat",
+            "action": "Walking slowly",
+            "camera": "Wide shot",
+            "lighting": "Golden hour",
+            "environment_persistence": "Desert landscape",
+        },
+    )
+
+    with temp_storage._get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT mismatch_description, retry_number, outcome, advisory_note, score_json
+            FROM render_attempts
+            WHERE shot_id = ? AND attempt_n = ?
+            """,
+            ("shot_002", 2),
+        )
+        row = cursor.fetchone()
+
+    assert row is not None
+    assert "character_state" in row[0]
+    assert row[1] == 1
+    assert row[2] == "correctable_mismatch"
+    assert "Character presence" in row[3]
+    score_json = json.loads(row[4])
+    assert score_json["retry_number"] == 1
+    assert score_json["outcome"] == "correctable_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_record_render_attempt_registers_downloaded_video_asset_before_frames(
+    retry_service,
+    mock_adherence_service,
+    passing_score,
+    tmp_path,
+):
+    """Live quality scoring needs the downloaded video registered for keyframes."""
+    video_path = tmp_path / "render.mp4"
+    video_path.write_bytes(b"fake mp4 bytes")
+    saved_assets = []
+    video_asset_service = MagicMock()
+    video_asset_service._save_asset.side_effect = lambda asset: saved_assets.append(asset) or asset
+
+    retry_service._video_asset_service = video_asset_service
+    retry_service._storage.list_render_attempts = MagicMock(return_value=[])
+    retry_service.download_runway_video = AsyncMock(return_value=str(video_path))
+    retry_service.extract_representative_frames = AsyncMock(
+        return_value=["/tmp/f1.jpg", "/tmp/f2.jpg", "/tmp/f3.jpg"]
+    )
+    mock_adherence_service.score_render_attempt.return_value = passing_score
+
+    await retry_service.record_render_attempt(
+        project_id="proj_001",
+        shot_id="shot_001",
+        job_id="job_001",
+        output_url="https://example.com/video.mp4",
+        prompt="Full provider prompt",
+        expected_slots={"camera": "Wide two-shot"},
+    )
+
+    assert len(saved_assets) == 1
+    saved = saved_assets[0]
+    assert saved.asset_id == "shot_001_job_001"
+    assert saved.project_id == "proj_001"
+    assert saved.source_type == "local_file"
+    assert saved.local_path == str(video_path)
+    assert saved.metadata["job_id"] == "job_001"
+    assert saved.metadata["source_url"] == "https://example.com/video.mp4"
 
 
 @pytest.mark.asyncio

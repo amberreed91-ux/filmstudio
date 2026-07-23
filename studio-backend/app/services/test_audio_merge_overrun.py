@@ -287,6 +287,7 @@ async def test_normal_case_audio_shorter_than_video(service, tmp_path):
     )
     assert result["audio_overrun"] is False
     assert result["audio_preserved"] is True
+    assert result["output_duration"] >= result["video_duration"] - 0.3
 
 
 # ------------------------------------------------------------------

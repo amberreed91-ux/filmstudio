@@ -488,8 +488,14 @@ def get_storyboard_wall(project_id: str):
 def generate_scene_storyboard(
     project_id: str,
     scene_id: str,
+    provider: str = "qwen-image-max",
+    shot_number: int = 1,
 ):
-    """Generate a storyboard image via Pollinations.ai with seed locking support"""
+    """Generate a storyboard image with Qwen-Image-Max by default.
+
+    The old Pollinations.ai URL generator remains available via
+    `?provider=pollinations` as a low-cost fallback.
+    """
     import random
     
     current = project_store.get_project(project_id)
@@ -588,9 +594,48 @@ def generate_scene_storyboard(
     else:
         seed = random.randint(1, 999999)
     
-    # Include seed in Pollinations.ai URL for visual consistency
-    encoded = urllib.parse.quote(prompt)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=768&height=432&nologo=true&seed={seed}"
+    normalized_provider = (provider or "qwen-image-max").strip().lower()
+    if normalized_provider in {"pollinations", "pollinations.ai", "legacy"}:
+        encoded = urllib.parse.quote(prompt)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=768&height=432&nologo=true&seed={seed}"
+        provider_used = "pollinations"
+        model_used = "pollinations.ai"
+    elif normalized_provider in {"qwen", "qwen-image-max", "dashscope"}:
+        try:
+            from pathlib import Path
+
+            from app.services.storyboard_image_service import storyboard_image_service
+
+            output_root = Path(__file__).resolve().parents[2] / "outputs" / "previs"
+            result = storyboard_image_service.generate_qwen_image(
+                project_id=project_id,
+                scene_id=scene_id,
+                prompt=prompt,
+                output_root=output_root,
+            )
+            image_url = result.image_url
+            provider_used = result.provider
+            model_used = result.model
+        except Exception as exc:
+            from app.services.stability import StabilityError
+
+            if isinstance(exc, StabilityError):
+                logger.error(
+                    "project_id=%s job_id=storyboard_%s provider=dashscope stage=%s "
+                    "duration_ms=0 error_type=%s metadata=%s",
+                    project_id,
+                    scene_id,
+                    exc.stage,
+                    exc.error_type,
+                    exc.metadata,
+                )
+                raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
+            raise
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="provider must be one of: qwen-image-max, pollinations",
+        )
 
     if not description:
         scene["description"] = f"{location} — {time_of_day}"
@@ -602,20 +647,25 @@ def generate_scene_storyboard(
     summary["scenes"] = scenes
     project_store.update_project(project_id, {"execution_summary": summary})
 
-    # Save seed to database if this is a new seed
-    if existing_seed is None:
-        storage.save_previs_image(
-            project_id=project_id,
-            scene_id=scene_id,
-            shot_id=None,
-            image_path=image_url,
-            job_id=f"storyboard_{scene_id}",
-            status="complete",
-            prompt_used=prompt,
-            fallback=False,
-            previs_seed=seed,
-            seed_locked=False
-        )
+    from app.services.storyboard_image_service import storyboard_image_service
+
+    image_state = storyboard_image_service.classify_image_url(image_url)
+
+    safe_shot_number = max(1, int(shot_number or 1))
+    storyboard_shot_id = f"{scene_id}_shot_{safe_shot_number:03d}"
+
+    storage.save_previs_image(
+        project_id=project_id,
+        scene_id=scene_id,
+        shot_id=storyboard_shot_id,
+        image_path=image_url,
+        job_id=f"storyboard_{storyboard_shot_id}_{provider_used}",
+        status="complete",
+        prompt_used=prompt,
+        fallback=provider_used == "pollinations",
+        previs_seed=seed,
+        seed_locked=existing_seed is not None,
+    )
 
     try:
         project = project_service.storage.get_project(project_id)
@@ -636,6 +686,15 @@ def generate_scene_storyboard(
         "image_url": image_url,
         "status": "complete",
         "seed": seed,
+        "provider": provider_used,
+        "model": model_used,
+        "image_state": image_state.state,
+        "retryable": image_state.retryable,
+        "message": image_state.message,
+        "scene_id": scene_id,
+        "shot_id": storyboard_shot_id,
+        "shot_number": safe_shot_number,
+        "job_id": f"storyboard_{storyboard_shot_id}_{provider_used}",
     }
 
 

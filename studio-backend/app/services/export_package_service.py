@@ -132,6 +132,7 @@ class ExportPackageService:
         # Extract scenes from execution_summary
         execution_summary = project_data.get("execution_summary", {})
         scenes_data = execution_summary.get("scenes", [])
+        scene_assemblies = self._scene_pipeline_assemblies_by_scene(execution_summary)
 
         scenes = []
         total_shots = 0
@@ -169,6 +170,7 @@ class ExportPackageService:
                 "title": scene_title,
                 "order_index": idx,
                 "shots": shots,
+                "scene_pipeline_assembly": scene_assemblies.get(str(scene_id)),
             })
 
         return {
@@ -179,6 +181,36 @@ class ExportPackageService:
             "export_timestamp": export_timestamp,
             "scenes": scenes,
         }
+
+    def _scene_pipeline_assemblies_by_scene(self, execution_summary: dict) -> Dict[str, dict]:
+        rows = execution_summary.get("scene_pipeline_assemblies")
+        if not isinstance(rows, list):
+            return {}
+        assemblies: Dict[str, dict] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            scene_id = str(row.get("scene_id") or "").strip()
+            output_url = str(row.get("output_url") or "").strip()
+            status = str(row.get("status") or "").strip().lower()
+            if not scene_id or not output_url or status not in {"complete", "completed", "existing"}:
+                continue
+            candidate = {
+                "assembly_id": row.get("assembly_id"),
+                "status": status,
+                "output_url": output_url,
+                "output_path": row.get("output_path"),
+                "duration_seconds": row.get("duration_seconds"),
+                "clip_count": row.get("clip_count"),
+                "shot_ids": row.get("shot_ids") if isinstance(row.get("shot_ids"), list) else [],
+                "score_ambient_provider": row.get("score_ambient_provider"),
+                "soundtrack_status": row.get("soundtrack_status"),
+                "updated_at": row.get("updated_at"),
+            }
+            existing = assemblies.get(scene_id)
+            if not existing or str(candidate.get("updated_at") or "") > str(existing.get("updated_at") or ""):
+                assemblies[scene_id] = candidate
+        return assemblies
 
     async def _build_continuity_report(self, project_id: str) -> Optional[dict]:
         """
@@ -376,6 +408,10 @@ class ExportPackageService:
             Honest assembly note string.
         """
         total_shots = manifest.get("total_shots", 0)
+        assembled_scenes = [
+            scene for scene in manifest.get("scenes", [])
+            if isinstance(scene, dict) and isinstance(scene.get("scene_pipeline_assembly"), dict)
+        ]
 
         # Count completed renders
         completed_count = 0
@@ -386,6 +422,16 @@ class ExportPackageService:
 
         if stitched_film_url and completed_count == total_shots and total_shots > 0:
             return f"Stitched film assembled from {completed_count} completed render outputs."
+        elif assembled_scenes:
+            scene_count = len(assembled_scenes)
+            clip_count = sum(
+                int((scene.get("scene_pipeline_assembly") or {}).get("clip_count") or 0)
+                for scene in assembled_scenes
+                if isinstance(scene.get("scene_pipeline_assembly"), dict)
+            )
+            if clip_count > 0:
+                return f"{scene_count} scene(s) have completed scene-pipeline assemblies covering {clip_count} stitched shot clips. Full-film stitching may be available separately."
+            return f"{scene_count} scene(s) have completed scene-pipeline assemblies. Full-film stitching may be available separately."
         elif completed_count > 0 and completed_count < total_shots:
             missing = total_shots - completed_count
             return f"Package contains {completed_count} of {total_shots} shots with completed renders. {missing} shot(s) have no render output."
@@ -741,5 +787,4 @@ FESTIVAL_PRESETS = {
 
 # Singleton instance
 export_package_service = ExportPackageService()
-
 
