@@ -139,6 +139,38 @@ describe('recommendGenerationSettings', () => {
     expect(result.duration_constraint.nearest_valid_duration_seconds).toBe(8)
     expect(result.reasoning).toContain('push-in')
   })
+
+  it('backfills duration constraints from an older backend response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          scene_id: 'scene_001',
+          shot_number: 1,
+          recommended: {
+            duration_seconds: 8,
+            fps: 12,
+            resolution: '720p',
+            model: 'Wan 2.2',
+          },
+          reasoning: 'The establishing frame needs room to settle.',
+          study_memories_used: 2,
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await recommendGenerationSettings('proj-1', {
+      scene_id: 'scene_001',
+      shot_number: 1,
+      shot_type: 'wide',
+    })
+
+    expect(result.duration_constraint).toMatchObject({
+      provider: 'Wan 2.2',
+      supports_custom_duration: true,
+      nearest_valid_duration_seconds: 8,
+    })
+  })
 })
 
 describe('getStudioProject', () => {

@@ -21,6 +21,8 @@ outputs/audio/
 studio-backend/static/composed/
 studio-backend/studio.db
 studio-backend/data/studio.db
+studio-backend/data/appearance_core_review_queue.json
+studio-backend/data/*.db.bak*
 node_modules/
 .DS_Store
 untitled/

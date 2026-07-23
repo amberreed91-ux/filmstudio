@@ -65,6 +65,17 @@ interface ActiveJob {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+export function buildScenePrompt(scene: Scene): string {
+  const description = (scene.description || scene.text || scene.scene_name || 'Untitled scene').trim()
+  const context = [
+    scene.location?.trim() ? `Location: ${scene.location.trim()}` : '',
+    scene.time_of_day?.trim() ? scene.time_of_day.trim() : '',
+    scene.emotional_tone?.trim() ? `Mood: ${scene.emotional_tone.trim()}` : '',
+  ].filter(Boolean)
+  const prompt = context.length > 0 ? `${description} ${context.join('. ')}.` : description
+  return prompt.slice(0, 512)
+}
+
 function estimateRuntime(scenes: Scene[]): number {
   return scenes.length * 2.5 // ~2.5 mins per scene default
 }
@@ -110,9 +121,16 @@ function sceneIdFromJob(job: RenderJob): string {
   return job.shot_id?.split('_shot_')[0] || job.shot_id || 'unknown'
 }
 
-function resolveSceneStoryboardUrl(sceneId: string, jobs: RenderJob[], scenes: Scene[]): string | undefined {
+export function resolveSceneStoryboardUrl(sceneId: string, jobs: RenderJob[], scenes: Scene[]): string | undefined {
   const scene = scenes.find((s) => s.scene_id === sceneId)
-  if (scene?.storyboard_image) return scene.storyboard_image
+  if (scene?.storyboard_image?.trim()) return scene.storyboard_image
+  if (scene?.storyboard_images) {
+    const firstShotImage = Object.entries(scene.storyboard_images)
+      .sort(([left], [right]) => left.localeCompare(right, undefined, { numeric: true }))
+      .map(([, url]) => url)
+      .find((url) => typeof url === 'string' && url.trim())
+    if (firstShotImage) return firstShotImage
+  }
   for (const job of jobs) {
     if (sceneIdFromJob(job) !== sceneId) continue
     const thumb = job.output_payload?.thumbnail_url

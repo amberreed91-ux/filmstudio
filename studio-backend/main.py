@@ -2,6 +2,7 @@ import secrets
 import logging
 import time
 import os
+import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -63,6 +64,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger("studio-api")
 
+
+def _resolve_git_commit() -> str | None:
+    """Return the checked-out git commit for build/runtime diagnostics."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parent.parent,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return None
+    commit = result.stdout.strip()
+    return commit or None
+
+
+BUILD_COMMIT = _resolve_git_commit()
+
 # Storage instance
 storage = get_storage("sqlite")
 
@@ -73,6 +94,7 @@ auth_service = AuthService(storage)
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     logger.info("Starting Studio API")
+    logger.info("Studio API build commit: %s", BUILD_COMMIT or "unknown")
     runway_key = os.getenv("RUNWAYML_API_SECRET", "").strip() or os.getenv("RUNWAY_API_KEY", "").strip()
     logger.info("Runway API configured: %s", bool(runway_key))
     
@@ -315,6 +337,16 @@ app.mount("/outputs", StaticFiles(directory=str(OUTPUTS_DIR)), name="outputs")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/build-info")
+def build_info():
+    return {
+        "app": "studio-api",
+        "version": app.version,
+        "commit": BUILD_COMMIT,
+        "commit_source": "git_rev_parse_head" if BUILD_COMMIT else "unavailable",
+    }
 
 # WebSocket Connection Manager
 class ConnectionManager:

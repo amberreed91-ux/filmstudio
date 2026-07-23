@@ -1638,7 +1638,9 @@ export async function recommendGenerationSettings(
   projectId: string,
   payload: GenerationSettingsRequest,
 ): Promise<GenerationSettingsResponse> {
-  return fetchJson<GenerationSettingsResponse>(
+  const response = await fetchJson<Omit<GenerationSettingsResponse, 'duration_constraint'> & {
+    duration_constraint?: ProviderDurationConstraint
+  }>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/generation-settings`,
     {
       method: 'POST',
@@ -1647,6 +1649,18 @@ export async function recommendGenerationSettings(
       timeoutLabel: 'Generation settings recommendation',
     },
   )
+
+  const recommendedDuration = response.recommended.duration_seconds
+  return {
+    ...response,
+    duration_constraint: response.duration_constraint ?? {
+      provider: response.recommended.model || 'Selected provider',
+      supports_custom_duration: true,
+      valid_durations_seconds: [],
+      nearest_valid_duration_seconds: recommendedDuration,
+      advisory: 'The suggested duration is editable before rendering.',
+    },
+  }
 }
 
 export function getProductionScanReport(projectId: string, scan_id: string): Promise<ProductionScanReport> {

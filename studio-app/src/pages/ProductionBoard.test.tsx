@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildScenePrompt } from './ProductionBoard'
+import { buildScenePrompt, resolveSceneStoryboardUrl } from './ProductionBoard'
 
 describe('buildScenePrompt', () => {
   it('starts with the scene description and stays within the length cap', () => {
@@ -30,5 +30,23 @@ describe('buildScenePrompt', () => {
     } as never)
 
     expect(prompt.startsWith('Fallback description from parser.')).toBe(true)
+  })
+})
+
+describe('resolveSceneStoryboardUrl', () => {
+  it('uses a per-shot storyboard image when the scene-level image is absent', () => {
+    const url = resolveSceneStoryboardUrl(
+      'scene_001',
+      [],
+      [{
+        scene_id: 'scene_001',
+        storyboard_images: {
+          scene_001_shot_002: '/previs-assets/project/shot-2.png',
+          scene_001_shot_001: '/previs-assets/project/shot-1.png',
+        },
+      } as never],
+    )
+
+    expect(url).toBe('/previs-assets/project/shot-1.png')
   })
 })
