@@ -13,7 +13,7 @@ from app.services.stability import ProviderError
 
 
 logger = logging.getLogger("qwen-llm-client")
-DEFAULT_OPENROUTER_MODEL = "poolside/laguna-s-2.1:free"
+DEFAULT_OPENROUTER_MODEL = "google/gemma-4-26b-a4b-it:free"
 
 
 # ---------------------------------------------------------------------------
@@ -95,8 +95,8 @@ async def call_openrouter(
     """Call OpenRouter's OpenAI-compatible chat endpoint as the fallback provider.
 
     Uses a ``:free`` model by default. OpenRouter free-tier capacity has lower
-    burst limits than Groq, which is acceptable for these interactive previs
-    intelligence calls but may rate-limit large fan-outs.
+    burst limits than paid providers, which is acceptable for these interactive
+    previs intelligence calls but may rate-limit large fan-outs.
     """
     settings = get_settings()
     api_key = (settings.openrouter_api_key or "").strip()

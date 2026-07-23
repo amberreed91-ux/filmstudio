@@ -94,7 +94,7 @@ async def test_call_openrouter_uses_free_model_and_openai_compatible_endpoint() 
     ):
         settings.return_value.openrouter_api_key = "test-openrouter-key"
         settings.return_value.openrouter_llm_model = (
-            "poolside/laguna-s-2.1:free"
+            "google/gemma-4-26b-a4b-it:free"
         )
         settings.return_value.openrouter_backup_llm_models = ""
         settings.return_value.openrouter_base_url = "https://openrouter.ai/api/v1"
@@ -106,7 +106,7 @@ async def test_call_openrouter_uses_free_model_and_openai_compatible_endpoint() 
         base_url="https://openrouter.ai/api/v1",
     )
     create.assert_awaited_once_with(
-        model="poolside/laguna-s-2.1:free",
+        model="google/gemma-4-26b-a4b-it:free",
         messages=[
             {"role": "system", "content": "system prompt"},
             {"role": "user", "content": "user message"},
@@ -134,14 +134,14 @@ async def test_call_openrouter_retries_configured_free_backup_model() -> None:
         patch("app.llm_client.get_settings") as settings,
     ):
         settings.return_value.openrouter_api_key = "test-openrouter-key"
-        settings.return_value.openrouter_llm_model = "poolside/laguna-s-2.1:free"
-        settings.return_value.openrouter_backup_llm_models = "google/gemma-4-26b-a4b-it:free"
+        settings.return_value.openrouter_llm_model = "google/gemma-4-26b-a4b-it:free"
+        settings.return_value.openrouter_backup_llm_models = "poolside/laguna-s-2.1:free"
         settings.return_value.openrouter_base_url = "https://openrouter.ai/api/v1"
         result = await call_openrouter("system prompt", "user message", max_tokens=222)
 
     assert result == "Backup model response."
-    assert create.await_args_list[0].kwargs["model"] == "poolside/laguna-s-2.1:free"
-    assert create.await_args_list[1].kwargs["model"] == "google/gemma-4-26b-a4b-it:free"
+    assert create.await_args_list[0].kwargs["model"] == "google/gemma-4-26b-a4b-it:free"
+    assert create.await_args_list[1].kwargs["model"] == "poolside/laguna-s-2.1:free"
 
 
 @pytest.mark.asyncio

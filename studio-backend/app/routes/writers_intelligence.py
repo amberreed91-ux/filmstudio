@@ -75,7 +75,7 @@ def _find_character(project_id: str, character_name: str) -> dict[str, Any] | No
 
 @router.post("/{project_id}/character-mind", response_model=CharacterMindResponse)
 async def simulate_character_mind(project_id: str, request: CharacterMindRequest):
-    """Simulate a character's inner thoughts during a scene using Groq LLM."""
+    """Simulate a character's inner thoughts during a scene using the fallback LLM chain."""
     try:
         scene = _find_scene(project_id, request.scene_id)
         if not scene:
@@ -139,7 +139,7 @@ async def simulate_character_mind(project_id: str, request: CharacterMindRequest
 
 @router.post("/{project_id}/debate", response_model=DebateResponse)
 async def debate_scene(project_id: str, request: DebateRequest):
-    """Generate two opposing co-director perspectives on a scene using Groq LLM."""
+    """Generate two opposing co-director perspectives using the fallback LLM chain."""
     try:
         scene = _find_scene(project_id, request.scene_id)
         if not scene:
@@ -169,7 +169,7 @@ async def debate_scene(project_id: str, request: DebateRequest):
         logger.info("Scene debate: project=%s scene=%s", project_id, request.scene_id)
 
         # Each perspective races Qwen against the internal timeout and falls
-        # back to Groq independently, so a single blocked provider call no
+        # back to OpenRouter independently, so a single blocked provider call no
         # longer hangs the whole Intelligence tab to the frontend's 30s.
         (restraint, restraint_provider), (urgency, urgency_provider) = await asyncio.gather(
             get_llm_completion_with_fallback(restraint_system, user_prompt),

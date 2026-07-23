@@ -8,7 +8,9 @@ plus AI-enhanced Previs Bay features wired to The Study context.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
+import json
 import logging
+import re
 import shutil
 import os
 
@@ -371,6 +373,14 @@ def _get_generation_settings_service():
     return previs_generation_settings_service
 
 
+def _parse_json_object_from_llm(reply: str) -> dict:
+    """Parse a JSON object, tolerating a fenced ```json response."""
+    text = str(reply or "").strip()
+    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    payload = fence.group(1) if fence else text
+    return json.loads(payload)
+
+
 @router.post("/projects/{project_id}/previs/enhance-prompt")
 async def enhance_prompt(
     project_id: str,
@@ -522,8 +532,7 @@ async def recommend_shot_count(
             project_id,
             provider,
         )
-        import json as _json
-        result = _json.loads(reply.strip())
+        result = _parse_json_object_from_llm(reply)
         shot_count = int(result.get("shot_count", 3))
         reasoning = str(result.get("reasoning", ""))
         shot_count = max(1, min(10, shot_count))

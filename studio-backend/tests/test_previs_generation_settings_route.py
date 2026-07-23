@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -54,3 +56,25 @@ def test_generation_settings_route_returns_duration_constraints(monkeypatch):
     assert data["duration_constraint"]["provider"] == "Wan 2.2"
     assert data["duration_constraint"]["nearest_valid_duration_seconds"] == 8
     assert data["reasoning"].startswith("Enough time")
+
+
+def test_shot_count_route_accepts_fenced_json(monkeypatch):
+    api = FastAPI()
+    api.include_router(previs_routes.router, prefix="/api/f51/studio")
+    llm = AsyncMock(
+        return_value=(
+            '```json\n{"shot_count": 4, "reasoning": "Four beats preserve the scene rhythm."}\n```',
+            "openrouter",
+        )
+    )
+    monkeypatch.setattr(previs_routes, "_get_llm_with_fallback", lambda: llm)
+
+    response = TestClient(api).post(
+        "/api/f51/studio/projects/project_3dba9330f43a/previs/shot-count",
+        json={"scene_id": "scene_001"},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["recommended_shot_count"] == 4
+    assert data["reasoning"] == "Four beats preserve the scene rhythm."
