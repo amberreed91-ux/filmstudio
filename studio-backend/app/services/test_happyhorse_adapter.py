@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from app.adapters import HappyHorseAdapter
+from app.adapters import HappyHorseAdapter, HappyHorseR2VAdapter
 from app.models import ProviderConfig, RenderJobInput, RenderJobModel
 from app.models.consistency import ConsistencyPayload, ReferenceAsset
 
@@ -127,3 +127,148 @@ async def test_happyhorse_merges_consistency_payload_into_prompt(monkeypatch):
     outgoing_prompt = captured_payloads[0]["input"]["prompt"]
     assert "Maya and Dre hold a tense two-shot." in outgoing_prompt
     assert "preserve project visual style reference" in outgoing_prompt
+
+
+@pytest.mark.asyncio
+async def test_happyhorse_t2v_character_reference_degrades_to_text_only(monkeypatch):
+    captured_payloads = []
+    adapter = HappyHorseAdapter(
+        ProviderConfig(
+            provider_id="happyhorse",
+            name="HappyHorse",
+            enabled=True,
+            is_simulated=False,
+            api_key="test-key",
+            api_endpoint="https://dashscope.example.test",
+            requires=["api_key"],
+            capabilities=["video_generation", "text_to_video"],
+        )
+    )
+    job = RenderJobModel(
+        id="job-happyhorse-t2v-character-fallback",
+        project_id="project_1",
+        shot_id="scene_001_shot_002",
+        provider="happyhorse",
+        status="pending",
+        input_payload=RenderJobInput(
+            shot_id="scene_001_shot_002",
+            prompt="Maya crosses the hallway.",
+            parameters={"duration": 3, "ratio": "16:9"},
+            consistency_payload=ConsistencyPayload(
+                project_id="project_1",
+                refs=[
+                    ReferenceAsset(
+                        ref_id="charlock:maya",
+                        kind="character_full",
+                        image_url="https://cdn.example.test/maya-reference.jpg",
+                        project_id="project_1",
+                    )
+                ],
+                weights={"charlock:maya": 1.0},
+                mode="identity_lock",
+                fallback_text={
+                    "charlock:maya": "Use locked reference for Maya; preserve visual identity."
+                },
+            ),
+        ),
+    )
+
+    async def fake_request(method, path, payload=None):
+        if method == "POST":
+            captured_payloads.append(payload)
+            return {"output": {"task_id": "task-t2v"}}
+        return {
+            "output": {
+                "task_status": "SUCCEEDED",
+                "video_url": "https://cdn.example.test/video.mp4",
+            }
+        }
+
+    async def fake_strip_audio(*, job, hosted_video_url):
+        return "/outputs/renders/project_1/t2v-stripped.mp4", {"stripped": True}
+
+    monkeypatch.setattr(adapter, "_happyhorse_request", fake_request)
+    monkeypatch.setattr(adapter, "_download_and_strip_audio", fake_strip_audio)
+
+    result = await adapter.submit_job(job)
+
+    assert result.status == "complete"
+    payload = captured_payloads[0]
+    assert payload["model"] == "happyhorse-1.1-t2v"
+    assert "media" not in payload["input"]
+    assert "Use locked reference for Maya" in payload["input"]["prompt"]
+    assert result.metadata["character_reference_degraded_to_text"] is True
+
+
+@pytest.mark.asyncio
+async def test_happyhorse_r2v_payload_uses_media_and_image_prompt_references(monkeypatch):
+    captured_payloads = []
+    adapter = HappyHorseR2VAdapter(
+        ProviderConfig(
+            provider_id="happyhorse-r2v",
+            name="HappyHorse Reference-to-Video",
+            enabled=True,
+            is_simulated=False,
+            api_key="test-key",
+            api_endpoint="https://dashscope.example.test",
+            requires=["api_key"],
+            capabilities=["video_generation", "reference_to_video", "image_conditioning"],
+        )
+    )
+    job = RenderJobModel(
+        id="job-happyhorse-r2v",
+        project_id="project_1",
+        shot_id="scene_001_shot_002",
+        provider="happyhorse-r2v",
+        status="pending",
+        input_payload=RenderJobInput(
+            shot_id="scene_001_shot_002",
+            prompt="Maya crosses the hallway.",
+            parameters={"duration": 3, "ratio": "16:9", "resolution": "720P"},
+            consistency_payload=ConsistencyPayload(
+                project_id="project_1",
+                refs=[
+                    ReferenceAsset(
+                        ref_id="charlock:maya",
+                        kind="character_full",
+                        image_url="https://cdn.example.test/maya-reference.jpg",
+                        source_shot_id="scene_001_shot_001",
+                        project_id="project_1",
+                    )
+                ],
+                weights={"charlock:maya": 1.0},
+                mode="identity_lock",
+                fallback_text={
+                    "charlock:maya": "Use locked reference for Maya; preserve face and wardrobe."
+                },
+            ),
+        ),
+    )
+
+    async def fake_request(method, path, payload=None):
+        if method == "POST":
+            captured_payloads.append(payload)
+            return {"output": {"task_id": "task-r2v"}}
+        return {
+            "output": {
+                "task_status": "SUCCEEDED",
+                "video_url": "https://cdn.example.test/video.mp4",
+            }
+        }
+
+    async def fake_strip_audio(*, job, hosted_video_url):
+        return "/outputs/renders/project_1/r2v-stripped.mp4", {"stripped": True}
+
+    monkeypatch.setattr(adapter, "_happyhorse_request", fake_request)
+    monkeypatch.setattr(adapter, "_download_and_strip_audio", fake_strip_audio)
+
+    result = await adapter.submit_job(job)
+
+    assert result.status == "complete"
+    payload = captured_payloads[0]
+    assert payload["model"] == "happyhorse-1.1-r2v"
+    assert payload["input"]["media"] == [
+        {"type": "image", "url": "https://cdn.example.test/maya-reference.jpg"}
+    ]
+    assert "[Image 1]" in payload["input"]["prompt"]
+    assert "Maya" in payload["input"]["prompt"]

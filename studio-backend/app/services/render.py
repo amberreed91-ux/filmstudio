@@ -229,6 +229,34 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
         logger.debug("Render quality check skipped for job %s: %s", job.id, exc)
 
 
+async def _run_character_reference_lock(job: RenderJobModel) -> None:
+    """Lock first successful character visual references after render completion."""
+    try:
+        storage = _storage
+        if storage is None:
+            from app.data.storage import get_storage
+
+            storage = get_storage("sqlite")
+        if storage is None:
+            return
+        from app.services.character_visual_reference_service import (
+            character_visual_reference_service as _char_ref_svc,
+        )
+
+        locks = _char_ref_svc.lock_first_references_for_completed_job(
+            job=job,
+            storage=storage,
+        )
+        if locks:
+            job.metadata = dict(job.metadata or {})
+            job.metadata["character_reference_locks_created"] = [
+                lock.model_dump(mode="json") for lock in locks
+            ]
+            _persist_job(job)
+    except Exception as exc:
+        logger.debug("Character reference lock skipped for job %s: %s", job.id, exc)
+
+
 async def _notify_update(job_id: str, job_data: dict):
     """Notify subscribers of job update"""
     if _job_update_callback:
@@ -486,6 +514,16 @@ class RenderService:
             api_endpoint=dashscope_api_endpoint,
             requires=["api_key"],
             capabilities=["video_generation", "text_to_video"],
+        )
+        self._provider_configs["happyhorse-r2v"] = ProviderConfig(
+            provider_id="happyhorse-r2v",
+            name="HappyHorse Reference-to-Video",
+            enabled=True,
+            is_simulated=False,
+            api_key=dashscope_api_key or None,
+            api_endpoint=dashscope_api_endpoint,
+            requires=["api_key"],
+            capabilities=["video_generation", "reference_to_video", "image_conditioning"],
         )
 
         # Simulated provider remains available fallback.
@@ -931,14 +969,41 @@ class RenderService:
             except Exception as _exc:
                 logger.warning("Failed to fetch scene description for prompt: %s", _exc)
 
-        _consistency_payload = self._build_reference_consistency_payload(project_id)
+        _consistency_payload = None
+        try:
+            _active_storage_for_refs = _storage
+            if _active_storage_for_refs is None:
+                from app.data.storage import get_storage as _get_storage
+
+                _active_storage_for_refs = _get_storage("sqlite")
+            if _active_storage_for_refs is not None:
+                from app.services.character_visual_reference_service import (
+                    character_visual_reference_service as _char_ref_svc,
+                )
+
+                _consistency_payload = _char_ref_svc.build_consistency_payload_for_shot(
+                    project_id=project_id,
+                    shot_id=shot_id,
+                    storage=_active_storage_for_refs,
+                    prompt=prompt,
+                )
+        except Exception as _exc:
+            logger.debug("Character reference consistency lookup skipped for %s/%s: %s", project_id, shot_id, _exc)
+
         if _consistency_payload is not None:
             logger.info(
-                "REFERENCE_CONSISTENCY_ATTACHED | project=%s | shot=%s | refs=%d",
+                "CHARACTER_REFERENCE_CONSISTENCY_ATTACHED | project=%s | shot=%s | refs=%d",
                 project_id,
                 shot_id,
                 len(_consistency_payload.refs),
             )
+            if provider == "happyhorse":
+                provider = "happyhorse-r2v"
+                logger.info(
+                    "CHARACTER_REFERENCE_PROVIDER_ROUTED | project=%s | shot=%s | provider=happyhorse-r2v",
+                    project_id,
+                    shot_id,
+                )
 
         _input_parameters = dict(parameters or {})
         if _prompt_slots_for_adherence:
@@ -1191,8 +1256,8 @@ class RenderService:
             )
             
             # Build director intent prefix
-            _storage = get_storage()
-            _intent = _storage.load_director_intent(project_id)
+            _director_storage = get_storage()
+            _intent = _director_storage.load_director_intent(project_id)
             _intent_prefix = build_director_intent_prefix(_intent)
             
             # Prepend director intent if it exists
@@ -1337,6 +1402,7 @@ class RenderService:
             if submitted_job.status == "complete" and previous_status != "complete":
                 await _run_continuity_review(submitted_job)
                 await _run_render_quality_check(submitted_job)
+                await _run_character_reference_lock(submitted_job)
             
             await _notify_update(job_id, submitted_job.model_dump())
             return submitted_job
@@ -1388,6 +1454,7 @@ class RenderService:
                     if transitioned_to_complete:
                         await _run_continuity_review(updated)
                         await _run_render_quality_check(updated)
+                        await _run_character_reference_lock(updated)
                     
                     if updated.status != job.status:
                         await _notify_update(job_id, updated.model_dump())
@@ -1737,6 +1804,7 @@ class RenderService:
 
             await _run_continuity_review(updated)
             await _run_render_quality_check(updated)
+            await _run_character_reference_lock(updated)
             self._jobs[job_id] = updated
             _persist_job(updated)
             await _notify_update(job_id, updated.model_dump())
@@ -2020,6 +2088,7 @@ class RenderService:
                             updated.recovery_status = "recovered_terminal"
                             await _run_continuity_review(updated)
                             await _run_render_quality_check(updated)
+                            await _run_character_reference_lock(updated)
                         elif updated.is_terminal():
                             updated.recovery_status = "recovery_failed"
                         else:

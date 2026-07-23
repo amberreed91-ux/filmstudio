@@ -13,6 +13,20 @@ class ReferenceAsset(BaseModel):
     project_id: str
 
 
+class CharacterReferenceLock(BaseModel):
+    lock_id: str
+    project_id: str
+    character_id: str
+    character_name: str = ""
+    source_shot_id: str
+    image_url: str
+    lock_status: Literal["provisional", "locked", "disabled", "superseded"] = "locked"
+    provider: str = ""
+    capture_method: str = "thumbnail"
+    created_at: str = ""
+    updated_at: str = ""
+
+
 class ConsistencyPayload(BaseModel):
     project_id: str
     refs: list[ReferenceAsset]

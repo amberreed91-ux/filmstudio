@@ -1424,7 +1424,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
             thumbnail_url="",
             metadata={
                 "provider_response_normalized": {
-                    "provider": "happyhorse",
+                    "provider": self.provider_id,
                     "task": "video_generation",
                     "status": "failed",
                     "output": {"video_url": None, "status": "failed"},
@@ -1438,6 +1438,30 @@ class HappyHorseAdapter(RenderProviderAdapter):
             },
         )
         return job
+
+    def _build_submit_payload(
+        self,
+        *,
+        job: RenderJobModel,
+        resolution: str,
+        duration: int,
+        ratio: str,
+        seed: object,
+        params: dict,
+    ) -> dict:
+        payload: dict = {
+            "model": self.MODEL_NAME,
+            "input": {"prompt": str(job.input_payload.prompt or "")},
+            "parameters": {
+                "resolution": resolution,
+                "ratio": ratio,
+                "duration": duration,
+                "watermark": bool(params.get("watermark", False)),
+            },
+        }
+        if seed is not None:
+            payload["parameters"]["seed"] = int(seed)
+        return payload
 
     async def submit_job(self, job: RenderJobModel) -> RenderJobModel:
         try:
@@ -1453,32 +1477,30 @@ class HappyHorseAdapter(RenderProviderAdapter):
             if _consistency_data is not None:
                 from app.models.consistency import (
                     ConsistencyPayload as _CP,
-                    to_runway as _to_provider_prompt_parts,
                 )
 
                 _cp_obj = _CP(**_consistency_data) if isinstance(_consistency_data, dict) else _consistency_data
-                _additions = _to_provider_prompt_parts(_cp_obj)
-                if "promptTextExtra" in _additions:
-                    _existing = str(job.input_payload.prompt or "")
-                    job.input_payload.prompt = _existing + "; " + _additions["promptTextExtra"]
-                    logger.info(
-                        "HAPPYHORSE_CONSISTENCY_PAYLOAD_MERGED | job=%s | promptTextExtra_len=%d",
-                        job.id,
-                        len(_additions["promptTextExtra"]),
-                    )
+                if self.MODEL_NAME.endswith("-t2v") and _cp_obj.fallback_text:
+                    _fallback = "; ".join(str(value) for value in _cp_obj.fallback_text.values() if str(value).strip())
+                    if _fallback:
+                        _existing = str(job.input_payload.prompt or "")
+                        job.input_payload.prompt = _existing + "; " + _fallback
+                        job.metadata = dict(job.metadata or {})
+                        job.metadata["character_reference_degraded_to_text"] = True
+                        logger.info(
+                            "HAPPYHORSE_CONSISTENCY_TEXT_FALLBACK_MERGED | job=%s | promptTextExtra_len=%d",
+                            job.id,
+                            len(_fallback),
+                        )
 
-            payload: dict = {
-                "model": self.MODEL_NAME,
-                "input": {"prompt": str(job.input_payload.prompt or "")},
-                "parameters": {
-                    "resolution": resolution,
-                    "ratio": ratio,
-                    "duration": duration,
-                    "watermark": bool(params.get("watermark", False)),
-                },
-            }
-            if seed is not None:
-                payload["parameters"]["seed"] = int(seed)
+            payload = self._build_submit_payload(
+                job=job,
+                resolution=resolution,
+                duration=duration,
+                ratio=ratio,
+                seed=seed,
+                params=params,
+            )
 
             submit_response = await self._happyhorse_request("POST", self.SUBMIT_PATH, payload=payload)
             task_id = self._extract_task_id(submit_response)
@@ -1542,7 +1564,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
                 hosted_video_url=hosted_video_url,
             )
             normalized = {
-                "provider": "happyhorse",
+                "provider": self.provider_id,
                 "task": "video_generation",
                 "status": "completed",
                 "output": {"video_url": stripped_url, "status": "completed"},
@@ -1600,7 +1622,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
                         thumbnail_url=None,
                         metadata={
                             "provider_response_normalized": {
-                                "provider": "happyhorse",
+                                "provider": self.provider_id,
                                 "task": "video_generation",
                                 "status": "completed",
                                 "output": {"video_url": stripped_url, "status": "completed"},
@@ -1639,7 +1661,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
             job_id=job.id,
             project_id=job.project_id,
             shot_id=job.shot_id,
-            provider="happyhorse",
+            provider=self.provider_id,
             asset_type="video",
             url=job.output_payload.asset_url or "",
             thumbnail_url=job.output_payload.thumbnail_url,
@@ -1649,14 +1671,80 @@ class HappyHorseAdapter(RenderProviderAdapter):
 
     async def get_status(self) -> ProviderStatus:
         return ProviderStatus(
-            provider_id="happyhorse",
-            name="HappyHorse",
+            provider_id=self.provider_id,
+            name=self.config.name or "HappyHorse",
             status="available" if self.config.api_key else "unavailable",
             is_simulated=False,
-            capabilities=["video_generation", "text_to_video"],
+            capabilities=self.config.capabilities or ["video_generation", "text_to_video"],
             active_jobs=0,
             queued_jobs=0,
         )
+
+
+class HappyHorseR2VAdapter(HappyHorseAdapter):
+    """DashScope HappyHorse reference-to-video adapter for locked characters."""
+
+    MODEL_NAME = "happyhorse-1.1-r2v"
+
+    def _build_submit_payload(
+        self,
+        *,
+        job: RenderJobModel,
+        resolution: str,
+        duration: int,
+        ratio: str,
+        seed: object,
+        params: dict,
+    ) -> dict:
+        consistency_data = getattr(job.input_payload, "consistency_payload", None)
+        if consistency_data is None:
+            return super()._build_submit_payload(
+                job=job,
+                resolution=resolution,
+                duration=duration,
+                ratio=ratio,
+                seed=seed,
+                params=params,
+            )
+
+        from app.models.consistency import ConsistencyPayload
+
+        payload_obj = (
+            ConsistencyPayload(**consistency_data)
+            if isinstance(consistency_data, dict)
+            else consistency_data
+        )
+        refs = [
+            ref
+            for ref in payload_obj.refs
+            if ref.kind in {"character_face", "character_full"} and ref.image_url
+        ][:9]
+        media = [{"type": "image", "url": ref.image_url} for ref in refs]
+        reference_lines = []
+        for index, ref in enumerate(refs, start=1):
+            fallback = payload_obj.fallback_text.get(ref.ref_id, "preserve this subject's identity")
+            reference_lines.append(f"[Image {index}]: {fallback}")
+
+        prompt = str(job.input_payload.prompt or "").strip()
+        if reference_lines:
+            prompt = f"{prompt}\n\nLocked character references:\n" + "\n".join(reference_lines)
+
+        payload: dict = {
+            "model": self.MODEL_NAME,
+            "input": {
+                "prompt": prompt,
+                "media": media,
+            },
+            "parameters": {
+                "resolution": resolution,
+                "ratio": ratio,
+                "duration": duration,
+                "watermark": bool(params.get("watermark", False)),
+            },
+        }
+        if seed is not None:
+            payload["parameters"]["seed"] = int(seed)
+        return payload
 
 
 # Provider registry
@@ -1666,6 +1754,7 @@ ADAPTER_REGISTRY: dict[str, type[RenderProviderAdapter]] = {
     "higgsfield": HiggsfieldAdapter,
     "runway": RunwayAdapter,
     "happyhorse": HappyHorseAdapter,
+    "happyhorse-r2v": HappyHorseR2VAdapter,
     "generic": GenericVideoProviderAdapter,
 }
 

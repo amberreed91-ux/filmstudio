@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.adapters import ADAPTER_REGISTRY, HappyHorseAdapter, RunwayAdapter
+from app.adapters import ADAPTER_REGISTRY, HappyHorseAdapter, HappyHorseR2VAdapter, RunwayAdapter
 from app.services.render import RenderService
 
 
@@ -9,6 +9,8 @@ def test_adapter_registry_includes_runway() -> None:
     assert ADAPTER_REGISTRY["runway"] is RunwayAdapter
     assert "happyhorse" in ADAPTER_REGISTRY
     assert ADAPTER_REGISTRY["happyhorse"] is HappyHorseAdapter
+    assert "happyhorse-r2v" in ADAPTER_REGISTRY
+    assert ADAPTER_REGISTRY["happyhorse-r2v"] is HappyHorseR2VAdapter
 
 
 def test_render_service_provider_configs_include_runway() -> None:
@@ -16,6 +18,7 @@ def test_render_service_provider_configs_include_runway() -> None:
     providers = set(service._provider_configs.keys())
     assert "runway" in providers
     assert "happyhorse" in providers
+    assert "happyhorse-r2v" in providers
     assert "local" in providers
     assert "simulated" in providers
 

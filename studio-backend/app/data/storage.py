@@ -1097,6 +1097,68 @@ class DatabaseStorage:
                 ALTER TABLE render_attempts ADD COLUMN outcome TEXT;
                 ALTER TABLE render_attempts ADD COLUMN advisory_note TEXT;
             """),
+            (34, "Add character reference locks table", """
+                CREATE TABLE IF NOT EXISTS character_reference_locks (
+                    lock_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    character_id TEXT NOT NULL,
+                    character_name TEXT,
+                    source_shot_id TEXT NOT NULL,
+                    image_url TEXT NOT NULL,
+                    lock_status TEXT NOT NULL DEFAULT 'locked'
+                        CHECK (lock_status IN ('provisional', 'locked', 'disabled', 'superseded')),
+                    provider TEXT,
+                    capture_method TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (project_id != ''),
+                    CHECK (character_id != ''),
+                    CHECK (source_shot_id != ''),
+                    CHECK (image_url != '')
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_character_reference_locks_active
+                    ON character_reference_locks(project_id, character_id)
+                    WHERE lock_status = 'locked';
+                CREATE INDEX IF NOT EXISTS idx_character_reference_locks_project
+                    ON character_reference_locks(project_id);
+                CREATE INDEX IF NOT EXISTS idx_character_reference_locks_source_shot
+                    ON character_reference_locks(project_id, source_shot_id);
+            """),
+            (35, "Allow provisional character reference locks", """
+                CREATE TABLE IF NOT EXISTS character_reference_locks_v2 (
+                    lock_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    character_id TEXT NOT NULL,
+                    character_name TEXT,
+                    source_shot_id TEXT NOT NULL,
+                    image_url TEXT NOT NULL,
+                    lock_status TEXT NOT NULL DEFAULT 'locked'
+                        CHECK (lock_status IN ('provisional', 'locked', 'disabled', 'superseded')),
+                    provider TEXT,
+                    capture_method TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (project_id != ''),
+                    CHECK (character_id != ''),
+                    CHECK (source_shot_id != ''),
+                    CHECK (image_url != '')
+                );
+                INSERT OR IGNORE INTO character_reference_locks_v2
+                    SELECT lock_id, project_id, character_id, character_name,
+                           source_shot_id, image_url, lock_status, provider,
+                           capture_method, created_at, updated_at
+                    FROM character_reference_locks;
+                DROP TABLE character_reference_locks;
+                ALTER TABLE character_reference_locks_v2 RENAME TO character_reference_locks;
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_character_reference_locks_active
+                    ON character_reference_locks(project_id, character_id)
+                    WHERE lock_status = 'locked';
+                CREATE INDEX IF NOT EXISTS idx_character_reference_locks_project
+                    ON character_reference_locks(project_id);
+                CREATE INDEX IF NOT EXISTS idx_character_reference_locks_source_shot
+                    ON character_reference_locks(project_id, source_shot_id);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -5216,6 +5278,98 @@ class DatabaseStorage:
                 except (json.JSONDecodeError, TypeError):
                     pass
             return asset
+
+    # ── Character Reference Locks ───────────────────────────────────────────
+
+    def save_character_reference_lock(self, lock: dict) -> dict:
+        """Persist the locked visual reference for a project character."""
+        now = datetime.now().isoformat()
+        lock_id = lock.get("lock_id") or f"charlock_{uuid4().hex[:12]}"
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO character_reference_locks
+                    (lock_id, project_id, character_id, character_name,
+                     source_shot_id, image_url, lock_status, provider,
+                     capture_method, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        lock_id,
+                        lock.get("project_id", ""),
+                        lock.get("character_id", ""),
+                        lock.get("character_name", ""),
+                        lock.get("source_shot_id", ""),
+                        lock.get("image_url", ""),
+                        lock.get("lock_status") or "locked",
+                        lock.get("provider", ""),
+                        lock.get("capture_method") or "thumbnail",
+                        lock.get("created_at") or now,
+                        lock.get("updated_at") or now,
+                    ),
+                )
+                conn.commit()
+                cursor.execute(
+                    "SELECT * FROM character_reference_locks WHERE lock_id = ?",
+                    (lock_id,),
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else {}
+
+        return self._execute_write_with_retry("save_character_reference_lock", _write)
+
+    def get_character_reference_lock(
+        self,
+        project_id: str,
+        character_id: str,
+        lock_status: str = "locked",
+    ) -> dict | None:
+        """Return a character's active visual reference lock within a project."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM character_reference_locks
+                WHERE project_id = ? AND character_id = ? AND lock_status = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (project_id, character_id, lock_status),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def list_character_reference_locks(
+        self,
+        project_id: str,
+        character_ids: list[str] | None = None,
+        lock_status: str = "locked",
+        limit: int = 50,
+    ) -> list[dict]:
+        """List character visual reference locks with project isolation."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            query = (
+                "SELECT * FROM character_reference_locks "
+                "WHERE project_id = ? AND lock_status = ?"
+            )
+            params: list = [project_id, lock_status]
+            clean_ids = [
+                str(character_id).strip()
+                for character_id in (character_ids or [])
+                if str(character_id).strip()
+            ]
+            if clean_ids:
+                placeholders = ",".join("?" for _ in clean_ids)
+                query += f" AND character_id IN ({placeholders})"
+                params.extend(clean_ids)
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
 
 
 class JsonFileStorage:
