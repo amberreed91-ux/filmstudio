@@ -174,6 +174,7 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
   return <RenderActivityContext.Provider value={{ activity }}>{children}</RenderActivityContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useRenderActivity() {
   return useContext(RenderActivityContext)
 }

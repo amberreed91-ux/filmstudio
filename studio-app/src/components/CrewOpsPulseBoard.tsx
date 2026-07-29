@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import type { StudioDecisionGate } from '../lib/studioApi'
+import type { CrewIntelligenceOverview, StudioDecisionGate } from '../lib/studioApi'
 
 type CrewOpsPulseBoardProps = {
   projectId: string
@@ -10,6 +10,7 @@ type CrewOpsPulseBoardProps = {
   memoryRecordCount: number
   continuityIssueCount: number
   styleDriftIssueCount: number
+  crewOverview?: CrewIntelligenceOverview | null
 }
 
 type DepartmentStatus = {
@@ -88,6 +89,9 @@ function stateBadge(state: DepartmentStatus['state']): string {
 
 export default function CrewOpsPulseBoard(props: CrewOpsPulseBoardProps) {
   const departments = buildDepartments(props)
+  const crewDepartments = props.crewOverview?.departments?.filter((department) => (
+    department.state !== 'idle' || department.last_reasoning_id || department.active_handoff_count > 0
+  )) || []
   const gate = gateLabel(props.decisionGate)
   return (
     <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4" data-testid="crew-ops-pulse-board">
@@ -128,6 +132,33 @@ export default function CrewOpsPulseBoard(props: CrewOpsPulseBoardProps) {
           {props.decisionGate?.recommended_next_action || 'The studio is still synchronizing render, review, and package state for the next handoff.'}
         </p>
       </div>
+
+      {props.crewOverview && (
+        <div className="mt-4 rounded-lg border border-white/10 bg-black/25 p-3 text-xs text-zinc-300">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-400">Crew Intelligence</div>
+            <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+              {props.crewOverview.creator_attention.length} needs attention
+            </span>
+          </div>
+          <p className="mt-1 text-zinc-300">{props.crewOverview.summary}</p>
+          {crewDepartments.length > 0 && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {crewDepartments.slice(0, 4).map((department) => (
+                <div key={department.agent_role} className="rounded border border-white/10 bg-white/5 px-2 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-zinc-100">{department.department_name}</span>
+                    <span className={`rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] ${department.needs_creator_attention ? stateBadge('needs attention') : stateBadge(department.active_handoff_count > 0 ? 'checking' : 'ready')}`}>
+                      {department.state.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-zinc-400">{department.current_activity}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }

@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import StudioShell from '../components/StudioShell'
 import CrewOpsDashboard from '../components/CrewOpsDashboard'
+import CrewIntelligencePanel from '../components/CrewIntelligencePanel'
 import CrewOpsPulseBoard from '../components/CrewOpsPulseBoard'
 import DecisionGateCard from '../components/DecisionGateCard'
 import { useStudio } from '../context/StudioContext'
 import {
+  getCrewIntelligenceOverview,
   getRenderProviders,
   getLatestDirectorSignature,
   getProjectDecisionGate,
@@ -36,6 +38,7 @@ import {
   type DirectorSignature,
   type StyleDriftIssue,
   type StudioDecisionGate,
+  type CrewIntelligenceOverview,
 } from '../lib/studioApi'
 import { isInsufficientVisualData, summarizeContinuityIssues } from '../lib/continuityIntelligence'
 import { INTELLIGENCE_LABELS, INTELLIGENCE_EMPTY } from '../lib/intelligenceStatus'
@@ -119,6 +122,7 @@ export default function Scheduler() {
   const [decisionGate, setDecisionGate] = useState<StudioDecisionGate | null>(null)
   const [decisionGateLoading, setDecisionGateLoading] = useState(false)
   const [decisionGateError, setDecisionGateError] = useState('')
+  const [crewOverview, setCrewOverview] = useState<CrewIntelligenceOverview | null>(null)
   const [packages, setPackages] = useState<FinalShortFilmPackage[]>([])
   const [message, setMessage] = useState('')
 
@@ -199,6 +203,28 @@ export default function Scheduler() {
     return () => {
       cancelled = true
       controller?.abort()
+      window.clearInterval(timer)
+    }
+  }, [activeProjectId])
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setCrewOverview(null)
+      return
+    }
+    let cancelled = false
+    async function loadCrewOverview() {
+      try {
+        const overview = await getCrewIntelligenceOverview(activeProjectId)
+        if (!cancelled) setCrewOverview(overview)
+      } catch {
+        if (!cancelled) setCrewOverview(null)
+      }
+    }
+    void loadCrewOverview()
+    const timer = window.setInterval(() => void loadCrewOverview(), 10000)
+    return () => {
+      cancelled = true
       window.clearInterval(timer)
     }
   }, [activeProjectId])
@@ -295,7 +321,11 @@ export default function Scheduler() {
             memoryRecordCount={cinematicMemory.length}
             continuityIssueCount={continuityIssues.length}
             styleDriftIssueCount={styleDriftIssues.length}
+            crewOverview={crewOverview}
           />
+        </section>
+        <section className="mt-4">
+          <CrewIntelligencePanel overview={crewOverview} />
         </section>
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
           <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">Production Pipeline</h2>

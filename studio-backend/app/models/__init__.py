@@ -47,6 +47,42 @@ from app.models.memory import (
     ContradictionCheck,
 )
 
+from app.models.crew_intelligence import (
+    CrewReasoningType,
+    CrewEvidenceRef,
+    CrewMemoryRef,
+    CrewSpineRef,
+    CrewRisk,
+    CrewRecommendation,
+    CrewReasoningRecord,
+    CrewHandoffStatus,
+    CrewHandoffPacket,
+    CrewDeliberationStatus,
+    CrewDeliberationRecord,
+    CrewDepartmentProfile,
+    CrewDepartmentStatus,
+    CrewCreatorAttentionItem,
+    CrewIntelligenceOverview,
+    CrewRoleContext,
+)
+
+from app.models.performance_intelligence import (
+    PerformanceEvidenceRef,
+    PerformanceUncertainty,
+    SubtextRead,
+    EmotionalContinuityRead,
+    PerformanceBeat,
+    RelationshipPerformanceRead,
+    CharacterPerformanceBrief,
+    PerformanceContextBundle,
+    PerformanceAnalysisRequest,
+    PerformanceAnalysisResponse,
+    PerformanceSaveDecisionRequest,
+    PerformanceUpdateDecisionRequest,
+    PerformanceDecisionMemoryProjection,
+    PerformanceDepartmentSignal,
+)
+
 from app.models.scene_intelligence import (
     SceneIntelligenceImportResult,
     SceneIntelligenceRecord,

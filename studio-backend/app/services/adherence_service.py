@@ -27,6 +27,7 @@ logger = logging.getLogger("adherence_service")
 # Dimension weights for aggregate adherence score
 DIMENSION_WEIGHTS = {
     "character_state": 0.25,
+    "identity_continuity": 0.0,
     "action": 0.20,
     "camera": 0.15,
     "lighting": 0.15,
@@ -155,6 +156,7 @@ class AdherenceService:
         
         # Extract expectations from slots
         expected_character = expected_slots.get("character_state", "")
+        expected_identity = expected_slots.get("identity_continuity", expected_character)
         expected_action = expected_slots.get("action", "")
         expected_camera = expected_slots.get("camera", "")
         expected_lighting = expected_slots.get("lighting", "")
@@ -170,6 +172,11 @@ class AdherenceService:
             expected_camera=expected_camera,
             expected_lighting=expected_lighting,
             expected_environment=expected_environment,
+            expected_identity=expected_identity,
+        )
+        self._ensure_identity_continuity_dimension(
+            vision_result,
+            expected_identity=expected_identity,
         )
         
         # Parse dimension scores
@@ -179,6 +186,12 @@ class AdherenceService:
                 evidence=vision_result["dimensions"]["character_state"]["evidence"],
                 expected=expected_character,
                 observed=vision_result["dimensions"]["character_state"]["observed"],
+            ),
+            "identity_continuity": DimensionScore(
+                score=vision_result["dimensions"]["identity_continuity"]["score"],
+                evidence=vision_result["dimensions"]["identity_continuity"]["evidence"],
+                expected=expected_identity,
+                observed=vision_result["dimensions"]["identity_continuity"]["observed"],
             ),
             "action": DimensionScore(
                 score=vision_result["dimensions"]["action"]["score"],
@@ -226,6 +239,10 @@ class AdherenceService:
         failed_slots = [
             dim for dim, score_obj in dimensions.items()
             if score_obj.score <= 70
+            and not (
+                dim == "identity_continuity"
+                and "inferred from character_state" in score_obj.evidence.lower()
+            )
         ]
         
         score_result = AdherenceScore(
@@ -925,6 +942,7 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
         expected_camera: str,
         expected_lighting: str,
         expected_environment: str,
+        expected_identity: str = "",
     ) -> Dict[str, Any]:
         """
         Call vision model to score frames against expectations.
@@ -935,7 +953,7 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
             from app.services.vision.qwen_vision_service import QwenVisionService
 
             service = QwenVisionService(model=self._vision_model or "qwen-vl-max")
-            return await service.score_adherence(
+            result = await service.score_adherence(
                 frames=frames,
                 expected_character=expected_character,
                 expected_action=expected_action,
@@ -943,6 +961,11 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
                 expected_lighting=expected_lighting,
                 expected_environment=expected_environment,
             )
+            self._ensure_identity_continuity_dimension(
+                result,
+                expected_identity=expected_identity or expected_character,
+            )
+            return result
 
         import google.generativeai as genai
 
@@ -950,18 +973,21 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
         prompt = f"""You are a film continuity expert. Score this rendered shot against the script expectations.
 
 Expected Character State: {expected_character}
+Expected Identity Continuity: {expected_identity or expected_character}
 Expected Action: {expected_action}
 Expected Camera: {expected_camera}
 Expected Lighting: {expected_lighting}
 Expected Environment: {expected_environment}
 
 Analyze the 3 provided frames (10%, 50%, 90% of shot duration) and score each dimension 0-100.
+Identity continuity means whether recurring characters remain recognizably the same actor and character across face, body, silhouette, skin tone, hair, age presentation, wardrobe continuity, accessories, persistent props, and temporary marks when those traits are expected.
 Detect temporal drift across the shot.
 
 Respond ONLY with valid JSON matching this exact schema:
 {{
   "dimensions": {{
     "character_state": {{"score": 0-100, "evidence": "str", "expected": "{expected_character}", "observed": "str"}},
+    "identity_continuity": {{"score": 0-100, "evidence": "str", "expected": "{expected_identity or expected_character}", "observed": "str"}},
     "action": {{"score": 0-100, "evidence": "str", "expected": "{expected_action}", "observed": "str"}},
     "camera": {{"score": 0-100, "evidence": "str", "expected": "{expected_camera}", "observed": "str"}},
     "lighting": {{"score": 0-100, "evidence": "str", "expected": "{expected_lighting}", "observed": "str"}},
@@ -1095,7 +1121,12 @@ Respond ONLY with valid JSON matching this exact schema:
             if not all(key in result for key in required_keys):
                 raise ValueError(f"Missing required keys in vision response: {required_keys}")
 
-            required_dimensions = ["character_state", "action", "camera", "lighting", "environment_persistence"]
+            self._ensure_identity_continuity_dimension(
+                result,
+                expected_identity=expected_identity or expected_character,
+            )
+
+            required_dimensions = ["character_state", "identity_continuity", "action", "camera", "lighting", "environment_persistence"]
             if not all(dim in result["dimensions"] for dim in required_dimensions):
                 raise ValueError(f"Missing required dimensions: {required_dimensions}")
 
@@ -1115,6 +1146,26 @@ Respond ONLY with valid JSON matching this exact schema:
         except Exception as e:
             logger.error(f"Vision API call failed: {e}")
             raise
+
+    @staticmethod
+    def _ensure_identity_continuity_dimension(
+        result: Dict[str, Any],
+        *,
+        expected_identity: str,
+    ) -> None:
+        dimensions = result.get("dimensions")
+        if not isinstance(dimensions, dict) or "identity_continuity" in dimensions:
+            return
+        character_dim = dimensions.get("character_state") if isinstance(dimensions.get("character_state"), dict) else {}
+        dimensions["identity_continuity"] = {
+            "score": character_dim.get("score", 0),
+            "evidence": (
+                "Identity continuity inferred from character_state because this evaluator "
+                "did not return a separate visual identity dimension."
+            ),
+            "expected": expected_identity,
+            "observed": character_dim.get("observed", ""),
+        }
     
     async def _call_groq_corrector(
         self,

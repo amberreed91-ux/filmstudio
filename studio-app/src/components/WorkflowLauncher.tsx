@@ -20,7 +20,9 @@ interface WorkflowDefinition {
     timeout_seconds: number
     retry_count: number
   }>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   required_inputs: Record<string, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   optional_inputs: Record<string, any>
   estimated_duration_minutes: number
   status: string
@@ -37,8 +39,11 @@ interface WorkflowExecution {
   current_step?: string
   completed_steps: string[]
   failed_steps: string[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   step_results: Record<string, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   inputs: Record<string, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   outputs: Record<string, any>
   error_message?: string
   progress_percentage: number
@@ -55,6 +60,7 @@ export default function WorkflowLauncher({ projectId, onWorkflowComplete }: Work
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowDefinition | null>(null)
   const [isExecuting, setIsExecuting] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [error, setError] = useState<string | null>(null)
 
@@ -91,6 +97,7 @@ export default function WorkflowLauncher({ projectId, onWorkflowComplete }: Work
     setError(null)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleInputChange = (key: string, value: any) => {
     setFormData(prev => ({ ...prev, [key]: value }))
   }

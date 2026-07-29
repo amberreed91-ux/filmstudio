@@ -2,11 +2,14 @@
 Script Parser Service - Extracts scenes, characters, and locations from screenplay text
 """
 
+import logging
 import re
 import copy
 import os
 import time
 import signal
+
+logger = logging.getLogger(__name__)
 from itertools import combinations
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
@@ -249,11 +252,11 @@ class ScriptParser:
         
         # Fallback: If no scenes found, try alternative formats
         if len(scenes) == 0:
-            print(f"[SCRIPT_PARSER] No INT/EXT headings found, trying fallback parsing", flush=True)
+            logger.info("[SCRIPT_PARSER] No INT/EXT headings found, trying fallback parsing")
             scenes = self._fallback_scene_parsing(script_text)
         
         format_detected = "standard" if len(scenes) > 0 and any("INT" in s.get("heading", "").upper() or "EXT" in s.get("heading", "").upper() for s in scenes) else "fallback"
-        print(f"[SCRIPT_PARSER] SCRIPT_PARSED | scenes={len(scenes)} | format_detected={format_detected}", flush=True)
+        logger.info("[SCRIPT_PARSER] SCRIPT_PARSED | scenes=%d | format_detected=%s", len(scenes), format_detected)
         
         return {"scenes": scenes}
 
@@ -695,11 +698,11 @@ class ScriptParser:
             signal.alarm(10)
 
         def _start_section(section_name: str) -> float:
-            print(f"START: {section_name}", flush=True)
+            logger.debug("START: %s", section_name)
             return time.time()
 
         def _end_section(section_name: str, section_start: float) -> None:
-            print(f"END: {section_name} {time.time() - section_start:.4f}", flush=True)
+            logger.debug("END: %s %.4f", section_name, time.time() - section_start)
 
         empty_summary = {
             "scene_count": 0,
@@ -1471,7 +1474,7 @@ class ScriptParser:
                     if isinstance(shot_queue, list) and isinstance(prompt_value, dict):
                         for shot_index, shot in enumerate(shot_queue[:allowed_shots]):
                             if shot_index >= MAX_SAFE_ITER:
-                                print("WARNING: loop guard triggered in multi-shot execution", flush=True)
+                                logger.warning("loop guard triggered in multi-shot execution")
                                 break
                             if not isinstance(shot, dict):
                                 continue
@@ -2334,7 +2337,7 @@ class ScriptParser:
             script_text = script_text.get("script_text", "")
 
         if not isinstance(script_text, str) or not script_text.strip():
-            print(f"END: build_script_breakdown_bundle (empty input) {time.time() - _function_start:.4f}", flush=True)
+            logger.debug("END: build_script_breakdown_bundle (empty input) %.4f", time.time() - _function_start)
             if dev_timeout_enabled:
                 signal.alarm(0)
                 if previous_alarm_handler is not None:
@@ -3478,7 +3481,7 @@ class ScriptParser:
                     if isinstance(shot_queue, list) and isinstance(prompt_value, dict):
                         for _shot_idx, shot in enumerate(shot_queue[:allowed_shots]):
                             if _shot_idx >= MAX_SAFE_ITER:
-                                print("WARNING: loop guard triggered in multi-shot execution", flush=True)
+                                logger.warning("loop guard triggered in multi-shot execution")
                                 break
                             if not isinstance(shot, dict):
                                 continue
@@ -3605,7 +3608,7 @@ class ScriptParser:
             if isinstance(shot_queue, list):
                 for queue_index, item in enumerate(shot_queue):
                     if queue_index >= MAX_SAFE_ITER:
-                        print("WARNING: loop guard triggered in shot_queue", flush=True)
+                        logger.warning("loop guard triggered in shot_queue")
                         break
                     if not isinstance(item, dict):
                         continue
@@ -3616,7 +3619,7 @@ class ScriptParser:
             multi_shot_execution_ledger = []
             for index, shot_id in enumerate(planned_shot_ids):
                 if index >= MAX_SAFE_ITER:
-                    print("WARNING: loop guard triggered in multi_shot_execution_ledger", flush=True)
+                    logger.warning("loop guard triggered in multi_shot_execution_ledger")
                     break
                 if index < len(multi_shot_results):
                     result_row = (
@@ -3661,7 +3664,7 @@ class ScriptParser:
             multi_shot_take_artifacts = []
             for index, result_row in enumerate(multi_shot_results):
                 if index >= MAX_SAFE_ITER:
-                    print("WARNING: loop guard triggered in memory arrays", flush=True)
+                    logger.warning("loop guard triggered in memory arrays")
                     break
                 row_data = result_row if isinstance(result_row, dict) else {}
                 row_meta = (
@@ -3691,7 +3694,7 @@ class ScriptParser:
             completed_shots = 0
             for row_index, row in enumerate(multi_shot_results):
                 if row_index >= MAX_SAFE_ITER:
-                    print("WARNING: loop guard triggered in memory arrays", flush=True)
+                    logger.warning("loop guard triggered in memory arrays")
                     break
                 if isinstance(row, dict) and row.get("status") == "success":
                     completed_shots += 1
@@ -3712,7 +3715,7 @@ class ScriptParser:
             has_success = False
             for row_index, row in enumerate(multi_shot_results):
                 if row_index >= MAX_SAFE_ITER:
-                    print("WARNING: loop guard triggered in memory arrays", flush=True)
+                    logger.warning("loop guard triggered in memory arrays")
                     break
                 if not isinstance(row, dict):
                     continue
@@ -3751,7 +3754,7 @@ class ScriptParser:
             updated_shot_execution_ledger: List[Dict[str, Any]] = []
             for index, shot_id in enumerate(planned_shot_ids):
                 if index >= MAX_SAFE_ITER:
-                    print("WARNING: loop guard triggered in multi_shot_execution_ledger", flush=True)
+                    logger.warning("loop guard triggered in multi_shot_execution_ledger")
                     break
                 if index < len(multi_shot_results):
                     result_row = multi_shot_results[index] if isinstance(multi_shot_results[index], dict) else {}
@@ -3809,7 +3812,7 @@ class ScriptParser:
             updated_ledger: List[Dict[str, Any]] = []
             for index, item in enumerate(shot_execution_ledger):
                 if index >= MAX_SAFE_ITER:
-                    print("WARNING: loop guard triggered in shot_queue", flush=True)
+                    logger.warning("loop guard triggered in shot_queue")
                     break
                 if not isinstance(item, dict):
                     continue
@@ -3955,7 +3958,7 @@ class ScriptParser:
         if isinstance(scenes, list):
             for scene_index_guard, scene_data in enumerate(scenes):
                 if scene_index_guard >= MAX_SAFE_ITER:
-                    print("WARNING: loop guard triggered in scenes", flush=True)
+                    logger.warning("loop guard triggered in scenes")
                     break
                 scene_payload = scene_data if isinstance(scene_data, dict) else {}
                 if isinstance(scene_payload, dict):
@@ -3995,10 +3998,7 @@ class ScriptParser:
         if isinstance(multi_shot_execution_ledger, list):
             for ledger_index, ledger_item in enumerate(multi_shot_execution_ledger):
                 if ledger_index >= MAX_SAFE_ITER:
-                    print(
-                        "WARNING: loop guard triggered in intervention plan ledger scan",
-                        flush=True,
-                    )
+                    logger.warning("loop guard triggered in intervention plan ledger scan")
                     break
                 if not isinstance(ledger_item, dict):
                     continue
@@ -4027,10 +4027,7 @@ class ScriptParser:
             if isinstance(raw_suggested_changes, list):
                 for change_index, raw_change in enumerate(raw_suggested_changes):
                     if change_index >= MAX_SAFE_ITER:
-                        print(
-                            "WARNING: loop guard triggered in intervention suggested changes",
-                            flush=True,
-                        )
+                        logger.warning("loop guard triggered in intervention suggested changes")
                         break
                     if len(suggested_changes) >= 3:
                         break
@@ -4097,10 +4094,7 @@ class ScriptParser:
             if isinstance(raw_coherence_issues, list):
                 for issue_index, raw_issue in enumerate(raw_coherence_issues):
                     if issue_index >= MAX_SAFE_ITER:
-                        print(
-                            "WARNING: loop guard triggered in co-director coherence issues",
-                            flush=True,
-                        )
+                        logger.warning("loop guard triggered in co-director coherence issues")
                         break
                     if isinstance(raw_issue, str) and raw_issue.strip():
                         coherence_issues.append(raw_issue.strip())
@@ -4117,10 +4111,7 @@ class ScriptParser:
             if isinstance(raw_continuity_issues, list):
                 for issue_index, raw_issue in enumerate(raw_continuity_issues):
                     if issue_index >= MAX_SAFE_ITER:
-                        print(
-                            "WARNING: loop guard triggered in co-director continuity issues",
-                            flush=True,
-                        )
+                        logger.warning("loop guard triggered in co-director continuity issues")
                         break
                     if isinstance(raw_issue, str) and raw_issue.strip():
                         continuity_issues.append(raw_issue.strip())
@@ -4131,10 +4122,7 @@ class ScriptParser:
             if isinstance(raw_motifs, list):
                 for motif_index, raw_motif in enumerate(raw_motifs):
                     if motif_index >= MAX_SAFE_ITER:
-                        print(
-                            "WARNING: loop guard triggered in co-director motif scan",
-                            flush=True,
-                        )
+                        logger.warning("loop guard triggered in co-director motif scan")
                         break
                     if not isinstance(raw_motif, dict):
                         continue
@@ -4542,7 +4530,7 @@ class ScriptParser:
         if isinstance(scenes, list):
             for scene_loop_index, scene in enumerate(scenes):
                 if scene_loop_index >= MAX_SAFE_ITER:
-                    print("WARNING: loop guard triggered in scenes fallback population", flush=True)
+                    logger.warning("loop guard triggered in scenes fallback population")
                     break
                 if not isinstance(scene, dict):
                     continue
@@ -6516,7 +6504,7 @@ class ScriptParser:
             "render_orchestration_contract": render_orchestration_contract,
         }
 
-        print(f"END: build_script_breakdown_bundle (total) {time.time() - _function_start:.4f}", flush=True)
+        logger.debug("END: build_script_breakdown_bundle (total) %.4f", time.time() - _function_start)
         if dev_timeout_enabled:
             signal.alarm(0)
             if previous_alarm_handler is not None:

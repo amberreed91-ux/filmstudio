@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Body, HTTPException
 
-from app.data.storage import get_storage
 from app.services.compose_service import compose_scene_for_delivery, get_scene_composition
+from app.services.project_persistence_service import project_persistence_service
 
 logger = logging.getLogger(__name__)
 
@@ -12,23 +12,7 @@ router = APIRouter(prefix="/api/f51/studio/projects")
 
 
 def _load_project(project_id: str) -> dict | None:
-    try:
-        from app.services.project_store import project_store
-        project = project_store.get_project(project_id)
-        if isinstance(project, dict):
-            return project
-    except Exception:
-        pass
-    try:
-        storage = get_storage("sqlite")
-        persisted = storage.get_project(project_id)
-        if isinstance(persisted, dict):
-            return persisted
-        if hasattr(persisted, "model_dump"):
-            return persisted.model_dump(mode="json")
-    except Exception:
-        return None
-    return None
+    return project_persistence_service.load(project_id)
 
 
 def _composition_from_scene_pipeline_assembly(project_id: str, scene_id: str) -> dict | None:

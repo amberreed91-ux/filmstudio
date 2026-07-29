@@ -1,21 +1,19 @@
 import asyncio
 import logging
-import urllib.parse
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Form, UploadFile, File
 from fastapi.responses import JSONResponse
 from typing import Optional
 
-from app.services import ProjectService, ReferenceStudyService
 from app.services.project_store import project_store
+from app.services.service_registry import (
+    project_service,
+    reference_study_service as study_service,
+)
+from app.services.previs_seed_service import previs_seed_service
 from app.models import StudioProject
-from app.data import get_storage
 
-# Initialize storage and services
-storage = get_storage("sqlite")
-project_service = ProjectService(storage)
-study_service = ReferenceStudyService(storage)
 logger = logging.getLogger(__name__)
 
 
@@ -199,42 +197,22 @@ def derive_category(title: str, content: str) -> str:
 @overview_router.post("/reorganize-reference-library")
 def reorganize_reference_library(project_id: str = Form(...)):
     """Re-categorize all existing references using derive_category logic."""
-    import logging
-    log = logging.getLogger(__name__)
     try:
-        project = study_service.storage.get_project(project_id)
-    except Exception:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if not project.reference_study_library or not project.reference_study_library.studies:
-        return {"project_id": project_id, "reorganized": 0, "studies": []}
-
-    count = 0
-    for study in project.reference_study_library.studies:
-        title = study.filename or ""
-        content = study.notes or ""
-        new_focus = derive_category(title, content)
-        if study.study_focus != new_focus:
-            study.study_focus = new_focus
-            count += 1
-
-    study_service.storage.save_project(project)
+        result = study_service.reorganize_reference_library(project_id, derive_category)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    project = result.pop("_project", None)
     try:
-        _sync_to_project_store(project)
+        if project is not None:
+            _sync_to_project_store(project)
     except Exception:
         pass
-
-    logger.info("Reorganized %d/%d references for project %s", count, len(project.reference_study_library.studies), project_id)
-    return {
-        "project_id": project_id,
-        "reorganized": count,
-        "total": len(project.reference_study_library.studies),
-        "studies": [
-            {"reference_id": s.reference_id, "filename": s.filename, "study_focus": s.study_focus}
-            for s in project.reference_study_library.studies
-        ],
-    }
+    logger.info(
+        "Reorganized %d references for project %s",
+        result["reorganized"],
+        project_id,
+    )
+    return result
 
 
 @overview_router.post("/study-reference")
@@ -323,6 +301,20 @@ def get_project(project_id: str, session_id: Optional[str] = None):
         return project
     logger.warning("PROJECT_NOT_FOUND | id=%s | db_checked=True", project_id)
     raise HTTPException(status_code=404, detail="Project not found")
+
+
+@projects_router.get("/projects/{project_id}/export/status")
+async def get_final_export_status_compat(project_id: str):
+    from app.routes.export import get_export_status
+
+    return await get_export_status(project_id)
+
+
+@projects_router.get("/projects/{project_id}/export/download")
+async def download_final_export_compat(project_id: str):
+    from app.routes.export import download_export
+
+    return await download_export(project_id)
 
 
 @projects_router.get("/projects/{project_id}/export/{artifact_type}")
@@ -496,206 +488,25 @@ def generate_scene_storyboard(
     The old Pollinations.ai URL generator remains available via
     `?provider=pollinations` as a low-cost fallback.
     """
-    import random
-    
-    current = project_store.get_project(project_id)
-    if current is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
-    scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
-
-    scene = next((s for s in scenes if isinstance(s, dict) and s.get("scene_id") == scene_id), None)
-    if scene is None:
-        raise HTTPException(status_code=404, detail="Scene not found")
-
-    location = (scene.get("location") or "").strip() or "cinematic scene"
-    time_of_day = (scene.get("time_of_day") or "").strip() or "day"
-    description = (scene.get("description") or "").strip()
-
-    # Get storage for character lookups and seed management
-    from app.data.storage import get_storage
-    storage = get_storage()
-
-    # ── Character visual description injection ──────────────────────────
-    # Fetch each character's visual_prompt_summary from the characters table
-    # and inject it into the prompt so character appearances are accurate.
-    # This mirrors the render.py fix but for Previs storyboard generation.
-    scene_characters = scene.get("characters") or []
-
-    # If no characters array, try to identify characters from scene text
-    # by matching against all project characters
-    if not scene_characters:
-        try:
-            all_chars = storage.get_characters(project_id)
-            scene_text_lower = (
-                str(scene.get("text") or "")
-                or str(scene.get("content") or "")
-                or str(scene.get("description") or "")
-                or str(scene.get("scene_text") or "")
-            ).lower()
-            for char in all_chars:
-                char_name = char.get("name", "")
-                if char_name and char_name.lower() in scene_text_lower:
-                    scene_characters.append(char_name)
-        except Exception:
-            pass
-
-    # Build character visual descriptions block
-    char_summaries: list[str] = []
-    for char_name in scene_characters:
-        char_name_str = str(char_name).strip()
-        if char_name_str:
-            try:
-                char_record = storage.get_character_by_name(project_id, char_name_str)
-                if char_record:
-                    vps = (char_record.get("visual_prompt_summary") or "").strip()
-                    if vps:
-                        char_summaries.append(f"{char_name_str}: {vps}")
-            except Exception:
-                pass
-
-    # Build prompt with character descriptions prioritized (character accuracy matters most)
-    if char_summaries:
-        char_block = "Characters: " + "; ".join(char_summaries)
-        prompt = (
-            f"cinematic film storyboard, {char_block}, "
-            f"{location}, {time_of_day}, {description}, "
-            f"dark atmospheric, professional cinematography, "
-            f"16:9 aspect ratio, film noir"
-        )
-        logger.info(
-            "PREVIS_CHARACTER_INJECTION | project=%s | scene=%s | chars=%d",
-            project_id,
-            scene_id,
-            len(char_summaries),
-        )
-    else:
-        prompt = (
-            f"cinematic film storyboard, {location}, "
-            f"{time_of_day}, {description}, "
-            f"dark atmospheric, professional cinematography, "
-            f"16:9 aspect ratio, film noir"
-        )
-
-    logger.info(
-        "PREVIS_PROMPT_BUILT | project=%s | scene=%s | prompt=%s",
-        project_id,
-        scene_id,
-        prompt,
-    )
-
-    # Check for existing seed
-    existing_seed = storage.get_scene_previs_seed(project_id, scene_id)
-    
-    # Use existing seed if available, otherwise generate new one
-    if existing_seed is not None:
-        seed = existing_seed
-    else:
-        seed = random.randint(1, 999999)
-    
-    normalized_provider = (provider or "qwen-image-max").strip().lower()
-    if normalized_provider in {"pollinations", "pollinations.ai", "legacy"}:
-        encoded = urllib.parse.quote(prompt)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=768&height=432&nologo=true&seed={seed}"
-        provider_used = "pollinations"
-        model_used = "pollinations.ai"
-    elif normalized_provider in {"qwen", "qwen-image-max", "dashscope"}:
-        try:
-            from pathlib import Path
-
-            from app.services.storyboard_image_service import storyboard_image_service
-
-            output_root = Path(__file__).resolve().parents[2] / "outputs" / "previs"
-            result = storyboard_image_service.generate_qwen_image(
-                project_id=project_id,
-                scene_id=scene_id,
-                prompt=prompt,
-                output_root=output_root,
-            )
-            image_url = result.image_url
-            provider_used = result.provider
-            model_used = result.model
-        except Exception as exc:
-            from app.services.stability import StabilityError
-
-            if isinstance(exc, StabilityError):
-                logger.error(
-                    "project_id=%s job_id=storyboard_%s provider=dashscope stage=%s "
-                    "duration_ms=0 error_type=%s metadata=%s",
-                    project_id,
-                    scene_id,
-                    exc.stage,
-                    exc.error_type,
-                    exc.metadata,
-                )
-                raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
-            raise
-    else:
-        raise HTTPException(
-            status_code=422,
-            detail="provider must be one of: qwen-image-max, pollinations",
-        )
-
-    if not description:
-        scene["description"] = f"{location} — {time_of_day}"
-
-    scene["storyboard_image"] = image_url
-    scene["previs_seed"] = seed
-    scene["updated_at"] = datetime.now(timezone.utc).isoformat()
-
-    summary["scenes"] = scenes
-    project_store.update_project(project_id, {"execution_summary": summary})
-
-    from app.services.storyboard_image_service import storyboard_image_service
-
-    image_state = storyboard_image_service.classify_image_url(image_url)
-
-    safe_shot_number = max(1, int(shot_number or 1))
-    storyboard_shot_id = f"{scene_id}_shot_{safe_shot_number:03d}"
-
-    storage.save_previs_image(
-        project_id=project_id,
-        scene_id=scene_id,
-        shot_id=storyboard_shot_id,
-        image_path=image_url,
-        job_id=f"storyboard_{storyboard_shot_id}_{provider_used}",
-        status="complete",
-        prompt_used=prompt,
-        fallback=provider_used == "pollinations",
-        previs_seed=seed,
-        seed_locked=existing_seed is not None,
-    )
+    from app.services.stability import StabilityError
+    from app.services.storyboard_blueprint_service import storyboard_blueprint_service
 
     try:
-        project = project_service.storage.get_project(project_id)
-        if project:
-            for shot in project.storyboard_wall:
-                if shot.shot_id == scene_id:
-                    shot.storyboard_image = image_url
-                    shot.previs_seed = seed
-                    if not shot.description.strip():
-                        shot.description = f"{location} — {time_of_day}"
-                    break
-            project_service.storage.save_project(project)
-            _sync_to_project_store(project)
-    except Exception:
-        pass
-
-    return {
-        "image_url": image_url,
-        "status": "complete",
-        "seed": seed,
-        "provider": provider_used,
-        "model": model_used,
-        "image_state": image_state.state,
-        "retryable": image_state.retryable,
-        "message": image_state.message,
-        "scene_id": scene_id,
-        "shot_id": storyboard_shot_id,
-        "shot_number": safe_shot_number,
-        "job_id": f"storyboard_{storyboard_shot_id}_{provider_used}",
-    }
+        return storyboard_blueprint_service.generate_storyboard_image_for_scene_shot(
+            project_id=project_id,
+            scene_id=scene_id,
+            provider=provider,
+            shot_number=shot_number,
+        )
+    except StabilityError as exc:
+        if exc.error_type == "validation_error":
+            raise HTTPException(status_code=422, detail=exc.to_dict()) from exc
+        if exc.error_type == "state_error":
+            status = 404 if "not found" in exc.message.lower() else 409
+            raise HTTPException(status_code=status, detail=exc.to_dict()) from exc
+        if exc.error_type == "provider_error":
+            raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
+        raise HTTPException(status_code=500, detail=exc.to_dict()) from exc
 
 
 @projects_router.patch("/projects/{project_id}/scenes/{scene_id}/previs/seed")
@@ -705,29 +516,13 @@ def toggle_previs_seed_lock(
     body: dict
 ):
     """Toggle seed lock status for a storyboard scene"""
-    from app.data.storage import get_storage
-    
     locked = body.get("locked", False)
-    
-    # Validate project exists
-    current = project_store.get_project(project_id)
-    if current is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    storage = get_storage()
-    
-    # Update seed lock status
-    success = storage.update_previs_seed_lock(project_id, scene_id, locked)
-    if not success:
-        raise HTTPException(status_code=400, detail="Failed to update seed lock status")
-    
-    # Get current seed
-    seed = storage.get_scene_previs_seed(project_id, scene_id)
-    
-    return {
-        "seed": seed,
-        "locked": locked,
-    }
+    try:
+        return previs_seed_service.update_lock(project_id, scene_id, locked)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @projects_router.post("/projects/{project_id}/storyboard-wall/update-shot")

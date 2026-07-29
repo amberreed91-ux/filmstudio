@@ -11,6 +11,7 @@ vi.mock("../lib/studioApi", () => ({
   },
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockStudioApi = studioApiModule.studioApi as any;
 
 describe("FestivalCheckSection", () => {

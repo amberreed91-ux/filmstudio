@@ -20,6 +20,10 @@ interface SoundIntelligencePanelProps {
   projectId: string;
 }
 
+function lowerFirst(value: string): string {
+  return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
+}
+
 /**
  * Sound Intelligence Panel - displays sound/music advisories per scene.
  * Phase 1 implementation.
@@ -144,7 +148,7 @@ export default function SoundIntelligencePanel({ projectId }: SoundIntelligenceP
                     Score
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    {scene.advisory.score_notes}
+                    {lowerFirst(scene.advisory.score_notes)}
                   </p>
                 </div>
               </div>
@@ -159,7 +163,7 @@ export default function SoundIntelligencePanel({ projectId }: SoundIntelligenceP
                     Ambient
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    {scene.advisory.ambient_notes}
+                    {lowerFirst(scene.advisory.ambient_notes)}
                   </p>
                 </div>
               </div>

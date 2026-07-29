@@ -120,7 +120,7 @@ export default function TransitionIntelligencePanel({ projectId }: TransitionInt
                 {pair.to_scene_id}
               </span>
               <span className={`text-xs px-2 py-0.5 rounded ${getTransitionColor(pair.advisory.transition_type)}`}>
-                {pair.advisory.transition_type.replace('_', ' ')}
+                {pair.advisory.transition_type.replace(/_/g, ' ')}
               </span>
             </div>
 

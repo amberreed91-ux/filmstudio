@@ -94,7 +94,7 @@ def test_get_composition_fallback_loads_project_from_sqlite_when_store_is_cold(m
 
     monkeypatch.setattr(compose, "get_scene_composition", _missing_composition)
     monkeypatch.setattr("app.services.project_store.project_store.get_project", lambda project_id: None)
-    monkeypatch.setattr(compose, "get_storage", lambda _name: FakeStorage())
+    monkeypatch.setattr(compose.project_persistence_service, "_storage", FakeStorage())
 
     response = _client().get("/api/f51/studio/projects/proj-compose/scenes/scene_003/composition")
 

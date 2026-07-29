@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle, AlertTriangle, Clock, X, Loader2 } from 'lucide-react'
+import { CheckCircle, AlertTriangle, Clock, Loader2 } from 'lucide-react'
 import type { Scene, ApprovalStatus } from '../lib/studioApi'
 import { updateSceneApproval } from '../lib/studioApi'
 import { canApprove } from './CollaboratorRoleBadge'
@@ -33,7 +33,6 @@ const APPROVAL_CONFIG: Record<ApprovalStatus, { label: string; icon: React.React
 export default function ApprovalControls({
   scene,
   currentUserRole,
-  currentUserEmail,
   onApprovalUpdated,
 }: ApprovalControlsProps) {
   const [isUpdating, setIsUpdating] = useState(false)
@@ -84,7 +83,7 @@ export default function ApprovalControls({
         </div>
         {scene.approval?.approved_by && (
           <p className="text-[10px] text-zinc-500 mt-1">
-            {scene.approval.approval_status === 'approved'
+            {scene.approval.status === 'approved'
               ? `Approved by ${scene.approval.approved_by}`
               : `Changes requested by ${scene.approval.requested_changes_by}`}
           </p>
@@ -181,11 +180,13 @@ export default function ApprovalControls({
 }
 
 // Helper to get approval status label
+// eslint-disable-next-line react-refresh/only-export-components
 export function getApprovalLabel(status: ApprovalStatus): string {
   return APPROVAL_CONFIG[status].label
 }
 
 // Helper to get approval icon
+// eslint-disable-next-line react-refresh/only-export-components
 export function getApprovalIcon(status: ApprovalStatus): React.ReactNode {
   return APPROVAL_CONFIG[status].icon
 }

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   DIRECTOR_MEMORY_KINDS,
   type CharacterEntry,
+  type CoDirectorDebateEntry,
   type DirectorMemoryBundle,
   type DirectorMemoryEntry,
   type DirectorMemoryKind,
@@ -32,6 +33,7 @@ const EMPTY_BUNDLE: DirectorMemoryBundle = {
   characters: [],
   themes: [],
   notes: [],
+  debates: [],
 }
 
 const TAB_LABELS: Record<DirectorMemoryKind, string> = {
@@ -40,6 +42,7 @@ const TAB_LABELS: Record<DirectorMemoryKind, string> = {
   characters: 'Characters',
   themes: 'Themes',
   notes: "Director's Notes",
+  debates: 'Debates',
 }
 
 function buildEmptyDraft(kind: DirectorMemoryKind): DraftState {
@@ -54,6 +57,8 @@ function buildEmptyDraft(kind: DirectorMemoryKind): DraftState {
       return { theme: '', first_introduced_scene: '' }
     case 'notes':
       return { headline: '', note: '', keyword: '' }
+    case 'debates':
+      return { query: '', synthesis: '' }
   }
 }
 
@@ -88,6 +93,8 @@ function entryHeadline(entry: DirectorMemoryEntry): string {
       return (entry as ThemeEntry).theme
     case 'notes':
       return (entry as DirectorNoteEntry).headline || (entry as DirectorNoteEntry).note
+    case 'debates':
+      return (entry as CoDirectorDebateEntry).query
   }
 }
 
@@ -116,6 +123,10 @@ function entryDetail(entry: DirectorMemoryEntry): string {
     case 'notes': {
       const n = entry as DirectorNoteEntry
       return n.note
+    }
+    case 'debates': {
+      const d = entry as CoDirectorDebateEntry
+      return d.synthesis || d.filmmaker_prerogative || 'debate saved'
     }
   }
 }
@@ -376,6 +387,11 @@ function fieldConfigForKind(kind: DirectorMemoryKind): FieldConfig[] {
         { field: 'headline', label: 'Headline' },
         { field: 'keyword', label: 'Trigger keyword (optional)' },
         { field: 'note', label: 'Note', multiline: true },
+      ]
+    case 'debates':
+      return [
+        { field: 'query', label: 'Query' },
+        { field: 'synthesis', label: 'Synthesis', multiline: true },
       ]
   }
 }

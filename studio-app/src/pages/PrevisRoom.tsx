@@ -13,22 +13,28 @@ import {
   LockOpen,
   Play,
   RotateCcw,
-  Shuffle,
   X,
 } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
+import CinematographerIntelligencePanel from '../components/CinematographerIntelligencePanel'
+import PerformanceAudioPanel from '../components/PerformanceAudioPanel'
+import ProductionDesignIntelligencePanel from '../components/ProductionDesignIntelligencePanel'
+import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
+import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
 import { useStudio } from '../context/StudioContext'
 import {
+  approveStoryboardVersion,
   checkBackendHealth,
   composeScene,
+  createStoryboardBlueprint,
   deleteRenderJob,
   enhancePrevisPrompt,
   generatePrevisDirectorNotes,
   generateScenePipeline,
   generateSceneStoryboard,
-  getScene,
+  getStoryboardBlueprint,
   getSceneRationale,
   listRenderJobs,
   listScenes,
@@ -38,22 +44,29 @@ import {
   togglePrevisSeedLock,
   type RenderJob,
   type Scene,
+  type StoryboardBlueprintDetail,
   type StoryboardImageProvider,
+  type StoryboardShot,
   type ScenePipelineGenerateResult,
   type SceneRationaleResponse,
   type ShotCountResponse,
   type GenerationSettingsResponse,
 } from '../lib/studioApi'
 import { normalizeJobStatus } from '../lib/jobStatus'
-import { persistActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import { persistActiveProjectId } from '../lib/projectContext'
 import {
   buildPrevisScenePipelinePayload,
   canGeneratePrevisScenePipeline,
   type PrevisSceneScoreMode,
 } from '../lib/scenePipeline'
 import {
+  buildStoryboardRenderReferences,
+  buildShotPlanningRenderPayload,
   chooseDurationForProvider,
   initialStoryboardImageState,
+  promptChangedAfterEnhancement,
+  providerIdForPrevisEngine,
+  type PrevisRenderEngine,
   type StoryboardImageStatus,
 } from '../lib/previsStoryboard'
 
@@ -240,7 +253,7 @@ function getShotTypeLabel(shotNumber: number): string {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type RenderEngine = 'Wan 2.2' | 'LTX-Video' | 'Auto (Best Available)'
+type RenderEngine = PrevisRenderEngine
 type DurationOption = number
 type FpsOption = 8 | 12 | 16 | 24
 type ResolutionOption = '480p' | '720p' | '1080p'
@@ -324,19 +337,6 @@ const DURATIONS: DurationOption[] = [4, 8, 12, 16, 20]
 const FPS_OPTIONS: FpsOption[] = [8, 12, 16, 24]
 const RESOLUTIONS: ResolutionOption[] = ['480p', '720p', '1080p']
 const ENGINES: RenderEngine[] = ['Wan 2.2', 'LTX-Video', 'Auto (Best Available)']
-
-function statusDotClass(status: PipelineStatus[keyof PipelineStatus]): string {
-  switch (status) {
-    case 'running':
-      return 'bg-amber-400 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.5)]'
-    case 'done':
-      return 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]'
-    case 'failed':
-      return 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]'
-    default:
-      return 'bg-zinc-600'
-  }
-}
 
 function generateSeed(): number {
   return Math.floor(Math.random() * 10_000_000)
@@ -445,8 +445,8 @@ export default function PrevisRoom() {
     setSearchParams(next, { replace: true })
   }, [selectedSceneId, searchParams, setSearchParams])
   const [coDirectorNoteApplied, setCoDirectorNoteApplied] = useState(false)
-  const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null)
-  const [enhancingPrompt, setEnhancingPrompt] = useState(false)
+  const [, setFocusedSceneId] = useState<string | null>(null)
+  const [, setEnhancingPrompt] = useState(false)
   const [rendering, setRendering] = useState(false)
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({
@@ -455,7 +455,7 @@ export default function PrevisRoom() {
     compose: 'pending',
     mp4: 'pending',
   })
-  const [progress, setProgress] = useState(0)
+  const [, setProgress] = useState(0)
 
   // ── Right panel ───────────────────────────────────────────────────────────
   const [directorNotes, setDirectorNotes] = useState<DirectorNote[]>([])
@@ -481,6 +481,9 @@ export default function PrevisRoom() {
   const [storyboardImagesByShot, setStoryboardImagesByShot] = useState<Record<number, string>>({})
   const [storyboardImageStates, setStoryboardImageStates] = useState<Record<number, StoryboardLoadState>>({})
   const [storyboardRetryNonce, setStoryboardRetryNonce] = useState<Record<number, number>>({})
+  const [storyboardBlueprint, setStoryboardBlueprint] = useState<StoryboardBlueprintDetail | null>(null)
+  const [blueprintLoading, setBlueprintLoading] = useState(false)
+  const [blueprintApproving, setBlueprintApproving] = useState(false)
   const [settingsRecommendation, setSettingsRecommendation] = useState<GenerationSettingsResponse | null>(null)
   const [durationDraft, setDurationDraft] = useState('4')
   const [shotPlanningOverrides, setShotPlanningOverrides] = useState<Record<number, Partial<ShotPlanningDetails>>>({})
@@ -505,11 +508,31 @@ export default function PrevisRoom() {
     return () => { cancelled = true }
   }, [selectedSceneId, effectiveProjectId])
 
+  useEffect(() => {
+    if (!selectedSceneId || !effectiveProjectId) {
+      setStoryboardBlueprint(null)
+      return
+    }
+    let cancelled = false
+    setBlueprintLoading(true)
+    getStoryboardBlueprint(effectiveProjectId, selectedSceneId)
+      .then((result) => {
+        if (!cancelled) setStoryboardBlueprint(result)
+      })
+      .catch(() => {
+        if (!cancelled) setStoryboardBlueprint(null)
+      })
+      .finally(() => {
+        if (!cancelled) setBlueprintLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [selectedSceneId, effectiveProjectId])
+
   // ── Multi-shot state ───────────────────────────────────────────────────────
   const [activeShotNumber, setActiveShotNumber] = useState(1)
   const [totalShots, setTotalShots] = useState(1)
   const [shotCountRec, setShotCountRec] = useState<ShotCountResponse | null>(null)
-  const [loadingShotCount, setLoadingShotCount] = useState(false)
+  const [, setLoadingShotCount] = useState(false)
   const [recommendingSettings, setRecommendingSettings] = useState(false)
   const [enhancedPrompt, setEnhancedPrompt] = useState(false)
   const [selectedTakeByShot, setSelectedTakeByShot] = useState<Record<number, number>>({})
@@ -614,11 +637,17 @@ export default function PrevisRoom() {
     const persistedShotImage = activeStoryboardShotId
       ? selectedScene?.storyboard_images?.[activeStoryboardShotId]
       : undefined
+    const blueprintImage = storyboardBlueprint?.shots.find((shot) => shot.shot_number === activeShotNumber)?.storyboard_image_url || undefined
     return storyboardImagesByShot[activeShotNumber]
+      || blueprintImage
       || persistedShotImage
       || (activeShotNumber === 1 ? selectedScene?.storyboard_image : undefined)
       || ''
-  }, [activeStoryboardShotId, activeShotNumber, selectedScene, storyboardImagesByShot])
+  }, [activeStoryboardShotId, activeShotNumber, selectedScene, storyboardBlueprint?.shots, storyboardImagesByShot])
+
+  const activeBlueprintShot = useMemo<StoryboardShot | null>(() => {
+    return storyboardBlueprint?.shots.find((shot) => shot.shot_number === activeShotNumber) || null
+  }, [activeShotNumber, storyboardBlueprint?.shots])
 
   const activeStoryboardState = storyboardImageStates[activeShotNumber]
     || initialStoryboardImageState(currentStoryboardImageUrl, loading)
@@ -880,10 +909,8 @@ export default function PrevisRoom() {
     }
 
     let cancelled = false
-    let attempts = 0
 
     async function pollJob() {
-      attempts += 1
       try {
         const jobs = await listRenderJobs(effectiveProjectId || '')
         if (cancelled) return
@@ -959,7 +986,7 @@ export default function PrevisRoom() {
           setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'failed' })
           setProgress(0)
           setRendering(false)
-          setError('Render failed — check the pipeline status')
+          setError(job.error_message ? `Render failed — ${job.error_message}` : 'Render failed — check the pipeline status')
           if (pollTimerRef.current) clearInterval(pollTimerRef.current)
         }
 
@@ -1079,6 +1106,12 @@ export default function PrevisRoom() {
         scene_id: selectedSceneId,
         prompt_text: original,
       })
+      if (!promptChangedAfterEnhancement(original, result.enhanced_prompt)) {
+        setEnhancedPrompt(false)
+        setOriginalPrompt('')
+        setError('Prompt enhancement was unavailable. The original prompt was left unchanged.')
+        return
+      }
       setPromptText(result.enhanced_prompt)
       setEnhancedPrompt(true)
       const memoryLabel = result.study_memories_used === 1 ? 'memory' : 'memories'
@@ -1103,7 +1136,9 @@ export default function PrevisRoom() {
       setError('No active project')
       return
     }
-    if (!promptText.trim()) {
+    const storyboardPrompt = activeBlueprintShot?.render_contract.provider_neutral_prompt?.trim() || ''
+    const renderPrompt = storyboardPrompt || promptText.trim()
+    if (!renderPrompt) {
       setError('Enter a prompt before rendering')
       return
     }
@@ -1123,22 +1158,49 @@ export default function PrevisRoom() {
 
       // Use locked storyboard seed if available and locked, otherwise use genConfig seed or generate new
       const seedToUse = (seedLocked && storyboardSeed !== null) ? storyboardSeed : (genConfig.seed ?? generateSeed())
+      const shotPlanningPayload = buildShotPlanningRenderPayload(activeShotPlanningDetails)
+      const storyboardReferenceUrl = currentStoryboardImageUrl.trim()
+      const renderReferenceAssets = buildStoryboardRenderReferences(
+        storyboardReferenceUrl,
+        activeBlueprintShot?.render_contract.reference_assets || [],
+      )
+      const blueprintParameters = activeBlueprintShot
+        ? {
+            ...(activeBlueprintShot.render_contract.structured_parameters || {}),
+            storyboard: {
+              blueprint_id: activeBlueprintShot.blueprint_id,
+              version_id: activeBlueprintShot.version_id,
+              storyboard_shot_id: activeBlueprintShot.storyboard_shot_id,
+              project_id: activeBlueprintShot.project_id,
+              scene_id: activeBlueprintShot.scene_id,
+              shot_id: activeBlueprintShot.shot_id,
+              shot_number: activeBlueprintShot.shot_number,
+              storyboard_image_url: storyboardReferenceUrl || activeBlueprintShot.storyboard_image_url || null,
+              link_type: 'initial_render',
+            },
+          }
+        : {}
 
       const job = await createJob(
         shotId,
-        genConfig.model === 'Auto (Best Available)' ? undefined : genConfig.model.toLowerCase().replace(/\s+/g, '_'),
+        providerIdForPrevisEngine(genConfig.model),
         genConfig.model,
-        promptText.trim(),
-        [],
+        renderPrompt,
+        renderReferenceAssets,
         {
+          ...blueprintParameters,
+          duration: genConfig.duration,
           duration_seconds: genConfig.duration,
           fps: genConfig.fps,
           resolution: genConfig.resolution,
+          ratio: '16:9',
           seed: seedToUse,
           shot_number: activeShotNumber,
           take_number: takeNumber,
           shot_type: shotLabel,
           structured_prompt: true,
+          storyboard_reference_url: storyboardReferenceUrl || null,
+          shot_planning: shotPlanningPayload,
         },
       )
 
@@ -1148,7 +1210,14 @@ export default function PrevisRoom() {
       setSuccess(`Render queued — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})${seedLocked ? ' [Seed Locked]' : ''}`)
 
       // If job completed during submit (local/simulated/fast providers), handle immediately
-      if (submitted.status === 'complete') {
+      if (submitted.status === 'failed') {
+        setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'failed' })
+        setProgress(0)
+        setRendering(false)
+        setCurrentJobId(null)
+        setSuccess('')
+        setError(submitted.error_message ? `Render failed — ${submitted.error_message}` : 'Render failed — check the pipeline status')
+      } else if (submitted.status === 'complete') {
         setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'done' })
         setProgress(100)
         setSuccess('Render complete!')
@@ -1163,7 +1232,7 @@ export default function PrevisRoom() {
             sceneName: `Shot ${activeShotNumber} Take ${takeNumber}`,
             duration: genConfig.duration,
             status: 'complete',
-            prompt: promptText.slice(0, 100),
+            prompt: renderPrompt.slice(0, 100),
             shot_number: activeShotNumber,
             hasPromptSlots: Boolean(submitted.input_payload?.parameters?.prompt_slots),
             thumbnailUrl: submitted.output_payload?.thumbnail_url || submitted.preview_url || undefined,
@@ -1200,7 +1269,7 @@ export default function PrevisRoom() {
       setRendering(false)
       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
     }
-  }, [effectiveProjectId, promptText, genConfig, createJob, submitJob, selectedSceneId, activeShotNumber, visibleRenderHistory, seedLocked, storyboardSeed])
+  }, [effectiveProjectId, activeBlueprintShot, promptText, genConfig, createJob, submitJob, selectedSceneId, activeShotNumber, visibleRenderHistory, seedLocked, storyboardSeed, activeShotPlanningDetails, currentStoryboardImageUrl])
 
   // ── Delete render job ────────────────────────────────────────────────────
   const handleDeleteRender = useCallback(async (jobId: string) => {
@@ -1211,7 +1280,9 @@ export default function PrevisRoom() {
         const deletedEntry = prev.find(e => e.jobId === jobId)
         if (deletedEntry) {
           setSelectedTakeByShot(prevState => {
-            const { [deletedEntry.shot_number]: _, ...rest } = prevState
+            const rest = Object.fromEntries(
+              Object.entries(prevState).filter(([key]) => key !== String(deletedEntry.shot_number))
+            )
             return rest
           })
         }
@@ -1349,6 +1420,48 @@ export default function PrevisRoom() {
   }, [applyRecommendedSettings, durationDraft, genConfig.duration])
 
   // ── UI Elements ───────────────────────────────────────────────────────
+
+  const handleCreateStoryboardBlueprint = useCallback(async () => {
+    if (!selectedSceneId || !effectiveProjectId) {
+      setError('Select a scene first')
+      return
+    }
+    setBlueprintLoading(true)
+    setError('')
+    try {
+      const result = await createStoryboardBlueprint(effectiveProjectId, selectedSceneId, {
+        shot_count: Math.max(1, totalShots),
+        regeneration_reason: 'previs_room_create',
+      })
+      setStoryboardBlueprint(result)
+      setTotalShots(Math.max(totalShots, result.shots.length || 1))
+      setSuccess('Storyboard blueprint ready')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Storyboard blueprint creation failed')
+    } finally {
+      setBlueprintLoading(false)
+    }
+  }, [effectiveProjectId, selectedSceneId, totalShots])
+
+  const handleApproveStoryboardBlueprint = useCallback(async () => {
+    const blueprint = storyboardBlueprint?.blueprint
+    const version = storyboardBlueprint?.version
+    if (!blueprint || !version) {
+      setError('Create a storyboard blueprint before approval')
+      return
+    }
+    setBlueprintApproving(true)
+    setError('')
+    try {
+      const result = await approveStoryboardVersion(blueprint.blueprint_id, version.version_id)
+      setStoryboardBlueprint(result)
+      setSuccess('Storyboard approved for production')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Storyboard approval failed')
+    } finally {
+      setBlueprintApproving(false)
+    }
+  }, [storyboardBlueprint])
 
   // ── Handle Generate Storyboard ─────────────────────────────────────────────
   const handleGenerateStoryboard = useCallback(async () => {
@@ -1723,6 +1836,49 @@ export default function PrevisRoom() {
               </div>
 
               <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
+                    STORYBOARD BLUEPRINT
+                  </div>
+                  <span className="rounded border px-2 py-0.5 text-[9px] uppercase tracking-[0.1em]" style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}>
+                    {blueprintLoading ? 'loading' : storyboardBlueprint?.blueprint.status || 'not built'}
+                  </span>
+                </div>
+                <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  {activeBlueprintShot
+                    ? `Shot ${activeBlueprintShot.shot_number}: ${activeBlueprintShot.render_contract.render_readiness}`
+                    : 'No canonical shot contract loaded for this scene.'}
+                </div>
+                {activeBlueprintShot?.rationale ? (
+                  <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                    {activeBlueprintShot.rationale}
+                  </div>
+                ) : null}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateStoryboardBlueprint()}
+                    disabled={!selectedSceneId || blueprintLoading}
+                    className="flex items-center justify-center gap-2 rounded-lg border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-on-surface)', background: 'rgba(255,255,255,0.03)' }}
+                  >
+                    {blueprintLoading ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
+                    Build
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleApproveStoryboardBlueprint()}
+                    disabled={!storyboardBlueprint?.version || blueprintApproving || storyboardBlueprint?.blueprint.status === 'approved'}
+                    className="flex items-center justify-center gap-2 rounded-lg border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ borderColor: 'rgba(16,185,129,0.35)', color: 'rgb(110,231,183)', background: 'rgba(16,185,129,0.08)' }}
+                  >
+                    {blueprintApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                    Approve
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                 <div className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
                   SCENE PIPELINE
                 </div>
@@ -2080,6 +2236,60 @@ export default function PrevisRoom() {
               </div>
             )}
 
+            {selectedSceneId && effectiveProjectId && (
+              <div className="space-y-3 px-4 pt-3">
+                <CinematographerIntelligencePanel
+                  projectId={effectiveProjectId}
+                  sceneId={selectedSceneId}
+                  shotId={activeStoryboardShotId}
+                  renderJobId={currentJobId || undefined}
+                  sceneContext={{
+                    ...(selectedScene || {}),
+                    shot_number: activeShotNumber,
+                    shot_planning: activeShotPlanningDetails,
+                    prompt_text: promptText,
+                  }}
+                />
+                <CastingIntelligencePanel projectId={effectiveProjectId} />
+                <PerformanceAudioPanel
+                  projectId={effectiveProjectId}
+                  sceneId={selectedSceneId}
+                  shotId={activeStoryboardShotId}
+                  renderJobId={currentJobId || undefined}
+                  sceneContext={{
+                    ...(selectedScene || {}),
+                    shot_number: activeShotNumber,
+                    shot_planning: activeShotPlanningDetails,
+                    prompt_text: promptText,
+                  }}
+                />
+                <ProductionDesignIntelligencePanel
+                  projectId={effectiveProjectId}
+                  sceneId={selectedSceneId}
+                  shotId={activeStoryboardShotId}
+                  renderJobId={currentJobId || undefined}
+                  sceneContext={{
+                    ...(selectedScene || {}),
+                    shot_number: activeShotNumber,
+                    shot_planning: activeShotPlanningDetails,
+                    prompt_text: promptText,
+                  }}
+                />
+                <ColoristIntelligencePanel
+                  projectId={effectiveProjectId}
+                  sceneId={selectedSceneId}
+                  shotId={activeStoryboardShotId}
+                  renderJobId={currentJobId || undefined}
+                  sceneContext={{
+                    ...(selectedScene || {}),
+                    shot_number: activeShotNumber,
+                    shot_planning: activeShotPlanningDetails,
+                    prompt_text: promptText,
+                  }}
+                />
+              </div>
+            )}
+
             {/* RENDER HISTORY FILMSTRIP */}
             <div className="px-4 pt-3">
               <div className="flex items-center gap-2 text-xs text-white/40 mb-2">
@@ -2090,7 +2300,7 @@ export default function PrevisRoom() {
                 {[1, 2, 3].map((takeNum) => {
                   const take = takes.find(t => t.take_number === takeNum);
                   return (
-                    <div
+                  <div
                       key={takeNum}
                       className={`flex flex-col items-center gap-1 cursor-pointer relative`}
                       onClick={() => take?.videoUrl && setSelectedTakeByShot(prev => ({ ...prev, [activeShotNumber]: take.take_number }))}

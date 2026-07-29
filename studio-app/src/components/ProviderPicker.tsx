@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
 
 // Provider configuration
@@ -42,8 +42,6 @@ export default function ProviderPicker({ value, onChange, className = '' }: Prov
   const [isOpen, setIsOpen] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState<string>(value?.provider || 'runway')
   const [selectedModel, setSelectedModel] = useState<string | undefined>(value?.model)
-
-  const selectedProviderConfig = PROVIDERS.find((p) => p.id === selectedProvider) || PROVIDERS[0]
 
   function handleProviderSelect(providerId: string) {
     const provider = PROVIDERS.find((p) => p.id === providerId)!

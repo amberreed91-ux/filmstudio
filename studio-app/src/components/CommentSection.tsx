@@ -3,8 +3,7 @@ import { Send, Trash2, User } from 'lucide-react'
 import type { SceneComment, Scene } from '../lib/studioApi'
 import { addSceneComment, deleteSceneComment } from '../lib/studioApi'
 import { useStudio } from '../context/StudioContext'
-import { canDelete, canComment } from './CollaboratorRoleBadge'
-import CollaboratorRoleBadge from './CollaboratorRoleBadge'
+import { canComment } from './CollaboratorRoleBadge'
 
 type CommentSectionProps = {
   scene: Scene
@@ -167,4 +166,5 @@ export default function CommentSection({
 }
 
 // Export helper for use in other components
+// eslint-disable-next-line react-refresh/only-export-components
 export { formatTimestamp }

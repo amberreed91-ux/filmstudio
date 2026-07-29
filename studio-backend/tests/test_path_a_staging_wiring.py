@@ -242,6 +242,62 @@ class TestPathAZeroRegressionNoStaging:
         )
 
 
+class TestPathAInferredShotCastConstraint:
+    """When saved scene.characters is empty, the render path should infer cast
+    from the shot-local action before falling back to the whole scene."""
+
+    def test_empty_scene_characters_infers_first_shot_mom_and_maya_only(self, tmp_path, monkeypatch):
+        from app.data.storage import DatabaseStorage
+        from app.models import StudioProject
+        from app.services.project_store import project_store
+        from app.services.render import RenderService
+
+        db = DatabaseStorage(str(tmp_path))
+        project_id = "proj-scene-15-cast-guard"
+        scene_text = """Late light through a thin curtain. A single pot of water works toward a boil.
+On the counter: spaghetti, fish fillets, one tomato, garlic.
+
+MOM stands at the stove, sleeves pushed up. MAYA leans in the doorway.
+
+They plate four bowls together and carry them out toward JAY and ELENA waiting."""
+        project_data = _make_project_data(
+            project_id,
+            "scene_015",
+            characters=[],
+            text=scene_text,
+            heading="INT. MAYA'S KITCHEN - EVENING",
+        )
+        db.save_project(StudioProject(**project_data))
+        for name in ("MOM", "MAYA", "JAY", "ELENA"):
+            _seed_character(db, project_id, name=name, vps=f"{name.lower()} visual canon")
+
+        monkeypatch.setattr(
+            project_store,
+            "get_project",
+            lambda pid: project_data if pid == project_id else None,
+        )
+        monkeypatch.setattr("app.services.render._storage", db)
+        monkeypatch.setattr("app.data.storage.get_storage", lambda *a, **kw: db)
+        monkeypatch.setattr(
+            "app.services.standing_corrections_service.get_storage",
+            lambda *a, **kw: db,
+        )
+
+        job = RenderService().create_job(
+            project_id=project_id,
+            shot_id="scene_015_shot_001",
+            prompt="",
+        )
+
+        outgoing = job.input_payload.prompt
+        assert "Only MOM and MAYA visible; no extras" in outgoing
+        assert "MOM:" in outgoing
+        assert "MAYA:" in outgoing
+        assert "JAY:" not in outgoing
+        assert "ELENA:" not in outgoing
+        assert "spaghetti" in outgoing.lower() or "fish" in outgoing.lower()
+
+
 # ── Test 3: Multi-shot — same scene-level staging in ALL 4 shots ──────────────
 
 class TestPathAMultiShotSceneLevelStaging:

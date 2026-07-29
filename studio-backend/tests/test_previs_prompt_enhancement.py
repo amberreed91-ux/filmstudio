@@ -45,7 +45,7 @@ REAL_SHOT_CASES = (
         "her lean figure passes from open gray light into bridge shadow. Let the camera lag "
         "half a step, observing rather than chasing, with deep focus holding the graveyard "
         "city and the place where she died in one continuous move.",
-        ("Chicago River", "Maya is killed"),
+        ("Chicago River", "Dre"),
     ),
     (
         "scene_003",
@@ -136,17 +136,20 @@ async def test_near_noop_is_retried_and_only_material_result_is_returned() -> No
 
 
 @pytest.mark.asyncio
-async def test_two_near_noops_fail_instead_of_claiming_enhancement() -> None:
+async def test_two_near_noops_use_scene_grounded_local_fallback() -> None:
     service = PrevisPromptEnhancementService()
     llm = AsyncMock(return_value=ORIGINAL + ".")
 
-    with pytest.raises(ProviderError, match="near-verbatim"):
-        await service.enhance(
-            project_id=PROJECT_ID,
-            scene_id="scene_001",
-            prompt_text=ORIGINAL,
-            llm=llm,
-        )
+    result = await service.enhance(
+        project_id=PROJECT_ID,
+        scene_id="scene_001",
+        prompt_text=ORIGINAL,
+        llm=llm,
+    )
+
+    assert is_material_enhancement(ORIGINAL, result.enhanced_prompt)
+    assert "40mm observational shot" in result.enhanced_prompt
+    assert result.attempts == 2
 
 
 def test_http_contract_reports_only_context_supplied_to_successful_generation() -> None:
@@ -167,10 +170,31 @@ def test_http_contract_reports_only_context_supplied_to_successful_generation() 
     assert data["enhancement_attempts"] == 1
 
 
-def test_http_contract_does_not_return_original_as_success_on_provider_failure() -> None:
+def test_http_contract_returns_local_enhancement_on_provider_failure() -> None:
     client = TestClient(app)
     with patch("app.routes.previs_routes._get_llm") as get_llm:
         get_llm.return_value = AsyncMock(side_effect=RuntimeError("provider down"))
+        response = client.post(
+            f"/api/f51/studio/projects/{PROJECT_ID}/previs/enhance-prompt",
+            json={"scene_id": "scene_001", "prompt_text": ORIGINAL},
+        )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["enhanced_prompt"] != ORIGINAL
+    assert "40mm observational shot" in data["enhanced_prompt"]
+
+
+def test_http_contract_returns_error_only_when_service_cannot_build_fallback() -> None:
+    client = TestClient(app)
+    with patch("app.routes.previs_routes._get_prompt_enhancement_service") as get_service:
+        service = AsyncMock()
+        service.enhance.side_effect = ProviderError(
+            "Both prompt enhancement providers failed",
+            stage="previs_prompt_enhancement",
+            metadata={"qwen_error": "blocked", "openrouter_error": "timeout"},
+        )
+        get_service.return_value = service
         response = client.post(
             f"/api/f51/studio/projects/{PROJECT_ID}/previs/enhance-prompt",
             json={"scene_id": "scene_001", "prompt_text": ORIGINAL},

@@ -356,7 +356,7 @@ class CreativeAuthorityHierarchy:
                 established_pattern = adaptation.get_recommended_pattern(
                     project_id, decision_type
                 )
-            except:
+            except Exception:
                 pass
         
         if established_pattern:
@@ -432,7 +432,7 @@ class CreativeAuthorityHierarchy:
                             f"DEVIATION OVERRIDE: {decision_type} = {dev_result.deviated_pattern} "
                             f"({dev_result.deviation_reason})"
                         )
-                except:
+                except Exception:
                     pass
         
         # Log the decision
@@ -614,7 +614,7 @@ class CreativeAuthorityHierarchy:
                         "priority": 3,
                         "value": pattern
                     })
-            except:
+            except Exception:
                 pass
         
         return debug

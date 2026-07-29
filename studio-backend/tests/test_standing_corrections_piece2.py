@@ -1167,6 +1167,22 @@ class TestZeroRegression:
             lambda *a, **kw: db,
         )
 
+        # Monkeypatch environment continuity to return empty context for zero regression test
+        # This test is specifically about standing corrections not being injected,
+        # not about environment continuity behavior.
+        monkeypatch.setattr(
+            "app.services.continuity_intelligence_service.continuity_intelligence_service",
+            type("MockContSvc", (), {
+                "resolve_environment_context": lambda *a, **kw: {
+                    "location_id": "",
+                    "canonical_environment": None,
+                    "prompt_lines": [],
+                    "warnings": [],
+                    "selected_references": [],
+                }
+            })(),
+        )
+
         service = RenderService()
         job = service.create_job(
             project_id=project_id,

@@ -11,6 +11,7 @@ from app.services.previs_generation_settings_service import (
     GenerationSettingsResult,
     ProviderDurationConstraint,
 )
+from app.services.stability import ProviderError
 
 
 class _StubSettingsService:
@@ -56,6 +57,36 @@ def test_generation_settings_route_returns_duration_constraints(monkeypatch):
     assert data["duration_constraint"]["provider"] == "Wan 2.2"
     assert data["duration_constraint"]["nearest_valid_duration_seconds"] == 8
     assert data["reasoning"].startswith("Enough time")
+
+
+def test_generation_settings_fallback_does_not_claim_render_providers_unavailable(monkeypatch):
+    api = FastAPI()
+    api.include_router(previs_routes.router, prefix="/api/f51/studio")
+
+    class _FailingSettingsService:
+        async def recommend(self, **kwargs):
+            raise ProviderError(
+                "Both settings recommendation providers failed",
+                stage="previs_generation_settings",
+                metadata={"qwen_error": "blocked", "openrouter_error": "timeout"},
+            )
+
+    monkeypatch.setattr(
+        previs_routes,
+        "_get_generation_settings_service",
+        lambda: _FailingSettingsService(),
+    )
+
+    response = TestClient(api).post(
+        "/api/f51/studio/projects/proj-1/previs/generation-settings",
+        json={"scene_id": "scene_001", "shot_number": 2, "shot_type": "close"},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    combined_copy = f"{data['reasoning']} {data['duration_constraint']['advisory']}"
+    assert "providers unavailable" not in combined_copy.lower()
+    assert "recommendation service was unavailable" in data["reasoning"].lower()
 
 
 def test_shot_count_route_accepts_fenced_json(monkeypatch):

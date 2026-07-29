@@ -36,6 +36,26 @@ logger = logging.getLogger("studio-orchestrator")
 logger.setLevel(logging.INFO)
 
 
+def _agent_role_enum(role: str):
+    from app.models.crew import AgentRole
+
+    return AgentRole(role)
+
+
+def _reasoning_type_for_task(task_type: str):
+    from app.models.crew_intelligence import CrewReasoningType
+
+    mapping = {
+        "script_analysis": CrewReasoningType.ANALYSIS,
+        "scene_breakdown": CrewReasoningType.ANALYSIS,
+        "shot_planning": CrewReasoningType.PLAN,
+        "prompt_generation": CrewReasoningType.HANDOFF_PREPARATION,
+        "render_coordination": CrewReasoningType.PROVIDER_READINESS,
+        "quality_review": CrewReasoningType.VALIDATION,
+    }
+    return mapping.get(task_type, CrewReasoningType.PRODUCTION_COORDINATION)
+
+
 class OrchestratorState(str, Enum):
     """Orchestrator lifecycle states"""
     STOPPED = "stopped"
@@ -460,6 +480,7 @@ QualityReviewExecutor,
             if exec_result.success:
                 # Mark as completed
                 self.storage.update_crew_task_status(task_id, "completed", output_data=exec_result.output_data)
+                self._record_crew_intelligence(task, exec_result)
                 
                 result["success"] = True
                 result["output_data"] = exec_result.output_data
@@ -472,6 +493,7 @@ QualityReviewExecutor,
                 if next_task:
                     result["next_task_created"] = True
                     result["next_task_id"] = next_task["task_id"]
+                    self._record_crew_handoff(task, next_task, exec_result.output_data)
                 
                 # Call completion callback
                 if self._on_task_complete:
@@ -492,6 +514,67 @@ QualityReviewExecutor,
             )
         
         return result
+
+    def _record_crew_intelligence(self, task: Dict, result: ExecutionResult) -> None:
+        """Bridge legacy orchestrator execution into Sprint 10 crew intelligence."""
+        try:
+            from app.services.crew_intelligence_service import CrewIntelligenceService
+
+            crew_intelligence_service = CrewIntelligenceService(storage=self.storage)
+            role = _agent_role_enum(task.get("agent_role", "system_orchestrator"))
+            output_data = result.output_data or {}
+            scene_id = output_data.get("scene_id") or task.get("input_data", {}).get("scene_id")
+            observation = output_data.get("observation") or f"{role.value.replace('_', ' ').title()} completed {task.get('task_type', 'workflow')} work."
+            if result.warnings:
+                observation = f"{observation} Warnings were captured for inspection."
+            crew_intelligence_service.create_reasoning_record(
+                project_id=task["project_id"],
+                task_id=task["task_id"],
+                agent_role=role,
+                reasoning_type=_reasoning_type_for_task(task.get("task_type", "")),
+                scene_id=scene_id,
+                observation=observation,
+                context_used=["studio_orchestrator", "crew_task", "executor_output"],
+                inference=output_data.get("inference", ""),
+                recommendation_summary=output_data.get("recommendation_summary") or "Workflow output is ready for the next department handoff.",
+                metadata={
+                    "orchestrator": "StudioOrchestrator",
+                    "task_type": task.get("task_type"),
+                    "artifacts": result.artifacts,
+                    "metrics": result.metrics,
+                    "warnings": result.warnings,
+                },
+            )
+        except Exception as exc:
+            logger.warning("[CREW_INTELLIGENCE] Failed to record orchestrator reasoning for %s: %s", task.get("task_id"), exc)
+
+    def _record_crew_handoff(self, completed_task: Dict, next_task: Dict, output_data: Dict) -> None:
+        """Persist cross-department context when the orchestrator advances workflow."""
+        try:
+            from app.services.crew_intelligence_service import CrewIntelligenceService
+
+            crew_intelligence_service = CrewIntelligenceService(storage=self.storage)
+            source_role = _agent_role_enum(completed_task.get("agent_role", "system_orchestrator"))
+            target_role = _agent_role_enum(next_task.get("agent_role", "system_orchestrator"))
+            if source_role == target_role:
+                return
+            crew_intelligence_service.create_handoff(
+                project_id=completed_task["project_id"],
+                source_role=source_role,
+                target_role=target_role,
+                source_task_id=completed_task["task_id"],
+                target_task_id=next_task["task_id"],
+                scene_id=output_data.get("scene_id") or completed_task.get("input_data", {}).get("scene_id"),
+                context_summary=f"{source_role.value.replace('_', ' ').title()} completed {completed_task.get('task_type')} and handed context to {target_role.value.replace('_', ' ').title()}.",
+                requirements=[f"Continue workflow with source task {completed_task['task_id']} as evidence."],
+                metadata={
+                    "orchestrator": "StudioOrchestrator",
+                    "source_task_type": completed_task.get("task_type"),
+                    "target_task_type": next_task.get("task_type"),
+                },
+            )
+        except Exception as exc:
+            logger.warning("[CREW_INTELLIGENCE] Failed to record orchestrator handoff for %s: %s", completed_task.get("task_id"), exc)
     
     def _handle_task_failure(self, task: Dict, result: ExecutionResult):
         """Handle task failure with retry logic"""

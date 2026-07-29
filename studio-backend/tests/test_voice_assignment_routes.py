@@ -16,15 +16,16 @@ from fastapi.testclient import TestClient
 
 from app.routes.projects import router
 from app.data.storage import DatabaseStorage
+from app.services.character_profile_service import character_profile_service
 
 
 @pytest.fixture
 def temp_db(tmp_path: Path, monkeypatch) -> DatabaseStorage:
-    """Create a temp SQLite DB and patch get_storage to return it."""
+    """Create a temp SQLite DB and inject it into the owning service."""
     db_dir = tmp_path / "route_test_db"
     db_dir.mkdir(parents=True, exist_ok=True)
     storage = DatabaseStorage(str(db_dir))
-    monkeypatch.setattr("app.routes.projects.get_storage", lambda *a, **kw: storage)
+    monkeypatch.setattr(character_profile_service, "_storage", storage)
     # Also patch _project_exists to return True for our test project
     monkeypatch.setattr("app.routes.projects._project_exists", lambda pid: True)
     return storage

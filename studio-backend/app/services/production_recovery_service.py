@@ -52,7 +52,8 @@ class ProductionRecoveryService:
                 "reviews": {"recovered": 0, "failed": 0},
                 "revisions": {"recovered": 0, "failed": 0},
                 "packages": {"recovered": 0, "failed": 0},
-                "projects": {"recovered": 0, "failed": 0}
+                "projects": {"recovered": 0, "failed": 0},
+                "queue": {"expired_leases": 0, "failed": 0},
             }
             
             # Step 1: Recover render jobs
@@ -72,6 +73,16 @@ class ProductionRecoveryService:
             
             # Step 6: Clean up stale data
             await self._cleanup_stale_data(project_id, recovery_results)
+
+            # Step 7: Recover durable production queue leases
+            try:
+                from app.services.production_queue_service import production_queue_service
+
+                queue_recovery = production_queue_service.recover_expired_leases()
+                recovery_results["queue"]["expired_leases"] = int(queue_recovery.get("expired_leases") or 0)
+            except Exception as queue_exc:
+                recovery_results["queue"]["failed"] += 1
+                logger.warning("Production queue lease recovery skipped: %s", queue_exc)
             
             recovery_results["status"] = "completed"
             recovery_results["end_time"] = datetime.now().isoformat()

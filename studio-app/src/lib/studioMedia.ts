@@ -103,7 +103,7 @@ function isMockOutput(job: RenderJob, outputUrl: string): boolean {
   if (mode === 'mock_success') return true
   const inputPayload = asRecord((job as unknown as AnyRecord).input_payload) || {}
   const parameters = asRecord(inputPayload.parameters) || {}
-  if (Boolean(parameters.use_mock_success)) return true
+  if (parameters.use_mock_success) return true
   const outputValue = outputUrl.trim().toLowerCase()
   if (outputValue.startsWith('/outputs/mock-video/')) return true
   return false

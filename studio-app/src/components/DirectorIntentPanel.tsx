@@ -24,12 +24,7 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
   const [whatToAvoid, setWhatToAvoid] = useState<string[]>([]);
   const [whatToAvoidInput, setWhatToAvoidInput] = useState("");
 
-  // Load intent on mount
-  useEffect(() => {
-    loadIntent();
-  }, [projectId]);
-
-  const loadIntent = async () => {
+  const loadIntent = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -48,7 +43,11 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    loadIntent();
+  }, [loadIntent]);
 
   const saveIntent = useCallback(
     async (update: DirectorIntentUpdate) => {
@@ -404,7 +403,7 @@ export function DirectorIntentSummary({ projectId }: DirectorIntentSummaryProps)
       try {
         const data = await getDirectorIntent(projectId);
         setIntent(data);
-      } catch (err) {
+      } catch {
         // Silent fail - intent is optional
       } finally {
         setLoading(false);

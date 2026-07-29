@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-07-29T08:33:49.251461Z",
+  "result": "pass",
+  "project_id": "hosted-verify-project-1785313849",
+  "render_job_id": "job-20260729043049-a3442075-hosted-verify-1785313849",
+  "provider": "runway",
+  "provider_mode": "hosted_api",
+  "provider_job_id": "2215db43-9e70-48d5-ad9d-9270312ecafc",
+  "model": "gemini_omni_flash",
+  "status": "complete",
+  "retry_count": 0,
+  "provider_output_reachable": true,
+  "local_output": {
+    "path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/renders/hosted-verify-project-1785313849/hosted-verify-1785313849_20260729_043123.mp4",
+    "sha256": "a42e4f0ee0bbf40d7ca0d5f2ccc157597982c4e6b0bd3fc460e37ef8692d08d1",
+    "size_bytes": 1149951,
+    "duration_seconds": 5.013,
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "width": 1280,
+    "height": 720,
+    "frame_rate": "24/1",
+    "extracted_frame_count": 3
+  },
+  "review": {
+    "review_id": "review-381b144bcac1",
+    "decision": "approved"
+  },
+  "final_package": {
+    "package_id": "package-a7b9718ae387",
+    "package_status": "approved",
+    "render_job_ids": [
+      "job-20260729043049-a3442075-hosted-verify-1785313849"
+    ]
+  },
+  "export": {
+    "package_id": "export_6bc787032a13",
+    "status": "complete",
+    "render_lineage_provider_job_id": "2215db43-9e70-48d5-ad9d-9270312ecafc"
+  },
+  "production_acceptance": {
+    "acceptance_id": "acceptance-b2e8f5d745e6",
+    "disposition": "ready_for_creator_approval",
+    "stale": false,
+    "blocker_count": 0,
+    "warning_count": 0
+  },
+  "provider_credit_balance_after_run": 0,
+  "notes": [
+    "Mock mode was explicitly disabled.",
+    "The provider rejected two preflight model attempts before task creation; neither consumed credits.",
+    "The completed hosted task consumed the available 50-credit balance.",
+    "Runtime defects observed during the real run were fixed locally: provider adapter sessions now close, and keyframe variance analysis is implemented."
+  ]
+}

@@ -41,7 +41,8 @@ def _cfg(api_key: str | None = "rk_live", api_endpoint: str | None = "https://ap
     )
 
 
-def test_runway_is_default_provider_when_enabled():
+def test_runway_can_be_selected_as_default_provider(monkeypatch):
+    monkeypatch.setenv("RENDER_VIDEO_PROVIDER", "runway")
     service = RenderService()
     assert service.get_default_provider() == "runway"
 
@@ -251,10 +252,32 @@ def test_runway_unauthorized_api_key(monkeypatch):
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
     job = asyncio.run(adapter.submit_job(_job()))
     assert job.status == "failed"
-    assert job.error_message == "Runway API unauthorized"
+    assert "Runway API unauthorized:" in (job.error_message or "")
+    assert "invalid api key" in (job.error_message or "")
     error = job.output_payload.metadata["provider_response_normalized"]["metadata"]["error"]
     assert error["error_type"] == "invalid_api_key"
     assert error["status_code"] == 401
+
+
+def test_runway_http_error_message_includes_provider_body(monkeypatch):
+    adapter = RunwayAdapter(_cfg(api_key="rk_live"))
+
+    async def _fake_request(method, path, payload=None, params=None):
+        from app.adapters import RunwayAPIError
+        if method == "GET" and path == "/v1/organization":
+            return {"id": "org_123"}
+        raise RunwayAPIError(
+            status_code=400,
+            endpoint=path,
+            response_headers={"content-type": "application/json"},
+            response_body="Validation of body failed: ratio must be one of 1280:768, 768:1280",
+        )
+
+    monkeypatch.setattr(adapter, "_runway_request", _fake_request)
+    job = asyncio.run(adapter.submit_job(_job()))
+    assert job.status == "failed"
+    assert "Runway API error 400:" in (job.error_message or "")
+    assert "ratio must be one of" in (job.error_message or "")
 
 
 def test_runway_error_classification_variants() -> None:
@@ -270,6 +293,7 @@ def test_runway_image_request_uses_image_to_video_and_includes_prompt_image(monk
     adapter = RunwayAdapter(_cfg())
     job = _job()
     job.input_payload.referenceAssets = ["https://example.com/image.jpg"]
+    job.input_payload.parameters["ratio"] = "16:9"
     calls: list[tuple[str, str]] = []
 
     async def _fake_request(method, path, payload=None, params=None):
@@ -279,6 +303,7 @@ def test_runway_image_request_uses_image_to_video_and_includes_prompt_image(monk
         if method == "POST":
             assert path == "/v1/image_to_video"
             assert payload["promptImage"] == "https://example.com/image.jpg"
+            assert payload["ratio"] == "1280:768"
             return {"id": "rw-123", "status": "queued"}
         return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
@@ -286,6 +311,27 @@ def test_runway_image_request_uses_image_to_video_and_includes_prompt_image(monk
     result = asyncio.run(adapter.submit_job(job))
     assert result.status == "complete"
     assert calls == [("GET", "/v1/organization"), ("POST", "/v1/image_to_video"), ("GET", "/v1/tasks/rw-123")]
+
+
+def test_runway_text_request_keeps_text_to_video_ratio(monkeypatch):
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.parameters["ratio"] = "16:9"
+    captured_payload: dict = {}
+
+    async def _fake_request(method, path, payload=None, params=None):
+        if method == "GET" and path == "/v1/organization":
+            return {"id": "org_123"}
+        if method == "POST":
+            assert path == "/v1/text_to_video"
+            captured_payload.update(payload or {})
+            return {"id": "rw-123", "status": "queued"}
+        return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
+
+    monkeypatch.setattr(adapter, "_runway_request", _fake_request)
+    result = asyncio.run(adapter.submit_job(job))
+    assert result.status == "complete"
+    assert captured_payload["ratio"] == "1280:720"
 
 
 def test_runway_long_running_task_completes_without_early_failure(monkeypatch):
@@ -478,6 +524,34 @@ def test_runway_model_per_request_override_via_parameters(monkeypatch):
     job = _job()
     job.input_payload.parameters["model"] = "gen6"
     assert adapter._runway_model(job) == "gen6"
+
+
+def test_runway_model_accepts_supported_hosted_override(monkeypatch):
+    monkeypatch.delenv("RUNWAY_MODEL", raising=False)
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.parameters["model"] = "gemini_omni_flash"
+    assert adapter._runway_model(job) == "gemini_omni_flash"
+
+
+def test_runway_classifies_credit_error_independent_of_status_code():
+    assert (
+        RunwayAdapter._classify_runway_error(
+            400,
+            '{"error":"You do not have enough credits to run this task."}',
+        )
+        == "missing_credits"
+    )
+
+
+def test_runway_classifies_unavailable_model_as_permanent():
+    assert (
+        RunwayAdapter._classify_runway_error(
+            403,
+            '{"error":"Model variant gen3a_turbo is not available"}',
+        )
+        == "unsupported_model"
+    )
 
 
 def test_runway_model_per_request_override_falls_back_to_env_when_no_parameter(monkeypatch):

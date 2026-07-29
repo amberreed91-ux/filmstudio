@@ -1,29 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import {
-  AlertCircle,
   Bold,
   Brain,
   CheckCircle2,
   ChevronDown,
   Copy,
-  Download,
   Edit3,
   FileText,
   Italic,
   MemoryStick,
-  MessageSquare,
   Mic,
   Plus,
   UserCheck,
   Redo2,
   Save,
   Undo2,
-  Upload,
   UploadCloud,
   Users,
-  X,
-  type LucideIcon,
 } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
@@ -37,12 +31,10 @@ import {
   checkBackendHealth,
   createScene,
   createCharacterSkeleton,
-  deleteScene,
   generateScenes,
   listCharacters,
   listScenes,
   saveCreativeDecisionMemory,
-  saveDirectorMemoryEntry,
   simulateCharacterMind,
   triggerSceneDebate,
   updateCharacter,
@@ -86,12 +78,6 @@ const FOUNTAIN_PREFIXES: Array<{ label: string; prefix: string; shortcut: string
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 function estimateWordCount(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0
 }
@@ -111,8 +97,7 @@ export default function WritersRoom() {
   const { projectId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryProjectId = searchParams.get('project_id') || ''
-  const navigate = useNavigate()
-  const { activeProject, activeProjectId } = useStudio()
+  const { activeProjectId } = useStudio()
 
   const effectiveProjectId = activeProjectId || projectId || queryProjectId
 
@@ -150,7 +135,6 @@ export default function WritersRoom() {
 
   // ── Intelligence state ────────────────────────────────────────────────────
   const [debateMode, setDebateMode] = useState(false)
-  const [debateTopic, setDebateTopic] = useState('')
   const [debateRunning, setDebateRunning] = useState(false)
   const [activeDebate, setActiveDebate] = useState<CoDirectorDebateEntry | null>(null)
 
@@ -160,7 +144,6 @@ export default function WritersRoom() {
   const [characterMindResult, setCharacterMindResult] = useState<string | null>(null)
 
   const [sceneDebateResult, setSceneDebateResult] = useState<{ restraint: string; urgency: string; scene_id: string } | null>(null)
-  const [sceneDebateAgreed, setSceneDebateAgreed] = useState<'restraint' | 'urgency' | null>(null)
 
   const [memorySaving, setMemorySaving] = useState(false)
   const [memorySavedChip, setMemorySavedChip] = useState(false)

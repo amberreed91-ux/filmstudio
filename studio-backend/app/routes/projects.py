@@ -4,7 +4,6 @@ import re
 import asyncio
 import json
 import os
-import sqlite3
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +14,8 @@ from fastapi import APIRouter, HTTPException, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
 from app.services.project_store import project_store
+from app.services.project_persistence_service import project_persistence_service
+from app.services.project_administration_service import project_administration_service
 from app.services.script_parser import ScriptParser, sanitize_scene_characters
 from app.services.generate_short_film_workflow_service import generate_short_film_workflow_service
 from app.services.multi_user_collaboration_service import multi_user_collaboration_service
@@ -60,9 +61,12 @@ from app.services.stability import (
     log_stage_event,
     start_timer,
 )
-from app.data import get_storage
-from app.models import StudioProject
-from app.llm_client import call_llm
+from app.services.project_route_dependencies import configure_project_route_dependencies
+from app.services.character_profile_service import (
+    CharacterDescriptorProviderError,
+    VALID_CASTING_VOICE_PROVIDERS,
+    character_profile_service,
+)
 from app.utils.helpers import as_non_empty_string, ensure_scene_fallback, scene_sequence_from_summary
 
 logger = logging.getLogger(__name__)
@@ -70,178 +74,18 @@ logger = logging.getLogger(__name__)
 
 def _project_exists(project_id: str) -> bool:
     """Treat persisted canonical projects as valid even when project_store is cold."""
-    if project_store.get_project(project_id) is not None:
-        return True
-    storage = get_storage("sqlite")
-    if storage is None:
-        return False
-    try:
-        return storage.get_project(project_id) is not None
-    except Exception:
-        return False
+    return project_persistence_service.exists(project_id)
 
 
 def _sync_project_to_canonical_store(project: Dict[str, Any]) -> None:
     """Ensure the canonical SQLite projects table has the current project row."""
-    if not isinstance(project, dict):
-        return
-    project_id = str(project.get("project_id") or "").strip()
-    if not project_id:
-        return
-    storage = get_storage("sqlite")
-    try:
-        storage.save_project(StudioProject(**project))
-    except Exception as exc:
-        # Fallback for legacy/minimal sqlite schemas used in tests.
-        try:
-            if hasattr(storage, "_get_connection"):
-                with storage._get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("PRAGMA table_info(projects)")
-                    columns = [row[1] for row in cursor.fetchall()]
-                    title = str(project.get("title") or project_id)
-                    updated_at = str(project.get("updated_at") or datetime.now(timezone.utc).isoformat())
-                    payload = json.dumps(project)
-                    if {"project_id", "data", "created_at", "updated_at"}.issubset(set(columns)):
-                        cursor.execute(
-                            """INSERT OR REPLACE INTO projects (project_id, data, created_at, updated_at)
-                               VALUES (?, ?, COALESCE((SELECT created_at FROM projects WHERE project_id = ?), ?), ?)""",
-                            (project_id, payload, project_id, updated_at, updated_at),
-                        )
-                    elif {"project_id", "data"}.issubset(set(columns)):
-                        cursor.execute(
-                            "INSERT OR REPLACE INTO projects (project_id, data) VALUES (?, ?)",
-                            (project_id, payload),
-                        )
-                    conn.commit()
-                    return
-        except (sqlite3.Error, AttributeError) as fallback_exc:
-            logger.warning("Fallback canonical project sync failed for %s: %s", project_id, fallback_exc)
-        logger.warning("Failed canonical project sync for %s: %s", project_id, exc)
+    project_persistence_service.sync(project)
 
 
 def _load_project_from_store(project_id: str):
-    current = project_store.get_project(project_id)
-    if current is not None:
-        return current
+    return project_persistence_service.load(project_id)
 
-    storage = get_storage("sqlite")
-    try:
-        persisted = storage.get_project(project_id)
-    except Exception as exc:
-        logger.debug("SQLite project lookup failed for %s: %s", project_id, exc)
-        persisted = None
-
-    if persisted is None:
-        logger.warning("PROJECT_NOT_FOUND | id=%s | db_checked=True", project_id)
-        return None
-
-    if hasattr(persisted, "model_dump"):
-        payload = persisted.model_dump(mode="json")
-    elif isinstance(persisted, dict):
-        payload = persisted
-    else:
-        payload = {"project_id": project_id}
-
-    try:
-        project_store.save_project(payload)
-    except Exception as exc:
-        logger.debug("Could not mirror SQLite project %s to project_store: %s", project_id, exc)
-
-    return payload
-
-if video_asset_service._storage is None:
-    video_asset_service._storage = get_storage("sqlite")
-if keyframe_extraction_service._storage is None:
-    keyframe_extraction_service._storage = get_storage("sqlite")
-if keyframe_extraction_service._video_asset_service is None:
-    keyframe_extraction_service._video_asset_service = video_asset_service
-if shot_detection_service._storage is None:
-    shot_detection_service._storage = get_storage("sqlite")
-if shot_detection_service._video_asset_service is None:
-    shot_detection_service._video_asset_service = video_asset_service
-if shot_detection_service._keyframe_service is None:
-    shot_detection_service._keyframe_service = keyframe_extraction_service
-if semantic_memory_service._storage is None:
-    semantic_memory_service._storage = get_storage("sqlite")
-if semantic_memory_service._video_asset_service is None:
-    semantic_memory_service._video_asset_service = video_asset_service
-if semantic_memory_service._shot_detection_service is None:
-    semantic_memory_service._shot_detection_service = shot_detection_service
-if continuity_intelligence_service._storage is None:
-    continuity_intelligence_service._storage = get_storage("sqlite")
-if continuity_intelligence_service._frame_analysis_service is None:
-    continuity_intelligence_service._frame_analysis_service = frame_analysis_service
-if continuity_intelligence_service._visual_embedding_service is None:
-    continuity_intelligence_service._visual_embedding_service = visual_embedding_service
-if continuity_intelligence_service._cinematic_memory_service is None:
-    continuity_intelligence_service._cinematic_memory_service = cinematic_memory_service
-if director_commentary_service._storage is None:
-    director_commentary_service._storage = get_storage("sqlite")
-if director_commentary_service._video_asset_service is None:
-    director_commentary_service._video_asset_service = video_asset_service
-if director_commentary_service._keyframe_service is None:
-    director_commentary_service._keyframe_service = keyframe_extraction_service
-if director_commentary_service._shot_detection_service is None:
-    director_commentary_service._shot_detection_service = shot_detection_service
-if director_commentary_service._semantic_memory_service is None:
-    director_commentary_service._semantic_memory_service = semantic_memory_service
-if semantic_search_service._storage is None:
-    semantic_search_service._storage = get_storage("sqlite")
-if semantic_search_service._semantic_memory_service is None:
-    semantic_search_service._semantic_memory_service = semantic_memory_service
-if frame_analysis_service._storage is None:
-    frame_analysis_service._storage = get_storage("sqlite")
-if frame_analysis_service._keyframe_service is None:
-    frame_analysis_service._keyframe_service = keyframe_extraction_service
-if frame_analysis_service._video_asset_service is None:
-    frame_analysis_service._video_asset_service = video_asset_service
-if visual_embedding_service._storage is None:
-    visual_embedding_service._storage = get_storage("sqlite")
-if visual_embedding_service._keyframe_service is None:
-    visual_embedding_service._keyframe_service = keyframe_extraction_service
-if visual_embedding_service._video_asset_service is None:
-    visual_embedding_service._video_asset_service = video_asset_service
-if cinematic_memory_service._storage is None:
-    cinematic_memory_service._storage = get_storage("sqlite")
-if cinematic_memory_service._frame_analysis_service is None:
-    cinematic_memory_service._frame_analysis_service = frame_analysis_service
-if cinematic_memory_service._visual_embedding_service is None:
-    cinematic_memory_service._visual_embedding_service = visual_embedding_service
-if cinematic_memory_service._keyframe_service is None:
-    cinematic_memory_service._keyframe_service = keyframe_extraction_service
-if cinematic_memory_service._video_asset_service is None:
-    cinematic_memory_service._video_asset_service = video_asset_service
-if semantic_retrieval_service._storage is None:
-    semantic_retrieval_service._storage = get_storage("sqlite")
-if semantic_retrieval_service._cinematic_memory_service is None:
-    semantic_retrieval_service._cinematic_memory_service = cinematic_memory_service
-if semantic_retrieval_service._visual_embedding_service is None:
-    semantic_retrieval_service._visual_embedding_service = visual_embedding_service
-if semantic_retrieval_service._keyframe_service is None:
-    semantic_retrieval_service._keyframe_service = keyframe_extraction_service
-if style_learning_service._storage is None:
-    style_learning_service._storage = get_storage("sqlite")
-if style_intelligence_service._storage is None:
-    style_intelligence_service._storage = get_storage("sqlite")
-if style_intelligence_service._frame_analysis_service is None:
-    style_intelligence_service._frame_analysis_service = frame_analysis_service
-if style_intelligence_service._visual_embedding_service is None:
-    style_intelligence_service._visual_embedding_service = visual_embedding_service
-if style_intelligence_service._cinematic_memory_service is None:
-    style_intelligence_service._cinematic_memory_service = cinematic_memory_service
-if style_intelligence_service._video_asset_service is None:
-    style_intelligence_service._video_asset_service = video_asset_service
-if style_intelligence_service._keyframe_service is None:
-    style_intelligence_service._keyframe_service = keyframe_extraction_service
-if video_metadata_matching_service._storage is None:
-    video_metadata_matching_service._storage = get_storage("sqlite")
-if video_metadata_matching_service._video_asset_service is None:
-    video_metadata_matching_service._video_asset_service = video_asset_service
-if cinematic_timeline_intelligence_service._storage is None:
-    cinematic_timeline_intelligence_service._storage = get_storage("sqlite")
-if editorial_revision_intelligence_service._storage is None:
-    editorial_revision_intelligence_service._storage = get_storage("sqlite")
+configure_project_route_dependencies()
 
 router = APIRouter(prefix="/api/f51/studio", tags=["project-persistence"])
 
@@ -466,28 +310,13 @@ def delete_project(project_id: str):
     """Delete a project and all associated data"""
     timer = start_timer()
     
-    # Check if project exists
-    project = project_store.get_project(project_id)
-    if project is None:
-        storage = get_storage("sqlite")
-        if storage:
-            project = storage.get_project(project_id)
-        if project is None:
-            raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Delete from project_store (in-memory)
-    project_store.delete_project(project_id)
-    
-    # Delete from canonical storage (SQLite) with full cascade
-    storage = get_storage("sqlite")
-    if storage:
-        try:
-            deleted = storage.cascade_delete_project(project_id)
-            if not deleted:
-                logger.warning("PROJECT_DELETE | project=%s | cascade_delete=false", project_id)
-        except Exception as exc:
-            logger.error("PROJECT_DELETE_ERROR | project=%s | error=%s", project_id, exc)
-            raise HTTPException(status_code=500, detail=f"Failed to delete project: {exc}")
+    try:
+        project_persistence_service.delete(project_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.error("PROJECT_DELETE_ERROR | project=%s | error=%s", project_id, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to delete project: {exc}")
     
     logger.info("PROJECT_DELETED | project=%s | elapsed=%dms", project_id, elapsed_ms(timer))
     
@@ -500,68 +329,10 @@ def migrate_characters():
     Removes characters that fail the fixed validation (COASTAL RENEWAL PROJECT,
     OWNER, REPRESENTATIVE, THE LAST TIDE, etc.) while keeping valid names
     (MARA, ELI, CHILD) that have genuine dialogue cues."""
-    storage = get_storage("sqlite")
-    if not storage:
-        raise HTTPException(status_code=503, detail="Storage not available")
-    
-    parser = ScriptParser()
-    results = {"projects_checked": 0, "characters_removed": 0, "characters_kept": 0}
-    
-    project_ids = storage.list_project_ids()
-    for pid in project_ids:
-        project = project_store.get_project(pid)
-        if project is None:
-            try:
-                persisted = storage.get_project(pid)
-                if persisted and hasattr(persisted, "model_dump"):
-                    project = persisted.model_dump(mode="json")
-                elif isinstance(persisted, dict):
-                    project = persisted
-            except Exception:
-                continue
-        if not isinstance(project, dict):
-            continue
-        
-        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
-        scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
-        if not scenes:
-            continue
-        
-        results["projects_checked"] += 1
-        changed = False
-        
-        for scene in scenes:
-            if not isinstance(scene, dict):
-                continue
-            scene_text = scene.get("text") or ""
-            if not scene_text.strip():
-                continue
-            
-            old_chars = scene.get("characters") if isinstance(scene.get("characters"), list) else []
-            if not old_chars:
-                continue
-            
-            valid_chars = parser._extract_simple_scene_characters(scene_text)
-            valid_set = set(c.upper() for c in valid_chars)
-            
-            removed = [c for c in old_chars if c.upper() not in valid_set]
-            kept = [c for c in old_chars if c.upper() in valid_set]
-            
-            if removed:
-                scene["characters"] = kept
-                changed = True
-                results["characters_removed"] += len(removed)
-                results["characters_kept"] += len(kept)
-        
-        if changed:
-            project_store.update_project(pid, {"execution_summary": summary})
-    
-    return {
-        "success": True,
-        "projects_checked": results["projects_checked"],
-        "characters_removed": results["characters_removed"],
-        "characters_kept": results["characters_kept"],
-    }
+    try:
+        return project_administration_service.migrate_characters()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 @router.post("/projects/{project_id}/generate-scenes")
@@ -1032,6 +803,26 @@ def get_director_memory(project_id: str):
     }
 
 
+@router.post("/projects/{project_id}/director-memory/scan")
+def scan_director_memory(project_id: str, payload: Dict[str, Any]):
+    """Scan a scene against Director's Memory and return co-director callbacks.
+
+    Request body: ``{"scene": {...}, "scene_index": <optional int>}``.
+    The scene payload is shape-flexible — any of ``title``, ``summary``,
+    ``description``, ``text``, ``beats`` is consulted.
+    """
+    if not _project_exists(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    scene = payload.get("scene") if isinstance(payload, dict) else None
+    if not isinstance(scene, dict):
+        raise HTTPException(status_code=400, detail="'scene' object is required")
+    scene_index = payload.get("scene_index") if isinstance(payload, dict) else None
+    result = director_memory_service.scan_scene(
+        project_id, scene, scene_index=scene_index
+    )
+    return result
+
+
 @router.get("/projects/{project_id}/director-memory/{kind}")
 def list_director_memory_entries(project_id: str, kind: str):
     if not _project_exists(project_id):
@@ -1127,26 +918,6 @@ def delete_director_memory_entry(project_id: str, kind: str, entry_id: str):
     except Exception:
         pass
     return {"success": True, "entry_id": entry_id}
-
-
-@router.post("/projects/{project_id}/director-memory/scan")
-def scan_director_memory(project_id: str, payload: Dict[str, Any]):
-    """Scan a scene against Director's Memory and return co-director callbacks.
-
-    Request body: ``{"scene": {...}, "scene_index": <optional int>}``.
-    The scene payload is shape-flexible — any of ``title``, ``summary``,
-    ``description``, ``text``, ``beats`` is consulted.
-    """
-    if not _project_exists(project_id):
-        raise HTTPException(status_code=404, detail="Project not found")
-    scene = payload.get("scene") if isinstance(payload, dict) else None
-    if not isinstance(scene, dict):
-        raise HTTPException(status_code=400, detail="'scene' object is required")
-    scene_index = payload.get("scene_index") if isinstance(payload, dict) else None
-    result = director_memory_service.scan_scene(
-        project_id, scene, scene_index=scene_index
-    )
-    return result
 
 
 @router.get("/projects/{project_id}/collaboration")
@@ -1313,24 +1084,9 @@ def list_project_scenes(project_id: str):
     script_text = current.get("script_text") or ""
     
     # Load previs images for this project to populate storyboard_image on scenes
-    previs_image_map: Dict[str, str] = {}
-    previs_shot_image_map: Dict[str, Dict[str, str]] = {}
-    try:
-        storage = get_storage("sqlite")
-        if storage:
-            previs_images = storage.load_previs_images(project_id)
-            for img in previs_images:
-                if img.get("status") == "complete" and img.get("image_path"):
-                    scene_id = img.get("scene_id", "")
-                    shot_id = img.get("shot_id")
-                    if scene_id and isinstance(shot_id, str) and shot_id.strip():
-                        previs_shot_image_map.setdefault(scene_id, {})
-                        if shot_id not in previs_shot_image_map[scene_id]:
-                            previs_shot_image_map[scene_id][shot_id] = img["image_path"]
-                    if scene_id and scene_id not in previs_image_map:
-                        previs_image_map[scene_id] = img["image_path"]
-    except Exception as exc:
-        logger.debug("Could not load previs images for %s: %s", project_id, exc)
+    previs_image_map, previs_shot_image_map = project_persistence_service.previs_image_maps(
+        project_id
+    )
     
     enriched = []
     for s in scenes:
@@ -2579,25 +2335,21 @@ def seed_demo_project(payload: SeedDemoProjectPayload = SeedDemoProjectPayload()
 @router.get("/projects/{project_id}/characters")
 def list_characters(project_id: str):
     """List all character descriptions for a project."""
-    storage = get_storage("sqlite")
-    try:
-        storage.seed_demo_characters(project_id)
-    except Exception:
-        pass
-    characters = storage.get_characters(project_id)
-    return {"characters": characters}
+    return {"characters": character_profile_service.list_characters(project_id)}
 
 
 @router.put("/projects/{project_id}/characters/{character_id}")
 def update_character(project_id: str, character_id: str, payload: dict):
     """Update a single character description."""
-    storage = get_storage("sqlite")
-    existing = storage.get_character(character_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Character not found")
-    name = payload.get("name") or existing["name"]
-    updated = storage.save_character(project_id, name, payload)
-    return {"character": updated}
+    try:
+        updated = character_profile_service.update_character(
+            project_id,
+            character_id,
+            payload,
+        )
+        return {"character": updated}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 class CharacterSkeletonPayload(BaseModel):
@@ -2607,49 +2359,15 @@ class CharacterSkeletonPayload(BaseModel):
 @router.post("/projects/{project_id}/characters")
 def create_character_skeleton(project_id: str, payload: CharacterSkeletonPayload):
     """Create a skeleton character record (name only) for a detected character."""
-    INVALID_NAMES = {
-        'THE HOMESTEAD', 'THE COUNTDOWN', 'THE FIRST TIMELINE', 'THE SECOND CHANCE',
-        'THE WEIGHT OF KNOWING', 'THE APOCALYPSE BEGINS', 'THE LAST NORMAL DAYS',
-        'THE HOMESTEAD COMMUNITY', 'FINAL CONFRONTATION', 'MAYA AND HER MOM',
-        'DRE NOTICES', 'ENDING', 'SUPPLIES', 'CUT TO', 'FADE IN', 'FADE OUT',
-        'SMASH CUT', 'TITLE CARD', 'MONTAGE', 'INTERCUT',
-    }
-    name_upper = (payload.name or "").strip().upper()
-    if not name_upper or name_upper in INVALID_NAMES:
-        raise HTTPException(status_code=400, detail="Invalid character name")
-    first_word = name_upper.split()[0] if name_upper.split() else ""
-    if first_word in ("THE", "A", "AN", "INT.", "EXT."):
-        raise HTTPException(status_code=400, detail="Invalid character name")
-    storage = get_storage("sqlite")
-    existing = storage.get_character_by_name(project_id, payload.name)
-    if existing:
-        return {"character": existing}
-    created = storage.save_character(project_id, payload.name, {"name": payload.name})
-    return {"character": created}
-
-
-_CHARACTER_DESCRIPTOR_SYSTEM_PROMPT = (
-    "You are a film character analyst. Extract character information "
-    "from the provided text and return ONLY valid JSON with these exact "
-    "fields: name (string), age (string), look (string, physical appearance), "
-    "energy (string, personality and presence), core_wound (string), "
-    "visual_prompt_summary (string, one sentence suitable for AI image generation). "
-    "If a field cannot be determined, return an empty string."
-)
-
-
-def _strip_markdown_fences(raw: str) -> str:
-    """Remove markdown code fences (```json ... ``` or ``` ... ```) from LLM output."""
-    raw = raw.strip()
-    if raw.startswith("```"):
-        # Remove opening fence
-        first_newline = raw.find("\n")
-        if first_newline != -1:
-            raw = raw[first_newline + 1 :]
-        # Remove closing fence
-        if raw.endswith("```"):
-            raw = raw[:-3].strip()
-    return raw
+    try:
+        return {
+            "character": character_profile_service.create_skeleton(
+                project_id,
+                payload.name,
+            )
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/projects/{project_id}/characters/{character_id}/upload-descriptor")
@@ -2659,13 +2377,6 @@ async def upload_character_descriptor(
     file: UploadFile = File(...),
 ):
     """Accept a .txt file, extract character info via Groq, and update the character record."""
-    storage = get_storage("sqlite")
-
-    existing = storage.get_character(character_id, project_id)
-    if existing is None:
-        raise HTTPException(status_code=404, detail="Character not found")
-
-    # Read the uploaded file
     if not file.filename or not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are accepted")
 
@@ -2678,35 +2389,16 @@ async def upload_character_descriptor(
     if not text_content.strip():
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
-    # Call Groq
     try:
-        raw_response = await call_llm(
-            system_prompt=_CHARACTER_DESCRIPTOR_SYSTEM_PROMPT,
-            message=text_content,
+        updated = await character_profile_service.apply_descriptor(
+            project_id,
+            character_id,
+            text_content,
         )
-    except Exception as exc:
-        logger.error("Groq LLM call failed for character descriptor: %s", exc)
-        raise HTTPException(status_code=502, detail="AI analysis service unavailable")
-
-    # Strip markdown fences and parse JSON
-    cleaned = _strip_markdown_fences(raw_response)
-    try:
-        extracted = json.loads(cleaned)
-    except json.JSONDecodeError:
-        logger.error("Failed to parse Groq response as JSON: %s", raw_response[:500])
-        raise HTTPException(status_code=502, detail="AI returned invalid JSON")
-
-    # Only overwrite fields that are currently empty in the existing record
-    merged = dict(existing)
-    for field in ("name", "age", "look", "energy", "core_wound", "visual_prompt_summary"):
-        existing_val = merged.get(field)
-        new_val = extracted.get(field)
-        if new_val and not existing_val:
-            merged[field] = new_val
-
-    # Persist the merged character
-    char_name = merged.get("name") or existing.get("name") or "Unknown"
-    updated = storage.save_character(project_id, char_name, merged)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except CharacterDescriptorProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
     return {"character": updated}
 
@@ -2833,15 +2525,12 @@ def generate_project_poster(project_id: str):
 
 @router.get("/projects/{project_id}/poster")
 def get_project_poster(project_id: str):
-    if not _project_exists(project_id):
-        raise HTTPException(status_code=404, detail="Project not found")
-    storage = get_storage("sqlite")
-    if storage is None:
-        raise HTTPException(status_code=500, detail="Storage not available")
-    url = storage.get_project_poster_url(project_id)
-    if not url:
-        raise HTTPException(status_code=404, detail="No poster generated yet")
-    return {"poster_url": url}
+    try:
+        return {"poster_url": project_persistence_service.get_poster_url(project_id)}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # ── ElevenLabs Voice Casting ──────────────────────────────────────────────────
@@ -2864,9 +2553,6 @@ class VoiceAssignmentResponse(BaseModel):
     voice_style_prompt: str | None = None
     elevenlabs_voice_id: str | None = None
     elevenlabs_voice_name: str | None = None
-
-
-VALID_CASTING_VOICE_PROVIDERS = {"cosyvoice", "fish_audio", "elevenlabs"}
 
 
 @router.get("/projects/{project_id}/elevenlabs/voices")
@@ -2948,21 +2634,10 @@ def list_elevenlabs_voices(project_id: str, category: str | None = None):
 @router.get("/projects/{project_id}/characters/{character_id}/voice")
 def get_character_voice(project_id: str, character_id: str):
     """Get the project Casting voice assignment for a character."""
-    storage = get_storage("sqlite")
-    character = storage.get_character(character_id, project_id)
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
-    return {
-        "character_id": character_id,
-        "project_id": project_id,
-        "voice_provider": character.get("voice_provider"),
-        "voice_id": character.get("voice_id"),
-        "voice_name": character.get("voice_name"),
-        "voice_source_type": character.get("voice_source_type"),
-        "voice_style_prompt": character.get("voice_style_prompt"),
-        "elevenlabs_voice_id": character.get("elevenlabs_voice_id"),
-        "elevenlabs_voice_name": character.get("elevenlabs_voice_name"),
-    }
+    try:
+        return character_profile_service.get_voice(project_id, character_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.put("/projects/{project_id}/characters/{character_id}/voice")
@@ -2971,10 +2646,6 @@ def set_character_voice(project_id: str, character_id: str, payload: VoiceAssign
 
     Pass ``voice_id=""`` to clear the assignment.
     """
-    storage = get_storage("sqlite")
-    character = storage.get_character(character_id, project_id)
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
     provider = (payload.provider or "elevenlabs").strip().lower()
     if provider not in VALID_CASTING_VOICE_PROVIDERS:
         raise HTTPException(
@@ -2985,48 +2656,20 @@ def set_character_voice(project_id: str, character_id: str, payload: VoiceAssign
                 metadata={"valid_providers": sorted(VALID_CASTING_VOICE_PROVIDERS)},
             ).to_dict(),
         )
-    if provider == "elevenlabs":
-        updated = storage.set_character_voice(
-            character_id,
+    try:
+        return character_profile_service.set_voice(
             project_id,
-            payload.voice_id,
-            payload.voice_name,
-        )
-        if updated and hasattr(storage, "set_character_voice_casting"):
-            updated = storage.set_character_voice_casting(
-                character_id=character_id,
-                project_id=project_id,
-                provider=provider,
-                voice_id=payload.voice_id,
-                voice_name=payload.voice_name,
-                source_type=payload.source_type or "library",
-                style_prompt=payload.style_prompt,
-            )
-    else:
-        if not hasattr(storage, "set_character_voice_casting"):
-            raise HTTPException(
-                status_code=500,
-                detail=PersistenceError("Provider-aware voice casting storage unavailable", stage="voice_casting").to_dict(),
-            )
-        updated = storage.set_character_voice_casting(
-            character_id=character_id,
-            project_id=project_id,
+            character_id,
             provider=provider,
             voice_id=payload.voice_id,
             voice_name=payload.voice_name,
             source_type=payload.source_type,
             style_prompt=payload.style_prompt,
         )
-    if not updated:
-        raise HTTPException(status_code=404, detail="Character not found")
-    return {
-        "character_id": character_id,
-        "project_id": project_id,
-        "voice_provider": updated.get("voice_provider"),
-        "voice_id": updated.get("voice_id"),
-        "voice_name": updated.get("voice_name"),
-        "voice_source_type": updated.get("voice_source_type"),
-        "voice_style_prompt": updated.get("voice_style_prompt"),
-        "elevenlabs_voice_id": updated.get("elevenlabs_voice_id"),
-        "elevenlabs_voice_name": updated.get("elevenlabs_voice_name"),
-    }
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=PersistenceError(str(exc), stage="voice_casting").to_dict(),
+        )

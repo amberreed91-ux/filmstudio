@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { Eye, Film, Clapperboard, Users, ArrowLeft, Loader2, MessageSquare } from 'lucide-react'
+import { Eye, Film, Clapperboard, Users, ArrowLeft, Loader2 } from 'lucide-react'
 import { getSharedProject, listScenes, type StudioProject, type Scene } from '../lib/studioApi'
 import { ProviderModelLabel } from '../components/ProviderPicker'
 import CollaboratorRoleBadge from '../components/CollaboratorRoleBadge'
@@ -80,6 +80,12 @@ export default function ShareProject() {
       </div>
     )
   }
+
+  const renderQueueRows = Array.isArray(project.render_queue)
+    ? (project.render_queue as Array<Record<string, unknown>>)
+    : []
+  const renderQueuePreview = renderQueueRows.slice(0, 12)
+  const hiddenRenderQueueCount = Math.max(0, renderQueueRows.length - renderQueuePreview.length)
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-deep)' }}>
@@ -230,14 +236,14 @@ export default function ShareProject() {
         </div>
 
         {/* Render Queue Preview */}
-        {project.render_queue && project.render_queue.length > 0 && (
+        {renderQueuePreview.length > 0 && (
           <div className="mb-8">
             <h2 className="text-lg font-semibold text-zinc-300 mb-3 flex items-center gap-2">
               <Users size={18} />
               Render Queue
             </h2>
             <div className="space-y-3">
-              {(project.render_queue as Array<Record<string, unknown>>).map((queueItem, index) => {
+              {renderQueuePreview.map((queueItem, index) => {
                 const item = queueItem as Record<string, unknown>
                 return (
                   <div
@@ -253,7 +259,7 @@ export default function ShareProject() {
                       </span>
                     </div>
                     <div className="text-sm text-zinc-400">
-                      {item.provider && (
+                      {typeof item.provider === 'string' && (
                         <ProviderModelLabel
                           provider={item.provider as string}
                           model={item.model as string | undefined}
@@ -264,6 +270,11 @@ export default function ShareProject() {
                   </div>
                 )
               })}
+              {hiddenRenderQueueCount > 0 ? (
+                <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-zinc-500">
+                  {hiddenRenderQueueCount} additional render queue item{hiddenRenderQueueCount === 1 ? '' : 's'} hidden from this share preview.
+                </div>
+              ) : null}
             </div>
           </div>
         )}

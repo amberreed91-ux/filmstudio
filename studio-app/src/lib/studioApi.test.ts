@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createClipRevision,
+  createCameraGrammarPlan,
+  createWorkflowVersion,
+  buildCameraGrammarRenderContext,
   getEditorialRevisionIntelligence,
   getTimelineIntelligence,
+  getProjectWorkflow,
   getProjectDecisionGate,
   getStudioProject,
   enhancePrevisPrompt,
@@ -10,10 +14,97 @@ import {
   generateScenePipeline,
   recommendGenerationSettings,
   refreshRenderJobOutputUrl,
+  recordWorkflowDecision,
   retryRenderJobForAdherence,
   resolveStudioApiBase,
   seedDemoStudioProject,
+  updateWorkflowPhase,
 } from './studioApi'
+
+describe('camera grammar API', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('creates camera grammar plans through the cinematography API', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          plan: {
+            plan_id: 'cam-plan-1',
+            project_id: 'project_cam',
+            plan_scope: 'scene',
+            status: 'active',
+            source_fingerprint: 'abc',
+            source_summary: '',
+            grammar_axes: [],
+            composition_intent: 'isolation',
+            lens_intent: 'observational_normal',
+            movement_intent: 'locked_observation',
+            lighting_intent: 'motivated_practical',
+            framing_intent: 'medium',
+            depth_strategy: '',
+            blocking_strategy: '',
+            screen_direction_strategy: '',
+            visual_storytelling_rationale: '',
+            render_slot_suggestions: [],
+            evidence_refs: [],
+            memory_refs: [],
+            spine_refs: [],
+            confidence_label: 'emerging',
+            creator_note: '',
+            advisory_only: true,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+            metadata: {},
+          },
+          reasoning_record_id: '',
+          stale_existing_plan_ids: [],
+          advisory_only: true,
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await createCameraGrammarPlan('project_cam', {
+      scene_id: 'scene_001',
+      scene_context: { visual_description: 'A held frame.' },
+    })
+
+    expect(result.plan.plan_id).toBe('cam-plan-1')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/projects/project_cam/cinematography/plans')
+    expect(JSON.parse(String(init?.body))).toMatchObject({ scene_id: 'scene_001' })
+  })
+
+  it('builds camera grammar render context through the slot endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          plan_id: 'cam-plan-1',
+          project_id: 'project_cam',
+          camera_direction: 'medium framing',
+          lighting_direction: 'practical light',
+          slot_suggestions: [],
+          evidence_refs: [],
+          budget: { camera_limit: 70, lighting_limit: 60 },
+          advisory_only: true,
+          metadata: {},
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await buildCameraGrammarRenderContext('project_cam', {
+      plan_id: 'cam-plan-1',
+      provider: 'runway',
+    })
+
+    expect(result.budget.camera_limit).toBe(70)
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/projects/project_cam/cinematography/render-context')
+  })
+})
 
 describe('enhancePrevisPrompt', () => {
   afterEach(() => {
@@ -549,5 +640,126 @@ describe('getSceneRationale', () => {
 
     const { getSceneRationale } = await import('./studioApi')
     await expect(getSceneRationale('proj-1', 'nonexistent')).rejects.toThrow()
+  })
+})
+
+describe('studio workflow API', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('loads project workflow summary from the canonical workflow route', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          project_state: {
+            project_id: 'project_s9',
+            current_phase: 'screening',
+            workflow_status: 'waiting_creator',
+            created_at: '2026-07-27T00:00:00Z',
+            updated_at: '2026-07-27T00:00:00Z',
+          },
+          collaborators: [],
+          active_gates: [],
+          active_versions: [],
+          open_tasks: [],
+          recent_events: [],
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await getProjectWorkflow('project_s9')
+
+    expect(result.project_state.current_phase).toBe('screening')
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/f51/studio/projects/project_s9/workflow')
+  })
+
+  it('creates workflow versions with JSON payloads', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          version_id: 'sw_ver_1',
+          project_id: 'project_s9',
+          artifact_type: 'scene',
+          artifact_id: 'scene_001',
+          version_number: 1,
+          status: 'draft',
+          created_at: '2026-07-27T00:00:00Z',
+          updated_at: '2026-07-27T00:00:00Z',
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await createWorkflowVersion('project_s9', {
+      artifact_type: 'scene',
+      artifact_id: 'scene_001',
+      created_by: 'owner',
+    })
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect(result.version_id).toBe('sw_ver_1')
+    expect((init?.method || '').toUpperCase()).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      artifact_type: 'scene',
+      artifact_id: 'scene_001',
+      created_by: 'owner',
+    })
+  })
+
+  it('records workflow decisions against a gate', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          decision_id: 'sw_dec_1',
+          project_id: 'project_s9',
+          gate_id: 'sw_gate_1',
+          actor_id: 'producer',
+          actor_role: 'producer',
+          decision: 'approve',
+          created_at: '2026-07-27T00:00:00Z',
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await recordWorkflowDecision('project_s9', 'sw_gate_1', {
+      actor_id: 'producer',
+      actor_role: 'producer',
+      decision: 'approve',
+      rationale: 'Ready for the next room.',
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/workflow/gates/sw_gate_1/decisions')
+    expect((init?.method || '').toUpperCase()).toBe('POST')
+    expect(result.decision).toBe('approve')
+  })
+
+  it('updates workflow phase with a PUT request', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          project_id: 'project_s9',
+          current_phase: 'screening',
+          workflow_status: 'waiting_creator',
+          created_at: '2026-07-27T00:00:00Z',
+          updated_at: '2026-07-27T00:00:00Z',
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const result = await updateWorkflowPhase('project_s9', {
+      actor_id: 'producer',
+      phase: 'screening',
+      workflow_status: 'waiting_creator',
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/workflow/phase')
+    expect((init?.method || '').toUpperCase()).toBe('PUT')
+    expect(result.current_phase).toBe('screening')
   })
 })

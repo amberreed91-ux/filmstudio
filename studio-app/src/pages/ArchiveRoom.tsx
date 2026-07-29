@@ -12,7 +12,6 @@ import {
   Plus,
   Search,
   Trash2,
-  Wifi,
   X,
   ImageIcon,
   FileVideo,
@@ -29,13 +28,10 @@ import {
   getProjectDecisionGate,
   listProjects,
   listScenes,
-  updateProject,
   listVideoAssetsForProject,
   type PersistedProjectState,
   type Scene,
-  type StudioDecisionGate,
 } from '../lib/studioApi'
-import { normalizeJobStatus } from '../lib/jobStatus'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -161,11 +157,6 @@ export default function ArchiveRoom() {
 
   // ── Selected film ─────────────────────────────────────────────────────────
   const [selectedFilm, setSelectedFilm] = useState<FilmEntry | null>(null)
-  const [editingTitle, setEditingTitle] = useState(false)
-  const [editingLogline, setEditingLogline] = useState(false)
-  const [titleDraft, setTitleDraft] = useState('')
-  const [loglineDraft, setLoglineDraft] = useState('')
-
   // ── Actions ───────────────────────────────────────────────────────────────
   const [archiving, setArchiving] = useState<string | null>(null)
   const [exporting, setExporting] = useState<string | null>(null)
@@ -287,10 +278,11 @@ export default function ArchiveRoom() {
       case 'runtime':
         sorted.sort((a, b) => b.runtime - a.runtime)
         break
-      case 'status':
+      case 'status': {
         const order: Record<FilmStatus, number> = { complete: 0, in_progress: 1, draft: 2 }
         sorted.sort((a, b) => order[a.status] - order[b.status])
         break
+      }
     }
 
     return sorted
@@ -330,53 +322,6 @@ export default function ArchiveRoom() {
     }
   }, [])
 
-  const handleStartRename = useCallback((film: FilmEntry) => {
-    setTitleDraft(film.project.title)
-    setEditingTitle(true)
-  }, [])
-
-  const handleSaveRename = useCallback(async () => {
-    if (!selectedFilm || !titleDraft.trim()) return
-    setError('')
-    try {
-      const { project } = await updateProject(selectedFilm.project.project_id, { title: titleDraft.trim() })
-      if (project) {
-        const updatedFilm = { ...selectedFilm, project, logline: deriveLogline(project) }
-        setSelectedFilm(updatedFilm)
-        setFilms((prev) => prev.map((f) => (f.project.project_id === project.project_id ? updatedFilm : f)))
-        setSuccess('Title updated')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Rename failed')
-    } finally {
-      setEditingTitle(false)
-    }
-  }, [selectedFilm, titleDraft])
-
-  const handleStartEditLogline = useCallback((film: FilmEntry) => {
-    setLoglineDraft(film.logline)
-    setEditingLogline(true)
-  }, [])
-
-  const handleSaveLogline = useCallback(async () => {
-    if (!selectedFilm || !loglineDraft.trim()) return
-    setError('')
-    try {
-      const execSummary = { ...selectedFilm.project.execution_summary, logline: loglineDraft.trim() }
-      const { project } = await updateProject(selectedFilm.project.project_id, { execution_summary: execSummary })
-      if (project) {
-        const updatedFilm = { ...selectedFilm, project, logline: loglineDraft.trim() }
-        setSelectedFilm(updatedFilm)
-        setFilms((prev) => prev.map((f) => (f.project.project_id === project.project_id ? updatedFilm : f)))
-        setSuccess('Logline updated')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Logline update failed')
-    } finally {
-      setEditingLogline(false)
-    }
-  }, [selectedFilm, loglineDraft])
-
   const handleArchive = useCallback(async (film: FilmEntry) => {
     setArchiving(film.project.project_id)
     setError('')
@@ -405,7 +350,7 @@ export default function ArchiveRoom() {
     setReadinessIssues([])
     setError('')
     try {
-      const gate = await getProjectDecisionGate(selectedFilm.project.project_id)
+      await getProjectDecisionGate(selectedFilm.project.project_id)
       const issues: ReadinessIssue[] = []
 
       if (selectedFilm.sceneCount === 0) {
@@ -620,7 +565,7 @@ export default function ArchiveRoom() {
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setSelectedFilm(film); handleStartRename(film) }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedFilm(film) }}
                             className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02]"
                             style={{ color: 'var(--color-on-surface-variant)' }}
                           >

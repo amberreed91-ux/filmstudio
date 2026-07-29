@@ -3,7 +3,10 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.data.storage import DatabaseStorage
+from app.models import RenderJobModel
 from app.routes import render as render_routes
+from app.services import render as render_module
 
 
 class _FakeRenderService:
@@ -96,10 +99,85 @@ class _FakeStatusRenderService:
                 "prompt_contradictions": [
                     {"code": "framing_closeup_full_body", "message": "Close-up conflicts with full body."}
                 ],
+                "character_identity_warnings": [
+                    "Maya: conflicting facial identity evidence needs review."
+                ],
+                "environment_continuity_context": {
+                    "location_id": "harbor-house-kitchen",
+                    "warnings": [
+                        "destruction_damage: window was previously broken and has no restored-state record"
+                    ],
+                    "recognizability": {
+                        "recognizable": False,
+                        "status": "needs_review",
+                        "preserved_anchors": ["Harbor House Kitchen"],
+                        "missing_anchors": ["blue enamel mug"],
+                        "basis": "Environment prompt does not carry enough canonical anchors to prove recognizability.",
+                    },
+                    "reference_explanations": [
+                        {
+                            "source_shot_id": "scene_001_shot_001",
+                            "role": "establishing",
+                            "reason": "selected because approved establishing shots are preferred as environment anchors",
+                        }
+                    ],
+                },
             },
             "retry_count": 0,
             "created_at": "2026-07-23T12:00:00",
             "updated_at": "2026-07-23T12:00:00",
+        }
+
+
+class _FakeRenderJob:
+    def __init__(self, job_id: str, created_at: str, status: str = "pending") -> None:
+        self.id = job_id
+        self.project_id = "project_1"
+        self.shot_id = f"shot_{job_id}"
+        self.provider = "happyhorse-r2v"
+        self.status = status
+        self.progress = 0
+        self.input_payload = None
+        self.output_payload = None
+        self.error_message = None
+        self.retry_count = 0
+        self.created_at = created_at
+        self.updated_at = created_at
+
+    def model_dump(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "shot_id": self.shot_id,
+            "provider": self.provider,
+            "status": self.status,
+            "progress": self.progress,
+            "input_payload": None,
+            "output_payload": None,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+
+class _FakePaginatedRenderStorage:
+    def list_jobs_page(self, **kwargs):
+        assert kwargs == {
+            "project_id": "project_1",
+            "status": "pending",
+            "cursor": None,
+            "limit": 2,
+        }
+        return {
+            "items": [
+                _FakeRenderJob("job_002", "2026-07-23T12:02:00"),
+                _FakeRenderJob("job_001", "2026-07-23T12:01:00"),
+            ],
+            "next_cursor": "2026-07-23T12:01:00|job_001",
+            "total_visible": 2,
+            "has_more": True,
+            "filters": {"project_id": "project_1", "status": "pending"},
         }
 
 
@@ -156,4 +234,62 @@ def test_render_job_response_includes_zero_touch_status_summary(monkeypatch) -> 
     assert summary["retry"]["count"] == 1
     assert summary["output_url"] == "https://cdn.example.test/shot.mp4"
     assert summary["preview_url"] == "https://cdn.example.test/shot.jpg"
+    assert summary["character_identity_warnings"] == [
+        "Maya: conflicting facial identity evidence needs review."
+    ]
+    assert summary["environment_continuity"]["location_id"] == "harbor-house-kitchen"
+    assert summary["environment_continuity"]["warnings"] == [
+        "destruction_damage: window was previously broken and has no restored-state record"
+    ]
+    assert summary["environment_continuity"]["human_review_required"] is True
+    assert summary["environment_continuity"]["recognizability"]["status"] == "needs_review"
+    assert summary["environment_continuity"]["reference_explanations"][0]["role"] == "establishing"
     assert summary["human_review_required"] is True
+
+
+def test_list_render_jobs_can_return_paginated_contract(monkeypatch) -> None:
+    monkeypatch.setattr(render_module, "_storage", _FakePaginatedRenderStorage())
+    api = FastAPI()
+    api.include_router(render_routes.router, prefix="/api/f51/studio/render")
+
+    response = TestClient(api).get(
+        "/api/f51/studio/render/jobs",
+        params={"project_id": "project_1", "status": "pending", "limit": 2, "paginated": "true"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_more"] is True
+    assert data["next_cursor"] == "2026-07-23T12:01:00|job_001"
+    assert [item["job_id"] for item in data["items"]] == ["job_002", "job_001"]
+    assert data["filters"] == {"project_id": "project_1", "status": "pending"}
+
+
+def test_render_job_storage_pagination_keeps_same_timestamp_rows(tmp_path) -> None:
+    storage = DatabaseStorage(str(tmp_path))
+    created_at = "2026-07-23T12:00:00"
+    for index in range(450):
+        storage.save_job(
+            RenderJobModel(
+                id=f"job_{index:04d}",
+                project_id="project_page",
+                shot_id=f"shot_{index:04d}",
+                provider="simulated",
+                status="pending",
+                created_at=created_at,
+                updated_at=created_at,
+            )
+        )
+
+    first_page = storage.list_jobs_page(project_id="project_page", limit=200)
+    second_page = storage.list_jobs_page(
+        project_id="project_page",
+        cursor=first_page["next_cursor"],
+        limit=200,
+    )
+
+    assert len(first_page["items"]) == 200
+    assert len(second_page["items"]) == 200
+    assert first_page["has_more"] is True
+    assert second_page["has_more"] is True
+    assert {job.id for job in first_page["items"]}.isdisjoint(job.id for job in second_page["items"])

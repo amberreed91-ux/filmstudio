@@ -31,6 +31,7 @@ export function AudioUXProvider({ children }: { children: ReactNode }) {
   return <AudioUXContext.Provider value={value}>{children}</AudioUXContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAudioUX() {
   return useContext(AudioUXContext)
 }

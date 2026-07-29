@@ -32,6 +32,9 @@ class AgentRole(str, Enum):
     SCRIPT_ANALYST = "script_analyst"           # Parse and structure (technical)
     STORYBOARD_ARTIST = "storyboard_artist"     # Visual layout (execution)
     CINEMATOGRAPHER = "cinematographer"        # Camera specs (technical)
+    PRODUCTION_DESIGNER = "production_designer" # Environments, props, costumes, and set dressing (technical)
+    COLORIST = "colorist"                      # Look development, grading consistency, and color storytelling (technical)
+    SOUND_DESIGNER = "sound_designer"          # Voice, music, ambience, and mix specs (technical)
     PROMPT_ENGINEER = "prompt_engineer"        # Prompt optimization (technical)
     EDITOR = "editor"                          # Sequence assembly (execution)
     CONTINUITY_SUPERVISOR = "continuity_supervisor" # Validation (technical)
@@ -416,6 +419,44 @@ AGENT_CONFIGS = {
         ],
         "is_creative": False,  # Technical specs, not creative decisions
         "escalates_on": [EscalationReason.RESOURCE_DECISION]
+    },
+
+    AgentRole.PRODUCTION_DESIGNER: {
+        "name": "Production Designer",
+        "description": "Environment, prop, costume, set dressing, material, and symbolic continuity specifications",
+        "capabilities": [
+            AgentCapability(capability="environment_design", description="Plan location and set identity", is_creative=False),
+            AgentCapability(capability="prop_continuity", description="Track practical and symbolic prop states", is_creative=False),
+            AgentCapability(capability="costume_continuity", description="Track wardrobe and costume state continuity", is_creative=False),
+            AgentCapability(capability="set_dressing", description="Specify set dressing and material constraints", is_creative=False),
+        ],
+        "is_creative": False,
+        "escalates_on": [EscalationReason.RESOURCE_DECISION, EscalationReason.CONFLICT],
+    },
+
+    AgentRole.COLORIST: {
+        "name": "Colorist",
+        "description": "Look development, scene matching, grading consistency, palette continuity, and emotional color storytelling",
+        "capabilities": [
+            AgentCapability(capability="look_development", description="Create project and sequence color look bibles", is_creative=False),
+            AgentCapability(capability="scene_matching", description="Compare scene and shot grade consistency", is_creative=False),
+            AgentCapability(capability="palette_continuity", description="Track color obligations across scenes and motifs", is_creative=False),
+            AgentCapability(capability="final_color_verification", description="Verify assembled output for color drift", is_creative=False),
+        ],
+        "is_creative": False,
+        "escalates_on": [EscalationReason.RESOURCE_DECISION, EscalationReason.CONFLICT],
+    },
+
+    AgentRole.SOUND_DESIGNER: {
+        "name": "Performance Audio",
+        "description": "Voice direction, music, ambience, sound design, and mix specifications",
+        "capabilities": [
+            AgentCapability(capability="voice_direction", description="Plan emotional dialogue delivery", is_creative=False),
+            AgentCapability(capability="soundscape_planning", description="Plan music, ambience, silence, and sound motifs", is_creative=False),
+            AgentCapability(capability="mix_readiness", description="Validate audio handoff and mix requirements", is_creative=False),
+        ],
+        "is_creative": False,
+        "escalates_on": [EscalationReason.RESOURCE_DECISION, EscalationReason.CONFLICT],
     },
     
     AgentRole.PROMPT_ENGINEER: {

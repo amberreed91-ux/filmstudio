@@ -389,7 +389,7 @@ def _find_rendered_video(project_id: str, scene_id: str) -> Optional[Path]:
         return None
 
 
-@router.post("/projects/{project_id}/scenes/{scene_id}/audio/generate")
+@router.post("/projects/{project_id}/scenes/{scene_id}/audio/pipeline/generate")
 async def generate_scene_audio_pipeline(
     project_id: str,
     scene_id: str,
@@ -480,7 +480,7 @@ async def generate_scene_audio_pipeline(
         raise HTTPException(status_code=500, detail=f"Audio pipeline failed: {exc}") from exc
 
 
-@router.get("/projects/{project_id}/scenes/{scene_id}/audio/status")
+@router.get("/projects/{project_id}/scenes/{scene_id}/audio/pipeline/status")
 async def get_scene_audio_pipeline_status(project_id: str, scene_id: str) -> Dict[str, Any]:
     """Return current audio pipeline status for a scene."""
     service = _get_pipeline_service()

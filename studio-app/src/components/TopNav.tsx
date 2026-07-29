@@ -91,7 +91,7 @@ export default function TopNav({ showProjectPicker }: TopNavProps) {
     try {
       const { debates } = await listDebates(activeProjectId)
       setDebateHistory(debates.slice(-5).reverse())
-    } catch (err: any) {
+    } catch {
       // Silently ignore 404 and other errors - no console logging
       return
     }

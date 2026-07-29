@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { X, ShieldCheck } from 'lucide-react'
 import { runProductionScan, type ProductionScanReport } from '../lib/studioApi'
 import ProductionScanReportView from './ProductionScanReport'

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Settings, MoreHorizontal, TrendingUp, RefreshCw } from 'lucide-react'
 import { useStudio } from '../context/StudioContext'
-import { retryRenderJob, setRenderMode } from '../lib/studioApi'
+import { getProductionQueueSummary, retryRenderJob, setRenderMode, type ProductionQueueSummary } from '../lib/studioApi'
 import StudioShell from '../components/StudioShell'
-import { getProviderSummaries, getRenderQueueRows } from '../lib/studioSelectors'
+import { getProviderPressureRows, getProviderSummaries, getQueueStatusCounts, getRenderQueueRows } from '../lib/studioSelectors'
 
 const COST_SETTINGS_KEY = 'studio:cost-settings'
 
@@ -110,10 +110,26 @@ export default function Cost() {
     return stored ? JSON.parse(stored).speedPriority || 75 : 75
   })
   const [notice, setNotice] = useState<string | null>(null)
+  const [queueSummary, setQueueSummary] = useState<ProductionQueueSummary | null>(null)
   const tabs = ['Dashboard', 'Queue', 'Providers', 'Settings']
   const { project, overview } = useStudio()
   const activeProject = project || overview?.latest_project || null
-  const providerSummaries = useMemo(() => getProviderSummaries(activeProject), [activeProject])
+  const queueCounts = getQueueStatusCounts(queueSummary)
+  const providerSummaries = useMemo(() => {
+    const pressureRows = getProviderPressureRows(queueSummary)
+    if (pressureRows.length) {
+      return pressureRows.map((row, index) => ({
+        id: row.provider,
+        name: row.provider.replace(/[_-]+/g, ' '),
+        instance: `${row.queued} waiting · ${row.status.replace(/_/g, ' ')}`,
+        load: row.limit > 0 ? Math.min(100, Math.round((row.active / row.limit) * 100)) : 0,
+        jobs: row.active + row.queued,
+        color: ['#06b6d4', '#a855f7', '#f97316', '#22c55e'][index % 4],
+        billedLabel: 'Queue summary',
+      }))
+    }
+    return getProviderSummaries(activeProject)
+  }, [activeProject, queueSummary])
   const renderRows = useMemo(() => getRenderQueueRows(activeProject), [activeProject])
   const providerExecution = (activeProject?.interactive_modules?.provider_execution as Record<string, unknown> | undefined) || {}
   const routingLog = [
@@ -124,7 +140,16 @@ export default function Cost() {
   const chartW = 320
   const chartH = 80
 
-  const queueTrend = (renderRows.length ? renderRows : [{ progress: 0 } as { progress: number }]).map((row, i, rows) => {
+  const queueTrendSource = queueSummary
+    ? [
+        { progress: queueCounts.active ? 100 : 0, label: 'Active' },
+        { progress: queueCounts.waiting ? 72 : 0, label: 'Waiting' },
+        { progress: queueCounts.blocked ? 45 : 0, label: 'Blocked' },
+        { progress: queueCounts.failed ? 30 : 0, label: 'Care' },
+      ]
+    : (renderRows.length ? renderRows.map((row) => ({ progress: row.progress, label: row.renderId })) : [{ progress: 0, label: 'Idle' }])
+
+  const queueTrend = queueTrendSource.map((row, i, rows) => {
     const x = rows.length === 1 ? chartW / 2 : (i / (rows.length - 1)) * chartW
     const y = chartH - ((row.progress / 100) * chartH)
     return `${x},${y}`
@@ -135,6 +160,19 @@ export default function Cost() {
   useEffect(() => {
     window.localStorage.setItem(COST_SETTINGS_KEY, JSON.stringify({ budgetCap, speedPriority }))
   }, [budgetCap, speedPriority])
+
+  useEffect(() => {
+    if (!activeProject?.project_id) return
+    let cancelled = false
+    getProductionQueueSummary(activeProject.project_id)
+      .then((summary) => {
+        if (!cancelled) setQueueSummary(summary)
+      })
+      .catch(() => {
+        if (!cancelled) setQueueSummary(null)
+      })
+    return () => { cancelled = true }
+  }, [activeProject?.project_id])
 
   async function handleRetryTopJob() {
     if (!activeProject?.project_id || !activeRenderJob) return
@@ -258,11 +296,11 @@ export default function Cost() {
                   <h3 className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Render Queue Health</h3>
                   <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--accent-cyan)' }}>
                     <TrendingUp size={11} />
-                    {renderRows.filter((row) => row.progress >= 90).length} review-ready
+                    {queueSummary ? `${queueCounts.active} active` : `${renderRows.filter((row) => row.progress >= 90).length} review-ready`}
                   </div>
                 </div>
                 <div className="rounded-lg p-3 relative" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', height: 120 }}>
-                  {renderRows.length === 0 ? (
+                  {!queueSummary && renderRows.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>No render queue data available.</span>
                     </div>
@@ -288,7 +326,7 @@ export default function Cost() {
                         ))}
                       </svg>
                       <div className="flex justify-between mt-1 ml-4 text-xs" style={{ color: 'var(--text-muted)', fontSize: 9 }}>
-                        {renderRows.slice(0, 6).map((row) => <span key={row.renderId}>{row.renderId}</span>)}
+                        {queueTrendSource.slice(0, 6).map((row) => <span key={row.label}>{row.label}</span>)}
                       </div>
                     </>
                   )}

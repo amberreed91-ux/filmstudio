@@ -64,7 +64,7 @@ def _project_with_scene_assembly(output_url: str) -> dict:
 
 def test_assembly_status_counts_scene_pipeline_assemblies(monkeypatch):
     storage = FakeStorage()
-    monkeypatch.setattr(assembly, "get_storage", lambda _name: storage)
+    monkeypatch.setattr(assembly.assembly_persistence_service, "_storage", storage)
     monkeypatch.setattr(
         "app.services.project_store.project_store.get_project",
         lambda project_id: _project_with_scene_assembly("/outputs/scene_assemblies/proj_scene_003.mp4"),
@@ -92,7 +92,7 @@ def test_assemble_film_accepts_local_scene_pipeline_assembly(monkeypatch, tmp_pa
     storage = FakeStorage()
     monkeypatch.setattr(assembly, "BACKEND_ROOT", tmp_path)
     monkeypatch.setattr(assembly, "FILMS_DIR", tmp_path / "static" / "films")
-    monkeypatch.setattr(assembly, "get_storage", lambda _name: storage)
+    monkeypatch.setattr(assembly.assembly_persistence_service, "_storage", storage)
     monkeypatch.setattr(
         "app.services.project_store.project_store.get_project",
         lambda project_id: _project_with_scene_assembly("/outputs/scene_assemblies/proj_scene_003_with_audio.mp4"),

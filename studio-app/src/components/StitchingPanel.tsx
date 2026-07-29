@@ -5,7 +5,7 @@
  * of all approved scenes, watch progress, and download the final MP4.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   type StitchJob,
   getStitchDownload,

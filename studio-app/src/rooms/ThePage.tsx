@@ -23,7 +23,7 @@ function DustMotes() {
     return pos
   }, [])
 
-  useFrame(({ clock }) => {
+  useFrame(() => {
     if (!ref.current) return
     const pos = ref.current.geometry.attributes.position.array as Float32Array
     for (let i = 0; i < count; i++) {

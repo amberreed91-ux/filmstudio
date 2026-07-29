@@ -10,13 +10,12 @@ Two-phase flow (propose → confirm) — no auto-promotion path exists:
 """
 
 import logging
-from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.data import get_storage
 from app.models.consistency import ReferenceAsset
+from app.services.reference_asset_service import reference_asset_service
 
 logger = logging.getLogger(__name__)
 
@@ -52,53 +51,12 @@ def propose_reference_asset(
     The caller must POST to /{project_id}/reference-assets with the
     proposal body to confirm and persist.
     """
-    storage = get_storage("sqlite")
-
-    attempts = storage.list_render_attempts(
-        project_id=project_id, shot_id=shot_id, limit=10,
-    )
-    if not attempts:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No render attempts found for shot {shot_id} in project {project_id}",
-        )
-
-    for attempt in attempts:
-        score_json = attempt.get("score_json") or {}
-        dimensions = score_json.get("dimensions") or {}
-        char_state = dimensions.get("character_state") or {}
-        cs_score = char_state.get("score", 0)
-        verdict = score_json.get("verdict", "")
-
-        if cs_score >= 90 and verdict == "pass":
-            proposal = ReferenceAsset(
-                ref_id=f"proposal_{uuid4().hex[:12]}",
-                kind="character_full",
-                image_url=body.video_url,
-                source_shot_id=shot_id,
-                project_id=project_id,
-            )
-            logger.info(
-                "REFERENCE_PROPOSAL_GENERATED | project=%s | shot=%s | attempt=%s",
-                project_id, shot_id, attempt.get("attempt_n"),
-            )
-            return {
-                "proposal": proposal.model_dump(mode="json"),
-                "qualifying_attempt": attempt.get("attempt_n"),
-                "note": (
-                    "This is a proposal only — not persisted. "
-                    "POST to /{project_id}/reference-assets to confirm."
-                ),
-            }
-
-    raise HTTPException(
-        status_code=400,
-        detail=(
-            f"Shot {shot_id} has no render attempt with "
-            f"character_state >= 90 and verdict == 'pass'. "
-            f"Cannot promote."
-        ),
-    )
+    try:
+        return reference_asset_service.propose(project_id, shot_id, body.video_url)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -113,28 +71,10 @@ def confirm_reference_asset(project_id: str, payload: ReferenceAsset):
     There is no auto-promotion, no background job, no hook from the
     propose endpoint, and no middleware that calls this implicitly.
     """
-    if payload.project_id != project_id:
-        raise HTTPException(
-            status_code=400,
-            detail=f"payload.project_id={payload.project_id!r} does not match URL project_id={project_id!r}",
-        )
-
-    # Assign a permanent id (strip the "proposal_" prefix if present)
-    clean_id = payload.ref_id.replace("proposal_", "ref_")
-    if clean_id == payload.ref_id:
-        clean_id = f"ref_{uuid4().hex[:24]}"
-    asset = payload.model_copy(update={"ref_id": clean_id})
-
-    storage = get_storage("sqlite")
-    asset_dict = asset.model_dump(mode="json")
-    storage.save_reference_asset(asset_dict)
-
-    logger.info(
-        "REFERENCE_ASSET_CONFIRMED | project=%s | ref_id=%s | kind=%s | source_shot=%s",
-        project_id, asset.ref_id, asset.kind, asset.source_shot_id,
-    )
-
-    return {"reference_asset": asset_dict}
+    try:
+        return {"reference_asset": reference_asset_service.confirm(project_id, payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -144,6 +84,5 @@ def confirm_reference_asset(project_id: str, payload: ReferenceAsset):
 @router.get("/{project_id}/reference-assets")
 def list_reference_assets(project_id: str, kind: str | None = None):
     """List confirmed ReferenceAssets for a project from the DB."""
-    storage = get_storage("sqlite")
-    assets = storage.list_reference_assets(project_id=project_id, kind=kind)
+    assets = reference_asset_service.list_assets(project_id, kind)
     return {"reference_assets": assets, "count": len(assets)}

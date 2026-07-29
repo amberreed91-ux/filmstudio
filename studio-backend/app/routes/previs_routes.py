@@ -14,6 +14,8 @@ import re
 import shutil
 import os
 
+from app.services.previs_service import previs_service
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -72,87 +74,16 @@ async def generate_scene_previs(
         shot_number: Shot number within scene (1-based, default 1)
         take_number: Take number for this shot (1-based, default 1)
     """
-    from app.data.storage import get_storage
-    from app.services.render import render_service
-    from app.services.shot_prompt_builder import build_shot_aware_prompt, get_shot_type_label
-    
-    storage = get_storage()
-    
-    # Fetch scene data
-    scene = storage.get_scene(project_id, scene_id)
-    if not scene:
-        raise HTTPException(status_code=404, detail=f"Scene {scene_id} not found")
-    
-    # Fetch characters for prompt injection
     try:
-        characters = storage.get_characters(project_id)
-    except Exception:
-        characters = []
-    
-    # Build shot-aware prompt
-    prompt = build_shot_aware_prompt(
-        scene_data=scene,
-        shot_number=shot_number,
-        take_number=take_number,
-        all_characters=characters,
-        audio_brief=None,  # Can be extended later
-        max_length=512,
-    )
-    
-    shot_label = get_shot_type_label(shot_number)
-    
-    logger.info(
-        "PREVIS_GENERATE | scene=%s | shot=%d | take=%d | type=%s | prompt=%s",
-        scene_id,
-        shot_number,
-        take_number,
-        shot_label,
-        prompt[:100],
-    )
-    
-    # Create render job for previs (3 second minimum duration)
-    try:
-        shot_id = f"{scene_id}_shot_{str(shot_number).zfill(3)}_take_{take_number}"
-        
-        job = render_service.create_job(
-            project_id=project_id,
-            shot_id=shot_id,
-            provider="runway",
-            prompt=prompt,
-            reference_assets=[],
-            parameters={"duration": 3, "ratio": "1280:720"}
-        )
-        
-        # Submit the job
-        await render_service.submit_job(job.id)
-        
-        # Store in previs_images table with pending status
-        storage.save_previs_image(
-            project_id=project_id,
-            scene_id=scene_id,
-            shot_id=shot_id,
-            image_path="",  # Will be filled when complete
-            job_id=job.id,
-            status="pending",
-            prompt_used=prompt,
-            fallback=False
-        )
-        
-        logger.info(
-            "PREVIS_JOB_CREATED | scene=%s | shot=%d | take=%d | job_id=%s",
+        result = await previs_service.generate_scene(
+            project_id,
             scene_id,
             shot_number,
             take_number,
-            job.id,
         )
-        
-        return PrevisGenerateResponse(
-            job_id=job.id,
-            status="pending",
-            scene_id=scene_id,
-            message=f"Preview generation started for Shot {shot_number}, Take {take_number} ({shot_label})"
-        )
-        
+        return PrevisGenerateResponse(**result)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as e:
         logger.error(
             "PREVIS_GENERATE_FAILED | scene=%s | shot=%d | take=%d | error=%s",
@@ -171,62 +102,12 @@ async def get_scene_previs_images(project_id: str, scene_id: str) -> list[Previs
     
     Returns a list of previs image records with their current status.
     """
-    from app.data.storage import get_storage
-    from app.services.render import render_service
-    
-    storage = get_storage()
-    
-    # Load previs images for this scene
-    images = storage.load_previs_images(project_id, scene_id)
-    
-    # Update status from render jobs if needed
-    updated_images = []
-    for image in images:
-        if image["status"] == "pending":
-            try:
-                # Check if the render job has completed
-                job = await render_service.get_job_status(image["job_id"])
-                
-                if job.status == "complete":
-                    # Extract image path from job output
-                    image_path = ""
-                    
-                    if job.output_payload and job.output_payload.asset_url:
-                        video_url = job.output_payload.asset_url
-                        
-                        if FFMPEG_AVAILABLE:
-                            # TODO: Extract first frame using FFmpeg
-                            # For now, use video URL as fallback
-                            image_path = video_url
-                            logger.info(f"PREVIS_FFMPEG_TODO | job={job.id} | using video url")
-                        else:
-                            # Use video URL directly
-                            image_path = video_url
-                            logger.info(f"PREVIS_FFMPEG_UNAVAILABLE | job={job.id} | using video url")
-                    
-                    # Update status in database
-                    if image_path:
-                        storage.update_previs_image_status(
-                            job_id=image["job_id"],
-                            status="complete",
-                            image_path=image_path
-                        )
-                        image["status"] = "complete"
-                        image["image_path"] = image_path
-                
-                elif job.status == "failed":
-                    storage.update_previs_image_status(
-                        job_id=image["job_id"],
-                        status="failed"
-                    )
-                    image["status"] = "failed"
-                    
-            except Exception as e:
-                logger.error(f"PREVIS_STATUS_CHECK_FAILED | job={image['job_id']} | error={str(e)}")
-        
-        updated_images.append(PrevisImageResponse(**image))
-    
-    return updated_images
+    images = await previs_service.list_scene_images(
+        project_id,
+        scene_id,
+        use_video_url_fallback=not FFMPEG_AVAILABLE,
+    )
+    return [PrevisImageResponse(**image) for image in images]
 
 
 @router.post("/projects/{project_id}/previs/generate-all")
@@ -236,40 +117,10 @@ async def generate_all_previs(project_id: str) -> dict:
     
     Returns a list of job IDs for tracking progress.
     """
-    from app.data.storage import get_storage
-    
-    storage = get_storage()
-    
-    # Get all scenes for the project
-    scenes = storage.list_scenes(project_id)
-    
-    if not scenes:
-        raise HTTPException(status_code=404, detail="No scenes found for project")
-    
-    jobs = []
-    
-    for scene in scenes:
-        try:
-            result = await generate_scene_previs(project_id, scene["scene_id"])
-            jobs.append({
-                "scene_id": scene["scene_id"],
-                "job_id": result.job_id,
-                "status": result.status
-            })
-        except Exception as e:
-            logger.error(f"PREVIS_GENERATE_ALL_FAILED | scene={scene['scene_id']} | error={str(e)}")
-            jobs.append({
-                "scene_id": scene["scene_id"],
-                "job_id": None,
-                "status": "failed",
-                "error": str(e)
-            })
-    
-    return {
-        "project_id": project_id,
-        "total_scenes": len(scenes),
-        "jobs": jobs
-    }
+    try:
+        return await previs_service.generate_all(project_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 # ===========================================================================
@@ -407,20 +258,13 @@ async def enhance_prompt(
                 raise HTTPException(status_code=422, detail=exc.to_dict()) from exc
             if exc.metadata and exc.metadata.get("openrouter_error"):
                 logger.warning(
-                    "Both providers failed for enhance-prompt, returning original prompt | "
+                    "Both providers failed for enhance-prompt | "
                     "project_id=%s qwen=%s openrouter=%s provider=none",
                     project_id,
                     exc.metadata.get("qwen_error"),
                     exc.metadata.get("openrouter_error"),
                 )
-                return EnhancePromptResponse(
-                    enhanced_prompt=body.prompt_text,
-                    original_prompt=body.prompt_text,
-                    study_memories_used=0,
-                    scene_context_used=False,
-                    character_profiles_used=0,
-                    enhancement_attempts=0,
-                )
+                raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
             logger.error(
                 "project_id=%s job_id=- provider=qwen stage=%s "
                 "duration_ms=0 error_type=%s metadata=%s",
@@ -599,9 +443,12 @@ async def recommend_generation_settings(
                         supports_custom_duration=True,
                         valid_durations_seconds=[4, 8, 12, 16, 20],
                         nearest_valid_duration_seconds=8,
-                        advisory="Providers were unavailable, so the closest editable default is shown.",
+                        advisory=(
+                            "AI recommendation was unavailable, so an editable "
+                            "studio default is shown."
+                        ),
                     ),
-                    reasoning="Default settings applied — providers unavailable.",
+                    reasoning="Default settings applied while the recommendation service was unavailable.",
                     study_memories_used=0,
                 )
             logger.error(

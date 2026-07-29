@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.routes.reference_assets import router
+from app.services.reference_asset_service import reference_asset_service
 
 app = FastAPI()
 app.include_router(router)
@@ -50,7 +51,7 @@ def test_propose_qualifying_returns_proposal_not_live_asset():
     storage_mock = MagicMock()
     storage_mock.list_render_attempts.return_value = [_qualifying_attempt(attempt_n=7, score=92)]
 
-    with patch("app.routes.reference_assets.get_storage", return_value=storage_mock):
+    with patch.object(reference_asset_service, "_storage", storage_mock):
         resp = client.post(
             "/api/f51/studio/projects/proj-1/shots/shot-1/propose-reference",
             json={"video_url": "https://cdn.example.com/render.mp4"},
@@ -85,7 +86,7 @@ def test_propose_rejects_non_qualifying_score():
     storage_mock = MagicMock()
     storage_mock.list_render_attempts.return_value = [_non_qualifying_attempt(score=65)]
 
-    with patch("app.routes.reference_assets.get_storage", return_value=storage_mock):
+    with patch.object(reference_asset_service, "_storage", storage_mock):
         resp = client.post(
             "/api/f51/studio/projects/proj-1/shots/shot-1/propose-reference",
             json={"video_url": "https://cdn.example.com/render.mp4"},
@@ -107,7 +108,7 @@ def test_propose_rejects_wrong_verdict():
         }
     ]
 
-    with patch("app.routes.reference_assets.get_storage", return_value=storage_mock):
+    with patch.object(reference_asset_service, "_storage", storage_mock):
         resp = client.post(
             "/api/f51/studio/projects/proj-1/shots/shot-1/propose-reference",
             json={"video_url": "https://cdn.example.com/render.mp4"},
@@ -121,7 +122,7 @@ def test_propose_rejects_no_attempts():
     storage_mock = MagicMock()
     storage_mock.list_render_attempts.return_value = []
 
-    with patch("app.routes.reference_assets.get_storage", return_value=storage_mock):
+    with patch.object(reference_asset_service, "_storage", storage_mock):
         resp = client.post(
             "/api/f51/studio/projects/proj-1/shots/shot-1/propose-reference",
             json={"video_url": "https://cdn.example.com/render.mp4"},
@@ -135,7 +136,7 @@ def test_propose_empty_score_json_handled():
     storage_mock = MagicMock()
     storage_mock.list_render_attempts.return_value = [{"attempt_n": 1, "score_json": None}]
 
-    with patch("app.routes.reference_assets.get_storage", return_value=storage_mock):
+    with patch.object(reference_asset_service, "_storage", storage_mock):
         resp = client.post(
             "/api/f51/studio/projects/proj-1/shots/shot-1/propose-reference",
             json={"video_url": "https://cdn.example.com/render.mp4"},
@@ -197,7 +198,7 @@ def test_confirm_is_only_write_path():
         _qualifying_attempt(attempt_n=1, score=98),
     ]
 
-    with patch("app.routes.reference_assets.get_storage", return_value=storage_mock):
+    with patch.object(reference_asset_service, "_storage", storage_mock):
         prop_resp = client.post(
             "/api/f51/studio/projects/proj-confirm-2/shots/shot-1/propose-reference",
             json={"video_url": "https://cdn.example.com/v1.mp4"},

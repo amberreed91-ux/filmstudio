@@ -131,13 +131,106 @@ class CharacterVisualReferenceService:
                 if lock_status == "provisional"
                 else "locked reference"
             )
+            reliability = str(lock.get("reliability") or ("medium" if lock_status == "provisional" else "high"))
+            source_shot = str(lock.get("source_shot_id") or "").strip()
             fallback_text[ref_id] = (
                 f"Use {status_label} for {character_name or 'this character'}; "
-                "preserve face, silhouette, wardrobe, and visual identity."
+                "preserve fixed identity (face, body, silhouette, skin tone, age presentation) "
+                "and preserve changeable appearance (hair, wardrobe, accessories, temporary marks) unless this shot explicitly changes them. "
+                f"Reference reliability: {reliability}; source shot: {source_shot or 'unknown'}."
             )
 
         if not refs:
+            return self._build_confirmed_reference_asset_payload(
+                project_id=project_id,
+                storage=storage,
+                characters=characters,
+            )
+        return ConsistencyPayload(
+            project_id=project_id,
+            refs=refs,
+            weights=weights,
+            mode="identity_lock",
+            fallback_text=fallback_text,
+        )
+
+    def _build_confirmed_reference_asset_payload(
+        self,
+        *,
+        project_id: str,
+        storage: Any,
+        characters: list[dict[str, Any]],
+    ) -> ConsistencyPayload | None:
+        """Fallback to confirmed project references for shots with resolved cast.
+
+        Character reference locks are the strongest source, but some projects
+        already have confirmed reference_assets rows before the first completed
+        render is approved. Use those only when the shot has resolved characters;
+        otherwise broad project references would leak into unrelated shots.
+        """
+        if not characters or not hasattr(storage, "list_reference_assets"):
             return None
+        try:
+            raw_refs = storage.list_reference_assets(project_id=project_id, limit=12)
+        except Exception as exc:
+            logger.debug("Confirmed reference asset lookup skipped for %s: %s", project_id, exc)
+            return None
+
+        refs: list[ReferenceAsset] = []
+        weights: dict[str, float] = {}
+        fallback_text: dict[str, str] = {}
+        kind_weights = {
+            "character_full": 0.9,
+            "character_face": 0.7,
+            "environment": 0.35,
+            "style": 0.2,
+        }
+        character_names = [
+            str(character.get("name") or "").strip()
+            for character in characters
+            if str(character.get("name") or "").strip()
+        ]
+        character_label = ", ".join(character_names) if character_names else "the resolved cast"
+
+        for raw in raw_refs:
+            if not isinstance(raw, dict):
+                continue
+            ref_id = str(raw.get("ref_id") or "").strip()
+            kind = str(raw.get("kind") or "").strip()
+            image_url = str(raw.get("image_url") or "").strip()
+            if not ref_id or kind not in kind_weights or not image_url:
+                continue
+            try:
+                ref = ReferenceAsset(
+                    ref_id=ref_id,
+                    kind=kind,  # type: ignore[arg-type]
+                    image_url=image_url,
+                    embedding=raw.get("embedding") if isinstance(raw.get("embedding"), list) else None,
+                    source_shot_id=raw.get("source_shot_id"),
+                    project_id=project_id,
+                )
+            except Exception:
+                continue
+            refs.append(ref)
+            weights[ref.ref_id] = kind_weights[kind]
+            if kind in {"character_full", "character_face"}:
+                fallback_text[ref.ref_id] = (
+                    f"Use confirmed {kind.replace('_', ' ')} reference for {character_label}; "
+                    "preserve identity, silhouette, face, and wardrobe continuity."
+                )
+            elif kind == "environment":
+                fallback_text[ref.ref_id] = "Use confirmed environment reference for spatial and lighting continuity."
+            elif kind == "style":
+                fallback_text[ref.ref_id] = "Use confirmed style reference for project visual language."
+
+        if not refs:
+            return None
+        logger.info(
+            "CONFIRMED_REFERENCE_ASSETS_ATTACHED | project=%s | refs=%d | characters=%d",
+            project_id,
+            len(refs),
+            len(characters),
+        )
         return ConsistencyPayload(
             project_id=project_id,
             refs=refs,
@@ -191,6 +284,12 @@ class CharacterVisualReferenceService:
                 lock_status="provisional",
                 provider="qwen-image-max",
                 capture_method="storyboard",
+                reference_role="general",
+                reliability="medium",
+                source_job_id=f"storyboard_{shot_id}",
+                source_status="provisional",
+                review_status="unreviewed",
+                trace_notes="Created from completed storyboard image before approved render exists.",
                 created_at=now,
                 updated_at=now,
             )
@@ -312,6 +411,12 @@ class CharacterVisualReferenceService:
                 lock_status="locked",
                 provider=job.provider,
                 capture_method=capture_method,
+                reference_role="general",
+                reliability="high",
+                source_job_id=job.id,
+                source_status="approved",
+                review_status="approved",
+                trace_notes="Promoted only after completed render passed adherence review.",
                 created_at=now,
                 updated_at=now,
             )

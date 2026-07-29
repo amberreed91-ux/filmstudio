@@ -24,6 +24,8 @@ from app.models.memory import MemoryType
 from app.services.guardrails import guardrails
 from app.services.conflicts import conflict_service
 from app.services.memory import memory_service
+from app.services.crew_intelligence_service import crew_intelligence_service
+from app.models.crew_intelligence import CrewEvidenceRef, CrewReasoningType, CrewRisk
 
 logger = logging.getLogger("studio-crew")
 logger.setLevel(logging.DEBUG)
@@ -375,6 +377,7 @@ class CrewService:
         
         # UPDATE MEMORY AFTER COMPLETING - Critical for continuity
         self._update_memory_from_task(task, output_data)
+        self._record_crew_intelligence_from_task(task, output_data, warnings or [])
         
         logger.info(f"Task {task_id} completed - memory updated")
         
@@ -385,6 +388,127 @@ class CrewService:
         self._trigger_dependents(task)
         
         return task
+
+    def _record_crew_intelligence_from_task(self, task: CrewTask, output_data: Dict, warnings: List[str]):
+        """Persist advisory crew reasoning without changing task lifecycle semantics."""
+        try:
+            scene_id = output_data.get("scene_id") or task.input.data.get("scene_id")
+            shot_id = output_data.get("shot_id") or task.input.data.get("shot_id")
+            asset_id = output_data.get("asset_id") or task.input.data.get("asset_id")
+            role = task.agent_role
+            reasoning_type = self._reasoning_type_for_role(role)
+            observation = self._observation_for_task_output(task, output_data)
+            recommendation = self._recommendation_for_task_output(task, output_data)
+            evidence_refs = [
+                CrewEvidenceRef(
+                    ref_type="task",
+                    ref_id=task.task_id,
+                    label=f"{role.value} task",
+                    summary=f"Completed {task.task_type.value} task for {role.value}.",
+                    source_service="CrewService",
+                )
+            ]
+            risks = [
+                CrewRisk(
+                    risk_id=f"risk-{task.task_id}-{idx}",
+                    category="task_warning",
+                    severity="needs_attention" if task.escalation else "advisory",
+                    summary=warning,
+                    evidence_refs=evidence_refs,
+                    requires_creator_decision=bool(task.escalation),
+                )
+                for idx, warning in enumerate(warnings or [])
+                if warning
+            ]
+            role_context = crew_intelligence_service.build_role_context(
+                project_id=task.project_id,
+                agent_role=role,
+                film_id=task.input.data.get("film_id") or task.input.data.get("project_id"),
+                scene_id=scene_id,
+            )
+            crew_intelligence_service.create_reasoning_record(
+                project_id=task.project_id,
+                task_id=task.task_id,
+                agent_role=role,
+                reasoning_type=reasoning_type,
+                scene_id=scene_id,
+                shot_id=shot_id,
+                asset_id=asset_id,
+                observation=observation,
+                context_used=["crew_task", "task_output"] + list(role_context.canonical_sources.keys()),
+                inference=output_data.get("inference", ""),
+                recommendation_summary=recommendation,
+                creator_note=output_data.get("creator_note", ""),
+                evidence_refs=evidence_refs,
+                memory_refs=role_context.memory_refs,
+                spine_refs=role_context.spine_refs,
+                risks=risks,
+                downstream_departments=self._downstream_departments_for_role(role),
+                requires_creator_decision=bool(task.escalation),
+                escalation_reason=(task.escalation or {}).get("reason") if task.escalation else None,
+                metadata={
+                    "task_status": task.status.value,
+                    "task_type": task.task_type.value,
+                    "output_keys": sorted(output_data.keys()),
+                    "context_notes": role_context.context_notes,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Failed to record crew intelligence for task %s: %s", task.task_id, exc)
+
+    def _reasoning_type_for_role(self, role: AgentRole) -> CrewReasoningType:
+        mapping = {
+            AgentRole.PRODUCER: CrewReasoningType.PRODUCTION_COORDINATION,
+            AgentRole.RENDER_COORDINATOR: CrewReasoningType.PROVIDER_READINESS,
+            AgentRole.DIRECTOR: CrewReasoningType.CREATIVE_SYNTHESIS,
+            AgentRole.SCRIPT_ANALYST: CrewReasoningType.ANALYSIS,
+            AgentRole.STORYBOARD_ARTIST: CrewReasoningType.PLAN,
+            AgentRole.CINEMATOGRAPHER: CrewReasoningType.STYLE_CHECK,
+            AgentRole.PROMPT_ENGINEER: CrewReasoningType.HANDOFF_PREPARATION,
+            AgentRole.EDITOR: CrewReasoningType.EDITORIAL_READ,
+            AgentRole.CONTINUITY_SUPERVISOR: CrewReasoningType.CONTINUITY_CHECK,
+            AgentRole.MEMORY_ARCHIVIST: CrewReasoningType.MEMORY_RECALL,
+            AgentRole.QUALITY_REVIEWER: CrewReasoningType.VALIDATION,
+            AgentRole.SYSTEM_ORCHESTRATOR: CrewReasoningType.PRODUCTION_COORDINATION,
+        }
+        return mapping.get(role, CrewReasoningType.ANALYSIS)
+
+    def _observation_for_task_output(self, task: CrewTask, output_data: Dict) -> str:
+        if output_data.get("observation"):
+            return output_data["observation"]
+        if output_data.get("scene_data"):
+            return "The department produced scene-level analysis for the current task."
+        if output_data.get("shot_plan"):
+            return "The department produced a shot planning handoff for the current scene."
+        if output_data.get("style_data"):
+            return "The department produced visual language guidance for downstream generation."
+        if output_data.get("feedback"):
+            return "The department produced review feedback for the completed output."
+        return f"{task.agent_role.value.replace('_', ' ').title()} completed a {task.task_type.value} task."
+
+    def _recommendation_for_task_output(self, task: CrewTask, output_data: Dict) -> str:
+        for key in ["recommendation_summary", "pacing_notes", "camera_choice", "result"]:
+            value = output_data.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        if task.escalation:
+            return "Review this department output before the next production handoff."
+        return "Crew reasoning is available for inspection and downstream handoff."
+
+    def _downstream_departments_for_role(self, role: AgentRole) -> List[AgentRole]:
+        mapping = {
+            AgentRole.SCRIPT_ANALYST: [AgentRole.STORYBOARD_ARTIST],
+            AgentRole.STORYBOARD_ARTIST: [AgentRole.CINEMATOGRAPHER, AgentRole.PROMPT_ENGINEER],
+            AgentRole.CINEMATOGRAPHER: [AgentRole.PROMPT_ENGINEER],
+            AgentRole.PROMPT_ENGINEER: [AgentRole.RENDER_COORDINATOR],
+            AgentRole.RENDER_COORDINATOR: [AgentRole.QUALITY_REVIEWER],
+            AgentRole.QUALITY_REVIEWER: [AgentRole.CONTINUITY_SUPERVISOR, AgentRole.EDITOR],
+            AgentRole.EDITOR: [AgentRole.MEMORY_ARCHIVIST, AgentRole.DIRECTOR],
+            AgentRole.CONTINUITY_SUPERVISOR: [AgentRole.MEMORY_ARCHIVIST, AgentRole.PROMPT_ENGINEER],
+            AgentRole.MEMORY_ARCHIVIST: [AgentRole.DIRECTOR],
+            AgentRole.PRODUCER: [AgentRole.SYSTEM_ORCHESTRATOR],
+        }
+        return mapping.get(role, [])
     
     def _update_memory_from_task(self, task: CrewTask, output_data: Dict):
         """Update memory based on task output

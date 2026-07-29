@@ -27,21 +27,16 @@ export default function DirectorMemoryCallbacks({
 
   useEffect(() => {
     let cancelled = false
-    if (!projectId || !scene) {
-      setCallbacks([])
-      return () => {
-        cancelled = true
-      }
-    }
+    if (!projectId || !scene) return
     setLoading(true)
     setError(null)
     scanSceneForDirectorMemory(projectId, scene, sceneIndex)
       .then((result) => {
         if (!cancelled) setCallbacks(result.callbacks ?? [])
       })
-      .catch((err: unknown) => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to scan memory')
+          setError(error instanceof Error ? error.message : 'Failed to scan memory')
         }
       })
       .finally(() => {

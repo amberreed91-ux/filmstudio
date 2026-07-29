@@ -5,7 +5,7 @@
  * metadata, resolution/format/quality options, and triggers download.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   type ExportJob,
   type ExportOptions,

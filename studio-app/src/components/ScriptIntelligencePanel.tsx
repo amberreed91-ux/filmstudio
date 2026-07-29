@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, BarChart3, Users, Sparkles, Scissors, Music, FileText, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, BarChart3, Users, Sparkles, Scissors, Music, Brain, Download } from 'lucide-react';
 import SceneBreakdownPanel from './SceneBreakdownPanel';
 import CharacterArcPanel from './CharacterArcPanel';
 import { PromptGenerationPanel } from './PromptGenerationPanel';
 import TransitionIntelligencePanel from './TransitionIntelligencePanel';
 import SoundIntelligencePanel from './SoundIntelligencePanel';
+import PerformanceIntelligencePanel from './PerformanceIntelligencePanel';
+import CastingIntelligencePanel from './CastingIntelligencePanel';
 import { exportSceneBreakdownAsPDF } from '../lib/pdfExport';
 import { useStudio } from '../context/StudioContext';
 
@@ -13,7 +15,7 @@ interface ScriptIntelligencePanelProps {
   sceneCount: number;
 }
 
-type TabType = 'breakdown' | 'characters' | 'prompts' | 'transitions' | 'sound';
+type TabType = 'breakdown' | 'characters' | 'casting' | 'performance' | 'prompts' | 'transitions' | 'sound';
 
 /**
  * Container for all Script Intelligence features.
@@ -31,7 +33,8 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
   const [activeTab, setActiveTab] = useState<TabType>('breakdown');
   const [isExporting, setIsExporting] = useState(false);
   const { project } = useStudio();
-
+  const scenes = Array.isArray(project?.execution_summary?.scenes) ? project.execution_summary.scenes : [];
+  const initialPerformanceSceneId = typeof scenes[0]?.scene_id === 'string' ? scenes[0].scene_id : 'scene_001';
   // Don't show panel if insufficient scenes
   if (sceneCount < 2) {
     return null;
@@ -71,7 +74,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
           className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-600 bg-zinc-800/50 text-zinc-200 hover:bg-zinc-700/50 hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Export scene breakdown as PDF"
         >
-          <FileText size={14} />
+          <Download size={14} />
           {isExporting ? 'Exporting...' : 'Export PDF'}
         </button>
         {isExpanded ? (
@@ -126,6 +129,32 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
               </div>
             </button>
             <button
+              onClick={() => setActiveTab('casting')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'casting'
+                  ? 'border-amber-400 text-amber-400'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Users size={14} />
+                Casting
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('performance')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'performance'
+                  ? 'border-amber-400 text-amber-400'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Brain size={14} />
+                Performance
+              </div>
+            </button>
+            <button
               onClick={() => setActiveTab('transitions')}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'transitions'
@@ -157,6 +186,10 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
           <div className="px-4 pb-4">
             {activeTab === 'breakdown' && <SceneBreakdownPanel projectId={projectId} />}
             {activeTab === 'characters' && <CharacterArcPanel projectId={projectId} />}
+            {activeTab === 'casting' && <CastingIntelligencePanel projectId={projectId} />}
+            {activeTab === 'performance' && (
+              <PerformanceIntelligencePanel projectId={projectId} initialSceneId={initialPerformanceSceneId} />
+            )}
             {activeTab === 'prompts' && <PromptGenerationPanel projectId={projectId} />}
             {activeTab === 'transitions' && <TransitionIntelligencePanel projectId={projectId} />}
             {activeTab === 'sound' && <SoundIntelligencePanel projectId={projectId} />}

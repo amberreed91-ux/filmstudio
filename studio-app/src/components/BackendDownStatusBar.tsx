@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { WifiOff, RefreshCw } from 'lucide-react'
-import { checkBackendHealth, STUDIO_API_BASE } from '../lib/studioApi'
+import { STUDIO_API_BASE } from '../lib/studioApi'
 
 const POLL_INTERVAL = 15_000 // 15 seconds
 

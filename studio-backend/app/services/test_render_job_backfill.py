@@ -77,6 +77,23 @@ def test_startup_hydration_restores_jobs(tmp_path: Path):
     assert service.get_job("job-hydrate-1") is not None
 
 
+def test_startup_hydration_uses_bounded_default_limit(tmp_path: Path):
+    class _Storage:
+        limit = None
+
+        def list_jobs(self, limit=0):
+            self.limit = limit
+            return []
+
+    storage = _Storage()
+    service = RenderService()
+
+    loaded_count = hydrate_render_service_from_storage(service, storage)
+
+    assert loaded_count == 0
+    assert storage.limit == 1000
+
+
 def test_backfill_persists_project_state_jobs(tmp_path: Path):
     storage = _make_storage(tmp_path)
     store = _make_project_store(tmp_path)

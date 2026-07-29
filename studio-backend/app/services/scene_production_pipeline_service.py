@@ -90,6 +90,7 @@ class SceneProductionPipelineService:
                 reference_assets=shot.get("reference_assets") or shot.get("source_refs") or [],
                 parameters=shot.get("parameters") or {},
             )
+            self._link_storyboard_render_if_present(shot, getattr(job, "id", ""))
             completed_job = await self._submit_and_wait(job.id)
             source_url = self._job_output_url(completed_job)
             source_path = self._local_output_path(source_url)
@@ -179,6 +180,25 @@ class SceneProductionPipelineService:
             "soundtrack_status": self._soundtrack_status(soundtrack_config),
         }
 
+    def _link_storyboard_render_if_present(self, shot: dict[str, Any], render_job_id: str) -> None:
+        parameters = shot.get("parameters") if isinstance(shot.get("parameters"), dict) else {}
+        storyboard_meta = parameters.get("storyboard") if isinstance(parameters, dict) else None
+        if not isinstance(storyboard_meta, dict) or not render_job_id:
+            return
+        try:
+            from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+
+            storyboard_shot_id = str(storyboard_meta.get("storyboard_shot_id") or "").strip()
+            storyboard_shot = storyboard_blueprint_service.storage.get_storyboard_shot(storyboard_shot_id)
+            if storyboard_shot is not None:
+                storyboard_blueprint_service.link_render_job(
+                    shot=storyboard_shot,
+                    render_job_id=render_job_id,
+                    link_type=str(storyboard_meta.get("link_type") or "scene_pipeline_render"),
+                )
+        except Exception as exc:
+            logger.debug("Storyboard scene-pipeline render link skipped for %s: %s", render_job_id, exc)
+
     def _find_scene(self, project: dict[str, Any], scene_id: str) -> dict[str, Any] | None:
         summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
         for container in (summary.get("scenes"), project.get("scenes")):
@@ -191,6 +211,57 @@ class SceneProductionPipelineService:
 
     def _resolve_ordered_shots(self, project: dict[str, Any], scene: dict[str, Any]) -> list[dict[str, Any]]:
         scene_id = str(scene.get("scene_id") or "").strip()
+        project_id = str(project.get("project_id") or "").strip()
+        if project_id and scene_id:
+            try:
+                from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+
+                blueprint = storyboard_blueprint_service.storage.get_storyboard_blueprint(project_id, scene_id)
+                if blueprint and (blueprint.approved_version_id or blueprint.current_version_id):
+                    version_id = blueprint.approved_version_id or blueprint.current_version_id
+                    blueprint_shots = storyboard_blueprint_service.storage.list_storyboard_shots(
+                        blueprint.blueprint_id,
+                        version_id,
+                    )
+                    shots = []
+                    for shot in blueprint_shots:
+                        shots.append(
+                            {
+                                "scene_id": shot.scene_id,
+                                "shot_id": shot.shot_id,
+                                "description": shot.render_contract.provider_neutral_prompt,
+                                "prompt": shot.render_contract.provider_neutral_prompt,
+                                "reference_assets": shot.render_contract.reference_assets,
+                                "parameters": {
+                                    **(shot.render_contract.structured_parameters or {}),
+                                    "storyboard": {
+                                        "blueprint_id": shot.blueprint_id,
+                                        "version_id": shot.version_id,
+                                        "storyboard_shot_id": shot.storyboard_shot_id,
+                                        "project_id": shot.project_id,
+                                        "scene_id": shot.scene_id,
+                                        "shot_id": shot.shot_id,
+                                        "shot_number": shot.shot_number,
+                                        "link_type": "scene_pipeline_render",
+                                    },
+                                },
+                                "duration_seconds": shot.render_contract.duration_seconds,
+                                "shot_number": shot.shot_number,
+                                "storyboard_blueprint_id": shot.blueprint_id,
+                                "storyboard_version_id": shot.version_id,
+                                "storyboard_shot_id": shot.storyboard_shot_id,
+                            }
+                        )
+                    if shots:
+                        return sorted(
+                            shots,
+                            key=lambda item: (
+                                int(item.get("shot_number") or 999999),
+                                str(item.get("shot_id") or ""),
+                            ),
+                        )
+            except Exception as exc:
+                logger.debug("Storyboard blueprint shot resolution skipped for %s/%s: %s", project_id, scene_id, exc)
         scene_shots = scene.get("shots")
         shots = [shot for shot in scene_shots if isinstance(shot, dict)] if isinstance(scene_shots, list) else []
         if not shots:

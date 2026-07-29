@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Html } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
@@ -23,13 +23,6 @@ const RELATIONSHIP_COLORS: Record<string, string> = {
   default: 'rgba(255,255,255,0.15)',
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  character: '#00d4aa',
-  location: '#4488ff',
-  object: '#ff8844',
-  lore: '#888888',
-}
-
 // Node-type visual style: fill, border (alpha), and glow color.
 // These drive the colored circle + tinted halo + outline border per type.
 export interface NodeTypeStyle {
@@ -38,6 +31,7 @@ export interface NodeTypeStyle {
   glow: string
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const NODE_TYPE_STYLES: Record<string, NodeTypeStyle> = {
   character: {
     fill: '#4cd7f6', // secondary / cyan
@@ -66,12 +60,14 @@ export const NODE_TYPE_STYLES: Record<string, NodeTypeStyle> = {
   },
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const DEFAULT_NODE_TYPE_STYLE: NodeTypeStyle = {
   fill: '#9b8f79', // outline / warm gray
   border: 'rgba(155,143,121,0.6)',
   glow: 'rgba(155,143,121,0.45)',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const NODE_TYPE_LEGEND: Array<{ key: string; label: string; style: NodeTypeStyle }> = [
   { key: 'character', label: 'CHARACTER', style: NODE_TYPE_STYLES.character },
   { key: 'location', label: 'LOCATION', style: NODE_TYPE_STYLES.location },
@@ -80,6 +76,7 @@ export const NODE_TYPE_LEGEND: Array<{ key: string; label: string; style: NodeTy
   { key: 'lore', label: 'LORE', style: NODE_TYPE_STYLES.lore },
 ]
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getNodeTypeStyle(nodeType: string): NodeTypeStyle {
   return NODE_TYPE_STYLES[nodeType] || DEFAULT_NODE_TYPE_STYLE
 }
@@ -422,6 +419,7 @@ const Nebula = () => (
 const StarField = () => {
   const farGroupRef = useRef<THREE.Group>(null)
   const midGroupRef = useRef<THREE.Group>(null)
+  const materialRef = useRef<THREE.ShaderMaterial | null>(null)
 
   // Three depth layers give the sense of parallax when the camera drifts.
   const farGeometry = useMemo(
@@ -438,7 +436,7 @@ const StarField = () => {
   )
 
   const material = useMemo(() => {
-    return new THREE.ShaderMaterial({
+    const mat = new THREE.ShaderMaterial({
       vertexShader: STAR_VERTEX_SHADER,
       fragmentShader: STAR_FRAGMENT_SHADER,
       uniforms: {
@@ -450,11 +448,14 @@ const StarField = () => {
       blending: THREE.AdditiveBlending,
       vertexColors: true,
     })
+    materialRef.current = mat
+    return mat
   }, [])
 
   useFrame(({ clock }, delta) => {
-    material.uniforms.uTime.value = clock.elapsedTime
-    // Far layer drifts slower than the mid layer — gives a gentle parallax.
+    if (materialRef.current) {
+      materialRef.current.uniforms.uTime.value = clock.elapsedTime
+    }
     if (farGroupRef.current) farGroupRef.current.rotation.y += delta * 0.006
     if (midGroupRef.current) midGroupRef.current.rotation.y += delta * 0.018
   })
@@ -474,8 +475,9 @@ const StarField = () => {
 
 // Controls Manager
 const ControlsManager = () => {
-  const controlsRef = useRef<any>(null)
-  const lastInteractionTime = useRef(Date.now())
+  const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null)
+  const lastInteractionTime = useRef(0)
+  useEffect(() => { lastInteractionTime.current = Date.now() }, [])
   const baseTarget = useMemo(() => new THREE.Vector3(0, 0, 0), [])
 
   useFrame(({ clock }) => {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Type, Clapperboard, Camera, Film, Clipboard, MessageSquare, AlertTriangle, CheckCircle2, Save, X } from 'lucide-react'
 import type { CoDirectorDebateEntry, AgentResponse } from '../types/directorMemory'
-import { triggerDebate, debateAction } from '../lib/studioApi'
+import { debateAction } from '../lib/studioApi'
 
 export interface DirectorDebatePanelProps {
   projectId: string
@@ -10,7 +10,7 @@ export interface DirectorDebatePanelProps {
   onDismiss?: () => void
 }
 
-const AGENT_ICONS: Record<string, any> = {
+const AGENT_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   'Writer Agent': Type,
   'Director Agent': Clapperboard,
   'Cinematographer Agent': Camera,

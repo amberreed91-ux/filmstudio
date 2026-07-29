@@ -44,8 +44,11 @@ describe('intelligenceStatus helpers', () => {
   describe('countMemoryRecordsForAsset', () => {
     it('counts memory records for specific asset', () => {
       const records = [
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { asset_id: 'a1' } as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { asset_id: 'a1' } as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { asset_id: 'a2' } as any,
       ]
       expect(countMemoryRecordsForAsset(records, 'a1')).toBe(2)
@@ -55,8 +58,11 @@ describe('intelligenceStatus helpers', () => {
   describe('countContinuityForAsset', () => {
     it('counts continuity issues touching asset', () => {
       const issues: ContinuityIssue[] = [
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { issue_id: '1', issue_type: 'visual_drift', asset_id: 'a1', severity: 'high' } as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { issue_id: '2', issue_type: 'lighting_mismatch', source_asset_id: 'a1', severity: 'medium' } as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { issue_id: '3', issue_type: 'mood_shift', compared_asset_id: 'a3', severity: 'low' } as any,
       ]
       expect(countContinuityForAsset(issues, 'a1')).toBe(2)
@@ -66,8 +72,11 @@ describe('intelligenceStatus helpers', () => {
   describe('countStyleDriftForAsset', () => {
     it('counts style drift issues for asset', () => {
       const issues: StyleDriftIssue[] = [
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { id: '1', asset_id: 'a1', drift_type: 'lighting' } as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { id: '2', asset_id: 'a1', drift_type: 'color' } as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { id: '3', asset_id: 'a2', drift_type: 'lighting' } as any,
       ]
       expect(countStyleDriftForAsset(issues, 'a1')).toBe(2)

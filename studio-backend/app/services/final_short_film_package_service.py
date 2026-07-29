@@ -463,6 +463,19 @@ class FinalShortFilmPackageService:
         valid_statuses = ["draft", "ready_for_review", "approved", "packaged", "archived"]
         if new_status not in valid_statuses:
             raise ValueError(f"Invalid package status: {new_status}. Must be one of: {valid_statuses}")
+
+        if new_status in {"approved", "packaged"}:
+            try:
+                from app.services.production_acceptance_service import ProductionAcceptanceService
+
+                guard = ProductionAcceptanceService(storage=self._storage).evaluate_package_approval_guard(
+                    package_id=package_id,
+                    desired_status=new_status,
+                )
+            except Exception as exc:
+                raise ValueError(f"Production acceptance guard failed: {exc}") from exc
+            if not guard.allowed:
+                raise ValueError(guard.reason)
         
         package.package_status = new_status
         package.updated_at = self._now_iso()

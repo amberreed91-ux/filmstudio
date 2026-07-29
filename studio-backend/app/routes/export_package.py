@@ -6,23 +6,15 @@ Endpoints for building and retrieving export packages.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.data.storage import get_storage
 from app.services.export_package_service import export_package_service
 
 logger = logging.getLogger("studio-export-package-routes")
 
 router = APIRouter(prefix="/api/f51/studio/projects", tags=["export-package"])
-
-storage = get_storage("sqlite")
-
-# Inject storage into service
-export_package_service._storage = storage
-
 
 class BuildExportPackageRequest(BaseModel):
     """Request body for building an export package."""
@@ -73,7 +65,7 @@ async def list_export_packages(project_id: str, limit: int = 10):
         List of package summaries.
     """
     try:
-        packages = storage.list_export_packages(project_id, limit=limit)
+        packages = export_package_service.list_export_packages(project_id, limit=limit)
         return {"packages": packages}
     
     except Exception as e:
@@ -94,16 +86,9 @@ async def get_export_package(project_id: str, package_id: str):
         The full export package.
     """
     try:
-        package = storage.load_export_package(package_id)
-        if not package:
-            raise HTTPException(status_code=404, detail=f"Package {package_id} not found")
-        
-        # Verify it belongs to this project
-        if package.get("project_id") != project_id:
-            raise HTTPException(status_code=404, detail=f"Package {package_id} not found")
-        
-        return package
-    
+        return export_package_service.get_export_package(project_id, package_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except HTTPException:
         raise
     except Exception as e:

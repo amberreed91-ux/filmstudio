@@ -11,6 +11,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from app.data.storage import get_storage
+
 logger = logging.getLogger("studio-pitch-deck")
 
 
@@ -24,6 +26,21 @@ class PitchDeckService:
     def _now_iso(self) -> str:
         """Return current time in ISO format."""
         return datetime.now().isoformat()
+
+    def _require_storage(self):
+        storage = self._storage or get_storage("sqlite")
+        if storage is None:
+            raise RuntimeError("Storage not configured")
+        return storage
+
+    def list_pitch_decks(self, project_id: str, limit: int = 10) -> list[dict]:
+        return self._require_storage().list_pitch_decks(project_id, limit=limit)
+
+    def get_pitch_deck(self, project_id: str, deck_id: str) -> dict:
+        deck = self._require_storage().load_pitch_deck(deck_id)
+        if not deck or deck.get("project_id") != project_id:
+            raise LookupError(f"Deck {deck_id} not found")
+        return deck
 
     async def generate_pitch_deck(
         self,
@@ -44,8 +61,7 @@ class PitchDeckService:
         generated_at = self._now_iso()
         uncertainty_notes = []
 
-        if not self._storage:
-            raise ValueError("Storage not configured")
+        self._storage = self._require_storage()
 
         # Load project data
         project = self._storage.get_project(project_id)

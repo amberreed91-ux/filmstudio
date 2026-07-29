@@ -1,5 +1,4 @@
-import React from 'react'
-import { CheckCircle, AlertTriangle, AlertOctagon, Printer, RefreshCw, ChevronRight } from 'lucide-react'
+import { CheckCircle, AlertOctagon, Printer, RefreshCw, ChevronRight } from 'lucide-react'
 import { type ProductionScanReport, type ProductionScanFlag, type Severity } from '../lib/studioApi'
 
 interface ProductionScanReportViewProps {

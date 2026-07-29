@@ -16,9 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 
-from app.services.continuity_intelligence_service import continuity_intelligence_service
-from app.services.project_store import project_store
-from app.data.storage import get_storage
+from app.services.film_dna_service import film_dna_service
 
 router = APIRouter(
     prefix="/api/f51/studio",
@@ -81,18 +79,7 @@ class RefreshResponse(BaseModel):
 
 async def _rebuild_film_dna_task(project_id: str):
     """Background task to rebuild Film DNA from current graph state."""
-    try:
-        project = project_store.get_project(project_id)
-        if project is None:
-            return
-
-        scenes = project.get("scenes", [])
-        dna = await continuity_intelligence_service.build_film_dna(project_id, scenes)
-
-        storage = get_storage()
-        storage.save_film_dna(project_id, dna)
-    except Exception:
-        pass  # Silent failure — client will see stale DNA on next GET
+    await film_dna_service.rebuild_background(project_id)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -105,20 +92,10 @@ async def get_film_dna(project_id: str) -> FilmDNAResponse:
     Returns an honest empty state if fewer than 3 scenes exist.
     Advisory only — does not mutate project state.
     """
-    project = project_store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    storage = get_storage()
-    dna = storage.load_film_dna(project_id)
-
-    # If no DNA exists, build it now.
-    if dna is None:
-        scenes = project.get("scenes", [])
-        dna = await continuity_intelligence_service.build_film_dna(project_id, scenes)
-        storage.save_film_dna(project_id, dna)
-
-    return FilmDNAResponse(**dna)
+    try:
+        return FilmDNAResponse(**(await film_dna_service.get(project_id)))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.post("/projects/{project_id}/film-dna/refresh", response_model=RefreshResponse)
@@ -134,8 +111,9 @@ async def refresh_film_dna(
 
     Advisory only — does not mutate canonical project state.
     """
-    project = project_store.get_project(project_id)
-    if project is None:
+    try:
+        film_dna_service.ensure_project_exists(project_id)
+    except LookupError:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Trigger background rebuild.
@@ -160,24 +138,10 @@ async def get_character_journeys(project_id: str) -> Dict[str, Any]:
 
     Advisory only — does not mutate project state.
     """
-    project = project_store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    storage = get_storage()
-    dna = storage.load_film_dna(project_id)
-
-    # If DNA exists and has character_journeys, return cached version.
-    if dna and "character_journeys" in dna:
-        return dna["character_journeys"]
-
-    # Otherwise, build fresh.
-    scenes = project.get("scenes", [])
-    character_journeys = await continuity_intelligence_service.build_character_journey_map(
-        project_id, scenes
-    )
-
-    return character_journeys
+    try:
+        return await film_dna_service.character_journeys(project_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.get("/projects/{project_id}/arc-completeness")
@@ -192,22 +156,7 @@ async def get_arc_completeness(project_id: str) -> Dict[str, Any]:
 
     Advisory only — does not mutate project state.
     """
-    project = project_store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    storage = get_storage()
-    dna = storage.load_film_dna(project_id)
-
-    # If DNA exists and has arc_completeness, return cached version.
-    if dna and "arc_completeness" in dna:
-        return dna["arc_completeness"]
-
-    # Otherwise, build fresh.
-    scenes = project.get("scenes", [])
-    arc_completeness = await continuity_intelligence_service.check_arc_completeness(
-        project_id, scenes
-    )
-
-    return arc_completeness
-
+    try:
+        return await film_dna_service.arc_completeness(project_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))

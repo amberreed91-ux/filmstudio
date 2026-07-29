@@ -14,11 +14,12 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.data.storage import get_storage
 from app.services.compose_service import (
     compose_scene_for_delivery,
     STATIC_URL_PREFIX,
 )
+from app.services.project_persistence_service import project_persistence_service
+from app.services.assembly_persistence_service import assembly_persistence_service
 
 logger = logging.getLogger(__name__)
 
@@ -58,23 +59,7 @@ def _get_scene_count(project_id: str) -> int:
 
 
 def _load_project(project_id: str) -> dict | None:
-    try:
-        from app.services.project_store import project_store
-        project = project_store.get_project(project_id)
-        if isinstance(project, dict):
-            return project
-    except Exception:
-        pass
-    try:
-        storage = get_storage("sqlite")
-        persisted = storage.get_project(project_id)
-        if isinstance(persisted, dict):
-            return persisted
-        if hasattr(persisted, "model_dump"):
-            return persisted.model_dump(mode="json")
-    except Exception:
-        return None
-    return None
+    return project_persistence_service.load(project_id)
 
 
 def _scene_pipeline_compositions(project_id: str) -> list[dict]:
@@ -162,8 +147,10 @@ async def _materialize_scene_video(client: httpx.AsyncClient, url_or_path: str, 
 
 @router.post("/{project_id}/assemble-film")
 async def assemble_film_endpoint(project_id: str):
-    storage = get_storage("sqlite")
-    compositions = _merged_scene_compositions(project_id, storage.list_scene_compositions_for_project(project_id))
+    compositions = _merged_scene_compositions(
+        project_id,
+        assembly_persistence_service.list_scene_compositions(project_id),
+    )
     scenes_total = _get_scene_count(project_id)
 
     if not compositions and scenes_total > 0:
@@ -184,7 +171,10 @@ async def assemble_film_endpoint(project_id: str):
                             await compose_scene_for_delivery(project_id, scene_id)
                         except Exception as e:
                             logger.warning("Could not compose %s/%s: %s", project_id, scene_id, e)
-                    compositions = _merged_scene_compositions(project_id, storage.list_scene_compositions_for_project(project_id))
+                    compositions = _merged_scene_compositions(
+                        project_id,
+                        assembly_persistence_service.list_scene_compositions(project_id),
+                    )
         except Exception as e:
             logger.warning("Auto-compose failed for %s: %s", project_id, e)
 
@@ -229,7 +219,13 @@ async def assemble_film_endpoint(project_id: str):
     total_duration_seconds = total_duration if total_duration > 0 else None
 
     film_url = f"{STATIC_URL_PREFIX}/static/films/{project_id}/the_last_tide.mp4"
-    storage.save_film(project_id=project_id, film_url=film_url, scene_count=len(sorted_comps), total_duration_seconds=total_duration_seconds, has_audio=has_audio)
+    assembly_persistence_service.save_film(
+        project_id=project_id,
+        film_url=film_url,
+        scene_count=len(sorted_comps),
+        total_duration_seconds=total_duration_seconds,
+        has_audio=has_audio,
+    )
 
     _assembly_status[project_id] = {
         "scenes_with_compositions": len(sorted_comps),
@@ -245,12 +241,14 @@ async def assemble_film_endpoint(project_id: str):
 
 @router.get("/{project_id}/assembly-status")
 async def get_assembly_status(project_id: str):
-    storage = get_storage("sqlite")
     cached = _assembly_status.get(project_id)
     if cached:
         return cached
-    film = storage.get_film(project_id)
-    compositions = _merged_scene_compositions(project_id, storage.list_scene_compositions_for_project(project_id))
+    film = assembly_persistence_service.get_film(project_id)
+    compositions = _merged_scene_compositions(
+        project_id,
+        assembly_persistence_service.list_scene_compositions(project_id),
+    )
     scenes_total = _get_scene_count(project_id)
     if film:
         result = {

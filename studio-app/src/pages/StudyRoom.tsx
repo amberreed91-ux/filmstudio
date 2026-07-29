@@ -14,6 +14,7 @@ import {
 import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
+import KnowledgeLibraryPanel from '../components/KnowledgeLibraryPanel'
 import { useStudio } from '../context/StudioContext'
 import {
   STUDIO_API_BASE,
@@ -25,7 +26,6 @@ import {
   saveCreativeDecisionMemory,
   saveDirectorMemoryEntry,
   studyReferencePrompt,
-  studyReferenceUpload,
 } from '../lib/studioApi'
 import { persistActiveProjectId } from '../lib/projectContext'
 import type {
@@ -106,11 +106,6 @@ const EMPTY_BUNDLE: DirectorMemoryBundle = {
 }
 
 /* ── CSS-in-JS helpers ─────────────────────────────────────────────────────── */
-
-function shakeStyle(invalid: boolean) {
-  if (!invalid) return {}
-  return { animation: 'shake 0.6s ease-in-out' }
-}
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
@@ -298,7 +293,7 @@ export default function StudyRoom() {
   const [filmIngestMode, setFilmIngestMode] = useState<'title' | 'upload'>('title')
   const [filmTitle, setFilmTitle] = useState('')
   const [filmDimensions, setFilmDimensions] = useState<'cinematography' | 'editing' | 'sound' | 'narrative' | 'all'>('all')
-  const [filmFile, setFilmFile] = useState<File | null>(null)
+  const [filmFile] = useState<File | null>(null)
   const [filmProcessing, setFilmProcessing] = useState(false)
   const [filmLearned, setFilmLearned] = useState<string[] | null>(null)
   const [filmIngestConfirmed, setFilmIngestConfirmed] = useState(false)
@@ -361,14 +356,14 @@ export default function StudyRoom() {
       }
       const project = await getStudioProject(resolvedProjectId)
       if (project?.reference_study_library?.studies) {
-        const refs: ReferenceCard[] = (project.reference_study_library.studies as any[]).map((study: any) => ({
-          id: study.reference_id,
-          title: study.filename || 'Untitled Reference',
-          category: study.study_focus || 'General',
-          summary: study.notes || study.study_focus || '',
-          source: study.content_type,
-          filename: study.filename,
-          study_focus: study.study_focus,
+        const refs: ReferenceCard[] = (project.reference_study_library.studies as Array<Record<string, unknown>>).map((study: Record<string, unknown>) => ({
+          id: (study.reference_id as string) || '',
+          title: (study.filename as string) || 'Untitled Reference',
+          category: (study.study_focus as string) || 'General',
+          summary: (study.notes as string) || (study.study_focus as string) || '',
+          source: study.content_type as string,
+          filename: study.filename as string,
+          study_focus: study.study_focus as string,
         }))
         setReferences(refs)
       } else {
@@ -561,14 +556,14 @@ export default function StudyRoom() {
       if (validFiles.length === 0) return
       for (const file of validFiles) {
         console.log('About to call API with:', { projectId: resolvedProjectId, fileName: file.name })
-        uploadFileWithProgress(resolvedProjectId, file, filmDimensions)
+        uploadFileWithProgress(resolvedProjectId, file)
       }
     } catch (err) {
       console.error('handleFileIngest failed:', err)
     }
   }, [resolvedProjectId, filmDimensions])
 
-  const uploadFileWithProgress = (projectId: string, file: File, dimensions: string) => {
+  const uploadFileWithProgress = (projectId: string, file: File) => {
     const filename = file.name
     const fileType = getFileCategory(file)
     setUploadProgress((prev) => ({
@@ -777,6 +772,7 @@ export default function StudyRoom() {
                       <input type="text" value={filmTitle} onChange={(e) => { setFilmTitle(e.target.value); if (filmTitleInvalid) setFilmTitleInvalid(false) }} onKeyDown={(e) => { if (e.key === 'Enter') void handleFilmTitleIngest() }} placeholder="Film title, director, year..." className={`cyber-input w-full rounded px-2 py-1.5 text-xs outline-none ${filmTitleInvalid ? 'animate-shake border-rose-400' : ''}`} style={{ color: 'var(--color-on-surface)' }} />
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-on-surface-variant)' }}>ANALYZE FOR →</span>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         <select value={filmDimensions} onChange={(e) => setFilmDimensions(e.target.value as any)} className="cyber-input rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] outline-none" style={{ color: 'var(--color-on-surface)' }}>
                           <option value="all">All Dimensions</option>
                           <option value="cinematography">Cinematography</option>
@@ -821,6 +817,7 @@ export default function StudyRoom() {
 
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-on-surface-variant)' }}>ANALYZE FOR →</span>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         <select value={filmDimensions} onChange={(e) => setFilmDimensions(e.target.value as any)} className="cyber-input rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] outline-none" style={{ color: 'var(--color-on-surface)' }}>
                           <option value="all">All Dimensions</option>
                           <option value="cinematography">Cinematography</option>
@@ -829,7 +826,7 @@ export default function StudyRoom() {
                           <option value="narrative">Narrative</option>
                         </select>
                       </div>
-                      <button type="button" onClick={() => { if (!resolvedProjectId) return; if (filmFile) { uploadFileWithProgress(resolvedProjectId, filmFile, filmDimensions) } else if (Object.keys(uploadProgress).length === 0) { setError('Select files by clicking the drop zone or dragging files in') } }} disabled={filmProcessing || !resolvedProjectId} title={!resolvedProjectId ? 'Loading project...' : undefined} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px Solid rgba(255,209,101,0.3)' }}>
+                      <button type="button" onClick={() => { if (!resolvedProjectId) return; if (filmFile) { uploadFileWithProgress(resolvedProjectId, filmFile) } else if (Object.keys(uploadProgress).length === 0) { setError('Select files by clicking the drop zone or dragging files in') } }} disabled={filmProcessing || !resolvedProjectId} title={!resolvedProjectId ? 'Loading project...' : undefined} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px Solid rgba(255,209,101,0.3)' }}>
                         {filmProcessing ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
                         {filmProcessing ? 'PROCESSING...' : '+ INGEST FILE'}
                       </button>
@@ -865,6 +862,8 @@ export default function StudyRoom() {
 
             {/* RIGHT: RESEARCH PANEL (67%) */}
             <div className="flex flex-[2] flex-col gap-4 overflow-y-auto">
+              {resolvedProjectId && <KnowledgeLibraryPanel projectId={resolvedProjectId} />}
+
               <div className="glass-panel rounded-xl p-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex flex-wrap gap-1">
@@ -1054,17 +1053,4 @@ export default function StudyRoom() {
       </StudioShell>
     </>
   )
-}
-
-/* ── Backend stub data (unchanged) ─────────────────────────────────────────── */
-
-function getStubReferences(): ReferenceCard[] {
-  return [
-    { id: 'ref-001', title: 'The Language of Film Composition', category: 'Cinematography', summary: 'Guide to visual grammar, rule of thirds, framing, and how composition drives narrative.', source: 'Stub Reference' },
-    { id: 'ref-002', title: 'Pacing in Modern Cinema', category: 'Editing', summary: 'How rhythm and edit timing shape emotional response and story momentum.', source: 'Stub Reference' },
-    { id: 'ref-003', title: 'Sound Design as Narrative', category: 'Sound', summary: 'Using ambient sound, foley, and score to create immersive emotional environments.', source: 'Stub Reference' },
-    { id: 'ref-004', title: 'Three-Act Structure', category: 'Narrative', summary: 'Classical story structure and how to adapt it for short film formats.', source: 'Stub Reference' },
-    { id: 'ref-005', title: 'Color Theory in Cinematography', category: 'Visual', summary: 'How color palettes, warm/cool contrasts, and grading create mood and subtext.', source: 'Stub Reference' },
-    { id: 'ref-006', title: 'Character Arc Design', category: 'Character', summary: 'Building believable character transformations through story beats.', source: 'Stub Reference' },
-  ]
 }

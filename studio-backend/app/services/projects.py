@@ -843,6 +843,35 @@ class ReferenceStudyService:
         
         return study_ref, None
 
+    def reorganize_reference_library(self, project_id: str, derive_category) -> dict:
+        project = self.storage.get_project(project_id) if self.storage else None
+        if not project:
+            raise LookupError("Project not found")
+        library = project.reference_study_library
+        if not library or not library.studies:
+            return {"project_id": project_id, "reorganized": 0, "studies": []}
+        count = 0
+        for study in library.studies:
+            new_focus = derive_category(study.filename or "", study.notes or "")
+            if study.study_focus != new_focus:
+                study.study_focus = new_focus
+                count += 1
+        self.storage.save_project(project)
+        return {
+            "project_id": project_id,
+            "reorganized": count,
+            "total": len(library.studies),
+            "studies": [
+                {
+                    "reference_id": study.reference_id,
+                    "filename": study.filename,
+                    "study_focus": study.study_focus,
+                }
+                for study in library.studies
+            ],
+            "_project": project,
+        }
+
     async def study_reference_upload(
         self,
         project_id: str,

@@ -1,5 +1,6 @@
 import secrets
 import logging
+import json
 import time
 import os
 import subprocess
@@ -42,6 +43,7 @@ from app.routes.audience_simulator import router as audience_simulator_router
 from app.routes.debate import router as debate_router
 from app.routes.universe_graph import router as universe_graph_router
 from app.routes.production_scan import router as production_scan_router
+from app.routes.production_acceptance import router as production_acceptance_router
 from app.routes.audio import router as audio_router
 from app.routes.stitching import router as stitching_router
 from app.routes.export import router as final_export_router
@@ -53,14 +55,36 @@ from app.routes.emotion_analysis import router as emotion_analysis_router
 from app.routes.writers_intelligence import router as writers_intelligence_router
 from app.routes.admin import router as admin_router
 from app.routes.standing_corrections import router as standing_corrections_router
+from app.routes.storyboard_blueprints import router as storyboard_blueprints_router
+from app.routes.editorial_intelligence import router as editorial_intelligence_router
+from app.routes.production_queue import router as production_queue_router
+from app.routes.studio_workflow import router as studio_workflow_router
+from app.routes.errors import router as errors_router
+from app.routes.performance_intelligence import router as performance_intelligence_router
+from app.routes.cinematography import router as cinematography_router
+from app.routes.performance_audio_intelligence import router as performance_audio_intelligence_router
+from app.routes.production_design_intelligence import router as production_design_intelligence_router
+from app.routes.colorist import router as colorist_router
+from app.routes.casting_intelligence import router as casting_intelligence_router
+from app.routes.studio_knowledge import router as studio_knowledge_router
+from app.routes.studio_brain import router as studio_brain_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
 from app.auth import AuthService, demo_login
+from app.config import settings, get_settings
+from app.middleware.request_id import RequestIDMiddleware, request_id_var
+from app.middleware.structured_logging import StructuredLoggingMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.services.background_task_registry import BackgroundTaskRegistry
+from app.services.database_backup import init_database_backup
 
 # Configure logging
+_log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+if settings.log_format == "json":
+    _log_format = "%(message)s"
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format=_log_format,
 )
 logger = logging.getLogger("studio-api")
 
@@ -83,12 +107,17 @@ def _resolve_git_commit() -> str | None:
 
 
 BUILD_COMMIT = _resolve_git_commit()
+_start_time = time.time()
 
 # Storage instance
 storage = get_storage("sqlite")
 
 # Auth service instance
 auth_service = AuthService(storage)
+
+# Background task registry
+task_registry = BackgroundTaskRegistry()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -97,27 +126,49 @@ async def lifespan(app: FastAPI):
     logger.info("Studio API build commit: %s", BUILD_COMMIT or "unknown")
     runway_key = os.getenv("RUNWAYML_API_SECRET", "").strip() or os.getenv("RUNWAY_API_KEY", "").strip()
     logger.info("Runway API configured: %s", bool(runway_key))
-    
+
     # Initialize storage
     set_storage(storage)
-    
+
+    # Initialize database backup
+    db_path = str(storage.db_path)
+    backup = init_database_backup(
+        db_path,
+        backup_dir=settings.backup_dir,
+        max_backups=settings.backup_max_count,
+    )
+    logger.info("Database backup initialized: %s", backup.get_status())
+
+    # Schedule daily backup
+    if settings.backup_enabled:
+        task_registry.register("daily-backup", backup.schedule_daily(settings.backup_interval_hours))
+
     # Initialize render service with storage
     from app.services.render import render_service
-    
+
     # Load existing jobs from canonical render_jobs storage
     try:
         from app.services.render_job_backfill import hydrate_render_service_from_storage
 
-        loaded_count = hydrate_render_service_from_storage(render_service, storage)
-        logger.info(f"Loaded {loaded_count} jobs from database")
+        loaded_count = hydrate_render_service_from_storage(
+            render_service,
+            storage,
+            limit=max(1, min(int(settings.render_recovery_hydration_limit or 1000), 5000)),
+        )
+        logger.info("Loaded %d jobs from database", loaded_count)
         recovery = await render_service.recover_jobs_after_restart()
         logger.info("Render recovery summary: %s", recovery)
     except Exception as e:
-        logger.warning(f"Could not load jobs from database: {e}")
-    
+        logger.warning("Could not load jobs from database: %s", e)
+
     # Initialize memory service with storage for persistence
     from app.services.memory import memory_service
     memory_service.storage = storage
+    from app.services.studio_knowledge_service import studio_knowledge_service
+    studio_knowledge_service.storage = storage
+    from app.services.studio_brain_executive_service import studio_brain_executive_service
+    studio_brain_executive_service._storage = storage
+    studio_brain_executive_service._knowledge_service = studio_knowledge_service
     from app.services.video_asset_service import video_asset_service
     from app.services.keyframe_extraction_service import keyframe_extraction_service
     from app.services.shot_detection_service import shot_detection_service
@@ -160,22 +211,20 @@ async def lifespan(app: FastAPI):
     _study_svc = get_study_memory_service()
     _study_svc.storage = storage
     logger.info("Study memory service initialized with storage")
-    
+
     # Initialize short film review service with storage
     from app.services.short_film_review_service import short_film_review_service
     short_film_review_service._storage = storage
     logger.info("Short film review service initialized with storage")
-    
+
     # Initialize clip revision service with storage and render service
     from app.services.clip_revision_service import clip_revision_service
     clip_revision_service._storage = storage
     clip_revision_service._render_service = render_service
     logger.info("Clip revision service initialized with storage and render service")
-    
+
     # Initialize final short film package service with storage and other services
     from app.services.final_short_film_package_service import final_short_film_package_service
-    from app.services.short_film_review_service import short_film_review_service
-    from app.services.video_asset_service import video_asset_service
     final_short_film_package_service._storage = storage
     final_short_film_package_service._render_service = render_service
     final_short_film_package_service._review_service = short_film_review_service
@@ -183,59 +232,94 @@ async def lifespan(app: FastAPI):
     final_short_film_package_service._video_asset_service = video_asset_service
     video_asset_service._storage = storage
     logger.info("Final short film package service initialized with storage and other services")
-    
+
     # Initialize standing corrections service with storage
     from app.services.standing_corrections_service import standing_corrections_service
+    from app.services.performance_intelligence_service import performance_intelligence_service
+    from app.services.cinematographer_intelligence_service import cinematographer_intelligence_service
+    from app.services.production_design_intelligence_service import production_design_intelligence_service
+    from app.services.casting_intelligence_service import casting_intelligence_service
     standing_corrections_service._storage = storage
+    performance_intelligence_service._storage = storage
+    cinematographer_intelligence_service._storage = storage
+    production_design_intelligence_service._storage = storage
+    casting_intelligence_service._storage = storage
     logger.info("Standing corrections service initialized with storage")
-    
+
+    # Initialize durable production queue service with storage and render dispatch.
+    from app.services.production_queue_service import production_queue_service
+    production_queue_service.set_storage(storage)
+    production_queue_service.set_render_service(render_service)
+    queue_recovery = production_queue_service.recover_expired_leases()
+    logger.info("Production queue initialized: %s", queue_recovery)
+    if settings.production_queue_enabled and settings.production_queue_worker_enabled:
+        task_registry.register("queue-worker", production_queue_service.worker_loop())
+        logger.info("Started production queue worker task")
+
     # Start background polling task for active Runway jobs
-    asyncio.create_task(render_service.poll_active_runway_jobs())
+    task_registry.register("render-polling", render_service.poll_active_runway_jobs())
     logger.info("Started background Runway job polling task")
-    
+
     yield
-    
+
+    # --- Graceful Shutdown ---
     logger.info("Shutting down Studio API")
-    # Cleanup
-    storage.cleanup_expired_sessions()
+
+    # 1. Cancel all tracked background tasks
+    await task_registry.cancel_all(timeout=10.0)
+
+    # 2. Stop production queue worker
+    try:
+        await production_queue_service.stop_background_worker()
+    except Exception as e:
+        logger.warning("Error stopping queue worker: %s", e)
+
+    # 3. Cleanup expired sessions before draining the connection pool.
+    try:
+        storage.cleanup_expired_sessions()
+    except Exception as e:
+        logger.warning("Error cleaning up sessions: %s", e)
+
+    # 4. Drain connection pool
+    storage.close()
+
+    logger.info("Studio API shutdown complete")
+
 
 app = FastAPI(
     title="Studio API",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
+app.state.disable_rate_limit_for_testclient = True
 
-# CORS - configured for local frontend dev origins
-CORS_ORIGINS = [
-    "http://127.0.0.1:5001",
-    "http://localhost:5001",
-    "http://127.0.0.1:5000",
-    "http://localhost:5000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://localhost:5173",
-    "http://127.0.0.1:5174",
-    "http://localhost:5174",
-    "http://127.0.0.1:4173",
-    "http://localhost:4173",
-    "http://127.0.0.1:4174",
-    "http://localhost:4174",
-    "http://127.0.0.1:8010",
-    "http://localhost:8010",
-    "http://127.0.0.1:8012",
-    "http://localhost:8012",
-]
+# --- Middleware Stack (order matters: outermost runs first) ---
+
+# 1. Request ID (outermost — every request gets a correlation ID)
+app.add_middleware(RequestIDMiddleware)
+
+# 2. Structured logging (emits JSON log per request)
+if settings.log_format == "json":
+    app.add_middleware(StructuredLoggingMiddleware)
+
+# 3. Rate limiting
+app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.rate_limit_per_minute)
+
+# 4. CORS — configurable origins
+if settings.cors_origins:
+    _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+else:
+    _cors_origins = [o.strip() for o in settings.cors_origins_dev.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins,
+    allow_credentials=bool(_cors_origins),
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Admin-Token"],
 )
 
-# Security headers middleware
+# 5. Security headers
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -245,19 +329,6 @@ async def security_headers(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
-# Request logging middleware
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start_time = time.time()
-    try:
-        response = await call_next(request)
-        duration = time.time() - start_time
-        logger.info(f"{request.method} {request.url.path} - {response.status_code} - {duration:.3f}s")
-        return response
-    except Exception as e:
-        duration = time.time() - start_time
-        logger.error(f"{request.method} {request.url.path} - Error: {e} - {duration:.3f}s")
-        raise
 
 # Routers
 app.include_router(overview_router, prefix="/api/f51/studio")
@@ -287,6 +358,7 @@ app.include_router(audience_simulator_router)
 app.include_router(debate_router)
 app.include_router(universe_graph_router)
 app.include_router(production_scan_router)
+app.include_router(production_acceptance_router)
 app.include_router(audio_router)
 app.include_router(stitching_router)
 app.include_router(final_export_router)
@@ -298,6 +370,19 @@ app.include_router(emotion_analysis_router)
 app.include_router(writers_intelligence_router)
 app.include_router(admin_router)
 app.include_router(standing_corrections_router)
+app.include_router(storyboard_blueprints_router)
+app.include_router(editorial_intelligence_router)
+app.include_router(production_queue_router)
+app.include_router(studio_workflow_router)
+app.include_router(errors_router)
+app.include_router(performance_intelligence_router)
+app.include_router(cinematography_router)
+app.include_router(performance_audio_intelligence_router)
+app.include_router(production_design_intelligence_router)
+app.include_router(colorist_router)
+app.include_router(casting_intelligence_router)
+app.include_router(studio_knowledge_router)
+app.include_router(studio_brain_router)
 
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -307,7 +392,6 @@ PREVIS_DIR = OUTPUTS_DIR / "previs"
 PREVIS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Mount static files for previs images
-from fastapi.staticfiles import StaticFiles
 app.mount("/previs-assets", StaticFiles(directory=str(PREVIS_DIR)), name="previs-assets")
 
 
@@ -360,14 +444,14 @@ class ConnectionManager:
         if job_id not in self.active_connections:
             self.active_connections[job_id] = set()
         self.active_connections[job_id].add(websocket)
-        logger.debug(f"WebSocket connected: {job_id}, total: {len(self.active_connections[job_id])}")
+        logger.debug("WebSocket connected: %s, total: %d", job_id, len(self.active_connections[job_id]))
     
     def disconnect(self, websocket: WebSocket, job_id: str = "global"):
         if job_id in self.active_connections:
             self.active_connections[job_id].discard(websocket)
             if not self.active_connections[job_id]:
                 del self.active_connections[job_id]
-            logger.debug(f"WebSocket disconnected: {job_id}")
+            logger.debug("WebSocket disconnected: %s", job_id)
     
     async def broadcast(self, message: dict, job_id: str = "global"):
         if job_id in self.active_connections:
@@ -427,59 +511,160 @@ async def websocket_job_updates(websocket: WebSocket, job_id: str):
     except WebSocketDisconnect:
         manager.disconnect(websocket, job_id)
 
-# Health check endpoint with detailed status
+
+# --- Health & Readiness Endpoints ---
+
 @app.get("/health")
 def health_check():
-    """Health check endpoint with detailed status"""
-    import psutil
-    
-    # Check database
+    """Comprehensive health check across all subsystems."""
+    try:
+        import psutil
+        _psutil_available = True
+    except ImportError:
+        _psutil_available = False
+
+    # Database
     db_status = "ok"
     db_error = None
+    db_latency_ms = None
     try:
-        with storage._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.fetchone()
+        import sqlite3 as _sq3
+        _start = time.perf_counter()
+        conn = _sq3.connect(str(storage.db_path), timeout=5.0)
+        try:
+            conn.execute("SELECT 1").fetchone()
+        finally:
+            conn.close()
+        db_latency_ms = round((time.perf_counter() - _start) * 1000, 2)
     except Exception as e:
         db_status = "error"
         db_error = str(e)
-    
-    # Check render service
+
+    # Render service
     render_status = "ok"
+    job_count = 0
+    providers_available = []
     try:
         from app.services.render import render_service
         job_count = len(render_service._jobs)
+        providers_available = list(getattr(render_service, '_available_providers', []))
     except Exception as e:
         render_status = "error"
-        job_count = 0
-    
-    # Check circuit breakers
+
+    # Production queue
+    queue_status = "ok"
+    queue_summary = {}
+    try:
+        from app.services.production_queue_service import production_queue_service
+        summary = production_queue_service.summarize()
+        queue_summary = {
+            "counts_by_status": summary.counts_by_status,
+            "stale_leases": summary.stale_leases,
+            "worker": production_queue_service.worker_status().model_dump(),
+        }
+    except Exception as e:
+        queue_status = "error"
+        queue_summary = {"error": str(e)}
+
+    # Circuit breakers
     from app.circuit_breaker import circuit_breaker
     circuit_status = {}
     for provider in ["simulated", "higgsfield", "generic"]:
         try:
             circuit_status[provider] = circuit_breaker.get_status(provider)
-        except:
+        except Exception:
             circuit_status[provider] = {"state": "unknown"}
-    
-    overall_status = "healthy" if db_status == "ok" else "degraded"
-    
-    return {
-        "status": overall_status,
-        "version": "1.0.0",
-        "timestamp": time.time(),
-        "components": {
-            "database": {"status": db_status, "error": db_error},
-            "render_service": {"status": render_status, "active_jobs": job_count},
-            "circuit_breakers": circuit_status,
-            "system": {
+
+    # Background tasks
+    bg_tasks = task_registry.status()
+
+    # System metrics
+    system_metrics = {"status": "unavailable"}
+    if _psutil_available:
+        try:
+            system_metrics = {
                 "cpu_percent": psutil.cpu_percent(),
                 "memory_percent": psutil.virtual_memory().percent,
-                "disk_percent": psutil.disk_usage('/').percent
+                "disk_percent": psutil.disk_usage('/').percent,
             }
-        }
+        except Exception:
+            system_metrics = {"status": "error"}
+
+    # Overall status
+    if db_status != "ok":
+        overall_status = "unhealthy"
+    elif render_status != "ok" or queue_status != "ok":
+        overall_status = "degraded"
+    else:
+        overall_status = "healthy"
+
+    return {
+        "status": overall_status,
+        "version": app.version,
+        "git_commit": BUILD_COMMIT,
+        "uptime_seconds": round(time.time() - _start_time, 1),
+        "timestamp": time.time(),
+        "components": {
+            "database": {"status": db_status, "error": db_error, "latency_ms": db_latency_ms},
+            "render_service": {"status": render_status, "active_jobs": job_count, "providers_available": providers_available},
+            "production_queue": {"status": queue_status, **queue_summary},
+            "circuit_breakers": circuit_status,
+            "background_tasks": bg_tasks,
+            "system": system_metrics,
+        },
     }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness probe — returns 200 only when fully initialized."""
+    checks = {}
+    all_ready = True
+
+    # Database
+    try:
+        import sqlite3 as _sq3
+        conn = _sq3.connect(str(storage.db_path), timeout=5.0)
+        try:
+            conn.execute("SELECT 1").fetchone()
+        finally:
+            conn.close()
+        checks["database"] = "ready"
+    except Exception as e:
+        checks["database"] = f"not_ready: {e}"
+        all_ready = False
+
+    # Schema
+    try:
+        import sqlite3 as _sq3
+        conn = _sq3.connect(str(storage.db_path), timeout=5.0)
+        try:
+            cursor = conn.execute("SELECT MAX(version) FROM schema_migrations")
+            row = cursor.fetchone()
+            checks["schema"] = f"ready (v{row[0]})" if row and row[0] else "not_ready: no migrations"
+        finally:
+            conn.close()
+    except Exception as e:
+        checks["schema"] = f"not_ready: {e}"
+        all_ready = False
+
+    # Background tasks
+    bg_status = task_registry.status()
+    if bg_status:
+        checks["background_tasks"] = f"ready ({len(bg_status)} active)"
+    else:
+        checks["background_tasks"] = "ready (no active tasks)"
+
+    status_code = 200 if all_ready else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "ready": all_ready,
+            "components": checks,
+            "timestamp": time.time(),
+        },
+    )
+
 
 @app.get("/")
 def root():

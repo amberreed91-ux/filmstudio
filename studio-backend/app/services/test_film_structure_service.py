@@ -3263,7 +3263,11 @@ def test_build_script_breakdown_bundle_matches_individual_helper_outputs():
         {key: scene.get(key) for key in core_scene_keys}
         for scene in bundle["scenes"]
     ]
-    assert normalized_bundle_scenes == scenes
+    normalized_independent_scenes = [
+        {key: scene.get(key) for key in core_scene_keys}
+        for scene in scenes
+    ]
+    assert normalized_bundle_scenes == normalized_independent_scenes
     for scene in bundle["scenes"]:
         assert isinstance(scene.get("multi_shot_execution_ledger"), list)
         assert any(

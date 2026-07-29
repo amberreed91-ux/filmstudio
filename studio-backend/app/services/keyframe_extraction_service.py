@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from PIL import Image, ImageChops, ImageStat
+
 from app.models import VideoKeyframe
 from app.services.video_asset_service import VideoAssetService
 
@@ -87,6 +89,53 @@ class KeyframeExtractionService:
         if self._storage_supports("delete_video_keyframes_for_asset"):
             return self._storage.delete_video_keyframes_for_asset(asset_id)
         return removed
+
+    async def analyze_keyframe_variance(
+        self,
+        *,
+        frame_paths: List[str],
+        shot_id: str,
+    ) -> Dict[str, Any]:
+        """Measure normalized visual change between consecutive extracted frames."""
+        paths = [Path(path).expanduser() for path in frame_paths]
+        missing = [str(path) for path in paths if not path.exists() or not path.is_file()]
+        if missing:
+            raise ValueError(f"Keyframe files are not accessible: {missing}")
+
+        frame_details: List[Dict[str, Any]] = []
+        variances: List[float] = []
+        previous: Image.Image | None = None
+
+        for index, path in enumerate(paths):
+            with Image.open(path) as source:
+                current = source.convert("RGB")
+                if previous is not None:
+                    if current.size != previous.size:
+                        current = current.resize(previous.size)
+                    difference = ImageChops.difference(previous, current)
+                    channel_means = ImageStat.Stat(difference).mean
+                    variance = round(sum(channel_means) / (len(channel_means) * 255.0), 6)
+                    variances.append(variance)
+                    frame_details.append(
+                        {
+                            "from_frame": index - 1,
+                            "to_frame": index,
+                            "variance": variance,
+                        }
+                    )
+                previous = current.copy()
+
+        average = round(sum(variances) / len(variances), 6) if variances else 0.0
+        maximum = max(variances, default=0.0)
+        rating = "stable" if average < 0.08 else "moderate" if average < 0.2 else "high_change"
+        return {
+            "shot_id": shot_id,
+            "frames_analyzed": len(paths),
+            "avg_variance": average,
+            "max_variance": maximum,
+            "stability_rating": rating,
+            "frame_details": frame_details,
+        }
 
     def _assert_ready_for_extraction(self, asset_id: str):
         if not self._video_asset_service:

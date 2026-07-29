@@ -588,8 +588,38 @@ async def test_qwen_vision_result_feeds_loop1_scoring(monkeypatch, base_slots):
 # INTEGRATION TESTS
 # ================================================================================
 
+@pytest.fixture
+def mock_groq_corrector(monkeypatch):
+    """Mock _call_groq_corrector to avoid real API calls."""
+    async def fake_corrector(*args, **kwargs):
+        return {
+            "ops": [
+                {
+                    "slot": "character_state",
+                    "op": "replace",
+                    "old_text": "Young woman, short dark hair, weathered hands, blue jacket",
+                    "new_text": "Weathered hands visible on young woman, short dark hair",
+                    "reason": "Character hands need to show weathering",
+                    "char_delta": 0,
+                },
+                {
+                    "slot": "environment_persistence",
+                    "op": "strengthen",
+                    "old_text": "Urban market with neon signs, rain-slicked streets",
+                    "new_text": "Vibrant neon signs illuminating rain-slicked streets throughout",
+                    "reason": "Neon signs not visible in render",
+                    "char_delta": 10,
+                },
+            ],
+            "chars_remaining": 22,
+        }
+    monkeypatch.setattr(
+        "app.services.adherence_service.AdherenceService._call_groq_corrector",
+        fake_corrector,
+    )
+
 @pytest.mark.asyncio
-async def test_corrective_diff_generation_integration(adherence_service, failing_score, base_slots):
+async def test_corrective_diff_generation_integration(adherence_service, failing_score, base_slots, mock_groq_corrector):
     """Integration test: generate corrective diff from failing score."""
     diff = await adherence_service.generate_corrective_diff(
         score=failing_score,
@@ -609,7 +639,7 @@ async def test_corrective_diff_generation_integration(adherence_service, failing
 
 
 @pytest.mark.asyncio
-async def test_full_adherence_workflow(adherence_service, base_slots):
+async def test_full_adherence_workflow(adherence_service, base_slots, mock_groq_corrector):
     """Integration test: score -> generate diff -> apply diff."""
     # This test uses mock vision/groq calls
     # In production, this would involve actual API calls

@@ -1,7 +1,11 @@
 from typing import Any, Optional, Callable, Awaitable
 from datetime import datetime
+import hashlib
+import json
 import os
 import uuid
+from pathlib import Path
+from urllib.parse import urlparse
 from app.models import (
     RenderJobModel, RenderJobInput, RenderJobOutput, RenderAsset,
     ProviderConfig, ProviderStatus, StudioProject
@@ -25,6 +29,8 @@ _CONTINUITY_CONTEXT_BLOCK = (
     "\nContinuity anchors: {continuity_anchors}"
 )
 
+_ENVIRONMENT_CONTEXT_BLOCK = "\n\n[ENVIRONMENT CONTINUITY]\n{environment_lines}"
+
 # WebSocket notification callback - will be set by main.py
 _job_update_callback: Optional[Callable[[str, dict], Awaitable[None]]] = None
 
@@ -35,6 +41,18 @@ _storage = None
 MAX_RETRIES = 3
 RETRY_DELAY_BASE = 5  # seconds, exponential backoff
 STALE_RENDER_THRESHOLD_SECONDS = 15 * 60
+PROVIDER_CALL_TIMEOUT_SECONDS = int(float(os.getenv("RENDER_PROVIDER_CALL_TIMEOUT_SECONDS", "310") or "310"))
+
+
+async def _close_provider_adapter(adapter: RenderProviderAdapter | None) -> None:
+    if adapter is None:
+        return
+    close = getattr(adapter, "close", None)
+    if not callable(close):
+        return
+    result = close()
+    if asyncio.iscoroutine(result):
+        await result
 
 
 def set_storage(storage):
@@ -70,7 +88,13 @@ async def _run_continuity_review(job: RenderJobModel) -> None:
             film_id=job.project_id,
             render_job_id=job.id,
             render_output_url=output_url,
-            scene_data={},
+            scene_data=(
+                (job.metadata or {}).get("environment_continuity_context", {})
+                if isinstance(job.metadata, dict)
+                else {}
+            ),
+            shot_id=shot_id,
+            prompt=(job.input_payload.prompt if job.input_payload else "") or "",
         )
         job.continuity_review = review
         if review.get("drift_detected"):
@@ -294,11 +318,12 @@ async def _notify_update(job_id: str, job_data: dict):
             logger.error(f"Failed to notify job update: {e}")
 
 
-def _persist_job(job: RenderJobModel):
+def _persist_job(job: RenderJobModel) -> bool:
     """Persist job to database with error handling"""
     if _storage:
         try:
             _storage.save_job(job)
+            return True
         except Exception as e:
             error_text = str(e)
             if "FOREIGN KEY constraint failed" in error_text:
@@ -328,10 +353,96 @@ def _persist_job(job: RenderJobModel):
                         )
                         _storage.save_job(job)
                         logger.info("Recovered FK persistence for job %s by syncing project %s", job.id, job.project_id)
-                        return
+                        return True
                 except Exception as retry_exc:
                     logger.error("FK recovery failed for job %s project %s: %s", job.id, job.project_id, retry_exc)
+            metadata = dict(job.metadata or {})
+            metadata["persistence_failure"] = {
+                "error_type": "persistence_error",
+                "message": error_text,
+                "recorded_at": _now_iso(),
+            }
+            job.metadata = metadata
+            _record_failure_location(
+                job,
+                phase="persist",
+                reason=error_text,
+                error_type="persistence_error",
+                category="temporary",
+            )
             logger.error(f"Failed to persist job {job.id}: {e}")
+            return False
+    return True
+
+
+def _now_iso() -> str:
+    return datetime.now().isoformat()
+
+
+def _stable_request_hash(value: dict[str, Any]) -> str:
+    payload = json.dumps(value, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _request_idempotency_key(
+    *,
+    project_id: str,
+    shot_id: str,
+    provider: str,
+    prompt: str,
+    reference_assets: list[str] | None,
+    parameters: dict[str, Any] | None,
+) -> tuple[str, bool]:
+    params = dict(parameters or {})
+    explicit = str(params.get("idempotency_key") or params.get("request_id") or "").strip()
+    if explicit:
+        return explicit, True
+    params.pop("zero_touch_debug", None)
+    return _stable_request_hash(
+        {
+            "project_id": project_id,
+            "shot_id": shot_id,
+            "provider": provider,
+            "prompt": prompt or "",
+            "reference_assets": reference_assets or [],
+            "parameters": params,
+        }
+    ), False
+
+
+def _ensure_reliability_metadata(job: RenderJobModel) -> dict[str, Any]:
+    metadata = dict(job.metadata or {})
+    reliability = dict(metadata.get("pipeline_reliability") or {})
+    correlation_id = str(reliability.get("correlation_id") or "").strip()
+    if not correlation_id:
+        correlation_id = f"corr-{uuid.uuid4().hex[:16]}"
+    reliability.setdefault("correlation_id", correlation_id)
+    reliability.setdefault("created_at", job.created_at or _now_iso())
+    reliability.setdefault("phase_timing", {})
+    metadata["pipeline_reliability"] = reliability
+    job.metadata = metadata
+    return reliability
+
+
+def _record_failure_location(
+    job: RenderJobModel,
+    *,
+    phase: str,
+    reason: str,
+    error_type: str = "",
+    category: str = "",
+) -> None:
+    reliability = _ensure_reliability_metadata(job)
+    reliability["failure_location"] = {
+        "phase": phase,
+        "reason": reason,
+        "error_type": error_type,
+        "category": category,
+        "recorded_at": _now_iso(),
+    }
+    metadata = dict(job.metadata or {})
+    metadata["pipeline_reliability"] = reliability
+    job.metadata = metadata
 
 
 def _log_audit(action: str, resource_type: str, resource_id: str, user_id: str = None, details: str = None):
@@ -537,6 +648,8 @@ def _provider_model_for_job(provider: str, parameters: dict[str, Any]) -> str:
         return "happyhorse-1.1-r2v"
     if provider == "happyhorse":
         return "happyhorse-1.1-t2v"
+    if provider == "wan":
+        return "wan2.6-t2v"
     return str(parameters.get("model") or provider or "default")
 
 
@@ -555,6 +668,8 @@ def _validate_model_override(provider: str, parameters: dict[str, Any]) -> None:
         raise ValueError("HappyHorse text-to-video does not support this model override")
     elif provider == "happyhorse-r2v" and requested != "happyhorse-1.1-r2v":
         raise ValueError("HappyHorse reference-to-video does not support this model override")
+    elif provider == "wan" and requested != "wan2.6-t2v":
+        raise ValueError("Wan text-to-video does not support this model override")
 
 
 def _scene_character_names_for_debug(project_id: str, scene_id: str) -> list[str]:
@@ -655,6 +770,7 @@ def _zero_touch_debug_metadata(
 
 
 def _set_zero_touch_phase(job: RenderJobModel, phase: str, status: str, **details: Any) -> None:
+    now = _now_iso()
     metadata = dict(job.metadata or {})
     debug = dict(metadata.get("zero_touch_pipeline") or {})
     phases = debug.get("phases")
@@ -663,13 +779,42 @@ def _set_zero_touch_phase(job: RenderJobModel, phase: str, status: str, **detail
     updated = False
     for row in phases:
         if isinstance(row, dict) and row.get("phase") == phase:
+            if status == "running" and not row.get("started_at"):
+                row["started_at"] = now
+            if status in {"complete", "failed", "skipped", "needs_review", "cancelled"}:
+                row["completed_at"] = now
+                started_at = RenderService._parse_iso(str(row.get("started_at") or ""))
+                completed_at = RenderService._parse_iso(now)
+                if started_at and completed_at:
+                    row["duration_ms"] = int((completed_at - started_at).total_seconds() * 1000)
             row.update({"status": status, **details})
             updated = True
             break
     if not updated:
-        phases.append({"phase": phase, "status": status, **details})
+        row = {"phase": phase, "status": status, **details}
+        if status == "running":
+            row["started_at"] = now
+        if status in {"complete", "failed", "skipped", "needs_review", "cancelled"}:
+            row["completed_at"] = now
+        phases.append(row)
     debug["phases"] = phases
     metadata["zero_touch_pipeline"] = debug
+    reliability = dict(metadata.get("pipeline_reliability") or {})
+    timing = dict(reliability.get("phase_timing") or {})
+    timing_row = dict(timing.get(phase) or {})
+    if status == "running" and "started_at" not in timing_row:
+        timing_row["started_at"] = now
+    if status in {"complete", "failed", "skipped", "needs_review", "cancelled"}:
+        timing_row["completed_at"] = now
+        started_at = RenderService._parse_iso(str(timing_row.get("started_at") or ""))
+        completed_at = RenderService._parse_iso(now)
+        if started_at and completed_at:
+            timing_row["duration_ms"] = int((completed_at - started_at).total_seconds() * 1000)
+    if details:
+        timing_row["details"] = {k: v for k, v in details.items() if k in {"provider", "model", "error", "reason", "error_type"}}
+    timing[phase] = timing_row
+    reliability["phase_timing"] = timing
+    metadata["pipeline_reliability"] = reliability
     job.metadata = metadata
     if job.input_payload and isinstance(job.input_payload.parameters, dict):
         job.input_payload.parameters["zero_touch_debug"] = debug
@@ -688,6 +833,7 @@ _PERMANENT_PROVIDER_ERROR_TYPES = {
 
 _TEMPORARY_PROVIDER_ERROR_TYPES = {
     "timeout",
+    "rate_limit",
     "request_error",
     "ssl_verification_error",
     "task_failed",
@@ -717,17 +863,25 @@ def _classify_provider_failure(job: RenderJobModel, fallback_message: str = "") 
     error_type = str(error_payload.get("error_type") or "").strip()
     message = str(error_payload.get("message") or fallback_message or job.error_message or "").strip()
     status_code = error_payload.get("status_code")
+    try:
+        status_code_int = int(status_code) if status_code is not None else None
+    except (TypeError, ValueError):
+        status_code_int = None
 
     if not error_type:
         text = message.lower()
-        if "api key" in text or "credential" in text or "unauthorized" in text:
+        if status_code_int == 429 or "rate limit" in text or "too many request" in text or "throttl" in text:
+            error_type = "rate_limit"
+        elif "api key" in text or "credential" in text or "unauthorized" in text:
             error_type = "missing_api_key" if "missing" in text or "not configured" in text else "invalid_api_key"
         elif "billing" in text or "credit" in text or "payment" in text:
             error_type = "missing_credits"
         elif "unsupported" in text and "model" in text:
             error_type = "unsupported_model"
-        elif "timeout" in text:
+        elif "timeout" in text or "timed out" in text:
             error_type = "timeout"
+        elif "without output url" in text or "without video_url" in text:
+            error_type = "missing_video_url"
         else:
             error_type = "provider_failure"
 
@@ -757,6 +911,13 @@ def _record_provider_failure_policy(job: RenderJobModel, fallback_message: str =
     metadata = dict(job.metadata or {})
     metadata["provider_failure"] = classification
     job.metadata = metadata
+    _record_failure_location(
+        job,
+        phase="render",
+        reason=classification["message"],
+        error_type=classification["error_type"],
+        category=classification["category"],
+    )
     if not classification["retryable"]:
         _set_zero_touch_phase(
             job,
@@ -823,6 +984,35 @@ def _detect_prompt_contradictions(prompt: str) -> list[dict[str, Any]]:
                 }
             )
     return contradictions
+
+
+_APP_SERVED_REFERENCE_PREFIXES = (
+    "/outputs/",
+    "/previs-assets/",
+    "/static/",
+    "outputs/",
+    "previs-assets/",
+    "static/",
+)
+
+
+def _missing_local_reference_assets(reference_assets: list[str] | None) -> list[str]:
+    missing: list[str] = []
+    backend_root = Path(__file__).resolve().parents[2]
+    for raw in reference_assets or []:
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        parsed = urlparse(value)
+        if parsed.scheme in {"http", "https", "data"}:
+            continue
+        if value.startswith(_APP_SERVED_REFERENCE_PREFIXES):
+            continue
+        path = Path(parsed.path if parsed.scheme == "file" else value).expanduser()
+        candidates = [path] if path.is_absolute() else [backend_root / path, Path.cwd() / path]
+        if not any(candidate.exists() and candidate.is_file() for candidate in candidates):
+            missing.append(value)
+    return missing
 
 
 class RenderService:
@@ -965,6 +1155,16 @@ class RenderService:
             api_endpoint=dashscope_api_endpoint,
             requires=["api_key"],
             capabilities=["video_generation", "reference_to_video", "image_conditioning"],
+        )
+        self._provider_configs["wan"] = ProviderConfig(
+            provider_id="wan",
+            name="Alibaba Wan",
+            enabled=True,
+            is_simulated=False,
+            api_key=dashscope_api_key or None,
+            api_endpoint=dashscope_api_endpoint,
+            requires=["api_key"],
+            capabilities=["video_generation", "text_to_video", "multi_shot", "audio_generation"],
         )
 
         # Simulated provider remains available fallback.
@@ -1111,6 +1311,27 @@ class RenderService:
         self._provider_configs[config.provider_id] = config
         return config
 
+    def _find_idempotent_job(
+        self,
+        *,
+        project_id: str,
+        shot_id: str,
+        provider: str,
+        idempotency_key: str,
+        explicit_key: bool,
+    ) -> RenderJobModel | None:
+        candidates = self.list_jobs(project_id=project_id)
+        for existing in candidates:
+            if existing.project_id != project_id or existing.shot_id != shot_id or existing.provider != provider:
+                continue
+            metadata = existing.metadata if isinstance(existing.metadata, dict) else {}
+            reliability = metadata.get("pipeline_reliability") if isinstance(metadata.get("pipeline_reliability"), dict) else {}
+            if reliability.get("idempotency_key") == idempotency_key:
+                return existing
+            if not explicit_key and existing.status in {"pending", "rendering"}:
+                return existing
+        return None
+
     def get_default_provider(self) -> str:
         """Get the env-selected default render provider."""
         selected = os.getenv("RENDER_VIDEO_PROVIDER", get_settings().render_video_provider or "happyhorse").strip().lower()
@@ -1214,6 +1435,36 @@ class RenderService:
                 raise ValueError(f"Unknown provider '{provider}'. Available providers: {list(self._provider_configs.keys())}")
         else:
             provider = self.get_default_provider()
+
+        _initial_parameters = dict(parameters or {})
+        _validate_model_override(provider, _initial_parameters)
+        _idempotency_key, _explicit_idempotency_key = _request_idempotency_key(
+            project_id=project_id,
+            shot_id=shot_id,
+            provider=provider,
+            prompt=prompt,
+            reference_assets=reference_assets,
+            parameters=_initial_parameters,
+        )
+        _existing = self._find_idempotent_job(
+            project_id=project_id,
+            shot_id=shot_id,
+            provider=provider,
+            idempotency_key=_idempotency_key,
+            explicit_key=_explicit_idempotency_key,
+        )
+        if _existing is not None:
+            _ensure_reliability_metadata(_existing)["duplicate_request_reused_at"] = _now_iso()
+            _persist_job(_existing)
+            logger.info(
+                "DUPLICATE_RENDER_REQUEST_REUSED | job_id=%s | project_id=%s | shot_id=%s | provider=%s | status=%s",
+                _existing.id,
+                project_id,
+                shot_id,
+                provider,
+                _existing.status,
+            )
+            return _existing
 
         # ── Replace generic prompts with real scene descriptions ──────────────
         # If prompt is generic or too short, fetch the actual scene description
@@ -1471,6 +1722,7 @@ class RenderService:
                 logger.warning("Failed to fetch scene description for prompt: %s", _exc)
 
         _consistency_payload = None
+        _canonical_identity_context = None
         try:
             _active_storage_for_refs = _storage
             if _active_storage_for_refs is None:
@@ -1506,10 +1758,147 @@ class RenderService:
                     shot_id,
                 )
 
+        try:
+            _active_storage_for_identity = _active_storage_for_refs if "_active_storage_for_refs" in locals() else _storage
+            if _active_storage_for_identity is not None:
+                from app.services.character_identity_memory_service import (
+                    character_identity_memory_service as _identity_svc,
+                )
+                from app.services.character_visual_reference_service import (
+                    character_visual_reference_service as _identity_char_ref_svc,
+                )
+                from app.services.render_executor import get_render_provider_capability as _provider_capability
+
+                _identity_characters = []
+                try:
+                    _identity_characters = _identity_char_ref_svc.resolve_shot_characters(
+                        project_id=project_id,
+                        shot_id=shot_id,
+                        storage=_active_storage_for_identity,
+                        prompt=prompt,
+                    )
+                except Exception:
+                    _identity_characters = []
+                _identity_character_ids = [
+                    str(character.get("id") or "").strip()
+                    for character in _identity_characters
+                    if isinstance(character, dict) and str(character.get("id") or "").strip()
+                ]
+                _identity_scene = {"scene_id": _scene_id, "characters": []}
+                try:
+                    _project = project_store.get_project(project_id)
+                    if isinstance(_project, dict):
+                        _summary = _project.get("execution_summary") or {}
+                        _scenes = _summary.get("scenes") or []
+                        _found_scene = next(
+                            (
+                                scene
+                                for scene in _scenes
+                                if isinstance(scene, dict) and scene.get("scene_id") == _scene_id
+                            ),
+                            None,
+                        )
+                        if isinstance(_found_scene, dict):
+                            _identity_scene = dict(_found_scene)
+                except Exception:
+                    pass
+                _identity_records = _identity_svc.build_records_from_storage(
+                    project_id=project_id,
+                    storage=_active_storage_for_identity,
+                    character_ids=_identity_character_ids or None,
+                )
+                if _identity_records:
+                    _canonical_identity_context = _identity_svc.build_provider_context_from_records(
+                        _identity_records,
+                        _identity_scene,
+                        shot_id=shot_id,
+                        provider_capability=_provider_capability(provider),
+                    )
+        except Exception as _exc:
+            logger.debug("Canonical character identity context skipped for %s/%s: %s", project_id, shot_id, _exc)
+
         _input_parameters = dict(parameters or {})
         if _prompt_slots_for_adherence:
+            identity_lines = []
+            if isinstance(_canonical_identity_context, dict):
+                constraint = _canonical_identity_context.get("constraint_injection")
+                if isinstance(constraint, dict) and isinstance(constraint.get("text_constraints"), list):
+                    identity_lines.extend(
+                        str(line).strip()
+                        for line in constraint.get("text_constraints") or []
+                        if str(line).strip()
+                    )
+            if _consistency_payload is not None:
+                identity_lines.extend([
+                    str(line).strip()
+                    for line in (_consistency_payload.fallback_text or {}).values()
+                    if str(line).strip()
+                ])
+            if identity_lines:
+                _prompt_slots_for_adherence["identity_continuity"] = " ".join(identity_lines)
             _input_parameters["prompt_slots"] = _prompt_slots_for_adherence
+        if _canonical_identity_context is not None:
+            _input_parameters["character_identity_context"] = _canonical_identity_context
         _validate_model_override(provider, _input_parameters)
+
+        _environment_context = None
+        try:
+            from app.services.continuity_intelligence_service import (
+                continuity_intelligence_service as _cont_svc,
+            )
+
+            _environment_scene_data: dict[str, Any] = {}
+            try:
+                _project = project_store.get_project(project_id)
+                if isinstance(_project, dict):
+                    _summary = _project.get("execution_summary") or {}
+                    _scenes = _summary.get("scenes") or []
+                    _found_scene = next(
+                        (
+                            scene
+                            for scene in _scenes
+                            if isinstance(scene, dict)
+                            and scene.get("scene_id") == _scene_id
+                        ),
+                        {},
+                    )
+                    if isinstance(_found_scene, dict):
+                        _environment_scene_data = dict(_found_scene)
+            except Exception:
+                _environment_scene_data = {}
+
+            _environment_context = _cont_svc.resolve_environment_context(
+                scene_id=_scene_id,
+                film_id=project_id,
+                shot_id=shot_id,
+                prompt=prompt,
+                scene_data=_environment_scene_data,
+                parameters=_input_parameters,
+            )
+            _environment_lines = [
+                str(line).strip()
+                for line in (_environment_context.get("prompt_lines") or [])
+                if str(line).strip()
+            ]
+            if _environment_lines:
+                prompt = prompt + _ENVIRONMENT_CONTEXT_BLOCK.format(
+                    environment_lines="\n".join(_environment_lines[:8])
+                )
+                _input_parameters["environment_continuity_context"] = _environment_context
+                _input_parameters["environment_continuity_warnings"] = (
+                    _environment_context.get("warnings") or []
+                )
+                logger.info(
+                    "ENVIRONMENT_CONTINUITY_CONTEXT | project=%s | shot=%s | location=%s | warnings=%d | refs=%d",
+                    project_id,
+                    shot_id,
+                    _environment_context.get("location_id") or "",
+                    len(_environment_context.get("warnings") or []),
+                    len(_environment_context.get("selected_references") or []),
+                )
+        except Exception as _exc:
+            logger.debug("Environment continuity context skipped for %s/%s: %s", project_id, shot_id, _exc)
+
         _zero_touch_debug = _zero_touch_debug_metadata(
             project_id=project_id,
             shot_id=shot_id,
@@ -1518,6 +1907,9 @@ class RenderService:
             prompt=prompt,
             consistency_payload=_consistency_payload,
         )
+        if _canonical_identity_context is not None:
+            _zero_touch_debug["character_identity_context"] = _canonical_identity_context
+            _zero_touch_debug["identity_conflict_warnings"] = _canonical_identity_context.get("conflict_warnings", [])
         _input_parameters["zero_touch_debug"] = _zero_touch_debug
 
         job = RenderJobModel(
@@ -1535,6 +1927,24 @@ class RenderService:
             ),
             metadata={
                 "zero_touch_pipeline": _zero_touch_debug,
+                "character_identity_warnings": (
+                    _canonical_identity_context.get("conflict_warnings", [])
+                    if isinstance(_canonical_identity_context, dict)
+                    else []
+                ),
+                "environment_continuity_context": _environment_context or {},
+                "environment_continuity_warnings": (
+                    (_environment_context or {}).get("warnings") or []
+                    if isinstance(_environment_context, dict)
+                    else []
+                ),
+                "pipeline_reliability": {
+                    "correlation_id": f"corr-{uuid.uuid4().hex[:16]}",
+                    "idempotency_key": _idempotency_key,
+                    "idempotency_key_source": "caller" if _explicit_idempotency_key else "request_hash",
+                    "created_at": datetime.now().isoformat(),
+                    "phase_timing": {},
+                },
             },
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat()
@@ -1827,6 +2237,9 @@ class RenderService:
             prompt=job.input_payload.prompt or "",
             consistency_payload=_consistency_payload,
         )
+        if _canonical_identity_context is not None:
+            _zero_touch_debug["character_identity_context"] = _canonical_identity_context
+            _zero_touch_debug["identity_conflict_warnings"] = _canonical_identity_context.get("conflict_warnings", [])
         job.input_payload.parameters["zero_touch_debug"] = _zero_touch_debug
         job.metadata = dict(job.metadata or {})
         job.metadata["zero_touch_pipeline"] = _zero_touch_debug
@@ -1904,9 +2317,31 @@ class RenderService:
         if job.status in {"rendering", "complete", "needs_review"}:
             logger.info("Submit skipped for %s because status=%s", job_id, job.status)
             return job
+        if job.status == "failed":
+            metadata = job.metadata if isinstance(job.metadata, dict) else {}
+            reliability = metadata.get("pipeline_reliability") if isinstance(metadata.get("pipeline_reliability"), dict) else {}
+            failure = reliability.get("failure_location") if isinstance(reliability.get("failure_location"), dict) else {}
+            if failure.get("category") == "permanent":
+                logger.info(
+                    "Submit skipped for permanent failed job %s phase=%s error_type=%s",
+                    job_id,
+                    failure.get("phase") or "",
+                    failure.get("error_type") or "",
+                )
+                return job
         if job.status == "failed" and job.retry_count >= MAX_RETRIES:
+            _record_failure_location(
+                job,
+                phase="retry",
+                reason=f"Job {job_id} exceeded max retries",
+                error_type="retry_limit_reached",
+                category="permanent",
+            )
+            _set_zero_touch_phase(job, "retry", "failed", error="retry limit reached", error_type="retry_limit_reached")
+            _persist_job(job)
             raise ValueError(f"Job {job_id} exceeded max retries")
         self._submit_locks.add(job_id)
+        adapter: RenderProviderAdapter | None = None
 
         try:
             config = self._provider_configs.get(job.provider)
@@ -1917,6 +2352,38 @@ class RenderService:
 
             params = job.input_payload.parameters if job.input_payload and isinstance(job.input_payload.parameters, dict) else {}
             _validate_model_override(job.provider, params)
+            _missing_reference_assets = _missing_local_reference_assets(
+                list(job.input_payload.referenceAssets or []) if job.input_payload else []
+            )
+            if _missing_reference_assets:
+                job.status = "failed"
+                job.error_message = "Reference file missing before provider submission"
+                job.metadata = dict(job.metadata or {})
+                job.metadata["reference_asset_failure"] = {
+                    "error_type": "reference_file_missing",
+                    "missing_references": _missing_reference_assets,
+                    "message": job.error_message,
+                }
+                _set_zero_touch_phase(
+                    job,
+                    "resolve_references",
+                    "failed",
+                    error=job.error_message,
+                    error_type="reference_file_missing",
+                    missing_references=_missing_reference_assets,
+                )
+                _set_zero_touch_phase(job, "render", "skipped", reason="reference file missing before provider submission")
+                _set_zero_touch_phase(job, "evaluate", "skipped", reason="render not submitted")
+                _set_zero_touch_phase(job, "retry", "skipped", reason="render not submitted")
+                _record_failure_location(
+                    job,
+                    phase="resolve_references",
+                    reason=job.error_message,
+                    error_type="reference_file_missing",
+                    category="permanent",
+                )
+                _persist_job(job)
+                return job
             _set_zero_touch_phase(
                 job,
                 "render",
@@ -1955,7 +2422,10 @@ class RenderService:
                 logger.debug("Seed injection skipped for %s: %s", job_id, _exc)
             
             job.recovery_status = "active"
-            submitted_job = await adapter.submit_job(job)
+            submitted_job = await asyncio.wait_for(
+                adapter.submit_job(job),
+                timeout=PROVIDER_CALL_TIMEOUT_SECONDS,
+            )
             
             # Ensure provider is set on the returned job
             if not submitted_job.provider or submitted_job.provider.strip() == "":
@@ -1986,16 +2456,22 @@ class RenderService:
             return submitted_job
             
         except Exception as e:
-            logger.error(f"Failed to submit job {job_id}: {e}")
+            error_message = (
+                f"Provider call timed out after {PROVIDER_CALL_TIMEOUT_SECONDS}s"
+                if isinstance(e, TimeoutError)
+                else str(e)
+            )
+            logger.error(f"Failed to submit job {job_id}: {error_message}")
             job.status = "failed"
-            job.error_message = str(e)
+            job.error_message = error_message
             job.updated_at = datetime.now().isoformat()
-            _set_zero_touch_phase(job, "render", "failed", error=str(e))
-            _record_provider_failure_policy(job, str(e))
+            _set_zero_touch_phase(job, "render", "failed", error=error_message)
+            _record_provider_failure_policy(job, error_message)
             self._jobs[job_id] = job
             _persist_job(job)
             raise
         finally:
+            await _close_provider_adapter(adapter)
             self._submit_locks.discard(job_id)
 
     async def get_job_status(self, job_id: str) -> RenderJobModel:
@@ -2019,8 +2495,38 @@ class RenderService:
                 config = self._provider_configs.get(job.provider)
                 if config:
                     adapter = get_adapter(job.provider, config)
-                    updated = await adapter.get_job_status(job)
+                    try:
+                        updated = await asyncio.wait_for(
+                            adapter.get_job_status(job),
+                            timeout=PROVIDER_CALL_TIMEOUT_SECONDS,
+                        )
+                    finally:
+                        await _close_provider_adapter(adapter)
+                    updated.last_polled_at = datetime.now().isoformat()
                     updated.updated_at = datetime.now().isoformat()
+                    if updated.status == "complete":
+                        has_url = (
+                            updated.output_payload
+                            and isinstance(updated.output_payload.asset_url, str)
+                            and updated.output_payload.asset_url.strip()
+                        )
+                        if not has_url:
+                            logger.warning(
+                                "JOB_COMPLETE_WITHOUT_URL | job=%s | project=%s | shot=%s | demoting to failed",
+                                updated.id,
+                                updated.project_id,
+                                updated.shot_id,
+                            )
+                            updated.status = "failed"
+                            updated.error_message = "Job completed without output URL"
+                            _set_zero_touch_phase(updated, "render", "failed", error=updated.error_message, error_type="missing_video_url")
+                            _record_failure_location(
+                                updated,
+                                phase="render",
+                                reason=updated.error_message,
+                                error_type="missing_video_url",
+                                category="temporary",
+                            )
                     
                     # Detect transition to complete status
                     transitioned_to_complete = (
@@ -2042,7 +2548,27 @@ class RenderService:
                         await _notify_update(job_id, updated.model_dump())
                     return updated
             except Exception as _exc:
-                logger.debug("Adapter status poll failed for %s: %s", job_id, _exc)
+                poll_error = (
+                    f"Provider status poll timed out after {PROVIDER_CALL_TIMEOUT_SECONDS}s"
+                    if isinstance(_exc, TimeoutError)
+                    else str(_exc)
+                )
+                job.status = "failed"
+                job.error_message = f"Provider status poll failed: {poll_error}"
+                job.last_polled_at = datetime.now().isoformat()
+                job.updated_at = job.last_polled_at
+                _set_zero_touch_phase(job, "render", "failed", error=poll_error, error_type="polling_failure")
+                _record_failure_location(
+                    job,
+                    phase="render",
+                    reason=job.error_message,
+                    error_type="polling_failure",
+                    category="temporary",
+                )
+                self._jobs[job_id] = job
+                _persist_job(job)
+                logger.info("ADAPTER_STATUS_POLL_FAILED | job=%s | provider=%s | error=%s", job_id, job.provider, _exc)
+                return job
 
         # Safeguard: if a job reports "complete" but has no output URL, demote to "failed"
         # so the UI doesn't show false COMPLETE badges with no playable video.
@@ -2059,6 +2585,14 @@ class RenderService:
                 )
                 job.status = "failed"
                 job.error_message = "Job completed without output URL"
+                _set_zero_touch_phase(job, "render", "failed", error=job.error_message, error_type="missing_video_url")
+                _record_failure_location(
+                    job,
+                    phase="render",
+                    reason=job.error_message,
+                    error_type="missing_video_url",
+                    category="temporary",
+                )
                 self._jobs[job_id] = job
                 _persist_job(job)
 
@@ -2086,7 +2620,10 @@ class RenderService:
             config = self._provider_configs["simulated"]
 
         adapter = get_adapter(job.provider, config)
-        result = await adapter.cancel_job(job)
+        try:
+            result = await adapter.cancel_job(job)
+        finally:
+            await _close_provider_adapter(adapter)
         
         if result:
             job.status = "cancelled"
@@ -2312,7 +2849,10 @@ class RenderService:
             config = self._provider_configs["simulated"]
 
         adapter = get_adapter(job.provider, config)
-        return await adapter.fetch_outputs(job)
+        try:
+            return await adapter.fetch_outputs(job)
+        finally:
+            await _close_provider_adapter(adapter)
 
     async def reconcile_completed_runway_task(self, job_id: str) -> RenderJobModel:
         """Reconcile a runway job against upstream Runway task status.
@@ -2344,7 +2884,10 @@ class RenderService:
             return job
 
         adapter = get_adapter("runway", config)
-        updated = await adapter.get_job_status(job)
+        try:
+            updated = await adapter.get_job_status(job)
+        finally:
+            await _close_provider_adapter(adapter)
         updated.last_polled_at = datetime.now().isoformat()
         updated.updated_at = updated.last_polled_at
 
@@ -2414,7 +2957,10 @@ class RenderService:
             return None
 
         adapter = get_adapter("runway", config)
-        refreshed = await adapter.get_job_status(job)
+        try:
+            refreshed = await adapter.get_job_status(job)
+        finally:
+            await _close_provider_adapter(adapter)
         fresh_url = ""
         if refreshed.output_payload:
             fresh_url = str(refreshed.output_payload.asset_url or "").strip()
@@ -2567,12 +3113,13 @@ class RenderService:
             _persist_job(job)
             job_ids.append(job.id)
 
-        # ── Submit all jobs in parallel ───────────────────────────────────────
-        submit_tasks = [self.submit_job(jid) for jid in job_ids]
-        results = await asyncio.gather(*submit_tasks, return_exceptions=True)
-        for jid, result in zip(job_ids, results):
-            if isinstance(result, Exception):
-                logger.warning("Batch job %s submit failed: %s", jid, result)
+        # ── Submit all jobs in parallel when a provider is explicitly chosen ──
+        if provider:
+            submit_tasks = [self.submit_job(jid) for jid in job_ids]
+            results = await asyncio.gather(*submit_tasks, return_exceptions=True)
+            for jid, result in zip(job_ids, results):
+                if isinstance(result, Exception):
+                    logger.warning("Batch job %s submit failed: %s", jid, result)
 
         # ── Store batch metadata ──────────────────────────────────────────────
         batch = {
@@ -2646,7 +3193,23 @@ class RenderService:
         recovered = 0
         stale_recovered = 0
         orphan_reconciled = 0
+        hydrated = 0
         errors: list[str] = []
+
+        if _storage:
+            try:
+                try:
+                    from app.config import get_settings
+
+                    hydration_limit = int(getattr(get_settings(), "render_recovery_hydration_limit", 1000) or 1000)
+                except Exception:
+                    hydration_limit = 1000
+                persisted_jobs = _storage.list_jobs(limit=max(1, min(hydration_limit, 5000)))
+                for persisted_job in persisted_jobs:
+                    self._jobs[persisted_job.id] = persisted_job
+                hydrated = len(persisted_jobs)
+            except Exception as exc:
+                errors.append(f"hydrate: {exc}")
 
         for job in list(self._jobs.values()):
             try:
@@ -2656,13 +3219,24 @@ class RenderService:
                         job.error_message = "Stale job with no provider task id after restart"
                         job.recovery_status = "stale_recovered"
                         job.updated_at = datetime.now().isoformat()
+                        _set_zero_touch_phase(job, "render", "failed", error=job.error_message, error_type="abandoned_without_provider_job_id")
+                        _record_failure_location(
+                            job,
+                            phase="render",
+                            reason=job.error_message,
+                            error_type="abandoned_without_provider_job_id",
+                            category="permanent",
+                        )
                         _persist_job(job)
                         stale_recovered += 1
                         continue
                     if job.provider_job_id:
                         config = self._provider_configs.get(job.provider) or self._provider_configs.get("simulated")
                         adapter = get_adapter(job.provider, config)
-                        updated = await adapter.get_job_status(job)
+                        try:
+                            updated = await adapter.get_job_status(job)
+                        finally:
+                            await _close_provider_adapter(adapter)
                         updated.updated_at = datetime.now().isoformat()
                         if updated.status == "complete" and not updated.completed_at:
                             updated.completed_at = updated.updated_at
@@ -2682,6 +3256,14 @@ class RenderService:
                             updated.error_message = "Stale job — exceeded render timeout after restart"
                             updated.recovery_status = "stale_recovered"
                             updated.updated_at = datetime.now().isoformat()
+                            _set_zero_touch_phase(updated, "render", "failed", error=updated.error_message, error_type="render_timeout")
+                            _record_failure_location(
+                                updated,
+                                phase="render",
+                                reason=updated.error_message,
+                                error_type="render_timeout",
+                                category="temporary",
+                            )
                             _persist_job(updated)
                             stale_recovered += 1
                         recovered += 1
@@ -2694,6 +3276,7 @@ class RenderService:
                 errors.append(f"{job.id}: {exc}")
 
         return {
+            "hydrated_jobs": hydrated,
             "recovered_jobs": recovered,
             "stale_recovered_jobs": stale_recovered,
             "orphan_reconciled_jobs": orphan_reconciled,
@@ -2723,6 +3306,14 @@ class RenderService:
                             job.error_message = "Stale job — exceeded render timeout"
                             job.recovery_status = "stale_recovered"
                             job.updated_at = datetime.now().isoformat()
+                            _set_zero_touch_phase(job, "render", "failed", error=job.error_message, error_type="polling_timeout")
+                            _record_failure_location(
+                                job,
+                                phase="render",
+                                reason=job.error_message,
+                                error_type="polling_timeout",
+                                category="temporary",
+                            )
                             self._jobs[job.id] = job
                             _persist_job(job)
                             logger.info("POLLING_STALE_CANCEL | job=%s | provider=%s", job.id, job.provider)

@@ -95,10 +95,26 @@ def assert_hosted_ready(runway_status: dict) -> None:
 
 
 def create_render_job(base: str, prompt: str) -> dict:
-    shot_id = f"hosted-verify-{int(time.time())}"
+    timestamp = int(time.time())
+    project_id = f"hosted-verify-project-{timestamp}"
+    shot_id = f"hosted-verify-{timestamp}"
+    project = curl_json(
+        "POST",
+        f"{base}/api/f51/studio/projects",
+        payload={
+            "project_id": project_id,
+            "title": "Hosted Runway Release Verification",
+        },
+        timeout=30,
+    )
+    if str(project.get("project_id") or project.get("id") or "") != project_id:
+        raise RuntimeError(
+            f"Temporary project creation failed for {project_id}: "
+            f"{json.dumps(project, ensure_ascii=True)}"
+        )
     query = urlencode(
         {
-            "project_id": "hosted-verify-project",
+            "project_id": project_id,
             "shot_id": shot_id,
             "provider": "runway",
             "prompt": prompt,

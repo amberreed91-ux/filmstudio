@@ -13,23 +13,28 @@ vi.mock('../lib/studioApi', async () => {
 
 describe('ScreeningEditorialComparisonPanel', () => {
   const getEditorialRevisionIntelligenceMock = vi.mocked(studioApi.getEditorialRevisionIntelligence)
+  const comparisonFixture = {
+    project_id: 'demo_studio_cinematic_001',
+    baseline_revision_id: 'rev-a',
+    comparison_revision_id: 'rev-b',
+    baseline_summary: {},
+    comparison_summary: {},
+    pacing_tradeoff: 'The newer revision moves with a cleaner forward pulse.',
+    escalation_tradeoff: 'Escalation remains similar.',
+    emotional_residue_tradeoff: 'The earlier pause keeps more emotional residue.',
+    tonal_consistency_tradeoff: 'Tonal cohesion stays stable.',
+    structural_clarity_tradeoff: 'Structural clarity improves in the newer ordering.',
+    strongest_difference: 'The strongest difference is how long emotion lingers after each transition.',
+    advisory_notes: ['Cinematic memory recall is active.'],
+    canonical_editorial_analysis: {
+      analysis_id: 'editorial-analysis-1',
+      overall_read: 'The cut carries a readable forward pulse.',
+    },
+  }
 
   beforeEach(() => {
     getEditorialRevisionIntelligenceMock.mockReset()
-    getEditorialRevisionIntelligenceMock.mockResolvedValue({
-      project_id: 'demo_studio_cinematic_001',
-      baseline_revision_id: 'rev-a',
-      comparison_revision_id: 'rev-b',
-      baseline_summary: {},
-      comparison_summary: {},
-      pacing_tradeoff: 'The newer revision moves with a cleaner forward pulse.',
-      escalation_tradeoff: 'Escalation remains similar.',
-      emotional_residue_tradeoff: 'The earlier pause keeps more emotional residue.',
-      tonal_consistency_tradeoff: 'Tonal cohesion stays stable.',
-      structural_clarity_tradeoff: 'Structural clarity improves in the newer ordering.',
-      strongest_difference: 'The strongest difference is how long emotion lingers after each transition.',
-      advisory_notes: ['Cinematic memory recall is active.'],
-    })
+    getEditorialRevisionIntelligenceMock.mockResolvedValue(comparisonFixture)
   })
 
   it('renders low-data comparison prompt when context is not ready', () => {
@@ -68,6 +73,7 @@ describe('ScreeningEditorialComparisonPanel', () => {
         comparisonRevisionId="rev-b"
         revisionEmphasis="structural_clarity"
         revisionCount={2}
+        initialComparison={comparisonFixture}
       />,
     )
     expect(html).toContain('Emphasis: Structural Clarity')
@@ -81,6 +87,7 @@ describe('ScreeningEditorialComparisonPanel', () => {
         comparisonRevisionId="rev-b"
         revisionEmphasis="structural_clarity"
         revisionCount={2}
+        initialComparison={comparisonFixture}
       />,
     )
 
@@ -88,5 +95,19 @@ describe('ScreeningEditorialComparisonPanel', () => {
     expect(content).not.toContain('%')
     expect(content).not.toContain('score')
     expect(content).not.toContain('confidence')
+  })
+
+  it('renders canonical editorial read when backend provides it', () => {
+    const html = renderToStaticMarkup(
+      <ScreeningEditorialComparisonPanel
+        projectId="demo_studio_cinematic_001"
+        baselineRevisionId="rev-a"
+        comparisonRevisionId="rev-b"
+        revisionEmphasis="structural_clarity"
+        revisionCount={2}
+        initialComparison={comparisonFixture}
+      />,
+    )
+    expect(html).toContain('Canonical Editorial Read')
   })
 })

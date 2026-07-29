@@ -8,8 +8,7 @@ import shutil
 logger = logging.getLogger(__name__)
 
 from app.services import render_service
-from app.services import render as render_module
-from app.services.render_job_backfill import backfill_render_jobs_from_project_state
+from app.services.render_maintenance_service import render_maintenance_service
 from app.services.project_store import project_store
 from app.models import ProviderConfig, RenderJobModel
 from pydantic import BaseModel, Field
@@ -36,6 +35,11 @@ class AdherenceRetryRequest(BaseModel):
     """Explicit active adherence retry request."""
     max_attempts: int = Field(default=3, ge=1, le=5)
     submission_strategy: str = "combined_reorder_and_fresh_seeds"
+
+
+class QueueRenderJobRequest(BaseModel):
+    priority: int = Field(default=50, ge=0, le=100)
+    idempotency_key: str | None = None
 
 
 def _parse_query_json(value: Any, fallback: Any) -> Any:
@@ -96,6 +100,33 @@ def _zero_touch_status_summary(payload: dict[str, Any]) -> dict[str, Any]:
     jobs_submitted = retry_cascade.get("jobs_submitted") if isinstance(retry_cascade.get("jobs_submitted"), list) else []
     adherence_review = _as_dict(metadata.get("adherence_review"))
     prompt_contradictions = metadata.get("prompt_contradictions") if isinstance(metadata.get("prompt_contradictions"), list) else []
+    environment_context = _as_dict(metadata.get("environment_continuity_context"))
+    environment_warnings = (
+        metadata.get("environment_continuity_warnings")
+        if isinstance(metadata.get("environment_continuity_warnings"), list)
+        else []
+    )
+    if not environment_warnings:
+        environment_warnings = (
+            environment_context.get("warnings")
+            if isinstance(environment_context.get("warnings"), list)
+            else []
+        )
+    environment_recognizability = _as_dict(environment_context.get("recognizability"))
+    environment_reference_explanations = (
+        environment_context.get("reference_explanations")
+        if isinstance(environment_context.get("reference_explanations"), list)
+        else []
+    )
+    identity_warnings = (
+        metadata.get("character_identity_warnings")
+        if isinstance(metadata.get("character_identity_warnings"), list)
+        else metadata.get("identity_conflict_warnings")
+        if isinstance(metadata.get("identity_conflict_warnings"), list)
+        else zero_touch.get("identity_conflict_warnings")
+        if isinstance(zero_touch.get("identity_conflict_warnings"), list)
+        else []
+    )
     provider_failure = _as_dict(metadata.get("provider_failure"))
 
     output_url = payload.get("output_url")
@@ -106,6 +137,9 @@ def _zero_touch_status_summary(payload: dict[str, Any]) -> dict[str, Any]:
     human_review_required = bool(
         status == "needs_review"
         or prompt_contradictions
+        or identity_warnings
+        or environment_warnings
+        or environment_recognizability.get("status") == "needs_review"
         or adherence_verdict in {"needs_review", "manual_review", "fail"}
     )
 
@@ -136,6 +170,17 @@ def _zero_touch_status_summary(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "provider_failure": provider_failure,
         "prompt_contradictions": prompt_contradictions,
+        "character_identity_warnings": identity_warnings,
+        "environment_continuity": {
+            "location_id": environment_context.get("location_id") or "",
+            "warnings": environment_warnings,
+            "human_review_required": bool(
+                environment_warnings
+                or environment_recognizability.get("status") == "needs_review"
+            ),
+            "recognizability": environment_recognizability,
+            "reference_explanations": environment_reference_explanations,
+        },
         "output_url": output_url,
         "preview_url": preview_url,
         "human_review_required": human_review_required,
@@ -192,7 +237,9 @@ def create_render_job(
     provider: Optional[str] = None,
     prompt: str = "",
     reference_assets: Optional[Any] = None,
-    parameters: Optional[Any] = None
+    parameters: Optional[Any] = None,
+    queue: bool = False,
+    queue_priority: int = 50,
 ):
     """Create a new render job"""
     try:
@@ -210,9 +257,53 @@ def create_render_job(
             reference_assets=parsed_reference_assets,
             parameters=parsed_parameters
         )
-        return _job_payload(job)
+        storyboard_meta = parsed_parameters.get("storyboard") if isinstance(parsed_parameters, dict) else None
+        if isinstance(storyboard_meta, dict):
+            try:
+                from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+
+                storyboard_shot_id = str(storyboard_meta.get("storyboard_shot_id") or "").strip()
+                shot = storyboard_blueprint_service.get_storyboard_shot(storyboard_shot_id)
+                if shot is not None:
+                    storyboard_blueprint_service.link_render_job(
+                        shot=shot,
+                        render_job_id=job.id,
+                        link_type=str(storyboard_meta.get("link_type") or "initial_render"),
+                    )
+            except Exception as exc:
+                logger.debug("Storyboard render provenance link skipped for %s: %s", job.id, exc)
+        payload = _job_payload(job)
+        if queue:
+            try:
+                from app.services.production_queue_service import production_queue_service
+
+                queue_item = production_queue_service.enqueue_existing_render_job(
+                    job_id=job.id,
+                    priority=max(0, min(int(queue_priority), 100)),
+                    idempotency_key=f"render_route:{project_id}:{job.id}",
+                )
+                payload["production_queue_item"] = queue_item.model_dump()
+            except Exception as exc:
+                logger.warning("Render job queue attachment failed for %s: %s", job.id, exc)
+                payload["production_queue_error"] = str(exc)
+        return payload
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/queue")
+def queue_existing_render_job(job_id: str, payload: QueueRenderJobRequest = QueueRenderJobRequest()):
+    """Attach an existing render job to the durable production queue."""
+    try:
+        from app.services.production_queue_service import production_queue_service
+
+        return production_queue_service.enqueue_existing_render_job(
+            job_id=job_id,
+            priority=payload.priority,
+            idempotency_key=payload.idempotency_key,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/jobs/{job_id}/submit")
@@ -336,8 +427,29 @@ def get_recommended_shot_duration(
 
 
 @router.get("/jobs")
-def list_render_jobs(project_id: Optional[str] = None):
+def list_render_jobs(
+    project_id: Optional[str] = None,
+    status: Optional[str] = None,
+    cursor: Optional[str] = None,
+    limit: int = 50,
+    paginated: bool = False,
+):
     """List all render jobs, optionally filtered by project"""
+    if paginated:
+        try:
+            page = render_maintenance_service.list_jobs_page(
+                project_id=project_id,
+                status=status,
+                cursor=cursor,
+                limit=limit,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        return {
+            **page,
+            "items": [_job_payload(job) for job in page["items"]],
+        }
+
     rows = []
     for job in render_service.list_jobs(project_id):
         rows.append(_job_payload(job))
@@ -381,20 +493,7 @@ def get_render_diagnostics(project_id: Optional[str] = None):
     for job in jobs:
         status_counts[job.status] = status_counts.get(job.status, 0) + 1
 
-    storage_health = "uninitialized"
-    storage_detail = "storage_not_set"
-    if render_module._storage is not None:
-        try:
-            _ = render_module._storage.list_jobs(limit=1)
-            storage_health = "ok"
-            storage_detail = "query_ok"
-        except Exception as exc:  # pragma: no cover - defensive
-            storage_health = "degraded"
-            storage_detail = str(exc)
-
-    persistence_path = ""
-    if render_module._storage is not None and hasattr(render_module._storage, "db_path"):
-        persistence_path = str(getattr(render_module._storage, "db_path"))
+    storage_diagnostics = render_maintenance_service.storage_diagnostics()
 
     provider_status = render_service.list_providers()
     provider_snapshot = [
@@ -427,12 +526,12 @@ def get_render_diagnostics(project_id: Optional[str] = None):
         },
         "hydration_state": {
             "in_memory_job_count": len(getattr(render_service, "_jobs", {})),
-            "storage_initialized": render_module._storage is not None,
+            "storage_initialized": storage_diagnostics["initialized"],
         },
         "persistence_health": {
-            "status": storage_health,
-            "detail": storage_detail,
-            "db_path": persistence_path,
+            "status": storage_diagnostics["status"],
+            "detail": storage_diagnostics["detail"],
+            "db_path": storage_diagnostics["db_path"],
         },
         "environment": {
             "ffmpeg_available": bool(ffmpeg_path),
@@ -446,12 +545,10 @@ def get_render_diagnostics(project_id: Optional[str] = None):
 @router.post("/backfill-project-state")
 def backfill_project_state_render_jobs():
     """Backfill canonical render_jobs rows from project_state_store.json."""
-    if render_module._storage is None:
-        raise HTTPException(status_code=503, detail="Render job storage is not initialized")
-    return backfill_render_jobs_from_project_state(
-        storage=render_module._storage,
-        render_service=render_service,
-    )
+    try:
+        return render_maintenance_service.backfill_project_state()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 @router.post("/recover-output-urls")
@@ -461,62 +558,10 @@ async def recover_render_output_urls():
     For simulated/local jobs: regenerate the placeholder URL immediately.
     For real provider jobs: set status to 'failed' since the URL is genuinely lost.
     """
-    if render_module._storage is None:
-        raise HTTPException(status_code=503, detail="Render job storage is not initialized")
-    
-    SIMULATED_PLACEHOLDER = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-    
-    jobs = render_module._storage.list_jobs(limit=5000)
-    recovered = 0
-    demoted = 0
-    skipped = 0
-    
-    for job in jobs:
-        if job.status != "complete":
-            continue
-        
-        has_url = (
-            job.output_payload
-            and isinstance(job.output_payload.asset_url, str)
-            and job.output_payload.asset_url.strip()
-        )
-        if has_url:
-            continue
-        
-        job_id = job.id
-        is_simulated = job.provider in ("simulated", "local")
-        
-        if is_simulated:
-            from app.models import RenderJobOutput
-            job.output_payload = RenderJobOutput(
-                asset_url=SIMULATED_PLACEHOLDER,
-                thumbnail_url=None,
-                metadata={"simulated": True, "provider": job.provider, "url": SIMULATED_PLACEHOLDER, "recovered": True},
-            )
-            job.error_message = None
-            job.completed_at = job.completed_at or datetime.now(timezone.utc).isoformat()
-            job.updated_at = datetime.now(timezone.utc).isoformat()
-            render_module._storage.save_job(job)
-            if job_id in render_service._jobs:
-                render_service._jobs[job_id] = job
-            recovered += 1
-            logger.info("RENDER_URL_RECOVERED | job=%s | provider=%s", job_id, job.provider)
-        else:
-            job.status = "failed"
-            job.error_message = "Job completed without output URL — demoted by recovery"
-            job.updated_at = datetime.now(timezone.utc).isoformat()
-            render_module._storage.save_job(job)
-            if job_id in render_service._jobs:
-                render_service._jobs[job_id] = job
-            demoted += 1
-            logger.info("RENDER_URL_DEMOTED | job=%s | provider=%s", job_id, job.provider)
-    
-    return {
-        "recovered": recovered,
-        "demoted": demoted,
-        "skipped": skipped,
-        "total_checked": recovered + demoted + skipped,
-    }
+    try:
+        return render_maintenance_service.recover_output_urls()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 # ── Seed lock/unlock ──────────────────────────────────────────────────────────
@@ -529,38 +574,12 @@ def update_shot_seed(project_id: str, scene_id: str, shot_id: str, payload: Shot
     - If seed is null: sets seed_locked=false (unlocks), keeps existing seed.
     - Returns the current shot seed state.
     """
-    if render_module._storage is None:
-        raise HTTPException(status_code=503, detail="Render storage not initialized")
-
-    # Normalize shot_id: if caller passed just the short name, combine with scene_id
-    # e.g. shot_id="shot_001", scene_id="scene_001" => "scene_001_shot_001"
-    full_shot_id = shot_id
-    if not shot_id.startswith(scene_id) and scene_id:
-        full_shot_id = f"{scene_id}_{shot_id}"
-
-    if payload.seed is not None:
-        # Lock seed: set both seed and locked
-        render_module._storage.save_shot_seed(project_id, full_shot_id, payload.seed, seed_locked=True)
-        logger.info(
-            "SEED_LOCKED | project=%s | shot=%s | seed=%d",
-            project_id, full_shot_id, payload.seed,
+    try:
+        return render_maintenance_service.update_shot_seed(
+            project_id,
+            scene_id,
+            shot_id,
+            payload.seed,
         )
-    else:
-        # Unlock: keep existing seed (if any), just unlock
-        existing = render_module._storage.get_shot_seed(project_id, full_shot_id)
-        current_seed = existing["seed"] if existing and existing.get("seed") is not None else None
-        render_module._storage.update_shot_seed_lock(project_id, full_shot_id, seed=current_seed, seed_locked=False)
-        logger.info(
-            "SEED_UNLOCKED | project=%s | shot=%s | seed=%s",
-            project_id, full_shot_id, current_seed,
-        )
-
-    result = render_module._storage.get_shot_seed(project_id, full_shot_id)
-    if not result:
-        return {"project_id": project_id, "shot_id": full_shot_id, "seed": None, "seed_locked": False}
-    return {
-        "project_id": result["project_id"],
-        "shot_id": result["shot_id"],
-        "seed": result["seed"],
-        "seed_locked": bool(result["seed_locked"]),
-    }
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))

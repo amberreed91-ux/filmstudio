@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from app.data.storage import DatabaseStorage
 from app.services.keyframe_extraction_service import KeyframeExtractionService
@@ -169,3 +171,35 @@ def test_static_frame_url_is_correct(tmp_path: Path):
     storage = _make_storage(tmp_path)
     service = KeyframeExtractionService(storage, VideoAssetService(storage))
     assert service.build_frame_url(asset_id="asset-123", filename="frame_0001.jpg") == "/outputs/keyframes/asset-123/frame_0001.jpg"
+
+
+def test_analyze_keyframe_variance_reports_stable_and_changed_frames(tmp_path: Path):
+    black = tmp_path / "black.jpg"
+    black_copy = tmp_path / "black-copy.jpg"
+    white = tmp_path / "white.jpg"
+    Image.new("RGB", (32, 32), "black").save(black)
+    Image.new("RGB", (32, 32), "black").save(black_copy)
+    Image.new("RGB", (32, 32), "white").save(white)
+
+    result = asyncio.run(
+        KeyframeExtractionService().analyze_keyframe_variance(
+            frame_paths=[str(black), str(black_copy), str(white)],
+            shot_id="shot-variance",
+        )
+    )
+
+    assert result["frames_analyzed"] == 3
+    assert result["frame_details"][0]["variance"] == 0
+    assert result["frame_details"][1]["variance"] == 1
+    assert result["avg_variance"] == 0.5
+    assert result["stability_rating"] == "high_change"
+
+
+def test_analyze_keyframe_variance_rejects_missing_frames(tmp_path: Path):
+    with pytest.raises(ValueError, match="not accessible"):
+        asyncio.run(
+            KeyframeExtractionService().analyze_keyframe_variance(
+                frame_paths=[str(tmp_path / "missing.jpg")],
+                shot_id="shot-missing",
+            )
+        )

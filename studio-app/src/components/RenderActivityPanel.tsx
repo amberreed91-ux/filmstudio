@@ -39,12 +39,12 @@ function statusClasses(status: LiveRenderStatus): string {
 export default function RenderActivityPanel({ roomName }: { roomName: 'Lobby' | 'Production Board' | 'Screening Room' }) {
   const { activity } = useRenderActivity()
   const { providers } = useStudio()
-  const [enteredTaskId, setEnteredTaskId] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [enteredTaskId, _setEnteredTaskId] = useState('')
   const availableProviderIds = useMemo(() => providers.map((provider) => provider.provider_id.toLowerCase()), [providers])
 
   useEffect(() => {
     if (!activity?.taskId) return
-    setEnteredTaskId(activity.taskId)
   }, [activity?.taskId])
 
   const panelClass = useMemo(() => {
@@ -94,9 +94,11 @@ export default function RenderActivityPanel({ roomName }: { roomName: 'Lobby' | 
             <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">Task ID</span>
             <div className="mt-1 truncate font-mono text-[11px] text-zinc-100">{activity?.taskId || enteredTaskId || 'n/a'}</div>
           </div>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           {activity?.taskId && activity.taskId !== (activity as any).jobId && (
             <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[11px] text-zinc-300">
               <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">Job ID</span>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               <div className="mt-1 truncate font-mono text-[9px] text-zinc-400">{(activity as any).jobId || 'n/a'}</div>
             </div>
           )}

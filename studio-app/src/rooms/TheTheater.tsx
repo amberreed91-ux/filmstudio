@@ -1,7 +1,6 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import React from 'react'
 import { PerspectiveCamera } from '@react-three/drei'
-import * as THREE from 'three'
 
 /**
  * Theater environment — large dark screening room with amber key light

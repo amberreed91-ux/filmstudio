@@ -55,7 +55,7 @@ function whyThisShotMatters(props: Pick<PrevisCinematicShowcaseProps, 'sceneTitl
   // Co-director voice: emotionally perceptive, cinematically literate, no scores
   
   if (props.visualEvidenceCount < 1 || props.relatedMemoryCount < 1) {
-    return `${subject} needs more visual evidence before the Studio can trust its place in the cut.`
+    return `${subject} needs more visual evidence before trusting the cut.`
   }
   
   if (props.continuityIssueCount > 0 && props.styleDriftIssueCount > 0) {
@@ -71,7 +71,7 @@ function whyThisShotMatters(props: Pick<PrevisCinematicShowcaseProps, 'sceneTitl
   }
   
   if (props.decisionGateStatus === 'ready' && props.hasDirectorSignature && props.relatedMemoryCount > 2) {
-    return `${subject} is ready because the visual memory, signature, and gate now agree on its strength.`
+    return `${subject} is ready because visual evidence, memory, and review state now agree.`
   }
   
   if (props.hasDirectorSignature && props.relatedMemoryCount > 1) {

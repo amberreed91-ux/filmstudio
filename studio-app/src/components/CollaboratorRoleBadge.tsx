@@ -57,23 +57,28 @@ export default function CollaboratorRoleBadge({ role, className = '' }: Collabor
 }
 
 // Helper to get role display properties
+// eslint-disable-next-line react-refresh/only-export-components
 export function getRoleProperties(role: CollaboratorRole) {
   return ROLE_CONFIG[role] || ROLE_CONFIG.viewer
 }
 
 // Helper to check permissions
+// eslint-disable-next-line react-refresh/only-export-components
 export function canEdit(role: CollaboratorRole): boolean {
   return role === 'owner' || role === 'editor'
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function canDelete(role: CollaboratorRole): boolean {
   return role === 'owner'
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function canComment(role: CollaboratorRole): boolean {
   return role === 'owner' || role === 'editor' || role === 'viewer'
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function canApprove(role: CollaboratorRole): boolean {
   return role === 'owner' || role === 'editor'
 }

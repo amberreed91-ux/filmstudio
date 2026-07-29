@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, Clock, Film, MessageSquare, Users, CheckCircle, AlertTriangle, X } from 'lucide-react'
-import { getProjectActivity, type ActivityEntry, type StudioProject } from '../lib/studioApi'
-import { useStudio } from '../context/StudioContext'
+import { Activity, Clock, Film, MessageSquare, Users, CheckCircle, X } from 'lucide-react'
+import { getProjectActivity, type ActivityEntry } from '../lib/studioApi'
 
 type ActivityFeedProps = {
   projectId: string
@@ -54,7 +53,7 @@ function getActivitySceneLink(entry: ActivityEntry, projectId: string) {
 }
 
 // Mock activity data for when API is not available
-export const MOCK_ACTIVITY: ActivityEntry[] = [
+const MOCK_ACTIVITY: ActivityEntry[] = [
   {
     id: 'act_1',
     type: 'collaborator_joined',
@@ -110,7 +109,6 @@ const ACTIVITY_ACTION_LABELS: Record<string, string> = {
 }
 
 export default function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
-  const { project } = useStudio()
   const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [showAll, setShowAll] = useState(false)
@@ -133,7 +131,7 @@ export default function ActivityFeed({ projectId, className = '' }: ActivityFeed
           // Use mock data as fallback
           setActivities(MOCK_ACTIVITY)
         }
-      } catch (error) {
+      } catch {
         setActivities(MOCK_ACTIVITY)
       } finally {
         setLoading(false)
@@ -256,4 +254,5 @@ function ActivityItem({ activity, projectId, isLast = false }: ActivityItemProps
 }
 
 // Export mock data for testing
+// eslint-disable-next-line react-refresh/only-export-components
 export { formatActivityTime, getActivityIcon }

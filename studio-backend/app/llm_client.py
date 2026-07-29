@@ -157,6 +157,46 @@ async def call_openrouter(
         )
 
 
+async def call_groq(
+    system_prompt: str,
+    message: str,
+    max_tokens: int = 1024,
+) -> str:
+    """Call Groq's OpenAI-compatible chat endpoint as a local configured fallback."""
+    settings = get_settings()
+    api_key = (settings.groq_api_key or "").strip()
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is not set — cannot fall back to Groq")
+    model = str(getattr(settings, "groq_llm_model", "") or "").strip() or "llama-3.3-70b-versatile"
+    client = AsyncOpenAI(
+        api_key=api_key,
+        base_url="https://api.groq.com/openai/v1",
+    )
+
+    started = perf_counter()
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": message},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.7,
+        )
+        content = response.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("Groq returned an empty response")
+        return content.strip()
+    finally:
+        logger.info(
+            "project_id=- job_id=- provider=groq stage=llm_chat_fallback "
+            "duration_ms=%d model=%s",
+            int((perf_counter() - started) * 1000),
+            model,
+        )
+
+
 # Shape of the tuple-returning fallback helper used by routes that want to
 # surface/log which provider actually answered.
 FallbackLLM = Callable[..., Awaitable[tuple[str, str]]]
@@ -187,22 +227,36 @@ async def get_llm_completion_with_fallback(
         return result, "qwen"
     except (asyncio.TimeoutError, QwenPolicyBlockedError, AuthenticationError) as exc:
         logger.warning(
-            "Qwen unavailable (%s), falling back to OpenRouter",
+            "Qwen unavailable (%s), trying configured fallback LLM providers",
             type(exc).__name__,
         )
+        fallback_errors: dict[str, str] = {}
         try:
-            result = await call_openrouter(system_prompt, message, max_tokens=max_tokens)
-            return result, "openrouter"
+            if (settings.openrouter_api_key or "").strip():
+                result = await call_openrouter(system_prompt, message, max_tokens=max_tokens)
+                return result, "openrouter"
+            fallback_errors["openrouter"] = "OPENROUTER_API_KEY missing"
         except Exception as openrouter_exc:
-            raise ProviderError(
-                f"Both providers failed — Qwen ({type(exc).__name__}) and OpenRouter ({type(openrouter_exc).__name__})",
-                stage="llm_fallback",
-                metadata={
-                    "qwen_error": type(exc).__name__,
-                    "openrouter_error": type(openrouter_exc).__name__,
-                    "openrouter_detail": str(openrouter_exc)[:200],
-                },
-            ) from openrouter_exc
+            fallback_errors["openrouter"] = f"{type(openrouter_exc).__name__}: {str(openrouter_exc)[:200]}"
+
+        try:
+            if (settings.groq_api_key or "").strip():
+                result = await call_groq(system_prompt, message, max_tokens=max_tokens)
+                return result, "groq"
+            fallback_errors["groq"] = "GROQ_API_KEY missing"
+        except Exception as groq_exc:
+            fallback_errors["groq"] = f"{type(groq_exc).__name__}: {str(groq_exc)[:200]}"
+
+        raise ProviderError(
+            "All configured LLM providers failed",
+            stage="llm_fallback",
+            metadata={
+                "qwen_error": type(exc).__name__,
+                "openrouter_error": fallback_errors.get("openrouter", ""),
+                "groq_error": fallback_errors.get("groq", ""),
+                "fallback_errors": fallback_errors,
+            },
+        )
 
 
 async def call_llm_with_fallback(

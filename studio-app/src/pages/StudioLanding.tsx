@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
-  PlayCircle,
   ArrowLeftRight,
   Plus,
   Clapperboard,
@@ -12,8 +11,9 @@ import {
 } from 'lucide-react'
 import { useStudio } from '../context/StudioContext'
 import { useRenderActivity } from '../context/RenderActivityContext'
-import { createProject } from '../lib/studioApi'
+import { createProject, getProductionQueueSummary, type ProductionQueueSummary } from '../lib/studioApi'
 import { STUDIO_API_BASE } from '../lib/studioApi'
+import { getQueueStatusCounts } from '../lib/studioSelectors'
 
 /* ─── Agent definitions ─────────────────────────────────────────────── */
 interface AgentInfo {
@@ -170,11 +170,12 @@ interface BackendHealth {
    ═══════════════════════════════════════════════════════════════════════ */
 export default function StudioLanding() {
   const navigate = useNavigate()
-  const { project, overview, activeProjectId, setActiveProject, loadProject } = useStudio()
+  const { project, overview, activeProjectId, setActiveProject } = useStudio()
   const { activity } = useRenderActivity()
   const [showNewProject, setShowNewProject] = useState(false)
   const [health, setHealth] = useState<BackendHealth | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
+  const [queueSummary, setQueueSummary] = useState<ProductionQueueSummary | null>(null)
 
   const agentStatus = computeAgentActivity()
 
@@ -202,15 +203,33 @@ export default function StudioLanding() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!activeProjectId) {
+      setQueueSummary(null)
+      return
+    }
+    let cancelled = false
+    getProductionQueueSummary(activeProjectId)
+      .then((summary) => {
+        if (!cancelled) setQueueSummary(summary)
+      })
+      .catch(() => {
+        if (!cancelled) setQueueSummary(null)
+      })
+    return () => { cancelled = true }
+  }, [activeProjectId])
+
   /* ── Derive project metadata ──────────────────────────────────────── */
-  const activeProduction = project || overview?.latest_project || null
   const scenesCount = project?.source_stats?.scene_count ?? overview?.projects?.[0]?.scene_count ?? 0
   const runtime = project?.source_stats?.target_runtime_minutes ?? null
   const lastModified = project?.updated_at ?? overview?.projects?.[0]?.updated_at ?? null
   const latestProjectTitle = project?.title ?? overview?.projects?.[0]?.title ?? null
 
   /* ── Queue count ──────────────────────────────────────────────────── */
-  const queueCount = project?.render_queue?.length ?? 0
+  const queueCounts = getQueueStatusCounts(queueSummary)
+  const queueCount = queueSummary
+    ? queueCounts.active + queueCounts.waiting + queueCounts.blocked + queueCounts.failed
+    : project?.render_queue?.length ?? 0
 
   /* ── Glass panel style (FIX 2) ───────────────────────────────────── */
   const glassStyle: React.CSSProperties = {
@@ -282,7 +301,7 @@ export default function StudioLanding() {
                 <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ ...glassStyle, padding: '12px 16px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(32,31,31,0.25)' }}>
                   <span className="text-xs uppercase tracking-[0.12em]" style={{ color: '#d3c5ac' }}>Last Modified</span>
                   <span className="text-sm font-medium" style={{ color: '#e5e2e1', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {formatTimeAgo(lastModified)}
+                    {formatTimeAgo(lastModified ?? undefined)}
                   </span>
                 </div>
                 <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ ...glassStyle, padding: '12px 16px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(32,31,31,0.25)' }}>

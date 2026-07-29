@@ -24,6 +24,7 @@ export function useRenderPolling<TJob>(options: UseRenderPollingOptions<TJob>) {
     if (!adaptive) return intervalMs
     
     // Extract status from job - handle different job types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const jobStatus = (job as any).status || 'unknown'
     
     // Adaptive polling based on job status and elapsed time

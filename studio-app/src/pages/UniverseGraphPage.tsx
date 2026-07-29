@@ -211,7 +211,7 @@ const UniverseGraphPage: React.FC = () => {
     setDetailPanelOpen(true)
   }, [])
 
-  const handleNodeHover = useCallback((_node: UniverseNode | null) => {
+  const handleNodeHover = useCallback(() => {
     // Hover state handled internally by 3D component
   }, [])
 

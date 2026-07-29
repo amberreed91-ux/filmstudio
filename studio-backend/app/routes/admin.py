@@ -5,15 +5,22 @@ import sys
 
 from fastapi import APIRouter, Header, HTTPException
 
+from app.config import settings
+
 router = APIRouter(prefix="/api/f51/studio/admin", tags=["admin"])
 
-ADMIN_TOKEN = "studio-restart-2026"
+
+def _get_admin_token() -> str:
+    return settings.admin_token
 
 
 @router.post("/restart")
 async def restart_server(x_admin_token: str = Header(...)):
     """Restart the backend server. Protected by X-Admin-Token header."""
-    if x_admin_token != ADMIN_TOKEN:
+    token = _get_admin_token()
+    if not token:
+        raise HTTPException(status_code=404, detail="Admin endpoints disabled")
+    if x_admin_token != token:
         raise HTTPException(status_code=403, detail="Invalid admin token")
 
     cmd = [
@@ -23,7 +30,6 @@ async def restart_server(x_admin_token: str = Header(...)):
     ]
     subprocess.Popen(cmd, cwd=os.getcwd())
 
-    # Release the current process so the new one can bind the port
     os.kill(os.getpid(), signal.SIGTERM)
 
     return {"message": "Restarting server"}

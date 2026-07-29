@@ -3,7 +3,7 @@
  * Uses the existing exportProjectArtifact API endpoint
  */
 
-import { exportProjectArtifact, type StudioProject } from './studioApi'
+import { exportProjectArtifact } from './studioApi'
 
 /**
  * Trigger scene breakdown PDF export via API

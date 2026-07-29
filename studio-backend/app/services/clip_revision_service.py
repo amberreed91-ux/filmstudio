@@ -50,6 +50,32 @@ class ClipRevisionService:
         
         if self._storage:
             self._storage.save_clip_revision(revision)
+        if self._render_service:
+            try:
+                original_job = self._render_service.get_job(original_job_id)
+                if original_job:
+                    from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+
+                    storyboard_blueprint_service.storage = self._storage or storyboard_blueprint_service.storage
+                    link = storyboard_blueprint_service.link_revision_from_job(
+                        project_id=project_id,
+                        revision_id=revision.revision_id,
+                        original_job=original_job,
+                        change_scope={
+                            "revision_reason": revision_reason,
+                            "revision_prompt": revision_prompt,
+                        },
+                    )
+                    if link:
+                        revision.metadata = {
+                            **(revision.metadata or {}),
+                            "storyboard_revision_link_id": link.link_id,
+                            "storyboard_original_version_id": link.original_version_id,
+                        }
+                        if self._storage:
+                            self._storage.update_clip_revision(revision)
+            except Exception:
+                pass
         
         return revision
 
@@ -89,6 +115,13 @@ class ClipRevisionService:
                 reference_assets = original_job.input_payload.referenceAssets or []
             if hasattr(original_job.input_payload, 'parameters'):
                 parameters = original_job.input_payload.parameters or {}
+        if isinstance(parameters, dict) and isinstance(parameters.get("storyboard"), dict):
+            parameters = dict(parameters)
+            parameters["storyboard"] = {
+                **parameters["storyboard"],
+                "link_type": "revision_render",
+                "revision_id": revision.revision_id,
+            }
         
         # Create new render job with revised prompt
         new_job = self._render_service.create_job(
@@ -111,6 +144,30 @@ class ClipRevisionService:
         
         if self._storage:
             self._storage.update_clip_revision(revision)
+        try:
+            from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+
+            storyboard_blueprint_service.storage = self._storage or storyboard_blueprint_service.storage
+            link = storyboard_blueprint_service.link_revision_from_job(
+                project_id=revision.project_id,
+                revision_id=revision.revision_id,
+                original_job=original_job,
+                change_scope={
+                    "revision_reason": revision.revision_reason,
+                    "revision_prompt": revision.revision_prompt,
+                    "new_job_id": new_job.id,
+                },
+            )
+            if link:
+                revision.metadata = {
+                    **(revision.metadata or {}),
+                    "storyboard_revision_link_id": link.link_id,
+                    "storyboard_original_version_id": link.original_version_id,
+                }
+                if self._storage:
+                    self._storage.update_clip_revision(revision)
+        except Exception:
+            pass
         
         return revision
 

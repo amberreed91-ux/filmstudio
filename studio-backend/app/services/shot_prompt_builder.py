@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Fixed slot character budgets (Runway weights early tokens more heavily)
 SLOT_BUDGETS = {
-    "character_state": 140,      # Visual canon only — hands, face, build — never character names
+    "character_state": 210,      # Cast guard + visual canon + shot-specific staging
     "action": 110,                # One action per shot, not multiple
     "environment_persistence": 100,  # Recurring motifs/settings that must not drop out
     "camera": 70,                 # Controlled vocabulary: wide/medium/close, static/dolly/pan
@@ -163,6 +163,52 @@ def _extract_characters_from_segment(segment: str, all_characters: list[dict]) -
     return mentioned_characters
 
 
+def _scene_character_names(scene_data: dict) -> set[str]:
+    raw = scene_data.get("characters") or scene_data.get("character_appearances") or []
+    if isinstance(raw, str):
+        return {part.strip().lower() for part in raw.split(",") if part.strip()}
+    if isinstance(raw, list):
+        return {str(part).strip().lower() for part in raw if str(part).strip()}
+    return set()
+
+
+def _merge_scene_characters(
+    segment_characters: list[dict],
+    scene_data: dict,
+    all_characters: list[dict],
+) -> list[dict]:
+    scene_names = _scene_character_names(scene_data)
+    if not scene_names:
+        return segment_characters
+
+    merged = list(segment_characters)
+    seen = {
+        str(char.get("name") or "").strip().lower()
+        for char in merged
+        if str(char.get("name") or "").strip()
+    }
+    for char in all_characters:
+        char_name = str(char.get("name") or "").strip()
+        normalized = char_name.lower()
+        if normalized and normalized in scene_names and normalized not in seen:
+            merged.append({
+                "name": char_name,
+                "visual_prompt_summary": char.get("visual_prompt_summary", ""),
+                "age": char.get("age", ""),
+            })
+            seen.add(normalized)
+    return merged
+
+
+def _format_visible_cast_constraint(character_names: list[str]) -> str:
+    """Build a compact cast guard for image/video providers."""
+    names = [str(name or "").strip() for name in character_names if str(name or "").strip()]
+    if not names:
+        return ""
+    joined = " and ".join(names) if len(names) <= 2 else ", ".join(names[:-1]) + f", and {names[-1]}"
+    return f"Only {joined} visible. No extras."
+
+
 def _determine_shot_type(shot_number: int, segment: str) -> str:
     """
     Determine the cinematically appropriate shot type description.
@@ -205,6 +251,7 @@ def build_shot_aware_prompt(
     take_number: int,
     all_characters: list[dict] | None = None,
     audio_brief: dict | None = None,
+    performance_context: dict | None = None,
     max_length: int = 512,
 ) -> str:
     """
@@ -216,6 +263,7 @@ def build_shot_aware_prompt(
         take_number: Take number (1-based)
         all_characters: List of character dicts from project (optional)
         audio_brief: Audio context dict (optional)
+        performance_context: Provider-neutral acting context with visible prompt lines (optional)
         max_length: Max prompt length (default 512 for Runway)
     
     Returns:
@@ -241,6 +289,11 @@ def build_shot_aware_prompt(
     segment_characters = _extract_characters_from_segment(
         shot_segment,
         all_characters or []
+    )
+    segment_characters = _merge_scene_characters(
+        segment_characters,
+        scene_data,
+        all_characters or [],
     )
     
     # Build prompt components
@@ -268,6 +321,11 @@ def build_shot_aware_prompt(
     
     # 4. Relevant characters with visual descriptions
     if segment_characters:
+        visible_cast = _format_visible_cast_constraint(
+            [str(char.get("name") or "") for char in segment_characters]
+        )
+        if visible_cast:
+            parts.append(visible_cast)
         char_descs = []
         for char in segment_characters[:3]:  # Max 3 characters to avoid bloat
             name = char["name"]
@@ -290,8 +348,17 @@ def build_shot_aware_prompt(
         parts.append(f"Mood: {audio_brief['mood']}")
     elif emotional_tone:
         parts.append(f"Mood: {emotional_tone}")
+
+    # 7. Performance Intelligence context: visible behavior only.
+    # Motivation/subtext stays in the reasoning layer; render prompts get playable action.
+    if isinstance(performance_context, dict):
+        prompt_lines = performance_context.get("prompt_lines")
+        if isinstance(prompt_lines, list):
+            visible_lines = [str(line).strip() for line in prompt_lines if str(line).strip()]
+            if visible_lines:
+                parts.append("Performance: " + " ".join(visible_lines[:2]))
     
-    # 7. Style suffix
+    # 8. Style suffix
     parts.append("Cinematic, film quality, single continuous shot.")
     
     # Join parts

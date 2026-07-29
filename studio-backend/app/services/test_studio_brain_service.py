@@ -47,3 +47,60 @@ def test_studio_brain_is_deterministic_and_preserves_boundaries():
     assert boundaries.get("additive_only") is True
     assert boundaries.get("authority", {}).get("canonical_mutation") == "forbidden"
     assert boundaries.get("advisory_separation", {}).get("studio_brain") == "advisory_only"
+
+
+def test_studio_brain_can_include_advisory_crew_intelligence_context():
+    service = StudioBrainService()
+    payload = service.build_orchestration_bundle(
+        director_context={},
+        writer_context={},
+        memory_archivist_context={},
+        evaluator_context={},
+        co_director_context={},
+        provider_router_context={},
+        emotional_arc_context={},
+        crew_intelligence_context={
+            "summary": "Department handoffs are active.",
+            "creator_attention": [{"attention_id": "attention-1"}],
+            "active_handoffs": [{"handoff_id": "handoff-1"}],
+            "canonical_sources": {"crew_reasoning_records": True},
+        },
+    )
+
+    timeline = payload.get("orchestration_timeline", [])
+    trace = payload.get("creative_reasoning_trace", [])
+    boundaries = payload.get("canonical_truth_boundaries", {})
+
+    assert timeline[-1]["role"] == "Crew Intelligence"
+    assert timeline[-1]["advisory_only"] is True
+    assert trace[-1]["role"] == "Crew Intelligence"
+    assert "crew_intelligence" in boundaries.get("canonical_sources", [])
+    assert boundaries.get("crew_intelligence_sources", {}).get("crew_reasoning_records") is True
+
+
+def test_studio_brain_can_include_studio_knowledge_context_trace():
+    service = StudioBrainService()
+    payload = service.build_orchestration_bundle(
+        director_context={},
+        writer_context={},
+        memory_archivist_context={},
+        evaluator_context={},
+        co_director_context={},
+        provider_router_context={},
+        emotional_arc_context={},
+        studio_knowledge_context={
+            "trace_id": "ktrace-001",
+            "atoms": [{"atom_id": "atom-1"}],
+            "conflicts": [],
+        },
+    )
+
+    timeline = payload.get("orchestration_timeline", [])
+    trace = payload.get("creative_reasoning_trace", [])
+    boundaries = payload.get("canonical_truth_boundaries", {})
+
+    assert timeline[-1]["role"] == "Studio Knowledge"
+    assert timeline[-1]["signal"] == "ktrace-001"
+    assert trace[-1]["role"] == "Studio Knowledge"
+    assert "studio_knowledge" in boundaries.get("canonical_sources", [])
+    assert boundaries.get("advisory_separation", {}).get("studio_knowledge") == "read_only_context"

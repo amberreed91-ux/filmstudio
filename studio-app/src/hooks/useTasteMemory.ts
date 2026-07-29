@@ -11,7 +11,7 @@
  * - Never block workflow actions
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 type TasteAxis = 'emotional_residue' | 'structural_clarity'
 

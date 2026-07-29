@@ -23,6 +23,13 @@ import {
 import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
+import ProductionAcceptancePanel from '../components/ProductionAcceptancePanel'
+import EditorialIntelligencePanel from '../components/EditorialIntelligencePanel'
+import CinematographerIntelligencePanel from '../components/CinematographerIntelligencePanel'
+import PerformanceAudioPanel from '../components/PerformanceAudioPanel'
+import ProductionDesignIntelligencePanel from '../components/ProductionDesignIntelligencePanel'
+import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
+import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
 import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
 import {
@@ -33,6 +40,7 @@ import {
   fetchJson,
   getAssemblyStatus,
   getLatestFinalShortFilmPackageForProject,
+  listProductionAcceptanceReports,
   getSceneAudioBrief,
   getSceneComposition,
   getSceneRationale,
@@ -43,10 +51,10 @@ import {
   simulateSceneAudience,
   stitchShortFilm,
   updateScene,
-  type ApplyAudioBriefResponse,
   type AssemblyStatusResponse,
   type EmotionAnalysisResult,
   type FinalShortFilmPackage,
+  type ProductionAcceptanceReport,
   type RenderJob,
   type Scene,
   type SceneComposition,
@@ -55,7 +63,7 @@ import {
 } from '../lib/studioApi'
 import type { ProjectAudienceSimulation, SceneAudienceSimulation } from '../types/audienceSimulator'
 import { normalizeJobStatus } from '../lib/jobStatus'
-import { persistActiveProjectId, withProjectQuery } from '../lib/projectContext'
+import { persistActiveProjectId } from '../lib/projectContext'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -162,7 +170,7 @@ export default function ScreeningRoom() {
   // ── Core state ────────────────────────────────────────────────────────────
   const [scenes, setScenes] = useState<Scene[]>([])
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
-  const [loading, setLoading] = useState(false)
+  const [, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -195,11 +203,14 @@ export default function ScreeningRoom() {
   const [exporting, setExporting] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [finalPackage, setFinalPackage] = useState<FinalShortFilmPackage | null>(null)
+  const [acceptanceReport, setAcceptanceReport] = useState<ProductionAcceptanceReport | null>(null)
+  const [acceptanceLoading, setAcceptanceLoading] = useState(false)
+  const [acceptanceError, setAcceptanceError] = useState('')
   const [stitching, setStitching] = useState(false)
 
   // ── Analysis sidebar state ────────────────────────────────────────────────
   const [audienceSegment, setAudienceSegment] = useState<AudienceSegment>('general')
-  const [audienceSim, setAudienceSim] = useState<ProjectAudienceSimulation | null>(null)
+  const [, setAudienceSim] = useState<ProjectAudienceSimulation | null>(null)
   const [simulating, setSimulating] = useState(false)
   const [coDirectorNotes, setCoDirectorNotes] = useState<CoDirectorNote[]>([])
   const [requestingNotes, setRequestingNotes] = useState(false)
@@ -397,7 +408,15 @@ export default function ScreeningRoom() {
     async function loadFinalPackage() {
       try {
         const { package: pkg } = await getLatestFinalShortFilmPackageForProject(effectiveProjectId)
-        if (!cancelled && pkg) setFinalPackage(pkg)
+        if (!cancelled && pkg) {
+          setFinalPackage(pkg)
+          try {
+            const reports = await listProductionAcceptanceReports(effectiveProjectId, pkg.package_id)
+            if (!cancelled) setAcceptanceReport(reports.reports[0] ?? null)
+          } catch {
+            if (!cancelled) setAcceptanceReport(null)
+          }
+        }
       } catch {
         // No package yet
       }
@@ -452,7 +471,7 @@ export default function ScreeningRoom() {
   // ── Load assembly status ──────────────────────────────────────────────────
   useEffect(() => {
     if (!effectiveProjectId || scenes.length === 0) return
-    let cancelled = false
+    const cancelled = false
     async function loadAssemblyStatus() {
       try {
         const status = await getAssemblyStatus(effectiveProjectId)
@@ -571,7 +590,7 @@ export default function ScreeningRoom() {
     try {
       const result = await assembleFilm(effectiveProjectId)
       setAssembledFilmUrl(result.film_url)
-      setAssemblyStatus((prev) => prev ? { ...prev, film_assembled: true, film_url: result.film_url, has_audio: result.has_audio, scenes_with_compositions: result.scene_count, scenes_total: prev.scenes_total || result.scene_count } : undefined)
+      setAssemblyStatus((prev) => prev ? { ...prev, film_assembled: true, film_url: result.film_url, has_audio: result.has_audio, scenes_with_compositions: result.scene_count, scenes_total: prev.scenes_total || result.scene_count } : null)
       setSuccess(`Film assembled: ${result.scene_count} scenes${result.has_audio ? ' with audio' : ''}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to assemble film')
@@ -639,85 +658,6 @@ export default function ScreeningRoom() {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  function deriveMetrics(text: string, sceneIndex?: number): SceneAudienceMetrics {
-    const lower = text.toLowerCase()
-    const words = lower.split(/\s+/).filter(Boolean)
-    const wordCount = words.length
-    const sentences = lower.split(/[.!?]+/).filter((s) => s.trim().length > 0)
-    const sentenceCount = sentences.length
-
-    console.log(
-      `[deriveMetrics] sceneIndex=${sceneIndex} wordCount=${wordCount} sentenceCount=${sentenceCount} text="${text.slice(0, 300)}"`,
-    )
-
-    let engagement = 50
-    let tension = 40
-    let emotionalImpact = 45
-    let anyKeywordMatched = false
-
-    const engageSignals = [
-      'grip', 'engage', 'captivat', 'compel', 'absorb', 'rivet', 'immers', 'fascinat', 'intrigu',
-      'quiet', 'observes', 'watches', 'lingers', 'moves', 'walks', 'slow', 'patient', 'still',
-      'hold', 'attention', 'hook', 'interest', 'curious', 'drawn', 'pace', 'rhythm',
-      'appreciate', 'attentive', 'involv', 'participation',
-    ]
-    for (const s of engageSignals) { if (lower.includes(s)) { engagement += 8; anyKeywordMatched = true } }
-
-    const tensionSignals = [
-      'tension', 'suspense', 'anxiety', 'dread', 'pressur', 'urgent', 'tense', 'unease',
-      'ominous', 'threat', 'danger', 'uneasy', 'unsettl', 'disturb', 'weight', 'heavy',
-      'pause', 'silence', 'stillness', 'wait', 'breath', 'subtext', 'restraint',
-    ]
-    for (const s of tensionSignals) { if (lower.includes(s)) { tension += 8; anyKeywordMatched = true } }
-
-    const emotionSignals = [
-      'emotion', 'moved', 'touch', 'heart', 'tear', 'joy', 'sorrow', 'grief', 'hope',
-      'fear', 'love', 'power', 'deep', 'poignant', 'yearn', 'melancholy', 'longing',
-      'warmth', 'tender', 'gentle', 'vulnerab', 'intimate', 'resonance', 'feeling',
-      'bittersweet', 'nostalgia', 'reflect', 'contemplat', 'vulnerability',
-      'connect', 'meaning', 'weight',
-    ]
-    for (const s of emotionSignals) { if (lower.includes(s)) { emotionalImpact += 8; anyKeywordMatched = true } }
-
-    // Text length = engagement proxy
-    if (wordCount > 15) engagement += 5
-    if (wordCount > 30) engagement += 5
-    if (wordCount > 50) engagement += 5
-
-    // Sentence count = narrative structure
-    if (sentenceCount > 2) engagement += 3
-    if (sentenceCount > 5) engagement += 3
-
-    // Broad emotional vocabulary net
-    const emotionalVocab = [
-      'love', 'hate', 'fear', 'joy', 'sad', 'angry', 'hope', 'dream',
-      'heart', 'soul', 'gentle', 'soft', 'warm', 'cold', 'dark', 'light', 'beautiful',
-      'pain', 'hurt', 'comfort', 'yearn', 'ache', 'long', 'miss', 'grief', 'tear',
-      'smile', 'laugh', 'cry', 'weep', 'rage', 'fury', 'calm', 'peace',
-    ]
-    for (const v of emotionalVocab) { if (lower.includes(v)) emotionalImpact += 3 }
-
-    // If no keyword matched at all but text exists, derive from structure
-    if (!anyKeywordMatched && wordCount > 0) {
-      engagement += Math.min(15, Math.floor(wordCount / 4))
-      if (sentenceCount > 1) { tension += 5; emotionalImpact += 5 }
-    }
-
-    // Narrative-arc floor via scene index (early ~35–50%, mid ~60–75%, late ~45–55%)
-    let narrativeFloor = wordCount > 0 ? 15 : 0
-    if (sceneIndex !== undefined) {
-      const narrativeDefaults = [38, 42, 55, 62, 68, 72, 78, 82, 85, 88, 78, 65, 55, 48, 42]
-      const arcBase = narrativeDefaults[sceneIndex] ?? 45
-      narrativeFloor = Math.max(narrativeFloor, Math.round(arcBase * 0.45))
-    }
-
-    return {
-      engagement: Math.min(100, Math.max(narrativeFloor, Math.round(engagement))),
-      tension: Math.min(100, Math.max(narrativeFloor, Math.round(tension))),
-      emotionalImpact: Math.min(100, Math.max(narrativeFloor, Math.round(emotionalImpact))),
-    }
-  }
-
   const DEFAULT_ARC: number[] = [35, 45, 50, 55, 60, 70, 65, 75, 85, 80, 45]
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -784,6 +724,20 @@ export default function ScreeningRoom() {
     if (job?.output_payload?.asset_url) return job.output_payload.asset_url
     return activeTake?.videoUrl || ''
   }, [isFullFilm, assembledFilmUrl, activeScenePipelineAssembly, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
+
+  const activeRenderJob = useMemo(() => {
+    const takes = shotTakes[activeShotNumber]
+    return takes?.[activeShotTakeIndex] || null
+  }, [activeShotNumber, activeShotTakeIndex, shotTakes])
+
+  const activeStoryboardProvenance = useMemo(() => {
+    const takes = shotTakes[activeShotNumber]
+    const job = takes?.[activeShotTakeIndex]
+    const storyboard = job?.input_payload?.parameters?.storyboard
+    return storyboard && typeof storyboard === 'object'
+      ? storyboard as Record<string, unknown>
+      : null
+  }, [activeShotNumber, activeShotTakeIndex, shotTakes])
 
   // Fix 1: Reset shot number when scene changes
   useEffect(() => {
@@ -853,27 +807,6 @@ export default function ScreeningRoom() {
         })
     }
   }, [activeTakeIndex, scenes, effectiveProjectId, sceneAudienceCache])
-
-  function getSegmentCache(): SceneAudienceMetrics {
-    const sim = activeTake?.sceneId ? sceneAudienceCache[activeTake.sceneId] : undefined
-    if (!sim) {
-      console.log('[getSegmentCache] no sim found for sceneId:', activeTake?.sceneId)
-      return { engagement: 0, tension: 0, emotionalImpact: 0 }
-    }
-    console.log('[getSegmentCache] using sim with', sim.audience_reactions?.length, 'reactions')
-    const segMap: Record<string, string> = { general: 'casual', cinephile: 'cinephile', genre_fan: 'genre' }
-    const match = sim.audience_reactions.find((r) =>
-      r.audience_type.toLowerCase().includes(segMap[audienceSegment] || audienceSegment),
-    )
-    const reaction = match || sim.audience_reactions[0]
-    if (!reaction) {
-      console.log('[getSegmentCache] no reaction found, returning 0s')
-      return { engagement: 0, tension: 0, emotionalImpact: 0 }
-    }
-    const text = reaction.likely_reaction + ' ' + reaction.reasoning
-    console.log('[getSegmentCache] reaction text:', text.slice(0, 250))
-    return deriveMetrics(text, activeTakeIndex)
-  }
 
   function getEmotionalArc(): number[] {
     return scenes.map((_, i) => {
@@ -1713,6 +1646,19 @@ export default function ScreeningRoom() {
                   </div>
                 )}
 
+                {activeStoryboardProvenance && (
+                  <div className="glass-panel rounded-xl border-l-2 p-4" style={{ borderLeftColor: 'rgb(251,191,36)' }}>
+                    <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'rgb(251,191,36)' }}>
+                      STORYBOARD SOURCE
+                    </div>
+                    <div className="space-y-1 text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      <div>Blueprint: {String(activeStoryboardProvenance.blueprint_id || 'linked')}</div>
+                      <div>Version: {String(activeStoryboardProvenance.version_id || 'unversioned')}</div>
+                      <div>Shot: {String(activeStoryboardProvenance.storyboard_shot_id || activeStoryboardProvenance.shot_id || 'current')}</div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="glass-panel rounded-xl p-4 space-y-4">
                   {/* Header */}
                   <div className="flex items-center justify-between">
@@ -1767,8 +1713,6 @@ export default function ScreeningRoom() {
                       const xScale = (i: number) => padL + (i / (arc.length - 1)) * plotW
                       const yScale = (v: number) => h - padB - (v / 100) * plotH
                       const lineD = arc.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(v).toFixed(1)}`).join(' ')
-                      const currentX = xScale(activeTakeIndex)
-                      const currentY = yScale(arc[activeTakeIndex] || 50)
                       return (
                         <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
                           {arc.map((v, i) => (
@@ -1970,10 +1914,10 @@ export default function ScreeningRoom() {
                               {audioBrief.mood}
                             </span>
                             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              {audioBrief.tempo}
+                              {String('tempo' in audioBrief ? audioBrief.tempo : 'Measured')}
                             </span>
                             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              {audioBrief.instrumentation}
+                              {String('instrumentation' in audioBrief ? audioBrief.instrumentation : 'Textural')}
                             </span>
                             {audioBrief.silence_flag && (
                               <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-300">
@@ -2134,6 +2078,96 @@ export default function ScreeningRoom() {
                       )}
                     </button>
                   )}
+
+                  <EditorialIntelligencePanel
+                    projectId={effectiveProjectId}
+                    sourcePackageId={finalPackage?.package_id || ''}
+                  />
+
+                  {activeTake?.sceneId ? (
+                    <div className="space-y-3">
+                      <CinematographerIntelligencePanel
+                        projectId={effectiveProjectId}
+                        sceneId={activeTake.sceneId}
+                        shotId={`${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
+                        renderJobId={activeRenderJob?.id}
+                        assetId={
+                          typeof activeRenderJob?.output_payload?.metadata?.asset_id === 'string'
+                            ? activeRenderJob.output_payload.metadata.asset_id
+                            : undefined
+                        }
+                        sceneContext={{
+                          scene_id: activeTake.sceneId,
+                          scene_name: activeTake.sceneName,
+                          shot_number: activeShotNumber,
+                          video_url: activeVideoUrl,
+                        }}
+                      />
+                      <PerformanceAudioPanel
+                        projectId={effectiveProjectId}
+                        sceneId={activeTake.sceneId}
+                        shotId={`${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
+                        renderJobId={activeRenderJob?.id}
+                        assetId={
+                          typeof activeRenderJob?.output_payload?.metadata?.asset_id === 'string'
+                            ? activeRenderJob.output_payload.metadata.asset_id
+                            : undefined
+                        }
+                        sceneContext={{
+                          scene_id: activeTake.sceneId,
+                          scene_name: activeTake.sceneName,
+                          shot_number: activeShotNumber,
+                          video_url: activeVideoUrl,
+                        }}
+                      />
+                      <CastingIntelligencePanel projectId={effectiveProjectId} />
+                      <ProductionDesignIntelligencePanel
+                        projectId={effectiveProjectId}
+                        sceneId={activeTake.sceneId}
+                        shotId={`${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
+                        renderJobId={activeRenderJob?.id}
+                        assetId={
+                          typeof activeRenderJob?.output_payload?.metadata?.asset_id === 'string'
+                            ? activeRenderJob.output_payload.metadata.asset_id
+                            : undefined
+                        }
+                        sceneContext={{
+                          scene_id: activeTake.sceneId,
+                          scene_name: activeTake.sceneName,
+                          shot_number: activeShotNumber,
+                          video_url: activeVideoUrl,
+                        }}
+                      />
+                      <ColoristIntelligencePanel
+                        projectId={effectiveProjectId}
+                        sceneId={activeTake.sceneId}
+                        shotId={`${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
+                        renderJobId={activeRenderJob?.id}
+                        assetId={
+                          typeof activeRenderJob?.output_payload?.metadata?.asset_id === 'string'
+                            ? activeRenderJob.output_payload.metadata.asset_id
+                            : undefined
+                        }
+                        sceneContext={{
+                          scene_id: activeTake.sceneId,
+                          scene_name: activeTake.sceneName,
+                          shot_number: activeShotNumber,
+                          video_url: activeVideoUrl,
+                        }}
+                      />
+                    </div>
+                  ) : null}
+
+                  <ProductionAcceptancePanel
+                    projectId={effectiveProjectId}
+                    finalPackage={finalPackage}
+                    report={acceptanceReport}
+                    onReport={setAcceptanceReport}
+                    loading={acceptanceLoading}
+                    setLoading={setAcceptanceLoading}
+                    error={acceptanceError}
+                    setError={setAcceptanceError}
+                  />
                 </div>
               </div>
             </div>

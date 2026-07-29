@@ -136,7 +136,6 @@ class FinalExportService:
         job = self._set_job(
             project_id,
             job_id=job_id,
-            project_id=project_id,
             status="pending",
             progress=0,
             options=options.model_dump(),

@@ -356,7 +356,7 @@ async def compose_scene_with_audio(
             prob = __import__("subprocess").run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(output_path)], capture_output=True, text=True, timeout=10)
             if prob.returncode == 0 and prob.stdout.strip():
                 duration_seconds = float(prob.stdout.strip())
-        except:
+        except Exception:
             pass
         composed_url = f"http://localhost:8010/static/composed/{project_id}/{scene_id}_audio.mp4"
         get_storage("sqlite").save_scene_composition(project_id, scene_id, composed_url, video_result.get("shot_count", 0), duration_seconds)

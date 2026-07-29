@@ -1,0 +1,1575 @@
+{
+  "preflight": {
+    "create_status_code": 200,
+    "job_id": "job-20260723141902-01b31afb-scene_002_shot_001",
+    "status": "pending",
+    "provider": "happyhorse-r2v",
+    "staging_applied": true,
+    "reference_count": 2,
+    "references_applied": true,
+    "model": "happyhorse-1.1-r2v",
+    "prompt_contradictions": [],
+    "retry_max_attempts": 0
+  },
+  "create": {
+    "id": "job-20260723141902-01b31afb-scene_002_shot_001",
+    "project_id": "project_3dba9330f43a",
+    "shot_id": "scene_002_shot_001",
+    "provider": "happyhorse-r2v",
+    "provider_job_id": null,
+    "status": "pending",
+    "progress": 0,
+    "input_payload": {
+      "shot_id": "scene_002_shot_001",
+      "prompt": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad b...; MAYA: In this shot: proof-run staging: Maya hold.... Maya stands near the broken curb in post-collapse Chicago, watching Dre with controlled tension before eith.... DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Proof correction: hold the camera low and patient before movement...... Cinematic, film quality.",
+      "referenceAssets": [],
+      "parameters": {
+        "duration": 3,
+        "duration_seconds": 3,
+        "ratio": "16:9",
+        "structured_prompt": true,
+        "shot_number": 1,
+        "take_number": 1,
+        "watermark": false,
+        "zero_touch_debug": {
+          "version": "zero_touch_v1",
+          "phases": [
+            {
+              "phase": "validate_input",
+              "status": "complete"
+            },
+            {
+              "phase": "load_project_context",
+              "status": "complete",
+              "scene_id": "scene_002"
+            },
+            {
+              "phase": "resolve_characters",
+              "status": "complete",
+              "characters": [
+                "DRE",
+                "MAYA"
+              ]
+            },
+            {
+              "phase": "build_staging",
+              "status": "complete",
+              "reason": ""
+            },
+            {
+              "phase": "resolve_references",
+              "status": "complete",
+              "references": [
+                {
+                  "reference_type": "character_full",
+                  "reference_id": "charlock:chr_b5c125804376",
+                  "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+                  "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+                  "entity": "scene_002_shot_001",
+                  "provider_supports_reference": true,
+                  "injected_into_request": true,
+                  "fallback_prompt_constraint": ""
+                },
+                {
+                  "reference_type": "character_full",
+                  "reference_id": "charlock:chr_2a1792f179c5",
+                  "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+                  "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+                  "entity": "scene_015_shot_001",
+                  "provider_supports_reference": true,
+                  "injected_into_request": true,
+                  "fallback_prompt_constraint": ""
+                }
+              ]
+            },
+            {
+              "phase": "prepare_provider_request",
+              "status": "complete"
+            },
+            {
+              "phase": "render",
+              "status": "pending"
+            },
+            {
+              "phase": "evaluate",
+              "status": "pending"
+            },
+            {
+              "phase": "retry",
+              "status": "pending"
+            },
+            {
+              "phase": "persist",
+              "status": "complete"
+            }
+          ],
+          "provider_selection": {
+            "provider": "happyhorse-r2v",
+            "model": "happyhorse-1.1-r2v",
+            "reason": "configured default or caller-selected provider"
+          },
+          "staging": {
+            "applied": true,
+            "characters": [
+              "DRE",
+              "MAYA"
+            ]
+          },
+          "references": [
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_b5c125804376",
+              "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_002_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            },
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_2a1792f179c5",
+              "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_015_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            }
+          ],
+          "prompt": {
+            "length": 394,
+            "structured_slots": true
+          },
+          "retry": {
+            "max_attempts": 0,
+            "history": []
+          }
+        },
+        "prompt_slots": {
+          "character_state": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad b...; MAYA: In this shot: proof-run staging: Maya hold...",
+          "action": "Maya stands near the broken curb in post-collapse Chicago, watching Dre with controlled tension before eith...",
+          "environment_persistence": "DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE",
+          "camera": "Proof correction: hold the camera low and patient before movement.....",
+          "lighting": ""
+        }
+      },
+      "consistency_payload": {
+        "project_id": "project_3dba9330f43a",
+        "refs": [
+          {
+            "ref_id": "charlock:chr_b5c125804376",
+            "kind": "character_full",
+            "image_url": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+            "embedding": null,
+            "source_shot_id": "scene_002_shot_001",
+            "project_id": "project_3dba9330f43a"
+          },
+          {
+            "ref_id": "charlock:chr_2a1792f179c5",
+            "kind": "character_full",
+            "image_url": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+            "embedding": null,
+            "source_shot_id": "scene_015_shot_001",
+            "project_id": "project_3dba9330f43a"
+          }
+        ],
+        "weights": {
+          "charlock:chr_b5c125804376": 1.0,
+          "charlock:chr_2a1792f179c5": 1.0
+        },
+        "mode": "identity_lock",
+        "fallback_text": {
+          "charlock:chr_b5c125804376": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+          "charlock:chr_2a1792f179c5": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity."
+        }
+      }
+    },
+    "output_payload": null,
+    "error_message": null,
+    "last_polled_at": null,
+    "retry_count": 0,
+    "recovery_status": "none",
+    "continuity_context_injected": false,
+    "continuity_review": null,
+    "metadata": {
+      "zero_touch_pipeline": {
+        "version": "zero_touch_v1",
+        "phases": [
+          {
+            "phase": "validate_input",
+            "status": "complete"
+          },
+          {
+            "phase": "load_project_context",
+            "status": "complete",
+            "scene_id": "scene_002"
+          },
+          {
+            "phase": "resolve_characters",
+            "status": "complete",
+            "characters": [
+              "DRE",
+              "MAYA"
+            ]
+          },
+          {
+            "phase": "build_staging",
+            "status": "complete",
+            "reason": ""
+          },
+          {
+            "phase": "resolve_references",
+            "status": "complete",
+            "references": [
+              {
+                "reference_type": "character_full",
+                "reference_id": "charlock:chr_b5c125804376",
+                "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+                "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+                "entity": "scene_002_shot_001",
+                "provider_supports_reference": true,
+                "injected_into_request": true,
+                "fallback_prompt_constraint": ""
+              },
+              {
+                "reference_type": "character_full",
+                "reference_id": "charlock:chr_2a1792f179c5",
+                "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+                "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+                "entity": "scene_015_shot_001",
+                "provider_supports_reference": true,
+                "injected_into_request": true,
+                "fallback_prompt_constraint": ""
+              }
+            ]
+          },
+          {
+            "phase": "prepare_provider_request",
+            "status": "complete"
+          },
+          {
+            "phase": "render",
+            "status": "pending"
+          },
+          {
+            "phase": "evaluate",
+            "status": "pending"
+          },
+          {
+            "phase": "retry",
+            "status": "pending"
+          },
+          {
+            "phase": "persist",
+            "status": "complete"
+          }
+        ],
+        "provider_selection": {
+          "provider": "happyhorse-r2v",
+          "model": "happyhorse-1.1-r2v",
+          "reason": "configured default or caller-selected provider"
+        },
+        "staging": {
+          "applied": true,
+          "characters": [
+            "DRE",
+            "MAYA"
+          ]
+        },
+        "references": [
+          {
+            "reference_type": "character_full",
+            "reference_id": "charlock:chr_b5c125804376",
+            "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+            "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+            "entity": "scene_002_shot_001",
+            "provider_supports_reference": true,
+            "injected_into_request": true,
+            "fallback_prompt_constraint": ""
+          },
+          {
+            "reference_type": "character_full",
+            "reference_id": "charlock:chr_2a1792f179c5",
+            "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+            "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+            "entity": "scene_015_shot_001",
+            "provider_supports_reference": true,
+            "injected_into_request": true,
+            "fallback_prompt_constraint": ""
+          }
+        ],
+        "prompt": {
+          "length": 394,
+          "structured_slots": true
+        },
+        "retry": {
+          "max_attempts": 0,
+          "history": []
+        }
+      }
+    },
+    "batch_id": null,
+    "retry_of": null,
+    "retry_advisory": null,
+    "created_at": "2026-07-23T14:19:02.760638",
+    "updated_at": "2026-07-23T14:19:02.760642",
+    "completed_at": null,
+    "job_id": "job-20260723141902-01b31afb-scene_002_shot_001",
+    "output_url": null,
+    "preview_url": null,
+    "zero_touch_status": {
+      "status": "pending",
+      "active_phase": "render",
+      "phases": [
+        {
+          "phase": "validate_input",
+          "status": "complete"
+        },
+        {
+          "phase": "load_project_context",
+          "status": "complete",
+          "scene_id": "scene_002"
+        },
+        {
+          "phase": "resolve_characters",
+          "status": "complete",
+          "characters": [
+            "DRE",
+            "MAYA"
+          ]
+        },
+        {
+          "phase": "build_staging",
+          "status": "complete",
+          "reason": ""
+        },
+        {
+          "phase": "resolve_references",
+          "status": "complete",
+          "references": [
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_b5c125804376",
+              "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_002_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            },
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_2a1792f179c5",
+              "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_015_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            }
+          ]
+        },
+        {
+          "phase": "prepare_provider_request",
+          "status": "complete"
+        },
+        {
+          "phase": "render",
+          "status": "pending"
+        },
+        {
+          "phase": "evaluate",
+          "status": "pending"
+        },
+        {
+          "phase": "retry",
+          "status": "pending"
+        },
+        {
+          "phase": "persist",
+          "status": "complete"
+        }
+      ],
+      "phase_statuses": {
+        "validate_input": "complete",
+        "load_project_context": "complete",
+        "resolve_characters": "complete",
+        "build_staging": "complete",
+        "resolve_references": "complete",
+        "prepare_provider_request": "complete",
+        "render": "pending",
+        "evaluate": "pending",
+        "retry": "pending",
+        "persist": "complete"
+      },
+      "provider": "happyhorse-r2v",
+      "model": "happyhorse-1.1-r2v",
+      "provider_selection_reason": "configured default or caller-selected provider",
+      "staging_applied": true,
+      "staging_characters": [
+        "DRE",
+        "MAYA"
+      ],
+      "references_applied": true,
+      "reference_count": 2,
+      "references": [
+        {
+          "reference_type": "character_full",
+          "reference_id": "charlock:chr_b5c125804376",
+          "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+          "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+          "entity": "scene_002_shot_001",
+          "provider_supports_reference": true,
+          "injected_into_request": true,
+          "fallback_prompt_constraint": ""
+        },
+        {
+          "reference_type": "character_full",
+          "reference_id": "charlock:chr_2a1792f179c5",
+          "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+          "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+          "entity": "scene_015_shot_001",
+          "provider_supports_reference": true,
+          "injected_into_request": true,
+          "fallback_prompt_constraint": ""
+        }
+      ],
+      "adherence": {
+        "verdict": "",
+        "passed": false,
+        "failed_slots": [],
+        "note": ""
+      },
+      "retry": {
+        "occurred": false,
+        "count": 0,
+        "max_attempts": 0,
+        "jobs_submitted": []
+      },
+      "provider_failure": {},
+      "prompt_contradictions": [],
+      "output_url": null,
+      "preview_url": null,
+      "human_review_required": false
+    }
+  },
+  "submit_status_code": 200,
+  "submit": {
+    "id": "job-20260723141902-01b31afb-scene_002_shot_001",
+    "project_id": "project_3dba9330f43a",
+    "shot_id": "scene_002_shot_001",
+    "provider": "happyhorse-r2v",
+    "provider_job_id": "99fcbdfd-8947-4114-8fd8-197873038341",
+    "status": "complete",
+    "progress": 100,
+    "input_payload": {
+      "shot_id": "scene_002_shot_001",
+      "prompt": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad b...; MAYA: In this shot: proof-run staging: Maya hold.... Maya stands near the broken curb in post-collapse Chicago, watching Dre with controlled tension before eith.... DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Proof correction: hold the camera low and patient before movement...... Cinematic, film quality.",
+      "referenceAssets": [],
+      "parameters": {
+        "duration": 3,
+        "duration_seconds": 3,
+        "ratio": "16:9",
+        "structured_prompt": true,
+        "shot_number": 1,
+        "take_number": 1,
+        "watermark": false,
+        "zero_touch_debug": {
+          "version": "zero_touch_v1",
+          "phases": [
+            {
+              "phase": "validate_input",
+              "status": "complete"
+            },
+            {
+              "phase": "load_project_context",
+              "status": "complete",
+              "scene_id": "scene_002"
+            },
+            {
+              "phase": "resolve_characters",
+              "status": "complete",
+              "characters": [
+                "DRE",
+                "MAYA"
+              ]
+            },
+            {
+              "phase": "build_staging",
+              "status": "complete",
+              "reason": ""
+            },
+            {
+              "phase": "resolve_references",
+              "status": "complete",
+              "references": [
+                {
+                  "reference_type": "character_full",
+                  "reference_id": "charlock:chr_b5c125804376",
+                  "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+                  "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+                  "entity": "scene_002_shot_001",
+                  "provider_supports_reference": true,
+                  "injected_into_request": true,
+                  "fallback_prompt_constraint": ""
+                },
+                {
+                  "reference_type": "character_full",
+                  "reference_id": "charlock:chr_2a1792f179c5",
+                  "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+                  "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+                  "entity": "scene_015_shot_001",
+                  "provider_supports_reference": true,
+                  "injected_into_request": true,
+                  "fallback_prompt_constraint": ""
+                }
+              ]
+            },
+            {
+              "phase": "prepare_provider_request",
+              "status": "complete"
+            },
+            {
+              "phase": "render",
+              "status": "complete",
+              "provider": "happyhorse-r2v",
+              "model": "happyhorse-1.1-r2v",
+              "provider_job_id": "99fcbdfd-8947-4114-8fd8-197873038341"
+            },
+            {
+              "phase": "evaluate",
+              "status": "complete"
+            },
+            {
+              "phase": "retry",
+              "status": "skipped",
+              "reason": "no recoverable adherence mismatch"
+            },
+            {
+              "phase": "persist",
+              "status": "complete"
+            }
+          ],
+          "provider_selection": {
+            "provider": "happyhorse-r2v",
+            "model": "happyhorse-1.1-r2v",
+            "reason": "configured default or caller-selected provider"
+          },
+          "staging": {
+            "applied": true,
+            "characters": [
+              "DRE",
+              "MAYA"
+            ]
+          },
+          "references": [
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_b5c125804376",
+              "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_002_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            },
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_2a1792f179c5",
+              "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_015_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            }
+          ],
+          "prompt": {
+            "length": 394,
+            "structured_slots": true
+          },
+          "retry": {
+            "max_attempts": 0,
+            "history": []
+          }
+        },
+        "prompt_slots": {
+          "character_state": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad b...; MAYA: In this shot: proof-run staging: Maya hold...",
+          "action": "Maya stands near the broken curb in post-collapse Chicago, watching Dre with controlled tension before eith...",
+          "environment_persistence": "DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE",
+          "camera": "Proof correction: hold the camera low and patient before movement.....",
+          "lighting": ""
+        }
+      },
+      "consistency_payload": {
+        "project_id": "project_3dba9330f43a",
+        "refs": [
+          {
+            "ref_id": "charlock:chr_b5c125804376",
+            "kind": "character_full",
+            "image_url": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+            "embedding": null,
+            "source_shot_id": "scene_002_shot_001",
+            "project_id": "project_3dba9330f43a"
+          },
+          {
+            "ref_id": "charlock:chr_2a1792f179c5",
+            "kind": "character_full",
+            "image_url": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+            "embedding": null,
+            "source_shot_id": "scene_015_shot_001",
+            "project_id": "project_3dba9330f43a"
+          }
+        ],
+        "weights": {
+          "charlock:chr_b5c125804376": 1.0,
+          "charlock:chr_2a1792f179c5": 1.0
+        },
+        "mode": "identity_lock",
+        "fallback_text": {
+          "charlock:chr_b5c125804376": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+          "charlock:chr_2a1792f179c5": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity."
+        }
+      }
+    },
+    "output_payload": {
+      "asset_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+      "thumbnail_url": null,
+      "metadata": {
+        "provider_response_normalized": {
+          "provider": "happyhorse-r2v",
+          "task": "video_generation",
+          "status": "completed",
+          "output": {
+            "video_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+            "status": "completed"
+          },
+          "metadata": {
+            "task_id": "99fcbdfd-8947-4114-8fd8-197873038341",
+            "model": "happyhorse-1.1-r2v",
+            "provider_mode": "hosted_api",
+            "hosted_video_url": "<redacted temporary provider URL>",
+            "raw_response": {
+              "request_id": "a8d1378c-b38c-91a7-a42c-37b71b938d80",
+              "output": {
+                "task_id": "99fcbdfd-8947-4114-8fd8-197873038341",
+                "task_status": "SUCCEEDED",
+                "submit_time": "2026-07-24 02:19:24.686",
+                "scheduled_time": "2026-07-24 02:19:24.706",
+                "end_time": "2026-07-24 02:21:12.931",
+                "orig_prompt": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad b...; MAYA: In this shot: proof-run staging: Maya hold.... Maya stands near the broken curb in post-collapse Chicago, watching Dre with controlled tension before eith.... DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Proof correction: hold the camera low and patient before movement...... Cinematic, film quality.\n\nLocked character references:\n[Image 1]: Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.\n[Image 2]: Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+                "video_url": "<redacted temporary provider URL>"
+              },
+              "usage": {
+                "duration": 3,
+                "input_video_duration": 0,
+                "output_video_duration": 3,
+                "video_count": 1,
+                "SR": 720,
+                "ratio": "16:9"
+              }
+            },
+            "audio_strip": {
+              "raw_local_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_raw.mp4",
+              "stripped_local_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+              "stripped_asset_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+              "ffprobe_streams": [
+                {
+                  "index": 0,
+                  "codec_name": "h264",
+                  "codec_type": "video"
+                }
+              ],
+              "audio_stream_count": 0
+            }
+          }
+        }
+      }
+    },
+    "error_message": null,
+    "last_polled_at": null,
+    "retry_count": 0,
+    "recovery_status": "active",
+    "continuity_context_injected": false,
+    "continuity_review": {
+      "passed": true,
+      "drift_detected": false,
+      "drift_notes": [],
+      "continuity_flags": [],
+      "advisory": "No continuity graph exists for this film yet. Render accepted without comparison.",
+      "uncertainty_notes": [
+        "No prior cinematic memory records found. This read will become more reliable as more scenes are rendered."
+      ]
+    },
+    "metadata": {
+      "zero_touch_pipeline": {
+        "version": "zero_touch_v1",
+        "phases": [
+          {
+            "phase": "validate_input",
+            "status": "complete"
+          },
+          {
+            "phase": "load_project_context",
+            "status": "complete",
+            "scene_id": "scene_002"
+          },
+          {
+            "phase": "resolve_characters",
+            "status": "complete",
+            "characters": [
+              "DRE",
+              "MAYA"
+            ]
+          },
+          {
+            "phase": "build_staging",
+            "status": "complete",
+            "reason": ""
+          },
+          {
+            "phase": "resolve_references",
+            "status": "complete",
+            "references": [
+              {
+                "reference_type": "character_full",
+                "reference_id": "charlock:chr_b5c125804376",
+                "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+                "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+                "entity": "scene_002_shot_001",
+                "provider_supports_reference": true,
+                "injected_into_request": true,
+                "fallback_prompt_constraint": ""
+              },
+              {
+                "reference_type": "character_full",
+                "reference_id": "charlock:chr_2a1792f179c5",
+                "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+                "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+                "entity": "scene_015_shot_001",
+                "provider_supports_reference": true,
+                "injected_into_request": true,
+                "fallback_prompt_constraint": ""
+              }
+            ]
+          },
+          {
+            "phase": "prepare_provider_request",
+            "status": "complete"
+          },
+          {
+            "phase": "render",
+            "status": "complete",
+            "provider": "happyhorse-r2v",
+            "model": "happyhorse-1.1-r2v",
+            "provider_job_id": "99fcbdfd-8947-4114-8fd8-197873038341"
+          },
+          {
+            "phase": "evaluate",
+            "status": "complete"
+          },
+          {
+            "phase": "retry",
+            "status": "skipped",
+            "reason": "no recoverable adherence mismatch"
+          },
+          {
+            "phase": "persist",
+            "status": "complete"
+          }
+        ],
+        "provider_selection": {
+          "provider": "happyhorse-r2v",
+          "model": "happyhorse-1.1-r2v",
+          "reason": "configured default or caller-selected provider"
+        },
+        "staging": {
+          "applied": true,
+          "characters": [
+            "DRE",
+            "MAYA"
+          ]
+        },
+        "references": [
+          {
+            "reference_type": "character_full",
+            "reference_id": "charlock:chr_b5c125804376",
+            "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+            "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+            "entity": "scene_002_shot_001",
+            "provider_supports_reference": true,
+            "injected_into_request": true,
+            "fallback_prompt_constraint": ""
+          },
+          {
+            "reference_type": "character_full",
+            "reference_id": "charlock:chr_2a1792f179c5",
+            "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+            "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+            "entity": "scene_015_shot_001",
+            "provider_supports_reference": true,
+            "injected_into_request": true,
+            "fallback_prompt_constraint": ""
+          }
+        ],
+        "prompt": {
+          "length": 394,
+          "structured_slots": true
+        },
+        "retry": {
+          "max_attempts": 0,
+          "history": []
+        }
+      },
+      "provider_payload_metadata": {
+        "provider": "happyhorse-r2v",
+        "endpoint": "/services/aigc/video-generation/video-synthesis",
+        "model": "happyhorse-1.1-r2v",
+        "prompt_length": 655,
+        "reference_count": 2,
+        "references_injected": true,
+        "references_degraded_to_prompt": false,
+        "duration": 3,
+        "ratio": "16:9",
+        "resolution": "720P",
+        "seed_present": false
+      },
+      "character_reference_locks_created": [
+        {
+          "lock_id": "charlock_b88e371b8408",
+          "project_id": "project_3dba9330f43a",
+          "character_id": "chr_b5c125804376",
+          "character_name": "DRE",
+          "source_shot_id": "scene_002_shot_001",
+          "image_url": "/outputs/references/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_scene_002_shot_001_reference.jpg",
+          "lock_status": "locked",
+          "provider": "happyhorse-r2v",
+          "capture_method": "representative_frame",
+          "created_at": "2026-07-23T14:21:18.671596",
+          "updated_at": "2026-07-23T14:21:18.671596"
+        },
+        {
+          "lock_id": "charlock_428b1e849429",
+          "project_id": "project_3dba9330f43a",
+          "character_id": "chr_2a1792f179c5",
+          "character_name": "MAYA",
+          "source_shot_id": "scene_002_shot_001",
+          "image_url": "/outputs/references/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_scene_002_shot_001_reference.jpg",
+          "lock_status": "locked",
+          "provider": "happyhorse-r2v",
+          "capture_method": "representative_frame",
+          "created_at": "2026-07-23T14:21:18.671596",
+          "updated_at": "2026-07-23T14:21:18.671596"
+        }
+      ]
+    },
+    "batch_id": null,
+    "retry_of": null,
+    "retry_advisory": null,
+    "created_at": "2026-07-23T14:19:02.760638",
+    "updated_at": "2026-07-23T14:21:18.501021",
+    "completed_at": "2026-07-23T14:21:18.500795",
+    "job_id": "job-20260723141902-01b31afb-scene_002_shot_001",
+    "output_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+    "preview_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+    "zero_touch_status": {
+      "status": "complete",
+      "active_phase": "",
+      "phases": [
+        {
+          "phase": "validate_input",
+          "status": "complete"
+        },
+        {
+          "phase": "load_project_context",
+          "status": "complete",
+          "scene_id": "scene_002"
+        },
+        {
+          "phase": "resolve_characters",
+          "status": "complete",
+          "characters": [
+            "DRE",
+            "MAYA"
+          ]
+        },
+        {
+          "phase": "build_staging",
+          "status": "complete",
+          "reason": ""
+        },
+        {
+          "phase": "resolve_references",
+          "status": "complete",
+          "references": [
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_b5c125804376",
+              "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_002_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            },
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_2a1792f179c5",
+              "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_015_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            }
+          ]
+        },
+        {
+          "phase": "prepare_provider_request",
+          "status": "complete"
+        },
+        {
+          "phase": "render",
+          "status": "complete",
+          "provider": "happyhorse-r2v",
+          "model": "happyhorse-1.1-r2v",
+          "provider_job_id": "99fcbdfd-8947-4114-8fd8-197873038341"
+        },
+        {
+          "phase": "evaluate",
+          "status": "complete"
+        },
+        {
+          "phase": "retry",
+          "status": "skipped",
+          "reason": "no recoverable adherence mismatch"
+        },
+        {
+          "phase": "persist",
+          "status": "complete"
+        }
+      ],
+      "phase_statuses": {
+        "validate_input": "complete",
+        "load_project_context": "complete",
+        "resolve_characters": "complete",
+        "build_staging": "complete",
+        "resolve_references": "complete",
+        "prepare_provider_request": "complete",
+        "render": "complete",
+        "evaluate": "complete",
+        "retry": "skipped",
+        "persist": "complete"
+      },
+      "provider": "happyhorse-r2v",
+      "model": "happyhorse-1.1-r2v",
+      "provider_selection_reason": "configured default or caller-selected provider",
+      "staging_applied": true,
+      "staging_characters": [
+        "DRE",
+        "MAYA"
+      ],
+      "references_applied": true,
+      "reference_count": 2,
+      "references": [
+        {
+          "reference_type": "character_full",
+          "reference_id": "charlock:chr_b5c125804376",
+          "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+          "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+          "entity": "scene_002_shot_001",
+          "provider_supports_reference": true,
+          "injected_into_request": true,
+          "fallback_prompt_constraint": ""
+        },
+        {
+          "reference_type": "character_full",
+          "reference_id": "charlock:chr_2a1792f179c5",
+          "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+          "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+          "entity": "scene_015_shot_001",
+          "provider_supports_reference": true,
+          "injected_into_request": true,
+          "fallback_prompt_constraint": ""
+        }
+      ],
+      "adherence": {
+        "verdict": "",
+        "passed": false,
+        "failed_slots": [],
+        "note": ""
+      },
+      "retry": {
+        "occurred": false,
+        "count": 0,
+        "max_attempts": 0,
+        "jobs_submitted": []
+      },
+      "provider_failure": {},
+      "prompt_contradictions": [],
+      "output_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+      "preview_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+      "human_review_required": false
+    }
+  },
+  "status_status_code": 200,
+  "status": {
+    "id": "job-20260723141902-01b31afb-scene_002_shot_001",
+    "project_id": "project_3dba9330f43a",
+    "shot_id": "scene_002_shot_001",
+    "provider": "happyhorse-r2v",
+    "provider_job_id": "99fcbdfd-8947-4114-8fd8-197873038341",
+    "status": "complete",
+    "progress": 100,
+    "input_payload": {
+      "shot_id": "scene_002_shot_001",
+      "prompt": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad b...; MAYA: In this shot: proof-run staging: Maya hold.... Maya stands near the broken curb in post-collapse Chicago, watching Dre with controlled tension before eith.... DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Proof correction: hold the camera low and patient before movement...... Cinematic, film quality.",
+      "referenceAssets": [],
+      "parameters": {
+        "duration": 3,
+        "duration_seconds": 3,
+        "ratio": "16:9",
+        "structured_prompt": true,
+        "shot_number": 1,
+        "take_number": 1,
+        "watermark": false,
+        "zero_touch_debug": {
+          "version": "zero_touch_v1",
+          "phases": [
+            {
+              "phase": "validate_input",
+              "status": "complete"
+            },
+            {
+              "phase": "load_project_context",
+              "status": "complete",
+              "scene_id": "scene_002"
+            },
+            {
+              "phase": "resolve_characters",
+              "status": "complete",
+              "characters": [
+                "DRE",
+                "MAYA"
+              ]
+            },
+            {
+              "phase": "build_staging",
+              "status": "complete",
+              "reason": ""
+            },
+            {
+              "phase": "resolve_references",
+              "status": "complete",
+              "references": [
+                {
+                  "reference_type": "character_full",
+                  "reference_id": "charlock:chr_b5c125804376",
+                  "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+                  "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+                  "entity": "scene_002_shot_001",
+                  "provider_supports_reference": true,
+                  "injected_into_request": true,
+                  "fallback_prompt_constraint": ""
+                },
+                {
+                  "reference_type": "character_full",
+                  "reference_id": "charlock:chr_2a1792f179c5",
+                  "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+                  "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+                  "entity": "scene_015_shot_001",
+                  "provider_supports_reference": true,
+                  "injected_into_request": true,
+                  "fallback_prompt_constraint": ""
+                }
+              ]
+            },
+            {
+              "phase": "prepare_provider_request",
+              "status": "complete"
+            },
+            {
+              "phase": "render",
+              "status": "complete",
+              "provider": "happyhorse-r2v",
+              "model": "happyhorse-1.1-r2v",
+              "provider_job_id": "99fcbdfd-8947-4114-8fd8-197873038341"
+            },
+            {
+              "phase": "evaluate",
+              "status": "complete"
+            },
+            {
+              "phase": "retry",
+              "status": "skipped",
+              "reason": "no recoverable adherence mismatch"
+            },
+            {
+              "phase": "persist",
+              "status": "complete"
+            }
+          ],
+          "provider_selection": {
+            "provider": "happyhorse-r2v",
+            "model": "happyhorse-1.1-r2v",
+            "reason": "configured default or caller-selected provider"
+          },
+          "staging": {
+            "applied": true,
+            "characters": [
+              "DRE",
+              "MAYA"
+            ]
+          },
+          "references": [
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_b5c125804376",
+              "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_002_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            },
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_2a1792f179c5",
+              "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_015_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            }
+          ],
+          "prompt": {
+            "length": 394,
+            "structured_slots": true
+          },
+          "retry": {
+            "max_attempts": 0,
+            "history": []
+          }
+        },
+        "prompt_slots": {
+          "character_state": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad b...; MAYA: In this shot: proof-run staging: Maya hold...",
+          "action": "Maya stands near the broken curb in post-collapse Chicago, watching Dre with controlled tension before eith...",
+          "environment_persistence": "DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE",
+          "camera": "Proof correction: hold the camera low and patient before movement.....",
+          "lighting": ""
+        }
+      },
+      "consistency_payload": {
+        "project_id": "project_3dba9330f43a",
+        "refs": [
+          {
+            "ref_id": "charlock:chr_b5c125804376",
+            "kind": "character_full",
+            "image_url": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+            "embedding": null,
+            "source_shot_id": "scene_002_shot_001",
+            "project_id": "project_3dba9330f43a"
+          },
+          {
+            "ref_id": "charlock:chr_2a1792f179c5",
+            "kind": "character_full",
+            "image_url": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+            "embedding": null,
+            "source_shot_id": "scene_015_shot_001",
+            "project_id": "project_3dba9330f43a"
+          }
+        ],
+        "weights": {
+          "charlock:chr_b5c125804376": 1.0,
+          "charlock:chr_2a1792f179c5": 1.0
+        },
+        "mode": "identity_lock",
+        "fallback_text": {
+          "charlock:chr_b5c125804376": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+          "charlock:chr_2a1792f179c5": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity."
+        }
+      }
+    },
+    "output_payload": {
+      "asset_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+      "thumbnail_url": null,
+      "metadata": {
+        "provider_response_normalized": {
+          "provider": "happyhorse-r2v",
+          "task": "video_generation",
+          "status": "completed",
+          "output": {
+            "video_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+            "status": "completed"
+          },
+          "metadata": {
+            "task_id": "99fcbdfd-8947-4114-8fd8-197873038341",
+            "model": "happyhorse-1.1-r2v",
+            "provider_mode": "hosted_api",
+            "hosted_video_url": "<redacted temporary provider URL>",
+            "raw_response": {
+              "request_id": "a8d1378c-b38c-91a7-a42c-37b71b938d80",
+              "output": {
+                "task_id": "99fcbdfd-8947-4114-8fd8-197873038341",
+                "task_status": "SUCCEEDED",
+                "submit_time": "2026-07-24 02:19:24.686",
+                "scheduled_time": "2026-07-24 02:19:24.706",
+                "end_time": "2026-07-24 02:21:12.931",
+                "orig_prompt": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad b...; MAYA: In this shot: proof-run staging: Maya hold.... Maya stands near the broken curb in post-collapse Chicago, watching Dre with controlled tension before eith.... DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Proof correction: hold the camera low and patient before movement...... Cinematic, film quality.\n\nLocked character references:\n[Image 1]: Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.\n[Image 2]: Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+                "video_url": "<redacted temporary provider URL>"
+              },
+              "usage": {
+                "duration": 3,
+                "input_video_duration": 0,
+                "output_video_duration": 3,
+                "video_count": 1,
+                "SR": 720,
+                "ratio": "16:9"
+              }
+            },
+            "audio_strip": {
+              "raw_local_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_raw.mp4",
+              "stripped_local_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+              "stripped_asset_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+              "ffprobe_streams": [
+                {
+                  "index": 0,
+                  "codec_name": "h264",
+                  "codec_type": "video"
+                }
+              ],
+              "audio_stream_count": 0
+            }
+          }
+        }
+      }
+    },
+    "error_message": null,
+    "last_polled_at": null,
+    "retry_count": 0,
+    "recovery_status": "active",
+    "continuity_context_injected": false,
+    "continuity_review": {
+      "passed": true,
+      "drift_detected": false,
+      "drift_notes": [],
+      "continuity_flags": [],
+      "advisory": "No continuity graph exists for this film yet. Render accepted without comparison.",
+      "uncertainty_notes": [
+        "No prior cinematic memory records found. This read will become more reliable as more scenes are rendered."
+      ]
+    },
+    "metadata": {
+      "zero_touch_pipeline": {
+        "version": "zero_touch_v1",
+        "phases": [
+          {
+            "phase": "validate_input",
+            "status": "complete"
+          },
+          {
+            "phase": "load_project_context",
+            "status": "complete",
+            "scene_id": "scene_002"
+          },
+          {
+            "phase": "resolve_characters",
+            "status": "complete",
+            "characters": [
+              "DRE",
+              "MAYA"
+            ]
+          },
+          {
+            "phase": "build_staging",
+            "status": "complete",
+            "reason": ""
+          },
+          {
+            "phase": "resolve_references",
+            "status": "complete",
+            "references": [
+              {
+                "reference_type": "character_full",
+                "reference_id": "charlock:chr_b5c125804376",
+                "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+                "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+                "entity": "scene_002_shot_001",
+                "provider_supports_reference": true,
+                "injected_into_request": true,
+                "fallback_prompt_constraint": ""
+              },
+              {
+                "reference_type": "character_full",
+                "reference_id": "charlock:chr_2a1792f179c5",
+                "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+                "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+                "entity": "scene_015_shot_001",
+                "provider_supports_reference": true,
+                "injected_into_request": true,
+                "fallback_prompt_constraint": ""
+              }
+            ]
+          },
+          {
+            "phase": "prepare_provider_request",
+            "status": "complete"
+          },
+          {
+            "phase": "render",
+            "status": "complete",
+            "provider": "happyhorse-r2v",
+            "model": "happyhorse-1.1-r2v",
+            "provider_job_id": "99fcbdfd-8947-4114-8fd8-197873038341"
+          },
+          {
+            "phase": "evaluate",
+            "status": "complete"
+          },
+          {
+            "phase": "retry",
+            "status": "skipped",
+            "reason": "no recoverable adherence mismatch"
+          },
+          {
+            "phase": "persist",
+            "status": "complete"
+          }
+        ],
+        "provider_selection": {
+          "provider": "happyhorse-r2v",
+          "model": "happyhorse-1.1-r2v",
+          "reason": "configured default or caller-selected provider"
+        },
+        "staging": {
+          "applied": true,
+          "characters": [
+            "DRE",
+            "MAYA"
+          ]
+        },
+        "references": [
+          {
+            "reference_type": "character_full",
+            "reference_id": "charlock:chr_b5c125804376",
+            "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+            "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+            "entity": "scene_002_shot_001",
+            "provider_supports_reference": true,
+            "injected_into_request": true,
+            "fallback_prompt_constraint": ""
+          },
+          {
+            "reference_type": "character_full",
+            "reference_id": "charlock:chr_2a1792f179c5",
+            "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+            "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+            "entity": "scene_015_shot_001",
+            "provider_supports_reference": true,
+            "injected_into_request": true,
+            "fallback_prompt_constraint": ""
+          }
+        ],
+        "prompt": {
+          "length": 394,
+          "structured_slots": true
+        },
+        "retry": {
+          "max_attempts": 0,
+          "history": []
+        }
+      },
+      "provider_payload_metadata": {
+        "provider": "happyhorse-r2v",
+        "endpoint": "/services/aigc/video-generation/video-synthesis",
+        "model": "happyhorse-1.1-r2v",
+        "prompt_length": 655,
+        "reference_count": 2,
+        "references_injected": true,
+        "references_degraded_to_prompt": false,
+        "duration": 3,
+        "ratio": "16:9",
+        "resolution": "720P",
+        "seed_present": false
+      },
+      "character_reference_locks_created": [
+        {
+          "lock_id": "charlock_b88e371b8408",
+          "project_id": "project_3dba9330f43a",
+          "character_id": "chr_b5c125804376",
+          "character_name": "DRE",
+          "source_shot_id": "scene_002_shot_001",
+          "image_url": "/outputs/references/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_scene_002_shot_001_reference.jpg",
+          "lock_status": "locked",
+          "provider": "happyhorse-r2v",
+          "capture_method": "representative_frame",
+          "created_at": "2026-07-23T14:21:18.671596",
+          "updated_at": "2026-07-23T14:21:18.671596"
+        },
+        {
+          "lock_id": "charlock_428b1e849429",
+          "project_id": "project_3dba9330f43a",
+          "character_id": "chr_2a1792f179c5",
+          "character_name": "MAYA",
+          "source_shot_id": "scene_002_shot_001",
+          "image_url": "/outputs/references/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_scene_002_shot_001_reference.jpg",
+          "lock_status": "locked",
+          "provider": "happyhorse-r2v",
+          "capture_method": "representative_frame",
+          "created_at": "2026-07-23T14:21:18.671596",
+          "updated_at": "2026-07-23T14:21:18.671596"
+        }
+      ]
+    },
+    "batch_id": null,
+    "retry_of": null,
+    "retry_advisory": null,
+    "created_at": "2026-07-23T14:19:02.760638",
+    "updated_at": "2026-07-23T14:21:18.501021",
+    "completed_at": "2026-07-23T14:21:18.500795",
+    "job_id": "job-20260723141902-01b31afb-scene_002_shot_001",
+    "output_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+    "preview_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+    "zero_touch_status": {
+      "status": "complete",
+      "active_phase": "",
+      "phases": [
+        {
+          "phase": "validate_input",
+          "status": "complete"
+        },
+        {
+          "phase": "load_project_context",
+          "status": "complete",
+          "scene_id": "scene_002"
+        },
+        {
+          "phase": "resolve_characters",
+          "status": "complete",
+          "characters": [
+            "DRE",
+            "MAYA"
+          ]
+        },
+        {
+          "phase": "build_staging",
+          "status": "complete",
+          "reason": ""
+        },
+        {
+          "phase": "resolve_references",
+          "status": "complete",
+          "references": [
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_b5c125804376",
+              "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_002_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            },
+            {
+              "reference_type": "character_full",
+              "reference_id": "charlock:chr_2a1792f179c5",
+              "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+              "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+              "entity": "scene_015_shot_001",
+              "provider_supports_reference": true,
+              "injected_into_request": true,
+              "fallback_prompt_constraint": ""
+            }
+          ]
+        },
+        {
+          "phase": "prepare_provider_request",
+          "status": "complete"
+        },
+        {
+          "phase": "render",
+          "status": "complete",
+          "provider": "happyhorse-r2v",
+          "model": "happyhorse-1.1-r2v",
+          "provider_job_id": "99fcbdfd-8947-4114-8fd8-197873038341"
+        },
+        {
+          "phase": "evaluate",
+          "status": "complete"
+        },
+        {
+          "phase": "retry",
+          "status": "skipped",
+          "reason": "no recoverable adherence mismatch"
+        },
+        {
+          "phase": "persist",
+          "status": "complete"
+        }
+      ],
+      "phase_statuses": {
+        "validate_input": "complete",
+        "load_project_context": "complete",
+        "resolve_characters": "complete",
+        "build_staging": "complete",
+        "resolve_references": "complete",
+        "prepare_provider_request": "complete",
+        "render": "complete",
+        "evaluate": "complete",
+        "retry": "skipped",
+        "persist": "complete"
+      },
+      "provider": "happyhorse-r2v",
+      "model": "happyhorse-1.1-r2v",
+      "provider_selection_reason": "configured default or caller-selected provider",
+      "staging_applied": true,
+      "staging_characters": [
+        "DRE",
+        "MAYA"
+      ],
+      "references_applied": true,
+      "reference_count": 2,
+      "references": [
+        {
+          "reference_type": "character_full",
+          "reference_id": "charlock:chr_b5c125804376",
+          "path": "/previs-assets/project_3dba9330f43a/scene_002_storyboard_qwen.png",
+          "reason": "Use provisional storyboard reference for DRE; preserve face, silhouette, wardrobe, and visual identity.",
+          "entity": "scene_002_shot_001",
+          "provider_supports_reference": true,
+          "injected_into_request": true,
+          "fallback_prompt_constraint": ""
+        },
+        {
+          "reference_type": "character_full",
+          "reference_id": "charlock:chr_2a1792f179c5",
+          "path": "/previs-assets/project_3dba9330f43a/scene_015_storyboard_qwen.png",
+          "reason": "Use provisional storyboard reference for MAYA; preserve face, silhouette, wardrobe, and visual identity.",
+          "entity": "scene_015_shot_001",
+          "provider_supports_reference": true,
+          "injected_into_request": true,
+          "fallback_prompt_constraint": ""
+        }
+      ],
+      "adherence": {
+        "verdict": "",
+        "passed": false,
+        "failed_slots": [],
+        "note": ""
+      },
+      "retry": {
+        "occurred": false,
+        "count": 0,
+        "max_attempts": 0,
+        "jobs_submitted": []
+      },
+      "provider_failure": {},
+      "prompt_contradictions": [],
+      "output_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+      "preview_url": "/outputs/renders/project_3dba9330f43a/job-20260723141902-01b31afb-scene_002_shot_001_happyhorse_silent.mp4",
+      "human_review_required": false
+    }
+  }
+}

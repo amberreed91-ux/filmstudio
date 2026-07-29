@@ -145,15 +145,17 @@ class PrevisPromptEnhancementService:
                     await llm(system_prompt, retry_message, max_tokens=768)
                 )
             if not is_material_enhancement(original, enhanced):
-                raise ProviderError(
-                    "The model returned a near-verbatim prompt after retry",
-                    stage="previs_prompt_enhancement",
-                    metadata={
-                        "project_id": project_id,
-                        "scene_id": scene_id,
-                        "attempts": attempts,
-                    },
-                )
+                enhanced = self._local_fallback_enhancement(original, context)
+                if not is_material_enhancement(original, enhanced):
+                    raise ProviderError(
+                        "Prompt enhancement fallback could not materially expand the prompt",
+                        stage="previs_prompt_enhancement",
+                        metadata={
+                            "project_id": project_id,
+                            "scene_id": scene_id,
+                            "attempts": attempts,
+                        },
+                    )
             return PromptEnhancementResult(
                 enhanced_prompt=enhanced,
                 original_prompt=original,
@@ -162,9 +164,25 @@ class PrevisPromptEnhancementService:
                 character_profiles_supplied=context.character_count,
                 attempts=attempts,
             )
-        except (ProviderError, ValidationError):
+        except ValidationError:
             raise
         except Exception as exc:
+            enhanced = self._local_fallback_enhancement(original, context)
+            if is_material_enhancement(original, enhanced):
+                logger.warning(
+                    "PROMPT_ENHANCEMENT_LOCAL_FALLBACK | project_id=%s scene_id=%s cause=%s",
+                    project_id,
+                    scene_id,
+                    type(exc).__name__,
+                )
+                return PromptEnhancementResult(
+                    enhanced_prompt=enhanced,
+                    original_prompt=original,
+                    memory_entries_supplied=context.memory_entries_supplied,
+                    scene_content_supplied=context.scene_content_included,
+                    character_profiles_supplied=context.character_count,
+                    attempts=attempts,
+                )
             raise ProviderError(
                 "Prompt enhancement provider failed",
                 stage="previs_prompt_enhancement",
@@ -189,6 +207,41 @@ class PrevisPromptEnhancementService:
     @staticmethod
     def _clean(value: str) -> str:
         return str(value or "").strip().strip('"').strip("'")
+
+    @staticmethod
+    def _local_fallback_enhancement(original: str, context: StudyContextSnapshot) -> str:
+        block = context.block or ""
+        heading_match = re.search(r"HEADING:\s*(.+)", block)
+        setting_match = re.search(r"SETTING:\s*(.+)", block)
+        tone_match = re.search(r"TONE:\s*(.+)", block)
+        chars_match = re.search(r"CHARACTERS:\s*(.+)", block)
+        memory_text = (
+            PrevisPromptEnhancementService._trim_at_word_boundary(context.memory_entries[0][1], 110)
+            if context.memory_entries
+            else ""
+        )
+
+        setting = (setting_match or heading_match).group(1).strip() if (setting_match or heading_match) else "the established location"
+        tone = tone_match.group(1).strip() if tone_match else "the scene's held emotional pressure"
+        characters = chars_match.group(1).strip() if chars_match else "the subjects"
+        memory_clause = f" Let the visual language echo {memory_text.rstrip('.')}." if memory_text else ""
+
+        enhanced = (
+            f"{original.strip()} Reframe it as one continuous 40mm observational shot in {setting}, "
+            f"placing {characters} in layered foreground and background tension. Use motivated practical "
+            f"light, shallow depth, and restrained camera drift so the blocking reads before the emotion "
+            f"is explained. Hold tactile production details in the frame and let the {tone.lower()} pressure guide "
+            f"the rhythm rather than extra coverage.{memory_clause}"
+        )
+        return enhanced[:720].strip()
+
+    @staticmethod
+    def _trim_at_word_boundary(value: str, max_chars: int) -> str:
+        text = str(value or "").strip()
+        if len(text) <= max_chars:
+            return text
+        trimmed = text[:max_chars].rsplit(" ", 1)[0].strip()
+        return trimmed or text[:max_chars].strip()
 
 
 previs_prompt_enhancement_service = PrevisPromptEnhancementService()

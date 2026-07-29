@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.data.storage import DatabaseStorage
+from app.services.reference_asset_service import reference_asset_service
 from app.routes.reference_assets import router
 
 
@@ -224,7 +225,7 @@ def test_confirm_then_list_survives_restart_via_routes(tmp_path: Path):
 
     # Phase 1: confirm an asset (using a real DB, not the in-memory dict)
     db_before = DatabaseStorage(db_path)
-    with patch("app.routes.reference_assets.get_storage", return_value=db_before):
+    with patch.object(reference_asset_service, "_storage", db_before):
         confirm_resp = client.post(
             "/api/f51/studio/projects/proj-restart-1/reference-assets",
             json={
@@ -246,7 +247,7 @@ def test_confirm_then_list_survives_restart_via_routes(tmp_path: Path):
     db_after = DatabaseStorage(db_path)
 
     # Phase 3: GET list — the asset must still be there
-    with patch("app.routes.reference_assets.get_storage", return_value=db_after):
+    with patch.object(reference_asset_service, "_storage", db_after):
         list_resp = client.get(
             "/api/f51/studio/projects/proj-restart-1/reference-assets",
         )
@@ -270,7 +271,7 @@ def test_route_confirm_rejects_cross_project_ref(tmp_path: Path):
     app.include_router(router)
     client = TestClient(app)
 
-    with patch("app.routes.reference_assets.get_storage", return_value=db):
+    with patch.object(reference_asset_service, "_storage", db):
         resp = client.post(
             "/api/f51/studio/projects/proj-legit/reference-assets",
             json={
@@ -293,7 +294,7 @@ def test_route_get_list_empty_for_project_with_no_assets(tmp_path: Path):
     app.include_router(router)
     client = TestClient(app)
 
-    with patch("app.routes.reference_assets.get_storage", return_value=db):
+    with patch.object(reference_asset_service, "_storage", db):
         resp = client.get(
             "/api/f51/studio/projects/proj-empty/reference-assets",
         )

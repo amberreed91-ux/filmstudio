@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from 'react'
+import { Component, type ReactNode, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -10,7 +10,31 @@ import { APP_ROUTES } from './routes'
 import NotFound from './pages/NotFound'
 import StudioLayout from './components/StudioLayout'
 import { disableStudioDevMode, enableStudioDevMode } from './lib/devMode'
+import { reportError } from './lib/errorTelemetry'
+import { cleanupStaleStorage } from './lib/localStorage'
 import './index.css'
+
+// Register global error handlers for telemetry
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    reportError(
+      event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
+      undefined,
+      'error'
+    )
+  })
+
+  window.addEventListener('error', (event) => {
+    reportError(
+      event.error || new Error(event.message),
+      undefined,
+      'error'
+    )
+  })
+
+  // Clean up stale localStorage keys on startup
+  cleanupStaleStorage()
+}
 
 declare global {
   interface Window {
@@ -34,8 +58,9 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
     return { hasError: true, error }
   }
 
-  componentDidCatch() {
-    // Error handled in render - no action needed
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    reportError(error, errorInfo.componentStack || undefined, 'fatal')
+    console.error('Studio Error:', error, errorInfo)
   }
 
   render() {
@@ -49,13 +74,22 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
             <div className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
               {this.state.error?.message || 'An unexpected error occurred in the application.'}
             </div>
-            <button
-              className="text-sm px-4 py-2 rounded-lg cursor-pointer"
-              style={{ background: 'rgba(0,200,255,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(0,200,255,0.3)' }}
-              onClick={() => window.location.reload()}
-            >
-              Reload Studio
-            </button>
+            <div className="flex gap-2 justify-center">
+              <button
+                className="text-sm px-4 py-2 rounded-lg cursor-pointer"
+                style={{ background: 'rgba(0,200,255,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(0,200,255,0.3)' }}
+                onClick={() => this.setState({ hasError: false, error: null })}
+              >
+                Try Again
+              </button>
+              <button
+                className="text-sm px-4 py-2 rounded-lg cursor-pointer"
+                style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.1)' }}
+                onClick={() => window.location.reload()}
+              >
+                Reload Studio
+              </button>
+            </div>
           </div>
         </div>
       )
@@ -67,10 +101,12 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
 const queryClient = new QueryClient()
 
 export default function App() {
-  if (typeof window !== 'undefined') {
-    window.enableStudioDevMode = enableStudioDevMode
-    window.disableStudioDevMode = disableStudioDevMode
-  }
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.enableStudioDevMode = enableStudioDevMode
+      window.disableStudioDevMode = disableStudioDevMode
+    }
+  }, [])
   
   return (
     <AppErrorBoundary>

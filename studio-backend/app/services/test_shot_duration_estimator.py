@@ -106,6 +106,23 @@ def test_provider_duration_constraint_returns_nearest_supported_option():
     assert "starting rhythm" in constraint.advisory
 
 
+def test_generation_settings_local_recommendation_handles_wide_shot_without_llm():
+    from app.services.previs_generation_settings_service import (
+        PrevisGenerationSettingsService,
+    )
+
+    recommendation, reasoning = PrevisGenerationSettingsService._local_recommendation(
+        scene_text="A quiet kitchen beat with no dialogue.",
+        shot_number=1,
+        shot_type="wide",
+    )
+
+    assert recommendation.duration_seconds == 8
+    assert recommendation.fps == 16
+    assert recommendation.resolution == "720p"
+    assert "first wide beat" in reasoning
+
+
 # ── Scene / shot resolution ─────────────────────────────────────────────────
 
 def test_resolve_scene_id_from_shot_id_formats():

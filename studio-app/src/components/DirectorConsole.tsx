@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { RadioTower } from 'lucide-react'
 import { useRenderActivity } from '../context/RenderActivityContext'
 import CinematicLoading from './CinematicLoading'
@@ -41,8 +41,12 @@ export default function DirectorConsole({
   const [provider, setProvider] = useState(defaultProvider || providers[0]?.id || 'mock')
   const [collaborationMode, setCollaborationMode] = useState<'passive' | 'advisory' | 'collaborative' | 'experimental'>('advisory')
 
+  const initialProviderRef = useRef(defaultProvider)
   useEffect(() => {
     if (!defaultProvider) return
+    if (!initialProviderRef.current) {
+      initialProviderRef.current = defaultProvider
+    }
     setProvider((prev) => prev || defaultProvider)
   }, [defaultProvider])
 

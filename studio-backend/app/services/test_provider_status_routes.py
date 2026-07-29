@@ -212,5 +212,5 @@ class TestSceneProviderOverride:
         )
         # scene_02 has no override — provider is whatever the default is.
         # We just verify it doesn't crash and returns a valid job.
-        assert job.provider in ("simulated", "runway", "higgsfield", "generic")
+        assert job.provider in ("simulated", "runway", "happyhorse", "happyhorse-r2v", "wan", "higgsfield", "generic")
         assert job.project_id == pid

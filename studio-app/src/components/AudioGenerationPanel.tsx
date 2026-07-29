@@ -149,7 +149,6 @@ function TrackCard({ trackKey, result, onRegenerate, regenerating }: TrackCardPr
       {/* Audio player */}
       {isComplete && fileUrl && (
         <div className="pt-1">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <audio
             ref={audioRef}
             controls

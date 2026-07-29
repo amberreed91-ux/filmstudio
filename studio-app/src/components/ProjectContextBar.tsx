@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useStudio } from '../context/StudioContext'
 import { Share2, Check, Copy, ChevronDown, User, Shield, Pencil, Eye, ShieldCheck } from 'lucide-react'
 import { generateShareToken, shareWithCollaborator, type StudioProject, type CollaboratorRole } from '../lib/studioApi'
@@ -197,8 +197,7 @@ function ShareModal({ project, onClose, onShareComplete }: ShareModalProps) {
               color: '#f1f5f9',
               marginBottom: '12px',
             }}
-            className="focus:outline-none focus:border-cyan-400/60"
-            placeholderTextColor="#64748b"
+            className="focus:outline-none focus:border-cyan-400/60 placeholder:text-slate-500"
           />
           
           {/* Role Selector */}
@@ -429,7 +428,7 @@ function ShareModal({ project, onClose, onShareComplete }: ShareModalProps) {
 function ShareButton({ project }: { project: StudioProject }) {
   const [isOpen, setIsOpen] = useState(false)
 
-  function handleShareComplete(shareToken: string) {
+  function handleShareComplete() {
     // Could update project with share token here if needed
   }
 

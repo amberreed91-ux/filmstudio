@@ -4,6 +4,7 @@ from typing import Optional
 import secrets
 
 from app.auth import auth_service, demo_login
+from app.config import settings
 
 router = APIRouter()
 
@@ -53,9 +54,9 @@ async def register(request: RegisterRequest, response: Response):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, response: Response, demo_mode: bool = True):
+async def login(request: LoginRequest, response: Response):
     """Login endpoint"""
-    if demo_mode:
+    if settings.demo_mode:
         # Demo mode - allow any username, no password required
         result, error = demo_login(request.username)
     else:

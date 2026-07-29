@@ -6,23 +6,15 @@ Endpoints for generating and retrieving pitch decks.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.data.storage import get_storage
 from app.services.pitch_deck_service import pitch_deck_service
 
 logger = logging.getLogger("studio-pitch-deck-routes")
 
 router = APIRouter(prefix="/api/f51/studio/projects", tags=["pitch-deck"])
-
-storage = get_storage("sqlite")
-
-# Inject storage into service
-pitch_deck_service._storage = storage
-
 
 class GeneratePitchDeckRequest(BaseModel):
     """Request body for generating a pitch deck."""
@@ -76,7 +68,7 @@ async def list_pitch_decks(project_id: str, limit: int = 10):
         List of deck summaries.
     """
     try:
-        decks = storage.list_pitch_decks(project_id, limit=limit)
+        decks = pitch_deck_service.list_pitch_decks(project_id, limit=limit)
         return {"decks": decks}
     
     except Exception as e:
@@ -97,16 +89,9 @@ async def get_pitch_deck(project_id: str, deck_id: str):
         The full pitch deck.
     """
     try:
-        deck = storage.load_pitch_deck(deck_id)
-        if not deck:
-            raise HTTPException(status_code=404, detail=f"Deck {deck_id} not found")
-        
-        # Verify it belongs to this project
-        if deck.get("project_id") != project_id:
-            raise HTTPException(status_code=404, detail=f"Deck {deck_id} not found")
-        
-        return deck
-    
+        return pitch_deck_service.get_pitch_deck(project_id, deck_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except HTTPException:
         raise
     except Exception as e:

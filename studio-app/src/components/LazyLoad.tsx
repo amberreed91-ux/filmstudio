@@ -81,13 +81,15 @@ export function LazyLoadOnVisible({
 }
 
 // Higher-order component for lazy loading any component
-export function lazyLoad<T extends React.ComponentType<any>>(
+// eslint-disable-next-line react-refresh/only-export-components
+export function lazyLoad<T extends React.ComponentType<Record<string, unknown>>>(
   componentFactory: () => Promise<{ default: T }>,
   fallback?: ReactNode
 ) {
   const LazyComponent = lazy(componentFactory)
   
-  return function LazyLoadedComponent(props: React.ComponentProps<T>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function LazyLoadedComponent(props: any) {
     return (
       <Suspense fallback={fallback || <div className="animate-pulse bg-zinc-800/50 h-32 rounded-lg" />}>
         <LazyComponent {...props} />
@@ -97,6 +99,7 @@ export function lazyLoad<T extends React.ComponentType<any>>(
 }
 
 // Hook for lazy loading state
+// eslint-disable-next-line react-refresh/only-export-components
 export function useLazyLoad(delay = 0) {
   const [shouldLoad, setShouldLoad] = useState(delay === 0)
 

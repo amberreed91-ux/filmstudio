@@ -580,11 +580,18 @@ def test_update_package_status(tmp_path: Path):
         final_output_url=str(temp_file)
     )
     
-    # Update status
-    updated = service.update_package_status(package.package_id, "approved")
+    # Approval is protected by production acceptance. Non-approval transitions
+    # should still work without an acceptance report.
+    try:
+        service.update_package_status(package.package_id, "approved")
+        assert False, "Should have raised ValueError without production acceptance"
+    except ValueError as e:
+        assert "Run production acceptance" in str(e)
+
+    updated = service.update_package_status(package.package_id, "ready_for_review")
     
     assert updated is not None
-    assert updated.package_status == "approved"
+    assert updated.package_status == "ready_for_review"
     assert updated.updated_at != package.updated_at
 
 
@@ -715,17 +722,22 @@ def test_package_helper_methods(tmp_path: Path):
     assert draft.can_package()
     assert not draft.can_archive()
     
-    # Update to approved (but can't approve without approved review decision)
-    approved = service.update_package_status(draft.package_id, "approved")
-    assert approved is not None
-    assert not approved.is_draft()
-    assert not approved.is_ready_for_review()
-    assert approved.is_approved()
-    assert not approved.is_packaged()
-    assert not approved.is_archived()
-    assert not approved.can_approve()  # Can't approve without approved review decision
-    assert approved.can_package()
-    assert approved.can_archive()
+    try:
+        service.update_package_status(draft.package_id, "approved")
+        assert False, "Should have raised ValueError without production acceptance"
+    except ValueError as e:
+        assert "Run production acceptance" in str(e)
+
+    ready = service.update_package_status(draft.package_id, "ready_for_review")
+    assert ready is not None
+    assert not ready.is_draft()
+    assert ready.is_ready_for_review()
+    assert not ready.is_approved()
+    assert not ready.is_packaged()
+    assert not ready.is_archived()
+    assert not ready.can_approve()
+    assert ready.can_package()
+    assert not ready.can_archive()
 
 
 def test_package_persists_across_service_reload(tmp_path: Path):

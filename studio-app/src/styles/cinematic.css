@@ -4,38 +4,40 @@
    ========================================================================== */
 
 /* ── Tailwind v4 Theme Tokens ───────────────────────────────────────────── */
-@theme {
-  /* Colors */
-  --color-surface: #131313;
-  --color-surface-dim: #131313;
-  --color-surface-bright: #3a3939;
-  --color-surface-container-lowest: #0e0e0e;
-  --color-surface-container-low: #1c1b1b;
-  --color-surface-container: #201f1f;
-  --color-surface-container-high: #2a2a2a;
-  --color-surface-container-highest: #353534;
-  --color-on-surface: #e5e2e1;
-  --color-on-surface-variant: #d3c5ac;
-  --color-outline: #9b8f79;
-  --color-outline-variant: #4f4633;
-  --color-surface-tint: #f7be1d;
-  --color-primary: #ffd165;
-  --color-on-primary: #3f2e00;
-  --color-primary-container: #eab308;
-  --color-primary-fixed-dim: #f7be1d;
-  --color-secondary: #4cd7f6;
-  --color-on-secondary: #003640;
-  --color-secondary-container: #03b5d3;
-  --color-error: #ffb4ab;
-  --color-error-container: #93000a;
-  --color-background: #131313;
-  --color-inverse-primary: #785a00;
-  --color-on-background: #e5e2e1;
+@layer base {
+  :root {
+    /* Colors */
+    --color-surface: #131313;
+    --color-surface-dim: #131313;
+    --color-surface-bright: #3a3939;
+    --color-surface-container-lowest: #0e0e0e;
+    --color-surface-container-low: #1c1b1b;
+    --color-surface-container: #201f1f;
+    --color-surface-container-high: #2a2a2a;
+    --color-surface-container-highest: #353534;
+    --color-on-surface: #e5e2e1;
+    --color-on-surface-variant: #d3c5ac;
+    --color-outline: #9b8f79;
+    --color-outline-variant: #4f4633;
+    --color-surface-tint: #f7be1d;
+    --color-primary: #ffd165;
+    --color-on-primary: #3f2e00;
+    --color-primary-container: #eab308;
+    --color-primary-fixed-dim: #f7be1d;
+    --color-secondary: #4cd7f6;
+    --color-on-secondary: #003640;
+    --color-secondary-container: #03b5d3;
+    --color-error: #ffb4ab;
+    --color-error-container: #93000a;
+    --color-background: #131313;
+    --color-inverse-primary: #785a00;
+    --color-on-background: #e5e2e1;
 
-  /* Font families */
-  --font-geist: "Geist", sans-serif;
-  --font-jetbrains: "JetBrains Mono", monospace;
-  --font-inter: "Inter", sans-serif;
+    /* Font families */
+    --font-geist: "Geist", sans-serif;
+    --font-jetbrains: "JetBrains Mono", monospace;
+    --font-inter: "Inter", sans-serif;
+  }
 }
 
 /* ── Utility Classes ─────────────────────────────────────────────────────── */

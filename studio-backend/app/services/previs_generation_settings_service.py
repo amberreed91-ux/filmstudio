@@ -239,8 +239,34 @@ class PrevisGenerationSettingsService:
                 reasoning=reasoning,
                 study_memories_used=mem_count,
             )
-        except (ValidationError, ProviderError):
+        except ValidationError:
             raise
+        except ProviderError as exc:
+            scene = _find_scene(project_id, scene_id) or {}
+            scene_text = scene.get("text") or scene.get("description") or ""
+            recommendation, reasoning = self._local_recommendation(
+                scene_text=scene_text,
+                shot_number=shot_number,
+                shot_type=shot_type,
+            )
+            duration_constraint = self.provider_duration_constraint(
+                recommendation.model,
+                recommendation.duration_seconds,
+            )
+            logger.warning(
+                "GENERATION_SETTINGS_LOCAL_FALLBACK | project_id=%s scene_id=%s cause=%s",
+                project_id,
+                scene_id,
+                exc.metadata,
+            )
+            return GenerationSettingsResult(
+                scene_id=scene_id,
+                shot_number=shot_number,
+                recommended=recommendation,
+                duration_constraint=duration_constraint,
+                reasoning=reasoning,
+                study_memories_used=mem_count,
+            )
         except Exception as exc:
             raise ProviderError(
                 "Generation settings recommendation failed",
@@ -290,6 +316,55 @@ class PrevisGenerationSettingsService:
                 fps=fps,
                 resolution=resolution,
                 model=model,
+            ),
+            reasoning,
+        )
+
+    @staticmethod
+    def _local_recommendation(
+        *,
+        scene_text: str,
+        shot_number: int,
+        shot_type: str,
+    ) -> tuple[GenerationSettingsRecommendation, str]:
+        density = _dialogue_density(scene_text)
+        normalized_type = (shot_type or "").lower()
+        establishing = shot_number == 1 or normalized_type == "wide"
+
+        if density == "dense":
+            duration = 12
+            fps = 24
+        elif establishing:
+            duration = 8
+            fps = 16
+        elif normalized_type == "close":
+            duration = 6
+            fps = 16
+        else:
+            duration = 8 if density in {"light", "moderate"} else 6
+            fps = 16
+
+        reasoning = (
+            "The shot needs enough room for the beat to register without "
+            "overextending the scene's pressure."
+        )
+        if density in {"moderate", "dense"}:
+            reasoning = (
+                "Dialogue gives this beat more weight, so the duration leaves "
+                "space for performance rhythm before the cut."
+            )
+        elif establishing:
+            reasoning = (
+                "As the first wide beat, the shot needs a little room for geography "
+                "and emotional pressure to settle."
+            )
+
+        return (
+            GenerationSettingsRecommendation(
+                duration_seconds=duration,
+                fps=fps,
+                resolution="720p",
+                model=None,
             ),
             reasoning,
         )

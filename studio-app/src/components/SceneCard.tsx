@@ -1,5 +1,4 @@
 import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
 import { CollapsibleSection } from './StudioShell'
 
 type SceneCardProps = {
@@ -62,9 +61,6 @@ export default function SceneCard(props: SceneCardProps) {
   const needsAttention = props.blocked
   const hasValidThumbnail = isValidAssetUrl(props.thumbnailUrl)
   const hasValidAsset = isValidAssetUrl(props.assetUrl)
-  const [thumbnailLoading, setThumbnailLoading] = useState(true)
-  const [thumbnailError, setThumbnailError] = useState(false)
-
   return (
     <div
       className={`rounded-xl border px-4 py-3 transition-all duration-200 hover:scale-[1.01] overflow-hidden scene-frame ${
@@ -170,23 +166,13 @@ export default function SceneCard(props: SceneCardProps) {
       {(hasValidThumbnail || hasValidAsset) && (
         <div className="mt-3 space-y-2">
           <div className="relative overflow-hidden rounded-md border border-white/10 bg-black/35">
-            {/* Loading Spinner */}
-            {hasValidThumbnail && thumbnailLoading && !thumbnailError && (
-              <div className="absolute inset-0 flex items-center justify-center aspect-widescreen clapperboard-placeholder bg-zinc-900/50">
-                <Loader2 size={20} className="animate-spin text-cyan-400" />
-              </div>
-            )}
-            
             {hasValidThumbnail ? (
               <img
                 src={props.thumbnailUrl}
                 alt={`${props.sceneId} render preview`}
                 className="aspect-widescreen w-full object-cover"
                 loading="lazy"
-                onLoad={() => setThumbnailLoading(false)}
                 onError={(e) => { 
-                  setThumbnailLoading(false)
-                  setThumbnailError(true)
                   (e.currentTarget as HTMLImageElement).style.display = 'none'
                   console.warn(`Thumbnail failed to load for ${props.sceneId}:`, props.thumbnailUrl)
                 }}
@@ -198,7 +184,7 @@ export default function SceneCard(props: SceneCardProps) {
                 controls
                 preload="metadata"
                 playsInline
-                onError={(e) => {
+                onError={() => {
                   console.warn(`Video failed to load for ${props.sceneId}:`, props.assetUrl)
                 }}
               />

@@ -24,7 +24,9 @@ def test_storyboard_route_defaults_to_qwen_image_max() -> None:
     with patch(
         "app.services.storyboard_image_service.storyboard_image_service.generate_qwen_image",
         return_value=result,
-    ) as generate, patch("app.routes.storage.save_previs_image"), patch(
+    ) as generate, patch(
+        "app.services.storyboard_blueprint_service.storyboard_blueprint_service.storage.save_previs_image"
+    ), patch(
         "app.routes.project_store.update_project"
     ), patch("app.routes.project_service.storage.get_project", return_value=None):
         response = client.post(
@@ -47,7 +49,9 @@ def test_storyboard_route_keeps_pollinations_fallback_selectable() -> None:
 
     with patch(
         "app.services.storyboard_image_service.storyboard_image_service.generate_qwen_image"
-    ) as generate, patch("app.routes.storage.save_previs_image"), patch(
+    ) as generate, patch(
+        "app.services.storyboard_blueprint_service.storyboard_blueprint_service.storage.save_previs_image"
+    ), patch(
         "app.routes.project_store.update_project"
     ), patch("app.routes.project_service.storage.get_project", return_value=None):
         response = client.post(

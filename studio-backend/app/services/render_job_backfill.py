@@ -120,7 +120,7 @@ def iter_render_jobs_from_project_state(store: Optional[ProjectStore] = None) ->
             yield job
 
 
-def hydrate_render_service_from_storage(render_service: Any, storage: Any, limit: int = 10000) -> int:
+def hydrate_render_service_from_storage(render_service: Any, storage: Any, limit: int = 1000) -> int:
     jobs = storage.list_jobs(limit=limit)
     for job in jobs:
         render_service._jobs[job.id] = job

@@ -57,7 +57,7 @@ export default function CoDirectorCollaborationPanel({
       visuals: [],
       themes: [],
     }
-  }, [alternateRows, disagreementRows, hasLive, room, thematicRows, visualRows])
+  }, [alternateRows, disagreementRows, hasLive, thematicRows, visualRows])
 
   return (
     <section className="co-director-collab-panel" data-testid={`co-director-collab-${room}`}>

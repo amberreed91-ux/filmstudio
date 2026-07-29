@@ -46,7 +46,7 @@ def _derive_act_position(scene: Dict[str, Any], scenes: list) -> str:
     return "unknown"
 
 
-def _build_context(scene: Dict[str, Any], scenes: list) -> str:
+def _build_context(scene: Dict[str, Any], scenes: list, performance_context: Dict[str, Any] | None = None) -> str:
     content = (
         scene.get("scene_text")
         or scene.get("content")
@@ -57,11 +57,19 @@ def _build_context(scene: Dict[str, Any], scenes: list) -> str:
     emotional_target = scene.get("emotional_target") or scene.get("emotional_tone") or "neutral"
     characters = scene.get("character_appearances") or scene.get("characters") or []
     act_position = _derive_act_position(scene, scenes)
+    performance_lines = []
+    if isinstance(performance_context, dict):
+        for line in performance_context.get("audio_lines") or []:
+            clean = str(line or "").strip()
+            if clean:
+                performance_lines.append(clean)
+    performance_block = "\nPerformance context: " + " ".join(performance_lines[:3]) if performance_lines else ""
     return (
         f"Scene content:\n{content}\n\n"
         f"Emotional target: {emotional_target}\n"
         f"Characters: {', '.join(str(c) for c in characters) if characters else 'none specified'}\n"
         f"Act position: {act_position}"
+        f"{performance_block}"
     )
 
 
@@ -69,13 +77,27 @@ async def generate_scene_audio_brief(
     project_id: str,
     scene_id: str,
     db,
+    performance_context: Dict[str, Any] | None = None,
 ) -> SoundAdvisory:
+    try:
+        from app.services.performance_audio_intelligence_service import performance_audio_intelligence_service
+
+        return performance_audio_intelligence_service.sound_advisory_for_scene(project_id, scene_id)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.info(
+            "AUDIO_DIRECTOR_CANONICAL_FALLBACK | project=%s scene=%s",
+            project_id,
+            scene_id,
+        )
+
     scene = _load_scene(project_id, scene_id)
     if not scene:
         raise HTTPException(status_code=404, detail=f"Scene {scene_id} not found")
 
     scenes = (project_store.get_project(project_id) or {}).get("execution_summary", {}).get("scenes") or []
-    context = _build_context(scene, scenes)
+    context = _build_context(scene, scenes, performance_context=performance_context)
 
     try:
         raw = await call_llm(

@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Camera,
-  ChevronDown,
   Edit3,
   Film,
   GripVertical,
@@ -10,7 +9,6 @@ import {
   Loader2,
   LockOpen,
   Plus,
-  RotateCcw,
   Scan,
   Wand2,
   X,
@@ -19,30 +17,33 @@ import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
 import RenderActivityPanel from '../components/RenderActivityPanel'
+import CinematographerIntelligencePanel from '../components/CinematographerIntelligencePanel'
+import PerformanceAudioPanel from '../components/PerformanceAudioPanel'
+import ProductionDesignIntelligencePanel from '../components/ProductionDesignIntelligencePanel'
+import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
+import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
 import { useStudio } from '../context/StudioContext'
-import { useRenderActivity } from '../context/RenderActivityContext'
 import {
   createScene,
   generateSceneStoryboard,
-  getProjectDecisionGate,
-  getScene,
+  getProductionQueueSummary,
+  listStoryboardBlueprints,
   listRenderJobs,
   listScenes,
-  reconcileRenderJob,
   retryRenderJobById,
-  saveToDirectorsNotes,
   togglePrevisSeedLock,
-  triggerDebate,
-  updateFilmCut,
   type CoDirectorDebateEntry,
   type RenderJob,
   type Scene,
-  type StudioDecisionGate,
+  type ProductionQueueSummary,
+  type StoryboardBlueprintSummary,
 } from '../lib/studioApi'
 import { normalizeJobStatus } from '../lib/jobStatus'
 import { formatProviderLabel } from '../lib/providerDisplay'
 import { persistActiveProjectId, withProjectQuery } from '../lib/projectContext'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
+import ProductionQueueSummaryStrip from '../components/ProductionQueueSummaryStrip'
+import ProductionQueueDetailPanel from '../components/ProductionQueueDetailPanel'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ interface ActiveJob {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildScenePrompt(scene: Scene): string {
   const description = (scene.description || scene.text || scene.scene_name || 'Untitled scene').trim()
   const context = [
@@ -121,6 +123,23 @@ function sceneIdFromJob(job: RenderJob): string {
   return job.shot_id?.split('_shot_')[0] || job.shot_id || 'unknown'
 }
 
+function renderFailureExplanation(job: RenderJob): string {
+  const providerFailure = job.metadata?.provider_failure
+  const failureLocation = job.metadata?.pipeline_reliability?.failure_location
+  const phase = failureLocation?.phase || 'render'
+  const reason = providerFailure?.message || failureLocation?.reason || job.error_message || 'The provider did not return a usable result.'
+  const category = providerFailure?.category || failureLocation?.category
+  const retryable = providerFailure?.retryable
+  const policy =
+    retryable === true
+      ? 'It can be retried under the recovery policy.'
+      : category === 'permanent'
+        ? 'It needs configuration or input correction before another provider submission.'
+        : providerFailure?.policy_reason || 'Check the job detail before retrying.'
+  return `${job.shot_id || job.id} failed during ${phase}: ${reason} ${policy}`
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
 export function resolveSceneStoryboardUrl(sceneId: string, jobs: RenderJob[], scenes: Scene[]): string | undefined {
   const scene = scenes.find((s) => s.scene_id === sceneId)
   if (scene?.storyboard_image?.trim()) return scene.storyboard_image
@@ -195,10 +214,8 @@ export default function ProductionBoard() {
   const { projectId } = useParams()
   const [searchParams] = useSearchParams()
   const queryProjectId = searchParams.get('project_id') || ''
-  const location = useLocation()
   const navigate = useNavigate()
-  const { activeProject, activeProjectId, createJob, submitJob } = useStudio()
-  const { activity } = useRenderActivity()
+  const { activeProject, activeProjectId } = useStudio()
 
   const effectiveProjectId = activeProjectId || projectId || queryProjectId
 
@@ -208,7 +225,12 @@ export default function ProductionBoard() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
-  const [loadingJobs, setLoadingJobs] = useState(false)
+  const [storyboardBlueprints, setStoryboardBlueprints] = useState<StoryboardBlueprintSummary[]>([])
+  const [, setLoadingJobs] = useState(false)
+  const [queueSummary, setQueueSummary] = useState<ProductionQueueSummary | null>(null)
+  const [queueSummaryLoading, setQueueSummaryLoading] = useState(false)
+  const [queueSummaryError, setQueueSummaryError] = useState('')
+  const [queueRefreshKey, setQueueRefreshKey] = useState(0)
 
   // ── Sidebar state ─────────────────────────────────────────────────────────
   const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
@@ -258,9 +280,44 @@ export default function ProductionBoard() {
     }
   }, [effectiveProjectId])
 
+  const loadQueueSummary = useCallback(async () => {
+    if (!effectiveProjectId) return
+    setQueueSummaryLoading(true)
+    setQueueSummaryError('')
+    try {
+      const summary = await getProductionQueueSummary(effectiveProjectId)
+      setQueueSummary(summary)
+      setQueueRefreshKey((value) => value + 1)
+    } catch (err) {
+      setQueueSummaryError(err instanceof Error ? err.message : 'Production queue summary unavailable')
+    } finally {
+      setQueueSummaryLoading(false)
+    }
+  }, [effectiveProjectId])
+
+  useEffect(() => {
+    void loadQueueSummary()
+  }, [loadQueueSummary])
+
   useEffect(() => {
     void loadScenes()
   }, [loadScenes])
+
+  useEffect(() => {
+    if (!effectiveProjectId) {
+      setStoryboardBlueprints([])
+      return
+    }
+    let cancelled = false
+    listStoryboardBlueprints(effectiveProjectId)
+      .then((rows) => {
+        if (!cancelled) setStoryboardBlueprints(Array.isArray(rows) ? rows : [])
+      })
+      .catch(() => {
+        if (!cancelled) setStoryboardBlueprints([])
+      })
+    return () => { cancelled = true }
+  }, [effectiveProjectId, scenes.length, success])
 
   // ── Load render jobs ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -323,6 +380,9 @@ export default function ProductionBoard() {
   // ── Derived values ────────────────────────────────────────────────────────
   const totalRuntime = estimateRuntime(scenes)
   const completionPct = completionPercent(scenes)
+  const blueprintBySceneId = useMemo(() => {
+    return new Map(storyboardBlueprints.map((blueprint) => [blueprint.scene_id, blueprint]))
+  }, [storyboardBlueprints])
 
   const allCharacters = useMemo(() => {
     const chars = new Set<string>()
@@ -340,6 +400,8 @@ export default function ProductionBoard() {
       (scene.characters || []).some((c) => c.toLowerCase() === characterFilter.toLowerCase()),
     )
   }, [scenes, characterFilter])
+
+  const cinematographerFocusScene = filteredScenes[0] || scenes[0]
 
   // ── Scene render state ─────────────────────────────────────────────────────
   const renderedSceneIds = useMemo(() => {
@@ -429,8 +491,9 @@ export default function ProductionBoard() {
         const result = await generateSceneStoryboard(effectiveProjectId, sceneId)
         if (result.image_url) {
           setSuccess('Storyboard generated')
-          if (result.seed) {
-            setSceneSeeds((prev) => new Map(prev).set(sceneId, result.seed))
+          const seed = result.seed
+          if (typeof seed === 'number') {
+            setSceneSeeds((prev) => new Map(prev).set(sceneId, seed))
           }
           await loadScenes()
         } else {
@@ -455,8 +518,9 @@ export default function ProductionBoard() {
       try {
         const result = await togglePrevisSeedLock(effectiveProjectId, sceneId, !currentLocked)
         setLockedSeeds((prev) => new Map(prev).set(sceneId, result.locked))
-        if (result.seed) {
-          setSceneSeeds((prev) => new Map(prev).set(sceneId, result.seed))
+        const seed = result.seed
+        if (typeof seed === 'number') {
+          setSceneSeeds((prev) => new Map(prev).set(sceneId, seed))
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to update seed lock')
@@ -502,10 +566,13 @@ export default function ProductionBoard() {
         return s === 'failed'
       })
       if (failedJobs.length > 0) {
+        const firstFailure = renderFailureExplanation(failedJobs[0])
         issues.push({
           id: 'render-failures',
           severity: 'error',
-          message: `${failedJobs.length} failed render job${failedJobs.length > 1 ? 's' : ''} — needs attention`,
+          message: failedJobs.length === 1
+            ? firstFailure
+            : `${failedJobs.length} failed render jobs. First issue: ${firstFailure}`,
         })
       }
       // Check for scenes without any valid render
@@ -567,6 +634,40 @@ export default function ProductionBoard() {
       <ProjectGuard>
         <ProjectContextBar roomName="production board" />
         <RenderActivityPanel roomName="Production Board" />
+        <ProductionQueueSummaryStrip
+          summary={queueSummary}
+          loading={queueSummaryLoading}
+          error={queueSummaryError}
+          onRefresh={loadQueueSummary}
+        />
+        {effectiveProjectId ? (
+          <ProductionQueueDetailPanel projectId={effectiveProjectId} refreshKey={queueRefreshKey} />
+        ) : null}
+        {effectiveProjectId && cinematographerFocusScene ? (
+          <div className="space-y-3 px-4 pt-3">
+            <CinematographerIntelligencePanel
+              projectId={effectiveProjectId}
+              sceneId={cinematographerFocusScene.scene_id}
+              sceneContext={cinematographerFocusScene as unknown as Record<string, unknown>}
+            />
+            <CastingIntelligencePanel projectId={effectiveProjectId} />
+            <PerformanceAudioPanel
+              projectId={effectiveProjectId}
+              sceneId={cinematographerFocusScene.scene_id}
+              sceneContext={cinematographerFocusScene as unknown as Record<string, unknown>}
+            />
+            <ProductionDesignIntelligencePanel
+              projectId={effectiveProjectId}
+              sceneId={cinematographerFocusScene.scene_id}
+              sceneContext={cinematographerFocusScene as unknown as Record<string, unknown>}
+            />
+            <ColoristIntelligencePanel
+              projectId={effectiveProjectId}
+              sceneId={cinematographerFocusScene.scene_id}
+              sceneContext={cinematographerFocusScene as unknown as Record<string, unknown>}
+            />
+          </div>
+        ) : null}
 
         {/* Status messages */}
         <div className="px-4 pt-2">
@@ -631,18 +732,21 @@ export default function ProductionBoard() {
                 <p className="text-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
                   {characterFilter
                     ? `No scenes found for character "${characterFilter}"`
-                    : 'No scenes yet. Import a script or add one above.'}
+                    : 'No scenes yet. Generate your script in Writer&apos;s Room to begin.'}
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredScenes.map((scene, index) => {
-                  const status = sceneStatusLabel(scene)
+                  const blueprint = blueprintBySceneId.get(scene.scene_id)
+                  const status = blueprint?.status === 'approved' || blueprint?.status === 'locked'
+                    ? 'storyboarded'
+                    : sceneStatusLabel(scene)
                   const isHovered = hoveredSceneId === scene.scene_id
                   const isGenerating = generatingScenes.has(scene.scene_id)
                   const hasRender = renderedSceneIds.has(scene.scene_id)
                   const renderThumb = hasRender ? getRenderThumbnailUrl(scene.scene_id) : undefined
-                  const storyboardUrl = resolveSceneStoryboardUrl(scene.scene_id, renderJobs, scenes)
+                  const storyboardUrl = blueprint?.storyboard_image || resolveSceneStoryboardUrl(scene.scene_id, renderJobs, scenes)
                   const locationLabel = sceneLocationLabel(scene)
 
                   return (
@@ -712,7 +816,7 @@ export default function ProductionBoard() {
                           <span
                             className={`status-chip absolute right-2 top-2 z-10 rounded border px-1.5 py-0.5 text-[9px] font-bold ${statusBadgeClass(status)}`}
                           >
-                            {status.toUpperCase()}
+                            {blueprint ? `${status.toUpperCase()} ${blueprint.ready_shot_count}/${blueprint.shot_count}` : status.toUpperCase()}
                           </span>
                         )}
                       </div>

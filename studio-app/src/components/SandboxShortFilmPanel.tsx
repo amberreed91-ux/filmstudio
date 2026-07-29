@@ -420,7 +420,7 @@ export default function SandboxShortFilmPanel() {
     try {
       const result = await getLatestShortFilmReview(projectId)
       setLatestReview(result.review)
-    } catch (err) {
+    } catch {
       // No reviews exist yet, which is fine
       setLatestReview(null)
     }

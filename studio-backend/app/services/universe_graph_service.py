@@ -322,7 +322,7 @@ class UniverseGraphService:
                         "advisory": gap.advisory
                     })
             return AbsenceReport(project_id=project_id, absences=absences)
-        except:
+        except Exception:
             return AbsenceReport(project_id=project_id, absences=[])
 
     async def export_bible(self, project_id: str) -> str:

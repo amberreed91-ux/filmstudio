@@ -39,11 +39,20 @@ class DialogueVoiceService:
         self,
         scenes: Any,
         character_profiles: Any = None,
+        performance_context: Any = None,
     ) -> List[DialogueLine]:
         scene_list = scenes if isinstance(scenes, list) else []
         voice_lookup: Dict[str, str] = {}
         rhythm_lookup: Dict[str, str] = {}
         behavior_lookup: Dict[str, str] = {}
+        performance_voice_lookup: Dict[str, str] = {}
+        if isinstance(performance_context, dict):
+            for line in self._string_list(performance_context.get("voice_lines")):
+                if ":" in line:
+                    name, direction = line.split(":", 1)
+                    cid = name.strip().lower().replace(" ", "_")
+                    if cid and direction.strip():
+                        performance_voice_lookup[cid] = direction.strip()
         if isinstance(character_profiles, list):
             for profile in character_profiles:
                 if not isinstance(profile, dict):
@@ -79,6 +88,8 @@ class DialogueVoiceService:
                 line_text = f"{char_name} carries the beat with {subtext}."
                 if behavior:
                     line_text = f"{line_text} Behavior memory: {behavior}."
+                if character_id in performance_voice_lookup:
+                    line_text = f"{line_text} Performance direction: {performance_voice_lookup[character_id]}."
                 lines.append(
                     DialogueLine(
                         line_id=f"{scene_id}_dlg_{idx + 1:02d}",
@@ -88,7 +99,7 @@ class DialogueVoiceService:
                         text=line_text,
                         emotional_subtext=subtext,
                         pacing_tag=(rhythm.lower() if rhythm else pacing_tag),
-                        voice_style_hint=hint,
+                        voice_style_hint=performance_voice_lookup.get(character_id) or hint,
                     )
                 )
         return lines

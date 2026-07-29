@@ -202,6 +202,40 @@ class FFmpegStitchingService:
     def get_job(self, project_id: str) -> Optional[Dict[str, Any]]:
         return _jobs.get(project_id)
 
+    def _approved_editorial_transition_map(self, project_id: str) -> Dict[tuple[str, str], Dict[str, Any]]:
+        plan = self._approved_editorial_stitch_plan(project_id)
+        advisories = plan.get("transition_advisories") or []
+        out: Dict[tuple[str, str], Dict[str, Any]] = {}
+        for advisory in advisories:
+            if not isinstance(advisory, dict):
+                continue
+            left = str(advisory.get("from_scene_id") or "").strip()
+            right = str(advisory.get("to_scene_id") or "").strip()
+            if left and right:
+                out[(left, right)] = advisory
+        return out
+
+    def _approved_editorial_stitch_plan(self, project_id: str) -> Dict[str, Any]:
+        try:
+            from app.services.editorial_intelligence_service import editorial_intelligence_service
+
+            return editorial_intelligence_service.latest_stitch_plan(project_id)
+        except Exception as exc:
+            logger.debug("Editorial stitch plan lookup failed for %s: %s", project_id, exc)
+            return {"transition_advisories": [], "timing_adjustments": []}
+
+    def _approved_editorial_timing_map(self, project_id: str) -> Dict[str, Dict[str, Any]]:
+        plan = self._approved_editorial_stitch_plan(project_id)
+        out: Dict[str, Dict[str, Any]] = {}
+        for adjustment in plan.get("timing_adjustments") or []:
+            if not isinstance(adjustment, dict):
+                continue
+            scene_id = str(adjustment.get("target_scene_id") or "").strip()
+            adjustment_type = str(adjustment.get("adjustment_type") or "").strip()
+            if scene_id and adjustment_type in {"tail_hold", "compress_duration", "tail_trim"}:
+                out[scene_id] = adjustment
+        return out
+
     # ------------------------------------------------------------------
     # Public entry point — starts background task
     # ------------------------------------------------------------------
@@ -322,6 +356,8 @@ class FFmpegStitchingService:
             segment_paths: List[str] = []
             transition_types: List[str] = []
             durations: List[float] = []
+            editorial_transitions = self._approved_editorial_transition_map(project_id)
+            editorial_timing = self._approved_editorial_timing_map(project_id)
 
             for i, scene in enumerate(scenes):
                 scene_id = str(scene.get("scene_id", f"scene_{i}"))
@@ -348,7 +384,12 @@ class FFmpegStitchingService:
                     duration = _get_video_duration(video_path)
                 else:
                     duration = float(scene.get("duration_estimate") or 5.0)
-                durations.append(duration)
+                timing_adjustment = editorial_timing.get(scene_id) or {}
+                if timing_adjustment.get("adjustment_type") in {"compress_duration", "tail_trim"}:
+                    try:
+                        duration = max(1.0, duration - float(timing_adjustment.get("seconds") or 0.0))
+                    except Exception:
+                        duration = duration
 
                 # --- Mix audio ---
                 mixed_audio = tmp / f"audio_{i}_{scene_id}.wav"
@@ -372,15 +413,43 @@ class FFmpegStitchingService:
                     tmp=tmp,
                     idx=i,
                 )
+                if timing_adjustment.get("adjustment_type") == "tail_hold":
+                    try:
+                        hold_seconds = max(0.0, min(float(timing_adjustment.get("seconds") or 0.0), 4.0))
+                    except Exception:
+                        hold_seconds = 0.0
+                    if hold_seconds > 0:
+                        held_segment = tmp / f"seg_{i}_{scene_id}_held.mp4"
+                        self._apply_tail_hold(
+                            input_path=str(segment),
+                            output_path=str(held_segment),
+                            hold_seconds=hold_seconds,
+                        )
+                        segment = held_segment
+                        duration += hold_seconds
+                durations.append(duration)
                 segment_paths.append(str(segment))
 
                 # --- Collect transition for next scene ---
                 if i < len(scenes) - 1:
-                    ta = scene.get("transition_advisory") or {}
-                    t_type = str(ta.get("transition_type") or "cut").lower()
+                    next_scene_id = str(scenes[i + 1].get("scene_id", f"scene_{i + 1}"))
+                    editorial = editorial_transitions.get((scene_id, next_scene_id)) or {}
+                    ta = editorial or scene.get("transition_advisory") or {}
+                    t_type = str(
+                        ta.get("recommended_transition_type")
+                        or ta.get("transition_type")
+                        or "cut"
+                    ).lower()
+                    if t_type == "hold_then_cut":
+                        t_type = "cut"
                     transition_types.append(t_type)
 
             job["transitions_used"] = transition_types
+            if editorial_transitions:
+                job["editorial_transition_source"] = "editorial_intelligence"
+            if editorial_timing:
+                job["editorial_timing_source"] = "editorial_intelligence"
+                job["editorial_timing_adjustments"] = list(editorial_timing.values())
 
             # ----------------------------------------------------------------
             # Step 2: Concatenate segments with transitions
@@ -495,6 +564,25 @@ class FFmpegStitchingService:
                 "-shortest",
                 output,
             ]
+        subprocess.run(cmd, capture_output=True, check=True, timeout=300)
+
+    def _apply_tail_hold(self, input_path: str, output_path: str, hold_seconds: float) -> None:
+        """Extend the final frame and audio bed for an editorial held beat."""
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", input_path,
+            "-filter_complex",
+            (
+                f"[0:v]tpad=stop_mode=clone:stop_duration={hold_seconds}[v];"
+                f"[0:a]apad=pad_dur={hold_seconds}[a]"
+            ),
+            "-map", "[v]",
+            "-map", "[a]",
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-shortest",
+            output_path,
+        ]
         subprocess.run(cmd, capture_output=True, check=True, timeout=300)
 
     # ------------------------------------------------------------------

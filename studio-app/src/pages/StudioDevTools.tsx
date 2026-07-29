@@ -42,9 +42,31 @@ import {
   searchSceneMemories,
   retrieveProjectStylePatterns,
   getRenderDiagnostics,
+  getProductionQueueDiagnostics,
   type RenderDiagnostics,
   type SimilarSceneResult,
 } from '../lib/studioApi'
+
+type QueueDiagnosticsPayload = {
+  worker?: {
+    enabled?: boolean
+    owner_id?: string
+    running?: boolean
+    last_heartbeat_at?: string | null
+    active_item_id?: string | null
+    loop_interval_seconds?: number
+    lease_seconds?: number
+  }
+  summary?: {
+    counts_by_status?: Record<string, number>
+    provider_pressure?: Array<{ provider: string; active: number; queued: number; limit: number; status: string }>
+    stale_leases?: number
+    blocked_reasons?: string[]
+  }
+  recovery?: {
+    stale_leases?: number
+  }
+}
 
 export default function StudioDevTools() {
   const { project, loading, error, renderJobs, pollingJobs, providers, selectedRenderProvider } = useStudio()
@@ -90,6 +112,7 @@ export default function StudioDevTools() {
   } | null>(null)
   const [styleLearningLoading, setStyleLearningLoading] = useState(false)
   const [diagnostics, setDiagnostics] = useState<RenderDiagnostics | null>(null)
+  const [queueDiagnostics, setQueueDiagnostics] = useState<QueueDiagnosticsPayload | null>(null)
   const [diagnosticsError, setDiagnosticsError] = useState('')
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false)
   const [debugPanelOpen, setDebugPanelOpen] = useState(true)
@@ -120,8 +143,12 @@ export default function StudioDevTools() {
     setDiagnosticsLoading(true)
     setDiagnosticsError('')
     try {
-      const result = await getRenderDiagnostics(projectId)
+      const [result, queueResult] = await Promise.all([
+        getRenderDiagnostics(projectId),
+        getProductionQueueDiagnostics(projectId) as Promise<QueueDiagnosticsPayload>,
+      ])
       setDiagnostics(result)
+      setQueueDiagnostics(queueResult)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load diagnostics'
       setDiagnosticsError(message)
@@ -538,6 +565,30 @@ export default function StudioDevTools() {
                   <div className="mt-1 space-y-1">
                     {Object.entries(diagnostics?.render_queue.status_counts || {}).map(([status, count]) => (
                       <div key={status}>{status}: {count}</div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded border border-white/10 bg-black/30 p-2 text-[11px]">
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Production Queue Worker</div>
+                  <div className="mt-1">enabled: {String(queueDiagnostics?.worker?.enabled ?? false)}</div>
+                  <div>running: {String(queueDiagnostics?.worker?.running ?? false)}</div>
+                  <div className="truncate">owner: {queueDiagnostics?.worker?.owner_id || 'n/a'}</div>
+                  <div className="truncate">active item: {queueDiagnostics?.worker?.active_item_id || 'none'}</div>
+                  <div>stale leases: {queueDiagnostics?.summary?.stale_leases ?? queueDiagnostics?.recovery?.stale_leases ?? 0}</div>
+                  <div className="truncate">heartbeat: {queueDiagnostics?.worker?.last_heartbeat_at || 'none'}</div>
+                </div>
+                <div className="rounded border border-white/10 bg-black/30 p-2 text-[11px]">
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-400">Production Queue Pressure</div>
+                  <div className="mt-1 space-y-1">
+                    {Object.entries(queueDiagnostics?.summary?.counts_by_status || {}).map(([status, count]) => (
+                      <div key={status}>{status}: {count}</div>
+                    ))}
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {(queueDiagnostics?.summary?.provider_pressure || []).slice(0, 4).map((provider) => (
+                      <div key={provider.provider}>
+                        {provider.provider}: {provider.active}/{provider.limit} active · {provider.queued} waiting
+                      </div>
                     ))}
                   </div>
                 </div>

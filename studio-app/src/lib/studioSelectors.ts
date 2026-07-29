@@ -1,4 +1,4 @@
-import type { StudioProject } from './studioApi'
+import type { ProductionProviderPressure, ProductionQueueItem, ProductionQueuePage, ProductionQueueSummary, StudioProject } from './studioApi'
 
 type RecordLike = Record<string, unknown>
 
@@ -44,6 +44,14 @@ export type PipelineStage = {
   status: 'complete' | 'active' | 'pending'
   progress: number
   detail?: string
+}
+
+export type QueueStatusCounts = {
+  active: number
+  waiting: number
+  blocked: number
+  failed: number
+  complete: number
 }
 
 function asRecord(value: unknown): RecordLike {
@@ -221,4 +229,37 @@ export function getProjectStats(project: StudioProject | null) {
     runningTasks,
     pendingApprovals,
   }
+}
+
+export function getQueueStatusCounts(summary: ProductionQueueSummary | null): QueueStatusCounts {
+  const counts = summary?.counts_by_status || {}
+  return {
+    active: Number(counts.leased || 0) + Number(counts.running || 0),
+    waiting: Number(counts.queued || 0) + Number(counts.waiting_provider || 0),
+    blocked: Number(counts.blocked || 0) + Number(counts.waiting_dependency || 0) + Number(counts.waiting_creator || 0),
+    failed: Number(counts.failed || 0) + Number(counts.dead_lettered || 0),
+    complete: Number(counts.complete || 0),
+  }
+}
+
+export function getProviderPressureRows(summary: ProductionQueueSummary | null): ProductionProviderPressure[] {
+  return [...(summary?.provider_pressure || [])].sort((left, right) => {
+    const leftAtCapacity = left.status === 'at_capacity' ? 1 : 0
+    const rightAtCapacity = right.status === 'at_capacity' ? 1 : 0
+    if (leftAtCapacity !== rightAtCapacity) return rightAtCapacity - leftAtCapacity
+    const leftWaiting = Number(left.queued || 0)
+    const rightWaiting = Number(right.queued || 0)
+    if (leftWaiting !== rightWaiting) return rightWaiting - leftWaiting
+    return String(left.provider).localeCompare(String(right.provider))
+  })
+}
+
+export function getBlockedQueueRows(page: ProductionQueuePage | null): ProductionQueueItem[] {
+  return (page?.items || []).filter((item) =>
+    ['blocked', 'waiting_dependency', 'waiting_creator', 'waiting_provider'].includes(item.status),
+  )
+}
+
+export function getActiveQueueRows(page: ProductionQueuePage | null): ProductionQueueItem[] {
+  return (page?.items || []).filter((item) => ['leased', 'running'].includes(item.status))
 }

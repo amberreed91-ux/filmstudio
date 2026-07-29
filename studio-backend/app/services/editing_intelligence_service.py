@@ -37,7 +37,7 @@ class EditingIntelligenceService:
                     suggestion_type="emotional_timing",
                     priority="medium",
                     title="Protect emotional landing beat",
-                    recommendation="Add a 1-2 second hold before the final cut to extend catharsis.",
+                    recommendation="Add a short hold before the final cut so the emotional landing has room to breathe.",
                     rationale="Ending beats benefit from slight breath before resolution.",
                     target_scene_id=str(last.get("scene_id", "")),
                 )
@@ -69,7 +69,7 @@ class EditingIntelligenceService:
                     suggestion_type="pacing_trims",
                     priority="high",
                     title="Trim pacing drag in transition moments",
-                    recommendation="Trim 8-15% from the weakest transition section.",
+                    recommendation="Tighten the weakest transition section without cutting away the reaction beat that carries emotion forward.",
                     rationale=str(flow["issues"][0]),
                 )
             )
@@ -92,7 +92,7 @@ class EditingIntelligenceService:
                     suggestion_type="pacing_trims",
                     priority="low",
                     title="Cut is stable",
-                    recommendation="No critical edit needed; optionally tighten one mid-sequence beat by 5%.",
+                    recommendation="No critical edit is needed; optionally tighten one mid-sequence beat if the room feels the momentum soften.",
                     rationale="Signals indicate stable continuity and flow.",
                 )
             )
@@ -109,4 +109,3 @@ class EditingIntelligenceService:
 
 
 editing_intelligence_service = EditingIntelligenceService()
-

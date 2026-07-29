@@ -34,6 +34,10 @@ class CinematicTimelineIntelligenceService:
         return str(getattr(job, "shot_id", "") or "").strip()
 
     def analyze_project_timeline(self, project_id: str) -> Dict[str, Any]:
+        canonical = self._canonical_timeline_read(project_id)
+        if canonical is not None:
+            return canonical
+
         storage = self._storage_ref()
         packages = storage.list_final_short_film_packages_for_project(project_id) or []
         latest_package = packages[0] if packages else None
@@ -153,6 +157,67 @@ class CinematicTimelineIntelligenceService:
             "tonal_consistency_read": tonal_consistency_read,
             "advisory_notes": advisory_notes,
             "low_data_reason": "" if clip_count > 0 else "Timeline read is operating in low-data mode.",
+        }
+
+    def _canonical_timeline_read(self, project_id: str) -> Dict[str, Any] | None:
+        try:
+            from app.services.editorial_intelligence_service import EditorialIntelligenceService
+
+            analysis = EditorialIntelligenceService(storage=self._storage_ref()).analyze_project(
+                project_id=project_id,
+                persist=False,
+            )
+        except Exception:
+            return None
+
+        evidence_counts = analysis.metadata.get("evidence_counts") if isinstance(analysis.metadata, dict) else {}
+        clip_count = int((evidence_counts or {}).get("clips") or 0)
+        package_count = int((evidence_counts or {}).get("final_packages") or 0)
+        assembly_kind = "assembled_manifest" if package_count else ("single_scene_preview" if clip_count == 1 else "none")
+        if analysis.source_package_id:
+            assembly_kind = "stitched_film"
+
+        pacing_read = analysis.pacing_diagnostics[0].read if analysis.pacing_diagnostics else analysis.overall_read
+        tension_curve = analysis.emotional_flow.tension_curve or analysis.emotional_flow.read
+        slow_sections = [
+            diagnostic.recommendation
+            for diagnostic in analysis.pacing_diagnostics
+            if self._string(diagnostic.recommendation)
+        ]
+        escalation_points = [
+            diagnostic.read
+            for diagnostic in analysis.rhythm_diagnostics
+            if self._string(diagnostic.read)
+        ]
+        emotional_residue_points = [
+            analysis.emotional_flow.emotional_residue
+        ] if analysis.emotional_flow.emotional_residue else []
+        abrupt_transition_flags = [
+            advisory.rationale
+            for advisory in analysis.transition_advisories
+            if advisory.recommended_transition_type != "cut"
+        ]
+        abrupt_transition_flags.extend(analysis.emotional_flow.risk_points)
+        advisory_notes = [
+            decision.recommendation
+            for decision in analysis.edit_decisions[:3]
+            if self._string(decision.recommendation)
+        ]
+        advisory_notes.extend(analysis.reasoning_trace)
+        advisory_notes = list(dict.fromkeys(advisory_notes))
+        return {
+            "project_id": project_id,
+            "assembly_kind": assembly_kind,
+            "clip_count": clip_count,
+            "pacing_read": pacing_read,
+            "tension_curve": tension_curve,
+            "slow_sections": slow_sections,
+            "escalation_points": escalation_points,
+            "emotional_residue_points": emotional_residue_points,
+            "abrupt_transition_flags": abrupt_transition_flags,
+            "tonal_consistency_read": analysis.overall_read,
+            "advisory_notes": advisory_notes,
+            "low_data_reason": " ".join(analysis.low_data_reasons),
         }
 
 

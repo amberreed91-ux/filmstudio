@@ -12,6 +12,7 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 import { useQuery } from "@tanstack/react-query";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockUseQuery = useQuery as any;
 
 describe("SoundIntelligencePanel", () => {

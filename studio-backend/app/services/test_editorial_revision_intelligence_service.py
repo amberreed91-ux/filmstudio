@@ -12,9 +12,19 @@ class _FakeStorage:
         self.style_drift_issues = []
         self.memories = []
         self.packages = []
+        self.scene_compositions = []
 
     def list_jobs(self, project_id=None, limit=1000):  # noqa: ARG002
         return self.jobs
+
+    def get_project(self, project_id):
+        return SimpleNamespace(project_id=project_id, title="Revision Test Film")
+
+    def list_scene_compositions_for_project(self, _project_id):
+        return self.scene_compositions
+
+    def list_video_frame_analyses_for_project(self, _project_id):
+        return []
 
     def list_continuity_issues_for_project(self, _project_id):
         return self.continuity_issues
@@ -110,3 +120,22 @@ def test_uncertainty_note_present_when_signals_thin():
     svc = EditorialRevisionIntelligenceService(storage=store)
     out = svc.compare_revisions("proj-x")
     assert out["uncertainty_note"]
+
+
+def test_revision_comparison_includes_canonical_editorial_analysis_when_available():
+    store = _FakeStorage()
+    store.jobs = [
+        _job("rev-a", "scene_001_shot_001", "2026-05-20T00:00:00Z"),
+        _job("rev-b", "scene_002_shot_001", "2026-05-20T00:01:00Z"),
+    ]
+    store.scene_compositions = [
+        {"scene_id": "scene_001", "composed_url": "/outputs/scene_001.mp4", "shot_count": 1},
+        {"scene_id": "scene_002", "composed_url": "/outputs/scene_002.mp4", "shot_count": 1},
+    ]
+    store.continuity_issues = [SimpleNamespace(issue_id="continuity-1")]
+    svc = EditorialRevisionIntelligenceService(storage=store)
+    out = svc.compare_revisions("proj-x", baseline_revision_id="rev-a", comparison_revision_id="rev-b")
+    canonical = out["canonical_editorial_analysis"]
+    assert canonical["analysis_id"].startswith("editorial-analysis-")
+    assert canonical["primary_pacing_read"]
+    assert any("Canonical editorial analysis" in note for note in out["advisory_notes"])

@@ -159,6 +159,141 @@ export type SceneAnimationPromptPayload = {
   comfy_notes: string
 }
 
+export type PerformanceEvidenceRef = {
+  evidence_id: string
+  source_type: string
+  source_id: string
+  field_path?: string
+  scene_id?: string | null
+  character_id?: string | null
+  excerpt?: string
+  relevance?: string
+  reliability_label?: 'insufficient_context' | 'emerging' | 'supported' | 'conflicted'
+}
+
+export type PerformanceUncertainty = {
+  label: 'insufficient_context' | 'emerging' | 'supported' | 'conflicted'
+  reason: string
+}
+
+export type PerformanceBeat = {
+  beat_id: string
+  beat_index: number
+  beat_label: string
+  visible_action: string
+  internal_action: string
+  dialogue_subtext: string
+  physical_direction: string
+  voice_direction: string
+  camera_relevance: string
+  evidence_refs: PerformanceEvidenceRef[]
+}
+
+export type CharacterPerformanceBrief = {
+  brief_id: string
+  scene_id: string
+  character_id: string
+  character_name: string
+  objective: string
+  obstacle: string
+  tactic: string
+  emotional_start: string
+  emotional_end: string
+  mask: string
+  reveal: string
+  subtext_summary: string
+  continuity_note: string
+  uncertainty: PerformanceUncertainty
+  beats: PerformanceBeat[]
+  evidence_refs: PerformanceEvidenceRef[]
+  advisory_only: boolean
+}
+
+export type RelationshipPerformanceRead = {
+  relationship_read_id: string
+  scene_id: string
+  character_a: string
+  character_b: string
+  relationship_state: string
+  pressure: string
+  power_shift: string
+  trust_state: string
+  conflict_residue: string
+  uncertainty: PerformanceUncertainty
+  evidence_refs: PerformanceEvidenceRef[]
+}
+
+export type PerformanceContextBundle = {
+  project_id: string
+  scene_id: string
+  shot_id?: string | null
+  character_ids: string[]
+  prompt_lines: string[]
+  voice_lines: string[]
+  audio_lines: string[]
+  screening_lines: string[]
+  evidence_refs: PerformanceEvidenceRef[]
+  advisory_only: boolean
+}
+
+export type PerformanceAnalysisResponse = {
+  analysis_id: string
+  project_id: string
+  scene_id?: string | null
+  analysis_scope: 'scene' | 'project'
+  status: 'complete' | 'partial' | 'stale'
+  generated_at: string
+  source_signature: string
+  model_version: string
+  summary: string
+  briefs: CharacterPerformanceBrief[]
+  relationship_reads: RelationshipPerformanceRead[]
+  reasoning_trace: Array<Record<string, unknown>>
+  guardrail_report: Record<string, unknown>
+  context_bundle?: PerformanceContextBundle | null
+  stale: boolean
+  stale_reason: string
+  advisory_only: boolean
+}
+
+export type PerformanceAnalysisRequest = {
+  scene_id?: string | null
+  character_ids?: string[] | null
+  scope?: 'scene' | 'project'
+  persist?: boolean
+  include_context_bundles?: boolean
+}
+
+export type PerformanceDecisionRequest = {
+  scene_id?: string | null
+  character_id?: string | null
+  source_brief_id?: string | null
+  decision_text: string
+  inferred_tradeoff?: string
+  saved_by?: string
+  save_to_project_memory?: boolean
+}
+
+export type PerformanceDecisionUpdateRequest = {
+  decision_text?: string
+  inferred_tradeoff?: string
+}
+
+export type PerformanceDecisionMemoryProjection = {
+  decision_id: string
+  project_id: string
+  scene_id?: string | null
+  character_id?: string | null
+  source_brief_id?: string | null
+  decision_text: string
+  inferred_tradeoff: string
+  saved_by: string
+  saved_at: string
+  memory_entry_id?: string | null
+  editable: boolean
+  forgotten_at?: string | null
+}
+
 export function resolveStudioApiBase(env?: { VITE_API_BASE_URL?: string; VITE_STUDIO_API_BASE?: string }): string {
   const configured = env?.VITE_API_BASE_URL || env?.VITE_STUDIO_API_BASE || ''
   const raw = configured.trim()
@@ -214,7 +349,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
   }
 
   try {
-    const { timeoutMs, timeoutLabel, ...rest } = init || {}
+    const rest = init || {}
     const response = await fetch(`${STUDIO_API_BASE}${path}`, {
       ...rest,
       signal,
@@ -275,6 +410,1242 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
     console.error(`[Studio API Error] ${path}:`, err)
     throw err
   }
+}
+
+export function analyzePerformance(
+  projectId: string,
+  payload: PerformanceAnalysisRequest,
+): Promise<PerformanceAnalysisResponse> {
+  return fetchJson<PerformanceAnalysisResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/analyze`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export type CameraGrammarConfidenceLabel = 'low_data' | 'emerging' | 'consistent' | 'strong'
+
+export type CameraGrammarEvidenceRef = {
+  ref_type: string
+  ref_id: string
+  label: string
+  summary: string
+  source_service: string
+  metadata: Record<string, unknown>
+}
+
+export type CameraGrammarMemoryRef = {
+  memory_id: string
+  memory_type: string
+  source_service: string
+  scene_id?: string | null
+  summary: string
+}
+
+export type CameraGrammarSpineRef = {
+  constraint_id: string
+  field_name: string
+  severity: string
+  summary: string
+  applied: boolean
+}
+
+export type CameraGrammarAxis = {
+  axis: string
+  intent: string
+  rationale: string
+  evidence_refs: CameraGrammarEvidenceRef[]
+  confidence_label: CameraGrammarConfidenceLabel
+}
+
+export type CameraGrammarRenderSlotSuggestion = {
+  slot: 'camera' | 'lighting'
+  suggestion: string
+  rationale: string
+  budget_limit: number
+  budget_used: number
+  evidence_refs: CameraGrammarEvidenceRef[]
+}
+
+export type CameraGrammarPlan = {
+  plan_id: string
+  project_id: string
+  scene_id?: string | null
+  shot_id?: string | null
+  take_id?: string | null
+  render_job_id?: string | null
+  plan_scope: 'scene' | 'shot' | 'take' | 'asset'
+  status: 'draft' | 'active' | 'low_data' | 'stale' | 'superseded' | 'failed'
+  source_fingerprint: string
+  source_summary: string
+  grammar_axes: CameraGrammarAxis[]
+  composition_intent: string
+  lens_intent: string
+  movement_intent: string
+  lighting_intent: string
+  framing_intent: string
+  depth_strategy: string
+  blocking_strategy: string
+  screen_direction_strategy: string
+  visual_storytelling_rationale: string
+  render_slot_suggestions: CameraGrammarRenderSlotSuggestion[]
+  evidence_refs: CameraGrammarEvidenceRef[]
+  memory_refs: CameraGrammarMemoryRef[]
+  spine_refs: CameraGrammarSpineRef[]
+  confidence_label: CameraGrammarConfidenceLabel
+  creator_note: string
+  advisory_only: boolean
+  created_at: string
+  updated_at: string
+  metadata: Record<string, unknown>
+}
+
+export type CameraGrammarObservation = {
+  observation_id: string
+  project_id: string
+  plan_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  scene_id?: string | null
+  shot_id?: string | null
+  status: CameraGrammarPlan['status']
+  observation_scope: CameraGrammarPlan['plan_scope']
+  observed_composition: string
+  observed_lighting: string
+  observed_camera_notes: string
+  observed_framing_tags: string[]
+  observed_lighting_tags: string[]
+  observed_movement_evidence: string
+  keyframe_ids: string[]
+  analysis_ids: string[]
+  cinematic_memory_ids: string[]
+  evidence_refs: CameraGrammarEvidenceRef[]
+  confidence_label: CameraGrammarConfidenceLabel
+  limitations: string[]
+  created_at: string
+  metadata: Record<string, unknown>
+}
+
+export type CameraGrammarRisk = {
+  risk_id: string
+  category: string
+  severity: 'advisory' | 'needs_attention'
+  summary: string
+  evidence_refs: CameraGrammarEvidenceRef[]
+  requires_creator_decision: boolean
+}
+
+export type CameraGrammarRevisionSuggestion = {
+  suggestion_id: string
+  target_axis: string
+  summary: string
+  rationale: string
+  render_slot?: 'camera' | 'lighting' | null
+  evidence_refs: CameraGrammarEvidenceRef[]
+}
+
+export type CameraGrammarAssessment = {
+  assessment_id: string
+  project_id: string
+  plan_id: string
+  observation_id: string
+  asset_id?: string | null
+  render_job_id?: string | null
+  scene_id?: string | null
+  shot_id?: string | null
+  status: CameraGrammarPlan['status']
+  alignment_summary: string
+  matched_axes: string[]
+  drift_axes: string[]
+  risks: CameraGrammarRisk[]
+  revision_suggestions: CameraGrammarRevisionSuggestion[]
+  evidence_refs: CameraGrammarEvidenceRef[]
+  memory_refs: CameraGrammarMemoryRef[]
+  spine_refs: CameraGrammarSpineRef[]
+  crew_reasoning_id?: string | null
+  requires_creator_attention: boolean
+  confidence_label: CameraGrammarConfidenceLabel
+  advisory_only: boolean
+  created_at: string
+  metadata: Record<string, unknown>
+}
+
+export type CameraGrammarPlanRequest = {
+  scene_id?: string | null
+  shot_id?: string | null
+  take_id?: string | null
+  render_job_id?: string | null
+  plan_scope?: 'scene' | 'shot' | 'take' | 'asset'
+  scene_context?: Record<string, unknown>
+  force_refresh?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export type CameraGrammarRenderContext = {
+  plan_id: string
+  project_id: string
+  scene_id?: string | null
+  shot_id?: string | null
+  camera_direction: string
+  lighting_direction: string
+  slot_suggestions: CameraGrammarRenderSlotSuggestion[]
+  evidence_refs: CameraGrammarEvidenceRef[]
+  budget: Record<string, number>
+  advisory_only: boolean
+  metadata: Record<string, unknown>
+}
+
+export function createCameraGrammarPlan(
+  projectId: string,
+  payload: CameraGrammarPlanRequest,
+): Promise<{ plan: CameraGrammarPlan; reasoning_record_id: string; stale_existing_plan_ids: string[]; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/plans`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listCameraGrammarPlans(
+  projectId: string,
+  filters: { scene_id?: string; shot_id?: string; render_job_id?: string; status?: string; limit?: number } = {},
+): Promise<{ plans: CameraGrammarPlan[] }> {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') params.set(key, String(value))
+  })
+  const query = params.toString() ? `?${params.toString()}` : ''
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/plans${query}`)
+}
+
+export function getCameraGrammarPlan(projectId: string, planId: string): Promise<{ plan: CameraGrammarPlan }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/plans/${encodeURIComponent(planId)}`)
+}
+
+export function createCameraGrammarObservation(
+  projectId: string,
+  payload: { plan_id?: string | null; asset_id?: string | null; render_job_id?: string | null; scene_id?: string | null; shot_id?: string | null; keyframe_ids?: string[]; metadata?: Record<string, unknown> },
+): Promise<{ observation: CameraGrammarObservation; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/observations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listCameraGrammarObservations(
+  projectId: string,
+  filters: { plan_id?: string; asset_id?: string; render_job_id?: string; scene_id?: string; shot_id?: string; limit?: number } = {},
+): Promise<{ observations: CameraGrammarObservation[] }> {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') params.set(key, String(value))
+  })
+  const query = params.toString() ? `?${params.toString()}` : ''
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/observations${query}`)
+}
+
+export function createCameraGrammarAssessment(
+  projectId: string,
+  payload: { plan_id: string; observation_id: string; create_crew_reasoning?: boolean; metadata?: Record<string, unknown> },
+): Promise<{ assessment: CameraGrammarAssessment; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/assessments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listCameraGrammarAssessments(
+  projectId: string,
+  filters: { plan_id?: string; observation_id?: string; asset_id?: string; render_job_id?: string; scene_id?: string; shot_id?: string; limit?: number } = {},
+): Promise<{ assessments: CameraGrammarAssessment[] }> {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') params.set(key, String(value))
+  })
+  const query = params.toString() ? `?${params.toString()}` : ''
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/assessments${query}`)
+}
+
+export function buildCameraGrammarRenderContext(
+  projectId: string,
+  payload: { plan_id: string; scene_id?: string | null; shot_id?: string | null; provider?: string; max_prompt_length?: number },
+): Promise<CameraGrammarRenderContext> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/render-context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export type ColoristConfidenceLabel = 'low_data' | 'emerging' | 'consistent' | 'strong'
+export type ColoristStatus = 'draft' | 'active' | 'low_data' | 'stale' | 'superseded' | 'failed' | 'verified'
+export type ColoristScope = 'project' | 'act' | 'sequence' | 'scene' | 'shot' | 'take' | 'asset' | 'package'
+export type ColorAxis = 'palette' | 'contrast' | 'exposure' | 'saturation' | 'temperature' | 'hue_bias' | 'skin_tone' | 'density' | 'highlight_rolloff' | 'shadow_detail' | 'emotional_color' | 'motif_color' | 'reference_match'
+
+export type ColorEvidenceRef = {
+  ref_type: string
+  ref_id: string
+  label: string
+  summary: string
+  source_service: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorStyleRef = {
+  style_id: string
+  style_type: string
+  summary: string
+  source_service: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorContinuityRef = {
+  continuity_id: string
+  category: string
+  summary: string
+  source_service: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorReferenceAssetRef = {
+  reference_id: string
+  asset_id: string
+  label: string
+  allowed_use: string
+  summary: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorDepartmentHandoffRef = {
+  target_department: string
+  summary: string
+  requirement: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorMemoryRef = {
+  memory_id: string
+  memory_type: string
+  scope: string
+  source_service: string
+  scene_id?: string | null
+  character_id?: string | null
+  summary: string
+}
+
+export type ColorSpineRef = {
+  constraint_id: string
+  field_name: string
+  severity: string
+  summary: string
+  applied: boolean
+}
+
+export type ColorRenderSlotSuggestion = {
+  slot: 'color' | 'lighting' | 'style'
+  suggestion: string
+  rationale: string
+  budget_limit: number
+  budget_used: number
+  evidence_refs: ColorEvidenceRef[]
+}
+
+export type ColorRisk = {
+  risk_id: string
+  category: string
+  severity: 'advisory' | 'needs_attention'
+  summary: string
+  evidence_refs: ColorEvidenceRef[]
+  downstream_impact: string[]
+  requires_creator_decision: boolean
+}
+
+export type ColorEmotionalRule = {
+  rule_id: string
+  emotional_state: string
+  color_direction: string
+  rationale: string
+  evidence_refs: ColorEvidenceRef[]
+}
+
+export type ColorMotifRule = {
+  rule_id: string
+  motif_id: string
+  motif_name: string
+  color_direction: string
+  persistence_rule: string
+  evidence_refs: ColorEvidenceRef[]
+}
+
+export type ColorRevisionSuggestion = {
+  suggestion_id: string
+  target_axis: ColorAxis
+  summary: string
+  rationale: string
+  render_slot?: 'color' | 'lighting' | 'style' | null
+  evidence_refs: ColorEvidenceRef[]
+}
+
+export type ColorArcBeat = {
+  beat_id: string
+  scope: ColoristScope
+  scope_id: string
+  emotional_turn: string
+  color_direction: string
+  rationale: string
+  evidence_refs: ColorEvidenceRef[]
+}
+
+export type ColorSceneVerificationRead = {
+  scene_id: string
+  status: ColoristStatus
+  summary: string
+  held_axes: ColorAxis[]
+  drift_axes: ColorAxis[]
+  assessment_ids: string[]
+  evidence_refs: ColorEvidenceRef[]
+}
+
+export type ColorPaletteFamily = {
+  family_id: string
+  name: string
+  colors: string[]
+  emotional_use: string
+  allowed_variations: string[]
+  evidence_refs: ColorEvidenceRef[]
+}
+
+export type ColorLookBible = {
+  look_bible_id: string
+  project_id: string
+  scope: ColoristScope
+  act_id?: string | null
+  sequence_id?: string | null
+  status: ColoristStatus
+  source_fingerprint: string
+  look_fingerprint: string
+  title: string
+  show_lut_intent: string
+  palette_families: ColorPaletteFamily[]
+  contrast_philosophy: string
+  saturation_philosophy: string
+  temperature_philosophy: string
+  skin_tone_protection: string
+  highlight_behavior: string
+  shadow_behavior: string
+  grain_or_texture_intent: string
+  emotional_color_rules: ColorEmotionalRule[]
+  motif_color_rules: ColorMotifRule[]
+  allowed_evolution: string[]
+  forbidden_drift: string[]
+  reference_asset_refs: ColorReferenceAssetRef[]
+  evidence_refs: ColorEvidenceRef[]
+  memory_refs: ColorMemoryRef[]
+  spine_refs: ColorSpineRef[]
+  style_refs: ColorStyleRef[]
+  confidence_label: ColoristConfidenceLabel
+  creator_note: string
+  advisory_only: boolean
+  created_at: string
+  updated_at: string
+  metadata: Record<string, unknown>
+}
+
+export type ColoristLookPlan = {
+  plan_id: string
+  project_id: string
+  look_bible_id?: string | null
+  scene_id?: string | null
+  shot_id?: string | null
+  take_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  scope: ColoristScope
+  status: ColoristStatus
+  source_fingerprint: string
+  look_fingerprint: string
+  source_summary: string
+  intended_palette: string[]
+  palette_rationale: string
+  contrast_intent: string
+  exposure_intent: string
+  saturation_intent: string
+  temperature_intent: string
+  hue_bias_intent: string
+  density_intent: string
+  skin_tone_intent: string
+  highlight_intent: string
+  shadow_intent: string
+  emotional_color_intent: string
+  reference_match_targets: ColorReferenceAssetRef[]
+  render_slot_suggestions: ColorRenderSlotSuggestion[]
+  revision_guardrails: string[]
+  evidence_refs: ColorEvidenceRef[]
+  memory_refs: ColorMemoryRef[]
+  spine_refs: ColorSpineRef[]
+  style_refs: ColorStyleRef[]
+  continuity_refs: ColorContinuityRef[]
+  department_handoffs: ColorDepartmentHandoffRef[]
+  confidence_label: ColoristConfidenceLabel
+  creator_note: string
+  advisory_only: boolean
+  created_at: string
+  updated_at: string
+  stale: boolean
+  stale_reason: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorGradeObservation = {
+  observation_id: string
+  project_id: string
+  plan_id?: string | null
+  look_bible_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  scene_id?: string | null
+  shot_id?: string | null
+  scope: ColoristScope
+  status: ColoristStatus
+  observed_palette: string[]
+  observed_palette_summary: string
+  observed_contrast: string
+  observed_exposure: string
+  observed_saturation: string
+  observed_temperature: string
+  observed_hue_bias: string
+  observed_density: string
+  observed_skin_tone_notes: string
+  observed_highlight_behavior: string
+  observed_shadow_behavior: string
+  observed_mood_tags: string[]
+  observed_lighting_tags: string[]
+  keyframe_ids: string[]
+  analysis_ids: string[]
+  cinematic_memory_ids: string[]
+  evidence_refs: ColorEvidenceRef[]
+  limitations: string[]
+  confidence_label: ColoristConfidenceLabel
+  created_at: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorMatchAssessment = {
+  assessment_id: string
+  project_id: string
+  plan_id: string
+  observation_id: string
+  look_bible_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  scene_id?: string | null
+  shot_id?: string | null
+  status: ColoristStatus
+  match_summary: string
+  held_axes: ColorAxis[]
+  drift_axes: ColorAxis[]
+  emotional_color_read: string
+  continuity_read: string
+  scene_matching_read: string
+  risks: ColorRisk[]
+  revision_suggestions: ColorRevisionSuggestion[]
+  evidence_refs: ColorEvidenceRef[]
+  memory_refs: ColorMemoryRef[]
+  spine_refs: ColorSpineRef[]
+  style_refs: ColorStyleRef[]
+  continuity_refs: ColorContinuityRef[]
+  crew_reasoning_id?: string | null
+  requires_creator_attention: boolean
+  confidence_label: ColoristConfidenceLabel
+  advisory_only: boolean
+  created_at: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorRenderContext = {
+  plan_id: string
+  project_id: string
+  look_bible_id?: string | null
+  scene_id?: string | null
+  shot_id?: string | null
+  color_direction: string
+  style_direction: string
+  lighting_color_notes: string
+  slot_suggestions: ColorRenderSlotSuggestion[]
+  evidence_refs: ColorEvidenceRef[]
+  reference_asset_refs: ColorReferenceAssetRef[]
+  budget: Record<string, number>
+  advisory_only: boolean
+  metadata: Record<string, unknown>
+}
+
+export type ColorFinalVerification = {
+  verification_id: string
+  project_id: string
+  package_id?: string | null
+  asset_id?: string | null
+  look_bible_id?: string | null
+  status: ColoristStatus
+  source_fingerprint: string
+  coverage_summary: string
+  scene_verification_reads: ColorSceneVerificationRead[]
+  sequence_matching_risks: ColorRisk[]
+  final_revision_suggestions: ColorRevisionSuggestion[]
+  evidence_refs: ColorEvidenceRef[]
+  assessment_ids: string[]
+  confidence_label: ColoristConfidenceLabel
+  creator_note: string
+  advisory_only: boolean
+  created_at: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorPaletteContinuityRecord = {
+  palette_record_id: string
+  project_id: string
+  scope: ColoristScope
+  scene_id?: string | null
+  sequence_id?: string | null
+  character_id?: string | null
+  location_id?: string | null
+  prop_id?: string | null
+  motif_id?: string | null
+  source_type: string
+  source_id: string
+  canonical_color_description: string
+  allowed_variations: string[]
+  story_motivated_changes: string[]
+  continuity_risks: ColorRisk[]
+  evidence_refs: ColorEvidenceRef[]
+  memory_refs: ColorMemoryRef[]
+  spine_refs: ColorSpineRef[]
+  confidence_label: ColoristConfidenceLabel
+  advisory_only: boolean
+  created_at: string
+  updated_at: string
+  metadata: Record<string, unknown>
+}
+
+export type ColorStoryArc = {
+  color_arc_id: string
+  project_id: string
+  look_bible_id?: string | null
+  status: ColoristStatus
+  source_fingerprint: string
+  arc_summary: string
+  continuity_constraints: string[]
+  allowed_breaks: string[]
+  evidence_refs: ColorEvidenceRef[]
+  memory_refs: ColorMemoryRef[]
+  spine_refs: ColorSpineRef[]
+  confidence_label: ColoristConfidenceLabel
+  creator_note: string
+  advisory_only: boolean
+  created_at: string
+  updated_at: string
+  metadata: Record<string, unknown>
+}
+
+export type ColoristDecisionProjection = {
+  decision_id: string
+  project_id: string
+  decision_text: string
+  inferred_tradeoff: string
+  scene_id?: string | null
+  plan_id?: string | null
+  assessment_id?: string | null
+  look_bible_id?: string | null
+  saved_by: string
+  saved_at: string
+  memory_entry_id?: string | null
+  editable: boolean
+  forgotten_at?: string | null
+  metadata: Record<string, unknown>
+}
+
+export type ColoristDepartmentSignal = {
+  project_id: string
+  scene_id?: string | null
+  asset_id?: string | null
+  latest_plan_id?: string | null
+  latest_assessment_id?: string | null
+  latest_verification_id?: string | null
+  state: string
+  summary: string
+  needs_creator_attention: boolean
+  confidence_label: ColoristConfidenceLabel
+  evidence_refs: ColorEvidenceRef[]
+  advisory_only: boolean
+}
+
+export type ColoristLookPlanRequest = {
+  look_bible_id?: string | null
+  scene_id?: string | null
+  shot_id?: string | null
+  take_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  scope?: ColoristScope
+  scene_context?: Record<string, unknown>
+  force_refresh?: boolean
+  metadata?: Record<string, unknown>
+}
+
+function coloristQuery(filters: Record<string, unknown> = {}) {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value))
+  })
+  return params.toString() ? `?${params.toString()}` : ''
+}
+
+export function createColorLookBible(projectId: string, payload: { scope?: ColoristScope; title?: string; project_context?: Record<string, unknown>; force_refresh?: boolean; metadata?: Record<string, unknown> }): Promise<{ look_bible: ColorLookBible; reasoning_record_id: string; stale_existing_look_bible_ids: string[]; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listColorLookBibles(projectId: string, filters: { scope?: string; sequence_id?: string; status?: string; limit?: number } = {}): Promise<{ look_bibles: ColorLookBible[] }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles${coloristQuery(filters)}`)
+}
+
+export function getColorLookBible(projectId: string, lookBibleId: string): Promise<{ look_bible: ColorLookBible }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles/${encodeURIComponent(lookBibleId)}`)
+}
+
+export function createColoristLookPlan(projectId: string, payload: ColoristLookPlanRequest): Promise<{ plan: ColoristLookPlan; reasoning_record_id: string; stale_existing_plan_ids: string[]; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/plans`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listColoristLookPlans(projectId: string, filters: { look_bible_id?: string; scene_id?: string; shot_id?: string; asset_id?: string; render_job_id?: string; status?: string; stale?: boolean; limit?: number } = {}): Promise<{ plans: ColoristLookPlan[] }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/plans${coloristQuery(filters)}`)
+}
+
+export function getColoristLookPlan(projectId: string, planId: string): Promise<{ plan: ColoristLookPlan }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/plans/${encodeURIComponent(planId)}`)
+}
+
+export function listColorPaletteContinuityRecords(projectId: string, filters: { scope?: string; scene_id?: string; sequence_id?: string; character_id?: string; location_id?: string; prop_id?: string; motif_id?: string; limit?: number } = {}): Promise<{ records: ColorPaletteContinuityRecord[] }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/palette-continuity${coloristQuery(filters)}`)
+}
+
+export function createColorStoryArc(projectId: string, payload: { look_bible_id?: string | null; project_context?: Record<string, unknown>; force_refresh?: boolean; metadata?: Record<string, unknown> }): Promise<{ story_arc: ColorStoryArc; reasoning_record_id: string; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/story-arcs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listColorStoryArcs(projectId: string, filters: { look_bible_id?: string; status?: string; limit?: number } = {}): Promise<{ story_arcs: ColorStoryArc[] }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/story-arcs${coloristQuery(filters)}`)
+}
+
+export function createColorGradeObservation(projectId: string, payload: { plan_id?: string | null; look_bible_id?: string | null; asset_id?: string | null; render_job_id?: string | null; scene_id?: string | null; shot_id?: string | null; metadata?: Record<string, unknown> }): Promise<{ observation: ColorGradeObservation; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/observations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listColorGradeObservations(projectId: string, filters: { plan_id?: string; asset_id?: string; render_job_id?: string; scene_id?: string; shot_id?: string; status?: string; limit?: number } = {}): Promise<{ observations: ColorGradeObservation[] }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/observations${coloristQuery(filters)}`)
+}
+
+export function createColorMatchAssessment(projectId: string, payload: { plan_id: string; observation_id: string; create_crew_reasoning?: boolean; metadata?: Record<string, unknown> }): Promise<{ assessment: ColorMatchAssessment; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/assessments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listColorMatchAssessments(projectId: string, filters: { plan_id?: string; observation_id?: string; look_bible_id?: string; asset_id?: string; render_job_id?: string; scene_id?: string; shot_id?: string; status?: string; limit?: number } = {}): Promise<{ assessments: ColorMatchAssessment[] }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/assessments${coloristQuery(filters)}`)
+}
+
+export function buildColorRenderContext(projectId: string, payload: { plan_id: string; scene_id?: string | null; shot_id?: string | null; provider?: string; max_prompt_length?: number }): Promise<ColorRenderContext> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/render-context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function createColorFinalVerification(projectId: string, payload: { package_id?: string | null; asset_id?: string | null; look_bible_id?: string | null; assessment_ids?: string[]; metadata?: Record<string, unknown> }): Promise<{ verification: ColorFinalVerification; reasoning_record_id: string; advisory_only: boolean }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/final-verifications`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listColorFinalVerifications(projectId: string, filters: { package_id?: string; asset_id?: string; look_bible_id?: string; status?: string; limit?: number } = {}): Promise<{ verifications: ColorFinalVerification[] }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/final-verifications${coloristQuery(filters)}`)
+}
+
+export function saveExplicitColorDecision(projectId: string, payload: { decision_text: string; inferred_tradeoff?: string; scene_id?: string | null; plan_id?: string | null; assessment_id?: string | null; look_bible_id?: string | null; saved_by?: string; metadata?: Record<string, unknown> }): Promise<ColoristDecisionProjection> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/decisions/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getColoristDepartmentSignal(projectId: string, filters: { scene_id?: string; asset_id?: string; render_job_id?: string } = {}): Promise<ColoristDepartmentSignal> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/signal${coloristQuery(filters)}`)
+}
+
+export type ProductionDesignConfidenceLabel = 'low_data' | 'emerging' | 'consistent' | 'strong' | 'conflicted'
+
+export type ProductionDesignEvidenceRef = {
+  evidence_id: string
+  source_type: string
+  source_id: string
+  field_path?: string
+  scene_id?: string | null
+  shot_id?: string | null
+  character_id?: string | null
+  asset_id?: string | null
+  excerpt?: string
+  relevance?: string
+  reliability_label?: ProductionDesignConfidenceLabel
+  metadata?: Record<string, unknown>
+}
+
+export type ProductionDesignMemoryRef = {
+  memory_id: string
+  memory_type: string
+  scope?: string
+  scene_id?: string | null
+  character_id?: string | null
+  summary?: string
+  source_service?: string
+}
+
+export type ProductionDesignSpineRef = {
+  constraint_id?: string
+  field_name?: string
+  severity?: string
+  summary?: string
+  applied?: boolean
+  risk_if_ignored?: string
+}
+
+export type SymbolicDesignRef = {
+  symbol_id: string
+  motif?: string
+  object_name?: string
+  color?: string
+  emotional_meaning?: string
+  recurrence_context?: string
+  evidence_refs: ProductionDesignEvidenceRef[]
+  confidence_label: ProductionDesignConfidenceLabel
+  advisory_only: boolean
+}
+
+export type DesignMaterialPalette = {
+  palette_id: string
+  color_family: string[]
+  texture_family: string[]
+  material_family: string[]
+  light_response?: string
+  emotional_rationale?: string
+  continuity_notes?: string
+  evidence_refs: ProductionDesignEvidenceRef[]
+}
+
+export type SetDressingElement = {
+  element_id: string
+  label: string
+  category: string
+  placement?: string
+  story_function?: string
+  continuity_rule?: string
+  should_appear: boolean
+  should_not_appear_reason?: string
+  evidence_refs: ProductionDesignEvidenceRef[]
+}
+
+export type PropContinuityRecord = {
+  prop_record_id: string
+  project_id: string
+  prop_id: string
+  prop_name: string
+  prop_type: string
+  canonical_description?: string
+  symbolic_refs: SymbolicDesignRef[]
+  states: Array<Record<string, unknown>>
+  recurrence_rule?: string
+  continuity_constraints: string[]
+  forbidden_changes: string[]
+  reference_asset_ids: string[]
+  evidence_refs: ProductionDesignEvidenceRef[]
+  memory_refs: ProductionDesignMemoryRef[]
+  source_signature: string
+  status: string
+  stale: boolean
+  stale_reason: string
+  advisory_only: boolean
+  created_at: string
+  updated_at: string
+  metadata: Record<string, unknown>
+}
+
+export type CostumeContinuityRecord = {
+  costume_record_id: string
+  project_id: string
+  character_id: string
+  character_name?: string
+  scene_id?: string | null
+  shot_id?: string | null
+  costume_label?: string
+  continuity_phase?: string
+  elements: Array<Record<string, unknown>>
+  palette_notes?: string
+  silhouette_notes?: string
+  deterioration_notes?: string
+  identity_constraints: string[]
+  reference_lock_ids: string[]
+  reference_asset_ids: string[]
+  evidence_refs: ProductionDesignEvidenceRef[]
+  memory_refs: ProductionDesignMemoryRef[]
+  source_signature: string
+  status: string
+  stale: boolean
+  stale_reason: string
+  advisory_only: boolean
+  created_at: string
+  updated_at: string
+  metadata: Record<string, unknown>
+}
+
+export type EnvironmentDesignProfile = {
+  profile_id: string
+  project_id: string
+  location_id?: string | null
+  location_name: string
+  environment_type?: string
+  era_logic?: string
+  architecture?: string
+  geography?: string
+  weathering?: string
+  practical_function?: string
+  emotional_function?: string
+  palette?: DesignMaterialPalette | null
+  set_dressing_rules: string[]
+  continuity_constraints: string[]
+  forbidden_elements: string[]
+  reference_asset_ids: string[]
+  evidence_refs: ProductionDesignEvidenceRef[]
+  memory_refs: ProductionDesignMemoryRef[]
+  spine_refs: ProductionDesignSpineRef[]
+  source_signature: string
+  status: string
+  stale: boolean
+  stale_reason: string
+  advisory_only: boolean
+  created_at: string
+  updated_at: string
+  metadata: Record<string, unknown>
+}
+
+export type ProductionDesignAxis = {
+  axis: string
+  intent: string
+  rationale: string
+  continuity_rule?: string
+  evidence_refs: ProductionDesignEvidenceRef[]
+  confidence_label: ProductionDesignConfidenceLabel
+}
+
+export type ProductionDesignRenderSlotSuggestion = {
+  slot: 'environment' | 'style' | 'negative' | 'character'
+  suggestion: string
+  rationale: string
+  budget_limit: number
+  budget_used: number
+  evidence_refs: ProductionDesignEvidenceRef[]
+}
+
+export type ProductionDesignPlan = {
+  plan_id: string
+  project_id: string
+  scope: 'project' | 'sequence' | 'scene' | 'shot' | 'asset'
+  scene_id?: string | null
+  shot_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  status: string
+  generated_at: string
+  updated_at: string
+  model_version: string
+  source_signature: string
+  source_summary: string
+  environment_profile?: EnvironmentDesignProfile | null
+  prop_records: PropContinuityRecord[]
+  costume_records: CostumeContinuityRecord[]
+  set_dressing: SetDressingElement[]
+  symbolic_refs: SymbolicDesignRef[]
+  design_axes: ProductionDesignAxis[]
+  material_palette?: DesignMaterialPalette | null
+  render_slot_suggestions: ProductionDesignRenderSlotSuggestion[]
+  negative_design_constraints: string[]
+  continuity_constraints: string[]
+  reasoning_trace: Array<Record<string, unknown>>
+  evidence_refs: ProductionDesignEvidenceRef[]
+  memory_refs: ProductionDesignMemoryRef[]
+  spine_refs: ProductionDesignSpineRef[]
+  crew_reasoning_id?: string | null
+  readiness_label: 'ready' | 'needs_review' | 'blocked' | 'low_data'
+  blockers: string[]
+  creator_note: string
+  stale: boolean
+  stale_reason: string
+  advisory_only: boolean
+  metadata: Record<string, unknown>
+}
+
+export type ProductionDesignObservation = {
+  observation_id: string
+  project_id: string
+  plan_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  scene_id?: string | null
+  shot_id?: string | null
+  status: string
+  observation_scope: string
+  observed_environment: string
+  observed_set_dressing_tags: string[]
+  observed_prop_candidates: string[]
+  observed_costume_candidates: string[]
+  observed_palette_tags: string[]
+  observed_material_tags: string[]
+  observed_symbolic_candidates: string[]
+  keyframe_ids: string[]
+  analysis_ids: string[]
+  cinematic_memory_ids: string[]
+  evidence_refs: ProductionDesignEvidenceRef[]
+  limitations: string[]
+  confidence_label: ProductionDesignConfidenceLabel
+  advisory_only: boolean
+  created_at: string
+  metadata: Record<string, unknown>
+}
+
+export type ProductionDesignAssessment = {
+  assessment_id: string
+  project_id: string
+  plan_id: string
+  observation_id: string
+  scene_id?: string | null
+  shot_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  status: string
+  generated_at: string
+  source_signature: string
+  alignment_summary: string
+  matched_axes: string[]
+  drift_axes: string[]
+  missing_required_elements: string[]
+  unexpected_elements: string[]
+  prop_state_conflicts: string[]
+  costume_continuity_conflicts: string[]
+  environment_continuity_conflicts: string[]
+  palette_material_drift: string[]
+  symbolic_risks: string[]
+  risks: Array<{ risk_id: string; category: string; severity: string; summary: string }>
+  revision_suggestions: Array<{ suggestion_id: string; target_axis: string; summary: string; rationale: string }>
+  evidence_refs: ProductionDesignEvidenceRef[]
+  memory_refs: ProductionDesignMemoryRef[]
+  spine_refs: ProductionDesignSpineRef[]
+  crew_reasoning_id?: string | null
+  requires_creator_attention: boolean
+  confidence_label: ProductionDesignConfidenceLabel
+  advisory_only: boolean
+  metadata: Record<string, unknown>
+}
+
+export type ProductionDesignRenderContext = {
+  plan_id: string
+  project_id: string
+  scene_id?: string | null
+  shot_id?: string | null
+  environment_direction: string
+  style_direction: string
+  character_direction: string
+  negative_design_direction: string
+  slot_suggestions: ProductionDesignRenderSlotSuggestion[]
+  evidence_refs: ProductionDesignEvidenceRef[]
+  budget: Record<string, number>
+  advisory_only: boolean
+  metadata: Record<string, unknown>
+}
+
+export type ProductionDesignPlanRequest = {
+  scene_id?: string | null
+  shot_id?: string | null
+  asset_id?: string | null
+  render_job_id?: string | null
+  scope?: 'project' | 'sequence' | 'scene' | 'shot' | 'asset'
+  scene_context?: Record<string, unknown>
+  force_refresh?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export function createProductionDesignPlan(
+  projectId: string,
+  payload: ProductionDesignPlanRequest,
+): Promise<{ plan: ProductionDesignPlan; reasoning_record_id: string; stale_existing_plan_ids: string[]; advisory_only: boolean }> {
+  return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/plans`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function buildProductionDesignRenderContext(
+  projectId: string,
+  payload: { plan_id: string; scene_id?: string | null; shot_id?: string | null; provider?: string; max_prompt_length?: number },
+): Promise<ProductionDesignRenderContext> {
+  return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/render-context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function createProductionDesignObservation(
+  projectId: string,
+  payload: { plan_id?: string | null; asset_id?: string | null; render_job_id?: string | null; scene_id?: string | null; shot_id?: string | null; keyframe_ids?: string[]; metadata?: Record<string, unknown> },
+): Promise<{ observation: ProductionDesignObservation; advisory_only: boolean }> {
+  return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/observations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function createProductionDesignAssessment(
+  projectId: string,
+  payload: { plan_id: string; observation_id: string; create_crew_reasoning?: boolean; metadata?: Record<string, unknown> },
+): Promise<{ assessment: ProductionDesignAssessment; advisory_only: boolean }> {
+  return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/assessments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getProductionDesignDepartmentSignal(projectId: string): Promise<{
+  project_id: string
+  state: string
+  active_plan_count: number
+  stale_plan_count: number
+  recent_assessment_count: number
+  needs_creator_attention: boolean
+  summary: string
+  last_plan_id?: string | null
+  last_assessment_id?: string | null
+  advisory_only: boolean
+}> {
+  return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/department-signal`)
+}
+
+export function getScenePerformance(projectId: string, sceneId: string): Promise<PerformanceAnalysisResponse> {
+  return fetchJson<PerformanceAnalysisResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}`,
+  )
+}
+
+export function getCharacterPerformanceHistory(
+  projectId: string,
+  characterId: string,
+  limit = 20,
+): Promise<CharacterPerformanceBrief[]> {
+  return fetchJson<CharacterPerformanceBrief[]>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/characters/${encodeURIComponent(characterId)}/history?limit=${limit}`,
+  )
+}
+
+export function getPerformancePromptContext(
+  projectId: string,
+  sceneId: string,
+  shotId?: string,
+): Promise<PerformanceContextBundle> {
+  const query = shotId ? `?shot_id=${encodeURIComponent(shotId)}` : ''
+  return fetchJson<PerformanceContextBundle>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/prompt-context${query}`,
+  )
+}
+
+export function getPerformanceVoiceContext(
+  projectId: string,
+  sceneId: string,
+  characterId: string,
+): Promise<PerformanceContextBundle> {
+  return fetchJson<PerformanceContextBundle>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/voice-context/${encodeURIComponent(characterId)}`,
+  )
+}
+
+export function getPerformanceScreeningContext(projectId: string, sceneId: string): Promise<PerformanceContextBundle> {
+  return fetchJson<PerformanceContextBundle>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/screening-context`,
+  )
+}
+
+export function savePerformanceDecision(
+  projectId: string,
+  payload: PerformanceDecisionRequest,
+): Promise<PerformanceDecisionMemoryProjection> {
+  return fetchJson<PerformanceDecisionMemoryProjection>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export function updatePerformanceDecision(
+  projectId: string,
+  decisionId: string,
+  payload: PerformanceDecisionUpdateRequest,
+): Promise<PerformanceDecisionMemoryProjection> {
+  return fetchJson<PerformanceDecisionMemoryProjection>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions/${encodeURIComponent(decisionId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export function forgetPerformanceDecision(
+  projectId: string,
+  decisionId: string,
+): Promise<PerformanceDecisionMemoryProjection> {
+  return fetchJson<PerformanceDecisionMemoryProjection>(
+    `/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions/${encodeURIComponent(decisionId)}`,
+    { method: 'DELETE' },
+  )
 }
 
 // Health check function to verify backend is reachable
@@ -436,6 +1807,257 @@ export type CollaborationState = {
   approval_votes?: Array<Record<string, unknown>>
   co_direction_notes?: Array<Record<string, unknown>>
   updated_at?: string
+}
+
+export type StudioWorkflowRole = 'owner' | 'producer' | 'director' | 'editor' | 'reviewer' | 'viewer' | 'ai_advisory'
+export type StudioWorkflowPhase =
+  | 'intake'
+  | 'study'
+  | 'writing'
+  | 'previs'
+  | 'production'
+  | 'screening'
+  | 'revision'
+  | 'packaging'
+  | 'acceptance'
+  | 'delivery'
+  | 'archive'
+export type StudioWorkflowStatus = 'active' | 'waiting_creator' | 'blocked' | 'ready_for_next_phase' | 'delivered' | 'archived'
+export type StudioArtifactType =
+  | 'script'
+  | 'scene'
+  | 'shot'
+  | 'storyboard_blueprint'
+  | 'render_select'
+  | 'scene_cut'
+  | 'film_cut'
+  | 'review_package'
+  | 'final_package'
+  | 'memory_record'
+  | 'creative_spine'
+export type StudioArtifactVersionStatus = 'draft' | 'submitted' | 'changes_requested' | 'approved' | 'locked' | 'superseded' | 'archived'
+export type StudioApprovalGateType =
+  | 'scene_review'
+  | 'shot_select'
+  | 'storyboard_lock'
+  | 'render_select'
+  | 'scene_cut_approval'
+  | 'film_cut_approval'
+  | 'package_acceptance'
+  | 'delivery_approval'
+  | 'creative_spine_deviation'
+  | 'memory_decision_save'
+  | 'manual_gate'
+export type StudioApprovalGateStatus = 'pending' | 'ready' | 'waiting_evidence' | 'approved' | 'changes_requested' | 'rejected' | 'blocked' | 'superseded' | 'cancelled'
+export type StudioApprovalDecisionValue = 'approve' | 'request_changes' | 'reject' | 'abstain' | 'override' | 'cancel'
+
+export type StudioWorkflowEvidenceRef = {
+  source_type: string
+  source_id?: string
+  source_label?: string
+  field_path?: string
+  observed_value?: unknown
+  metadata?: Record<string, unknown>
+}
+
+export type StudioWorkflowProjectState = {
+  project_id: string
+  current_phase: StudioWorkflowPhase
+  workflow_status: StudioWorkflowStatus
+  active_version_id?: string
+  active_gate_id?: string
+  metadata?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type StudioWorkflowCollaborator = {
+  collaborator_id: string
+  project_id: string
+  actor_id: string
+  display_name: string
+  role: StudioWorkflowRole
+  permission_scope: string
+  status: string
+  last_seen_at?: string | null
+  metadata?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type StudioArtifactVersion = {
+  version_id: string
+  project_id: string
+  artifact_type: StudioArtifactType
+  artifact_id: string
+  version_number: number
+  status: StudioArtifactVersionStatus
+  title?: string
+  summary?: string
+  source_version_id?: string | null
+  canonical_ref_type?: string
+  canonical_ref_id?: string
+  snapshot?: Record<string, unknown>
+  evidence?: StudioWorkflowEvidenceRef[]
+  created_by?: string
+  approved_by?: string
+  approved_at?: string | null
+  locked_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type StudioApprovalGate = {
+  gate_id: string
+  project_id: string
+  gate_type: StudioApprovalGateType
+  target_type: string
+  target_id: string
+  version_id?: string | null
+  status: StudioApprovalGateStatus
+  required_role: StudioWorkflowRole
+  required_decision: StudioApprovalDecisionValue
+  queue_item_id?: string | null
+  manual_dependency_id?: string | null
+  evidence_policy?: Record<string, unknown>
+  latest_evaluation?: {
+    blockers?: string[]
+    warnings?: string[]
+    evidence?: StudioWorkflowEvidenceRef[]
+    evaluated_at?: string
+    advisory_only?: boolean
+  } & Record<string, unknown>
+  opened_by?: string
+  closed_by?: string
+  closed_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type StudioApprovalDecision = {
+  decision_id: string
+  project_id: string
+  gate_id: string
+  version_id?: string | null
+  actor_id: string
+  actor_role: StudioWorkflowRole
+  decision: StudioApprovalDecisionValue
+  rationale?: string
+  notes?: string
+  evidence?: StudioWorkflowEvidenceRef[]
+  created_at: string
+}
+
+export type StudioWorkflowComment = {
+  comment_id: string
+  project_id: string
+  target_type: string
+  target_id: string
+  version_id?: string | null
+  parent_comment_id?: string | null
+  actor_id: string
+  actor_role: StudioWorkflowRole
+  display_name?: string
+  body: string
+  status: 'open' | 'resolved' | 'archived'
+  resolved_by?: string | null
+  resolved_at?: string | null
+  metadata?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type StudioWorkflowTask = {
+  workflow_task_id: string
+  project_id: string
+  title: string
+  task_type: string
+  target_type?: string
+  target_id?: string
+  version_id?: string | null
+  assignee_actor_id?: string
+  status: 'open' | 'in_progress' | 'waiting_creator' | 'blocked' | 'complete' | 'cancelled'
+  priority?: string
+  queue_item_id?: string | null
+  due_at?: string | null
+  metadata?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type StudioWorkflowEvent = {
+  event_id: string
+  project_id: string
+  event_type: string
+  actor_id?: string
+  target_type?: string
+  target_id?: string
+  version_id?: string | null
+  gate_id?: string | null
+  decision_id?: string | null
+  message?: string
+  details?: Record<string, unknown>
+  created_at: string
+}
+
+export type StudioWorkflowSummary = {
+  project_state: StudioWorkflowProjectState
+  collaborators: StudioWorkflowCollaborator[]
+  active_gates: StudioApprovalGate[]
+  active_versions: StudioArtifactVersion[]
+  open_tasks: StudioWorkflowTask[]
+  recent_events: StudioWorkflowEvent[]
+  legacy_projection?: Record<string, unknown>
+}
+
+export type CreateStudioArtifactVersionPayload = {
+  artifact_type: StudioArtifactType
+  artifact_id: string
+  title?: string
+  summary?: string
+  source_version_id?: string | null
+  canonical_ref_type?: string
+  canonical_ref_id?: string
+  snapshot?: Record<string, unknown>
+  evidence?: StudioWorkflowEvidenceRef[]
+  created_by?: string
+  status?: StudioArtifactVersionStatus
+}
+
+export type CreateStudioApprovalGatePayload = {
+  gate_type: StudioApprovalGateType
+  target_type: string
+  target_id: string
+  version_id?: string | null
+  required_role?: StudioWorkflowRole
+  required_decision?: StudioApprovalDecisionValue
+  queue_item_id?: string | null
+  manual_dependency_id?: string | null
+  evidence_policy?: Record<string, unknown>
+  opened_by?: string
+}
+
+export type RecordStudioApprovalDecisionPayload = {
+  actor_id: string
+  actor_role: StudioWorkflowRole
+  decision: StudioApprovalDecisionValue
+  rationale?: string
+  notes?: string
+  evidence?: StudioWorkflowEvidenceRef[]
+  release_queue?: boolean
+  create_revision_task?: boolean
+}
+
+export type CreateStudioWorkflowCommentPayload = {
+  target_type: string
+  target_id: string
+  version_id?: string | null
+  parent_comment_id?: string | null
+  actor_id: string
+  actor_role?: StudioWorkflowRole
+  display_name?: string
+  body: string
+  metadata?: Record<string, unknown>
 }
 
 export type ShortFilmWorkflowStage = {
@@ -698,6 +2320,109 @@ export type Scene = {
   transition_advisory?: TransitionAdvisory
   comments?: SceneComment[]
   approval?: SceneApproval
+}
+
+export type StoryboardBlueprintStatus = 'draft' | 'needs_review' | 'approved' | 'locked' | 'superseded' | 'archived'
+export type StoryboardShotStatus = 'draft' | 'ready' | 'approved' | 'locked' | 'rendering' | 'rendered' | 'needs_revision' | 'superseded'
+
+export type StoryboardShotRenderContract = {
+  provider_neutral_prompt: string
+  prompt_components: string[]
+  structured_parameters: Record<string, unknown>
+  reference_assets: string[]
+  duration_seconds: number
+  aspect_ratio: string
+  seed?: number | null
+  seed_locked: boolean
+  render_readiness: 'not_ready' | 'ready' | 'blocked' | 'stale' | string
+  render_blockers: string[]
+  provenance: Record<string, unknown>
+}
+
+export type StoryboardShot = {
+  storyboard_shot_id: string
+  blueprint_id: string
+  version_id: string
+  project_id: string
+  scene_id: string
+  shot_id: string
+  shot_number: number
+  status: StoryboardShotStatus
+  intent: Record<string, unknown>
+  visual_plan: Record<string, unknown>
+  continuity_plan: Record<string, unknown>
+  render_contract: StoryboardShotRenderContract
+  department_notes: Array<Record<string, unknown>>
+  storyboard_image_url?: string | null
+  previs_image_id?: string | null
+  rationale: string
+  locked: boolean
+  created_at: string
+  updated_at: string
+  metadata: Record<string, unknown>
+}
+
+export type StoryboardBlueprint = {
+  blueprint_id: string
+  project_id: string
+  scene_id: string
+  current_version_id?: string | null
+  status: StoryboardBlueprintStatus
+  approved_version_id?: string | null
+  locked: boolean
+  created_at: string
+  updated_at: string
+  created_by: string
+  metadata: Record<string, unknown>
+}
+
+export type StoryboardBlueprintVersion = {
+  version_id: string
+  blueprint_id: string
+  project_id: string
+  scene_id: string
+  version_number: number
+  status: StoryboardBlueprintStatus
+  change_reason: string
+  source_version_id?: string | null
+  provenance: Record<string, unknown>
+  inspection: Record<string, unknown>
+  created_at: string
+  approved_at?: string | null
+  approved_by: string
+  metadata: Record<string, unknown>
+}
+
+export type StoryboardBlueprintInspection = {
+  blueprint_id: string
+  version_id: string
+  render_readiness: string
+  blockers: string[]
+  warnings: string[]
+  stale_render_job_ids: string[]
+  provenance: Record<string, unknown>
+  generated_at: string
+}
+
+export type StoryboardBlueprintDetail = {
+  blueprint: StoryboardBlueprint
+  version: StoryboardBlueprintVersion | null
+  shots: StoryboardShot[]
+  inspection: StoryboardBlueprintInspection
+}
+
+export type StoryboardBlueprintSummary = {
+  blueprint_id: string
+  project_id: string
+  scene_id: string
+  current_version_id?: string | null
+  approved_version_id?: string | null
+  status: StoryboardBlueprintStatus | string
+  locked: boolean
+  shot_count: number
+  ready_shot_count: number
+  storyboard_image?: string | null
+  updated_at: string
 }
 
 // Activity Feed Types
@@ -1242,6 +2967,164 @@ export async function castCollaborationVote(
   }
 }
 
+export function getProjectWorkflow(projectId: string): Promise<StudioWorkflowSummary> {
+  return fetchJson<StudioWorkflowSummary>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow`)
+}
+
+export function createWorkflowVersion(
+  projectId: string,
+  payload: CreateStudioArtifactVersionPayload,
+): Promise<StudioArtifactVersion> {
+  return fetchJson<StudioArtifactVersion>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/versions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listWorkflowVersions(
+  projectId: string,
+  filters: { artifact_type?: StudioArtifactType; artifact_id?: string; status?: StudioArtifactVersionStatus; limit?: number } = {},
+): Promise<StudioArtifactVersion[]> {
+  const params = new URLSearchParams()
+  if (filters.artifact_type) params.set('artifact_type', filters.artifact_type)
+  if (filters.artifact_id) params.set('artifact_id', filters.artifact_id)
+  if (filters.status) params.set('status', filters.status)
+  if (filters.limit) params.set('limit', String(filters.limit))
+  const query = params.toString()
+  return fetchJson<StudioArtifactVersion[]>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/versions${query ? `?${query}` : ''}`,
+  )
+}
+
+export function createWorkflowGate(
+  projectId: string,
+  payload: CreateStudioApprovalGatePayload,
+): Promise<StudioApprovalGate> {
+  return fetchJson<StudioApprovalGate>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listWorkflowGates(
+  projectId: string,
+  filters: { status?: StudioApprovalGateStatus; gate_type?: StudioApprovalGateType; target_type?: string; target_id?: string; limit?: number } = {},
+): Promise<StudioApprovalGate[]> {
+  const params = new URLSearchParams()
+  if (filters.status) params.set('status', filters.status)
+  if (filters.gate_type) params.set('gate_type', filters.gate_type)
+  if (filters.target_type) params.set('target_type', filters.target_type)
+  if (filters.target_id) params.set('target_id', filters.target_id)
+  if (filters.limit) params.set('limit', String(filters.limit))
+  const query = params.toString()
+  return fetchJson<StudioApprovalGate[]>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates${query ? `?${query}` : ''}`,
+  )
+}
+
+export function evaluateWorkflowGate(projectId: string, gateId: string): Promise<StudioApprovalGate> {
+  return fetchJson<StudioApprovalGate>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates/${encodeURIComponent(gateId)}/evaluate`,
+    { method: 'POST' },
+  )
+}
+
+export function recordWorkflowDecision(
+  projectId: string,
+  gateId: string,
+  payload: RecordStudioApprovalDecisionPayload,
+): Promise<StudioApprovalDecision> {
+  return fetchJson<StudioApprovalDecision>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates/${encodeURIComponent(gateId)}/decisions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export function updateWorkflowPhase(
+  projectId: string,
+  payload: { actor_id?: string; phase: StudioWorkflowPhase; workflow_status?: StudioWorkflowStatus | null },
+): Promise<StudioWorkflowProjectState> {
+  return fetchJson<StudioWorkflowProjectState>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/phase`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function postWorkflowComment(
+  projectId: string,
+  payload: CreateStudioWorkflowCommentPayload,
+): Promise<StudioWorkflowComment> {
+  return fetchJson<StudioWorkflowComment>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function listWorkflowComments(
+  projectId: string,
+  filters: { target_type?: string; target_id?: string; version_id?: string; status?: StudioWorkflowComment['status']; limit?: number } = {},
+): Promise<StudioWorkflowComment[]> {
+  const params = new URLSearchParams()
+  if (filters.target_type) params.set('target_type', filters.target_type)
+  if (filters.target_id) params.set('target_id', filters.target_id)
+  if (filters.version_id) params.set('version_id', filters.version_id)
+  if (filters.status) params.set('status', filters.status)
+  if (filters.limit) params.set('limit', String(filters.limit))
+  const query = params.toString()
+  return fetchJson<StudioWorkflowComment[]>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments${query ? `?${query}` : ''}`,
+  )
+}
+
+export function resolveWorkflowComment(projectId: string, commentId: string, actorId = 'owner'): Promise<StudioWorkflowComment> {
+  return fetchJson<StudioWorkflowComment>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments/${encodeURIComponent(commentId)}/resolve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actor_id: actorId }),
+    },
+  )
+}
+
+export function listWorkflowTasks(
+  projectId: string,
+  filters: { status?: StudioWorkflowTask['status']; limit?: number } = {},
+): Promise<StudioWorkflowTask[]> {
+  const params = new URLSearchParams()
+  if (filters.status) params.set('status', filters.status)
+  if (filters.limit) params.set('limit', String(filters.limit))
+  const query = params.toString()
+  return fetchJson<StudioWorkflowTask[]>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/tasks${query ? `?${query}` : ''}`,
+  )
+}
+
+export async function listWorkflowEvents(
+  projectId: string,
+  filters: { target_type?: string; target_id?: string; gate_id?: string; version_id?: string; limit?: number } = {},
+): Promise<StudioWorkflowEvent[]> {
+  const params = new URLSearchParams()
+  if (filters.target_type) params.set('target_type', filters.target_type)
+  if (filters.target_id) params.set('target_id', filters.target_id)
+  if (filters.gate_id) params.set('gate_id', filters.gate_id)
+  if (filters.version_id) params.set('version_id', filters.version_id)
+  if (filters.limit) params.set('limit', String(filters.limit))
+  const query = params.toString()
+  const response = await fetchJson<{ events: StudioWorkflowEvent[] }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/events${query ? `?${query}` : ''}`,
+  )
+  return response.events
+}
+
 export function createDemoProject(demoId = 'neon_aftertaste') {
   const form = new FormData()
   form.append('demo_id', demoId)
@@ -1332,6 +3215,125 @@ export function generateSceneStoryboard(
   }>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard?${params.toString()}`,
     { method: 'POST', timeoutMs: 30000 },
+  )
+}
+
+export function createStoryboardBlueprint(
+  projectId: string,
+  sceneId: string,
+  payload: {
+    mode?: string
+    shot_count?: number | null
+    source?: string
+    preserve_locked_shots?: boolean
+    regeneration_reason?: string
+  } = {},
+) {
+  return fetchJson<StoryboardBlueprintDetail>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard-blueprint`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      timeoutMs: 30000,
+    },
+  )
+}
+
+export function getStoryboardBlueprint(projectId: string, sceneId: string) {
+  return fetchJson<StoryboardBlueprintDetail>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard-blueprint`,
+    { timeoutMs: 10000 },
+  )
+}
+
+export function listStoryboardBlueprints(projectId: string) {
+  return fetchJson<StoryboardBlueprintSummary[]>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/storyboard-blueprints`,
+    { timeoutMs: 10000 },
+  )
+}
+
+export function backfillStoryboardBlueprints(
+  projectId: string,
+  payload: { shot_count?: number | null; preserve_locked_shots?: boolean } = {},
+) {
+  return fetchJson<{
+    project_id: string
+    scene_count: number
+    created: Array<Record<string, unknown>>
+    existing: Array<Record<string, unknown>>
+  }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/storyboard-blueprints/backfill`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    timeoutMs: 30000,
+  })
+}
+
+export function approveStoryboardVersion(
+  blueprintId: string,
+  versionId: string,
+  approvedBy = 'creator',
+) {
+  return fetchJson<StoryboardBlueprintDetail>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/approve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved_by: approvedBy, acknowledged_warnings: [] }),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export function updateStoryboardShot(
+  blueprintId: string,
+  storyboardShotId: string,
+  payload: {
+    intent?: Record<string, unknown> | null
+    visual_plan?: Record<string, unknown> | null
+    continuity_plan?: Record<string, unknown> | null
+    render_contract?: Record<string, unknown> | null
+    change_reason?: string
+  },
+) {
+  return fetchJson<StoryboardShot>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export function lockStoryboardShot(blueprintId: string, storyboardShotId: string, locked = true) {
+  return fetchJson<StoryboardShot>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/lock`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locked }),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export function renderStoryboardShot(
+  blueprintId: string,
+  storyboardShotId: string,
+  options: { provider?: string | null; submit?: boolean } = {},
+) {
+  return fetchJson<RenderJob>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/render`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+      timeoutMs: 30000,
+    },
   )
 }
 
@@ -1699,6 +3701,23 @@ export type RenderJob = {
   output_url?: string
   preview_url?: string
   error_message?: string
+  metadata?: {
+    provider_failure?: {
+      category?: string
+      error_type?: string
+      message?: string
+      retryable?: boolean
+      policy_reason?: string
+    }
+    pipeline_reliability?: {
+      failure_location?: {
+        phase?: string
+        reason?: string
+        error_type?: string
+        category?: string
+      }
+    }
+  }
   retry_count: number
   continuity_context_injected?: boolean
   continuity_review?: ContinuityReview | null
@@ -1768,6 +3787,92 @@ export type RenderDiagnostics = {
     ffprobe_available: boolean
     ffprobe_path: string
   }
+}
+
+export type RenderJobsPage = {
+  items: RenderJob[]
+  next_cursor?: string | null
+  total_visible: number
+  has_more: boolean
+  filters: Record<string, unknown>
+}
+
+export type ProductionQueueItem = {
+  queue_item_id: string
+  project_id: string
+  scene_id?: string | null
+  shot_id?: string | null
+  work_type: string
+  canonical_type: string
+  canonical_id?: string | null
+  provider?: string | null
+  status: string
+  priority: number
+  idempotency_key: string
+  dependency_policy: string
+  payload: Record<string, unknown>
+  result: Record<string, unknown>
+  failure: Record<string, unknown>
+  reason: string
+  attempt_count: number
+  max_attempts: number
+  lease_owner?: string | null
+  lease_acquired_at?: string | null
+  lease_expires_at?: string | null
+  next_run_at?: string | null
+  next_poll_at?: string | null
+  created_at: string
+  updated_at: string
+  started_at?: string | null
+  completed_at?: string | null
+}
+
+export type ProductionProviderPressure = {
+  provider: string
+  active: number
+  queued: number
+  limit: number
+  status: string
+}
+
+export type ProductionProjectThroughput = {
+  project_id: string
+  active: number
+  queued: number
+  completed: number
+  failed: number
+}
+
+export type ProductionQueueSummary = {
+  project_id?: string | null
+  captured_at: string
+  counts_by_status: Record<string, number>
+  counts_by_work_type: Record<string, number>
+  provider_pressure: ProductionProviderPressure[]
+  project_throughput: ProductionProjectThroughput[]
+  oldest_waiting_item?: ProductionQueueItem | null
+  blocked_reasons: string[]
+  stale_leases: number
+  recent_failures: ProductionQueueItem[]
+}
+
+export type ProductionQueuePage = {
+  items: ProductionQueueItem[]
+  next_cursor?: string | null
+  total_visible: number
+  has_more: boolean
+  filters: Record<string, unknown>
+}
+
+export type ProductionQueueEvent = {
+  event_id: string
+  queue_item_id?: string | null
+  project_id: string
+  event_type: string
+  stage: string
+  message: string
+  details: Record<string, unknown>
+  created_at: string
 }
 
 export type ReadinessLevel = 'ready' | 'minor_issues' | 'major_issues'
@@ -1913,9 +4018,95 @@ export function listRenderJobs(projectId?: string, init?: RequestInit) {
   return fetchJson<RenderJob[]>('/api/f51/studio/render/jobs' + query, { ...init, timeoutLabel: 'Render' })
 }
 
+export function listRenderJobsPage(
+  filters: { projectId?: string; status?: string; cursor?: string; limit?: number } = {},
+  init?: RequestInit,
+) {
+  const params = new URLSearchParams({ paginated: 'true' })
+  if (filters.projectId) params.append('project_id', filters.projectId)
+  if (filters.status) params.append('status', filters.status)
+  if (filters.cursor) params.append('cursor', filters.cursor)
+  if (filters.limit) params.append('limit', String(filters.limit))
+  return fetchJson<RenderJobsPage>(`/api/f51/studio/render/jobs?${params.toString()}`, {
+    ...init,
+    timeoutLabel: 'Render',
+  })
+}
+
 export function getRenderDiagnostics(projectId?: string, init?: RequestInit) {
   const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''
   return fetchJson<RenderDiagnostics>('/api/f51/studio/render/diagnostics' + query, init)
+}
+
+export function getProductionQueueSummary(projectId?: string, init?: RequestInit) {
+  const path = projectId
+    ? `/api/f51/studio/production-queue/projects/${encodeURIComponent(projectId)}/summary`
+    : '/api/f51/studio/production-queue/summary'
+  return fetchJson<ProductionQueueSummary>(path, { ...init, timeoutLabel: 'Production queue' })
+}
+
+export function listProductionQueueItems(
+  projectId: string,
+  filters: { status?: string; work_type?: string; provider?: string; cursor?: string; limit?: number } = {},
+  init?: RequestInit,
+) {
+  const params = new URLSearchParams()
+  if (filters.status) params.append('status', filters.status)
+  if (filters.work_type) params.append('work_type', filters.work_type)
+  if (filters.provider) params.append('provider', filters.provider)
+  if (filters.cursor) params.append('cursor', filters.cursor)
+  if (filters.limit) params.append('limit', String(filters.limit))
+  const query = params.toString() ? `?${params.toString()}` : ''
+  return fetchJson<ProductionQueuePage>(
+    `/api/f51/studio/production-queue/projects/${encodeURIComponent(projectId)}/items${query}`,
+    { ...init, timeoutLabel: 'Production queue' },
+  )
+}
+
+export function getProductionQueueItem(queueItemId: string, init?: RequestInit) {
+  return fetchJson<ProductionQueueItem>(
+    `/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}`,
+    { ...init, timeoutLabel: 'Production queue' },
+  )
+}
+
+export function cancelProductionQueueItem(queueItemId: string, reason = '') {
+  return fetchJson<ProductionQueueItem>(
+    `/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/cancel`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+      timeoutLabel: 'Production queue',
+    },
+  )
+}
+
+export function retryProductionQueueItem(queueItemId: string, reason = '') {
+  return fetchJson<ProductionQueueItem>(
+    `/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/retry`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+      timeoutLabel: 'Production queue',
+    },
+  )
+}
+
+export function getProductionQueueEvents(queueItemId: string, limit = 100, init?: RequestInit) {
+  return fetchJson<ProductionQueueEvent[]>(
+    `/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/events?limit=${encodeURIComponent(String(limit))}`,
+    { ...init, timeoutLabel: 'Production queue' },
+  )
+}
+
+export function getProductionQueueDiagnostics(projectId?: string, init?: RequestInit) {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''
+  return fetchJson<Record<string, unknown>>('/api/f51/studio/production-queue/diagnostics' + query, {
+    ...init,
+    timeoutLabel: 'Production queue',
+  })
 }
 
 export function reconcileRenderJob(jobId: string) {
@@ -2260,6 +4451,99 @@ export type UpdatePackageStatusPayload = {
   package_status: string
 }
 
+export type AcceptanceSeverity = 'pass' | 'warning' | 'blocker' | 'not_applicable'
+export type AcceptanceDisposition =
+  | 'ready_for_creator_approval'
+  | 'needs_attention'
+  | 'blocked'
+  | 'insufficient_data'
+
+export type AcceptanceEvidenceRef = {
+  source_type: string
+  source_id: string
+  source_label: string
+  field_path: string
+  observed_value?: unknown
+  metadata: Record<string, unknown>
+}
+
+export type ProductionAcceptanceCheckResult = {
+  check_id: string
+  check_version: string
+  category: string
+  severity: AcceptanceSeverity
+  title: string
+  summary: string
+  co_director_note: string
+  affected_scenes: string[]
+  affected_shots: string[]
+  evidence: AcceptanceEvidenceRef[]
+  remediation: string[]
+  metadata: Record<string, unknown>
+}
+
+export type ProductionAcceptanceContextSnapshot = {
+  project_id: string
+  package_id: string
+  package_updated_at: string
+  final_output_url: string
+  final_output_fingerprint: string
+  review_id: string
+  review_decision: string
+  render_job_ids: string[]
+  revision_ids: string[]
+  scene_ids: string[]
+  acceptance_input_hash: string
+  evidence_counts: Record<string, number>
+}
+
+export type ProductionAcceptanceReport = {
+  acceptance_id: string
+  project_id: string
+  package_id: string
+  disposition: AcceptanceDisposition
+  stale: boolean
+  stale_reasons: string[]
+  checks: ProductionAcceptanceCheckResult[]
+  context: ProductionAcceptanceContextSnapshot
+  summary: string
+  co_director_note: string
+  generated_at: string
+  generated_by: string
+  metadata: Record<string, unknown>
+}
+
+export type ProductionAcceptanceRunRequest = {
+  package_id?: string
+  force_refresh?: boolean
+  include_advisory_checks?: boolean
+  strict?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export type ProductionAcceptanceSummary = {
+  project_id: string
+  package_id: string
+  latest_acceptance_id: string
+  disposition: AcceptanceDisposition | 'not_run'
+  stale: boolean
+  blocker_count: number
+  warning_count: number
+  generated_at: string
+  recommended_action: string
+}
+
+export type PackageApprovalGuardResult = {
+  project_id: string
+  package_id: string
+  allowed: boolean
+  guard_level: 'allow' | 'warn' | 'block'
+  reason: string
+  latest_acceptance_id: string
+  evidence: AcceptanceEvidenceRef[]
+  metadata: Record<string, unknown>
+}
+
 export type VideoAsset = {
   asset_id: string
   project_id: string
@@ -2570,6 +4854,121 @@ export type EditorialRevisionComparison = {
   strongest_difference: string
   advisory_notes: string[]
   uncertainty_note?: string
+  canonical_editorial_analysis?: {
+    analysis_id?: string
+    context_hash?: string
+    analysis_status?: string
+    overall_read?: string
+    primary_pacing_read?: string
+    primary_rhythm_read?: string
+    emotional_residue_read?: string
+    transition_reads?: string[]
+    decision_reads?: string[]
+    low_data_reasons?: string[]
+  }
+}
+
+export type EditorialEvidenceRef = {
+  source_type: string
+  source_id: string
+  project_id: string
+  scene_id?: string
+  shot_id?: string
+  timestamp_seconds?: number | null
+  description?: string
+  metadata?: Record<string, unknown>
+}
+
+export type EditorialDiagnostic = {
+  diagnostic_id: string
+  section_id?: string
+  read: string
+  recommendation?: string
+  rhythm_pattern?: string
+  risk?: string
+  evidence_refs: EditorialEvidenceRef[]
+  uncertainty_note?: string
+  advisory_only: boolean
+}
+
+export type EditorialEmotionalFlow = {
+  read: string
+  tension_curve: string
+  emotional_residue: string
+  risk_points: string[]
+  evidence_refs: EditorialEvidenceRef[]
+  uncertainty_note?: string
+  advisory_only: boolean
+}
+
+export type EditorialTransitionAdvisory = {
+  transition_id: string
+  from_scene_id: string
+  to_scene_id: string
+  recommended_transition_type: string
+  duration_seconds?: number | null
+  rationale: string
+  continuity_impact: string
+  emotional_impact: string
+  rhythm_impact: string
+  evidence_refs: EditorialEvidenceRef[]
+  stitching_hint: Record<string, unknown>
+  advisory_only: boolean
+}
+
+export type EditorialDecision = {
+  decision_id: string
+  decision_type: string
+  target_type: string
+  target_id: string
+  from_scene_id?: string
+  to_scene_id?: string
+  recommendation: string
+  rationale: string
+  expected_story_effect?: string
+  risk_if_ignored?: string
+  evidence_refs: EditorialEvidenceRef[]
+  uncertainty_note?: string
+  application_status: string
+  metadata: Record<string, unknown>
+  advisory_only: boolean
+}
+
+export type EditorialAnalysisRecord = {
+  analysis_id: string
+  project_id: string
+  source_cut_id: string
+  source_package_id: string
+  context_hash: string
+  analysis_status: string
+  analysis_scope: string
+  overall_read: string
+  pacing_diagnostics: EditorialDiagnostic[]
+  rhythm_diagnostics: EditorialDiagnostic[]
+  emotional_flow: EditorialEmotionalFlow
+  transition_advisories: EditorialTransitionAdvisory[]
+  edit_decisions: EditorialDecision[]
+  reasoning_trace: string[]
+  low_data_reasons: string[]
+  created_at: string
+  metadata: Record<string, unknown>
+  advisory_only: boolean
+}
+
+export type EditorialApplyResult = {
+  application_id: string
+  project_id: string
+  analysis_id: string
+  decision_ids: string[]
+  source_cut_id: string
+  result_cut_id?: string
+  application_status: string
+  applied_effects: string[]
+  skipped_decisions: string[]
+  advisory_notes: string[]
+  created_at: string
+  metadata: Record<string, unknown>
+  advisory_only: boolean
 }
 
 function isStudioDecisionGateShape(value: unknown): value is StudioDecisionGate {
@@ -2632,6 +5031,33 @@ export async function updateFinalShortFilmPackageStatus(packageId: string, paylo
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+export async function runProductionAcceptance(projectId: string, payload: ProductionAcceptanceRunRequest = {}): Promise<{ report: ProductionAcceptanceReport }> {
+  return fetchJson<{ report: ProductionAcceptanceReport }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    timeoutMs: 45000,
+  })
+}
+
+export async function listProductionAcceptanceReports(projectId: string, packageId?: string): Promise<{ reports: ProductionAcceptanceReport[] }> {
+  const query = packageId ? `?package_id=${encodeURIComponent(packageId)}` : ''
+  return fetchJson<{ reports: ProductionAcceptanceReport[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance${query}`)
+}
+
+export async function getLatestProductionAcceptanceSummary(projectId: string, packageId?: string): Promise<{ summary: ProductionAcceptanceSummary }> {
+  const query = packageId ? `?package_id=${encodeURIComponent(packageId)}` : ''
+  return fetchJson<{ summary: ProductionAcceptanceSummary }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance/latest${query}`)
+}
+
+export async function getProductionAcceptanceReport(acceptanceId: string): Promise<{ report: ProductionAcceptanceReport }> {
+  return fetchJson<{ report: ProductionAcceptanceReport }>(`/api/f51/studio/production-acceptance/${encodeURIComponent(acceptanceId)}`)
+}
+
+export async function getPackageAcceptanceGuard(packageId: string, desiredStatus = 'approved'): Promise<{ guard: PackageApprovalGuardResult }> {
+  return fetchJson<{ guard: PackageApprovalGuardResult }>(`/api/f51/studio/final-short-film-packages/${encodeURIComponent(packageId)}/acceptance-guard?desired_status=${encodeURIComponent(desiredStatus)}`)
 }
 
 export async function registerVideoAsset(projectId: string, payload: RegisterVideoAssetPayload): Promise<{ asset: VideoAsset }> {
@@ -3144,6 +5570,93 @@ export async function getEditorialRevisionIntelligence(
   )
 }
 
+export async function analyzeEditorialIntelligence(
+  projectId: string,
+  payload: {
+    source_package_id?: string
+    source_cut_id?: string
+    analysis_depth?: 'preview' | 'standard' | 'deep'
+    include_shot_boundaries?: boolean
+    include_frame_analysis?: boolean
+    revision_emphasis?: 'emotional_residue' | 'structural_clarity' | 'balanced'
+    metadata?: Record<string, unknown>
+  } = {},
+): Promise<{ analysis: EditorialAnalysisRecord }> {
+  return fetchJson<{ analysis: EditorialAnalysisRecord }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/analyze`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      timeoutMs: 45000,
+    },
+  )
+}
+
+export async function getLatestEditorialIntelligence(
+  projectId: string,
+  init?: RequestInit,
+): Promise<{ analysis: EditorialAnalysisRecord | null }> {
+  return fetchJson<{ analysis: EditorialAnalysisRecord | null }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/latest`,
+    init,
+  )
+}
+
+export async function listEditorialIntelligence(
+  projectId: string,
+  limit = 20,
+  init?: RequestInit,
+): Promise<{ analyses: EditorialAnalysisRecord[] }> {
+  return fetchJson<{ analyses: EditorialAnalysisRecord[] }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence?limit=${encodeURIComponent(String(limit))}`,
+    init,
+  )
+}
+
+export async function getEditorialIntelligence(
+  projectId: string,
+  analysisId: string,
+  init?: RequestInit,
+): Promise<{ analysis: EditorialAnalysisRecord }> {
+  return fetchJson<{ analysis: EditorialAnalysisRecord }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/${encodeURIComponent(analysisId)}`,
+    init,
+  )
+}
+
+export async function applyEditorialDecisions(
+  projectId: string,
+  analysisId: string,
+  payload: {
+    decision_ids: string[]
+    apply_mode: 'metadata_only' | 'update_cut' | 'next_stitch'
+    expected_context_hash: string
+    creator_confirmation: boolean
+    metadata?: Record<string, unknown>
+  },
+): Promise<{ result: EditorialApplyResult }> {
+  return fetchJson<{ result: EditorialApplyResult }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/${encodeURIComponent(analysisId)}/apply`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function listEditorialApplications(
+  projectId: string,
+  limit = 20,
+  init?: RequestInit,
+): Promise<{ applications: EditorialApplyResult[] }> {
+  return fetchJson<{ applications: EditorialApplyResult[] }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/applications?limit=${encodeURIComponent(String(limit))}`,
+    init,
+  )
+}
+
 export async function compareStyleSignatures(
   leftSignatureId: string,
   rightSignatureId: string,
@@ -3571,8 +6084,8 @@ export type ExportPackageManifest = {
 }
 
 export type ExportPackageContinuityReport = {
-  motif_thread_analysis: any
-  arc_completeness: any
+  motif_thread_analysis: Record<string, unknown>
+  arc_completeness: Record<string, unknown>
   active_contradictions: Array<{
     scene_id: string
     element_type: string
@@ -3599,7 +6112,7 @@ export type ExportPackage = {
   continuity_report: ExportPackageContinuityReport | null
   render_lineage: ExportPackageRenderLineage | null
   director_notes: ExportPackageDirectorNotes | null
-  film_dna_snapshot: any | null
+  film_dna_snapshot: Record<string, unknown> | null
   stitched_film_url: string | null
   honest_assembly_note: string
   created_at: string
@@ -4180,5 +6693,203 @@ export async function applyAudioBrief(
   return fetchJson<ApplyAudioBriefResponse>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/audio-brief/apply`,
     { method: 'POST' },
+  )
+}
+
+// ── Advanced Crew Intelligence ─────────────────────────────────────────────
+
+export type CrewAgentRole =
+  | 'producer'
+  | 'render_coordinator'
+  | 'director'
+  | 'script_analyst'
+  | 'storyboard_artist'
+  | 'cinematographer'
+  | 'production_designer'
+  | 'sound_designer'
+  | 'prompt_engineer'
+  | 'editor'
+  | 'continuity_supervisor'
+  | 'memory_archivist'
+  | 'quality_reviewer'
+  | 'system_orchestrator'
+
+export type CrewEvidenceRef = {
+  ref_type: string
+  ref_id: string
+  label?: string
+  summary?: string
+  source_service?: string
+  metadata?: Record<string, unknown>
+}
+
+export type CrewRisk = {
+  risk_id: string
+  category: string
+  severity: string
+  summary: string
+  evidence_refs?: CrewEvidenceRef[]
+  downstream_impact?: string[]
+  requires_creator_decision?: boolean
+}
+
+export type CrewReasoningRecord = {
+  reasoning_id: string
+  project_id: string
+  task_id?: string | null
+  agent_role: CrewAgentRole
+  department_name: string
+  reasoning_type: string
+  scene_id?: string | null
+  shot_id?: string | null
+  asset_id?: string | null
+  observation: string
+  context_used: string[]
+  inference: string
+  recommendation_summary: string
+  creator_note: string
+  evidence_refs: CrewEvidenceRef[]
+  memory_refs: Array<Record<string, unknown>>
+  spine_refs: Array<Record<string, unknown>>
+  risks: CrewRisk[]
+  downstream_departments: CrewAgentRole[]
+  requires_creator_decision: boolean
+  status: string
+  confidence_label: string
+  advisory_only: boolean
+  trace_id: string
+  created_at: string
+  metadata: Record<string, unknown>
+}
+
+export type CrewHandoffPacket = {
+  handoff_id: string
+  project_id: string
+  source_role: CrewAgentRole
+  target_role: CrewAgentRole
+  source_task_id?: string | null
+  target_task_id?: string | null
+  scene_id?: string | null
+  context_summary: string
+  requirements: string[]
+  open_questions: string[]
+  risks: CrewRisk[]
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export type CrewDeliberationRecord = {
+  deliberation_id: string
+  project_id: string
+  participating_roles: CrewAgentRole[]
+  triggering_reasoning_ids: string[]
+  triggering_task_ids: string[]
+  issue_summary: string
+  points_of_agreement: string[]
+  points_of_tension: string[]
+  recommended_resolution: string
+  requires_creator_decision: boolean
+  creator_question?: string | null
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export type CrewDepartmentStatus = {
+  agent_role: CrewAgentRole
+  department_name: string
+  state: string
+  current_task_id?: string | null
+  current_activity: string
+  last_reasoning_id?: string | null
+  active_handoff_count: number
+  unresolved_risk_count: number
+  needs_creator_attention: boolean
+  last_updated_at: string
+}
+
+export type CrewCreatorAttentionItem = {
+  attention_id: string
+  project_id: string
+  source_type: string
+  source_id: string
+  agent_role?: CrewAgentRole | null
+  title: string
+  summary: string
+  recommended_action: string
+  severity: string
+  created_at: string
+  metadata?: Record<string, unknown>
+}
+
+export type CrewDepartmentProfile = {
+  agent_role: CrewAgentRole
+  department_name: string
+  description: string
+  responsibilities: string[]
+  inputs_consumed: string[]
+  outputs_produced: string[]
+  memory_read_policy: string[]
+  memory_write_policy: string
+  spine_access_policy: string
+  collaboration_partners: CrewAgentRole[]
+  escalation_triggers: string[]
+  inspection_fields: string[]
+  creator_authority_boundary: string
+}
+
+export type CrewIntelligenceOverview = {
+  project_id: string
+  generated_at: string
+  departments: CrewDepartmentStatus[]
+  recent_reasoning: CrewReasoningRecord[]
+  active_handoffs: CrewHandoffPacket[]
+  open_deliberations: CrewDeliberationRecord[]
+  creator_attention: CrewCreatorAttentionItem[]
+  summary: string
+  canonical_sources: Record<string, boolean>
+}
+
+export type CrewPagedResponse<T> = {
+  items: T[]
+  limit: number
+  offset: number
+  has_more: boolean
+}
+
+export async function getCrewIntelligenceOverview(projectId: string): Promise<CrewIntelligenceOverview> {
+  return fetchJson<CrewIntelligenceOverview>(
+    `/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence`,
+  )
+}
+
+export async function getCrewDepartmentProfiles(projectId: string): Promise<CrewDepartmentProfile[]> {
+  return fetchJson<CrewDepartmentProfile[]>(
+    `/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/departments`,
+  )
+}
+
+export async function listCrewReasoningRecords(projectId: string): Promise<CrewPagedResponse<CrewReasoningRecord>> {
+  return fetchJson<CrewPagedResponse<CrewReasoningRecord>>(
+    `/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/reasoning`,
+  )
+}
+
+export async function listCrewHandoffs(projectId: string): Promise<CrewPagedResponse<CrewHandoffPacket>> {
+  return fetchJson<CrewPagedResponse<CrewHandoffPacket>>(
+    `/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/handoffs`,
+  )
+}
+
+export async function listCrewDeliberations(projectId: string): Promise<CrewPagedResponse<CrewDeliberationRecord>> {
+  return fetchJson<CrewPagedResponse<CrewDeliberationRecord>>(
+    `/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/deliberations`,
+  )
+}
+
+export async function getCrewCreatorAttention(projectId: string): Promise<CrewCreatorAttentionItem[]> {
+  return fetchJson<CrewCreatorAttentionItem[]>(
+    `/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/attention`,
   )
 }

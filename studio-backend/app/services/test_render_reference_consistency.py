@@ -116,6 +116,81 @@ def test_first_shot_with_storyboard_gets_provisional_reference_and_routes_to_r2v
     assert job.input_payload.consistency_payload.refs[0].image_url == provisional["image_url"]
 
 
+def test_create_job_attaches_provider_aware_canonical_identity_context(tmp_path, monkeypatch):
+    storage = _storage(tmp_path)
+    monkeypatch.setattr(render_module, "_storage", storage)
+    character = storage.save_character(
+        "proj-canonical-context",
+        "Maya",
+        {
+            "identity_core_json": """
+            {
+              "facial_identity": "heart-shaped face",
+              "body_and_silhouette": "compact frame",
+              "skin_tone": "warm brown",
+              "hair_style": "tight coils",
+              "hair_length": "chin length",
+              "hair_color": "black",
+              "age_presentation": "late thirties"
+            }
+            """,
+            "default_appearance_json": """
+            {
+              "wardrobe": ["charcoal work jacket"],
+              "accessories": ["thin silver chain"],
+              "persistent_props": ["brass lighter"],
+              "emotional_state": "contained grief"
+            }
+            """,
+        },
+    )
+    storage.save_character_reference_lock(
+        {
+            "project_id": "proj-canonical-context",
+            "character_id": character["id"],
+            "character_name": "Maya",
+            "source_shot_id": "scene_001_shot_001",
+            "source_job_id": "job-approved-maya",
+            "image_url": "/outputs/references/proj-canonical-context/maya.jpg",
+            "lock_status": "locked",
+            "source_status": "approved",
+            "review_status": "approved",
+            "reliability": "high",
+        }
+    )
+
+    def fake_project(project_id):
+        return {
+            "project_id": project_id,
+            "execution_summary": {
+                "scenes": [
+                    {"scene_id": "scene_001", "characters": ["Maya"]},
+                ]
+            },
+        }
+
+    monkeypatch.setattr(
+        "app.services.character_visual_reference_service.project_store.get_project",
+        fake_project,
+    )
+    monkeypatch.setattr(render_module.project_store, "get_project", fake_project)
+
+    job = RenderService().create_job(
+        project_id="proj-canonical-context",
+        shot_id="scene_001_shot_002",
+        provider="happyhorse",
+        prompt="Maya walks into the room, holding herself very still.",
+    )
+
+    context = job.input_payload.parameters["character_identity_context"]
+    assert context["constraint_injection"]["strategy"] == "reference_images_and_text"
+    assert "heart-shaped face" in context["identity_lines"][0]
+    assert "charcoal work jacket" in context["identity_lines"][0]
+    assert context["reference_images"][character["id"]][0]["source_job_id"] == "job-approved-maya"
+    assert job.metadata["zero_touch_pipeline"]["character_identity_context"] == context
+    assert job.metadata["character_identity_warnings"] == []
+
+
 def test_first_shot_without_storyboard_stays_t2v_until_post_render_lock(tmp_path, monkeypatch):
     storage = _storage(tmp_path)
     monkeypatch.setattr(render_module, "_storage", storage)

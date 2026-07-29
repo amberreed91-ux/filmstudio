@@ -5,10 +5,11 @@ import { ChevronUp, ChevronDown, EllipsisVertical } from 'lucide-react'
 import { useRenderActivity } from '../context/RenderActivityContext'
 import { useStudio } from '../context/StudioContext'
 import { formatProviderLabel } from '../lib/providerDisplay'
+import { getCrewIntelligenceOverview, type CrewIntelligenceOverview } from '../lib/studioApi'
 
 const CREW_KEY = 'crew-presence-collapsed'
 
-type CrewAgentId = 'director' | 'writer' | 'memory_archivist' | 'evaluator' | 'provider_router'
+type CrewAgentId = string
 
 type CrewAgent = {
   id: CrewAgentId
@@ -46,7 +47,7 @@ function baseByRoom(pathname: string): string {
 export default function AICrewPresence() {
   const location = useLocation()
   const { activity } = useRenderActivity()
-  const { providers } = useStudio()
+  const { providers, project } = useStudio()
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(CREW_KEY) === 'true'
@@ -55,6 +56,7 @@ export default function AICrewPresence() {
     }
   })
   const [mockIndex, setMockIndex] = useState(0)
+  const [crewOverview, setCrewOverview] = useState<CrewIntelligenceOverview | null>(null)
   const availableProviderIds = useMemo(() => providers.map((provider) => provider.provider_id.toLowerCase()), [providers])
 
   useEffect(() => {
@@ -74,7 +76,43 @@ export default function AICrewPresence() {
     return () => window.clearInterval(mockTimer)
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    const projectId = project?.project_id
+    if (!projectId) return
+
+    async function loadCrewOverview() {
+      try {
+        const overview = await getCrewIntelligenceOverview(projectId!)
+        if (!cancelled) setCrewOverview(overview)
+      } catch {
+        if (!cancelled) setCrewOverview(null)
+      }
+    }
+
+    void loadCrewOverview()
+    const timer = window.setInterval(() => void loadCrewOverview(), 10000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [project?.project_id])
+
   const agents = useMemo<CrewAgent[]>(() => {
+    const liveDepartments = crewOverview?.departments
+      ?.filter((department) => department.state !== 'idle' || department.last_reasoning_id || department.active_handoff_count > 0)
+      ?.slice(0, 5)
+
+    if (liveDepartments && liveDepartments.length > 0) {
+      return liveDepartments.map((department) => ({
+        id: department.agent_role,
+        name: department.department_name,
+        initial: department.department_name.charAt(0).toUpperCase(),
+        activity: department.current_activity || 'Standing by with project context.',
+        active: department.state !== 'idle',
+      }))
+    }
+
     const mock = MOCK_UPDATES[mockIndex]
     const providerText = activity?.isActive
       ? `Provider Router selecting ${formatProviderLabel(activity.provider || activity.selectedProvider, availableProviderIds)}...`
@@ -96,7 +134,7 @@ export default function AICrewPresence() {
       { id: 'evaluator', name: 'Evaluator', initial: 'E', activity: evaluatorText, active: true },
       { id: 'provider_router', name: 'Provider Router', initial: 'P', activity: providerText, active: true },
     ]
-  }, [activity, availableProviderIds, location.pathname, mockIndex])
+  }, [activity, availableProviderIds, crewOverview?.departments, location.pathname, mockIndex])
 
   return (
     <div className="ai-crew-container">

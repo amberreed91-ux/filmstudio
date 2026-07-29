@@ -21,9 +21,8 @@ import {
 import { lazyLoad } from './LazyLoad'
 import { useRenderActivity } from '../context/RenderActivityContext'
 import { useAudioUX } from '../context/AudioUXContext'
-import { getRouteByPath, getRouteLabel } from '../routes'
-import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProjectQuery } from '../lib/projectContext'
-import { roomDescription } from '../lib/userFacingText'
+import { getRouteByPath } from '../routes'
+import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId } from '../lib/projectContext'
 import { useRenderStatusStore } from '../stores/renderStatusStore'
 import CoDirectorDrawer from './CoDirectorDrawer'
 
@@ -249,7 +248,7 @@ function resolveBackgroundKey(pathname: string): string {
   return '/'
 }
 
-export default function StudioShell({ title, subtitle, transparent, children }: StudioShellProps) {
+export default function StudioShell({ title, transparent, children }: StudioShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { activity } = useRenderActivity()

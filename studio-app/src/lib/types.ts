@@ -99,6 +99,8 @@ export interface StoryboardShot {
 }
 
 export interface RenderJob {
+  id?: string
+  job_id?: string
   render_id: string
   shot_id: string
   status: string
@@ -107,6 +109,24 @@ export interface RenderJob {
   cost_per_minute: string
   priority: boolean
   provider: string
+  error_message?: string | null
+  metadata?: {
+    provider_failure?: {
+      category?: string
+      error_type?: string
+      message?: string
+      retryable?: boolean
+      policy_reason?: string
+    }
+    pipeline_reliability?: {
+      failure_location?: {
+        phase?: string
+        reason?: string
+        error_type?: string
+        category?: string
+      }
+    }
+  }
 }
 
 export interface RightsSafetyBoard {

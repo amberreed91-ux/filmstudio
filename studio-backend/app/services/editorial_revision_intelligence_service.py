@@ -42,6 +42,43 @@ class EditorialRevisionIntelligenceService:
             "has_output": bool(EditorialRevisionIntelligenceService._job_output_url(job)),
         }
 
+    def _canonical_analysis_summary(self, project_id: str, revision_emphasis: str) -> Dict[str, Any]:
+        try:
+            from app.models.editorial_intelligence import EditorialAnalysisRequest
+            from app.services.editorial_intelligence_service import EditorialIntelligenceService
+
+            emphasis = self._string(revision_emphasis).lower()
+            if emphasis not in {"emotional_residue", "structural_clarity", "balanced"}:
+                emphasis = "balanced"
+            analysis = EditorialIntelligenceService(storage=self._storage_ref()).analyze_project(
+                project_id=project_id,
+                request=EditorialAnalysisRequest(revision_emphasis=emphasis),
+                persist=False,
+            )
+        except Exception:
+            return {}
+
+        primary_pacing = analysis.pacing_diagnostics[0].read if analysis.pacing_diagnostics else ""
+        primary_rhythm = analysis.rhythm_diagnostics[0].read if analysis.rhythm_diagnostics else ""
+        transition_reads = [
+            advisory.rationale
+            for advisory in analysis.transition_advisories
+            if advisory.recommended_transition_type != "cut"
+        ]
+        decision_reads = [decision.recommendation for decision in analysis.edit_decisions[:2]]
+        return {
+            "analysis_id": analysis.analysis_id,
+            "context_hash": analysis.context_hash,
+            "analysis_status": analysis.analysis_status,
+            "overall_read": analysis.overall_read,
+            "primary_pacing_read": primary_pacing,
+            "primary_rhythm_read": primary_rhythm,
+            "emotional_residue_read": analysis.emotional_flow.emotional_residue,
+            "transition_reads": transition_reads,
+            "decision_reads": decision_reads,
+            "low_data_reasons": analysis.low_data_reasons,
+        }
+
     def _resolve_revisions(
         self,
         jobs: List[Any],
@@ -84,6 +121,7 @@ class EditorialRevisionIntelligenceService:
         packages = storage.list_final_short_film_packages_for_project(project_id) or []
         latest_package = packages[0] if packages else None
         assembly_kind = self._string(getattr(latest_package, "metadata", {}).get("assembly_kind")) if latest_package else "none"
+        canonical = self._canonical_analysis_summary(project_id, revision_emphasis)
 
         baseline, comparison = self._resolve_revisions(
             jobs=jobs,
@@ -108,6 +146,7 @@ class EditorialRevisionIntelligenceService:
                     "Generate at least two completed revision outputs to unlock editorial comparison guidance."
                 ],
                 "uncertainty_note": "This is a low-data editorial read.",
+                "canonical_editorial_analysis": canonical,
             }
 
         emphasis = self._string(revision_emphasis).lower()
@@ -123,6 +162,14 @@ class EditorialRevisionIntelligenceService:
         structural_tradeoff = "Structural clarity improves slightly in the newer ordering."
         strongest_difference = "The strongest shift is a cleaner editorial cadence in the newer pass."
         advisory_notes: List[str] = []
+        if canonical:
+            canonical_pacing = self._string(canonical.get("primary_pacing_read"))
+            canonical_residue = self._string(canonical.get("emotional_residue_read"))
+            if canonical_pacing:
+                pacing_tradeoff = canonical_pacing
+            if canonical_residue and has_memory:
+                emotional_tradeoff = canonical_residue
+            advisory_notes.append("Canonical editorial analysis was consulted for pacing, rhythm, transition, and emotional-flow evidence.")
 
         if has_continuity_pressure:
             pacing_tradeoff = "The newer cut moves faster, though continuity pressure can make transitions feel abrupt."
@@ -150,10 +197,19 @@ class EditorialRevisionIntelligenceService:
 
         if not advisory_notes:
             advisory_notes.append("The revisions are close; the tradeoff is mostly between emotional linger and structural directness.")
+        elif canonical:
+            for row in canonical.get("decision_reads", [])[:2]:
+                clean = self._string(row)
+                if clean:
+                    advisory_notes.append(clean)
 
         uncertainty_note = ""
         if len(memories) < 2 or (not has_continuity_pressure and not has_style_pressure):
             uncertainty_note = "This read is intentionally cautious; additional revisions may change the interpretation."
+        if canonical and canonical.get("analysis_status") == "low_data":
+            low_data = canonical.get("low_data_reasons") if isinstance(canonical.get("low_data_reasons"), list) else []
+            if low_data:
+                uncertainty_note = " ".join(str(row) for row in low_data if str(row).strip())
 
         return {
             "project_id": project_id,
@@ -169,6 +225,7 @@ class EditorialRevisionIntelligenceService:
             "strongest_difference": strongest_difference,
             "advisory_notes": advisory_notes,
             "uncertainty_note": uncertainty_note,
+            "canonical_editorial_analysis": canonical,
         }
 
 

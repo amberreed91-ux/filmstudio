@@ -23,6 +23,12 @@ class CharacterReferenceLock(BaseModel):
     lock_status: Literal["provisional", "locked", "disabled", "superseded"] = "locked"
     provider: str = ""
     capture_method: str = "thumbnail"
+    reference_role: Literal["face", "full_body", "wardrobe", "temporary_state", "general"] = "general"
+    reliability: Literal["low", "medium", "high"] = "medium"
+    source_job_id: str = ""
+    source_status: Literal["approved", "provisional", "rejected", "failed", "superseded"] = "provisional"
+    review_status: Literal["approved", "unreviewed", "rejected", "ambiguous"] = "unreviewed"
+    trace_notes: str = ""
     created_at: str = ""
     updated_at: str = ""
 

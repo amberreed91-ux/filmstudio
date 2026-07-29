@@ -87,6 +87,13 @@ class TestBuildContext:
         assert "neutral" in result
 
 
+def _force_llm_fallback():
+    """Return a patcher that makes sound_advisory_for_scene raise so LLM path runs."""
+    return patch(
+        "app.services.performance_audio_intelligence_service.performance_audio_intelligence_service.sound_advisory_for_scene",
+        side_effect=RuntimeError("force LLM fallback"),
+    )
+
 class TestGenerateSceneAudioBrief:
     @patch("app.services.audio_director_service.call_llm", new_callable=AsyncMock)
     async def test_returns_sound_advisory(self, mock_llm):
@@ -99,7 +106,8 @@ class TestGenerateSceneAudioBrief:
             "instrumentation": ["cello", "piano", "percussion"],
         })
 
-        with patch("app.services.audio_director_service.project_store") as mock_store:
+        with patch("app.services.audio_director_service.project_store") as mock_store, \
+             _force_llm_fallback():
             mock_store.get_project.return_value = _project("p1", [_scene("scene_001")])
             result = await generate_scene_audio_brief("p1", "scene_001", None)
 
@@ -120,7 +128,8 @@ class TestGenerateSceneAudioBrief:
             "instrumentation": ["violin", "string pad"],
         })
 
-        with patch("app.services.audio_director_service.project_store") as mock_store:
+        with patch("app.services.audio_director_service.project_store") as mock_store, \
+             _force_llm_fallback():
             mock_store.get_project.return_value = _project("p1", [_scene("scene_001")])
             result = await generate_scene_audio_brief("p1", "scene_001", None)
 
@@ -129,7 +138,8 @@ class TestGenerateSceneAudioBrief:
             _ = result.tempo
 
     async def test_raises_404_when_scene_missing(self):
-        with patch("app.services.audio_director_service.project_store") as mock_store:
+        with patch("app.services.audio_director_service.project_store") as mock_store, \
+             _force_llm_fallback():
             mock_store.get_project.return_value = _project("p1", [_scene("scene_001")])
             with pytest.raises(Exception) as exc_info:
                 await generate_scene_audio_brief("p1", "scene_002", None)
@@ -139,7 +149,8 @@ class TestGenerateSceneAudioBrief:
     async def test_raises_500_on_llm_failure(self, mock_llm):
         mock_llm.side_effect = RuntimeError("Groq down")
 
-        with patch("app.services.audio_director_service.project_store") as mock_store:
+        with patch("app.services.audio_director_service.project_store") as mock_store, \
+             _force_llm_fallback():
             mock_store.get_project.return_value = _project("p1", [_scene("scene_001")])
             with pytest.raises(Exception) as exc_info:
                 await generate_scene_audio_brief("p1", "scene_001", None)
@@ -149,7 +160,8 @@ class TestGenerateSceneAudioBrief:
     async def test_raises_500_on_bad_json(self, mock_llm):
         mock_llm.return_value = "Not valid JSON"
 
-        with patch("app.services.audio_director_service.project_store") as mock_store:
+        with patch("app.services.audio_director_service.project_store") as mock_store, \
+             _force_llm_fallback():
             mock_store.get_project.return_value = _project("p1", [_scene("scene_001")])
             with pytest.raises(Exception) as exc_info:
                 await generate_scene_audio_brief("p1", "scene_001", None)

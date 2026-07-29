@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from app.adapters import ADAPTER_REGISTRY, HappyHorseAdapter, HappyHorseR2VAdapter, RunwayAdapter
+from app.adapters import (
+    ADAPTER_REGISTRY,
+    HappyHorseAdapter,
+    HappyHorseR2VAdapter,
+    RunwayAdapter,
+    WanTextToVideoAdapter,
+)
 from app.services.render import RenderService
 
 
@@ -13,6 +19,8 @@ def test_adapter_registry_includes_runway() -> None:
     assert ADAPTER_REGISTRY["happyhorse"] is HappyHorseAdapter
     assert "happyhorse-r2v" in ADAPTER_REGISTRY
     assert ADAPTER_REGISTRY["happyhorse-r2v"] is HappyHorseR2VAdapter
+    assert "wan" in ADAPTER_REGISTRY
+    assert ADAPTER_REGISTRY["wan"] is WanTextToVideoAdapter
 
 
 def test_render_service_provider_configs_include_runway() -> None:
@@ -21,6 +29,7 @@ def test_render_service_provider_configs_include_runway() -> None:
     assert "runway" in providers
     assert "happyhorse" in providers
     assert "happyhorse-r2v" in providers
+    assert "wan" in providers
     assert "local" in providers
     assert "simulated" in providers
 
@@ -180,6 +189,19 @@ def test_invalid_happyhorse_model_override_is_rejected_before_submission() -> No
         assert False, "expected ValueError"
     except ValueError as exc:
         assert "does not support this model override" in str(exc)
+
+
+def test_invalid_wan_model_override_is_rejected_before_submission() -> None:
+    service = RenderService()
+
+    with pytest.raises(ValueError, match="Wan text-to-video"):
+        service.create_job(
+            project_id="proj-1",
+            shot_id="shot-1",
+            provider="wan",
+            prompt="A cinematic shot with enough detail for the provider request.",
+            parameters={"model": "wan-not-real"},
+        )
 
 
 @pytest.mark.asyncio

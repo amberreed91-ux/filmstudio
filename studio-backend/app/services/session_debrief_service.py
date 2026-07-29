@@ -15,6 +15,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from app.data.storage import get_storage
+
 logger = logging.getLogger("studio-session-debrief")
 
 
@@ -27,6 +29,45 @@ class SessionDebriefService:
     def _now_iso(self) -> str:
         """Return current time in ISO format."""
         return datetime.now().isoformat()
+
+    def _require_storage(self):
+        storage = self._storage or get_storage("sqlite")
+        if storage is None:
+            raise RuntimeError("Storage not configured")
+        return storage
+
+    async def generate_and_save(
+        self,
+        project_id: str,
+        session_start: str,
+        session_end: str,
+    ) -> dict:
+        storage = self._require_storage()
+        project = storage.get_project(project_id)
+        if not project:
+            raise LookupError(f"Project {project_id} not found")
+        project_data = (
+            project.model_dump(mode="json")
+            if hasattr(project, "model_dump")
+            else dict(project)
+        )
+        debrief = await self.generate_debrief(
+            project_id=project_id,
+            session_start=session_start,
+            session_end=session_end,
+            project_data=project_data,
+        )
+        storage.save_session_debrief(project_id, debrief)
+        return debrief
+
+    def list_debriefs(self, project_id: str, limit: int = 10) -> list[dict]:
+        return self._require_storage().list_session_debriefs(project_id, limit=limit)
+
+    def get_debrief(self, project_id: str, debrief_id: str) -> dict:
+        debrief = self._require_storage().get_session_debrief(project_id, debrief_id)
+        if not debrief:
+            raise LookupError(f"Debrief {debrief_id} not found")
+        return debrief
 
     async def generate_debrief(
         self,

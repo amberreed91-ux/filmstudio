@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { chooseDurationForProvider, initialStoryboardImageState } from './previsStoryboard'
+import {
+  buildStoryboardRenderReferences,
+  buildShotPlanningRenderPayload,
+  chooseDurationForProvider,
+  initialStoryboardImageState,
+  promptChangedAfterEnhancement,
+  providerIdForPrevisEngine,
+} from './previsStoryboard'
 
 describe('initialStoryboardImageState', () => {
   it('starts successful image URLs in loading state', () => {
@@ -41,5 +48,53 @@ describe('chooseDurationForProvider', () => {
     expect(chooseDurationForProvider(Number.NaN, undefined, 4)).toBe(4)
     expect(chooseDurationForProvider(0, undefined, 4)).toBe(1)
     expect(chooseDurationForProvider(90, undefined, 4)).toBe(60)
+  })
+})
+
+describe('providerIdForPrevisEngine', () => {
+  it('routes named previs model choices through a backend-supported render provider', () => {
+    expect(providerIdForPrevisEngine('Wan 2.2')).toBe('runway')
+    expect(providerIdForPrevisEngine('LTX-Video')).toBe('runway')
+  })
+
+  it('lets auto selection fall through to the backend default provider', () => {
+    expect(providerIdForPrevisEngine('Auto (Best Available)')).toBeUndefined()
+  })
+})
+
+describe('promptChangedAfterEnhancement', () => {
+  it('rejects unchanged prompt responses even when whitespace differs', () => {
+    expect(promptChangedAfterEnhancement('A quiet two-shot.', ' A quiet   two-shot. ')).toBe(false)
+  })
+
+  it('accepts genuinely changed enhanced prompt text', () => {
+    expect(promptChangedAfterEnhancement('A quiet two-shot.', 'A quiet two-shot with warm practical light.')).toBe(true)
+  })
+})
+
+describe('buildShotPlanningRenderPayload', () => {
+  it('keeps only concrete shot-planning guidance for the render payload', () => {
+    expect(buildShotPlanningRenderPayload({
+      purpose: ' Hold pressure. ',
+      framing: '  ',
+      camera: 'Patient observational camera.',
+      blocking: 'Maya crosses to the boiling pot.',
+    })).toEqual({
+      purpose: 'Hold pressure.',
+      camera: 'Patient observational camera.',
+      blocking: 'Maya crosses to the boiling pot.',
+    })
+  })
+})
+
+describe('buildStoryboardRenderReferences', () => {
+  it('puts the active storyboard image first for image-conditioned video renders', () => {
+    expect(buildStoryboardRenderReferences('/previs-assets/proj/scene_001_shot_001.png', [
+      'https://cdn.example.test/style.png',
+      '/previs-assets/proj/scene_001_shot_001.png',
+    ])).toEqual([
+      '/previs-assets/proj/scene_001_shot_001.png',
+      'https://cdn.example.test/style.png',
+    ])
   })
 })

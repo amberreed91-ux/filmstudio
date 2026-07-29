@@ -1,25 +1,64 @@
-import type { ReactNode } from 'react'
-import { BookOpen, Clapperboard, DollarSign, Film, FolderKanban, Home, LayoutDashboard, FileText, Eye, Share2 } from 'lucide-react'
+import { Suspense, lazy, type ReactNode } from 'react'
+import { BookOpen, Clapperboard, DollarSign, Film, FolderKanban, Home, LayoutDashboard, FileText, Share2 } from 'lucide-react'
 import { matchPath } from 'react-router-dom'
-import Dashboard from './pages/Dashboard'
-import StudyRoom from './pages/StudyRoom'
-import Scheduler from './pages/Scheduler'
-import Cost from './pages/Cost'
-import ProjectSlate from './pages/ProjectSlate'
-import ProjectWorkspace from './pages/ProjectWorkspace'
-import ScriptIngest from './pages/ScriptIngest'
-import PrevisRoom from './pages/PrevisRoom'
-import StudioLanding from './pages/StudioLanding'
-import StudioLobby from './pages/StudioLobby'
-import StudioOverview from './pages/StudioOverview'
-import WritersRoom from './pages/WritersRoom'
-import ProductionBoard from './pages/ProductionBoard'
-import ScreeningRoom from './pages/ScreeningRoom'
-import ArchiveRoom from './pages/ArchiveRoom'
-import StudioDevTools from './pages/StudioDevTools'
-import ShareProject from './pages/ShareProject'
-import UniverseGraphPage from './pages/UniverseGraphPage'
-import { ThreeTest } from './pages/ThreeTest'
+
+// Lazy-loaded page components for code splitting
+// eslint-disable-next-line react-refresh/only-export-components
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+// eslint-disable-next-line react-refresh/only-export-components
+const StudyRoom = lazy(() => import('./pages/StudyRoom'))
+// eslint-disable-next-line react-refresh/only-export-components
+const Scheduler = lazy(() => import('./pages/Scheduler'))
+// eslint-disable-next-line react-refresh/only-export-components
+const Cost = lazy(() => import('./pages/Cost'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ProjectSlate = lazy(() => import('./pages/ProjectSlate'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ProjectWorkspace = lazy(() => import('./pages/ProjectWorkspace'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ScriptIngest = lazy(() => import('./pages/ScriptIngest'))
+// eslint-disable-next-line react-refresh/only-export-components
+const PrevisRoom = lazy(() => import('./pages/PrevisRoom'))
+// eslint-disable-next-line react-refresh/only-export-components
+const StudioLanding = lazy(() => import('./pages/StudioLanding'))
+// eslint-disable-next-line react-refresh/only-export-components
+const StudioLobby = lazy(() => import('./pages/StudioLobby'))
+// eslint-disable-next-line react-refresh/only-export-components
+const StudioOverview = lazy(() => import('./pages/StudioOverview'))
+// eslint-disable-next-line react-refresh/only-export-components
+const WritersRoom = lazy(() => import('./pages/WritersRoom'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ProductionBoard = lazy(() => import('./pages/ProductionBoard'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ScreeningRoom = lazy(() => import('./pages/ScreeningRoom'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ArchiveRoom = lazy(() => import('./pages/ArchiveRoom'))
+// eslint-disable-next-line react-refresh/only-export-components
+const StudioDevTools = lazy(() => import('./pages/StudioDevTools'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ShareProject = lazy(() => import('./pages/ShareProject'))
+// eslint-disable-next-line react-refresh/only-export-components
+const UniverseGraphPage = lazy(() => import('./pages/UniverseGraphPage'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ThreeTest = lazy(() => import('./pages/ThreeTest').then(m => ({ default: m.ThreeTest })))
+
+// Loading skeleton for route transitions
+// eslint-disable-next-line react-refresh/only-export-components
+function RouteLoadingSkeleton() {
+  return (
+    <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg-deep, #0a0a0f)' }}>
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-zinc-400 text-sm">Loading...</p>
+      </div>
+    </div>
+  )
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+function LazyRoute({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteLoadingSkeleton />}>{children}</Suspense>
+}
 
 export type NavigationPlacement =
   | 'primary'
@@ -52,7 +91,7 @@ export const APP_ROUTES: AppRoute[] = [
     title: 'Studio Landing',
     purpose: 'Cinematic entry portal for the studio environment.',
     placement: 'hidden-system',
-    element: <StudioLanding />,
+    element: <LazyRoute><StudioLanding /></LazyRoute>,
   },
   {
     path: '/studio',
@@ -68,7 +107,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/previs', label: 'Open Previs Room' },
     ],
     icon: <Home size={14} />,
-    element: <StudioLobby />,
+    element: <LazyRoute><StudioLobby /></LazyRoute>,
   },
   {
     path: '/studio/lobby',
@@ -79,11 +118,11 @@ export const APP_ROUTES: AppRoute[] = [
     breadcrumbs: [{ label: 'Studio', to: '/studio' }, { label: 'Home' }],
     contextualLinks: [
       { to: '/studio/overview', label: 'Open Overview' },
-      { to: '/studio/writers-room', label: "Open Write" },
+      { to: '/studio/writers-room', label: 'Open Write' },
       { to: '/studio/previs', label: 'Open Storyboard' },
     ],
     icon: <Home size={14} />,
-    element: <StudioLobby />,
+    element: <LazyRoute><StudioLobby /></LazyRoute>,
   },
   {
     path: '/studio/overview',
@@ -94,10 +133,10 @@ export const APP_ROUTES: AppRoute[] = [
     breadcrumbs: [{ label: 'Home', to: '/' }, { label: 'Studio', to: '/studio' }, { label: 'Overview' }],
     contextualLinks: [
       { to: '/studio/lobby', label: 'Open Home' },
-      { to: '/studio/writers-room', label: "Open Write" },
+      { to: '/studio/writers-room', label: 'Open Write' },
     ],
     icon: <LayoutDashboard size={14} />,
-    element: <StudioOverview />,
+    element: <LazyRoute><StudioOverview /></LazyRoute>,
   },
   {
     path: '/studio/writers-room',
@@ -111,7 +150,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/production-board', label: 'Open Scenes' },
     ],
     icon: <BookOpen size={14} />,
-    element: <WritersRoom />,
+    element: <LazyRoute><WritersRoom /></LazyRoute>,
   },
   {
     path: '/studio/universe-graph',
@@ -121,7 +160,7 @@ export const APP_ROUTES: AppRoute[] = [
     placement: 'primary',
     breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Universe' }],
     icon: <Share2 size={14} />,
-    element: <UniverseGraphPage />,
+    element: <LazyRoute><UniverseGraphPage /></LazyRoute>,
   },
   {
     path: '/studio/production-board',
@@ -135,7 +174,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/screening-room', label: 'Open Watch' },
     ],
     icon: <Clapperboard size={14} />,
-    element: <ProductionBoard />,
+    element: <LazyRoute><ProductionBoard /></LazyRoute>,
   },
   {
     path: '/studio/screening-room',
@@ -149,7 +188,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/archive', label: 'Open Archive' },
     ],
     icon: <Film size={14} />,
-    element: <ScreeningRoom />,
+    element: <LazyRoute><ScreeningRoom /></LazyRoute>,
   },
   {
     path: '/studio/archive',
@@ -163,7 +202,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/previs', label: 'Open Storyboard' },
     ],
     icon: <FolderKanban size={14} />,
-    element: <ArchiveRoom />,
+    element: <LazyRoute><ArchiveRoom /></LazyRoute>,
   },
   {
     path: '/studio/devtools',
@@ -177,7 +216,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/production-board', label: 'Open Production Board' },
     ],
     icon: <Clapperboard size={14} />,
-    element: <StudioDevTools />,
+    element: <LazyRoute><StudioDevTools /></LazyRoute>,
   },
   {
     path: '/studio/workspace',
@@ -191,7 +230,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/production-board', label: 'Open Production Board' },
     ],
     icon: <Film size={14} />,
-    element: <ProjectSlate />,
+    element: <LazyRoute><ProjectSlate /></LazyRoute>,
   },
   {
     path: '/studio/development-room',
@@ -205,13 +244,13 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/previs', label: 'Open Previs Room' },
     ],
     icon: <Film size={14} />,
-    element: <PrevisRoom />,
+    element: <LazyRoute><PrevisRoom /></LazyRoute>,
   },
   {
     path: '/studio/ingest',
     label: 'Script Processing',
     title: 'Script Processing',
-    purpose: 'Internal script processing stage triggered by Generate Scenes in Writer’s Room.',
+    purpose: 'Internal script processing stage triggered by Generate Scenes in Writer\'s Room.',
     placement: 'hidden-system',
     breadcrumbs: [{ label: 'Studio Dashboard', to: '/studio' }, { label: 'Script Processing' }],
     contextualLinks: [
@@ -219,7 +258,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/dashboard', label: 'Approval Room' },
     ],
     icon: <FileText size={14} />,
-    element: <ScriptIngest />,
+    element: <LazyRoute><ScriptIngest /></LazyRoute>,
   },
   {
     path: '/studio/slate',
@@ -233,7 +272,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/scheduler', label: 'Crew Ops' },
     ],
     icon: <FolderKanban size={14} />,
-    element: <ProjectSlate />,
+    element: <LazyRoute><ProjectSlate /></LazyRoute>,
   },
   {
     path: '/studio/project/:projectId',
@@ -247,7 +286,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/dashboard', label: 'Approval Room' },
     ],
     icon: <Film size={14} />,
-    element: <ProjectWorkspace />,
+    element: <LazyRoute><ProjectWorkspace /></LazyRoute>,
   },
   {
     path: '/previs',
@@ -261,7 +300,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/dashboard', label: 'Approval Room' },
     ],
     icon: <Film size={14} />,
-    element: <PrevisRoom />,
+    element: <LazyRoute><PrevisRoom /></LazyRoute>,
   },
   {
     path: '/studio/previs',
@@ -275,7 +314,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/dashboard', label: 'Approval Room' },
     ],
     icon: <Film size={14} />,
-    element: <PrevisRoom />,
+    element: <LazyRoute><PrevisRoom /></LazyRoute>,
   },
   {
     path: '/studio/project/:projectId/previs',
@@ -289,7 +328,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/dashboard', label: 'Approval Room' },
     ],
     icon: <Film size={14} />,
-    element: <PrevisRoom />,
+    element: <LazyRoute><PrevisRoom /></LazyRoute>,
   },
   {
     path: '/three-test',
@@ -297,7 +336,7 @@ export const APP_ROUTES: AppRoute[] = [
     title: 'Three.js R3F Test',
     purpose: 'Isolated test to verify R3F Canvas rendering.',
     placement: 'hidden-system',
-    element: <ThreeTest />,
+    element: <LazyRoute><ThreeTest /></LazyRoute>,
   },
   {
     path: '/studio/dashboard',
@@ -311,7 +350,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/study-room', label: 'Open Study Room' },
     ],
     icon: <LayoutDashboard size={14} />,
-    element: <Dashboard />,
+    element: <LazyRoute><Dashboard /></LazyRoute>,
   },
   {
     path: '/studio/approval',
@@ -325,7 +364,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/study-room', label: 'Open Study Room' },
     ],
     icon: <LayoutDashboard size={14} />,
-    element: <Dashboard />,
+    element: <LazyRoute><Dashboard /></LazyRoute>,
   },
   {
     path: '/studio/approval-room',
@@ -339,7 +378,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/study-room', label: 'Open Study Room' },
     ],
     icon: <LayoutDashboard size={14} />,
-    element: <Dashboard />,
+    element: <LazyRoute><Dashboard /></LazyRoute>,
   },
   {
     path: '/studio/study-room',
@@ -353,7 +392,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/scheduler', label: 'Plan in Crew Ops' },
     ],
     icon: <BookOpen size={14} />,
-    element: <StudyRoom />,
+    element: <LazyRoute><StudyRoom /></LazyRoute>,
   },
   {
     path: '/studio/study',
@@ -368,7 +407,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/screening-room', label: 'Open Screening Room' },
     ],
     icon: <BookOpen size={14} />,
-    element: <StudyRoom />,
+    element: <LazyRoute><StudyRoom /></LazyRoute>,
   },
   {
     path: '/studio/scheduler',
@@ -382,7 +421,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/cost', label: 'Open Cost Manager' },
     ],
     icon: <Clapperboard size={14} />,
-    element: <Scheduler />,
+    element: <LazyRoute><Scheduler /></LazyRoute>,
   },
   {
     path: '/studio/cost',
@@ -396,7 +435,7 @@ export const APP_ROUTES: AppRoute[] = [
       { to: '/studio/scheduler', label: 'Go to Crew Ops' },
     ],
     icon: <DollarSign size={14} />,
-    element: <Cost />,
+    element: <LazyRoute><Cost /></LazyRoute>,
   },
   {
     path: '/share/:shareToken',
@@ -404,7 +443,7 @@ export const APP_ROUTES: AppRoute[] = [
     title: 'Shared Project View',
     purpose: 'Read-only view of a shared project via share token.',
     placement: 'hidden-system',
-    element: <ShareProject />,
+    element: <LazyRoute><ShareProject /></LazyRoute>,
   },
 ]
 

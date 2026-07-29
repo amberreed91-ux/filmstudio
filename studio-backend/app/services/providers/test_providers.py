@@ -408,7 +408,14 @@ def test_real_stub_registered_only_when_explicitly_enabled():
     assert isinstance(provider, RealProviderStub)
 
 
-def test_provider_config_deterministic():
+def test_provider_config_deterministic(monkeypatch):
+    monkeypatch.delenv("RUNWAYML_API_SECRET", raising=False)
+    monkeypatch.delenv("RUNWAY_API_KEY", raising=False)
+    monkeypatch.delenv("VIDEO_PROVIDER_API_KEY", raising=False)
+    monkeypatch.delenv("IMAGE_PROVIDER_API_KEY", raising=False)
+    monkeypatch.delenv("RUNWAY_API_BASE_URL", raising=False)
+    monkeypatch.delenv("VIDEO_PROVIDER_BASE_URL", raising=False)
+
     first = get_provider_config()
     second = get_provider_config()
 

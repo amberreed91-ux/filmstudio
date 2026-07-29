@@ -31,6 +31,7 @@ class RecoveryResponse(BaseModel):
     revisions: Dict[str, int] = Field(default_factory=dict)
     packages: Dict[str, int] = Field(default_factory=dict)
     projects: Dict[str, int] = Field(default_factory=dict)
+    queue: Dict[str, int] = Field(default_factory=dict)
     error: Optional[str] = None
 
 

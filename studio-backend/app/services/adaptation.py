@@ -171,7 +171,7 @@ class WeightedPattern:
             # Linear decay: 1.0 -> 0.5 over hours_until_stale
             decay = max(0.5, 1.0 - (age_hours / hours_until_stale * 0.5))
             return decay
-        except:
+        except Exception:
             return 1.0
 
     def add_context_tag(self, tag: str):

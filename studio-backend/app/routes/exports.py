@@ -4,16 +4,11 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from typing import Any, Dict, List
 
-from app.data import get_storage
-from app.services import ProjectService
 from app.services.script_parser import build_safe_export_bundle_placeholder
 from app.services.memory_store import memory_store
+from app.services.service_registry import project_service
 
 router = APIRouter(prefix="/api/f51/studio/exports", tags=["exports"])
-
-storage = get_storage("sqlite")
-project_service = ProjectService(storage)
-
 
 def _as_dict(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}

@@ -31,7 +31,7 @@ class RunwayAPIError(Exception):
 # referenced in this repo (default RUNWAY_MODEL + tests). The configured
 # RUNWAY_MODEL env default is operator-controlled and is NOT validated here;
 # only caller-supplied per-request overrides are gated by this allowlist.
-ALLOWED_RUNWAY_MODELS = frozenset({"gen4.5", "gen6", "gen3"})
+ALLOWED_RUNWAY_MODELS = frozenset({"gen4.5", "gemini_omni_flash", "gen6", "gen3"})
 
 class RenderProviderAdapter(ABC):
     """Abstract base class for render provider adapters"""
@@ -632,10 +632,21 @@ class RunwayAdapter(RenderProviderAdapter):
             return 300
 
     @staticmethod
-    def _normalize_ratio(raw_ratio: Optional[str]) -> str:
-        supported = {"1280:720", "720:1280"}
+    def _normalize_ratio(raw_ratio: Optional[str], *, image_to_video: bool = False) -> str:
+        supported = {"1280:768", "768:1280"} if image_to_video else {"1280:720", "720:1280"}
+        fallback = "1280:768" if image_to_video else "1280:720"
         ratio = str(raw_ratio or "").strip()
-        return ratio if ratio in supported else "1280:720"
+        return ratio if ratio in supported else fallback
+
+    @staticmethod
+    def _runway_error_message(status_code: int, body: str) -> str:
+        fallback = "Runway API unauthorized" if status_code == 401 else f"Runway API error {status_code}"
+        text = str(body or "").strip()
+        if not text:
+            return fallback
+        if len(text) > 240:
+            text = text[:237].rstrip() + "..."
+        return f"{fallback}: {text}"
 
     @staticmethod
     def _extract_task_id(response: dict) -> Optional[str]:
@@ -697,11 +708,17 @@ class RunwayAdapter(RenderProviderAdapter):
     @staticmethod
     def _classify_runway_error(status_code: int, body: str) -> str:
         text = (body or "").lower()
+        if "credit" in text or "billing" in text or "payment" in text:
+            return "missing_credits"
+        if "model" in text and (
+            "not available" in text
+            or "unsupported" in text
+            or "invalid option" in text
+        ):
+            return "unsupported_model"
         if status_code == 401:
             if "revoked" in text:
                 return "revoked_key"
-            if "credit" in text or "billing" in text or "payment" in text:
-                return "missing_credits"
             if "organization" in text or "org" in text or "project" in text:
                 return "missing_org_access"
             if "invalid api key" in text or "invalid key" in text or "unauthorized" in text:
@@ -711,6 +728,8 @@ class RunwayAdapter(RenderProviderAdapter):
             if "model" in text and ("unsupported" in text or "invalid" in text):
                 return "unsupported_model"
             return "invalid_payload"
+        if status_code == 429:
+            return "rate_limit"
         return "unknown_401" if status_code == 401 else "request_error"
 
     async def submit_job(self, job: RenderJobModel) -> RenderJobModel:
@@ -823,7 +842,7 @@ class RunwayAdapter(RenderProviderAdapter):
                     )
 
             params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
-            ratio = self._normalize_ratio(params.get("ratio"))
+            ratio = self._normalize_ratio(params.get("ratio"), image_to_video=bool(prompt_image))
             duration = int(params.get("duration") or params.get("duration_seconds") or 5)
 
             # Extract seed from parameters if present
@@ -1022,7 +1041,7 @@ class RunwayAdapter(RenderProviderAdapter):
             return job
         except RunwayAPIError as exc:
             classification = self._classify_runway_error(exc.status_code, exc.response_body)
-            error_message = "Runway API unauthorized" if exc.status_code == 401 else f"Runway API error {exc.status_code}"
+            error_message = self._runway_error_message(exc.status_code, exc.response_body)
             error = self._error_metadata(
                 classification,
                 error_message,
@@ -1252,6 +1271,9 @@ class HappyHorseAdapter(RenderProviderAdapter):
     """DashScope HappyHorse video adapter that strips embedded audio before return."""
 
     MODEL_NAME = "happyhorse-1.1-t2v"
+    PROVIDER_LABEL = "HappyHorse"
+    OUTPUT_PROCESSING_METADATA_KEY = "audio_strip"
+    ASSET_ID_PREFIX = "happyhorse"
     SUBMIT_PATH = "/services/aigc/video-generation/video-synthesis"
     TASK_STATUS_PATH = "/tasks/{task_id}"
 
@@ -1329,7 +1351,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
         payload: Optional[dict] = None,
     ) -> dict:
         if not self.config.api_endpoint:
-            raise ValueError("HappyHorse API endpoint is not configured")
+            raise ValueError(f"{self.PROVIDER_LABEL} API endpoint is not configured")
         if not self.config.api_key:
             raise ValueError("DashScope API key is not configured")
         url = f"{self.config.api_endpoint}{path}"
@@ -1343,7 +1365,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
         async with session.request(method, url, headers=headers, json=payload) as response:
             body_text = await response.text()
             if response.status >= 400:
-                raise ValueError(f"HappyHorse API error {response.status}: {body_text}")
+                raise ValueError(f"{self.PROVIDER_LABEL} API error {response.status}: {body_text}")
             if not body_text.strip():
                 return {}
             try:
@@ -1389,7 +1411,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
         session = await self._get_session()
         async with session.get(url) as response:
             if response.status != 200:
-                raise ValueError(f"Failed to download HappyHorse video: HTTP {response.status}")
+                raise ValueError(f"Failed to download {self.PROVIDER_LABEL} video: HTTP {response.status}")
             path.write_bytes(await response.read())
 
     @staticmethod
@@ -1566,7 +1588,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
             if not task_id:
                 return self._failure_output(
                     job,
-                    "HappyHorse submission failed: missing task id",
+                    f"{self.PROVIDER_LABEL} submission failed: missing task id",
                     "missing_task_id",
                     submit_response,
                 )
@@ -1589,13 +1611,13 @@ class HappyHorseAdapter(RenderProviderAdapter):
                 )
                 output = poll_response.get("output") if isinstance(poll_response, dict) else {}
                 task_status = str(output.get("task_status", "PENDING")).strip().upper() if isinstance(output, dict) else "PENDING"
-                logger.info("HappyHorse polling status: task_id=%s status=%s", task_id, task_status)
+                logger.info("%s polling status: task_id=%s status=%s", self.PROVIDER_LABEL, task_id, task_status)
                 if task_status in {"SUCCEEDED", "FAILED", "CANCELED", "CANCELLED"}:
                     break
                 if asyncio.get_running_loop().time() - started >= timeout_seconds:
                     return self._failure_output(
                         job,
-                        f"HappyHorse task polling timed out after {timeout_seconds}s",
+                        f"{self.PROVIDER_LABEL} task polling timed out after {timeout_seconds}s",
                         "timeout",
                         poll_response,
                     )
@@ -1604,7 +1626,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
             if task_status != "SUCCEEDED":
                 return self._failure_output(
                     job,
-                    self._extract_task_error(poll_response, "HappyHorse task failed"),
+                    self._extract_task_error(poll_response, f"{self.PROVIDER_LABEL} task failed"),
                     "task_failed",
                     poll_response,
                 )
@@ -1613,7 +1635,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
             if not hosted_video_url:
                 return self._failure_output(
                     job,
-                    "HappyHorse task completed without video_url",
+                    f"{self.PROVIDER_LABEL} task completed without video_url",
                     "missing_video_url",
                     poll_response,
                 )
@@ -1634,7 +1656,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
                     "hosted_video_url": "<redacted temporary provider URL>",
                     "hosted_video_url_redacted": True,
                     "raw_response": self._redact_temporary_provider_urls(poll_response),
-                    "audio_strip": strip_metadata,
+                    self.OUTPUT_PROCESSING_METADATA_KEY: strip_metadata,
                 },
             }
             job.status = "complete"
@@ -1649,7 +1671,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
             )
             return job
         except Exception as exc:
-            return self._failure_output(job, f"HappyHorse API error: {exc}", "request_error")
+            return self._failure_output(job, f"{self.PROVIDER_LABEL} API error: {exc}", "request_error")
 
     async def get_job_status(self, job: RenderJobModel) -> RenderJobModel:
         if job.status == "complete":
@@ -1693,21 +1715,21 @@ class HappyHorseAdapter(RenderProviderAdapter):
                                     "hosted_video_url": "<redacted temporary provider URL>",
                                     "hosted_video_url_redacted": True,
                                     "raw_response": self._redact_temporary_provider_urls(response),
-                                    "audio_strip": strip_metadata,
+                                    self.OUTPUT_PROCESSING_METADATA_KEY: strip_metadata,
                                 },
                             }
                         },
                     )
                 else:
                     job.status = "failed"
-                    job.error_message = "HappyHorse task completed without video_url"
+                    job.error_message = f"{self.PROVIDER_LABEL} task completed without video_url"
             elif task_status in {"FAILED", "CANCELED", "CANCELLED"}:
                 job.status = "failed"
-                job.error_message = self._extract_task_error(response, "HappyHorse status check failed")
+                job.error_message = self._extract_task_error(response, f"{self.PROVIDER_LABEL} status check failed")
             job.updated_at = datetime.now().isoformat()
         except Exception as exc:
             job.status = "failed"
-            job.error_message = f"HappyHorse status check failed: {exc}"
+            job.error_message = f"{self.PROVIDER_LABEL} status check failed: {exc}"
             job.updated_at = datetime.now().isoformat()
         return job
 
@@ -1718,7 +1740,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
         if job.status != "complete" or not job.output_payload:
             return []
         return [RenderAsset(
-            id=f"happyhorse-asset-{job.id}",
+            id=f"{self.ASSET_ID_PREFIX}-asset-{job.id}",
             job_id=job.id,
             project_id=job.project_id,
             shot_id=job.shot_id,
@@ -1733,7 +1755,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
     async def get_status(self) -> ProviderStatus:
         return ProviderStatus(
             provider_id=self.provider_id,
-            name=self.config.name or "HappyHorse",
+            name=self.config.name or self.PROVIDER_LABEL,
             status="available" if self.config.api_key else "unavailable",
             is_simulated=False,
             capabilities=self.config.capabilities or ["video_generation", "text_to_video"],
@@ -1857,6 +1879,100 @@ class HappyHorseR2VAdapter(HappyHorseAdapter):
         return payload
 
 
+class WanTextToVideoAdapter(HappyHorseAdapter):
+    """DashScope Wan text-to-video adapter that preserves generated audio."""
+
+    MODEL_NAME = "wan2.6-t2v"
+    PROVIDER_LABEL = "Wan"
+    OUTPUT_PROCESSING_METADATA_KEY = "media_download"
+    ASSET_ID_PREFIX = "wan"
+
+    @staticmethod
+    def _happyhorse_timeout_seconds() -> int:
+        raw = os.getenv("WAN_TIMEOUT_SECONDS", "900").strip()
+        try:
+            timeout = int(float(raw))
+            return timeout if timeout > 0 else 900
+        except Exception:
+            return 900
+
+    @staticmethod
+    def _happyhorse_poll_interval_seconds() -> float:
+        raw = os.getenv("WAN_POLL_INTERVAL_SECONDS", "5").strip()
+        try:
+            interval = float(raw)
+            return interval if interval > 0 else 5.0
+        except Exception:
+            return 5.0
+
+    @staticmethod
+    def _normalize_duration(value: object) -> int:
+        try:
+            duration = int(float(value))
+        except Exception:
+            duration = 5
+        return min((5, 10, 15), key=lambda allowed: (abs(allowed - duration), allowed))
+
+    @staticmethod
+    def _wan_size(resolution: str, ratio: str) -> str:
+        sizes = {
+            ("720P", "16:9"): "1280*720",
+            ("720P", "9:16"): "720*1280",
+            ("1080P", "16:9"): "1920*1080",
+            ("1080P", "9:16"): "1080*1920",
+        }
+        return sizes.get((resolution, ratio), "1280*720")
+
+    def _build_submit_payload(
+        self,
+        *,
+        job: RenderJobModel,
+        resolution: str,
+        duration: int,
+        ratio: str,
+        seed: object,
+        params: dict,
+    ) -> dict:
+        payload: dict = {
+            "model": self.MODEL_NAME,
+            "input": {"prompt": str(job.input_payload.prompt or "")},
+            "parameters": {
+                "size": self._wan_size(resolution, ratio),
+                "duration": duration,
+                "prompt_extend": bool(params.get("prompt_extend", True)),
+                "shot_type": str(params.get("shot_type") or "multi"),
+                "watermark": bool(params.get("watermark", False)),
+            },
+        }
+        audio_url = str(params.get("audio_url") or "").strip()
+        if audio_url:
+            payload["input"]["audio_url"] = audio_url
+        if seed is not None:
+            payload["parameters"]["seed"] = int(seed)
+        return payload
+
+    async def _download_and_strip_audio(
+        self,
+        *,
+        job: RenderJobModel,
+        hosted_video_url: str,
+    ) -> tuple[str, dict]:
+        output_dir = self._output_dir(job.project_id)
+        safe_job_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in job.id)
+        output_path = output_dir / f"{safe_job_id}_wan.mp4"
+        await self._download_to_file(hosted_video_url, output_path)
+        streams = await asyncio.to_thread(self._ffprobe_streams_sync, output_path)
+        audio_streams = [stream for stream in streams if stream.get("codec_type") == "audio"]
+        relative_url = f"/outputs/renders/{job.project_id}/{output_path.name}"
+        return relative_url, {
+            "local_path": str(output_path),
+            "asset_url": relative_url,
+            "ffprobe_streams": streams,
+            "audio_stream_count": len(audio_streams),
+            "provider_audio_preserved": True,
+        }
+
+
 # Provider registry
 ADAPTER_REGISTRY: dict[str, type[RenderProviderAdapter]] = {
     "simulated": SimulatedProviderAdapter,
@@ -1865,6 +1981,7 @@ ADAPTER_REGISTRY: dict[str, type[RenderProviderAdapter]] = {
     "runway": RunwayAdapter,
     "happyhorse": HappyHorseAdapter,
     "happyhorse-r2v": HappyHorseR2VAdapter,
+    "wan": WanTextToVideoAdapter,
     "generic": GenericVideoProviderAdapter,
 }
 

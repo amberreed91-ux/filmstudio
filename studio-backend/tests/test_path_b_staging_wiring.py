@@ -484,3 +484,44 @@ class TestPathBFullAdherencePayload:
         assert "Keep both characters readable in the frame" in slots["camera"]
         assert job.input_payload.consistency_payload is not None
         assert job.input_payload.consistency_payload.refs[0].ref_id == "ref_maya_full"
+        debug = job.metadata["zero_touch_pipeline"]
+        assert debug["staging"]["applied"] is True
+        assert debug["references"][0]["reference_id"] == "ref_maya_full"
+        assert debug["references"][0]["injected_into_request"] is True
+
+    def test_structured_prompt_uses_previs_shot_planning_details(
+        self,
+        isolated_render,
+    ):
+        db, project_id, service = isolated_render
+
+        maya = db.get_character_by_name(project_id, CHAR_NAME)
+        _seed_scene_staging(db, maya["id"], "scene_002")
+
+        job = service.create_job(
+            project_id=project_id,
+            shot_id="scene_002_shot_002",
+            prompt=NON_GENERIC_PROMPT,
+            parameters={
+                "structured_prompt": True,
+                "shot_planning": {
+                    "blocking": "Maya stops at the river and keeps her hand on the rail.",
+                    "purpose": "Hold the betrayal without explaining it.",
+                    "framing": "Medium two-shot tension.",
+                    "camera": "Patient locked-off camera, no flourish.",
+                    "composition": "Keep the river as the pressure point behind her.",
+                    "atmosphere": "Hard daylight, emotionally cold.",
+                    "production": "Chicago River edge, cracked concrete.",
+                },
+            },
+        )
+
+        slots = job.input_payload.parameters["prompt_slots"]
+        outgoing = job.input_payload.prompt
+
+        assert "hand on the rail" in slots["action"]
+        assert "Medium two-shot tension" in slots["camera"]
+        assert "Patient locked-off camera" in slots["camera"]
+        assert "Hard daylight" in slots["lighting"]
+        assert "Chicago River edge" in slots["environment_persistence"]
+        assert "hand on the rail" in outgoing

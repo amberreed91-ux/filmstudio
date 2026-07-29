@@ -28,6 +28,7 @@ Advisory only — does not mutate canonical project state or auto-regenerate cli
 from __future__ import annotations
 
 import logging
+import json
 import math
 import uuid
 from datetime import datetime, timezone
@@ -1789,6 +1790,665 @@ class ContinuityIntelligenceService:
         
         return notes
 
+    # ── Environment continuity graph ─────────────────────────────────────────
+
+    def _environment_empty_context(self) -> Dict[str, Any]:
+        return {
+            "location_id": "",
+            "canonical_environment": None,
+            "prompt_lines": [],
+            "warnings": [],
+            "selected_references": [],
+            "reference_explanations": [],
+            "state_change_summary": [],
+        }
+
+    def _normalize_env_text(self, value: Any) -> str:
+        return " ".join(str(value or "").strip().split())
+
+    def _normalize_location_id(self, value: Any) -> str:
+        text = self._normalize_env_text(value).lower()
+        parts: List[str] = []
+        prev_dash = False
+        for char in text:
+            if char.isalnum():
+                parts.append(char)
+                prev_dash = False
+            elif not prev_dash:
+                parts.append("-")
+                prev_dash = True
+        return "".join(parts).strip("-")
+
+    def _env_list(self, value: Any) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
+        if isinstance(value, (list, tuple, set)):
+            result: List[str] = []
+            for item in value:
+                if isinstance(item, dict):
+                    text = self._normalize_env_text(
+                        item.get("name")
+                        or item.get("object")
+                        or item.get("description")
+                        or item.get("detail")
+                    )
+                else:
+                    text = self._normalize_env_text(item)
+                if text:
+                    result.append(text)
+            return result
+        return []
+
+    def _env_dict(self, value: Any) -> Dict[str, Any]:
+        return dict(value) if isinstance(value, dict) else {}
+
+    def _get_env_payload(
+        self,
+        *,
+        shot_id: str,
+        prompt: str,
+        scene_data: Any,
+        parameters: Any,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if isinstance(scene_data, dict):
+            payload.update(scene_data)
+            nested = scene_data.get("environment") or scene_data.get("environment_state")
+            if isinstance(nested, dict):
+                payload.update(nested)
+        if isinstance(parameters, dict):
+            nested = parameters.get("environment_continuity") or parameters.get("environment_state")
+            if isinstance(nested, dict):
+                payload.update(nested)
+
+        prompt_lower = str(prompt or "").lower()
+        if not payload.get("shot_type"):
+            if "establishing" in prompt_lower:
+                payload["shot_type"] = "establishing"
+            elif "wide" in prompt_lower:
+                payload["shot_type"] = "wide"
+            elif "reverse" in prompt_lower:
+                payload["shot_type"] = "reverse_angle"
+            elif "close" in prompt_lower:
+                payload["shot_type"] = "close_up"
+        payload.setdefault("shot_id", shot_id)
+        return payload
+
+    def _resolve_location_id(self, payload: Dict[str, Any], prompt: str) -> tuple[str, str]:
+        raw = (
+            payload.get("location_id")
+            or payload.get("location")
+            or payload.get("environment_location")
+            or payload.get("place")
+            or payload.get("room")
+        )
+        name = self._normalize_env_text(raw)
+        if not name:
+            prompt_text = self._normalize_env_text(prompt)
+            lowered = prompt_text.lower()
+            for marker in (" inside ", " in ", " at "):
+                if marker in lowered:
+                    chunk = prompt_text[lowered.index(marker) + len(marker):]
+                    name = chunk.split(".")[0].split(",")[0].strip()
+                    break
+        return self._normalize_location_id(payload.get("location_id") or name), name
+
+    def _default_environment_record(
+        self,
+        *,
+        location_id: str,
+        location_name: str,
+        scene_id: str,
+        shot_id: str,
+    ) -> Dict[str, Any]:
+        now = self._now_iso()
+        return {
+            "location_id": location_id,
+            "permanent_location_identity": {
+                "name": location_name or location_id,
+                "aliases": [],
+                "first_seen_scene_id": scene_id,
+                "first_seen_shot_id": shot_id,
+            },
+            "default_layout": {
+                "room_layout": "",
+                "entrances_exits": [],
+                "furniture_placement": {},
+                "persistent_objects": [],
+                "lighting_sources": [],
+                "environmental_storytelling_details": [],
+            },
+            "scene_state": {
+                "time_of_day": "",
+                "weather": "",
+                "season": "",
+                "cleanliness_disorder": "",
+            },
+            "shot_state": {},
+            "temporary_changes": [],
+            "destructive_changes": [],
+            "restored_state": [],
+            "approved_references": [],
+            "visual_signature": [],
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    def _environment_visual_signature(self, record: Dict[str, Any]) -> List[str]:
+        layout = record.get("default_layout") if isinstance(record.get("default_layout"), dict) else {}
+        identity = record.get("permanent_location_identity") if isinstance(record.get("permanent_location_identity"), dict) else {}
+        anchors: List[str] = []
+        furniture_names = (
+            list((layout.get("furniture_placement") or {}).keys())
+            if isinstance(layout.get("furniture_placement"), dict)
+            else []
+        )
+        values = [
+            identity.get("name"),
+            layout.get("room_layout"),
+            *self._env_list(layout.get("entrances_exits")),
+            *furniture_names,
+            *self._env_list(layout.get("persistent_objects")),
+            *self._env_list(layout.get("lighting_sources")),
+            *self._env_list(layout.get("environmental_storytelling_details")),
+        ]
+        for value in values:
+            text = self._normalize_env_text(value)
+            if text and text not in anchors:
+                anchors.append(text)
+        return anchors[:12]
+
+    def _environment_recognizability(
+        self,
+        record: Dict[str, Any],
+        payload: Dict[str, Any],
+        prompt_lines: List[str],
+    ) -> Dict[str, Any]:
+        signature = self._environment_visual_signature(record)
+        if not signature:
+            return {
+                "recognizable": False,
+                "status": "insufficient_environment_signature",
+                "preserved_anchors": [],
+                "missing_anchors": [],
+                "basis": "No canonical environment anchors have been established yet.",
+            }
+
+        evidence_parts = [
+            " ".join(prompt_lines),
+            self._normalize_env_text(payload.get("render_prompt")),
+            " ".join(self._env_list(payload.get("visible_objects"))),
+            " ".join(self._env_list(payload.get("spatial_relationships"))),
+            self._normalize_env_text(payload.get("recognizable_object")),
+            self._normalize_env_text(payload.get("room_layout") or payload.get("layout")),
+        ]
+        evidence = " ".join(part for part in evidence_parts if part).lower()
+        preserved: List[str] = []
+        missing: List[str] = []
+        for anchor in signature:
+            anchor_lower = anchor.lower()
+            anchor_terms = [
+                term
+                for term in anchor_lower.replace("-", " ").split()
+                if len(term) > 2
+            ]
+            matched = anchor_lower in evidence or any(term in evidence for term in anchor_terms[:3])
+            if matched:
+                preserved.append(anchor)
+            else:
+                missing.append(anchor)
+
+        recognizable = bool(preserved) and len(preserved) >= min(3, len(signature))
+        return {
+            "recognizable": recognizable,
+            "status": "recognizable" if recognizable else "needs_review",
+            "preserved_anchors": preserved,
+            "missing_anchors": missing[:6],
+            "basis": (
+                "Environment prompt carries enough canonical anchors to preserve location identity."
+                if recognizable
+                else "Environment prompt does not carry enough canonical anchors to prove recognizability."
+            ),
+        }
+
+    def _environment_warnings(self, record_before: Dict[str, Any], payload: Dict[str, Any]) -> List[str]:
+        warnings: List[str] = []
+        scene_state = record_before.get("scene_state") if isinstance(record_before, dict) else {}
+        scene_state = scene_state if isinstance(scene_state, dict) else {}
+        intentional = bool(
+            payload.get("intentional_environment_change")
+            or payload.get("allow_environment_change")
+        )
+        for field in ("time_of_day", "weather", "season"):
+            incoming = self._normalize_env_text(payload.get(field))
+            established = self._normalize_env_text(scene_state.get(field))
+            field_intent = bool(payload.get(f"intentional_{field}_change"))
+            if incoming and established and incoming.lower() != established.lower() and not (intentional or field_intent):
+                warnings.append(
+                    f"{field}: '{incoming}' conflicts with established '{established}' without an intentional change flag"
+                )
+
+        destructive = [item.lower() for item in self._env_list(record_before.get("destructive_changes"))]
+        restored = [item.lower() for item in self._env_list(record_before.get("restored_state"))]
+        notes = " ".join(
+            self._env_list(payload.get("environment_notes"))
+            + [self._normalize_env_text(payload.get("prompt_notes"))]
+        ).lower()
+        incoming_damage = " ".join(self._env_list(payload.get("damage"))).lower()
+        window_was_broken = any("window broken" in item or "broken window" in item for item in destructive)
+        if window_was_broken:
+            says_intact = (
+                payload.get("window_broken") is False
+                or "intact window" in notes
+                or "unbroken window" in notes
+                or "window intact" in notes
+                or "fixed window" in notes
+                or "intact" in incoming_damage
+            )
+            window_restored = any("window" in item for item in restored) or bool(payload.get("window_restored"))
+            if says_intact and not (window_restored or intentional):
+                warnings.append("destruction_damage: window was previously broken and has no restored-state record")
+
+        if record_before.get("temporary_changes"):
+            prior_movements = [item.lower() for item in self._env_list(record_before.get("temporary_changes"))]
+            missing_objects = " ".join(self._env_list(payload.get("missing_objects"))).lower()
+            if "back in original position" in notes and not intentional:
+                warnings.append("object_movement: prompt restores an object position without an explicit restored-state note")
+            for movement in prior_movements:
+                moved_object = movement.split(" moved ", 1)[0].strip()
+                if moved_object and moved_object in missing_objects:
+                    warnings.append(f"missing_objects: '{moved_object}' was moved earlier, not removed")
+        return warnings
+
+    def _merge_environment_record(
+        self,
+        record: Dict[str, Any],
+        payload: Dict[str, Any],
+        *,
+        scene_id: str,
+        shot_id: str,
+    ) -> List[str]:
+        summary: List[str] = []
+        layout = record.setdefault("default_layout", {})
+        scene_state = record.setdefault("scene_state", {})
+
+        room_layout = self._normalize_env_text(payload.get("room_layout") or payload.get("layout"))
+        if room_layout and not layout.get("room_layout"):
+            layout["room_layout"] = room_layout
+            summary.append(f"default layout established: {room_layout}")
+
+        cleanliness = self._normalize_env_text(
+            payload.get("cleanliness_disorder") or payload.get("disorder") or payload.get("cleanliness")
+        )
+        if cleanliness and scene_state.get("cleanliness_disorder") != cleanliness:
+            scene_state["cleanliness_disorder"] = cleanliness
+            summary.append(f"cleanliness_disorder now {cleanliness}")
+
+        list_fields = {
+            "entrances_exits": ("entrances_exits", "entrances", "exits"),
+            "persistent_objects": ("persistent_objects", "objects"),
+            "lighting_sources": ("lighting_sources", "practical_lights"),
+            "environmental_storytelling_details": ("environmental_storytelling_details", "storytelling_details"),
+        }
+        for field, keys in list_fields.items():
+            existing = layout.setdefault(field, [])
+            if not isinstance(existing, list):
+                existing = []
+                layout[field] = existing
+            incoming: List[str] = []
+            for key in keys:
+                incoming.extend(self._env_list(payload.get(key)))
+            for item in incoming:
+                if item not in existing:
+                    existing.append(item)
+                    summary.append(f"{field} added: {item}")
+
+        furniture = layout.setdefault("furniture_placement", {})
+        if not isinstance(furniture, dict):
+            furniture = {}
+            layout["furniture_placement"] = furniture
+        for key in ("furniture_placement", "furniture"):
+            for name, placement in self._env_dict(payload.get(key)).items():
+                object_name = self._normalize_env_text(name)
+                object_place = self._normalize_env_text(placement)
+                if object_name and object_place and object_name not in furniture:
+                    furniture[object_name] = object_place
+                    summary.append(f"furniture placed: {object_name} at {object_place}")
+
+        for field in ("time_of_day", "weather", "season"):
+            incoming = self._normalize_env_text(payload.get(field))
+            if incoming and scene_state.get(field) != incoming:
+                scene_state[field] = incoming
+                summary.append(f"{field} now {incoming}")
+
+        temporary = record.setdefault("temporary_changes", [])
+        for movement in self._env_list(payload.get("object_movements") or payload.get("object_movement")):
+            if movement not in temporary:
+                temporary.append(movement)
+                summary.append(f"object movement recorded: {movement}")
+
+        destructive = record.setdefault("destructive_changes", [])
+        damage_items = []
+        damage_items.extend(self._env_list(payload.get("destruction_damage")))
+        damage_items.extend(self._env_list(payload.get("damage")))
+        if payload.get("window_broken") is True:
+            damage_items.append("window broken")
+        for item in damage_items:
+            if item not in destructive:
+                destructive.append(item)
+                summary.append(f"damage persists: {item}")
+
+        restored = record.setdefault("restored_state", [])
+        for item in self._env_list(payload.get("restored_state") or payload.get("restored_objects")):
+            if item not in restored:
+                restored.append(item)
+                summary.append(f"restored state recorded: {item}")
+
+        shot_states = record.setdefault("shot_state", {})
+        existing_shot_state = shot_states.get(shot_id)
+        shot_state = dict(existing_shot_state) if isinstance(existing_shot_state, dict) else {}
+        shot_state.setdefault("scene_id", scene_id)
+        shot_state.setdefault("shot_id", shot_id)
+        for key, value in {
+            "shot_type": self._normalize_env_text(payload.get("shot_type")),
+            "entrance": self._normalize_env_text(payload.get("entrance") or payload.get("character_entering")),
+            "exit": self._normalize_env_text(payload.get("exit") or payload.get("character_exiting")),
+            "recognizable_object": self._normalize_env_text(payload.get("recognizable_object")),
+        }.items():
+            if value:
+                shot_state[key] = value
+            else:
+                shot_state.setdefault(key, "")
+        for key, value in {
+            "missing_objects": self._env_list(payload.get("missing_objects")),
+            "added_objects": self._env_list(payload.get("added_objects")),
+            "spatial_relationships": self._env_list(payload.get("spatial_relationships")),
+        }.items():
+            if value:
+                shot_state[key] = value
+            else:
+                shot_state.setdefault(key, [])
+        shot_state.setdefault("created_at", self._now_iso())
+        shot_states[shot_id] = shot_state
+        record["updated_at"] = self._now_iso()
+        record["visual_signature"] = self._environment_visual_signature(record)
+        return summary
+
+    def _select_environment_references(
+        self,
+        *,
+        film_id: str,
+        location_id: str,
+        record: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        selected: List[Dict[str, Any]] = []
+        approved = record.get("approved_references")
+        if isinstance(approved, list):
+            establishing = [
+                ref for ref in approved
+                if isinstance(ref, dict)
+                and ref.get("status") == "approved"
+                and ref.get("role") == "establishing"
+            ]
+            other = [
+                ref for ref in approved
+                if isinstance(ref, dict)
+                and ref.get("status") == "approved"
+                and ref.get("role") != "establishing"
+            ]
+            selected.extend(establishing[:1])
+            selected.extend(other[:2])
+
+        if self._storage and hasattr(self._storage, "list_reference_assets"):
+            try:
+                for ref in self._storage.list_reference_assets(project_id=film_id, kind="environment", limit=6) or []:
+                    if not isinstance(ref, dict):
+                        continue
+                    source = self._normalize_location_id(ref.get("source_shot_id") or "")
+                    if location_id and source and location_id not in source:
+                        continue
+                    if not any(existing.get("ref_id") == ref.get("ref_id") for existing in selected if isinstance(existing, dict)):
+                        selected.append({
+                            "ref_id": ref.get("ref_id"),
+                            "image_url": ref.get("image_url"),
+                            "source_shot_id": ref.get("source_shot_id"),
+                            "role": "approved_environment",
+                            "status": "approved",
+                        })
+            except Exception:
+                pass
+        return selected[:3]
+
+    def resolve_environment_context(
+        self,
+        *,
+        scene_id: str,
+        film_id: str,
+        shot_id: str,
+        prompt: str = "",
+        scene_data: Any = None,
+        parameters: Any = None,
+    ) -> Dict[str, Any]:
+        """
+        Resolve and persist canonical environment state before generation.
+
+        This records location identity, layout, state, changes, warnings, and
+        reference anchor choices. It is advisory and never blocks rendering.
+        """
+        if not film_id:
+            return self._environment_empty_context()
+
+        payload = self._get_env_payload(
+            shot_id=shot_id,
+            prompt=prompt,
+            scene_data=scene_data,
+            parameters=parameters,
+        )
+        location_id, location_name = self._resolve_location_id(payload, prompt)
+        if not location_id:
+            return self._environment_empty_context()
+
+        graph = self._get_or_build_graph(film_id)
+        env_graph = graph.setdefault("environment_continuity", {})
+        locations = env_graph.setdefault("locations", {})
+        if not isinstance(locations, dict):
+            locations = {}
+            env_graph["locations"] = locations
+
+        existing = locations.get(location_id)
+        record_before = json.loads(json.dumps(existing)) if isinstance(existing, dict) else {}
+        record = existing if isinstance(existing, dict) else self._default_environment_record(
+            location_id=location_id,
+            location_name=location_name,
+            scene_id=scene_id,
+            shot_id=shot_id,
+        )
+
+        warnings = self._environment_warnings(record_before, payload)
+        summary = self._merge_environment_record(record, payload, scene_id=scene_id, shot_id=shot_id)
+        locations[location_id] = record
+        env_graph["last_location_id"] = location_id
+        env_graph["updated_at"] = self._now_iso()
+        self._save_graph(film_id, graph)
+
+        selected_refs = self._select_environment_references(
+            film_id=film_id,
+            location_id=location_id,
+            record=record,
+        )
+        layout = record.get("default_layout") if isinstance(record.get("default_layout"), dict) else {}
+        scene_state = record.get("scene_state") if isinstance(record.get("scene_state"), dict) else {}
+        prompt_lines = [f"Environment identity: {record['permanent_location_identity']['name']} ({location_id})"]
+        if layout.get("room_layout"):
+            prompt_lines.append(f"Preserve room layout: {layout['room_layout']}")
+        if layout.get("entrances_exits"):
+            prompt_lines.append("Entrances/exits: " + ", ".join(layout["entrances_exits"][:4]))
+        if layout.get("furniture_placement"):
+            furniture_bits = [
+                f"{name} at {place}"
+                for name, place in list(layout["furniture_placement"].items())[:4]
+            ]
+            prompt_lines.append("Furniture placement: " + "; ".join(furniture_bits))
+        if layout.get("persistent_objects"):
+            prompt_lines.append("Persistent objects: " + ", ".join(layout["persistent_objects"][:5]))
+        if record.get("destructive_changes"):
+            prompt_lines.append("Persisting damage: " + ", ".join(record["destructive_changes"][:4]))
+        state_bits = [f"{key}: {value}" for key, value in scene_state.items() if value]
+        if state_bits:
+            prompt_lines.append("Environment state: " + "; ".join(state_bits))
+
+        recognizability = self._environment_recognizability(record, payload, prompt_lines)
+
+        explanations = []
+        for ref in selected_refs:
+            role = ref.get("role") or "environment"
+            source = ref.get("source_shot_id") or ref.get("ref_id") or "unknown source"
+            reason = (
+                "selected because approved establishing shots are preferred as environment anchors"
+                if role == "establishing"
+                else "selected because it is an approved environment reference for this location"
+            )
+            explanations.append({"source_shot_id": source, "role": role, "reason": reason})
+
+        return {
+            "location_id": location_id,
+            "canonical_environment": record,
+            "prompt_lines": prompt_lines,
+            "warnings": warnings,
+            "selected_references": selected_refs,
+            "reference_explanations": explanations,
+            "state_change_summary": summary,
+            "recognizability": recognizability,
+        }
+
+    def approve_environment_reference(
+        self,
+        *,
+        film_id: str,
+        location_id: str,
+        source_shot_id: str,
+        image_url: str = "",
+        role: str = "approved",
+        source_job_id: str = "",
+    ) -> Dict[str, Any]:
+        """Mark an approved shot as an environment reference anchor."""
+        if not film_id or not location_id or not source_shot_id:
+            return self._environment_empty_context()
+        graph = self._get_or_build_graph(film_id)
+        env_graph = graph.setdefault("environment_continuity", {})
+        locations = env_graph.setdefault("locations", {})
+        record = locations.get(location_id)
+        if not isinstance(record, dict):
+            record = self._default_environment_record(
+                location_id=location_id,
+                location_name=location_id,
+                scene_id="",
+                shot_id=source_shot_id,
+            )
+            locations[location_id] = record
+        refs = record.setdefault("approved_references", [])
+        ref = {
+            "ref_id": f"env-ref-{source_shot_id}",
+            "source_shot_id": source_shot_id,
+            "source_job_id": source_job_id,
+            "image_url": image_url,
+            "role": "establishing" if role == "establishing" else role,
+            "status": "approved",
+            "approved_at": self._now_iso(),
+        }
+        refs[:] = [
+            existing for existing in refs
+            if not isinstance(existing, dict) or existing.get("source_shot_id") != source_shot_id
+        ]
+        refs.append(ref)
+        record["updated_at"] = self._now_iso()
+        env_graph["updated_at"] = self._now_iso()
+        self._save_graph(film_id, graph)
+        return ref
+
+    def evaluate_environment_render(
+        self,
+        *,
+        scene_id: str,
+        film_id: str,
+        shot_id: str,
+        render_job_id: str,
+        render_output_url: str = "",
+        scene_data: Any = None,
+        prompt: str = "",
+    ) -> Dict[str, Any]:
+        """Evaluate environment continuity after rendering and persist output evidence."""
+        context = self.resolve_environment_context(
+            scene_id=scene_id,
+            film_id=film_id,
+            shot_id=shot_id,
+            prompt=prompt,
+            scene_data=scene_data,
+            parameters={},
+        )
+        if not context.get("location_id"):
+            return {
+                "passed": True,
+                "environment_drift_detected": False,
+                "environment_flags": [],
+                "environment_advisory": "No environment location could be resolved for this render.",
+                "reference_explanations": [],
+            }
+        graph = self._get_or_build_graph(film_id)
+        record = (
+            graph.get("environment_continuity", {})
+            .get("locations", {})
+            .get(context["location_id"], {})
+        )
+        if isinstance(record, dict):
+            shot_state = record.setdefault("shot_state", {}).setdefault(shot_id, {})
+            if isinstance(shot_state, dict):
+                shot_state["render_job_id"] = render_job_id
+                shot_state["render_output_url"] = render_output_url
+                shot_state["evaluated_at"] = self._now_iso()
+            if render_output_url and shot_state.get("shot_type") == "establishing":
+                self.approve_environment_reference(
+                    film_id=film_id,
+                    location_id=context["location_id"],
+                    source_shot_id=shot_id,
+                    image_url=render_output_url,
+                    role="establishing",
+                    source_job_id=render_job_id,
+                )
+            else:
+                self._save_graph(film_id, graph)
+
+        review_payload = self._get_env_payload(
+            shot_id=shot_id,
+            prompt=prompt,
+            scene_data=scene_data,
+            parameters={},
+        )
+        review_payload["render_prompt"] = prompt
+        recognizability = (
+            self._environment_recognizability(record, review_payload, [])
+            if isinstance(record, dict)
+            else {}
+        )
+        flags = list(context.get("warnings") or [])
+        if recognizability and not recognizability.get("recognizable"):
+            flags.append("visual_recognizability: canonical environment anchors are underrepresented")
+        return {
+            "passed": not flags,
+            "environment_drift_detected": bool(flags),
+            "environment_flags": flags,
+            "environment_advisory": (
+                "Environment continuity needs review before this location is treated as stable."
+                if flags
+                else "Environment continuity is consistent with the canonical location state."
+            ),
+            "location_id": context["location_id"],
+            "reference_explanations": context.get("reference_explanations", []),
+            "recognizability": recognizability,
+        }
+
 
     # ── Post-render continuity review ────────────────────────────────────────
 
@@ -1799,6 +2459,8 @@ class ContinuityIntelligenceService:
         render_job_id: str,
         render_output_url: str,
         scene_data: dict,
+        shot_id: str = "",
+        prompt: str = "",
     ) -> dict:
         """
         Evaluate whether a completed render output is consistent with the
@@ -1829,7 +2491,7 @@ class ContinuityIntelligenceService:
         }
 
         try:
-            return await self._review_render_output_inner(
+            review = await self._review_render_output_inner(
                 scene_id=scene_id,
                 film_id=film_id,
                 render_job_id=render_job_id,
@@ -1837,6 +2499,26 @@ class ContinuityIntelligenceService:
                 scene_data=scene_data,
                 empty_ok=_empty_ok,
             )
+            environment_review = self.evaluate_environment_render(
+                scene_id=scene_id,
+                film_id=film_id,
+                shot_id=shot_id or render_job_id,
+                render_job_id=render_job_id,
+                render_output_url=render_output_url,
+                scene_data=scene_data,
+                prompt=prompt,
+            )
+            review["environment_review"] = environment_review
+            if environment_review.get("environment_drift_detected"):
+                review["passed"] = False
+                review["drift_detected"] = True
+                review.setdefault("continuity_flags", []).extend(
+                    environment_review.get("environment_flags") or []
+                )
+                review.setdefault("drift_notes", []).append(
+                    environment_review.get("environment_advisory", "")
+                )
+            return review
         except Exception as exc:  # never block a render
             logger.debug(
                 "review_render_output failed silently scene=%s job=%s: %s",

@@ -50,13 +50,13 @@ def test_render_service_provider_selection_is_unaffected_by_codirector_stack():
     """
     service = RenderService()
 
-    # Baseline: local/simulated is the default when no Runway API key is present.
-    assert service.get_default_provider() == "local"
+    # Baseline: provider selection follows the configured render default.
+    assert service.get_default_provider() == "happyhorse"
 
     # Disable simulated, then enable a real provider and ensure default follows
     # provider config only (not any co-director metadata).
-    # NOTE: get_default_provider() now always returns "local" for this build,
-    # so the test verifies co-director state does not change provider selection.
+    # Provider selection follows explicit configuration only; debug metadata
+    # from co-director surfaces must not affect it.
     simulated = service.get_provider_config("simulated")
     assert simulated is not None
     simulated.enabled = False
@@ -70,8 +70,7 @@ def test_render_service_provider_selection_is_unaffected_by_codirector_stack():
     assert config is not None
     config.enabled = True
     service.set_provider_config(config)
-    # Default provider is always "local" regardless of other enabled providers
-    assert service.get_default_provider() == "local"
+    assert service.get_default_provider() == "happyhorse"
 
 
 def test_authority_paths_do_not_consume_adapter_contract_trace_tokens():

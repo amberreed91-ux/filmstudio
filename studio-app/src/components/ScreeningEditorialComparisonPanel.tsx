@@ -7,6 +7,7 @@ type ScreeningEditorialComparisonPanelProps = {
   comparisonRevisionId: string
   revisionEmphasis: 'emotional_residue' | 'structural_clarity'
   revisionCount: number
+  initialComparison?: EditorialRevisionComparison | null
 }
 
 export default function ScreeningEditorialComparisonPanel({
@@ -15,8 +16,9 @@ export default function ScreeningEditorialComparisonPanel({
   comparisonRevisionId,
   revisionEmphasis,
   revisionCount,
+  initialComparison = null,
 }: ScreeningEditorialComparisonPanelProps) {
-  const [comparison, setComparison] = useState<EditorialRevisionComparison | null>(null)
+  const [comparison, setComparison] = useState<EditorialRevisionComparison | null>(initialComparison)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -132,6 +134,12 @@ export default function ScreeningEditorialComparisonPanel({
           <li key={note}>• {note}</li>
         ))}
       </ul>
+      {comparison.canonical_editorial_analysis?.overall_read ? (
+        <div className="mt-2 rounded border border-white/10 bg-white/5 p-2 text-[11px] text-zinc-400">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-sky-200">Canonical Editorial Read</div>
+          <div className="mt-1">{comparison.canonical_editorial_analysis.overall_read}</div>
+        </div>
+      ) : null}
       {comparison.uncertainty_note ? (
         <div className="mt-2 text-[11px] text-zinc-500">{comparison.uncertainty_note}</div>
       ) : null}

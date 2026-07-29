@@ -6,10 +6,10 @@ import { CheckCircle2, GitBranch, Lock, Save } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
 import StudioPanel from '../components/StudioPanel'
 import CoDirectorInspectionPanel from '../components/CoDirectorInspectionPanel'
-import ExecutionSummaryInspectionPanel from '../components/ExecutionSummaryInspectionPanel'
 import DirectorMemoryPanel from '../components/DirectorMemoryPanel'
+import ProfessionalStudioWorkflowPanel from '../components/ProfessionalStudioWorkflowPanel'
 import { useStudio } from '../context/StudioContext'
-import { STUDIO_API_BASE, type StudioProject } from '../lib/studioApi'
+import { STUDIO_API_BASE, getProductionQueueSummary, type ProductionQueueSummary, type StudioProject } from '../lib/studioApi'
 import {
   buildAgentProfiles,
   buildCrewThreads,
@@ -20,7 +20,7 @@ import {
   buildWorkflowStages,
 } from '../lib/studioSystem'
 import { createSlateVariant, getVariantById, loadWorkspaceState, saveWorkspaceState, type LeadershipNote, type ProductionMode } from '../lib/studioWorkspaceState'
-import { getProviderSummaries, getRenderQueueRows } from '../lib/studioSelectors'
+import { getProviderPressureRows, getProviderSummaries, getQueueStatusCounts, getRenderQueueRows } from '../lib/studioSelectors'
 import {
   extractExecutionStatusStripMessage,
   extractMemorySnapshotMessage,
@@ -117,6 +117,7 @@ export function ProjectWorkspaceBody({
   const workspaceKey = `${projectId}:${variant?.id || 'main'}`
   const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState(workspaceKey, initialIdentity.productionMode))
   const [leadershipInput, setLeadershipInput] = useState('')
+  const [queueSummary, setQueueSummary] = useState<ProductionQueueSummary | null>(null)
 
   const { check: proactiveCheck, card: proactiveCard, dismiss: proactiveDismiss, saveToNotes: proactiveSaveToNotes } = useProactiveCoDirector(projectId)
 
@@ -131,6 +132,18 @@ export function ProjectWorkspaceBody({
   useEffect(() => {
     saveWorkspaceState(workspaceKey, workspaceState)
   }, [workspaceKey, workspaceState])
+
+  useEffect(() => {
+    let cancelled = false
+    getProductionQueueSummary(projectId)
+      .then((summary) => {
+        if (!cancelled) setQueueSummary(summary)
+      })
+      .catch(() => {
+        if (!cancelled) setQueueSummary(null)
+      })
+    return () => { cancelled = true }
+  }, [projectId])
 
   if (!loading && !sourceProject) {
     return (
@@ -172,6 +185,8 @@ export function ProjectWorkspaceBody({
   const orchestration = buildOrchestration(sourceProject ?? null, workflow, threads, identity)
   const queueRows = getRenderQueueRows(sourceProject ?? null)
   const providers = getProviderSummaries(sourceProject ?? null)
+  const queueCounts = getQueueStatusCounts(queueSummary)
+  const queueProviderPressure = getProviderPressureRows(queueSummary)
   const productionSignalMessage = extractProductionSignalMessage(sourceProject ?? null)
   const sceneIntentLabel = extractSceneIntentLabel(sourceProject ?? null)
   const reviewStateMessage = extractReviewStateMessage(sourceProject ?? null)
@@ -279,6 +294,7 @@ export function ProjectWorkspaceBody({
             Open Previs Room
           </Link>
         </div>
+        <ProfessionalStudioWorkflowPanel projectId={projectId} actorId="owner" actorRole="producer" />
         <StudioPanel
           title="Project Overview Panel"
           subtitle={identity.logline}
@@ -698,19 +714,47 @@ export function ProjectWorkspaceBody({
         <StudioPanel title="Operational View" subtitle="Provider pressure, render queue, and approval-safe execution.">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              {providers.map((provider) => (
-                <div key={provider.id} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
+              {(queueProviderPressure.length > 0 ? queueProviderPressure : providers).map((provider) => {
+                const providerKey = 'id' in provider ? provider.id : provider.provider
+                const providerName = 'name' in provider ? provider.name : provider.provider.replace(/[_-]+/g, ' ')
+                const providerCount = 'jobs' in provider ? `${provider.jobs} jobs` : `${provider.active}/${provider.limit} active`
+                const providerDetail = 'instance' in provider ? provider.instance : `${provider.queued} waiting · ${provider.status.replace(/_/g, ' ')}`
+                return (
+                <div key={providerKey} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{provider.name}</div>
-                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{provider.jobs} jobs</div>
+                    <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                      {providerName}
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {providerCount}
+                    </div>
                   </div>
-                  <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{provider.instance}</div>
+                  <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    {providerDetail}
+                  </div>
                 </div>
-              ))}
+              )})}
             </div>
             <div className="space-y-2">
-              {queueRows.slice(0, 5).map((row) => (
-              <div key={row.renderId} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }} data-testid="render-status-card">
+              {queueSummary ? (
+                <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }} data-testid="production-queue-summary-card">
+                  <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Production Queue</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {[
+                      ['Active', queueCounts.active],
+                      ['Waiting', queueCounts.waiting],
+                      ['Blocked', queueCounts.blocked],
+                      ['Needs Care', queueCounts.failed],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-lg p-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                        <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</div>
+                        <div className="text-xs mt-1" style={{ color: 'var(--text-primary)' }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : queueRows.slice(0, 5).map((row) => (
+                <div key={row.renderId} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }} data-testid="render-status-card">
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{row.shotId}</div>
                     <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{row.status}</div>

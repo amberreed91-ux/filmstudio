@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 interface EnhancedPrompt {
   scene_id: string;
@@ -20,7 +20,6 @@ interface PromptGenerationPanelProps {
 }
 
 export function PromptGenerationPanel({ projectId }: PromptGenerationPanelProps) {
-  const queryClient = useQueryClient();
   const [editingPrompts, setEditingPrompts] = useState<Record<string, string>>({});
 
   // Fetch enhanced prompts

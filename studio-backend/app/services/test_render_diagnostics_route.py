@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import app.routes.render as render_routes
+from app.services import render as render_module
 
 
 class _DummyStorage:
@@ -35,7 +36,7 @@ class _DummyRenderService:
 
 def test_render_diagnostics_endpoint(monkeypatch):
     monkeypatch.setattr(render_routes, "render_service", _DummyRenderService())
-    monkeypatch.setattr(render_routes.render_module, "_storage", _DummyStorage())
+    monkeypatch.setattr(render_module, "_storage", _DummyStorage())
 
     api = FastAPI()
     api.include_router(render_routes.router, prefix="/api/f51/studio/render")

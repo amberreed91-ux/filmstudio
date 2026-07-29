@@ -10,7 +10,17 @@ from app.models.crew import (
     AgentRole, TaskType, TaskStatus, EscalationReason,
     ProjectOwnership, CreativeDecision
 )
+from app.models.crew_intelligence import (
+    CrewDeliberationStatus,
+    CrewHandoffStatus,
+    CrewReasoningType,
+)
 from app.services.crew import crew_service
+from app.services.crew_intelligence_service import (
+    CrewIntelligenceStateError,
+    CrewIntelligenceValidationError,
+    crew_intelligence_service,
+)
 from app.services.conflicts import conflict_service, ConflictService
 from app.services.guardrails import guardrails, TaskGuardrails
 from app.services.adaptation import adaptation_engine
@@ -260,6 +270,294 @@ def get_orchestrator_status():
             "agent_responsibility": "Technical execution within defined parameters"
         }
     }
+
+
+# ==================== ADVANCED CREW INTELLIGENCE ====================
+
+class CreateCrewHandoffRequest(BaseModel):
+    source_role: str
+    target_role: str
+    context_summary: str
+    source_task_id: Optional[str] = None
+    target_task_id: Optional[str] = None
+    scene_id: Optional[str] = None
+    shot_id: Optional[str] = None
+    asset_id: Optional[str] = None
+    requirements: List[str] = []
+    open_questions: List[str] = []
+    evidence_refs: List[dict] = []
+    risks: List[dict] = []
+    metadata: dict = {}
+
+
+class UpdateCrewHandoffRequest(BaseModel):
+    status: str
+    failed_reason: Optional[str] = None
+    metadata: dict = {}
+
+
+class CreateCrewDeliberationRequest(BaseModel):
+    participating_roles: List[str]
+    issue_summary: str
+    triggering_reasoning_ids: List[str] = []
+    triggering_task_ids: List[str] = []
+    points_of_agreement: List[str] = []
+    points_of_tension: List[str] = []
+    recommended_resolution: str = ""
+    requires_creator_decision: bool = False
+    creator_question: Optional[str] = None
+    scene_id: Optional[str] = None
+    evidence_refs: List[dict] = []
+    risks: List[dict] = []
+    metadata: dict = {}
+
+
+class ResolveCrewDeliberationRequest(BaseModel):
+    resolution_summary: str
+
+
+@router.get("/projects/{project_id}/intelligence")
+def get_crew_intelligence_overview(
+    project_id: str,
+    recent_limit: int = 10,
+    handoff_limit: int = 10,
+    deliberation_limit: int = 10,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get bounded project-level crew intelligence overview."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return crew_intelligence_service.get_project_overview(
+        project_id=project_id,
+        recent_limit=recent_limit,
+        handoff_limit=handoff_limit,
+        deliberation_limit=deliberation_limit,
+    )
+
+
+@router.get("/projects/{project_id}/intelligence/departments")
+def get_crew_department_profiles(project_id: str, user_id: str = Depends(get_current_user_id)):
+    """List all crew department profiles and authority boundaries."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return crew_intelligence_service.get_department_profiles(project_id)
+
+
+@router.get("/projects/{project_id}/intelligence/reasoning")
+def list_crew_reasoning(
+    project_id: str,
+    agent_role: Optional[str] = None,
+    reasoning_type: Optional[str] = None,
+    scene_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    requires_creator_decision: Optional[bool] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    user_id: str = Depends(get_current_user_id),
+):
+    """List persisted crew reasoning records."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    filters: dict[str, Any] = {}
+    if agent_role:
+        filters["agent_role"] = AgentRole(agent_role).value
+    if reasoning_type:
+        filters["reasoning_type"] = CrewReasoningType(reasoning_type).value
+    if scene_id:
+        filters["scene_id"] = scene_id
+    if task_id:
+        filters["task_id"] = task_id
+    if requires_creator_decision is not None:
+        filters["requires_creator_decision"] = requires_creator_decision
+    if status:
+        filters["status"] = status
+    items = crew_intelligence_service.list_reasoning_records(project_id, filters=filters, limit=limit, offset=offset)
+    return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
+
+
+@router.get("/projects/{project_id}/intelligence/reasoning/{reasoning_id}")
+def get_crew_reasoning(project_id: str, reasoning_id: str, user_id: str = Depends(get_current_user_id)):
+    """Get one crew reasoning record."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    record = crew_intelligence_service.get_reasoning_record(reasoning_id)
+    if not record or record.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Crew reasoning record not found")
+    return record
+
+
+@router.get("/projects/{project_id}/intelligence/handoffs")
+def list_crew_handoffs(
+    project_id: str,
+    source_role: Optional[str] = None,
+    target_role: Optional[str] = None,
+    scene_id: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    user_id: str = Depends(get_current_user_id),
+):
+    """List crew handoff packets."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    filters: dict[str, Any] = {}
+    if source_role:
+        filters["source_role"] = AgentRole(source_role).value
+    if target_role:
+        filters["target_role"] = AgentRole(target_role).value
+    if scene_id:
+        filters["scene_id"] = scene_id
+    if status:
+        filters["status"] = CrewHandoffStatus(status).value
+    items = crew_intelligence_service.list_handoffs(project_id, filters=filters, limit=limit, offset=offset)
+    return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
+
+
+@router.post("/projects/{project_id}/intelligence/handoffs")
+def create_crew_handoff(
+    project_id: str,
+    request: CreateCrewHandoffRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a cross-department crew handoff."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    try:
+        return crew_intelligence_service.create_handoff(
+            project_id=project_id,
+            source_role=AgentRole(request.source_role),
+            target_role=AgentRole(request.target_role),
+            context_summary=request.context_summary,
+            source_task_id=request.source_task_id,
+            target_task_id=request.target_task_id,
+            scene_id=request.scene_id,
+            shot_id=request.shot_id,
+            asset_id=request.asset_id,
+            requirements=request.requirements,
+            open_questions=request.open_questions,
+            evidence_refs=request.evidence_refs,
+            risks=request.risks,
+            metadata={**request.metadata, "created_by": user_id},
+        )
+    except CrewIntelligenceValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.patch("/projects/{project_id}/intelligence/handoffs/{handoff_id}")
+def update_crew_handoff(
+    project_id: str,
+    handoff_id: str,
+    request: UpdateCrewHandoffRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Update crew handoff lifecycle status."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    handoff = crew_intelligence_service.get_handoff(handoff_id)
+    if not handoff or handoff.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Crew handoff not found")
+    try:
+        updated = crew_intelligence_service.update_handoff_status(
+            handoff_id=handoff_id,
+            status=CrewHandoffStatus(request.status),
+            actor_id=user_id,
+            failed_reason=request.failed_reason,
+            metadata=request.metadata,
+        )
+    except CrewIntelligenceStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return updated
+
+
+@router.get("/projects/{project_id}/intelligence/deliberations")
+def list_crew_deliberations(
+    project_id: str,
+    status: Optional[str] = None,
+    scene_id: Optional[str] = None,
+    requires_creator_decision: Optional[bool] = None,
+    limit: int = 50,
+    offset: int = 0,
+    user_id: str = Depends(get_current_user_id),
+):
+    """List crew deliberations."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    filters: dict[str, Any] = {}
+    if status:
+        filters["status"] = CrewDeliberationStatus(status).value
+    if scene_id:
+        filters["scene_id"] = scene_id
+    if requires_creator_decision is not None:
+        filters["requires_creator_decision"] = requires_creator_decision
+    items = crew_intelligence_service.list_deliberations(project_id, filters=filters, limit=limit, offset=offset)
+    return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
+
+
+@router.get("/projects/{project_id}/intelligence/deliberations/{deliberation_id}")
+def get_crew_deliberation(project_id: str, deliberation_id: str, user_id: str = Depends(get_current_user_id)):
+    """Get one crew deliberation."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    record = crew_intelligence_service.get_deliberation(deliberation_id)
+    if not record or record.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Crew deliberation not found")
+    return record
+
+
+@router.post("/projects/{project_id}/intelligence/deliberations")
+def create_crew_deliberation(
+    project_id: str,
+    request: CreateCrewDeliberationRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a structured crew deliberation."""
+    if not crew_service.can_access_project(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    try:
+        return crew_intelligence_service.create_deliberation(
+            project_id=project_id,
+            participating_roles=[AgentRole(role) for role in request.participating_roles],
+            issue_summary=request.issue_summary,
+            triggering_reasoning_ids=request.triggering_reasoning_ids,
+            triggering_task_ids=request.triggering_task_ids,
+            points_of_agreement=request.points_of_agreement,
+            points_of_tension=request.points_of_tension,
+            recommended_resolution=request.recommended_resolution,
+            requires_creator_decision=request.requires_creator_decision,
+            creator_question=request.creator_question,
+            scene_id=request.scene_id,
+            evidence_refs=request.evidence_refs,
+            risks=request.risks,
+            metadata={**request.metadata, "created_by": user_id},
+        )
+    except CrewIntelligenceValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.patch("/projects/{project_id}/intelligence/deliberations/{deliberation_id}")
+def resolve_crew_deliberation(
+    project_id: str,
+    deliberation_id: str,
+    request: ResolveCrewDeliberationRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Resolve a crew deliberation. Creator-required deliberations need Creative Director authority."""
+    record = crew_intelligence_service.get_deliberation(deliberation_id)
+    if not record or record.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Crew deliberation not found")
+    if record.requires_creator_decision and not crew_service.is_creative_director(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Only Creative Director can resolve this deliberation")
+    updated = crew_intelligence_service.resolve_deliberation(deliberation_id, user_id, request.resolution_summary)
+    return updated
+
+
+@router.get("/projects/{project_id}/intelligence/attention")
+def get_crew_creator_attention(project_id: str, user_id: str = Depends(get_current_user_id)):
+    """Get crew intelligence items needing creator attention."""
+    if not crew_service.is_creative_director(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Only Creative Director can view crew attention")
+    return crew_intelligence_service.get_creator_attention(project_id)
 
 
 # ==================== CONFLICT RESOLUTION ====================

@@ -199,7 +199,7 @@ export function getNextStepGuidance(stage: PipelineStage, context?: {
         buttonRoute: '/studio/previs',
       }
     
-    case 'renders_pending':
+    case 'renders_pending': {
       const ready = context?.readyCount || 0
       const total = context?.totalCount || 0
       return {
@@ -208,6 +208,7 @@ export function getNextStepGuidance(stage: PipelineStage, context?: {
         buttonLabel: 'Go to Scenes →',
         buttonRoute: '/studio/production-board',
       }
+    }
     
     case 'renders_complete':
       return {
@@ -217,7 +218,7 @@ export function getNextStepGuidance(stage: PipelineStage, context?: {
         buttonRoute: '/studio/screening-room',
       }
     
-    case 'needs_attention':
+    case 'needs_attention': {
       const failed = context?.failedCount || 0
       const plural = failed === 1 ? 'scene needs' : 'scenes need'
       return {
@@ -226,6 +227,7 @@ export function getNextStepGuidance(stage: PipelineStage, context?: {
         buttonLabel: 'Fix scenes →',
         buttonRoute: '/studio/production-board',
       }
+    }
     
     default:
       return {

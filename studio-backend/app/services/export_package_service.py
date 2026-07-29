@@ -11,6 +11,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from app.data.storage import get_storage
+
 logger = logging.getLogger("studio-export-package")
 
 
@@ -23,6 +25,21 @@ class ExportPackageService:
     def _now_iso(self) -> str:
         """Return current time in ISO format."""
         return datetime.now().isoformat()
+
+    def _require_storage(self):
+        storage = self._storage or get_storage("sqlite")
+        if storage is None:
+            raise RuntimeError("Storage not configured")
+        return storage
+
+    def list_export_packages(self, project_id: str, limit: int = 10) -> list[dict]:
+        return self._require_storage().list_export_packages(project_id, limit=limit)
+
+    def get_export_package(self, project_id: str, package_id: str) -> dict:
+        package = self._require_storage().load_export_package(package_id)
+        if not package or package.get("project_id") != project_id:
+            raise LookupError(f"Package {package_id} not found")
+        return package
 
     async def build_export_package(
         self,
@@ -47,8 +64,7 @@ class ExportPackageService:
         export_timestamp = self._now_iso()
 
         # Load project data
-        if not self._storage:
-            raise ValueError("Storage not configured")
+        self._storage = self._require_storage()
 
         project = self._storage.get_project(project_id)
         if not project:
@@ -787,4 +803,3 @@ FESTIVAL_PRESETS = {
 
 # Singleton instance
 export_package_service = ExportPackageService()
-

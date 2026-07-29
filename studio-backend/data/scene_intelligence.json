@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-05-29T09:10:34.319235Z",
+  "updated_at": "2026-07-29T10:13:35.897504Z",
   "records": {
     "codex_e2e_metadata_scene_001": {
       "scene_id": "codex_e2e_metadata_scene_001",
@@ -860,7 +860,7 @@
       "video_file": null,
       "source_type": "json_metadata",
       "created_at": "2026-05-24T13:15:06.613818Z",
-      "updated_at": "2026-05-29T09:10:34.319235Z"
+      "updated_at": "2026-07-29T10:13:35.897504Z"
     }
   }
 }

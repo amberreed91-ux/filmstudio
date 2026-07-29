@@ -1,0 +1,124 @@
+{
+  "adapter_captures": [
+    {
+      "job_id": "job-20260723055101-8290cc30-scene_001_shot_001",
+      "provider": "happyhorse-r2v",
+      "reference_images_seen_by_adapter": [
+        "/previs-assets/capture-character-locking/maya-storyboard.png"
+      ],
+      "reference_payload_refs": [
+        {
+          "embedding": null,
+          "image_url": "/previs-assets/capture-character-locking/maya-storyboard.png",
+          "kind": "character_full",
+          "project_id": "capture-character-locking",
+          "ref_id": "charlock:chr_f53609cb8853",
+          "source_shot_id": "scene_001_shot_001"
+        }
+      ],
+      "shot_id": "scene_001_shot_001"
+    },
+    {
+      "job_id": "job-20260723055101-a88759d6-scene_001_shot_002",
+      "provider": "happyhorse-r2v",
+      "reference_images_seen_by_adapter": [
+        "https://cdn.example.test/capture/maya-post-render-reference.jpg"
+      ],
+      "reference_payload_refs": [
+        {
+          "embedding": null,
+          "image_url": "https://cdn.example.test/capture/maya-post-render-reference.jpg",
+          "kind": "character_full",
+          "project_id": "capture-character-locking",
+          "ref_id": "charlock:chr_f53609cb8853",
+          "source_shot_id": "scene_001_shot_001"
+        }
+      ],
+      "shot_id": "scene_001_shot_002"
+    }
+  ],
+  "first_job": {
+    "job_id": "job-20260723055101-8290cc30-scene_001_shot_001",
+    "provider": "happyhorse-r2v",
+    "provider_job_id": "local-capture-job-20260723055101-8290cc30-scene_001_shot_001",
+    "provisional_reference_used": true,
+    "shot_id": "scene_001_shot_001",
+    "submitted_provider": "happyhorse-r2v"
+  },
+  "locked_after_first_render": {
+    "capture_method": "thumbnail",
+    "character_id": "chr_f53609cb8853",
+    "character_name": "Maya",
+    "created_at": "2026-07-23T05:51:01.837510",
+    "image_url": "https://cdn.example.test/capture/maya-post-render-reference.jpg",
+    "lock_id": "charlock_8514072f9fda",
+    "lock_status": "locked",
+    "project_id": "capture-character-locking",
+    "provider": "happyhorse-r2v",
+    "source_shot_id": "scene_001_shot_001",
+    "updated_at": "2026-07-23T05:51:01.837510"
+  },
+  "proof": {
+    "first_job_used_provisional_storyboard_reference": true,
+    "paid_provider_call_made": false,
+    "provisional_promoted_to_locked": true,
+    "second_job_used_canonical_reference": true
+  },
+  "provisional_before_submit": {
+    "capture_method": "storyboard",
+    "character_id": "chr_f53609cb8853",
+    "character_name": "Maya",
+    "created_at": "2026-07-23T05:51:01.792611",
+    "image_url": "/previs-assets/capture-character-locking/maya-storyboard.png",
+    "lock_id": "charlock_297c444e8531",
+    "lock_status": "provisional",
+    "project_id": "capture-character-locking",
+    "provider": "qwen-image-max",
+    "source_shot_id": "scene_001_shot_001",
+    "updated_at": "2026-07-23T05:51:01.792611"
+  },
+  "second_job": {
+    "consistency_payload": {
+      "fallback_text": {
+        "charlock:chr_f53609cb8853": "Use locked reference for Maya; preserve face, silhouette, wardrobe, and visual identity."
+      },
+      "mode": "identity_lock",
+      "project_id": "capture-character-locking",
+      "refs": [
+        {
+          "embedding": null,
+          "image_url": "https://cdn.example.test/capture/maya-post-render-reference.jpg",
+          "kind": "character_full",
+          "project_id": "capture-character-locking",
+          "ref_id": "charlock:chr_f53609cb8853",
+          "source_shot_id": "scene_001_shot_001"
+        }
+      ],
+      "weights": {
+        "charlock:chr_f53609cb8853": 1.0
+      }
+    },
+    "job_id": "job-20260723055101-a88759d6-scene_001_shot_002",
+    "provider": "happyhorse-r2v",
+    "provider_job_id": "local-capture-job-20260723055101-a88759d6-scene_001_shot_002",
+    "shot_id": "scene_001_shot_002",
+    "submitted_provider": "happyhorse-r2v"
+  },
+  "status": "pass",
+  "storage_path": "/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/studio-character-locking-0jjpxnxi",
+  "superseded_after_first_render": [
+    {
+      "capture_method": "storyboard",
+      "character_id": "chr_f53609cb8853",
+      "character_name": "Maya",
+      "created_at": "2026-07-23T05:51:01.792611",
+      "image_url": "/previs-assets/capture-character-locking/maya-storyboard.png",
+      "lock_id": "charlock_297c444e8531",
+      "lock_status": "superseded",
+      "project_id": "capture-character-locking",
+      "provider": "qwen-image-max",
+      "source_shot_id": "scene_001_shot_001",
+      "updated_at": "2026-07-23T05:51:01.837510"
+    }
+  ]
+}

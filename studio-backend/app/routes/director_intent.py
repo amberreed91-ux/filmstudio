@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.data.storage import get_storage
+from app.services.director_intent_service import director_intent_service
 
 router = APIRouter(
     prefix="/api/f51/studio",
@@ -58,8 +58,7 @@ async def get_director_intent(project_id: str) -> DirectorIntentResponse:
 
     Returns empty intent if none exists.
     """
-    storage = get_storage()
-    intent = storage.load_director_intent(project_id)
+    intent = director_intent_service.get(project_id)
 
     if intent is None:
         # Return empty intent structure
@@ -81,21 +80,10 @@ async def update_director_intent(
 
     Returns the merged intent.
     """
-    storage = get_storage()
-
-    # Convert request to dict, excluding None values
     intent_dict = intent_update.model_dump(exclude_none=True)
-
-    # Save/merge intent
-    success = storage.save_director_intent(project_id, intent_dict)
-
-    if not success:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # Load and return merged intent
-    merged_intent = storage.load_director_intent(project_id)
-
-    if merged_intent is None:
-        raise HTTPException(status_code=500, detail="Failed to save director intent")
-
-    return DirectorIntentResponse(**merged_intent)
+    try:
+        return DirectorIntentResponse(**director_intent_service.update(project_id, intent_dict))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

@@ -65,10 +65,10 @@ function sentenceCaseStatus(status: string): string {
 
 function gateSummary(gate: StudioDecisionGate | null): string {
   if (!gate) return 'The studio is still gathering enough evidence for a confident screening verdict.'
-  if (gate.gate_status === 'ready') return 'The visual language is stable enough for audience review and package polish.'
+  if (gate.gate_status === 'ready') return 'The cut is ready because visual evidence, memory, and review state now agree.'
   if (gate.gate_status === 'needs_review') return 'The cut is close, but a focused review pass should tighten audience impact.'
   if (gate.gate_status === 'blocked') return 'The cut is blocked by unresolved production concerns and needs intervention.'
-  return 'The studio needs more visual evidence before it can lock a confident cut.'
+  return 'The studio needs more visual evidence before trusting the cut.'
 }
 
 function creativeRead(props: Pick<ScreeningCinematicShowcaseProps, 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'memoryRecordsCount' | 'hasDirectorSignature'>): string {
@@ -137,9 +137,9 @@ function revisionEmphasisGuidance(
 
 function sessionTasteMemoryNote(emphasis: RevisionEmphasis): string {
   if (emphasis === 'structural_clarity') {
-    return 'For this session, the Studio is reading this as a preference toward structural clarity.'
+    return 'For this session, the Studio is reading this as a preference toward structural clarity. This session read is based on revision emphasis and comparison behavior only. It is not saved.'
   }
-  return 'For this session, the Studio is reading this as a preference toward emotional residue.'
+  return 'For this session, the Studio is reading this as a preference toward emotional residue. This session read is based on revision emphasis and comparison behavior only. It is not saved.'
 }
 
 function emergingTasteRead(
@@ -163,30 +163,6 @@ function emergingTasteRead(
   return 'For this session, the Studio is reading this as a tentative preference toward emotional residue.'
 }
 
-function directorTasteSessionPreview(
-  emphasis: RevisionEmphasis,
-  props: Pick<ScreeningCinematicShowcaseProps, 'gateStatus' | 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'memoryRecordsCount'>,
-): { leaning: string; read: string; disclaimer: string } {
-  if (emphasis === 'structural_clarity') {
-    return {
-      leaning: 'Structural Clarity',
-      read:
-        props.continuityIssuesCount > 0 || props.gateStatus === 'needs_review'
-          ? 'Structural clarity is currently shaping the revision notes to keep sequence readability stable.'
-          : 'Across this session, the Studio noticed a lean toward cleaner pacing and tighter editorial flow.',
-      disclaimer: 'The Studio is treating this as a temporary creative read, not a permanent profile.',
-    }
-  }
-  return {
-    leaning: 'Emotional Residue',
-    read:
-      props.memoryRecordsCount > 0
-        ? 'For this session, you seem to be leaning toward emotional residue and longer emotional carryover.'
-        : 'Across this session, the Studio noticed early signs of an emotional residue preference.',
-    disclaimer: 'The Studio is treating this as a temporary creative read, not a permanent profile.',
-  }
-}
-
 function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'activeSceneId' | 'gateStatus' | 'memoryRecordsCount' | 'continuityIssuesCount' | 'styleDriftIssuesCount' | 'hasDirectorSignature' | 'renderJobsCount' | 'reviewsCount' | 'packagesCount'>): string {
   const subject = props.activeSceneId ? `Scene ${props.activeSceneId}` : 'This cut'
   
@@ -194,7 +170,7 @@ function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'active
   // Co-director voice: emotionally perceptive, cinematically literate, no scores
   
   if (props.memoryRecordsCount < 1) {
-    return `${subject} needs more cinematic memory before the Studio can confirm its emotional weight.`
+    return `${subject} needs more visual evidence before trusting the cut.`
   }
   
   if (props.continuityIssuesCount > 0 && props.styleDriftIssuesCount > 0) {
@@ -210,7 +186,7 @@ function whyThisShotMatters(props: Pick<ScreeningCinematicShowcaseProps, 'active
   }
   
   if (props.gateStatus === 'ready' && props.renderJobsCount > 0 && props.reviewsCount > 0 && props.packagesCount > 0 && props.hasDirectorSignature && props.memoryRecordsCount > 2) {
-    return `${subject} is ready because memory, signature, review state, and package readiness now align.`
+    return `${subject} is ready because visual evidence, memory, and review state now agree.`
   }
   
   if (props.reviewsCount > 0 && props.packagesCount > 0 && props.hasDirectorSignature) {
@@ -287,18 +263,21 @@ function creativeDisagreementAside(
   return null
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildJournalEntry(rawDraft: string): string | null {
   const trimmed = rawDraft.trim()
   if (!trimmed) return null
   return trimmed
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function addJournalEntry(notes: string[], rawDraft: string): { notes: string[]; nextDraft: string } {
   const entry = buildJournalEntry(rawDraft)
   if (!entry) return { notes, nextDraft: rawDraft }
   return { notes: [entry, ...notes], nextDraft: '' }
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function applyJournalPrompt(prompt: JournalPrompt): string {
   return `${prompt} `
 }
@@ -310,6 +289,7 @@ export type CandidateMemory = {
   sessionOrder: number
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function inferTradeoffAxisFromText(note: string): CandidateMemory['inferredTradeoffAxis'] {
   const text = note.toLowerCase()
   if (text.includes('clarity') || text.includes('structure') || text.includes('pacing')) {
@@ -318,6 +298,7 @@ export function inferTradeoffAxisFromText(note: string): CandidateMemory['inferr
   return 'emotional_residue'
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function markCandidateMemory(
   currentCandidates: CandidateMemory[],
   note: string,
@@ -338,10 +319,12 @@ export function markCandidateMemory(
   ]
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function removeCandidateMemory(currentCandidates: CandidateMemory[], candidateId: string): CandidateMemory[] {
   return currentCandidates.filter((candidate) => candidate.id !== candidateId)
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function clearCandidateMemories(): CandidateMemory[] {
   return []
 }
@@ -407,15 +390,9 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
   const compareRight = useMemo(() => props.revisions.find((item) => item.id === compareRightId) || null, [props.revisions, compareRightId])
   const nextStep = recommendation(props.gateStatus)
   const disagreementAside = creativeDisagreementAside(props, compareLeftId, compareRightId, props.revisionCount, revisionEmphasis)
-  const tasteRead = emergingTasteRead(revisionEmphasis, props, Boolean(disagreementAside))
-  const sessionTastePreview = sessionTasteCleared
-    ? {
-        leaning: 'Emerging',
-        read: 'Taste read is reset for this session. The Studio needs more revision choices before saying more.',
-        disclaimer: 'The Studio is treating this as a temporary creative read, not a permanent profile.',
-      }
-    : directorTasteSessionPreview(revisionEmphasis, props)
-
+  const tasteRead = sessionTasteCleared
+    ? 'Taste read is reset for this session. The Studio needs more revision choices before saying more.'
+    : emergingTasteRead(revisionEmphasis, props, Boolean(disagreementAside))
   const heroMedia = props.heroVideoUrl || selectedRevision?.outputUrl || ''
   const heroImage = props.heroPreviewUrl || selectedRevision?.previewUrl || ''
 
@@ -501,7 +478,6 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
         <div className="mb-6">
           <DirectorDebatePanel
             projectId={props.projectId}
-            sceneId={props.activeSceneId}
             debate={activeDebate}
             onDismiss={() => setActiveDebate(null)}
           />
@@ -673,7 +649,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
               </button>
             </div>
             <p className="mt-2 text-[11px] text-zinc-500" data-testid="taste-observed-explainer">
-              What is being observed? This session read is based on revision emphasis toggle behavior only. It is not saved. Observations: {tasteMemory.observationCount}
+              What is being observed? This session read is based on revision emphasis and comparison behavior only. It is not saved. Observations: {tasteMemory.observationCount}
             </p>
             {!tastePreviewHidden ? (
               <div className="mt-2 rounded-md border border-white/10 bg-zinc-900/40 px-2 py-1.5" data-testid="director-taste-session-preview">

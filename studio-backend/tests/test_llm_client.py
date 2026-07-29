@@ -5,7 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.llm_client import QwenPolicyBlockedError, call_llm, call_openrouter, get_llm_completion_with_fallback
+from app.llm_client import (
+    QwenPolicyBlockedError,
+    call_groq,
+    call_llm,
+    call_openrouter,
+    get_llm_completion_with_fallback,
+)
 from app.services.stability import ProviderError
 from app.services.shared.dashscope_client import DashScopeConfig
 
@@ -145,6 +151,43 @@ async def test_call_openrouter_retries_configured_free_backup_model() -> None:
 
 
 @pytest.mark.asyncio
+async def test_call_groq_uses_openai_compatible_endpoint() -> None:
+    completion = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="  Groq fallback response.  ")
+            )
+        ]
+    )
+    create = AsyncMock(return_value=completion)
+    client = MagicMock()
+    client.chat.completions.create = create
+
+    with (
+        patch("app.llm_client.AsyncOpenAI", return_value=client) as openai_client,
+        patch("app.llm_client.get_settings") as settings,
+    ):
+        settings.return_value.groq_api_key = "test-groq-key"
+        settings.return_value.groq_llm_model = "llama-test"
+        result = await call_groq("system prompt", "user message", max_tokens=444)
+
+    assert result == "Groq fallback response."
+    openai_client.assert_called_once_with(
+        api_key="test-groq-key",
+        base_url="https://api.groq.com/openai/v1",
+    )
+    create.assert_awaited_once_with(
+        model="llama-test",
+        messages=[
+            {"role": "system", "content": "system prompt"},
+            {"role": "user", "content": "user message"},
+        ],
+        max_tokens=444,
+        temperature=0.7,
+    )
+
+
+@pytest.mark.asyncio
 async def test_qwen_policy_block_falls_back_to_openrouter() -> None:
     with (
         patch("app.llm_client.call_llm", AsyncMock(side_effect=QwenPolicyBlockedError("blocked"))),
@@ -160,18 +203,39 @@ async def test_qwen_policy_block_falls_back_to_openrouter() -> None:
 
 
 @pytest.mark.asyncio
+async def test_qwen_policy_block_falls_back_to_groq_when_openrouter_missing() -> None:
+    with (
+        patch("app.llm_client.call_llm", AsyncMock(side_effect=QwenPolicyBlockedError("blocked"))),
+        patch("app.llm_client.call_openrouter", AsyncMock(side_effect=AssertionError("should not call openrouter"))),
+        patch("app.llm_client.call_groq", AsyncMock(return_value="groq fallback text")) as groq,
+        patch("app.llm_client.get_settings") as settings,
+    ):
+        settings.return_value.qwen_internal_timeout_seconds = 12.0
+        settings.return_value.openrouter_api_key = ""
+        settings.return_value.groq_api_key = "test-groq-key"
+        result, provider = await get_llm_completion_with_fallback("system", "message")
+
+    assert result == "groq fallback text"
+    assert provider == "groq"
+    groq.assert_awaited_once_with("system", "message", max_tokens=1024)
+
+
+@pytest.mark.asyncio
 async def test_both_provider_failure_raises_provider_error_with_openrouter_metadata() -> None:
     with (
         patch("app.llm_client.call_llm", AsyncMock(side_effect=QwenPolicyBlockedError("blocked"))),
         patch("app.llm_client.call_openrouter", AsyncMock(side_effect=RuntimeError("router down"))),
+        patch("app.llm_client.call_groq", AsyncMock(side_effect=RuntimeError("groq down"))),
         patch("app.llm_client.get_settings") as settings,
     ):
         settings.return_value.qwen_internal_timeout_seconds = 12.0
+        settings.return_value.openrouter_api_key = "test-openrouter-key"
+        settings.return_value.groq_api_key = "test-groq-key"
         with pytest.raises(ProviderError) as exc_info:
             await get_llm_completion_with_fallback("system", "message")
 
     error = exc_info.value
     assert error.stage == "llm_fallback"
     assert error.metadata["qwen_error"] == "QwenPolicyBlockedError"
-    assert error.metadata["openrouter_error"] == "RuntimeError"
-    assert "router down" in error.metadata["openrouter_detail"]
+    assert "router down" in error.metadata["openrouter_error"]
+    assert "groq down" in error.metadata["groq_error"]

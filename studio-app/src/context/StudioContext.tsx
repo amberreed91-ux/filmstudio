@@ -161,7 +161,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           setActiveProjectState(loadedProject)
           setActiveProjectId(storedProjectId)
           setProject(loadedProject)
-        } catch (err) {
+        } catch {
           // Stored project not found, clear all persisted references
           sessionStorage.removeItem(STORAGE_KEY)
           localStorage.removeItem('studio:activeProjectId')
@@ -182,7 +182,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           sessionStorage.setItem(STORAGE_KEY, firstProjectId)
           localStorage.setItem('studio:activeProjectId', firstProjectId)
           localStorage.setItem('studio:selected-project-id', firstProjectId)
-        } catch (err) {
+        } catch {
           // Fallback project also failed - that's ok
         }
       }
