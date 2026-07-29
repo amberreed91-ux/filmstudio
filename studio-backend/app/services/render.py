@@ -97,6 +97,8 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
     Never raises — silent fallback on any error.
     """
     try:
+        _set_zero_touch_phase(job, "evaluate", "running")
+        _persist_job(job)
         from app.services.render_retry_service import render_retry_service
         
         output_url = ""
@@ -105,6 +107,9 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
         
         if not output_url:
             logger.debug("Skipping quality check for job %s: no output URL", job.id)
+            _set_zero_touch_phase(job, "evaluate", "skipped", reason="no output URL")
+            _set_zero_touch_phase(job, "retry", "skipped", reason="evaluation skipped")
+            _persist_job(job)
             return
 
         _expected_slots = None
@@ -188,6 +193,13 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
                 _max_retries = int(os.getenv("ADHERENCE_AUTO_RETRY_MAX", "2") or "2")
                 _max_retries = max(0, min(_max_retries, 5))
                 if _max_retries > 0:
+                    _set_zero_touch_phase(
+                        job,
+                        "retry",
+                        "running",
+                        reason=_sc_score_json.get("mismatch_description", ""),
+                        max_retries=_max_retries,
+                    )
                     _retry_result = await render_retry_service.evaluate_and_select_best(
                         shot_id=job.shot_id,
                         project_id=job.project_id,
@@ -205,6 +217,12 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
                         "jobs_submitted": _retry_result.get("jobs_submitted", []),
                         "mismatch_description": _sc_score_json.get("mismatch_description", ""),
                     }
+                    _set_zero_touch_phase(
+                        job,
+                        "retry",
+                        "complete",
+                        jobs_submitted=_retry_result.get("jobs_submitted", []),
+                    )
                     _persist_job(job)
                     logger.info(
                         "ADHERENCE_RETRY_CASCADE_TRIGGERED | job=%s | shot=%s | retries=%d | failed_slots=%s",
@@ -214,11 +232,19 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
                         _failed_slots,
                     )
         except Exception as _retry_exc:
+            _set_zero_touch_phase(job, "retry", "failed", error=str(_retry_exc))
             logger.debug(
                 "Adherence retry cascade skipped for job %s: %s",
                 job.id, _retry_exc,
             )
 
+        _set_zero_touch_phase(job, "evaluate", "complete")
+        if not (
+            isinstance(job.metadata, dict)
+            and isinstance(job.metadata.get("adherence_retry_cascade"), dict)
+        ):
+            _set_zero_touch_phase(job, "retry", "skipped", reason="no recoverable adherence mismatch")
+        _persist_job(job)
         logger.info(
             "RENDER_QUALITY_CHECK_COMPLETE | job=%s | project=%s | shot=%s",
             job.id,
@@ -226,6 +252,8 @@ async def _run_render_quality_check(job: RenderJobModel) -> None:
             job.shot_id,
         )
     except Exception as exc:
+        _set_zero_touch_phase(job, "evaluate", "failed", error=str(exc))
+        _persist_job(job)
         logger.debug("Render quality check skipped for job %s: %s", job.id, exc)
 
 
@@ -382,6 +410,419 @@ def _extract_visual_action(text: str, max_chars: int = 280) -> str:
             result = result[:last_space]
 
     return result.strip()
+
+
+def _extract_initial_visual_beat(text: str, max_chars: int = 360) -> str:
+    """Return the opening visual beat before dialogue or later scene business."""
+    import re as _re
+
+    paragraphs = [
+        " ".join(line.strip() for line in chunk.splitlines() if line.strip()).strip()
+        for chunk in _re.split(r"\n\s*\n", text)
+    ]
+    action_parts: list[str] = []
+    for paragraph in paragraphs:
+        stripped = paragraph.strip()
+        if not stripped:
+            continue
+        clean = _re.sub(r"\(.*?\)", "", stripped).strip().rstrip(".")
+        is_char_cue = (
+            len(stripped) < 35
+            and len(clean) >= 2
+            and clean.replace(" ", "").replace("'", "").isalpha()
+            and clean.isupper()
+            and not clean.startswith(("THE ", "ACT ", "INT ", "EXT ", "CUT ", "FADE"))
+        )
+        if is_char_cue and action_parts:
+            break
+        if (
+            stripped.isupper() and len(stripped) > 15
+        ) or clean.upper().startswith(("INT ", "EXT ", "INT.", "EXT.")):
+            continue
+        action_parts.append(stripped)
+        if len(action_parts) >= 2 or len(" ".join(action_parts)) >= max_chars:
+            break
+
+    result = " ".join(action_parts)
+    if len(result) > max_chars:
+        result = result[:max_chars]
+        last_space = result.rfind(" ")
+        if last_space > int(max_chars * 0.6):
+            result = result[:last_space]
+    return result.strip()
+
+
+def _normalize_character_names(names: Any) -> list[str]:
+    if isinstance(names, str):
+        raw_names = [part.strip() for part in names.split(",")]
+    elif isinstance(names, list):
+        raw_names = [str(name).strip() for name in names]
+    else:
+        raw_names = []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for name in raw_names:
+        if not name:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(name)
+    return normalized
+
+
+def _infer_scene_characters_from_text(
+    all_characters: list[dict[str, Any]],
+    *,
+    primary_text: str,
+    fallback_text: str,
+) -> list[str]:
+    """Infer visible cast from the shot action before falling back to the scene."""
+    candidates: list[str] = []
+    for text in (primary_text, fallback_text):
+        text_lower = str(text or "").lower()
+        if not text_lower:
+            continue
+        matches: list[tuple[int, str]] = []
+        seen: set[str] = set()
+        for character in all_characters:
+            name = str(character.get("name") or "").strip()
+            name_lower = name.lower()
+            if not name or name_lower in seen:
+                continue
+            index = text_lower.find(name_lower)
+            if index >= 0:
+                seen.add(name_lower)
+                matches.append((index, name))
+        for _, name in sorted(matches, key=lambda item: item[0]):
+            if name not in candidates:
+                candidates.append(name)
+        if candidates:
+            return candidates
+    return []
+
+
+def _format_visible_cast_constraint(character_names: list[str]) -> str:
+    names = _normalize_character_names(character_names)
+    if not names:
+        return ""
+    joined = " and ".join(names) if len(names) <= 2 else ", ".join(names[:-1]) + f", and {names[-1]}"
+    return f"Only {joined} visible; no extras."
+
+
+def _shot_planning_value(shot_planning: Any, key: str) -> str:
+    if not isinstance(shot_planning, dict):
+        return ""
+    value = shot_planning.get(key)
+    return str(value or "").strip() if value is not None else ""
+
+
+def _join_shot_planning_values(shot_planning: Any, keys: list[str]) -> str:
+    parts: list[str] = []
+    for key in keys:
+        value = _shot_planning_value(shot_planning, key)
+        if value:
+            parts.append(value)
+    return " ".join(parts).strip()
+
+
+def _provider_model_for_job(provider: str, parameters: dict[str, Any]) -> str:
+    requested = str(parameters.get("model") or "").strip()
+    if requested:
+        return requested
+    if provider == "runway":
+        return os.getenv("RUNWAY_MODEL", "gen4.5").strip() or "gen4.5"
+    if provider == "happyhorse-r2v":
+        return "happyhorse-1.1-r2v"
+    if provider == "happyhorse":
+        return "happyhorse-1.1-t2v"
+    return str(parameters.get("model") or provider or "default")
+
+
+def _validate_model_override(provider: str, parameters: dict[str, Any]) -> None:
+    requested = str(parameters.get("model") or "").strip()
+    if not requested:
+        return
+    if provider == "runway":
+        from app.adapters import ALLOWED_RUNWAY_MODELS
+
+        if requested not in ALLOWED_RUNWAY_MODELS:
+            raise ValueError(
+                f"Unsupported Runway model '{requested}'. Allowed models: {sorted(ALLOWED_RUNWAY_MODELS)}"
+            )
+    elif provider == "happyhorse" and requested != "happyhorse-1.1-t2v":
+        raise ValueError("HappyHorse text-to-video does not support this model override")
+    elif provider == "happyhorse-r2v" and requested != "happyhorse-1.1-r2v":
+        raise ValueError("HappyHorse reference-to-video does not support this model override")
+
+
+def _scene_character_names_for_debug(project_id: str, scene_id: str) -> list[str]:
+    try:
+        project = project_store.get_project(project_id)
+        if not isinstance(project, dict):
+            return []
+        summary = project.get("execution_summary") or {}
+        scenes = summary.get("scenes") or []
+        scene = next(
+            (
+                item for item in scenes
+                if isinstance(item, dict) and str(item.get("scene_id") or "") == scene_id
+            ),
+            None,
+        )
+        if not isinstance(scene, dict):
+            return []
+        return _normalize_character_names(
+            scene.get("characters") or scene.get("character_appearances") or []
+        )
+    except Exception:
+        return []
+
+
+def _reference_debug(consistency_payload: ConsistencyPayload | None, provider: str) -> list[dict[str, Any]]:
+    if consistency_payload is None:
+        return []
+    supports_images = provider in {"runway", "happyhorse-r2v", "simulated", "local"}
+    rows: list[dict[str, Any]] = []
+    for ref in consistency_payload.refs:
+        fallback = str(consistency_payload.fallback_text.get(ref.ref_id, "")).strip()
+        rows.append(
+            {
+                "reference_type": ref.kind,
+                "reference_id": ref.ref_id,
+                "path": ref.image_url,
+                "reason": fallback or f"Selected confirmed {ref.kind.replace('_', ' ')} reference.",
+                "entity": ref.source_shot_id or "project",
+                "provider_supports_reference": supports_images,
+                "injected_into_request": supports_images,
+                "fallback_prompt_constraint": fallback if not supports_images else "",
+            }
+        )
+    return rows
+
+
+def _zero_touch_debug_metadata(
+    *,
+    project_id: str,
+    shot_id: str,
+    provider: str,
+    parameters: dict[str, Any],
+    prompt: str,
+    consistency_payload: ConsistencyPayload | None,
+) -> dict[str, Any]:
+    scene_id = derive_scene_id_from_shot_id(shot_id)
+    characters = _scene_character_names_for_debug(project_id, scene_id)
+    references = _reference_debug(consistency_payload, provider)
+    staging_applied = bool(characters and "In this shot:" in prompt)
+    return {
+        "version": "zero_touch_v1",
+        "phases": [
+            {"phase": "validate_input", "status": "complete"},
+            {"phase": "load_project_context", "status": "complete", "scene_id": scene_id},
+            {"phase": "resolve_characters", "status": "complete", "characters": characters},
+            {
+                "phase": "build_staging",
+                "status": "complete" if staging_applied else "skipped",
+                "reason": "" if staging_applied else ("no resolved character staging" if characters else "no characters resolved"),
+            },
+            {"phase": "resolve_references", "status": "complete" if references else "skipped", "references": references},
+            {"phase": "prepare_provider_request", "status": "complete"},
+            {"phase": "render", "status": "pending"},
+            {"phase": "evaluate", "status": "pending"},
+            {"phase": "retry", "status": "pending"},
+            {"phase": "persist", "status": "complete"},
+        ],
+        "provider_selection": {
+            "provider": provider,
+            "model": _provider_model_for_job(provider, parameters),
+            "reason": "explicit override" if parameters.get("model") else "configured default or caller-selected provider",
+        },
+        "staging": {
+            "applied": staging_applied,
+            "characters": characters,
+        },
+        "references": references,
+        "prompt": {
+            "length": len(prompt),
+            "structured_slots": bool(parameters.get("prompt_slots")),
+        },
+        "retry": {
+            "max_attempts": max(0, min(int(os.getenv("ADHERENCE_AUTO_RETRY_MAX", "2") or "2"), 5)),
+            "history": [],
+        },
+    }
+
+
+def _set_zero_touch_phase(job: RenderJobModel, phase: str, status: str, **details: Any) -> None:
+    metadata = dict(job.metadata or {})
+    debug = dict(metadata.get("zero_touch_pipeline") or {})
+    phases = debug.get("phases")
+    if not isinstance(phases, list):
+        phases = []
+    updated = False
+    for row in phases:
+        if isinstance(row, dict) and row.get("phase") == phase:
+            row.update({"status": status, **details})
+            updated = True
+            break
+    if not updated:
+        phases.append({"phase": phase, "status": status, **details})
+    debug["phases"] = phases
+    metadata["zero_touch_pipeline"] = debug
+    job.metadata = metadata
+    if job.input_payload and isinstance(job.input_payload.parameters, dict):
+        job.input_payload.parameters["zero_touch_debug"] = debug
+
+
+_PERMANENT_PROVIDER_ERROR_TYPES = {
+    "missing_api_key",
+    "invalid_api_key",
+    "revoked_key",
+    "missing_credits",
+    "missing_org_access",
+    "unsupported_model",
+    "invalid_payload",
+    "test_mode_not_allowed",
+}
+
+_TEMPORARY_PROVIDER_ERROR_TYPES = {
+    "timeout",
+    "request_error",
+    "ssl_verification_error",
+    "task_failed",
+    "missing_task_id",
+    "missing_video_url",
+}
+
+
+def _provider_error_payload(job: RenderJobModel) -> dict[str, Any]:
+    output_metadata = (
+        job.output_payload.metadata
+        if job.output_payload and isinstance(job.output_payload.metadata, dict)
+        else {}
+    )
+    normalized = output_metadata.get("provider_response_normalized")
+    if not isinstance(normalized, dict):
+        return {}
+    metadata = normalized.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    error = metadata.get("error") or metadata.get("timeout")
+    return error if isinstance(error, dict) else {}
+
+
+def _classify_provider_failure(job: RenderJobModel, fallback_message: str = "") -> dict[str, Any]:
+    error_payload = _provider_error_payload(job)
+    error_type = str(error_payload.get("error_type") or "").strip()
+    message = str(error_payload.get("message") or fallback_message or job.error_message or "").strip()
+    status_code = error_payload.get("status_code")
+
+    if not error_type:
+        text = message.lower()
+        if "api key" in text or "credential" in text or "unauthorized" in text:
+            error_type = "missing_api_key" if "missing" in text or "not configured" in text else "invalid_api_key"
+        elif "billing" in text or "credit" in text or "payment" in text:
+            error_type = "missing_credits"
+        elif "unsupported" in text and "model" in text:
+            error_type = "unsupported_model"
+        elif "timeout" in text:
+            error_type = "timeout"
+        else:
+            error_type = "provider_failure"
+
+    permanent = error_type in _PERMANENT_PROVIDER_ERROR_TYPES
+    retryable = error_type in _TEMPORARY_PROVIDER_ERROR_TYPES and not permanent
+    if error_type == "provider_failure":
+        retryable = False
+
+    category = "permanent" if permanent else ("temporary" if retryable else "unknown")
+    policy_reason = (
+        "requires configuration, billing, tenant, or request correction before another spend"
+        if permanent
+        else ("transient provider/runtime failure may be retried by an explicit retry policy" if retryable else "provider failure is not classified as safely retryable")
+    )
+    return {
+        "category": category,
+        "error_type": error_type,
+        "message": message,
+        "status_code": status_code,
+        "retryable": retryable,
+        "policy_reason": policy_reason,
+    }
+
+
+def _record_provider_failure_policy(job: RenderJobModel, fallback_message: str = "") -> None:
+    classification = _classify_provider_failure(job, fallback_message)
+    metadata = dict(job.metadata or {})
+    metadata["provider_failure"] = classification
+    job.metadata = metadata
+    if not classification["retryable"]:
+        _set_zero_touch_phase(
+            job,
+            "retry",
+            "skipped",
+            reason=classification["policy_reason"],
+            error_type=classification["error_type"],
+        )
+
+
+def _detect_prompt_contradictions(prompt: str) -> list[dict[str, Any]]:
+    """Detect only high-confidence provider prompt contradictions before spend."""
+    import re
+
+    text = f" {str(prompt or '').lower()} "
+    checks: list[tuple[str, str, str, str, str]] = [
+        (
+            "framing_closeup_full_body",
+            r"\b(close[- ]?up|tight close|extreme close[- ]?up)\b",
+            r"\b(full[- ]?body|head[- ]to[- ]toe|entire body)\b",
+            "Close-up framing conflicts with full-body framing.",
+            "Choose either close-up emphasis or full-body visibility.",
+        ),
+        (
+            "position_left_center",
+            r"\b(on the left|left side|frame left|screen left|to the left)\b",
+            r"\b(centered|centre|center frame|dead center|in the center|in center)\b",
+            "Left-side placement conflicts with centered placement.",
+            "Choose one screen position for the subject.",
+        ),
+        (
+            "lighting_day_night",
+            r"\b(daylight|daytime|midday|sunlit|bright day)\b",
+            r"\b(nighttime|night time|at night|after dark|moonlit)\b",
+            "Daylight instructions conflict with nighttime instructions.",
+            "Choose one time-of-day lighting condition.",
+        ),
+        (
+            "camera_static_tracking",
+            r"\b(static camera|locked[- ]off|locked off|fixed camera|stationary camera)\b",
+            r"\b(rapid tracking|fast tracking|quick tracking|tracking shot)\b",
+            "Static camera instructions conflict with tracking movement.",
+            "Choose either a static camera or a moving tracking shot.",
+        ),
+        (
+            "empty_room_visible_characters",
+            r"\b(empty room|empty hallway|empty space|no people|no characters)\b",
+            r"\b(multiple visible characters|two visible characters|three visible characters|crowd|group of people|characters visible)\b",
+            "Empty-room instructions conflict with visible-character requirements.",
+            "Choose either an empty environment or visible characters.",
+        ),
+    ]
+    contradictions: list[dict[str, Any]] = []
+    for code, first_pattern, second_pattern, message, recommendation in checks:
+        first = re.search(first_pattern, text)
+        second = re.search(second_pattern, text)
+        if first and second:
+            contradictions.append(
+                {
+                    "code": code,
+                    "message": message,
+                    "signals": [first.group(0).strip(), second.group(0).strip()],
+                    "recommendation": recommendation,
+                }
+            )
+    return contradictions
 
 
 class RenderService:
@@ -842,7 +1283,20 @@ class RenderService:
                                 _active_storage = _get_storage()
                             except Exception:
                                 _active_storage = _storage
-                            _scene_chars = _scene.get("characters") or []
+                            # 2. Extract visual action (strip dialogue). This
+                            # also gives us shot-local text for cast inference
+                            # when the scene's saved characters list is empty.
+                            from app.services.shot_prompt_builder import SLOT_BUDGETS
+                            _cast_probe_text = _extract_initial_visual_beat(
+                                _scene_text, max_chars=360
+                            ) if _scene_text else ""
+                            _action_text = _extract_visual_action(
+                                _scene_text, max_chars=SLOT_BUDGETS["action"]
+                            ) if _scene_text else ""
+
+                            _scene_chars = _normalize_character_names(
+                                _scene.get("characters") or _scene.get("character_appearances") or []
+                            )
                             if _scene_chars and _active_storage:
                                 from app.services.character_staging_service import (
                                     resolve_character_prompt as _resolve_char_prompt,
@@ -875,18 +1329,65 @@ class RenderService:
                                             if _resolved and _resolved != _char_name_str:
                                                 _char_summaries.append(_resolved)
                                 if _char_summaries:
-                                    _char_visuals = "; ".join(_char_summaries)
+                                    _cast_constraint = _format_visible_cast_constraint(_scene_chars)
+                                    _char_visuals = "; ".join(
+                                        [part for part in [_cast_constraint, *_char_summaries] if part]
+                                    )
                                     logger.info(
                                         "CHARACTER_PROMPT_INJECTION | scene=%s | chars=%d",
                                         _scene_id,
                                         len(_char_summaries),
                                     )
-
-                            # 2. Extract visual action (strip dialogue)
-                            from app.services.shot_prompt_builder import SLOT_BUDGETS
-                            _action_text = _extract_visual_action(
-                                _scene_text, max_chars=SLOT_BUDGETS["action"]
-                            ) if _scene_text else ""
+                            elif _active_storage:
+                                try:
+                                    _all_chars = _active_storage.get_characters(project_id)
+                                    _scene_chars = _infer_scene_characters_from_text(
+                                        _all_chars,
+                                        primary_text=_cast_probe_text,
+                                        fallback_text=_full_content,
+                                    )
+                                    if _scene_chars:
+                                        from app.services.character_staging_service import (
+                                            resolve_character_prompt as _resolve_char_prompt,
+                                        )
+                                        _char_summaries = []
+                                        for _char_name_str in _scene_chars:
+                                            _char_record = _active_storage.get_character_by_name(
+                                                project_id, _char_name_str
+                                            )
+                                            if not _char_record:
+                                                continue
+                                            try:
+                                                _resolved = _resolve_char_prompt(
+                                                    _char_record,
+                                                    _scene_id,
+                                                    shot_id,
+                                                    _active_storage,
+                                                )
+                                            except Exception:
+                                                _vps = (
+                                                    _char_record.get("visual_prompt_summary")
+                                                    or ""
+                                                ).strip()
+                                                _resolved = (
+                                                    f"{_char_name_str}: {_vps}"
+                                                    if _vps
+                                                    else ""
+                                                )
+                                            if _resolved and _resolved != _char_name_str:
+                                                _char_summaries.append(_resolved)
+                                        if _char_summaries:
+                                            _cast_constraint = _format_visible_cast_constraint(_scene_chars)
+                                            _char_visuals = "; ".join(
+                                                [part for part in [_cast_constraint, *_char_summaries] if part]
+                                            )
+                                            logger.info(
+                                                "CHARACTER_PROMPT_INFERRED | scene=%s | chars=%d",
+                                                _scene_id,
+                                                len(_char_summaries),
+                                            )
+                                except Exception:
+                                    pass
 
                             # 3. Derive shot_number from shot_id for camera defaults
                             #    e.g. "scene_001_shot_003" → 3
@@ -1008,6 +1509,16 @@ class RenderService:
         _input_parameters = dict(parameters or {})
         if _prompt_slots_for_adherence:
             _input_parameters["prompt_slots"] = _prompt_slots_for_adherence
+        _validate_model_override(provider, _input_parameters)
+        _zero_touch_debug = _zero_touch_debug_metadata(
+            project_id=project_id,
+            shot_id=shot_id,
+            provider=provider,
+            parameters=_input_parameters,
+            prompt=prompt,
+            consistency_payload=_consistency_payload,
+        )
+        _input_parameters["zero_touch_debug"] = _zero_touch_debug
 
         job = RenderJobModel(
             id=job_id,
@@ -1022,6 +1533,9 @@ class RenderService:
                 parameters=_input_parameters,
                 consistency_payload=_consistency_payload,
             ),
+            metadata={
+                "zero_touch_pipeline": _zero_touch_debug,
+            },
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat()
         )
@@ -1051,21 +1565,24 @@ class RenderService:
                         None,
                     )
                     if _scene:
-                        _scene_chars = list(_scene.get("characters") or [])
+                        _scene_chars = _normalize_character_names(
+                            _scene.get("characters") or _scene.get("character_appearances") or []
+                        )
                         # If no characters array, try to identify from scene text
                         if not _scene_chars:
                             try:
                                 _all_chars = _active_storage.get_characters(project_id)
-                                _scene_text_lower = (
+                                _scene_text = (
                                     str(_scene.get("text") or "")
                                     or str(_scene.get("content") or "")
                                     or str(_scene.get("description") or "")
                                     or str(_scene.get("scene_text") or "")
-                                ).lower()
-                                for _char in _all_chars:
-                                    _char_name = _char.get("name", "")
-                                    if _char_name and _char_name.lower() in _scene_text_lower:
-                                        _scene_chars.append(_char_name)
+                                )
+                                _scene_chars = _infer_scene_characters_from_text(
+                                    _all_chars,
+                                    primary_text=job.input_payload.prompt or "",
+                                    fallback_text=_scene_text,
+                                )
                             except Exception:
                                 pass
 
@@ -1101,7 +1618,10 @@ class RenderService:
                                 if _resolved and _resolved != _char_name_str:
                                     _char_summaries.append(_resolved)
                     if _char_summaries:
-                        _char_block = "Characters: " + "; ".join(_char_summaries)
+                        _cast_constraint = _format_visible_cast_constraint(_scene_chars)
+                        _char_block = "Characters: " + "; ".join(
+                            [part for part in [_cast_constraint, *_char_summaries] if part]
+                        )
                         _current_prompt = job.input_payload.prompt or ""
                         # Skip if characters already present (e.g., generic prompt path)
                         if "Characters:" not in _current_prompt:
@@ -1138,11 +1658,17 @@ class RenderService:
                 from app.services.shot_prompt_builder import build_slotted_prompt
 
                 _current_prompt = job.input_payload.prompt or ""
-                _action_text = _current_prompt
+                _shot_planning = parameters.get("shot_planning") if isinstance(parameters, dict) else None
+                _planned_action = _join_shot_planning_values(
+                    _shot_planning,
+                    ["blocking", "purpose", "rationale"],
+                )
+                _action_text = _planned_action or _current_prompt
                 _char_visuals = ""
                 if "Characters:" in _current_prompt:
-                    _action_text, _char_visuals = _current_prompt.split("Characters:", 1)
-                    _action_text = _action_text.strip()
+                    _prompt_action, _char_visuals = _current_prompt.split("Characters:", 1)
+                    if not _planned_action:
+                        _action_text = _prompt_action.strip()
                     _char_visuals = _char_visuals.strip()
 
                 _scene_for_slots: dict[str, Any] = {}
@@ -1170,16 +1696,22 @@ class RenderService:
                 except (ValueError, IndexError):
                     pass
 
-                _environment = (
+                _planned_environment = _shot_planning_value(_shot_planning, "production")
+                _environment = _planned_environment or (
                     str(_scene_for_slots.get("location") or "").strip()
                     or str(_scene_for_slots.get("heading") or "").strip()
                 )
-                _lighting = " ".join(
+                _planned_lighting = _shot_planning_value(_shot_planning, "atmosphere")
+                _lighting = _planned_lighting or " ".join(
                     p for p in [
                         str(_scene_for_slots.get("time_of_day") or "").strip(),
                         str(_scene_for_slots.get("emotional_tone") or "").strip(),
                     ]
                     if p
+                )
+                _camera_direction = _join_shot_planning_values(
+                    _shot_planning,
+                    ["framing", "camera", "composition"],
                 )
                 _slotted = build_slotted_prompt(
                     scene_data=_scene_for_slots,
@@ -1187,7 +1719,7 @@ class RenderService:
                     character_visual_canon=_char_visuals,
                     action_text=_action_text,
                     environment_motifs=_environment,
-                    camera_direction="",
+                    camera_direction=_camera_direction,
                     lighting_direction=_lighting,
                 )
                 from app.services.standing_corrections_service import (
@@ -1228,9 +1760,10 @@ class RenderService:
                     if _slot != "reserve"
                 }
                 logger.info(
-                    "STRUCTURED_PREVIS_PROMPT_APPLIED | job=%s | scene=%s | slots=%s",
+                    "STRUCTURED_PREVIS_PROMPT_APPLIED | job=%s | scene=%s | shot_planning=%s | slots=%s",
                     job_id,
                     _scene_id,
+                    isinstance(_shot_planning, dict),
                     {k: len(v) for k, v in job.input_payload.parameters["prompt_slots"].items()},
                 )
             except Exception as _exc:
@@ -1285,6 +1818,33 @@ class RenderService:
                 )
         except Exception as _exc:  # never block a render
             logger.debug("Continuity context injection skipped: %s", _exc)
+
+        _zero_touch_debug = _zero_touch_debug_metadata(
+            project_id=project_id,
+            shot_id=shot_id,
+            provider=provider,
+            parameters=job.input_payload.parameters,
+            prompt=job.input_payload.prompt or "",
+            consistency_payload=_consistency_payload,
+        )
+        job.input_payload.parameters["zero_touch_debug"] = _zero_touch_debug
+        job.metadata = dict(job.metadata or {})
+        job.metadata["zero_touch_pipeline"] = _zero_touch_debug
+        _prompt_contradictions = _detect_prompt_contradictions(job.input_payload.prompt or "")
+        if _prompt_contradictions:
+            job.status = "needs_review"
+            job.error_message = "Prompt contains contradictory instructions that require review before rendering."
+            job.metadata["prompt_contradictions"] = _prompt_contradictions
+            _set_zero_touch_phase(
+                job,
+                "prepare_provider_request",
+                "needs_review",
+                reason="contradictory prompt instructions",
+                contradictions=_prompt_contradictions,
+            )
+            _set_zero_touch_phase(job, "render", "skipped", reason="needs review before provider submission")
+            _set_zero_touch_phase(job, "evaluate", "skipped", reason="render not submitted")
+            _set_zero_touch_phase(job, "retry", "skipped", reason="render not submitted")
 
         # Diagnostic logging for provider status
         config = self._provider_configs.get(provider)
@@ -1341,7 +1901,7 @@ class RenderService:
         if job_id in self._submit_locks:
             logger.info("Duplicate submit blocked for %s", job_id)
             return job
-        if job.status in {"rendering", "complete"}:
+        if job.status in {"rendering", "complete", "needs_review"}:
             logger.info("Submit skipped for %s because status=%s", job_id, job.status)
             return job
         if job.status == "failed" and job.retry_count >= MAX_RETRIES:
@@ -1355,6 +1915,16 @@ class RenderService:
                 job.provider = "simulated"
                 logger.warning(f"Provider {job.provider} not found, falling back to simulated")
 
+            params = job.input_payload.parameters if job.input_payload and isinstance(job.input_payload.parameters, dict) else {}
+            _validate_model_override(job.provider, params)
+            _set_zero_touch_phase(
+                job,
+                "render",
+                "running",
+                provider=job.provider,
+                model=_provider_model_for_job(job.provider, params),
+            )
+            _persist_job(job)
             adapter = get_adapter(job.provider, config)
             previous_status = job.status
             logger.info(f"Submitting job {job_id} to provider {job.provider}")
@@ -1396,6 +1966,14 @@ class RenderService:
             submitted_job.updated_at = datetime.now().isoformat()
             
             self._jobs[job_id] = submitted_job
+            _set_zero_touch_phase(
+                submitted_job,
+                "render",
+                "complete" if submitted_job.status == "complete" else submitted_job.status,
+                provider_job_id=submitted_job.provider_job_id or "",
+            )
+            if submitted_job.status == "failed":
+                _record_provider_failure_policy(submitted_job)
             _persist_job(submitted_job)
             _log_audit("submit_job", "render_job", job_id, details=f"provider={submitted_job.provider}")
 
@@ -1412,6 +1990,8 @@ class RenderService:
             job.status = "failed"
             job.error_message = str(e)
             job.updated_at = datetime.now().isoformat()
+            _set_zero_touch_phase(job, "render", "failed", error=str(e))
+            _record_provider_failure_policy(job, str(e))
             self._jobs[job_id] = job
             _persist_job(job)
             raise
@@ -1448,6 +2028,8 @@ class RenderService:
                     )
                     
                     self._jobs[job_id] = updated
+                    if updated.status == "failed":
+                        _record_provider_failure_policy(updated)
                     _persist_job(updated)
                     
                     # Run completion hooks on status transition

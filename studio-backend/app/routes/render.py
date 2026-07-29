@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
+import json
 import logging
 import shutil
 
@@ -35,6 +36,110 @@ class AdherenceRetryRequest(BaseModel):
     """Explicit active adherence retry request."""
     max_attempts: int = Field(default=3, ge=1, le=5)
     submission_strategy: str = "combined_reorder_and_fresh_seeds"
+
+
+def _parse_query_json(value: Any, fallback: Any) -> Any:
+    if value is None:
+        return fallback
+    if isinstance(value, str):
+        clean = value.strip()
+        if not clean:
+            return fallback
+        try:
+            return json.loads(clean)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON query value: {exc.msg}") from exc
+    return value
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _job_payload(job: Any) -> dict[str, Any]:
+    payload = job.model_dump() if hasattr(job, "model_dump") else dict(job or {})
+    output_payload = _as_dict(payload.get("output_payload"))
+    output_url = payload.get("output_url") or output_payload.get("asset_url")
+    preview_url = payload.get("preview_url") or output_payload.get("thumbnail_url") or output_url
+    payload["job_id"] = payload.get("id")
+    payload["output_url"] = output_url
+    payload["preview_url"] = preview_url
+    payload["zero_touch_status"] = _zero_touch_status_summary(payload)
+    return payload
+
+
+def _zero_touch_status_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = _as_dict(payload.get("metadata"))
+    zero_touch = _as_dict(metadata.get("zero_touch_pipeline"))
+    phases = zero_touch.get("phases") if isinstance(zero_touch.get("phases"), list) else []
+    clean_phases = [row for row in phases if isinstance(row, dict)]
+    phase_statuses = {
+        str(row.get("phase")): str(row.get("status") or "")
+        for row in clean_phases
+        if row.get("phase")
+    }
+    active_phase = ""
+    for row in clean_phases:
+        status = str(row.get("status") or "")
+        if status in {"running", "pending", "needs_review", "failed"}:
+            active_phase = str(row.get("phase") or "")
+            break
+
+    provider_selection = _as_dict(zero_touch.get("provider_selection"))
+    references = zero_touch.get("references") if isinstance(zero_touch.get("references"), list) else []
+    reference_rows = [row for row in references if isinstance(row, dict)]
+    staging = _as_dict(zero_touch.get("staging"))
+    retry_debug = _as_dict(zero_touch.get("retry"))
+    retry_cascade = _as_dict(metadata.get("adherence_retry_cascade"))
+    jobs_submitted = retry_cascade.get("jobs_submitted") if isinstance(retry_cascade.get("jobs_submitted"), list) else []
+    adherence_review = _as_dict(metadata.get("adherence_review"))
+    prompt_contradictions = metadata.get("prompt_contradictions") if isinstance(metadata.get("prompt_contradictions"), list) else []
+    provider_failure = _as_dict(metadata.get("provider_failure"))
+
+    output_url = payload.get("output_url")
+    preview_url = payload.get("preview_url")
+    status = str(payload.get("status") or "")
+    adherence_verdict = str(adherence_review.get("verdict") or adherence_review.get("outcome") or "")
+    retry_count = len(jobs_submitted)
+    human_review_required = bool(
+        status == "needs_review"
+        or prompt_contradictions
+        or adherence_verdict in {"needs_review", "manual_review", "fail"}
+    )
+
+    return {
+        "status": status,
+        "active_phase": active_phase,
+        "phases": clean_phases,
+        "phase_statuses": phase_statuses,
+        "provider": provider_selection.get("provider") or payload.get("provider"),
+        "model": provider_selection.get("model") or "",
+        "provider_selection_reason": provider_selection.get("reason") or "",
+        "staging_applied": bool(staging.get("applied")),
+        "staging_characters": staging.get("characters") if isinstance(staging.get("characters"), list) else [],
+        "references_applied": any(bool(row.get("injected_into_request")) for row in reference_rows),
+        "reference_count": len(reference_rows),
+        "references": reference_rows,
+        "adherence": {
+            "verdict": adherence_verdict,
+            "passed": adherence_verdict == "pass",
+            "failed_slots": adherence_review.get("failed_slots") if isinstance(adherence_review.get("failed_slots"), list) else [],
+            "note": adherence_review.get("advisory_note") or "",
+        },
+        "retry": {
+            "occurred": retry_count > 0,
+            "count": retry_count,
+            "max_attempts": retry_cascade.get("max_retries") or retry_debug.get("max_attempts") or 0,
+            "jobs_submitted": jobs_submitted,
+        },
+        "provider_failure": provider_failure,
+        "prompt_contradictions": prompt_contradictions,
+        "output_url": output_url,
+        "preview_url": preview_url,
+        "human_review_required": human_review_required,
+    }
 
 
 # Provider management
@@ -86,20 +191,26 @@ def create_render_job(
     shot_id: str,
     provider: Optional[str] = None,
     prompt: str = "",
-    reference_assets: Optional[list[str]] = None,
-    parameters: Optional[dict] = None
+    reference_assets: Optional[Any] = None,
+    parameters: Optional[Any] = None
 ):
     """Create a new render job"""
     try:
+        parsed_reference_assets = _parse_query_json(reference_assets, [])
+        parsed_parameters = _parse_query_json(parameters, {})
+        if not isinstance(parsed_reference_assets, list):
+            raise HTTPException(status_code=400, detail="reference_assets must be a JSON array")
+        if not isinstance(parsed_parameters, dict):
+            raise HTTPException(status_code=400, detail="parameters must be a JSON object")
         job = render_service.create_job(
             project_id=project_id,
             shot_id=shot_id,
             provider=provider,
             prompt=prompt,
-            reference_assets=reference_assets,
-            parameters=parameters
+            reference_assets=parsed_reference_assets,
+            parameters=parsed_parameters
         )
-        return job
+        return _job_payload(job)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -108,7 +219,7 @@ def create_render_job(
 async def submit_render_job(job_id: str):
     """Submit a render job to the provider"""
     job = await render_service.submit_job(job_id)
-    return job
+    return _job_payload(job)
 
 
 @router.get("/jobs/{job_id}")
@@ -117,14 +228,14 @@ def get_render_job(job_id: str):
     job = render_service.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return _job_payload(job)
 
 
 @router.get("/jobs/{job_id}/status")
 async def get_render_job_status(job_id: str):
     """Poll render job status"""
     job = await render_service.get_job_status(job_id)
-    return job
+    return _job_payload(job)
 
 
 @router.delete("/jobs/{job_id}")
@@ -149,7 +260,7 @@ async def cancel_render_job(job_id: str):
 async def retry_render_job(job_id: str):
     """Retry a failed render job"""
     job = await render_service.retry_job(job_id)
-    return job
+    return _job_payload(job)
 
 
 @router.post("/jobs/{job_id}/adherence-retry")
@@ -229,18 +340,7 @@ def list_render_jobs(project_id: Optional[str] = None):
     """List all render jobs, optionally filtered by project"""
     rows = []
     for job in render_service.list_jobs(project_id):
-        payload = job.model_dump()
-        output_payload = payload.get("output_payload") if isinstance(payload.get("output_payload"), dict) else {}
-        output_url = payload.get("output_url") or output_payload.get("asset_url")
-        preview_url = payload.get("preview_url") or output_payload.get("thumbnail_url")
-        rows.append(
-            {
-                **payload,
-                "job_id": payload.get("id"),
-                "output_url": output_url,
-                "preview_url": preview_url,
-            }
-        )
+        rows.append(_job_payload(job))
 
     # Compatibility fallback for seeded demo/runtime rows that currently live in
     # project execution summaries but are not yet hydrated into canonical job rows.
@@ -464,4 +564,3 @@ def update_shot_seed(project_id: str, scene_id: str, shot_id: str, payload: Shot
         "seed": result["seed"],
         "seed_locked": bool(result["seed_locked"]),
     }
-

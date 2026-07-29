@@ -3,7 +3,9 @@ from datetime import datetime
 from typing import Optional
 import asyncio
 import aiohttp
+import base64
 import logging
+import mimetypes
 import os
 import subprocess
 import ssl
@@ -820,11 +822,12 @@ class RunwayAdapter(RenderProviderAdapter):
                         len(_additions["promptTextExtra"]),
                     )
 
-            ratio = self._normalize_ratio(job.input_payload.parameters.get("ratio"))
-            duration = int(job.input_payload.parameters.get("duration") or 5)
+            params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
+            ratio = self._normalize_ratio(params.get("ratio"))
+            duration = int(params.get("duration") or params.get("duration_seconds") or 5)
 
             # Extract seed from parameters if present
-            raw_seed = job.input_payload.parameters.get("seed")
+            raw_seed = params.get("seed")
             seed_val = int(raw_seed) if raw_seed is not None else None
 
             if prompt_image:
@@ -854,6 +857,18 @@ class RunwayAdapter(RenderProviderAdapter):
                     "image_to_video" if prompt_image else "text_to_video",
                     seed_val,
                 )
+            job.metadata = dict(job.metadata or {})
+            job.metadata["provider_payload_metadata"] = {
+                "provider": "runway",
+                "endpoint": endpoint,
+                "model": model,
+                "prompt_length": len(str(job.input_payload.prompt or "")),
+                "reference_count": 1 if prompt_image else 0,
+                "references_injected": bool(prompt_image),
+                "duration": duration,
+                "ratio": ratio,
+                "seed_present": seed_val is not None,
+            }
             logger.info(
                 "TEMP_RUNWAY_DEBUG request endpoint=%s model=%s payload=%s payload_schema=%s",
                 endpoint,
@@ -1285,8 +1300,26 @@ class HappyHorseAdapter(RenderProviderAdapter):
     ) -> dict:
         payload = {"error_type": error_type, "message": message}
         if raw_response is not None:
-            payload["raw_response"] = raw_response
+            payload["raw_response"] = HappyHorseAdapter._redact_temporary_provider_urls(raw_response)
         return payload
+
+    @staticmethod
+    def _redact_temporary_provider_urls(value: object) -> object:
+        """Return provider metadata without temporary signed media URLs."""
+        if isinstance(value, dict):
+            clean: dict = {}
+            for key, child in value.items():
+                key_text = str(key).lower()
+                if key_text in {"video_url", "url", "hosted_video_url"}:
+                    child_text = str(child or "")
+                    if "signature=" in child_text.lower() or "ossaccesskeyid=" in child_text.lower() or "expires=" in child_text.lower():
+                        clean[key] = "<redacted temporary provider URL>"
+                        continue
+                clean[key] = HappyHorseAdapter._redact_temporary_provider_urls(child)
+            return clean
+        if isinstance(value, list):
+            return [HappyHorseAdapter._redact_temporary_provider_urls(item) for item in value]
+        return value
 
     async def _happyhorse_request(
         self,
@@ -1335,6 +1368,16 @@ class HappyHorseAdapter(RenderProviderAdapter):
             if isinstance(video_url, str) and video_url.strip():
                 return video_url.strip()
         return None
+
+    @staticmethod
+    def _extract_task_error(response: dict, fallback: str) -> str:
+        output = response.get("output") if isinstance(response, dict) else None
+        if isinstance(output, dict):
+            message = str(output.get("message") or "").strip()
+            code = str(output.get("code") or "").strip()
+            if message:
+                return f"{code}: {message}" if code else message
+        return str(response.get("message") or response.get("error") or fallback)
 
     @staticmethod
     def _output_dir(project_id: str) -> Path:
@@ -1470,7 +1513,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
 
             params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
             resolution = self._normalize_resolution(params.get("resolution"))
-            duration = self._normalize_duration(params.get("duration") or 5)
+            duration = self._normalize_duration(params.get("duration") or params.get("duration_seconds") or 5)
             ratio = self._normalize_ratio(params.get("ratio"))
             seed = params.get("seed")
             _consistency_data = getattr(job.input_payload, 'consistency_payload', None)
@@ -1501,6 +1544,22 @@ class HappyHorseAdapter(RenderProviderAdapter):
                 seed=seed,
                 params=params,
             )
+            input_payload = payload.get("input") if isinstance(payload, dict) else {}
+            media = input_payload.get("media") if isinstance(input_payload, dict) else None
+            job.metadata = dict(job.metadata or {})
+            job.metadata["provider_payload_metadata"] = {
+                "provider": self.provider_id,
+                "endpoint": self.SUBMIT_PATH,
+                "model": str(payload.get("model") or self.MODEL_NAME),
+                "prompt_length": len(str(input_payload.get("prompt") or "")) if isinstance(input_payload, dict) else 0,
+                "reference_count": len(media) if isinstance(media, list) else 0,
+                "references_injected": bool(media) if isinstance(media, list) else False,
+                "references_degraded_to_prompt": bool(job.metadata.get("character_reference_degraded_to_text")),
+                "duration": duration,
+                "ratio": ratio,
+                "resolution": resolution,
+                "seed_present": seed is not None,
+            }
 
             submit_response = await self._happyhorse_request("POST", self.SUBMIT_PATH, payload=payload)
             task_id = self._extract_task_id(submit_response)
@@ -1545,7 +1604,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
             if task_status != "SUCCEEDED":
                 return self._failure_output(
                     job,
-                    str(poll_response.get("message") or poll_response.get("error") or "HappyHorse task failed"),
+                    self._extract_task_error(poll_response, "HappyHorse task failed"),
                     "task_failed",
                     poll_response,
                 )
@@ -1572,8 +1631,9 @@ class HappyHorseAdapter(RenderProviderAdapter):
                     "task_id": task_id,
                     "model": self.MODEL_NAME,
                     "provider_mode": "hosted_api",
-                    "hosted_video_url": hosted_video_url,
-                    "raw_response": poll_response,
+                    "hosted_video_url": "<redacted temporary provider URL>",
+                    "hosted_video_url_redacted": True,
+                    "raw_response": self._redact_temporary_provider_urls(poll_response),
                     "audio_strip": strip_metadata,
                 },
             }
@@ -1630,8 +1690,9 @@ class HappyHorseAdapter(RenderProviderAdapter):
                                     "task_id": job.provider_job_id,
                                     "model": self.MODEL_NAME,
                                     "provider_mode": "hosted_api",
-                                    "hosted_video_url": hosted_video_url,
-                                    "raw_response": response,
+                                    "hosted_video_url": "<redacted temporary provider URL>",
+                                    "hosted_video_url_redacted": True,
+                                    "raw_response": self._redact_temporary_provider_urls(response),
                                     "audio_strip": strip_metadata,
                                 },
                             }
@@ -1642,7 +1703,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
                     job.error_message = "HappyHorse task completed without video_url"
             elif task_status in {"FAILED", "CANCELED", "CANCELLED"}:
                 job.status = "failed"
-                job.error_message = str(response.get("message") or response.get("error") or "HappyHorse status check failed")
+                job.error_message = self._extract_task_error(response, "HappyHorse status check failed")
             job.updated_at = datetime.now().isoformat()
         except Exception as exc:
             job.status = "failed"
@@ -1686,6 +1747,43 @@ class HappyHorseR2VAdapter(HappyHorseAdapter):
 
     MODEL_NAME = "happyhorse-1.1-r2v"
 
+    @staticmethod
+    def _previs_assets_root() -> Path:
+        return Path(__file__).resolve().parents[2] / "outputs" / "previs"
+
+    @staticmethod
+    def _outputs_root() -> Path:
+        return Path(__file__).resolve().parents[2] / "outputs"
+
+    @classmethod
+    def _provider_reference_url(cls, image_url: str) -> str:
+        value = str(image_url or "").strip()
+        if value.startswith(("http://", "https://", "data:")):
+            return value
+        if value.startswith("/previs-assets/"):
+            root = cls._previs_assets_root().resolve()
+            relative_path = value.removeprefix("/previs-assets/")
+        elif value.startswith("/outputs/references/"):
+            root = cls._outputs_root().resolve()
+            relative_path = value.removeprefix("/outputs/")
+        else:
+            raise ValueError(
+                "HappyHorse reference image must be a public URL, Base64 data URL, "
+                "local /previs-assets/ path, or local /outputs/references/ path"
+            )
+
+        local_path = (root / relative_path).resolve()
+        if not local_path.is_relative_to(root):
+            raise ValueError("HappyHorse reference image path escapes the allowed output directory")
+        if not local_path.is_file():
+            raise ValueError(f"HappyHorse local reference image was not found: {value}")
+
+        mime_type, _ = mimetypes.guess_type(local_path.name)
+        if mime_type not in {"image/jpeg", "image/png", "image/webp"}:
+            raise ValueError(f"HappyHorse reference image has unsupported format: {local_path.suffix}")
+        encoded = base64.b64encode(local_path.read_bytes()).decode("ascii")
+        return f"data:{mime_type};base64,{encoded}"
+
     def _build_submit_payload(
         self,
         *,
@@ -1719,11 +1817,23 @@ class HappyHorseR2VAdapter(HappyHorseAdapter):
             for ref in payload_obj.refs
             if ref.kind in {"character_face", "character_full"} and ref.image_url
         ][:9]
-        media = [{"type": "image", "url": ref.image_url} for ref in refs]
+        refs_by_image: dict[str, list] = {}
+        for ref in refs:
+            refs_by_image.setdefault(ref.image_url, []).append(ref)
+        media = [
+            {
+                "type": "reference_image",
+                "url": self._provider_reference_url(image_url),
+            }
+            for image_url in refs_by_image
+        ]
         reference_lines = []
-        for index, ref in enumerate(refs, start=1):
-            fallback = payload_obj.fallback_text.get(ref.ref_id, "preserve this subject's identity")
-            reference_lines.append(f"[Image {index}]: {fallback}")
+        for index, image_refs in enumerate(refs_by_image.values(), start=1):
+            fallbacks = [
+                payload_obj.fallback_text.get(ref.ref_id, "preserve this subject's identity")
+                for ref in image_refs
+            ]
+            reference_lines.append(f"[Image {index}]: {'; '.join(fallbacks)}")
 
         prompt = str(job.input_payload.prompt or "").strip()
         if reference_lines:

@@ -728,7 +728,7 @@ class AgentExecutor:
                                 "value": value,
                                 "reason": "Optimized based on render feedback"
                             })
-                        except:
+                        except Exception:
                             pass
             
             result["generated_shot"]["settings"] = settings
@@ -767,7 +767,8 @@ class AgentExecutor:
         
         result = {
             "task_type": "execution",
-            "render_job": None
+            "render_job": None,
+            "warnings": [],
         }
         
         # Get prompt and submit render
@@ -792,8 +793,11 @@ class AgentExecutor:
                         "submitted_at": datetime.now().isoformat()
                     }
                     
-                    # Auto-submit for rendering
-                    render_service.submit_job(job.id)
+                    # Auto-submit through the canonical render service path.
+                    submitted = await render_service.submit_job(job.id)
+                    result["render_job"]["status"] = submitted.status
+                    result["render_job"]["provider"] = submitted.provider
+                    result["render_job"]["provider_job_id"] = submitted.provider_job_id
                     
             except Exception as e:
                 result["warnings"].append(f"Render submission error: {e}")

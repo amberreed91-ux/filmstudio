@@ -19,6 +19,10 @@ studio-backend/outputs/voice_clone_scene_002/
 studio-backend/outputs/voice_conversion_scene_002/
 outputs/audio/
 studio-backend/static/composed/
+studio-backend/backups/
+studio-backend/data/project_state_store.json
+studio-backend/data/reference_memory.json
+studio-backend/data/scene_intelligence.json
 studio-backend/studio.db
 studio-backend/data/studio.db
 studio-backend/data/appearance_core_review_queue.json

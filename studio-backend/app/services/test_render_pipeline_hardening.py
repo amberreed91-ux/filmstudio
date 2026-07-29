@@ -4,8 +4,8 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
 
-from app.models import RenderJobModel, RenderJobOutput
-from app.services.render import RenderService, set_storage
+from app.models import RenderJobInput, RenderJobModel, RenderJobOutput
+from app.services.render import RenderService, _run_render_quality_check, set_storage
 from app.services.render_job_backfill import hydrate_render_service_from_storage
 
 
@@ -156,3 +156,55 @@ def test_persistence_restoration_hydrates_jobs():
     assert restored is not None
     assert restored.recovery_status == "recovered_terminal"
     assert restored.last_polled_at == now
+
+
+def test_quality_check_records_evaluation_failure_without_raising(monkeypatch):
+    storage = _StorageStub()
+    set_storage(storage)
+    now = datetime.now().isoformat()
+    job = RenderJobModel(
+        id="job-eval-failure-1",
+        project_id="p3",
+        shot_id="shot_5",
+        provider="simulated",
+        status="complete",
+        progress=100,
+        input_payload=RenderJobInput(
+            shot_id="shot_5",
+            prompt="Mara waits in the hallway.",
+            parameters={"prompt_slots": {"character": "Mara"}},
+        ),
+        output_payload=RenderJobOutput(asset_url="https://example.com/eval-fails.mp4"),
+        metadata={
+            "zero_touch_pipeline": {
+                "phases": [
+                    {"phase": "evaluate", "status": "pending"},
+                    {"phase": "retry", "status": "pending"},
+                ]
+            }
+        },
+        created_at=now,
+        updated_at=now,
+        completed_at=now,
+    )
+    storage.save_job(job)
+
+    async def _raise_record_attempt(**_kwargs):
+        raise RuntimeError("adherence evaluator unavailable")
+
+    monkeypatch.setattr(
+        "app.services.render_retry_service.render_retry_service.record_render_attempt",
+        _raise_record_attempt,
+    )
+
+    asyncio.run(_run_render_quality_check(job))
+
+    persisted = storage.get_job(job.id)
+    phases = {
+        row["phase"]: row
+        for row in persisted.metadata["zero_touch_pipeline"]["phases"]
+    }
+    assert phases["evaluate"]["status"] == "failed"
+    assert "adherence evaluator unavailable" in phases["evaluate"]["error"]
+    assert phases["retry"]["status"] == "pending"
+    assert persisted.metadata.get("adherence_retry_cascade") is None
