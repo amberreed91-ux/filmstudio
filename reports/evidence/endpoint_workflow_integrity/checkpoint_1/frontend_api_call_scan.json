@@ -1,0 +1,2958 @@
+[
+  {
+    "file": "studio-app/src/components/BackendDownStatusBar.tsx",
+    "line": 18,
+    "paths": [],
+    "text": "const res = await fetch(`${STUDIO_API_BASE}/health`, {"
+  },
+  {
+    "file": "studio-app/src/components/CharacterArcPanel.tsx",
+    "line": 82,
+    "paths": [
+      "/api/projects/${projectId}/script-analysis/characters"
+    ],
+    "text": "const response = await fetch(`/api/projects/${projectId}/script-analysis/characters`);"
+  },
+  {
+    "file": "studio-app/src/components/CharacterArcPanel.tsx",
+    "line": 96,
+    "paths": [
+      "/api/projects/${projectId}/characters/${selectedChar.character_id}/history"
+    ],
+    "text": "const response = await fetch(`/api/projects/${projectId}/characters/${selectedChar.character_id}/history`);"
+  },
+  {
+    "file": "studio-app/src/components/CharacterArcPanel.tsx",
+    "line": 105,
+    "paths": [
+      "/api/projects/${projectId}/characters/${vars.charId}/simulate"
+    ],
+    "text": "const response = await fetch(`/api/projects/${projectId}/characters/${vars.charId}/simulate`, {"
+  },
+  {
+    "file": "studio-app/src/components/CharacterArcPanel.tsx",
+    "line": 121,
+    "paths": [
+      "/api/projects/${projectId}/characters/${selectedChar?.character_id}/notes"
+    ],
+    "text": "const response = await fetch(`/api/projects/${projectId}/characters/${selectedChar?.character_id}/notes`, {"
+  },
+  {
+    "file": "studio-app/src/components/CoDirectorDrawer.tsx",
+    "line": 124,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? '')}/director-memory`,"
+  },
+  {
+    "file": "studio-app/src/components/CoDirectorDrawer.tsx",
+    "line": 141,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? '')}/scenes`,"
+  },
+  {
+    "file": "studio-app/src/components/CoDirectorDrawer.tsx",
+    "line": 205,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? '')}/co-director/chat`,"
+  },
+  {
+    "file": "studio-app/src/components/ExecutionSummaryInspectionPanel.tsx",
+    "line": 60,
+    "paths": [],
+    "text": "const response = await fetch(filePath, { method: 'GET' })"
+  },
+  {
+    "file": "studio-app/src/components/PromptGenerationPanel.tsx",
+    "line": 29,
+    "paths": [
+      "/api/projects/${projectId}/script-analysis/prompts"
+    ],
+    "text": "const response = await fetch(`/api/projects/${projectId}/script-analysis/prompts`, {"
+  },
+  {
+    "file": "studio-app/src/components/SceneBreakdownPanel.tsx",
+    "line": 47,
+    "paths": [
+      "/api/projects/${projectId}/script-analysis/breakdown"
+    ],
+    "text": "const response = await fetch(`/api/projects/${projectId}/script-analysis/breakdown`);"
+  },
+  {
+    "file": "studio-app/src/components/SoundIntelligencePanel.tsx",
+    "line": 38,
+    "paths": [
+      "/api/projects/${projectId}/script-analysis/sound"
+    ],
+    "text": "const response = await fetch(`/api/projects/${projectId}/script-analysis/sound`);"
+  },
+  {
+    "file": "studio-app/src/components/TopNav.tsx",
+    "line": 42,
+    "paths": [],
+    "text": "const res = await fetch(`${apiBaseUrl.replace(/\\/+$/, '')}/health`, {"
+  },
+  {
+    "file": "studio-app/src/components/TopNav.tsx",
+    "line": 67,
+    "paths": [],
+    "text": "await fetch(`${apiBaseUrl.replace(/\\/+$/, '')}/api/f51/studio/admin/restart`, {"
+  },
+  {
+    "file": "studio-app/src/components/TransitionIntelligencePanel.tsx",
+    "line": 33,
+    "paths": [
+      "/api/projects/${projectId}/script-analysis/transitions"
+    ],
+    "text": "const response = await fetch(`/api/projects/${projectId}/script-analysis/transitions`);"
+  },
+  {
+    "file": "studio-app/src/components/WorkflowLauncher.tsx",
+    "line": 75,
+    "paths": [],
+    "text": "const response = await fetch(`${STUDIO_API_BASE}/api/workflows/definitions`)"
+  },
+  {
+    "file": "studio-app/src/components/WorkflowLauncher.tsx",
+    "line": 85,
+    "paths": [],
+    "text": "const response = await fetch(`${STUDIO_API_BASE}/api/workflows/executions?project_id=${projectId}`)"
+  },
+  {
+    "file": "studio-app/src/components/WorkflowLauncher.tsx",
+    "line": 122,
+    "paths": [],
+    "text": "const response = await fetch(`${STUDIO_API_BASE}/api/workflows/execute`, {"
+  },
+  {
+    "file": "studio-app/src/components/WorkflowLauncher.tsx",
+    "line": 160,
+    "paths": [],
+    "text": "const response = await fetch(`${STUDIO_API_BASE}/api/workflows/executions/${executionId}`)"
+  },
+  {
+    "file": "studio-app/src/hooks/useBackendHealth.test.ts",
+    "line": 27,
+    "paths": [
+      "/api/f51/studio/admin/restart"
+    ],
+    "text": "expect(String(fetchMock.mock.calls[1][0])).toContain('/api/f51/studio/admin/restart')"
+  },
+  {
+    "file": "studio-app/src/hooks/useBackendHealth.ts",
+    "line": 62,
+    "paths": [],
+    "text": "const res = await fetch(`${STUDIO_API_BASE}/health`, {"
+  },
+  {
+    "file": "studio-app/src/hooks/useProductionRecovery.ts",
+    "line": 113,
+    "paths": [],
+    "text": "const response = await fetch(`${STUDIO_API_BASE}/api/production-recovery/status`)"
+  },
+  {
+    "file": "studio-app/src/hooks/useProductionRecovery.ts",
+    "line": 184,
+    "paths": [],
+    "text": "const response = await fetch(`${STUDIO_API_BASE}/api/production-recovery/recover${projectId ? `?project_id=${projectId}` : ''}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/audioApi.ts",
+    "line": 11,
+    "paths": [
+      "/api/f51/studio"
+    ],
+    "text": "const BASE = '/api/f51/studio'"
+  },
+  {
+    "file": "studio-app/src/lib/audioApi.ts",
+    "line": 65,
+    "paths": [],
+    "text": "const res = await fetch(url, {"
+  },
+  {
+    "file": "studio-app/src/lib/castingIntelligenceApi.ts",
+    "line": 1,
+    "paths": [
+      "/api/f51/studio/projects"
+    ],
+    "text": "const BASE = '/api/f51/studio/projects'"
+  },
+  {
+    "file": "studio-app/src/lib/castingIntelligenceApi.ts",
+    "line": 147,
+    "paths": [],
+    "text": "const response = await fetch(url, {"
+  },
+  {
+    "file": "studio-app/src/lib/errorTelemetry.test.ts",
+    "line": 34,
+    "paths": [
+      "/api/f51/studio/errors"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/errors')"
+  },
+  {
+    "file": "studio-app/src/lib/errorTelemetry.ts",
+    "line": 78,
+    "paths": [],
+    "text": "fetch(`${TELEMETRY_ENDPOINT}/api/f51/studio/errors`, {"
+  },
+  {
+    "file": "studio-app/src/lib/exportApi.ts",
+    "line": 58,
+    "paths": [],
+    "text": "const res = await fetch(`${BASE_URL}${path}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/exportApi.ts",
+    "line": 79,
+    "paths": [
+      "/api/f51/studio/projects/${projectId}/export"
+    ],
+    "text": "`/api/f51/studio/projects/${projectId}/export`,"
+  },
+  {
+    "file": "studio-app/src/lib/exportApi.ts",
+    "line": 87,
+    "paths": [
+      "/api/f51/studio/projects/${projectId}/export/status"
+    ],
+    "text": "`/api/f51/studio/projects/${projectId}/export/status`,"
+  },
+  {
+    "file": "studio-app/src/lib/exportApi.ts",
+    "line": 97,
+    "paths": [
+      "/api/f51/studio/projects/${projectId}/export/download"
+    ],
+    "text": "`/api/f51/studio/projects/${projectId}/export/download`,"
+  },
+  {
+    "file": "studio-app/src/lib/performanceAudioApi.ts",
+    "line": 1,
+    "paths": [
+      "/api/f51/studio/projects"
+    ],
+    "text": "const BASE = '/api/f51/studio/projects'"
+  },
+  {
+    "file": "studio-app/src/lib/performanceAudioApi.ts",
+    "line": 118,
+    "paths": [],
+    "text": "const response = await fetch(url, {"
+  },
+  {
+    "file": "studio-app/src/lib/stitchingApi.ts",
+    "line": 43,
+    "paths": [],
+    "text": "const res = await fetch(`${BASE_URL}${path}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/stitchingApi.ts",
+    "line": 57,
+    "paths": [
+      "/api/f51/studio/projects/${projectId}/stitch"
+    ],
+    "text": "`/api/f51/studio/projects/${projectId}/stitch`,"
+  },
+  {
+    "file": "studio-app/src/lib/stitchingApi.ts",
+    "line": 64,
+    "paths": [
+      "/api/f51/studio/projects/${projectId}/stitch/status"
+    ],
+    "text": "return fetchStitch<StitchJob>(`/api/f51/studio/projects/${projectId}/stitch/status`)"
+  },
+  {
+    "file": "studio-app/src/lib/stitchingApi.ts",
+    "line": 73,
+    "paths": [
+      "/api/f51/studio/projects/${projectId}/stitch/download"
+    ],
+    "text": "`/api/f51/studio/projects/${projectId}/stitch/download`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 76,
+    "paths": [
+      "/api/projects/project_cam/cinematography/plans"
+    ],
+    "text": "expect(String(url)).toContain('/api/projects/project_cam/cinematography/plans')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 105,
+    "paths": [
+      "/api/projects/project_cam/cinematography/render-context"
+    ],
+    "text": "expect(String(url)).toContain('/api/projects/project_cam/cinematography/render-context')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 281,
+    "paths": [
+      "/api/f51/studio/projects/proj-1?session_id=session-123"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/projects/proj-1?session_id=session-123')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 293,
+    "paths": [
+      "/api/f51/studio/projects/proj-2"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/projects/proj-2')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 380,
+    "paths": [
+      "/api/f51/studio/projects/proj-timeline/timeline-intelligence"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/projects/proj-timeline/timeline-intelligence')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 418,
+    "paths": [
+      "/api/f51/studio/projects/proj-edit/editorial-revision-intelligence"
+    ],
+    "text": "expect(urlText).toContain('/api/f51/studio/projects/proj-edit/editorial-revision-intelligence')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 468,
+    "paths": [
+      "/api/f51/studio/projects/proj-scene/scenes/scene_003/pipeline/generate"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/projects/proj-scene/scenes/scene_003/pipeline/generate')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 519,
+    "paths": [
+      "/api/f51/studio/projects/proj-clip/clip-revisions"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/projects/proj-clip/clip-revisions')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 537,
+    "paths": [
+      "/api/f51/studio/render/jobs/job-123/refresh-url"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/render/jobs/job-123/refresh-url')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 555,
+    "paths": [
+      "/api/f51/studio/render/jobs/job-adherence/adherence-retry"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/render/jobs/job-adherence/adherence-retry')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 588,
+    "paths": [
+      "/api/f51/studio/dev/seed-demo-project"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/dev/seed-demo-project')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 631,
+    "paths": [
+      "/api/f51/studio/projects/proj-1/scenes/scene_001/rationale"
+    ],
+    "text": "expect(String(url)).toContain('/api/f51/studio/projects/proj-1/scenes/scene_001/rationale')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.test.ts",
+    "line": 675,
+    "paths": [
+      "/api/f51/studio/projects/project_s9/workflow"
+    ],
+    "text": "expect(String(fetchMock.mock.calls[0][0])).toContain('/api/f51/studio/projects/project_s9/workflow')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 367,
+    "paths": [],
+    "text": "const response = await fetch(`${STUDIO_API_BASE}${path}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 434,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/analyze"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/analyze`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 619,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/cinematography/plans"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/plans`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 635,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/cinematography/plans${query}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/plans${query}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 639,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/cinematography/plans/${encodeURIComponent(planId)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/plans/${encodeURIComponent(planId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 646,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/cinematography/observations"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/observations`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 662,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/cinematography/observations${query}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/observations${query}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 669,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/cinematography/assessments"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/assessments`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 685,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/cinematography/assessments${query}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/assessments${query}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 692,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/cinematography/render-context"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/cinematography/render-context`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1122,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1130,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles${coloristQuery(filters)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles${coloristQuery(filters)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1134,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles/${encodeURIComponent(lookBibleId)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/look-bibles/${encodeURIComponent(lookBibleId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1138,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/plans"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/plans`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1146,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/plans${coloristQuery(filters)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/plans${coloristQuery(filters)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1150,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/plans/${encodeURIComponent(planId)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/plans/${encodeURIComponent(planId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1154,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/palette-continuity${coloristQuery(filters)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/palette-continuity${coloristQuery(filters)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1158,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/story-arcs"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/story-arcs`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1166,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/story-arcs${coloristQuery(filters)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/story-arcs${coloristQuery(filters)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1170,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/observations"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/observations`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1178,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/observations${coloristQuery(filters)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/observations${coloristQuery(filters)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1182,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/assessments"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/assessments`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1190,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/assessments${coloristQuery(filters)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/assessments${coloristQuery(filters)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1194,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/render-context"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/render-context`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1202,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/final-verifications"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/final-verifications`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1210,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/final-verifications${coloristQuery(filters)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/final-verifications${coloristQuery(filters)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1214,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/decisions/save"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/decisions/save`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1222,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/colorist/signal${coloristQuery(filters)}"
+    ],
+    "text": "return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/colorist/signal${coloristQuery(filters)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1528,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/plans"
+    ],
+    "text": "return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/plans`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1539,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/render-context"
+    ],
+    "text": "return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/render-context`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1550,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/observations"
+    ],
+    "text": "return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/observations`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1561,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/assessments"
+    ],
+    "text": "return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/assessments`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1580,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/department-signal"
+    ],
+    "text": "return fetchJson(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-design/department-signal`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1585,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1595,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/characters/${encodeURIComponent(characterId)}/history?limit=${limit}"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/characters/${encodeURIComponent(characterId)}/history?limit=${limit}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1606,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/prompt-context${query}"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/prompt-context${query}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1616,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/voice-context/${encodeURIComponent(characterId)}"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/voice-context/${encodeURIComponent(characterId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1622,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/screening-context"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/scenes/${encodeURIComponent(sceneId)}/screening-context`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1631,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1646,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions/${encodeURIComponent(decisionId)}"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions/${encodeURIComponent(decisionId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1660,
+    "paths": [
+      "/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions/${encodeURIComponent(decisionId)}"
+    ],
+    "text": "`/api/projects/${encodeURIComponent(projectId)}/performance-intelligence/decisions/${encodeURIComponent(decisionId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1679,
+    "paths": [
+      "/api/f51/studio/overview"
+    ],
+    "text": "return fetchJson<StudioOverview>('/api/f51/studio/overview').then((raw) => ({"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1686,
+    "paths": [
+      "/api/f51/studio/dev/seed-demo-project"
+    ],
+    "text": "return fetchJson<DemoStudioSeedResponse>('/api/f51/studio/dev/seed-demo-project', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1699,
+    "paths": [
+      "/api/scene-intelligence/import"
+    ],
+    "text": "}>('/api/scene-intelligence/import', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1707,
+    "paths": [
+      "/api/scene-intelligence"
+    ],
+    "text": "return fetchJson<{ records: SceneIntelligenceRecord[] }>('/api/scene-intelligence')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1711,
+    "paths": [
+      "/api/scene-intelligence/${encodeURIComponent(sceneId)}"
+    ],
+    "text": "return fetchJson<SceneIntelligenceRecord>(`/api/scene-intelligence/${encodeURIComponent(sceneId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1715,
+    "paths": [
+      "/api/scene-intelligence/${encodeURIComponent(sceneId)}/animation-prompt"
+    ],
+    "text": "return fetchJson<SceneAnimationPromptPayload>(`/api/scene-intelligence/${encodeURIComponent(sceneId)}/animation-prompt`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1721,
+    "paths": [
+      "/api/scene-intelligence/${encodeURIComponent(sceneId)}/link-video"
+    ],
+    "text": "return fetchJson<SceneIntelligenceRecord>(`/api/scene-intelligence/${encodeURIComponent(sceneId)}/link-video`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1734,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}${query}"
+    ],
+    "text": "return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}${query}`).then((raw) =>"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1755,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/share/generate"
+    ],
+    "text": "return fetchJson<ShareTokenResponse>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/share/generate`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1761,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/share/collaborator"
+    ],
+    "text": "return fetchJson<ShareTokenResponse>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/share/collaborator`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1768,
+    "paths": [
+      "/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/comments"
+    ],
+    "text": "return fetchJson<SceneComment>(`/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/comments`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1775,
+    "paths": [
+      "/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/comments/${encodeURIComponent(commentId)}"
+    ],
+    "text": "return fetchJson<void>(`/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/comments/${encodeURIComponent(commentId)}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1781,
+    "paths": [
+      "/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/approval"
+    ],
+    "text": "return fetchJson<SceneApproval>(`/api/f51/studio/scenes/${encodeURIComponent(sceneId)}/approval`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1788,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/activity"
+    ],
+    "text": "return fetchJson<ActivityEntry[]>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/activity`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 1792,
+    "paths": [
+      "/api/f51/studio/share/${encodeURIComponent(shareToken)}"
+    ],
+    "text": "return fetchJson<StudioProject>(`/api/f51/studio/share/${encodeURIComponent(shareToken)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2161,
+    "paths": [
+      "/api/f51/studio/projects"
+    ],
+    "text": "return await fetchJson<{ projects: PersistedProjectState[] }>('/api/f51/studio/projects')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2175,
+    "paths": [
+      "/api/f51/studio/projects"
+    ],
+    "text": "const project = await fetchJson<PersistedProjectState>('/api/f51/studio/projects', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2190,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}"
+    ],
+    "text": "const project = await fetchJson<PersistedProjectState>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2204,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}"
+    ],
+    "text": "const project = await fetchJson<PersistedProjectState>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2220,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2239,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/generate-scenes"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/generate-scenes`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2265,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scene-review"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scene-review`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2511,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2529,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2551,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2568,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2589,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2632,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2650,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2671,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2696,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/upload-descriptor"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/upload-descriptor`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2750,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/elevenlabs/voices${params}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/elevenlabs/voices${params}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2767,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/voice"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/voice`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2788,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/voice"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/voice`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2815,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-cut"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-cut`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2836,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/generate-motion"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/generate-motion`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2870,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/generate-short-film"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/generate-short-film`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2905,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/stitch-short-film"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/stitch-short-film`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2932,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/pipeline/generate"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/pipeline/generate`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2960,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/collaboration/session"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/collaboration/session`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2976,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/collaboration"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/collaboration`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 2990,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/collaboration/comments"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/collaboration/comments`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3009,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/collaboration/votes"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/collaboration/votes`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3023,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow"
+    ],
+    "text": "return fetchJson<StudioWorkflowSummary>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3030,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/versions"
+    ],
+    "text": "return fetchJson<StudioArtifactVersion>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/versions`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3048,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/versions${query ? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/versions${query ? `?${query}` : ''}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3056,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates"
+    ],
+    "text": "return fetchJson<StudioApprovalGate>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3075,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates${query ? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates${query ? `?${query}` : ''}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3081,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates/${encodeURIComponent(gateId)}/evaluate"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates/${encodeURIComponent(gateId)}/evaluate`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3092,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates/${encodeURIComponent(gateId)}/decisions"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/gates/${encodeURIComponent(gateId)}/decisions`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3105,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/phase"
+    ],
+    "text": "return fetchJson<StudioWorkflowProjectState>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/phase`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3116,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments"
+    ],
+    "text": "return fetchJson<StudioWorkflowComment>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3135,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments${query ? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments${query ? `?${query}` : ''}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3141,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments/${encodeURIComponent(commentId)}/resolve"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/comments/${encodeURIComponent(commentId)}/resolve`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3159,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/tasks${query ? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/tasks${query ? `?${query}` : ''}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3175,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/events${query ? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/workflow/events${query ? `?${query}` : ''}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3183,
+    "paths": [
+      "/api/f51/studio/demo-project"
+    ],
+    "text": "return fetchJson<StudioProject>('/api/f51/studio/demo-project', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3201,
+    "paths": [
+      "/api/f51/studio/ingest-script"
+    ],
+    "text": "return fetchJson<StudioProject>('/api/f51/studio/ingest-script', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3214,
+    "paths": [
+      "/api/f51/studio/study-reference-prompt"
+    ],
+    "text": "return fetchJson<StudyReferenceStudy>('/api/f51/studio/study-reference-prompt', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3224,
+    "paths": [
+      "/api/f51/studio/reorganize-reference-library"
+    ],
+    "text": "'/api/f51/studio/reorganize-reference-library',"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3230,
+    "paths": [
+      "/api/f51/studio/studio-brain-library"
+    ],
+    "text": "return fetchJson<{ files: StudioBrainLibraryFile[] }>('/api/f51/studio/studio-brain-library')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3234,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/studio-brain-library/attach"
+    ],
+    "text": "return fetchJson<StudioBrainAttachResult>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/studio-brain-library/attach`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3251,
+    "paths": [
+      "/api/f51/studio/study-reference"
+    ],
+    "text": "return fetchJson<StudyReferenceStudy>('/api/f51/studio/study-reference', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3280,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard?${params.toString()}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard?${params.toString()}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3297,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard-blueprint"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard-blueprint`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3309,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard-blueprint"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard-blueprint`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3316,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/storyboard-blueprints"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/storyboard-blueprints`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3330,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/storyboard-blueprints/backfill"
+    ],
+    "text": "}>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/storyboard-blueprints/backfill`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3344,
+    "paths": [
+      "/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/approve"
+    ],
+    "text": "`/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/approve`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3360,
+    "paths": [
+      "/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/continuity-review"
+    ],
+    "text": "`/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/continuity-review`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3382,
+    "paths": [
+      "/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}"
+    ],
+    "text": "`/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3394,
+    "paths": [
+      "/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/lock"
+    ],
+    "text": "`/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/lock`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3410,
+    "paths": [
+      "/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/render"
+    ],
+    "text": "`/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/render`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3422,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/previs/seed"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/previs/seed`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3433,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/simulate-screening"
+    ],
+    "text": "return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/simulate-screening`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3440,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/export/${encodeURIComponent(artifactType)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/export/${encodeURIComponent(artifactType)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3458,
+    "paths": [
+      "/api/f51/studio/exports/${encodeURIComponent(projectId)}/${encodeURIComponent(packageType)}"
+    ],
+    "text": "`/api/f51/studio/exports/${encodeURIComponent(projectId)}/${encodeURIComponent(packageType)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3531,
+    "paths": [
+      "/api/f51/studio/memory/reference-analysis/store"
+    ],
+    "text": "return fetchJson<Record<string, unknown>>('/api/f51/studio/memory/reference-analysis/store', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3542,
+    "paths": [
+      "/api/f51/studio/memory/reference-analysis/retrieve"
+    ],
+    "text": "return fetchJson<Record<string, unknown>>('/api/f51/studio/memory/reference-analysis/retrieve', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3553,
+    "paths": [
+      "/api/f51/studio/memory/reference-analysis/delete"
+    ],
+    "text": "return fetchJson<Record<string, unknown>>('/api/f51/studio/memory/reference-analysis/delete', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3564,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/review-shot"
+    ],
+    "text": "return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/review-shot`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3578,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/dailies-select"
+    ],
+    "text": "return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/dailies-select`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3586,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/retry-render/${encodeURIComponent(renderId)}"
+    ],
+    "text": "return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/retry-render/${encodeURIComponent(renderId)}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3592,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-mode"
+    ],
+    "text": "return fetchJson<StudioProject>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-mode`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3600,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scan"
+    ],
+    "text": "return fetchJson<ProductionScanReport>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scan`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3626,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/enhance-prompt"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/enhance-prompt`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3651,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/director-notes"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/director-notes`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3677,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/shot-count"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/shot-count`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3726,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/generation-settings"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/generation-settings`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3749,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scan/${encodeURIComponent(scan_id)}"
+    ],
+    "text": "return fetchJson<ProductionScanReport>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scan/${encodeURIComponent(scan_id)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3995,
+    "paths": [
+      "/api/f51/studio/render/providers"
+    ],
+    "text": "return fetchJson<ProviderStatus[]>('/api/f51/studio/render/providers')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 3999,
+    "paths": [
+      "/api/f51/studio/render/providers/${encodeURIComponent(providerId)}"
+    ],
+    "text": "return fetchJson<ProviderConfig>(`/api/f51/studio/render/providers/${encodeURIComponent(providerId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4003,
+    "paths": [
+      "/api/f51/studio/render/providers/${encodeURIComponent(providerId)}/enable"
+    ],
+    "text": "return fetchJson<ProviderConfig>(`/api/f51/studio/render/providers/${encodeURIComponent(providerId)}/enable`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4009,
+    "paths": [
+      "/api/f51/studio/render/providers/${encodeURIComponent(providerId)}/disable"
+    ],
+    "text": "return fetchJson<ProviderConfig>(`/api/f51/studio/render/providers/${encodeURIComponent(providerId)}/disable`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4031,
+    "paths": [
+      "/api/f51/studio/render/jobs?"
+    ],
+    "text": "const url = '/api/f51/studio/render/jobs?' + params.toString()"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4039,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/submit"
+    ],
+    "text": "return fetchJson<RenderJob>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/submit`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4045,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}"
+    ],
+    "text": "return fetchJson<RenderJob>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4049,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/status"
+    ],
+    "text": "return fetchJson<RenderJob>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/status`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4053,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}"
+    ],
+    "text": "return fetchJson<{ status: string }>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4059,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/cancel"
+    ],
+    "text": "return fetchJson<{ status: string }>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/cancel`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4065,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/retry"
+    ],
+    "text": "return fetchJson<RenderJob>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/retry`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4084,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/adherence-retry"
+    ],
+    "text": "return fetchJson<AdherenceRetryResult>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/adherence-retry`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4095,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/outputs"
+    ],
+    "text": "return fetchJson<RenderAsset[]>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/outputs`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4100,
+    "paths": [
+      "/api/f51/studio/render/jobs"
+    ],
+    "text": "return fetchJson<RenderJob[]>('/api/f51/studio/render/jobs' + query, { ...init, timeoutLabel: 'Render' })"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4112,
+    "paths": [
+      "/api/f51/studio/render/jobs?${params.toString()}"
+    ],
+    "text": "return fetchJson<RenderJobsPage>(`/api/f51/studio/render/jobs?${params.toString()}`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4120,
+    "paths": [
+      "/api/f51/studio/render/diagnostics"
+    ],
+    "text": "return fetchJson<RenderDiagnostics>('/api/f51/studio/render/diagnostics' + query, init)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4125,
+    "paths": [
+      "/api/f51/studio/production-queue/projects/${encodeURIComponent(projectId)}/summary"
+    ],
+    "text": "? `/api/f51/studio/production-queue/projects/${encodeURIComponent(projectId)}/summary`"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4126,
+    "paths": [
+      "/api/f51/studio/production-queue/summary"
+    ],
+    "text": ": '/api/f51/studio/production-queue/summary'"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4143,
+    "paths": [
+      "/api/f51/studio/production-queue/projects/${encodeURIComponent(projectId)}/items${query}"
+    ],
+    "text": "`/api/f51/studio/production-queue/projects/${encodeURIComponent(projectId)}/items${query}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4150,
+    "paths": [
+      "/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}"
+    ],
+    "text": "`/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4157,
+    "paths": [
+      "/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/cancel"
+    ],
+    "text": "`/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/cancel`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4169,
+    "paths": [
+      "/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/retry"
+    ],
+    "text": "`/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/retry`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4181,
+    "paths": [
+      "/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/events?limit=${encodeURIComponent(String(limit))}"
+    ],
+    "text": "`/api/f51/studio/production-queue/items/${encodeURIComponent(queueItemId)}/events?limit=${encodeURIComponent(String(limit))}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4188,
+    "paths": [
+      "/api/f51/studio/production-queue/diagnostics"
+    ],
+    "text": "return fetchJson<Record<string, unknown>>('/api/f51/studio/production-queue/diagnostics' + query, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4195,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/reconcile"
+    ],
+    "text": "return fetchJson<RenderJob>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/reconcile`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4201,
+    "paths": [
+      "/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/refresh-url"
+    ],
+    "text": "return fetchJson<{ output_url: string | null }>(`/api/f51/studio/render/jobs/${encodeURIComponent(jobId)}/refresh-url`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4229,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/compose"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/compose`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4236,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/composition"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/composition`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4259,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/assemble-film"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/assemble-film`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4266,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/assembly-status"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/assembly-status`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4342,
+    "paths": [
+      "/api/f51/studio/memory/${encodeURIComponent(projectId)}"
+    ],
+    "text": "return fetchJson<MemoryData>(`/api/f51/studio/memory/${encodeURIComponent(projectId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4346,
+    "paths": [
+      "/api/f51/studio/memory/${encodeURIComponent(projectId)}/init"
+    ],
+    "text": "return fetchJson<Record<string, unknown>>(`/api/f51/studio/memory/${encodeURIComponent(projectId)}/init`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4354,
+    "paths": [
+      "/api/f51/studio/memory/${encodeURIComponent(projectId)}/scene"
+    ],
+    "text": "return fetchJson<Record<string, unknown>>(`/api/f51/studio/memory/${encodeURIComponent(projectId)}/scene`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4363,
+    "paths": [
+      "/api/f51/studio/memory/${encodeURIComponent(projectId)}/agent-context?agent_role=${encodeURIComponent(agentRole)}"
+    ],
+    "text": "`/api/f51/studio/memory/${encodeURIComponent(projectId)}/agent-context?agent_role=${encodeURIComponent(agentRole)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4394,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/short-film-review"
+    ],
+    "text": "return fetchJson<{ review: ShortFilmReview }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/short-film-review`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4402,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/short-film-reviews"
+    ],
+    "text": "return fetchJson<{ reviews: ShortFilmReview[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/short-film-reviews`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4406,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/short-film-review/latest"
+    ],
+    "text": "return fetchJson<{ review: ShortFilmReview }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/short-film-review/latest`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4410,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/short-film-review/${encodeURIComponent(reviewId)}/decision"
+    ],
+    "text": "return fetchJson<{ review: ShortFilmReview }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/short-film-review/${encodeURIComponent(reviewId)}/decision`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4456,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/clip-revisions"
+    ],
+    "text": "return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/clip-revisions`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4464,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/clip-revisions"
+    ],
+    "text": "return fetchJson<{ revisions: ClipRevision[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/clip-revisions`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4468,
+    "paths": [
+      "/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}"
+    ],
+    "text": "return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4472,
+    "paths": [
+      "/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/submit"
+    ],
+    "text": "return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/submit`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4480,
+    "paths": [
+      "/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/cancel"
+    ],
+    "text": "return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/cancel`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4486,
+    "paths": [
+      "/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/complete-from-job"
+    ],
+    "text": "return fetchJson<{ revision: ClipRevision }>(`/api/f51/studio/clip-revisions/${encodeURIComponent(revisionId)}/complete-from-job`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 4492,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/restitch-with-revisions"
+    ],
+    "text": "return fetchJson<ShortFilmStitchResult>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/restitch-with-revisions`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5091,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/final-short-film-package"
+    ],
+    "text": "return fetchJson<{ package: FinalShortFilmPackage }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/final-short-film-package`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5099,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/final-short-film-packages"
+    ],
+    "text": "return fetchJson<{ packages: FinalShortFilmPackage[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/final-short-film-packages`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5103,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/final-short-film-package/latest"
+    ],
+    "text": "return fetchJson<{ package: FinalShortFilmPackage }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/final-short-film-package/latest`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5107,
+    "paths": [
+      "/api/f51/studio/final-short-film-packages/${encodeURIComponent(packageId)}"
+    ],
+    "text": "return fetchJson<{ package: FinalShortFilmPackage }>(`/api/f51/studio/final-short-film-packages/${encodeURIComponent(packageId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5111,
+    "paths": [
+      "/api/f51/studio/final-short-film-packages/${encodeURIComponent(packageId)}/status"
+    ],
+    "text": "return fetchJson<{ package: FinalShortFilmPackage }>(`/api/f51/studio/final-short-film-packages/${encodeURIComponent(packageId)}/status`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5119,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance"
+    ],
+    "text": "return fetchJson<{ report: ProductionAcceptanceReport }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5129,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance${query}"
+    ],
+    "text": "return fetchJson<{ reports: ProductionAcceptanceReport[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance${query}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5134,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance/latest${query}"
+    ],
+    "text": "return fetchJson<{ summary: ProductionAcceptanceSummary }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/production-acceptance/latest${query}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5138,
+    "paths": [
+      "/api/f51/studio/production-acceptance/${encodeURIComponent(acceptanceId)}"
+    ],
+    "text": "return fetchJson<{ report: ProductionAcceptanceReport }>(`/api/f51/studio/production-acceptance/${encodeURIComponent(acceptanceId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5142,
+    "paths": [
+      "/api/f51/studio/final-short-film-packages/${encodeURIComponent(packageId)}/acceptance-guard?desired_status=${encodeURIComponent(desiredStatus)}"
+    ],
+    "text": "return fetchJson<{ guard: PackageApprovalGuardResult }>(`/api/f51/studio/final-short-film-packages/${encodeURIComponent(packageId)}/acceptance-guard?desired_status=${encodeURIComponent(desiredStatus)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5146,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/video-assets"
+    ],
+    "text": "return fetchJson<{ asset: VideoAsset }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/video-assets`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5154,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/video-assets"
+    ],
+    "text": "return fetchJson<{ assets: VideoAsset[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/video-assets`, init)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5161,
+    "paths": [
+      "/api/f51/studio/video-assets${query}"
+    ],
+    "text": "return fetchJson<{ assets: VideoAsset[] }>(`/api/f51/studio/video-assets${query}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5165,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}"
+    ],
+    "text": "return fetchJson<{ asset: VideoAsset }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5198,
+    "paths": [
+      "/api/f51/studio/video-assets/upload"
+    ],
+    "text": "return await tryUpload('/api/f51/studio/video-assets/upload')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5202,
+    "paths": [
+      "/api/f51/studio/video-assets/upload/"
+    ],
+    "text": "return tryUpload('/api/f51/studio/video-assets/upload/')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5209,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/attach-project"
+    ],
+    "text": "return fetchJson<{ asset: VideoAsset }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/attach-project`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5217,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/status"
+    ],
+    "text": "return fetchJson<{ asset: VideoAsset }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/status`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5228,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/extract-keyframes"
+    ],
+    "text": "return fetchJson<{ keyframes: VideoKeyframe[] }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/extract-keyframes`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5236,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/keyframes"
+    ],
+    "text": "return fetchJson<{ keyframes: VideoKeyframe[] }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/keyframes`, init)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5240,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/keyframes"
+    ],
+    "text": "return fetchJson<{ keyframes: VideoKeyframe[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/keyframes`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5244,
+    "paths": [
+      "/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}"
+    ],
+    "text": "return fetchJson<{ keyframe: VideoKeyframe }>(`/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5252,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/detect-shots"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/detect-shots`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5262,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/shots"
+    ],
+    "text": "return fetchJson<{ shots: ShotBoundary[] }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/shots`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5270,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/scene-memory/ingest"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/scene-memory/ingest`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5281,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/scene-memory"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/scene-memory`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5287,
+    "paths": [
+      "/api/f51/studio/scene-memory/search?query=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}"
+    ],
+    "text": "`/api/f51/studio/scene-memory/search?query=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5293,
+    "paths": [
+      "/api/f51/studio/scene-memory/${encodeURIComponent(memoryId)}/related?limit=${encodeURIComponent(String(limit))}"
+    ],
+    "text": "`/api/f51/studio/scene-memory/${encodeURIComponent(memoryId)}/related?limit=${encodeURIComponent(String(limit))}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5314,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/analyze-continuity"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/analyze-continuity`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5328,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/continuity-issues"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/continuity-issues`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5338,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/director-commentary/generate"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/director-commentary/generate`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5351,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/director-commentary"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/director-commentary`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5368,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/frame-analysis"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/frame-analysis`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5381,
+    "paths": [
+      "/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/analyze"
+    ],
+    "text": "`/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/analyze`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5390,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/analyze-keyframes"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/analyze-keyframes`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5404,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/frame-analyses"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/frame-analyses`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5414,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/frame-analyses"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/frame-analyses`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5421,
+    "paths": [
+      "/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/embed"
+    ],
+    "text": "`/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/embed`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5428,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/embed-keyframes"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/embed-keyframes`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5435,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/embeddings"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/embeddings`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5441,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/embeddings"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/embeddings`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5451,
+    "paths": [
+      "/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/similar"
+    ],
+    "text": "`/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/similar`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5465,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/build-memory"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/build-memory`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5479,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/memory"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/memory`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5489,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/search-memory"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/search-memory`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5502,
+    "paths": [
+      "/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/related-memory"
+    ],
+    "text": "`/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/related-memory`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5508,
+    "paths": [
+      "/api/f51/studio/scene-search/similar?memory_id=${encodeURIComponent(memoryId)}&limit=${encodeURIComponent(String(limit))}"
+    ],
+    "text": "`/api/f51/studio/scene-search/similar?memory_id=${encodeURIComponent(memoryId)}&limit=${encodeURIComponent(String(limit))}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5514,
+    "paths": [
+      "/api/f51/studio/scene-search/by-mood?mood=${encodeURIComponent(mood)}&limit=${encodeURIComponent(String(limit))}"
+    ],
+    "text": "`/api/f51/studio/scene-search/by-mood?mood=${encodeURIComponent(mood)}&limit=${encodeURIComponent(String(limit))}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5520,
+    "paths": [
+      "/api/f51/studio/scene-search/by-visual-style?style=${encodeURIComponent(style)}&limit=${encodeURIComponent(String(limit))}"
+    ],
+    "text": "`/api/f51/studio/scene-search/by-visual-style?style=${encodeURIComponent(style)}&limit=${encodeURIComponent(String(limit))}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5528,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-signatures/build"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-signatures/build`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5540,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-signatures"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-signatures`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5557,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-patterns"
+    ],
+    "text": "}>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-patterns`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5564,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/build-director-signature"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/build-director-signature`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5578,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-signature"
+    ],
+    "text": "}>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-signature`, init)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5600,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/detect-style-drift"
+    ],
+    "text": "}>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/detect-style-drift`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5617,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-drift-issues"
+    ],
+    "text": "}>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/style-drift-issues`, init)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5622,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/decision-gate"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/decision-gate`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5630,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/timeline-intelligence"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/timeline-intelligence`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5650,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-revision-intelligence${query ? "
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-revision-intelligence${query ? `?${query}` : ''}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5668,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/analyze"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/analyze`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5683,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/latest"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/latest`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5694,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence?limit=${encodeURIComponent(String(limit))}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence?limit=${encodeURIComponent(String(limit))}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5705,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/${encodeURIComponent(analysisId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/${encodeURIComponent(analysisId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5722,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/${encodeURIComponent(analysisId)}/apply"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/${encodeURIComponent(analysisId)}/apply`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5737,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/applications?limit=${encodeURIComponent(String(limit))}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/editorial-intelligence/applications?limit=${encodeURIComponent(String(limit))}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5746,
+    "paths": [
+      "/api/f51/studio/style-signatures/compare"
+    ],
+    "text": "return fetchJson<StyleSignatureComparison>('/api/f51/studio/style-signatures/compare', {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5758,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/understanding-status"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/understanding-status`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5763,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/auto-match-metadata"
+    ],
+    "text": "return fetchJson<AutoMatchResult>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/auto-match-metadata`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5769,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches"
+    ],
+    "text": "return fetchJson<{ matches: VideoMetadataMatch[] }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5774,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches/${encodeURIComponent(matchId)}/confirm"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches/${encodeURIComponent(matchId)}/confirm`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5781,
+    "paths": [
+      "/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches/${encodeURIComponent(matchId)}/reject"
+    ],
+    "text": "`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/metadata-matches/${encodeURIComponent(matchId)}/reject`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5787,
+    "paths": [
+      "/api/f51/studio/video-assets/unmatched"
+    ],
+    "text": "return fetchJson<{ assets: VideoAsset[] }>('/api/f51/studio/video-assets/unmatched')"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5803,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/video-understanding-status"
+    ],
+    "text": "}>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/video-understanding-status`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5845,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/render-batch"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/render-batch`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5859,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-batch/${encodeURIComponent(batchId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-batch/${encodeURIComponent(batchId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5882,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/provider-status"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/provider-status`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5892,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/provider-override"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/provider-override`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 5914,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-jobs/${encodeURIComponent(jobId)}/retry"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/render-jobs/${encodeURIComponent(jobId)}/retry`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6009,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-dna"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-dna`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6015,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-dna/refresh"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-dna/refresh`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6022,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/character-journeys"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/character-journeys`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6028,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/arc-completeness"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/arc-completeness`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6056,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-intent"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-intent`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6065,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-intent"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-intent`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6116,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debrief"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debrief`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6133,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debriefs?limit=${limit}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debriefs?limit=${limit}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6142,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debriefs/${encodeURIComponent(debriefId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/session-debriefs/${encodeURIComponent(debriefId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6222,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-package"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-package`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6240,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages?limit=${limit}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages?limit=${limit}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6249,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages/${encodeURIComponent(packageId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages/${encodeURIComponent(packageId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6295,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages/${encodeURIComponent(packageId)}/validate-festival"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/export-packages/${encodeURIComponent(packageId)}/validate-festival`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6306,
+    "paths": [
+      "/api/f51/studio/festival-presets"
+    ],
+    "text": "`/api/f51/studio/festival-presets`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6346,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-deck"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-deck`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6360,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-decks?limit=${limit}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-decks?limit=${limit}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6369,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-decks/${encodeURIComponent(deckId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/pitch-decks/${encodeURIComponent(deckId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6398,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6411,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6421,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories/${encodeURIComponent(memoryId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories/${encodeURIComponent(memoryId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6437,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories/${encodeURIComponent(memoryId)}"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/creative-memories/${encodeURIComponent(memoryId)}`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6464,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-memory"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/director-memory`"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6550,
+    "paths": [
+      "/api/f51/studio/debate/trigger"
+    ],
+    "text": "`/api/f51/studio/debate/trigger`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6565,
+    "paths": [
+      "/api/f51/studio/debate/action"
+    ],
+    "text": "`/api/f51/studio/debate/action`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6575,
+    "paths": [
+      "/api/f51/studio/debate/${projectId}"
+    ],
+    "text": "return fetchJson<{ debates: CoDirectorDebateEntry[] }>(`/api/f51/studio/debate/${projectId}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6585,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/character-mind"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/character-mind`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6600,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/debate"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/debate`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6673,
+    "paths": [
+      "/api/f51/studio/audience-simulator/projects/${projectId}/scenes/${sceneId}/simulate"
+    ],
+    "text": "return fetchJson(`/api/f51/studio/audience-simulator/projects/${projectId}/scenes/${sceneId}/simulate`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6682,
+    "paths": [
+      "/api/f51/studio/audience-simulator/projects/${projectId}/simulate"
+    ],
+    "text": "return fetchJson(`/api/f51/studio/audience-simulator/projects/${projectId}/simulate`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6691,
+    "paths": [
+      "/api/f51/studio/memory/${projectId}/review"
+    ],
+    "text": "await fetchJson(`/api/f51/studio/memory/${projectId}/review`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6741,
+    "paths": [
+      "/api/f51/studio/emotion-analysis/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/analyze"
+    ],
+    "text": "`/api/f51/studio/emotion-analysis/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/analyze`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6751,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/rationale"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/rationale`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6767,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/audio-brief"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/audio-brief`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6776,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/audio-brief/apply"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/audio-brief/apply`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6945,
+    "paths": [
+      "/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence"
+    ],
+    "text": "`/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6951,
+    "paths": [
+      "/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/departments"
+    ],
+    "text": "`/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/departments`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6957,
+    "paths": [
+      "/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/reasoning"
+    ],
+    "text": "`/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/reasoning`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6963,
+    "paths": [
+      "/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/handoffs"
+    ],
+    "text": "`/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/handoffs`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6969,
+    "paths": [
+      "/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/deliberations"
+    ],
+    "text": "`/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/deliberations`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioApi.ts",
+    "line": 6975,
+    "paths": [
+      "/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/attention"
+    ],
+    "text": "`/api/f51/studio/crew/projects/${encodeURIComponent(projectId)}/intelligence/attention`,"
+  },
+  {
+    "file": "studio-app/src/lib/studioBrainApi.ts",
+    "line": 108,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(projectId)}/brain${suffix}"
+    ],
+    "text": "const brainPath = (projectId: string, suffix: string) => `/api/f51/studio/projects/${encodeURIComponent(projectId)}/brain${suffix}`"
+  },
+  {
+    "file": "studio-app/src/lib/studioKnowledgeApi.ts",
+    "line": 163,
+    "paths": [
+      "/api/projects/${projectId}/knowledge/bibles"
+    ],
+    "text": "return fetchJson<KnowledgeBibleResponse>(`/api/projects/${projectId}/knowledge/bibles`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioKnowledgeApi.ts",
+    "line": 183,
+    "paths": [
+      "/api/projects/${projectId}/knowledge/bibles/upload"
+    ],
+    "text": "return fetchJson<KnowledgeBibleResponse>(`/api/projects/${projectId}/knowledge/bibles/upload`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioKnowledgeApi.ts",
+    "line": 190,
+    "paths": [
+      "/api/projects/${projectId}/knowledge/bibles"
+    ],
+    "text": "return fetchJson<{ bibles: KnowledgeBible[] }>(`/api/projects/${projectId}/knowledge/bibles`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioKnowledgeApi.ts",
+    "line": 194,
+    "paths": [
+      "/api/projects/${projectId}/knowledge/atoms?limit=${limit}"
+    ],
+    "text": "return fetchJson<{ atoms: KnowledgeAtom[] }>(`/api/projects/${projectId}/knowledge/atoms?limit=${limit}`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioKnowledgeApi.ts",
+    "line": 205,
+    "paths": [
+      "/api/projects/${projectId}/knowledge/rebuild"
+    ],
+    "text": "return fetchJson(`/api/projects/${projectId}/knowledge/rebuild`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioKnowledgeApi.ts",
+    "line": 216,
+    "paths": [
+      "/api/projects/${projectId}/knowledge/context"
+    ],
+    "text": "return fetchJson<KnowledgeContextPack>(`/api/projects/${projectId}/knowledge/context`, {"
+  },
+  {
+    "file": "studio-app/src/lib/studioKnowledgeApi.ts",
+    "line": 224,
+    "paths": [
+      "/api/projects/${projectId}/knowledge/conflicts"
+    ],
+    "text": "return fetchJson<{ conflicts: CanonicalConflict[] }>(`/api/projects/${projectId}/knowledge/conflicts`)"
+  },
+  {
+    "file": "studio-app/src/lib/studioKnowledgeApi.ts",
+    "line": 228,
+    "paths": [
+      "/api/projects/${projectId}/knowledge/traces/${traceId}"
+    ],
+    "text": "return fetchJson<{ trace: KnowledgeReasoningTrace }>(`/api/projects/${projectId}/knowledge/traces/${traceId}`)"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 262,
+    "paths": [
+      "/api/f51/studio/overview"
+    ],
+    "text": "http.get('/api/f51/studio/overview', async () => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 268,
+    "paths": [
+      "/api/f51/studio/projects/:projectId"
+    ],
+    "text": "http.get('/api/f51/studio/projects/:projectId', async ({ params }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 276,
+    "paths": [
+      "/api/f51/studio/demo-project"
+    ],
+    "text": "http.post('/api/f51/studio/demo-project', async ({ request }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 286,
+    "paths": [
+      "/api/f51/studio/ingest-script"
+    ],
+    "text": "http.post('/api/f51/studio/ingest-script', async ({ request }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 308,
+    "paths": [
+      "/api/f51/studio/study-reference-prompt"
+    ],
+    "text": "http.post('/api/f51/studio/study-reference-prompt', async () => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 314,
+    "paths": [
+      "/api/f51/studio/study-reference"
+    ],
+    "text": "http.post('/api/f51/studio/study-reference', async ({ request }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 323,
+    "paths": [
+      "/api/f51/studio/projects/:projectId/simulate-screening"
+    ],
+    "text": "http.post('/api/f51/studio/projects/:projectId/simulate-screening', async ({ params }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 342,
+    "paths": [
+      "/api/f51/studio/projects/:projectId/review-shot"
+    ],
+    "text": "http.post('/api/f51/studio/projects/:projectId/review-shot', async ({ params, request }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 357,
+    "paths": [
+      "/api/f51/studio/projects/:projectId/dailies-select"
+    ],
+    "text": "http.post('/api/f51/studio/projects/:projectId/dailies-select', async ({ params, request }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 376,
+    "paths": [
+      "/api/f51/studio/projects/:projectId/retry-render/:renderId"
+    ],
+    "text": "http.post('/api/f51/studio/projects/:projectId/retry-render/:renderId', async ({ params }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 390,
+    "paths": [
+      "/api/f51/studio/projects/:projectId/render-mode"
+    ],
+    "text": "http.post('/api/f51/studio/projects/:projectId/render-mode', async ({ params, request }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 407,
+    "paths": [
+      "/api/f51/studio/memory/:projectId"
+    ],
+    "text": "http.get('/api/f51/studio/memory/:projectId', async ({ params }) => {"
+  },
+  {
+    "file": "studio-app/src/mocks/handlers.ts",
+    "line": 452,
+    "paths": [
+      "/api/f51/studio/memory/:projectId/init"
+    ],
+    "text": "http.post('/api/f51/studio/memory/:projectId/init', async ({ params }) => {"
+  },
+  {
+    "file": "studio-app/src/pages/Dashboard.tsx",
+    "line": 38,
+    "paths": [],
+    "text": "const res = await fetch(url)"
+  },
+  {
+    "file": "studio-app/src/pages/ScreeningRoom.tsx",
+    "line": 858,
+    "paths": [],
+    "text": "const response = await fetch(url)"
+  },
+  {
+    "file": "studio-app/src/pages/ScreeningRoom.tsx",
+    "line": 985,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/co-director/chat"
+    ],
+    "text": "const url = `/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/co-director/chat`"
+  },
+  {
+    "file": "studio-app/src/pages/ScreeningRoom.tsx",
+    "line": 996,
+    "paths": [],
+    "text": "const res = await fetch(url, {"
+  },
+  {
+    "file": "studio-app/src/pages/ScreeningRoom.tsx",
+    "line": 1114,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/poster"
+    ],
+    "text": "fetchJson<{ poster_url: string }>(`/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/poster`)"
+  },
+  {
+    "file": "studio-app/src/pages/ScreeningRoom.tsx",
+    "line": 1127,
+    "paths": [
+      "/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/poster/generate"
+    ],
+    "text": "`/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/poster/generate`,"
+  },
+  {
+    "file": "studio-app/src/pages/StudioLanding.tsx",
+    "line": 187,
+    "paths": [],
+    "text": "const res = await fetch(`${STUDIO_API_BASE}/health`, { headers: { Accept: 'application/json' } })"
+  }
+]

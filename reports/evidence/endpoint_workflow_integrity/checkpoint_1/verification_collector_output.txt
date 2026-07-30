@@ -1,0 +1,21 @@
+AudioPipelineService running in MOCK MODE — missing: piper-tts. Install with: pip install piper-tts torch transformers scipy
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID extract_video_asset_keyframes_api_f51_studio_video_assets__asset_id__extract_keyframes_post for function extract_video_asset_keyframes at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID list_video_asset_keyframes_api_f51_studio_video_assets__asset_id__keyframes_get for function list_video_asset_keyframes at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID list_project_keyframes_api_f51_studio_projects__project_id__keyframes_get for function list_project_keyframes at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID get_video_keyframe_api_f51_studio_video_keyframes__keyframe_id__get for function get_video_keyframe at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID analyze_video_keyframe_api_f51_studio_video_keyframes__keyframe_id__analyze_post for function analyze_video_keyframe at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID analyze_video_asset_keyframes_api_f51_studio_video_assets__asset_id__analyze_keyframes_post for function analyze_video_asset_keyframes at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID list_video_asset_frame_analyses_api_f51_studio_video_assets__asset_id__frame_analyses_get for function list_video_asset_frame_analyses at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID list_project_frame_analyses_api_f51_studio_projects__project_id__frame_analyses_get for function list_project_frame_analyses at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID proactive_check_api_f51_studio_projects__project_id__co_director_proactive_check_post for function proactive_check at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/proactive.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID co_director_chat_api_f51_studio_projects__project_id__co_director_chat_post for function co_director_chat at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/proactive.py
+  warnings.warn(message, stacklevel=1)

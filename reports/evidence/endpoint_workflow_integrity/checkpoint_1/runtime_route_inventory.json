@@ -1,0 +1,5716 @@
+[
+  {
+    "endpoint": "openapi",
+    "include_in_schema": false,
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "openapi",
+    "path": "/openapi.json",
+    "route_class": "Route"
+  },
+  {
+    "endpoint": "swagger_ui_html",
+    "include_in_schema": false,
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "swagger_ui_html",
+    "path": "/docs",
+    "route_class": "Route"
+  },
+  {
+    "endpoint": "swagger_ui_redirect",
+    "include_in_schema": false,
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "swagger_ui_redirect",
+    "path": "/docs/oauth2-redirect",
+    "route_class": "Route"
+  },
+  {
+    "endpoint": "redoc_html",
+    "include_in_schema": false,
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "name": "redoc_html",
+    "path": "/redoc",
+    "route_class": "Route"
+  },
+  {
+    "endpoint": "get_overview",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_overview",
+    "path": "/api/f51/studio/overview",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_demo_project",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_demo_project",
+    "path": "/api/f51/studio/demo-project",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "ingest_script",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "ingest_script",
+    "path": "/api/f51/studio/ingest-script",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "study_reference_prompt",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "study_reference_prompt",
+    "path": "/api/f51/studio/study-reference-prompt",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "reorganize_reference_library",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "reorganize_reference_library",
+    "path": "/api/f51/studio/reorganize-reference-library",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_studio_brain_library",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_studio_brain_library",
+    "path": "/api/f51/studio/studio-brain-library",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "attach_studio_brain_library_files",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "attach_studio_brain_library_files",
+    "path": "/api/f51/studio/projects/{project_id}/studio-brain-library/attach",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "study_reference_upload",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "study_reference_upload",
+    "path": "/api/f51/studio/study-reference",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "extract_study_memories",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "extract_study_memories",
+    "path": "/api/f51/studio/projects/{project_id}/study/memories/extract",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_study_memories",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_study_memories",
+    "path": "/api/f51/studio/projects/{project_id}/study/memories",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "clear_study_memories",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "clear_study_memories",
+    "path": "/api/f51/studio/projects/{project_id}/study/memories",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project",
+    "path": "/api/f51/studio/projects/{project_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_final_export_status_compat",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_final_export_status_compat",
+    "path": "/api/f51/studio/projects/{project_id}/export/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "download_final_export_compat",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "download_final_export_compat",
+    "path": "/api/f51/studio/projects/{project_id}/export/download",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_project_artifact",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_project_artifact",
+    "path": "/api/f51/studio/projects/{project_id}/export/{artifact_type}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "simulate_screening",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "simulate_screening",
+    "path": "/api/f51/studio/projects/{project_id}/simulate-screening",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "review_shot",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "review_shot",
+    "path": "/api/f51/studio/projects/{project_id}/review-shot",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "add_shot_to_approval_gates",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "add_shot_to_approval_gates",
+    "path": "/api/f51/studio/projects/{project_id}/approval-gates/add-shot",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "initialize_project_crew",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "initialize_project_crew",
+    "path": "/api/f51/studio/projects/{project_id}/initialize-crew",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "record_dailies_select",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "record_dailies_select",
+    "path": "/api/f51/studio/projects/{project_id}/dailies-select",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "retry_render",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "retry_render",
+    "path": "/api/f51/studio/projects/{project_id}/retry-render/{render_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_render_mode",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "set_render_mode",
+    "path": "/api/f51/studio/projects/{project_id}/render-mode",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_storyboard_wall",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_storyboard_wall",
+    "path": "/api/f51/studio/projects/{project_id}/storyboard-wall",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_scene_storyboard",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_scene_storyboard",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/storyboard",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "toggle_previs_seed_lock",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "toggle_previs_seed_lock",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/previs/seed",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_storyboard_shot",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_storyboard_shot",
+    "path": "/api/f51/studio/projects/{project_id}/storyboard-wall/update-shot",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_pending_shots",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_pending_shots",
+    "path": "/api/f51/studio/projects/{project_id}/pending-shots",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_projects",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_projects",
+    "path": "/api/f51/studio/projects",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_project",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_project",
+    "path": "/api/f51/studio/projects",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_project",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "update_project",
+    "path": "/api/f51/studio/projects/{project_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_project",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_project",
+    "path": "/api/f51/studio/projects/{project_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "migrate_characters",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "migrate_characters",
+    "path": "/api/f51/studio/admin/migrate-characters",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_scenes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_scenes",
+    "path": "/api/f51/studio/projects/{project_id}/generate-scenes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_scene_review",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "update_scene_review",
+    "path": "/api/f51/studio/projects/{project_id}/scene-review",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_film_cut",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "update_film_cut",
+    "path": "/api/f51/studio/projects/{project_id}/film-cut",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_motion",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_motion",
+    "path": "/api/f51/studio/projects/{project_id}/generate-motion",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_short_film",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_short_film",
+    "path": "/api/f51/studio/projects/{project_id}/generate-short-film",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "stitch_short_film",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "stitch_short_film",
+    "path": "/api/f51/studio/projects/{project_id}/stitch-short-film",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "stitch_scene",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "stitch_scene",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/stitch",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_scene_pipeline",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_scene_pipeline",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/pipeline/generate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_or_get_collaboration_session",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_or_get_collaboration_session",
+    "path": "/api/f51/studio/projects/{project_id}/collaboration/session",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_creative_decision_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_creative_decision_memory",
+    "path": "/api/f51/studio/projects/{project_id}/creative-memories",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_creative_decision_memories",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_creative_decision_memories",
+    "path": "/api/f51/studio/projects/{project_id}/creative-memories",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_creative_decision_memory",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_creative_decision_memory",
+    "path": "/api/f51/studio/projects/{project_id}/creative-memories/{memory_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_creative_decision_memory",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_creative_decision_memory",
+    "path": "/api/f51/studio/projects/{project_id}/creative-memories/{memory_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_director_memory",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_director_memory",
+    "path": "/api/f51/studio/projects/{project_id}/director-memory",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "scan_director_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "scan_director_memory",
+    "path": "/api/f51/studio/projects/{project_id}/director-memory/scan",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_director_memory_entries",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_director_memory_entries",
+    "path": "/api/f51/studio/projects/{project_id}/director-memory/{kind}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_director_memory_entry",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_director_memory_entry",
+    "path": "/api/f51/studio/projects/{project_id}/director-memory/{kind}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_director_memory_entry",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_director_memory_entry",
+    "path": "/api/f51/studio/projects/{project_id}/director-memory/{kind}/{entry_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_director_memory_entry",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_director_memory_entry",
+    "path": "/api/f51/studio/projects/{project_id}/director-memory/{kind}/{entry_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_collaboration_state",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_collaboration_state",
+    "path": "/api/f51/studio/projects/{project_id}/collaboration",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_collaboration_room",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "set_collaboration_room",
+    "path": "/api/f51/studio/projects/{project_id}/collaboration/room",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_collaboration_screening",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "set_collaboration_screening",
+    "path": "/api/f51/studio/projects/{project_id}/collaboration/screening",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "post_collaboration_comment",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "post_collaboration_comment",
+    "path": "/api/f51/studio/projects/{project_id}/collaboration/comments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "cast_collaboration_vote",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "cast_collaboration_vote",
+    "path": "/api/f51/studio/projects/{project_id}/collaboration/votes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "add_collaboration_co_direction_note",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "add_collaboration_co_direction_note",
+    "path": "/api/f51/studio/projects/{project_id}/collaboration/co-direction",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_scenes",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_scenes",
+    "path": "/api/f51/studio/projects/{project_id}/scenes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_scene",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_scene",
+    "path": "/api/f51/studio/projects/{project_id}/scenes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene_rationale",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene_rationale",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/rationale",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_scene",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "update_scene",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_scene",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_scene",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_short_film_review",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_short_film_review",
+    "path": "/api/f51/studio/projects/{project_id}/short-film-review",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_short_film_reviews",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_short_film_reviews",
+    "path": "/api/f51/studio/projects/{project_id}/short-film-reviews",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_latest_short_film_review",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_latest_short_film_review",
+    "path": "/api/f51/studio/projects/{project_id}/short-film-review/latest",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_short_film_review_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_short_film_review_decision",
+    "path": "/api/f51/studio/projects/{project_id}/short-film-review/{review_id}/decision",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_clip_revision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_clip_revision",
+    "path": "/api/f51/studio/projects/{project_id}/clip-revisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_clip_revisions_for_project",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_clip_revisions_for_project",
+    "path": "/api/f51/studio/projects/{project_id}/clip-revisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_clip_revision",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_clip_revision",
+    "path": "/api/f51/studio/clip-revisions/{revision_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "submit_clip_revision_render",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "submit_clip_revision_render",
+    "path": "/api/f51/studio/clip-revisions/{revision_id}/submit",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "cancel_clip_revision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "cancel_clip_revision",
+    "path": "/api/f51/studio/clip-revisions/{revision_id}/cancel",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "complete_clip_revision_from_job",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "complete_clip_revision_from_job",
+    "path": "/api/f51/studio/clip-revisions/{revision_id}/complete-from-job",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "restitch_project_with_revisions",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "restitch_project_with_revisions",
+    "path": "/api/f51/studio/projects/{project_id}/restitch-with-revisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "extract_video_asset_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "extract_video_asset_keyframes",
+    "path": "/api/f51/studio/video-assets/{asset_id}/extract-keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_asset_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_asset_keyframes",
+    "path": "/api/f51/studio/video-assets/{asset_id}/keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_keyframes",
+    "path": "/api/f51/studio/projects/{project_id}/keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_video_keyframe",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_video_keyframe",
+    "path": "/api/f51/studio/video-keyframes/{keyframe_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "detect_video_asset_shots",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "detect_video_asset_shots",
+    "path": "/api/f51/studio/video-assets/{asset_id}/detect-shots",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_asset_shots",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_asset_shots",
+    "path": "/api/f51/studio/video-assets/{asset_id}/shots",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "ingest_video_asset_scene_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "ingest_video_asset_scene_memory",
+    "path": "/api/f51/studio/video-assets/{asset_id}/scene-memory/ingest",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_asset_scene_memory",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_asset_scene_memory",
+    "path": "/api/f51/studio/video-assets/{asset_id}/scene-memory",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "search_scene_memories",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "search_scene_memories",
+    "path": "/api/f51/studio/scene-memory/search",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "related_scene_memories",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "related_scene_memories",
+    "path": "/api/f51/studio/scene-memory/{memory_id}/related",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_project_continuity",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_project_continuity",
+    "path": "/api/f51/studio/projects/{project_id}/analyze-continuity",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_project_continuity_legacy",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_project_continuity_legacy",
+    "path": "/api/f51/studio/projects/{project_id}/continuity/analyze",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_continuity_issues",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_continuity_issues",
+    "path": "/api/f51/studio/projects/{project_id}/continuity-issues",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_continuity_issues_legacy",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_continuity_issues_legacy",
+    "path": "/api/f51/studio/projects/{project_id}/continuity/issues",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_decision_gate",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_decision_gate",
+    "path": "/api/f51/studio/projects/{project_id}/decision-gate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_timeline_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_timeline_intelligence",
+    "path": "/api/f51/studio/projects/{project_id}/timeline-intelligence",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_editorial_revision_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_editorial_revision_intelligence",
+    "path": "/api/f51/studio/projects/{project_id}/editorial-revision-intelligence",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_director_signature",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_director_signature",
+    "path": "/api/f51/studio/projects/{project_id}/build-director-signature",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_director_signature",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_director_signature",
+    "path": "/api/f51/studio/projects/{project_id}/director-signature",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "detect_style_drift",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "detect_style_drift",
+    "path": "/api/f51/studio/projects/{project_id}/detect-style-drift",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_style_drift_issues",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_style_drift_issues",
+    "path": "/api/f51/studio/projects/{project_id}/style-drift-issues",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_project_style_signature",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_project_style_signature",
+    "path": "/api/f51/studio/projects/{project_id}/style-signatures/build",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_style_signatures",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_style_signatures",
+    "path": "/api/f51/studio/projects/{project_id}/style-signatures",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_style_signature",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_style_signature",
+    "path": "/api/f51/studio/style-signatures/{signature_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "compare_style_signatures",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "compare_style_signatures",
+    "path": "/api/f51/studio/style-signatures/compare",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "retrieve_style_patterns",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "retrieve_style_patterns",
+    "path": "/api/f51/studio/projects/{project_id}/style-patterns",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_video_understanding_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_video_understanding_status",
+    "path": "/api/f51/studio/video-assets/{asset_id}/understanding-status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_video_understanding_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_video_understanding_status",
+    "path": "/api/f51/studio/projects/{project_id}/video-understanding-status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_director_commentary",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_director_commentary",
+    "path": "/api/f51/studio/video-assets/{asset_id}/director-commentary/generate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_director_commentary",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_director_commentary",
+    "path": "/api/f51/studio/video-assets/{asset_id}/director-commentary",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "register_frame_analysis",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "register_frame_analysis",
+    "path": "/api/f51/studio/video-assets/{asset_id}/frame-analysis",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_video_keyframe",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_video_keyframe",
+    "path": "/api/f51/studio/video-keyframes/{keyframe_id}/analyze",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_video_asset_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_video_asset_keyframes",
+    "path": "/api/f51/studio/video-assets/{asset_id}/analyze-keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_asset_frame_analyses",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_asset_frame_analyses",
+    "path": "/api/f51/studio/video-assets/{asset_id}/frame-analyses",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_frame_analyses",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_frame_analyses",
+    "path": "/api/f51/studio/projects/{project_id}/frame-analyses",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "embed_video_keyframe",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "embed_video_keyframe",
+    "path": "/api/f51/studio/video-keyframes/{keyframe_id}/embed",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "embed_video_asset_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "embed_video_asset_keyframes",
+    "path": "/api/f51/studio/video-assets/{asset_id}/embed-keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_asset_embeddings",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_asset_embeddings",
+    "path": "/api/f51/studio/video-assets/{asset_id}/embeddings",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_embeddings",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_embeddings",
+    "path": "/api/f51/studio/projects/{project_id}/embeddings",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "find_similar_video_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "find_similar_video_keyframes",
+    "path": "/api/f51/studio/video-keyframes/{keyframe_id}/similar",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_project_cinematic_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_project_cinematic_memory",
+    "path": "/api/f51/studio/projects/{project_id}/build-memory",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_cinematic_memory",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_cinematic_memory",
+    "path": "/api/f51/studio/projects/{project_id}/memory",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "search_project_cinematic_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "search_project_cinematic_memory",
+    "path": "/api/f51/studio/projects/{project_id}/search-memory",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "related_memory_for_keyframe",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "related_memory_for_keyframe",
+    "path": "/api/f51/studio/video-keyframes/{keyframe_id}/related-memory",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "search_similar_scenes",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "search_similar_scenes",
+    "path": "/api/f51/studio/scene-search/similar",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "search_scenes_by_mood",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "search_scenes_by_mood",
+    "path": "/api/f51/studio/scene-search/by-mood",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "search_scenes_by_visual_style",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "search_scenes_by_visual_style",
+    "path": "/api/f51/studio/scene-search/by-visual-style",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_final_short_film_package",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_final_short_film_package",
+    "path": "/api/f51/studio/projects/{project_id}/final-short-film-package",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_final_short_film_packages_for_project",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_final_short_film_packages_for_project",
+    "path": "/api/f51/studio/projects/{project_id}/final-short-film-packages",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_latest_final_short_film_package_for_project",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_latest_final_short_film_package_for_project",
+    "path": "/api/f51/studio/projects/{project_id}/final-short-film-package/latest",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_final_short_film_package",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_final_short_film_package",
+    "path": "/api/f51/studio/final-short-film-packages/{package_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_final_short_film_package_status",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_final_short_film_package_status",
+    "path": "/api/f51/studio/final-short-film-packages/{package_id}/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "seed_demo_project",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "seed_demo_project",
+    "path": "/api/f51/studio/dev/seed-demo-project",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_characters",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_characters",
+    "path": "/api/f51/studio/projects/{project_id}/characters",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_character",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "update_character",
+    "path": "/api/f51/studio/projects/{project_id}/characters/{character_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_character_skeleton",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_character_skeleton",
+    "path": "/api/f51/studio/projects/{project_id}/characters",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "upload_character_descriptor",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "upload_character_descriptor",
+    "path": "/api/f51/studio/projects/{project_id}/characters/{character_id}/upload-descriptor",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_provider_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_provider_status",
+    "path": "/api/f51/studio/projects/{project_id}/provider-status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_scene_provider_override",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "set_scene_provider_override",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/provider-override",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_project_poster",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_project_poster",
+    "path": "/api/f51/studio/projects/{project_id}/poster/generate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_poster",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_poster",
+    "path": "/api/f51/studio/projects/{project_id}/poster",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_elevenlabs_voices",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_elevenlabs_voices",
+    "path": "/api/f51/studio/projects/{project_id}/elevenlabs/voices",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_character_voice",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_character_voice",
+    "path": "/api/f51/studio/projects/{project_id}/characters/{character_id}/voice",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_character_voice",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "set_character_voice",
+    "path": "/api/f51/studio/projects/{project_id}/characters/{character_id}/voice",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "register_video_asset",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "register_video_asset",
+    "path": "/api/f51/studio/projects/{project_id}/video-assets",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_assets_for_project",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_assets_for_project",
+    "path": "/api/f51/studio/projects/{project_id}/video-assets",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_assets",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_assets",
+    "path": "/api/f51/studio/video-assets",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "upload_video_asset",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "upload_video_asset",
+    "path": "/api/f51/studio/video-assets/upload/",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "upload_video_asset",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "upload_video_asset",
+    "path": "/api/f51/studio/video-assets/upload",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_unmatched_assets",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_unmatched_assets",
+    "path": "/api/f51/studio/video-assets/unmatched",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_video_asset",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_video_asset",
+    "path": "/api/f51/studio/video-assets/{asset_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_video_asset_status",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_video_asset_status",
+    "path": "/api/f51/studio/video-assets/{asset_id}/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "attach_video_asset_to_project",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "attach_video_asset_to_project",
+    "path": "/api/f51/studio/video-assets/{asset_id}/attach-project",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "auto_match_metadata",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "auto_match_metadata",
+    "path": "/api/f51/studio/video-assets/{asset_id}/auto-match-metadata",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_metadata_matches",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_metadata_matches",
+    "path": "/api/f51/studio/video-assets/{asset_id}/metadata-matches",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "confirm_metadata_match",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "confirm_metadata_match",
+    "path": "/api/f51/studio/video-assets/{asset_id}/metadata-matches/{match_id}/confirm",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "reject_metadata_match",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "reject_metadata_match",
+    "path": "/api/f51/studio/video-assets/{asset_id}/metadata-matches/{match_id}/reject",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "extract_video_asset_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "extract_video_asset_keyframes",
+    "path": "/api/f51/studio/video-assets/{asset_id}/extract-keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_asset_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_asset_keyframes",
+    "path": "/api/f51/studio/video-assets/{asset_id}/keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_keyframes",
+    "path": "/api/f51/studio/projects/{project_id}/keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_video_keyframe",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_video_keyframe",
+    "path": "/api/f51/studio/video-keyframes/{keyframe_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_video_keyframe",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_video_keyframe",
+    "path": "/api/f51/studio/video-keyframes/{keyframe_id}/analyze",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_video_asset_keyframes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_video_asset_keyframes",
+    "path": "/api/f51/studio/video-assets/{asset_id}/analyze-keyframes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_video_asset_frame_analyses",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_video_asset_frame_analyses",
+    "path": "/api/f51/studio/video-assets/{asset_id}/frame-analyses",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_frame_analyses",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_frame_analyses",
+    "path": "/api/f51/studio/projects/{project_id}/frame-analyses",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_pitch_pack",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_pitch_pack",
+    "path": "/api/f51/studio/exports/{project_id}/pitch-pack",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_shot_list",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_shot_list",
+    "path": "/api/f51/studio/exports/{project_id}/shot-list",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_prompt_pack",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_prompt_pack",
+    "path": "/api/f51/studio/exports/{project_id}/prompt-pack",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_cut_manifest",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_cut_manifest",
+    "path": "/api/f51/studio/exports/{project_id}/cut-manifest",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_archive_snapshot",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_archive_snapshot",
+    "path": "/api/f51/studio/exports/{project_id}/archive-snapshot",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_festival",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_festival",
+    "path": "/api/f51/studio/exports/{project_id}/festival-export",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_youtube",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_youtube",
+    "path": "/api/f51/studio/exports/{project_id}/youtube-export",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_trailer",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_trailer",
+    "path": "/api/f51/studio/exports/{project_id}/trailer-export",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_teaser",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_teaser",
+    "path": "/api/f51/studio/exports/{project_id}/teaser-export",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_subtitles",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_subtitles",
+    "path": "/api/f51/studio/exports/{project_id}/subtitle-packages",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_providers",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_providers",
+    "path": "/api/f51/studio/render/providers",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_provider",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_provider",
+    "path": "/api/f51/studio/render/providers/{provider_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "enable_provider",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "enable_provider",
+    "path": "/api/f51/studio/render/providers/{provider_id}/enable",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "disable_provider",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "disable_provider",
+    "path": "/api/f51/studio/render/providers/{provider_id}/disable",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "configure_provider",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "configure_provider",
+    "path": "/api/f51/studio/render/providers",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_render_job",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_render_job",
+    "path": "/api/f51/studio/render/jobs",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "queue_existing_render_job",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "queue_existing_render_job",
+    "path": "/api/f51/studio/render/jobs/{job_id}/queue",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "submit_render_job",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "submit_render_job",
+    "path": "/api/f51/studio/render/jobs/{job_id}/submit",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_render_job",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_render_job",
+    "path": "/api/f51/studio/render/jobs/{job_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_render_job_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_render_job_status",
+    "path": "/api/f51/studio/render/jobs/{job_id}/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_render_job",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_render_job",
+    "path": "/api/f51/studio/render/jobs/{job_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "cancel_render_job",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "cancel_render_job",
+    "path": "/api/f51/studio/render/jobs/{job_id}/cancel",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "retry_render_job",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "retry_render_job",
+    "path": "/api/f51/studio/render/jobs/{job_id}/retry",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "retry_render_job_for_adherence",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "retry_render_job_for_adherence",
+    "path": "/api/f51/studio/render/jobs/{job_id}/adherence-retry",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "reconcile_render_job",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "reconcile_render_job",
+    "path": "/api/f51/studio/render/jobs/{job_id}/reconcile",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "refresh_render_job_output_url",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "refresh_render_job_output_url",
+    "path": "/api/f51/studio/render/jobs/{job_id}/refresh-url",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_render_job_outputs",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_render_job_outputs",
+    "path": "/api/f51/studio/render/jobs/{job_id}/outputs",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_recommended_shot_duration",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_recommended_shot_duration",
+    "path": "/api/f51/studio/render/projects/{project_id}/shots/{shot_id}/recommended-duration",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_render_jobs",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_render_jobs",
+    "path": "/api/f51/studio/render/jobs",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_render_diagnostics",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_render_diagnostics",
+    "path": "/api/f51/studio/render/diagnostics",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "backfill_project_state_render_jobs",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "backfill_project_state_render_jobs",
+    "path": "/api/f51/studio/render/backfill-project-state",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "recover_render_output_urls",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "recover_render_output_urls",
+    "path": "/api/f51/studio/render/recover-output-urls",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_shot_seed",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_shot_seed",
+    "path": "/api/f51/studio/render/projects/{project_id}/scenes/{scene_id}/shots/{shot_id}/seed",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "register",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "register",
+    "path": "/api/f51/studio/auth/register",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "login",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "login",
+    "path": "/api/f51/studio/auth/login",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "logout",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "logout",
+    "path": "/api/f51/studio/auth/logout",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_session",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_session",
+    "path": "/api/f51/studio/auth/session",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_session",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_session",
+    "path": "/api/f51/studio/auth/session",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_project_ownership",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_project_ownership",
+    "path": "/api/f51/studio/agents/projects/{project_id}/ownership",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_ownership",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_ownership",
+    "path": "/api/f51/studio/agents/projects/{project_id}/ownership",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_task",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_task",
+    "path": "/api/f51/studio/agents/projects/{project_id}/tasks",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_tasks",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_tasks",
+    "path": "/api/f51/studio/agents/projects/{project_id}/tasks",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_task",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_task",
+    "path": "/api/f51/studio/agents/tasks/{task_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "assign_task",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "assign_task",
+    "path": "/api/f51/studio/agents/tasks/{task_id}/assign/{agent_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "start_task",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "start_task",
+    "path": "/api/f51/studio/agents/tasks/{task_id}/start",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "complete_task",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "complete_task",
+    "path": "/api/f51/studio/agents/tasks/{task_id}/complete",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "apply_override",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "apply_override",
+    "path": "/api/f51/studio/agents/tasks/{task_id}/override",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "run_script_analysis",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "run_script_analysis",
+    "path": "/api/f51/studio/agents/projects/{project_id}/workflow/script-analysis",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_render_request",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_render_request",
+    "path": "/api/f51/studio/agents/projects/{project_id}/workflow/render",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_activities",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_activities",
+    "path": "/api/f51/studio/agents/projects/{project_id}/activities",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_agents",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_agents",
+    "path": "/api/f51/studio/agents/agents",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "init_project",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "init_project",
+    "path": "/api/f51/studio/crew/projects/{project_id}/init",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project",
+    "path": "/api/f51/studio/crew/projects/{project_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_task",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_task",
+    "path": "/api/f51/studio/crew/projects/{project_id}/tasks",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_tasks",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_tasks",
+    "path": "/api/f51/studio/crew/projects/{project_id}/tasks",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_creative_attention",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_creative_attention",
+    "path": "/api/f51/studio/crew/projects/{project_id}/needs-attention",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_task",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_task",
+    "path": "/api/f51/studio/crew/tasks/{task_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "start_task",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "start_task",
+    "path": "/api/f51/studio/crew/tasks/{task_id}/start",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "complete_task",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "complete_task",
+    "path": "/api/f51/studio/crew/tasks/{task_id}/complete",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "apply_creative_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "apply_creative_decision",
+    "path": "/api/f51/studio/crew/tasks/{task_id}/decision",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_agents",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_agents",
+    "path": "/api/f51/studio/crew/agents",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_orchestrator_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_orchestrator_status",
+    "path": "/api/f51/studio/crew/orchestrator/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_crew_intelligence_overview",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_crew_intelligence_overview",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_crew_department_profiles",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_crew_department_profiles",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/departments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_crew_reasoning",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_crew_reasoning",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/reasoning",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_crew_reasoning",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_crew_reasoning",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/reasoning/{reasoning_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_crew_handoffs",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_crew_handoffs",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/handoffs",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_crew_handoff",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_crew_handoff",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/handoffs",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_crew_handoff",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_crew_handoff",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/handoffs/{handoff_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_crew_deliberations",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_crew_deliberations",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/deliberations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_crew_deliberation",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_crew_deliberation",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/deliberations/{deliberation_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_crew_deliberation",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_crew_deliberation",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/deliberations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "resolve_crew_deliberation",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "resolve_crew_deliberation",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/deliberations/{deliberation_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_crew_creator_attention",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_crew_creator_attention",
+    "path": "/api/f51/studio/crew/projects/{project_id}/intelligence/attention",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_conflicts",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_conflicts",
+    "path": "/api/f51/studio/crew/conflicts",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_audit_trail",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_audit_trail",
+    "path": "/api/f51/studio/crew/conflicts/audit",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_guardrails_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_guardrails_status",
+    "path": "/api/f51/studio/crew/guardrails/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_guardrails_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_guardrails_status",
+    "path": "/api/f51/studio/crew/guardrails/project/{project_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "reset_project_guardrails",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "reset_project_guardrails",
+    "path": "/api/f51/studio/crew/guardrails/project/{project_id}/reset",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "emergency_stop_project",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "emergency_stop_project",
+    "path": "/api/f51/studio/crew/guardrails/project/{project_id}/emergency-stop",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "start_agent_loop",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "start_agent_loop",
+    "path": "/api/f51/studio/crew/projects/{project_id}/agent-loop/start",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "stop_agent_loop",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "stop_agent_loop",
+    "path": "/api/f51/studio/crew/projects/{project_id}/agent-loop/stop",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_agent_loop_status_endpoint",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_agent_loop_status_endpoint",
+    "path": "/api/f51/studio/crew/projects/{project_id}/agent-loop/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_global_agent_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_global_agent_status",
+    "path": "/api/f51/studio/crew/agent-loop/global-status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "trigger_agent_execution",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "trigger_agent_execution",
+    "path": "/api/f51/studio/crew/projects/{project_id}/agent-loop/trigger",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_established_patterns",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_established_patterns",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/patterns",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_adaptation_decisions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_adaptation_decisions",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/decisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_evolution_metrics",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_evolution_metrics",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/evolution",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "record_feedback",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "record_feedback",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/feedback",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_user_override",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "set_user_override",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/user-override",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_style_boundaries",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "set_style_boundaries",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/style-boundaries",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_pattern_suggestions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_pattern_suggestions",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/suggestions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "check_consistency",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "check_consistency",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/consistency-check",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "check_deviation_opportunity",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "check_deviation_opportunity",
+    "path": "/api/f51/studio/crew/projects/{project_id}/deviation/check",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "apply_deviation",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "apply_deviation",
+    "path": "/api/f51/studio/crew/projects/{project_id}/deviation/apply",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_deviation_history",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_deviation_history",
+    "path": "/api/f51/studio/crew/projects/{project_id}/deviation/history",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_deviation_stats",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_deviation_stats",
+    "path": "/api/f51/studio/crew/projects/{project_id}/deviation/stats",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_custom_inversions",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "set_custom_inversions",
+    "path": "/api/f51/studio/crew/projects/{project_id}/deviation/custom-inversions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_deviation_thresholds",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "set_deviation_thresholds",
+    "path": "/api/f51/studio/crew/projects/{project_id}/deviation/thresholds",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_user_override",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "set_user_override",
+    "path": "/api/f51/studio/crew/projects/{project_id}/hierarchy/override",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "clear_user_override",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "clear_user_override",
+    "path": "/api/f51/studio/crew/projects/{project_id}/hierarchy/override/{decision_type}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "set_scene_intent",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "set_scene_intent",
+    "path": "/api/f51/studio/crew/projects/{project_id}/hierarchy/scene-intent",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "resolve_decision_conflict",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "resolve_decision_conflict",
+    "path": "/api/f51/studio/crew/projects/{project_id}/hierarchy/resolve",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_hierarchy_debug",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_hierarchy_debug",
+    "path": "/api/f51/studio/crew/projects/{project_id}/hierarchy/debug",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_hierarchy_decisions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_hierarchy_decisions",
+    "path": "/api/f51/studio/crew/projects/{project_id}/hierarchy/decisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_hierarchy_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_hierarchy_status",
+    "path": "/api/f51/studio/crew/projects/{project_id}/hierarchy/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "record_iteration",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "record_iteration",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/iteration",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "record_approval",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "record_approval",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/approval",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene_evolution",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene_evolution",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/scene-evolution/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_iteration",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_iteration",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/iteration/{scene_id}/{iteration_number}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_evolution_metrics",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_evolution_metrics",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/metrics",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_evolution",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_evolution",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/project-evolution",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_improvement_trajectory",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_improvement_trajectory",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/trajectory/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "compare_iterations",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "compare_iterations",
+    "path": "/api/f51/studio/crew/projects/{project_id}/adaptation/compare/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "record_evolution_endpoint",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "record_evolution_endpoint",
+    "path": "/api/f51/studio/crew/scenes/{scene_id}/evolution",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_evolution_data_endpoint",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_evolution_data_endpoint",
+    "path": "/api/f51/studio/crew/scenes/{scene_id}/evolution",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "compute_improvement_metrics_endpoint",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "compute_improvement_metrics_endpoint",
+    "path": "/api/f51/studio/crew/scenes/{scene_id}/evolution/metrics",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_memory",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_memory",
+    "path": "/api/f51/studio/memory/{project_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_project_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_project_memory",
+    "path": "/api/f51/studio/memory/{project_id}/update",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "initialize_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "initialize_memory",
+    "path": "/api/f51/studio/memory/{project_id}/init",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_scene_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_scene_memory",
+    "path": "/api/f51/studio/memory/{project_id}/scene",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_character_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_character_memory",
+    "path": "/api/f51/studio/memory/{project_id}/character",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "store_reference_analysis",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "store_reference_analysis",
+    "path": "/api/f51/studio/memory/reference-analysis/store",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "retrieve_reference_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "retrieve_reference_memory",
+    "path": "/api/f51/studio/memory/reference-analysis/retrieve",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_reference_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "delete_reference_memory",
+    "path": "/api/f51/studio/memory/reference-analysis/delete",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_style_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_style_memory",
+    "path": "/api/f51/studio/memory/{project_id}/style",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_review_memory",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_review_memory",
+    "path": "/api/f51/studio/memory/{project_id}/review",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "check_contradiction",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "check_contradiction",
+    "path": "/api/f51/studio/memory/{project_id}/check-contradiction",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_agent_context",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_agent_context",
+    "path": "/api/f51/studio/memory/{project_id}/agent-context",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_memory_versions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_memory_versions",
+    "path": "/api/f51/studio/memory/{project_id}/versions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "debug_memory",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "debug_memory",
+    "path": "/api/f51/studio/memory/{project_id}/debug",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "import_scene_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "import_scene_intelligence",
+    "path": "/api/scene-intelligence/import",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_scene_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_scene_intelligence",
+    "path": "/api/scene-intelligence",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene_intelligence",
+    "path": "/api/scene-intelligence/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_scene_animation_prompt",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_scene_animation_prompt",
+    "path": "/api/scene-intelligence/{scene_id}/animation-prompt",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "link_scene_intelligence_video",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "link_scene_intelligence_video",
+    "path": "/api/scene-intelligence/{scene_id}/link-video",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_definitions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_definitions",
+    "path": "/api/workflows/definitions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_workflow_definition",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_workflow_definition",
+    "path": "/api/workflows/definitions/{workflow_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_categories_endpoint",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_categories_endpoint",
+    "path": "/api/workflows/categories",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "execute_workflow",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "execute_workflow",
+    "path": "/api/workflows/execute",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_executions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_executions",
+    "path": "/api/workflows/executions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_workflow_execution",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_workflow_execution",
+    "path": "/api/workflows/executions/{execution_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "cancel_workflow_execution",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "cancel_workflow_execution",
+    "path": "/api/workflows/executions/{execution_id}/cancel",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_workflow_execution",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_workflow_execution",
+    "path": "/api/workflows/executions/{execution_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "start_production_recovery",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "start_production_recovery",
+    "path": "/api/production-recovery/recover",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_recovery_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_recovery_status",
+    "path": "/api/production-recovery/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "reset_recovery_state",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "reset_recovery_state",
+    "path": "/api/production-recovery/reset",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "health_check",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "health_check",
+    "path": "/api/production-recovery/health",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "scene_continuity_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "scene_continuity_intelligence",
+    "path": "/api/f51/studio/projects/{project_id}/scene-continuity-intelligence",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_motif_threads",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_motif_threads",
+    "path": "/api/f51/studio/projects/{project_id}/motif-threads",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_render_batch",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_render_batch",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/render-batch",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_render_batch_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_render_batch_status",
+    "path": "/api/f51/studio/projects/{project_id}/render-batch/{batch_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "retry_render_job_with_context",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "retry_render_job_with_context",
+    "path": "/api/f51/studio/projects/{project_id}/render-jobs/{job_id}/retry",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_film_dna",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_film_dna",
+    "path": "/api/f51/studio/projects/{project_id}/film-dna",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "refresh_film_dna",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "refresh_film_dna",
+    "path": "/api/f51/studio/projects/{project_id}/film-dna/refresh",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_character_journeys",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_character_journeys",
+    "path": "/api/f51/studio/projects/{project_id}/character-journeys",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_arc_completeness",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_arc_completeness",
+    "path": "/api/f51/studio/projects/{project_id}/arc-completeness",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_director_intent",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_director_intent",
+    "path": "/api/f51/studio/projects/{project_id}/director-intent",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_director_intent",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "update_director_intent",
+    "path": "/api/f51/studio/projects/{project_id}/director-intent",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_session_debrief",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_session_debrief",
+    "path": "/api/f51/studio/projects/{project_id}/session-debrief",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_session_debriefs",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_session_debriefs",
+    "path": "/api/f51/studio/projects/{project_id}/session-debriefs",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_session_debrief",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_session_debrief",
+    "path": "/api/f51/studio/projects/{project_id}/session-debriefs/{debrief_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_export_package",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_export_package",
+    "path": "/api/f51/studio/projects/{project_id}/export-package",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_export_packages",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_export_packages",
+    "path": "/api/f51/studio/projects/{project_id}/export-packages",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_export_package",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_export_package",
+    "path": "/api/f51/studio/projects/{project_id}/export-packages/{package_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "validate_for_festival",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "validate_for_festival",
+    "path": "/api/f51/studio/projects/{project_id}/export-packages/{package_id}/validate-festival",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_festival_presets",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_festival_presets",
+    "path": "/api/f51/studio/festival-presets",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_pitch_deck",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_pitch_deck",
+    "path": "/api/f51/studio/projects/{project_id}/pitch-deck",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_pitch_decks",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_pitch_decks",
+    "path": "/api/f51/studio/projects/{project_id}/pitch-decks",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_pitch_deck",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_pitch_deck",
+    "path": "/api/f51/studio/projects/{project_id}/pitch-decks/{deck_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_scene_previs",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_scene_previs",
+    "path": "/api/f51/studio/projects/{project_id}/previs/generate-scene/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene_previs_images",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene_previs_images",
+    "path": "/api/f51/studio/projects/{project_id}/previs/images/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_all_previs",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_all_previs",
+    "path": "/api/f51/studio/projects/{project_id}/previs/generate-all",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "enhance_prompt",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "enhance_prompt",
+    "path": "/api/f51/studio/projects/{project_id}/previs/enhance-prompt",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "previs_director_notes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "previs_director_notes",
+    "path": "/api/f51/studio/projects/{project_id}/previs/director-notes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "recommend_shot_count",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "recommend_shot_count",
+    "path": "/api/f51/studio/projects/{project_id}/previs/shot-count",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "recommend_generation_settings",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "recommend_generation_settings",
+    "path": "/api/f51/studio/projects/{project_id}/previs/generation-settings",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene_breakdown",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene_breakdown",
+    "path": "/api/projects/{project_id}/script-analysis/breakdown",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_character_arcs",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_character_arcs",
+    "path": "/api/projects/{project_id}/script-analysis/characters",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_tone_consistency",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_tone_consistency",
+    "path": "/api/projects/{project_id}/script-analysis/tone",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_scene_prompts",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_scene_prompts",
+    "path": "/api/projects/{project_id}/script-analysis/prompts",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_transition_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_transition_intelligence",
+    "path": "/api/projects/{project_id}/script-analysis/transitions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_sound_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_sound_intelligence",
+    "path": "/api/projects/{project_id}/script-analysis/sound",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "simulate_character",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "simulate_character",
+    "path": "/api/projects/{project_id}/characters/{character_id}/simulate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_character_sim_history",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_character_sim_history",
+    "path": "/api/projects/{project_id}/characters/{character_id}/history",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_sim_to_notes",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_sim_to_notes",
+    "path": "/api/projects/{project_id}/characters/{character_id}/notes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "migrate_project_characters",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "migrate_project_characters",
+    "path": "/api/projects/{project_id}/migrate-characters",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "simulate_scene_audience",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "simulate_scene_audience",
+    "path": "/api/f51/studio/audience-simulator/projects/{project_id}/scenes/{scene_id}/simulate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "simulate_project_audience",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "simulate_project_audience",
+    "path": "/api/f51/studio/audience-simulator/projects/{project_id}/simulate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "trigger_debate",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "trigger_debate",
+    "path": "/f51/studio/debate/trigger",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "debate_action",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "debate_action",
+    "path": "/f51/studio/debate/action",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_debates",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_debates",
+    "path": "/f51/studio/debate/{project_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_universe_graph",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_universe_graph",
+    "path": "/projects/{project_id}/universe-graph",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_node",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_node",
+    "path": "/projects/{project_id}/universe-graph/nodes",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_node",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_node",
+    "path": "/projects/{project_id}/universe-graph/nodes/{node_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_relationship",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_relationship",
+    "path": "/projects/{project_id}/universe-graph/relationships",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "delete_relationship",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_relationship",
+    "path": "/projects/{project_id}/universe-graph/relationships/{relationship_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_absences",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_absences",
+    "path": "/projects/{project_id}/universe-graph/absences",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "export_universe_bible",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "export_universe_bible",
+    "path": "/projects/{project_id}/universe-graph/export",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "force_auto_populate",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "force_auto_populate",
+    "path": "/projects/{project_id}/universe-graph/auto-populate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "run_production_scan",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "run_production_scan",
+    "path": "/api/f51/studio/projects/{project_id}/scan",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_production_scan_report",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_production_scan_report",
+    "path": "/api/f51/studio/projects/{project_id}/scan/{scan_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "run_production_acceptance",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "run_production_acceptance",
+    "path": "/api/f51/studio/projects/{project_id}/production-acceptance",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_production_acceptance_reports",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_production_acceptance_reports",
+    "path": "/api/f51/studio/projects/{project_id}/production-acceptance",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "latest_production_acceptance",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "latest_production_acceptance",
+    "path": "/api/f51/studio/projects/{project_id}/production-acceptance/latest",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_production_acceptance_report",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_production_acceptance_report",
+    "path": "/api/f51/studio/production-acceptance/{acceptance_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_package_acceptance_guard",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_package_acceptance_guard",
+    "path": "/api/f51/studio/final-short-film-packages/{package_id}/acceptance-guard",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_scene_audio",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_scene_audio",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/generate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene_audio_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene_audio_status",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_audio_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_audio_status",
+    "path": "/api/f51/studio/projects/{project_id}/audio/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_audio_capabilities",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_audio_capabilities",
+    "path": "/api/f51/studio/audio/capabilities",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_audio_brief",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_audio_brief",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio-brief",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "apply_audio_brief",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "apply_audio_brief",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio-brief/apply",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_scene_audio_pipeline",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_scene_audio_pipeline",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/pipeline/generate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene_audio_pipeline_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene_audio_pipeline_status",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/audio/pipeline/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_audio_pipeline_capabilities",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_audio_pipeline_capabilities",
+    "path": "/api/f51/studio/audio/pipeline/capabilities",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "trigger_stitch",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "trigger_stitch",
+    "path": "/api/f51/studio/projects/{project_id}/stitch",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_stitch_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_stitch_status",
+    "path": "/api/f51/studio/projects/{project_id}/stitch/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "download_stitched_film",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "download_stitched_film",
+    "path": "/api/f51/studio/projects/{project_id}/stitch/download",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "trigger_export",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "trigger_export",
+    "path": "/api/f51/studio/projects/{project_id}/export",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_export_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_export_status",
+    "path": "/api/f51/studio/projects/{project_id}/export/status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "download_export",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "download_export",
+    "path": "/api/f51/studio/projects/{project_id}/export/download",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "proactive_check",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "proactive_check",
+    "path": "/api/f51/studio/projects/{project_id}/co-director/proactive-check",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "co_director_chat",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "co_director_chat",
+    "path": "/api/f51/studio/projects/{project_id}/co-director/chat",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "proactive_check",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "proactive_check",
+    "path": "/api/f51/studio/projects/{project_id}/co-director/proactive-check",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "co_director_chat",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "co_director_chat",
+    "path": "/api/f51/studio/projects/{project_id}/co-director/chat",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "compose_scene_endpoint",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "compose_scene_endpoint",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/compose",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_composition_endpoint",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_composition_endpoint",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/composition",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "assemble_film_endpoint",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "assemble_film_endpoint",
+    "path": "/api/f51/studio/projects/{project_id}/assemble-film",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_assembly_status",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_assembly_status",
+    "path": "/api/f51/studio/projects/{project_id}/assembly-status",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_scene_emotion",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_scene_emotion",
+    "path": "/api/f51/studio/emotion-analysis/projects/{project_id}/scenes/{scene_id}/analyze",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "simulate_character_mind",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "simulate_character_mind",
+    "path": "/api/f51/studio/projects/{project_id}/character-mind",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "debate_scene",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "debate_scene",
+    "path": "/api/f51/studio/projects/{project_id}/debate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "restart_server",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "restart_server",
+    "path": "/api/f51/studio/admin/restart",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "propose_standing_correction",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "propose_standing_correction",
+    "path": "/api/f51/studio/projects/{project_id}/standing-corrections/propose",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "confirm_standing_correction",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "confirm_standing_correction",
+    "path": "/api/f51/studio/projects/{project_id}/standing-corrections/confirm",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_storyboard_blueprint",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_storyboard_blueprint",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_storyboard_blueprint",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_storyboard_blueprint",
+    "path": "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_storyboard_blueprints",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_storyboard_blueprints",
+    "path": "/api/f51/studio/projects/{project_id}/storyboard-blueprints",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "backfill_storyboard_blueprints",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "backfill_storyboard_blueprints",
+    "path": "/api/f51/studio/projects/{project_id}/storyboard-blueprints/backfill",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "approve_storyboard_version",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "approve_storyboard_version",
+    "path": "/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "run_storyboard_continuity_review",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "run_storyboard_continuity_review",
+    "path": "/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/continuity-review",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_storyboard_shot",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_storyboard_shot",
+    "path": "/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "lock_storyboard_shot",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "lock_storyboard_shot",
+    "path": "/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/lock",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_storyboard_render_contract",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_storyboard_render_contract",
+    "path": "/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/render-contract",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "render_storyboard_shot",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "render_storyboard_shot",
+    "path": "/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/render",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_storyboard_shot_image",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_storyboard_shot_image",
+    "path": "/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_editorial_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_editorial_intelligence",
+    "path": "/api/f51/studio/projects/{project_id}/editorial-intelligence/analyze",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_latest_editorial_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_latest_editorial_intelligence",
+    "path": "/api/f51/studio/projects/{project_id}/editorial-intelligence/latest",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_editorial_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_editorial_intelligence",
+    "path": "/api/f51/studio/projects/{project_id}/editorial-intelligence",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_editorial_applications",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_editorial_applications",
+    "path": "/api/f51/studio/projects/{project_id}/editorial-intelligence/applications",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_editorial_intelligence",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_editorial_intelligence",
+    "path": "/api/f51/studio/projects/{project_id}/editorial-intelligence/{analysis_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "apply_editorial_decisions",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "apply_editorial_decisions",
+    "path": "/api/f51/studio/projects/{project_id}/editorial-intelligence/{analysis_id}/apply",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_queue_item",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_queue_item",
+    "path": "/api/f51/studio/production-queue/items",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "queue_scene_generation",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "queue_scene_generation",
+    "path": "/api/f51/studio/production-queue/projects/{project_id}/scenes/{scene_id}/queue",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_queue_item",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_queue_item",
+    "path": "/api/f51/studio/production-queue/items/{queue_item_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_project_queue_items",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_project_queue_items",
+    "path": "/api/f51/studio/production-queue/projects/{project_id}/items",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_global_queue_summary",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_global_queue_summary",
+    "path": "/api/f51/studio/production-queue/summary",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_queue_summary",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_queue_summary",
+    "path": "/api/f51/studio/production-queue/projects/{project_id}/summary",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "cancel_queue_item",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "cancel_queue_item",
+    "path": "/api/f51/studio/production-queue/items/{queue_item_id}/cancel",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "retry_queue_item",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "retry_queue_item",
+    "path": "/api/f51/studio/production-queue/items/{queue_item_id}/retry",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_queue_events",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_queue_events",
+    "path": "/api/f51/studio/production-queue/items/{queue_item_id}/events",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_queue_diagnostics",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_queue_diagnostics",
+    "path": "/api/f51/studio/production-queue/diagnostics",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "recover_queue_leases",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "recover_queue_leases",
+    "path": "/api/f51/studio/production-queue/recover",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "run_queue_worker_once",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "run_queue_worker_once",
+    "path": "/api/f51/studio/production-queue/worker/run-once",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_project_workflow",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_project_workflow",
+    "path": "/api/f51/studio/projects/{project_id}/workflow",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "upsert_workflow_collaborator",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "upsert_workflow_collaborator",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/collaborators",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_workflow_phase",
+    "include_in_schema": true,
+    "methods": [
+      "PUT"
+    ],
+    "name": "update_workflow_phase",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/phase",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_collaborators",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_collaborators",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/collaborators",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_workflow_version",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_workflow_version",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/versions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_versions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_versions",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/versions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_workflow_version",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_workflow_version",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/versions/{version_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_workflow_gate",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_workflow_gate",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/gates",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_gates",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_gates",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/gates",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_workflow_gate",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_workflow_gate",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/gates/{gate_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "evaluate_workflow_gate",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "evaluate_workflow_gate",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/gates/{gate_id}/evaluate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "record_workflow_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "record_workflow_decision",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/gates/{gate_id}/decisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "post_workflow_comment",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "post_workflow_comment",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/comments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_comments",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_comments",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/comments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_tasks",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_tasks",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/tasks",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "resolve_workflow_comment",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "resolve_workflow_comment",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/comments/{comment_id}/resolve",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_workflow_events",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_workflow_events",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/events",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_workflow_compatibility",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_workflow_compatibility",
+    "path": "/api/f51/studio/projects/{project_id}/workflow/compatibility",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "receive_error_reports",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "receive_error_reports",
+    "path": "/api/f51/studio/errors",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "analyze_performance",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "analyze_performance",
+    "path": "/api/projects/{project_id}/performance-intelligence/analyze",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_scene_performance",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_scene_performance",
+    "path": "/api/projects/{project_id}/performance-intelligence/scenes/{scene_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_character_performance_history",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_character_performance_history",
+    "path": "/api/projects/{project_id}/performance-intelligence/characters/{character_id}/history",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_performance_prompt_context",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_performance_prompt_context",
+    "path": "/api/projects/{project_id}/performance-intelligence/scenes/{scene_id}/prompt-context",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_performance_voice_context",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_performance_voice_context",
+    "path": "/api/projects/{project_id}/performance-intelligence/scenes/{scene_id}/voice-context/{character_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_performance_screening_context",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_performance_screening_context",
+    "path": "/api/projects/{project_id}/performance-intelligence/scenes/{scene_id}/screening-context",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_performance_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_performance_decision",
+    "path": "/api/projects/{project_id}/performance-intelligence/decisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_performance_decision",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_performance_decision",
+    "path": "/api/projects/{project_id}/performance-intelligence/decisions/{decision_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "forget_performance_decision",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "forget_performance_decision",
+    "path": "/api/projects/{project_id}/performance-intelligence/decisions/{decision_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_camera_grammar_plan",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_camera_grammar_plan",
+    "path": "/api/projects/{project_id}/cinematography/plans",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_camera_grammar_plans",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_camera_grammar_plans",
+    "path": "/api/projects/{project_id}/cinematography/plans",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_camera_grammar_plan",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_camera_grammar_plan",
+    "path": "/api/projects/{project_id}/cinematography/plans/{plan_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_camera_grammar_observation",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_camera_grammar_observation",
+    "path": "/api/projects/{project_id}/cinematography/observations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_camera_grammar_observations",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_camera_grammar_observations",
+    "path": "/api/projects/{project_id}/cinematography/observations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_camera_grammar_assessment",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_camera_grammar_assessment",
+    "path": "/api/projects/{project_id}/cinematography/assessments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_camera_grammar_assessments",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_camera_grammar_assessments",
+    "path": "/api/projects/{project_id}/cinematography/assessments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_camera_grammar_render_context",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_camera_grammar_render_context",
+    "path": "/api/projects/{project_id}/cinematography/render-context",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_performance_audio_plan",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_performance_audio_plan",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/plans",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_performance_audio_plans",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_performance_audio_plans",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/plans",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_performance_audio_plan",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_performance_audio_plan",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/plans/{plan_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_performance_audio_execution_request",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_performance_audio_execution_request",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/plans/{plan_id}/execution-request",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_performance_audio_from_plan",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_performance_audio_from_plan",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/plans/{plan_id}/generate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_performance_audio_voice_profiles",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_performance_audio_voice_profiles",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/voice-profiles",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_performance_audio_dialogue_cues",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_performance_audio_dialogue_cues",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/dialogue-cues",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_performance_audio_soundscape_layers",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_performance_audio_soundscape_layers",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/soundscape-layers",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_performance_audio_assessment",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_performance_audio_assessment",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/assessments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_performance_audio_assessments",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_performance_audio_assessments",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/assessments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_performance_audio_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_performance_audio_decision",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/decisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_performance_audio_decision",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_performance_audio_decision",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/decisions/{decision_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "forget_performance_audio_decision",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "forget_performance_audio_decision",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/decisions/{decision_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_performance_audio_department_signal",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_performance_audio_department_signal",
+    "path": "/api/f51/studio/projects/{project_id}/audio-intelligence/department-signal",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_production_design_plan",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_production_design_plan",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/plans",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_production_design_plans",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_production_design_plans",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/plans",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_production_design_plan",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_production_design_plan",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/plans/{plan_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_production_design_environment_profile",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_production_design_environment_profile",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/environment-profiles",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_production_design_environment_profiles",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_production_design_environment_profiles",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/environment-profiles",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_production_design_prop_record",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_production_design_prop_record",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/prop-records",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_production_design_prop_records",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_production_design_prop_records",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/prop-records",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_production_design_costume_record",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_production_design_costume_record",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/costume-records",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_production_design_costume_records",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_production_design_costume_records",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/costume-records",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_production_design_observation",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_production_design_observation",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/observations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_production_design_observations",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_production_design_observations",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/observations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_production_design_assessment",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_production_design_assessment",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/assessments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_production_design_assessments",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_production_design_assessments",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/assessments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_production_design_render_context",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_production_design_render_context",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/render-context",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_production_design_department_signal",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_production_design_department_signal",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/department-signal",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_production_design_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_production_design_decision",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/decisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_production_design_decision",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_production_design_decision",
+    "path": "/api/f51/studio/projects/{project_id}/production-design/decisions/{decision_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_color_look_bible",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_color_look_bible",
+    "path": "/api/projects/{project_id}/colorist/look-bibles",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_color_look_bibles",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_color_look_bibles",
+    "path": "/api/projects/{project_id}/colorist/look-bibles",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_color_look_bible",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_color_look_bible",
+    "path": "/api/projects/{project_id}/colorist/look-bibles/{look_bible_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_colorist_look_plan",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_colorist_look_plan",
+    "path": "/api/projects/{project_id}/colorist/plans",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_colorist_look_plans",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_colorist_look_plans",
+    "path": "/api/projects/{project_id}/colorist/plans",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_colorist_look_plan",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_colorist_look_plan",
+    "path": "/api/projects/{project_id}/colorist/plans/{plan_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_color_palette_continuity",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_color_palette_continuity",
+    "path": "/api/projects/{project_id}/colorist/palette-continuity",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_color_story_arc",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_color_story_arc",
+    "path": "/api/projects/{project_id}/colorist/story-arcs",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_color_story_arcs",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_color_story_arcs",
+    "path": "/api/projects/{project_id}/colorist/story-arcs",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_color_grade_observation",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_color_grade_observation",
+    "path": "/api/projects/{project_id}/colorist/observations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_color_grade_observations",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_color_grade_observations",
+    "path": "/api/projects/{project_id}/colorist/observations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_color_match_assessment",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_color_match_assessment",
+    "path": "/api/projects/{project_id}/colorist/assessments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_color_match_assessments",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_color_match_assessments",
+    "path": "/api/projects/{project_id}/colorist/assessments",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_color_render_context",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_color_render_context",
+    "path": "/api/projects/{project_id}/colorist/render-context",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_color_final_verification",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_color_final_verification",
+    "path": "/api/projects/{project_id}/colorist/final-verifications",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_color_final_verifications",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_color_final_verifications",
+    "path": "/api/projects/{project_id}/colorist/final-verifications",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_explicit_color_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_explicit_color_decision",
+    "path": "/api/projects/{project_id}/colorist/decisions/save",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_colorist_signal",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_colorist_signal",
+    "path": "/api/projects/{project_id}/colorist/signal",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_casting_role_breakdowns",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_casting_role_breakdowns",
+    "path": "/api/f51/studio/projects/{project_id}/casting/roles/build",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_casting_role_breakdowns",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_casting_role_breakdowns",
+    "path": "/api/f51/studio/projects/{project_id}/casting/roles",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_casting_role_breakdown",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_casting_role_breakdown",
+    "path": "/api/f51/studio/projects/{project_id}/casting/roles/{role_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_talent_profile",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_talent_profile",
+    "path": "/api/f51/studio/projects/{project_id}/casting/talent",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_talent_profiles",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_talent_profiles",
+    "path": "/api/f51/studio/projects/{project_id}/casting/talent",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_talent_profile",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_talent_profile",
+    "path": "/api/f51/studio/projects/{project_id}/casting/talent/{talent_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_talent_profile",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_talent_profile",
+    "path": "/api/f51/studio/projects/{project_id}/casting/talent/{talent_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_audition_package",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_audition_package",
+    "path": "/api/f51/studio/projects/{project_id}/casting/roles/{role_id}/audition-packages",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_audition_packages",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_audition_packages",
+    "path": "/api/f51/studio/projects/{project_id}/casting/audition-packages",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "submit_audition",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "submit_audition",
+    "path": "/api/f51/studio/projects/{project_id}/casting/audition-packages/{package_id}/submissions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_auditions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_auditions",
+    "path": "/api/f51/studio/projects/{project_id}/casting/auditions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "evaluate_audition",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "evaluate_audition",
+    "path": "/api/f51/studio/projects/{project_id}/casting/auditions/{audition_id}/evaluate",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "recommend_casting",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "recommend_casting",
+    "path": "/api/f51/studio/projects/{project_id}/casting/roles/{role_id}/recommendations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_casting_recommendations",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_casting_recommendations",
+    "path": "/api/f51/studio/projects/{project_id}/casting/recommendations",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "approve_casting_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "approve_casting_decision",
+    "path": "/api/f51/studio/projects/{project_id}/casting/decisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_active_casting_decisions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_active_casting_decisions",
+    "path": "/api/f51/studio/projects/{project_id}/casting/decisions/active",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_casting_projection",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_casting_projection",
+    "path": "/api/f51/studio/projects/{project_id}/casting/projection",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_casting_readiness_report",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_casting_readiness_report",
+    "path": "/api/f51/studio/projects/{project_id}/casting/readiness",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_casting_department_signal",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_casting_department_signal",
+    "path": "/api/f51/studio/projects/{project_id}/casting/department-signal",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "save_casting_memory_decision",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "save_casting_memory_decision",
+    "path": "/api/f51/studio/projects/{project_id}/casting/memory-decisions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "update_casting_memory_decision",
+    "include_in_schema": true,
+    "methods": [
+      "PATCH"
+    ],
+    "name": "update_casting_memory_decision",
+    "path": "/api/f51/studio/projects/{project_id}/casting/memory-decisions/{decision_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "forget_casting_memory_decision",
+    "include_in_schema": true,
+    "methods": [
+      "DELETE"
+    ],
+    "name": "forget_casting_memory_decision",
+    "path": "/api/f51/studio/projects/{project_id}/casting/memory-decisions/{decision_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "register_knowledge_bible",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "register_knowledge_bible",
+    "path": "/api/projects/{project_id}/knowledge/bibles",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "upload_knowledge_bible",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "upload_knowledge_bible",
+    "path": "/api/projects/{project_id}/knowledge/bibles/upload",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_knowledge_bibles",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_knowledge_bibles",
+    "path": "/api/projects/{project_id}/knowledge/bibles",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_knowledge_bible",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_knowledge_bible",
+    "path": "/api/projects/{project_id}/knowledge/bibles/{bible_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "parse_knowledge_bible",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "parse_knowledge_bible",
+    "path": "/api/projects/{project_id}/knowledge/bibles/{bible_id}/parse",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "rebuild_knowledge_index",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "rebuild_knowledge_index",
+    "path": "/api/projects/{project_id}/knowledge/rebuild",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_knowledge_rebuilds",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_knowledge_rebuilds",
+    "path": "/api/projects/{project_id}/knowledge/rebuilds",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_knowledge_rebuild",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_knowledge_rebuild",
+    "path": "/api/projects/{project_id}/knowledge/rebuilds/{run_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_knowledge_atoms",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_knowledge_atoms",
+    "path": "/api/projects/{project_id}/knowledge/atoms",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "build_knowledge_context_pack",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "build_knowledge_context_pack",
+    "path": "/api/projects/{project_id}/knowledge/context",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_knowledge_conflicts",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_knowledge_conflicts",
+    "path": "/api/projects/{project_id}/knowledge/conflicts",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "acknowledge_knowledge_conflict",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "acknowledge_knowledge_conflict",
+    "path": "/api/projects/{project_id}/knowledge/conflicts/{conflict_id}/acknowledge",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_knowledge_traces",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_knowledge_traces",
+    "path": "/api/projects/{project_id}/knowledge/traces",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_knowledge_trace",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_knowledge_trace",
+    "path": "/api/projects/{project_id}/knowledge/traces/{trace_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_knowledge_sources",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_knowledge_sources",
+    "path": "/api/projects/{project_id}/knowledge/sources",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_studio_brain_session",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_studio_brain_session",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "list_studio_brain_sessions",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "list_studio_brain_sessions",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_studio_brain_session",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_studio_brain_session",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions/{session_id}",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "refresh_studio_brain_signals",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "refresh_studio_brain_signals",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions/{session_id}/signals/refresh",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "generate_studio_brain_plan",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "generate_studio_brain_plan",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions/{session_id}/plan",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "detect_studio_brain_conflicts",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "detect_studio_brain_conflicts",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions/{session_id}/conflicts/detect",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "resolve_studio_brain_conflict",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "resolve_studio_brain_conflict",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions/{session_id}/conflicts/{conflict_id}/resolve",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "create_studio_brain_readiness",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "create_studio_brain_readiness",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions/{session_id}/readiness",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "propose_studio_brain_directives",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "propose_studio_brain_directives",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions/{session_id}/directives",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "dispatch_studio_brain_directive",
+    "include_in_schema": true,
+    "methods": [
+      "POST"
+    ],
+    "name": "dispatch_studio_brain_directive",
+    "path": "/api/f51/studio/projects/{project_id}/brain/sessions/{session_id}/directives/{directive_id}/dispatch",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "get_latest_studio_brain_session",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "get_latest_studio_brain_session",
+    "path": "/api/f51/studio/projects/{project_id}/brain/latest",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": null,
+    "include_in_schema": null,
+    "methods": [],
+    "name": "previs-assets",
+    "path": "/previs-assets",
+    "route_class": "Mount"
+  },
+  {
+    "endpoint": "mock_video_sample",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "mock_video_sample",
+    "path": "/outputs/mock-video/sample.mp4",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": null,
+    "include_in_schema": null,
+    "methods": [],
+    "name": "outputs",
+    "path": "/outputs",
+    "route_class": "Mount"
+  },
+  {
+    "endpoint": null,
+    "include_in_schema": null,
+    "methods": [],
+    "name": "static",
+    "path": "/static",
+    "route_class": "Mount"
+  },
+  {
+    "endpoint": "build_info",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "build_info",
+    "path": "/build-info",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "websocket_jobs_endpoint",
+    "include_in_schema": null,
+    "methods": [],
+    "name": "websocket_jobs_endpoint",
+    "path": "/ws/jobs",
+    "route_class": "APIWebSocketRoute"
+  },
+  {
+    "endpoint": "websocket_job_updates",
+    "include_in_schema": null,
+    "methods": [],
+    "name": "websocket_job_updates",
+    "path": "/ws/jobs/{job_id}",
+    "route_class": "APIWebSocketRoute"
+  },
+  {
+    "endpoint": "health_check",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "health_check",
+    "path": "/health",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "readiness_check",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "readiness_check",
+    "path": "/ready",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "root",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "root",
+    "path": "/",
+    "route_class": "APIRoute"
+  },
+  {
+    "endpoint": "approval_snapshot",
+    "include_in_schema": true,
+    "methods": [
+      "GET"
+    ],
+    "name": "approval_snapshot",
+    "path": "/api/approval",
+    "route_class": "APIRoute"
+  }
+]

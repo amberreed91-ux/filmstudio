@@ -1,0 +1,5837 @@
+{
+  "studio-backend/app/routes/__init__.py": {
+    "route_defs": [
+      {
+        "handler": "get_overview",
+        "method": "GET",
+        "path": "/overview",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "create_demo_project",
+        "method": "POST",
+        "path": "/demo-project",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "ingest_script",
+        "method": "POST",
+        "path": "/ingest-script",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "study_reference_prompt",
+        "method": "POST",
+        "path": "/study-reference-prompt",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "reorganize_reference_library",
+        "method": "POST",
+        "path": "/reorganize-reference-library",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_studio_brain_library",
+        "method": "GET",
+        "path": "/studio-brain-library",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "attach_studio_brain_library_files",
+        "method": "POST",
+        "path": "/projects/{project_id}/studio-brain-library/attach",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "study_reference_upload",
+        "method": "POST",
+        "path": "/study-reference",
+        "request_model_candidates": [
+          "str",
+          "UploadFile",
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project",
+        "method": "GET",
+        "path": "/projects/{project_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_final_export_status_compat",
+        "method": "GET",
+        "path": "/projects/{project_id}/export/status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "download_final_export_compat",
+        "method": "GET",
+        "path": "/projects/{project_id}/export/download",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_project_artifact",
+        "method": "GET",
+        "path": "/projects/{project_id}/export/{artifact_type}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "simulate_screening",
+        "method": "POST",
+        "path": "/projects/{project_id}/simulate-screening",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "review_shot",
+        "method": "POST",
+        "path": "/projects/{project_id}/review-shot",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "add_shot_to_approval_gates",
+        "method": "POST",
+        "path": "/projects/{project_id}/approval-gates/add-shot",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "initialize_project_crew",
+        "method": "POST",
+        "path": "/projects/{project_id}/initialize-crew",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "record_dailies_select",
+        "method": "POST",
+        "path": "/projects/{project_id}/dailies-select",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "bool",
+          "int",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "retry_render",
+        "method": "POST",
+        "path": "/projects/{project_id}/retry-render/{render_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_render_mode",
+        "method": "POST",
+        "path": "/projects/{project_id}/render-mode",
+        "request_model_candidates": [
+          "str",
+          "bool",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_storyboard_wall",
+        "method": "GET",
+        "path": "/projects/{project_id}/storyboard-wall",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_scene_storyboard",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/storyboard",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "toggle_previs_seed_lock",
+        "method": "PATCH",
+        "path": "/projects/{project_id}/scenes/{scene_id}/previs/seed",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "dict"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_storyboard_shot",
+        "method": "POST",
+        "path": "/projects/{project_id}/storyboard-wall/update-shot",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_pending_shots",
+        "method": "GET",
+        "path": "/projects/{project_id}/pending-shots",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "extract_study_memories",
+        "method": "POST",
+        "path": "/projects/{project_id}/study/memories/extract",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_study_memories",
+        "method": "GET",
+        "path": "/projects/{project_id}/study/memories",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "clear_study_memories",
+        "method": "DELETE",
+        "path": "/projects/{project_id}/study/memories",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      null,
+      null
+    ]
+  },
+  "studio-backend/app/routes/admin.py": {
+    "route_defs": [
+      {
+        "handler": "restart_server",
+        "method": "POST",
+        "path": "/restart",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/admin"
+    ]
+  },
+  "studio-backend/app/routes/agents.py": {
+    "route_defs": [
+      {
+        "handler": "create_project_ownership",
+        "method": "POST",
+        "path": "/projects/{project_id}/ownership",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_ownership",
+        "method": "GET",
+        "path": "/projects/{project_id}/ownership",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_task",
+        "method": "POST",
+        "path": "/projects/{project_id}/tasks",
+        "request_model_candidates": [
+          "str",
+          "CreateTaskRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_tasks",
+        "method": "GET",
+        "path": "/projects/{project_id}/tasks",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_task",
+        "method": "GET",
+        "path": "/tasks/{task_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "assign_task",
+        "method": "POST",
+        "path": "/tasks/{task_id}/assign/{agent_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "start_task",
+        "method": "POST",
+        "path": "/tasks/{task_id}/start",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "complete_task",
+        "method": "POST",
+        "path": "/tasks/{task_id}/complete",
+        "request_model_candidates": [
+          "str",
+          "CompleteTaskRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "apply_override",
+        "method": "POST",
+        "path": "/tasks/{task_id}/override",
+        "request_model_candidates": [
+          "str",
+          "OverrideRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "run_script_analysis",
+        "method": "POST",
+        "path": "/projects/{project_id}/workflow/script-analysis",
+        "request_model_candidates": [
+          "str",
+          "ScriptAnalysisRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_render_request",
+        "method": "POST",
+        "path": "/projects/{project_id}/workflow/render",
+        "request_model_candidates": [
+          "str",
+          "RenderRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_activities",
+        "method": "GET",
+        "path": "/projects/{project_id}/activities",
+        "request_model_candidates": [
+          "str",
+          "int",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_agents",
+        "method": "GET",
+        "path": "/agents",
+        "request_model_candidates": [],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/agents"
+    ]
+  },
+  "studio-backend/app/routes/assembly.py": {
+    "route_defs": [
+      {
+        "handler": "assemble_film_endpoint",
+        "method": "POST",
+        "path": "/{project_id}/assemble-film",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_assembly_status",
+        "method": "GET",
+        "path": "/{project_id}/assembly-status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/audience_simulator.py": {
+    "route_defs": [
+      {
+        "handler": "simulate_scene_audience",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/simulate",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "SceneAudienceSimulation"
+      },
+      {
+        "handler": "simulate_project_audience",
+        "method": "POST",
+        "path": "/projects/{project_id}/simulate",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "ProjectAudienceSimulation"
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/audience-simulator"
+    ]
+  },
+  "studio-backend/app/routes/audio.py": {
+    "route_defs": [
+      {
+        "handler": "generate_scene_audio",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/audio/generate",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "AudioGenerateRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_scene_audio_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/scenes/{scene_id}/audio/status",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_audio_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/audio/status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_audio_capabilities",
+        "method": "GET",
+        "path": "/audio/capabilities",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_audio_brief",
+        "method": "GET",
+        "path": "/projects/{project_id}/scenes/{scene_id}/audio-brief",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "SoundAdvisory"
+      },
+      {
+        "handler": "apply_audio_brief",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/audio-brief/apply",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_scene_audio_pipeline",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/audio/pipeline/generate",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "AudioPipelineRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_scene_audio_pipeline_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/scenes/{scene_id}/audio/pipeline/status",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_audio_pipeline_capabilities",
+        "method": "GET",
+        "path": "/audio/pipeline/capabilities",
+        "request_model_candidates": [],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/auth.py": {
+    "route_defs": [
+      {
+        "handler": "register",
+        "method": "POST",
+        "path": "/register",
+        "request_model_candidates": [
+          "RegisterRequest",
+          "Response"
+        ],
+        "response_model": "LoginResponse"
+      },
+      {
+        "handler": "login",
+        "method": "POST",
+        "path": "/login",
+        "request_model_candidates": [
+          "LoginRequest",
+          "Response"
+        ],
+        "response_model": "LoginResponse"
+      },
+      {
+        "handler": "logout",
+        "method": "POST",
+        "path": "/logout",
+        "request_model_candidates": [
+          "Response"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_session",
+        "method": "GET",
+        "path": "/session",
+        "request_model_candidates": [
+          "Request"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "delete_session",
+        "method": "DELETE",
+        "path": "/session",
+        "request_model_candidates": [
+          "Request",
+          "Response"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      null
+    ]
+  },
+  "studio-backend/app/routes/casting_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "build_casting_role_breakdowns",
+        "method": "POST",
+        "path": "/{project_id}/casting/roles/build",
+        "request_model_candidates": [
+          "str",
+          "RoleBreakdownBuildRequest"
+        ],
+        "response_model": "RoleBreakdownBuildResponse"
+      },
+      {
+        "handler": "list_casting_role_breakdowns",
+        "method": "GET",
+        "path": "/{project_id}/casting/roles",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_casting_role_breakdown",
+        "method": "GET",
+        "path": "/{project_id}/casting/roles/{role_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "CastingRoleBreakdown"
+      },
+      {
+        "handler": "create_talent_profile",
+        "method": "POST",
+        "path": "/{project_id}/casting/talent",
+        "request_model_candidates": [
+          "str",
+          "TalentProfileRequest"
+        ],
+        "response_model": "TalentProfile"
+      },
+      {
+        "handler": "list_talent_profiles",
+        "method": "GET",
+        "path": "/{project_id}/casting/talent",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_talent_profile",
+        "method": "GET",
+        "path": "/{project_id}/casting/talent/{talent_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "TalentProfile"
+      },
+      {
+        "handler": "update_talent_profile",
+        "method": "PATCH",
+        "path": "/{project_id}/casting/talent/{talent_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "TalentProfileUpdateRequest"
+        ],
+        "response_model": "TalentProfile"
+      },
+      {
+        "handler": "create_audition_package",
+        "method": "POST",
+        "path": "/{project_id}/casting/roles/{role_id}/audition-packages",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "AuditionPackageRequest"
+        ],
+        "response_model": "AuditionPackage"
+      },
+      {
+        "handler": "list_audition_packages",
+        "method": "GET",
+        "path": "/{project_id}/casting/audition-packages",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "submit_audition",
+        "method": "POST",
+        "path": "/{project_id}/casting/audition-packages/{package_id}/submissions",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "AuditionSubmissionRequest"
+        ],
+        "response_model": "AuditionSubmission"
+      },
+      {
+        "handler": "list_auditions",
+        "method": "GET",
+        "path": "/{project_id}/casting/auditions",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "evaluate_audition",
+        "method": "POST",
+        "path": "/{project_id}/casting/auditions/{audition_id}/evaluate",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "AuditionEvaluation"
+      },
+      {
+        "handler": "recommend_casting",
+        "method": "POST",
+        "path": "/{project_id}/casting/roles/{role_id}/recommendations",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "CastingRecommendationRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_casting_recommendations",
+        "method": "GET",
+        "path": "/{project_id}/casting/recommendations",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "approve_casting_decision",
+        "method": "POST",
+        "path": "/{project_id}/casting/decisions",
+        "request_model_candidates": [
+          "str",
+          "CastingDecisionRequest"
+        ],
+        "response_model": "CastingDecision"
+      },
+      {
+        "handler": "list_active_casting_decisions",
+        "method": "GET",
+        "path": "/{project_id}/casting/decisions/active",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_casting_projection",
+        "method": "GET",
+        "path": "/{project_id}/casting/projection",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "CastingProjection"
+      },
+      {
+        "handler": "create_casting_readiness_report",
+        "method": "POST",
+        "path": "/{project_id}/casting/readiness",
+        "request_model_candidates": [
+          "str",
+          "CastingReadinessRequest"
+        ],
+        "response_model": "CastingReadinessReport"
+      },
+      {
+        "handler": "get_casting_department_signal",
+        "method": "GET",
+        "path": "/{project_id}/casting/department-signal",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "CastingDepartmentSignal"
+      },
+      {
+        "handler": "save_casting_memory_decision",
+        "method": "POST",
+        "path": "/{project_id}/casting/memory-decisions",
+        "request_model_candidates": [
+          "str",
+          "CastingSaveDecisionRequest"
+        ],
+        "response_model": "CastingDecisionMemoryProjection"
+      },
+      {
+        "handler": "update_casting_memory_decision",
+        "method": "PATCH",
+        "path": "/{project_id}/casting/memory-decisions/{decision_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "CastingDecisionUpdateRequest"
+        ],
+        "response_model": "CastingDecisionMemoryProjection"
+      },
+      {
+        "handler": "forget_casting_memory_decision",
+        "method": "DELETE",
+        "path": "/{project_id}/casting/memory-decisions/{decision_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "CastingDecisionMemoryProjection"
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/cinematography.py": {
+    "route_defs": [
+      {
+        "handler": "create_camera_grammar_plan",
+        "method": "POST",
+        "path": "/{project_id}/cinematography/plans",
+        "request_model_candidates": [
+          "str",
+          "CameraGrammarPlanRequest"
+        ],
+        "response_model": "CameraGrammarPlanResponse"
+      },
+      {
+        "handler": "list_camera_grammar_plans",
+        "method": "GET",
+        "path": "/{project_id}/cinematography/plans",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_camera_grammar_plan",
+        "method": "GET",
+        "path": "/{project_id}/cinematography/plans/{plan_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_camera_grammar_observation",
+        "method": "POST",
+        "path": "/{project_id}/cinematography/observations",
+        "request_model_candidates": [
+          "str",
+          "CameraGrammarObservationRequest"
+        ],
+        "response_model": "CameraGrammarObservationResponse"
+      },
+      {
+        "handler": "list_camera_grammar_observations",
+        "method": "GET",
+        "path": "/{project_id}/cinematography/observations",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_camera_grammar_assessment",
+        "method": "POST",
+        "path": "/{project_id}/cinematography/assessments",
+        "request_model_candidates": [
+          "str",
+          "CameraGrammarAssessmentRequest"
+        ],
+        "response_model": "CameraGrammarAssessmentResponse"
+      },
+      {
+        "handler": "list_camera_grammar_assessments",
+        "method": "GET",
+        "path": "/{project_id}/cinematography/assessments",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_camera_grammar_render_context",
+        "method": "POST",
+        "path": "/{project_id}/cinematography/render-context",
+        "request_model_candidates": [
+          "str",
+          "CameraGrammarRenderContextRequest"
+        ],
+        "response_model": "CameraGrammarRenderContext"
+      }
+    ],
+    "router_prefixes": [
+      "/api/projects"
+    ]
+  },
+  "studio-backend/app/routes/co_director_chat.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/colorist.py": {
+    "route_defs": [
+      {
+        "handler": "create_color_look_bible",
+        "method": "POST",
+        "path": "/{project_id}/colorist/look-bibles",
+        "request_model_candidates": [
+          "str",
+          "ColorLookBibleRequest"
+        ],
+        "response_model": "ColorLookBibleResponse"
+      },
+      {
+        "handler": "list_color_look_bibles",
+        "method": "GET",
+        "path": "/{project_id}/colorist/look-bibles",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_color_look_bible",
+        "method": "GET",
+        "path": "/{project_id}/colorist/look-bibles/{look_bible_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_colorist_look_plan",
+        "method": "POST",
+        "path": "/{project_id}/colorist/plans",
+        "request_model_candidates": [
+          "str",
+          "ColoristLookPlanRequest"
+        ],
+        "response_model": "ColoristLookPlanResponse"
+      },
+      {
+        "handler": "list_colorist_look_plans",
+        "method": "GET",
+        "path": "/{project_id}/colorist/plans",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_colorist_look_plan",
+        "method": "GET",
+        "path": "/{project_id}/colorist/plans/{plan_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_color_palette_continuity",
+        "method": "GET",
+        "path": "/{project_id}/colorist/palette-continuity",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_color_story_arc",
+        "method": "POST",
+        "path": "/{project_id}/colorist/story-arcs",
+        "request_model_candidates": [
+          "str",
+          "ColorStoryArcRequest"
+        ],
+        "response_model": "ColorStoryArcResponse"
+      },
+      {
+        "handler": "list_color_story_arcs",
+        "method": "GET",
+        "path": "/{project_id}/colorist/story-arcs",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_color_grade_observation",
+        "method": "POST",
+        "path": "/{project_id}/colorist/observations",
+        "request_model_candidates": [
+          "str",
+          "ColorGradeObservationRequest"
+        ],
+        "response_model": "ColorGradeObservationResponse"
+      },
+      {
+        "handler": "list_color_grade_observations",
+        "method": "GET",
+        "path": "/{project_id}/colorist/observations",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_color_match_assessment",
+        "method": "POST",
+        "path": "/{project_id}/colorist/assessments",
+        "request_model_candidates": [
+          "str",
+          "ColorMatchAssessmentRequest"
+        ],
+        "response_model": "ColorMatchAssessmentResponse"
+      },
+      {
+        "handler": "list_color_match_assessments",
+        "method": "GET",
+        "path": "/{project_id}/colorist/assessments",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_color_render_context",
+        "method": "POST",
+        "path": "/{project_id}/colorist/render-context",
+        "request_model_candidates": [
+          "str",
+          "ColorRenderContextRequest"
+        ],
+        "response_model": "ColorRenderContext"
+      },
+      {
+        "handler": "create_color_final_verification",
+        "method": "POST",
+        "path": "/{project_id}/colorist/final-verifications",
+        "request_model_candidates": [
+          "str",
+          "ColorFinalVerificationRequest"
+        ],
+        "response_model": "ColorFinalVerificationResponse"
+      },
+      {
+        "handler": "list_color_final_verifications",
+        "method": "GET",
+        "path": "/{project_id}/colorist/final-verifications",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "save_explicit_color_decision",
+        "method": "POST",
+        "path": "/{project_id}/colorist/decisions/save",
+        "request_model_candidates": [
+          "str",
+          "ColoristDecisionSaveRequest"
+        ],
+        "response_model": "ColoristDecisionProjection"
+      },
+      {
+        "handler": "get_colorist_signal",
+        "method": "GET",
+        "path": "/{project_id}/colorist/signal",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "ColoristDepartmentSignal"
+      }
+    ],
+    "router_prefixes": [
+      "/api/projects"
+    ]
+  },
+  "studio-backend/app/routes/compose.py": {
+    "route_defs": [
+      {
+        "handler": "compose_scene_endpoint",
+        "method": "POST",
+        "path": "/{project_id}/scenes/{scene_id}/compose",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "bool"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_composition_endpoint",
+        "method": "GET",
+        "path": "/{project_id}/scenes/{scene_id}/composition",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/crew.py": {
+    "route_defs": [
+      {
+        "handler": "init_project",
+        "method": "POST",
+        "path": "/projects/{project_id}/init",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project",
+        "method": "GET",
+        "path": "/projects/{project_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_task",
+        "method": "POST",
+        "path": "/projects/{project_id}/tasks",
+        "request_model_candidates": [
+          "str",
+          "CreateTaskRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_tasks",
+        "method": "GET",
+        "path": "/projects/{project_id}/tasks",
+        "request_model_candidates": [
+          "str",
+          "bool",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_creative_attention",
+        "method": "GET",
+        "path": "/projects/{project_id}/needs-attention",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_task",
+        "method": "GET",
+        "path": "/tasks/{task_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "start_task",
+        "method": "POST",
+        "path": "/tasks/{task_id}/start",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "complete_task",
+        "method": "POST",
+        "path": "/tasks/{task_id}/complete",
+        "request_model_candidates": [
+          "str",
+          "CompleteTaskRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "apply_creative_decision",
+        "method": "POST",
+        "path": "/tasks/{task_id}/decision",
+        "request_model_candidates": [
+          "str",
+          "CreativeDecisionRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_agents",
+        "method": "GET",
+        "path": "/agents",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_orchestrator_status",
+        "method": "GET",
+        "path": "/orchestrator/status",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_crew_intelligence_overview",
+        "method": "GET",
+        "path": "/projects/{project_id}/intelligence",
+        "request_model_candidates": [
+          "str",
+          "int",
+          "int",
+          "int",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_crew_department_profiles",
+        "method": "GET",
+        "path": "/projects/{project_id}/intelligence/departments",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_crew_reasoning",
+        "method": "GET",
+        "path": "/projects/{project_id}/intelligence/reasoning",
+        "request_model_candidates": [
+          "str",
+          "int",
+          "int",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_crew_reasoning",
+        "method": "GET",
+        "path": "/projects/{project_id}/intelligence/reasoning/{reasoning_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_crew_handoffs",
+        "method": "GET",
+        "path": "/projects/{project_id}/intelligence/handoffs",
+        "request_model_candidates": [
+          "str",
+          "int",
+          "int",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_crew_handoff",
+        "method": "POST",
+        "path": "/projects/{project_id}/intelligence/handoffs",
+        "request_model_candidates": [
+          "str",
+          "CreateCrewHandoffRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_crew_handoff",
+        "method": "PATCH",
+        "path": "/projects/{project_id}/intelligence/handoffs/{handoff_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "UpdateCrewHandoffRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_crew_deliberations",
+        "method": "GET",
+        "path": "/projects/{project_id}/intelligence/deliberations",
+        "request_model_candidates": [
+          "str",
+          "int",
+          "int",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_crew_deliberation",
+        "method": "GET",
+        "path": "/projects/{project_id}/intelligence/deliberations/{deliberation_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_crew_deliberation",
+        "method": "POST",
+        "path": "/projects/{project_id}/intelligence/deliberations",
+        "request_model_candidates": [
+          "str",
+          "CreateCrewDeliberationRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "resolve_crew_deliberation",
+        "method": "PATCH",
+        "path": "/projects/{project_id}/intelligence/deliberations/{deliberation_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "ResolveCrewDeliberationRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_crew_creator_attention",
+        "method": "GET",
+        "path": "/projects/{project_id}/intelligence/attention",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_conflicts",
+        "method": "GET",
+        "path": "/conflicts",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_audit_trail",
+        "method": "GET",
+        "path": "/conflicts/audit",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_guardrails_status",
+        "method": "GET",
+        "path": "/guardrails/status",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_guardrails_status",
+        "method": "GET",
+        "path": "/guardrails/project/{project_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "reset_project_guardrails",
+        "method": "POST",
+        "path": "/guardrails/project/{project_id}/reset",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "emergency_stop_project",
+        "method": "POST",
+        "path": "/guardrails/project/{project_id}/emergency-stop",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "start_agent_loop",
+        "method": "POST",
+        "path": "/projects/{project_id}/agent-loop/start",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "stop_agent_loop",
+        "method": "POST",
+        "path": "/projects/{project_id}/agent-loop/stop",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_agent_loop_status_endpoint",
+        "method": "GET",
+        "path": "/projects/{project_id}/agent-loop/status",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_global_agent_status",
+        "method": "GET",
+        "path": "/agent-loop/global-status",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "trigger_agent_execution",
+        "method": "POST",
+        "path": "/projects/{project_id}/agent-loop/trigger",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_established_patterns",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/patterns",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_adaptation_decisions",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/decisions",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_evolution_metrics",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/evolution",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "record_feedback",
+        "method": "POST",
+        "path": "/projects/{project_id}/adaptation/feedback",
+        "request_model_candidates": [
+          "str",
+          "FeedbackRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_user_override",
+        "method": "POST",
+        "path": "/projects/{project_id}/adaptation/user-override",
+        "request_model_candidates": [
+          "str",
+          "UserOverrideRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_style_boundaries",
+        "method": "POST",
+        "path": "/projects/{project_id}/adaptation/style-boundaries",
+        "request_model_candidates": [
+          "str",
+          "StyleBoundaryRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_pattern_suggestions",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/suggestions",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "check_consistency",
+        "method": "POST",
+        "path": "/projects/{project_id}/adaptation/consistency-check",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "check_deviation_opportunity",
+        "method": "POST",
+        "path": "/projects/{project_id}/deviation/check",
+        "request_model_candidates": [
+          "str",
+          "DeviationCheckRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "apply_deviation",
+        "method": "POST",
+        "path": "/projects/{project_id}/deviation/apply",
+        "request_model_candidates": [
+          "str",
+          "DeviationCheckRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_deviation_history",
+        "method": "GET",
+        "path": "/projects/{project_id}/deviation/history",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_deviation_stats",
+        "method": "GET",
+        "path": "/projects/{project_id}/deviation/stats",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_custom_inversions",
+        "method": "POST",
+        "path": "/projects/{project_id}/deviation/custom-inversions",
+        "request_model_candidates": [
+          "str",
+          "CustomInversionRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_deviation_thresholds",
+        "method": "POST",
+        "path": "/projects/{project_id}/deviation/thresholds",
+        "request_model_candidates": [
+          "str",
+          "float",
+          "float"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_user_override",
+        "method": "POST",
+        "path": "/projects/{project_id}/hierarchy/override",
+        "request_model_candidates": [
+          "str",
+          "UserOverrideRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "clear_user_override",
+        "method": "DELETE",
+        "path": "/projects/{project_id}/hierarchy/override/{decision_type}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_scene_intent",
+        "method": "POST",
+        "path": "/projects/{project_id}/hierarchy/scene-intent",
+        "request_model_candidates": [
+          "str",
+          "SceneIntentRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "resolve_decision_conflict",
+        "method": "POST",
+        "path": "/projects/{project_id}/hierarchy/resolve",
+        "request_model_candidates": [
+          "str",
+          "DecisionConflictRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_hierarchy_debug",
+        "method": "GET",
+        "path": "/projects/{project_id}/hierarchy/debug",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_hierarchy_decisions",
+        "method": "GET",
+        "path": "/projects/{project_id}/hierarchy/decisions",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_hierarchy_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/hierarchy/status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "record_iteration",
+        "method": "POST",
+        "path": "/projects/{project_id}/adaptation/iteration",
+        "request_model_candidates": [
+          "str",
+          "RecordIterationRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "record_approval",
+        "method": "POST",
+        "path": "/projects/{project_id}/adaptation/approval",
+        "request_model_candidates": [
+          "str",
+          "RecordApprovalRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_scene_evolution",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/scene-evolution/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_iteration",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/iteration/{scene_id}/{iteration_number}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_evolution_metrics",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/metrics",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_evolution",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/project-evolution",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_improvement_trajectory",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/trajectory/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "compare_iterations",
+        "method": "GET",
+        "path": "/projects/{project_id}/adaptation/compare/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "int",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "record_evolution_endpoint",
+        "method": "POST",
+        "path": "/scenes/{scene_id}/evolution",
+        "request_model_candidates": [
+          "str",
+          "RecordEvolutionRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_evolution_data_endpoint",
+        "method": "GET",
+        "path": "/scenes/{scene_id}/evolution",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "compute_improvement_metrics_endpoint",
+        "method": "GET",
+        "path": "/scenes/{scene_id}/evolution/metrics",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/crew"
+    ]
+  },
+  "studio-backend/app/routes/debate.py": {
+    "route_defs": [
+      {
+        "handler": "trigger_debate",
+        "method": "POST",
+        "path": "/trigger",
+        "request_model_candidates": [
+          "DebateRoundRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "debate_action",
+        "method": "POST",
+        "path": "/action",
+        "request_model_candidates": [
+          "DebateActionRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_debates",
+        "method": "GET",
+        "path": "/{project_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/f51/studio/debate"
+    ]
+  },
+  "studio-backend/app/routes/director_intent.py": {
+    "route_defs": [
+      {
+        "handler": "get_director_intent",
+        "method": "GET",
+        "path": "/projects/{project_id}/director-intent",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "DirectorIntentResponse"
+      },
+      {
+        "handler": "update_director_intent",
+        "method": "POST",
+        "path": "/projects/{project_id}/director-intent",
+        "request_model_candidates": [
+          "str",
+          "DirectorIntentRequest"
+        ],
+        "response_model": "DirectorIntentResponse"
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/editorial_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "analyze_editorial_intelligence",
+        "method": "POST",
+        "path": "/projects/{project_id}/editorial-intelligence/analyze",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_latest_editorial_intelligence",
+        "method": "GET",
+        "path": "/projects/{project_id}/editorial-intelligence/latest",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_editorial_intelligence",
+        "method": "GET",
+        "path": "/projects/{project_id}/editorial-intelligence",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_editorial_applications",
+        "method": "GET",
+        "path": "/projects/{project_id}/editorial-intelligence/applications",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_editorial_intelligence",
+        "method": "GET",
+        "path": "/projects/{project_id}/editorial-intelligence/{analysis_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "apply_editorial_decisions",
+        "method": "POST",
+        "path": "/projects/{project_id}/editorial-intelligence/{analysis_id}/apply",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "EditorialApplyRequest"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/emotion_analysis.py": {
+    "route_defs": [
+      {
+        "handler": "analyze_scene_emotion",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/analyze",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "EmotionAnalysisResponse"
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/emotion-analysis"
+    ]
+  },
+  "studio-backend/app/routes/errors.py": {
+    "route_defs": [
+      {
+        "handler": "receive_error_reports",
+        "method": "POST",
+        "path": "/errors",
+        "request_model_candidates": [
+          "ErrorBatch",
+          "Request"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/export.py": {
+    "route_defs": [
+      {
+        "handler": "trigger_export",
+        "method": "POST",
+        "path": "/projects/{project_id}/export",
+        "request_model_candidates": [
+          "str",
+          "ExportOptions"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_export_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/export/status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "download_export",
+        "method": "GET",
+        "path": "/projects/{project_id}/export/download",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/export_package.py": {
+    "route_defs": [
+      {
+        "handler": "build_export_package",
+        "method": "POST",
+        "path": "/{project_id}/export-package",
+        "request_model_candidates": [
+          "str",
+          "BuildExportPackageRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_export_packages",
+        "method": "GET",
+        "path": "/{project_id}/export-packages",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_export_package",
+        "method": "GET",
+        "path": "/{project_id}/export-packages/{package_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "validate_for_festival",
+        "method": "POST",
+        "path": "/{project_id}/export-packages/{package_id}/validate-festival",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "dict"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_festival_presets",
+        "method": "GET",
+        "path": "/festival-presets",
+        "request_model_candidates": [],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects",
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/exports.py": {
+    "route_defs": [
+      {
+        "handler": "export_pitch_pack",
+        "method": "GET",
+        "path": "/{project_id}/pitch-pack",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_shot_list",
+        "method": "GET",
+        "path": "/{project_id}/shot-list",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_prompt_pack",
+        "method": "GET",
+        "path": "/{project_id}/prompt-pack",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_cut_manifest",
+        "method": "GET",
+        "path": "/{project_id}/cut-manifest",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_archive_snapshot",
+        "method": "GET",
+        "path": "/{project_id}/archive-snapshot",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_festival",
+        "method": "GET",
+        "path": "/{project_id}/festival-export",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_youtube",
+        "method": "GET",
+        "path": "/{project_id}/youtube-export",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_trailer",
+        "method": "GET",
+        "path": "/{project_id}/trailer-export",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_teaser",
+        "method": "GET",
+        "path": "/{project_id}/teaser-export",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "export_subtitles",
+        "method": "GET",
+        "path": "/{project_id}/subtitle-packages",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/exports"
+    ]
+  },
+  "studio-backend/app/routes/film_dna.py": {
+    "route_defs": [
+      {
+        "handler": "get_film_dna",
+        "method": "GET",
+        "path": "/projects/{project_id}/film-dna",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "FilmDNAResponse"
+      },
+      {
+        "handler": "refresh_film_dna",
+        "method": "POST",
+        "path": "/projects/{project_id}/film-dna/refresh",
+        "request_model_candidates": [
+          "str",
+          "BackgroundTasks"
+        ],
+        "response_model": "RefreshResponse"
+      },
+      {
+        "handler": "get_character_journeys",
+        "method": "GET",
+        "path": "/projects/{project_id}/character-journeys",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_arc_completeness",
+        "method": "GET",
+        "path": "/projects/{project_id}/arc-completeness",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/memory.py": {
+    "route_defs": [
+      {
+        "handler": "get_project_memory",
+        "method": "GET",
+        "path": "/{project_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_project_memory",
+        "method": "POST",
+        "path": "/{project_id}/update",
+        "request_model_candidates": [
+          "str",
+          "UpdateMemoryRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "initialize_memory",
+        "method": "POST",
+        "path": "/{project_id}/init",
+        "request_model_candidates": [
+          "str",
+          "InitializeMemoryRequest",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_scene_memory",
+        "method": "POST",
+        "path": "/{project_id}/scene",
+        "request_model_candidates": [
+          "str",
+          "SceneMemoryRequest",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_character_memory",
+        "method": "POST",
+        "path": "/{project_id}/character",
+        "request_model_candidates": [
+          "str",
+          "CharacterMemoryRequest",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "store_reference_analysis",
+        "method": "POST",
+        "path": "/reference-analysis/store",
+        "request_model_candidates": [
+          "ReferenceAnalysisStoreRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "retrieve_reference_memory",
+        "method": "POST",
+        "path": "/reference-analysis/retrieve",
+        "request_model_candidates": [
+          "ReferenceMemoryRetrieveRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "delete_reference_memory",
+        "method": "POST",
+        "path": "/reference-analysis/delete",
+        "request_model_candidates": [
+          "ReferenceMemoryDeleteRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_style_memory",
+        "method": "POST",
+        "path": "/{project_id}/style",
+        "request_model_candidates": [
+          "str",
+          "StyleMemoryRequest",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_review_memory",
+        "method": "POST",
+        "path": "/{project_id}/review",
+        "request_model_candidates": [
+          "str",
+          "ReviewMemoryRequest",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "check_contradiction",
+        "method": "GET",
+        "path": "/{project_id}/check-contradiction",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "Any",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_agent_context",
+        "method": "GET",
+        "path": "/{project_id}/agent-context",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_memory_versions",
+        "method": "GET",
+        "path": "/{project_id}/versions",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "debug_memory",
+        "method": "GET",
+        "path": "/{project_id}/debug",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/memory"
+    ]
+  },
+  "studio-backend/app/routes/performance_audio_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "create_performance_audio_plan",
+        "method": "POST",
+        "path": "/{project_id}/audio-intelligence/plans",
+        "request_model_candidates": [
+          "str",
+          "PerformanceAudioPlanRequest"
+        ],
+        "response_model": "PerformanceAudioPlanResponse"
+      },
+      {
+        "handler": "list_performance_audio_plans",
+        "method": "GET",
+        "path": "/{project_id}/audio-intelligence/plans",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_performance_audio_plan",
+        "method": "GET",
+        "path": "/{project_id}/audio-intelligence/plans/{plan_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_performance_audio_execution_request",
+        "method": "POST",
+        "path": "/{project_id}/audio-intelligence/plans/{plan_id}/execution-request",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "AudioExecutionRequest"
+      },
+      {
+        "handler": "generate_performance_audio_from_plan",
+        "method": "POST",
+        "path": "/{project_id}/audio-intelligence/plans/{plan_id}/generate",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_performance_audio_voice_profiles",
+        "method": "GET",
+        "path": "/{project_id}/audio-intelligence/voice-profiles",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_performance_audio_dialogue_cues",
+        "method": "GET",
+        "path": "/{project_id}/audio-intelligence/dialogue-cues",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_performance_audio_soundscape_layers",
+        "method": "GET",
+        "path": "/{project_id}/audio-intelligence/soundscape-layers",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_performance_audio_assessment",
+        "method": "POST",
+        "path": "/{project_id}/audio-intelligence/assessments",
+        "request_model_candidates": [
+          "str",
+          "AudioIntelligenceAssessmentRequest"
+        ],
+        "response_model": "AudioIntelligenceAssessment"
+      },
+      {
+        "handler": "list_performance_audio_assessments",
+        "method": "GET",
+        "path": "/{project_id}/audio-intelligence/assessments",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "save_performance_audio_decision",
+        "method": "POST",
+        "path": "/{project_id}/audio-intelligence/decisions",
+        "request_model_candidates": [
+          "str",
+          "PerformanceAudioDecisionRequest"
+        ],
+        "response_model": "PerformanceAudioDecisionProjection"
+      },
+      {
+        "handler": "update_performance_audio_decision",
+        "method": "PATCH",
+        "path": "/{project_id}/audio-intelligence/decisions/{decision_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "PerformanceAudioDecisionUpdateRequest"
+        ],
+        "response_model": "PerformanceAudioDecisionProjection"
+      },
+      {
+        "handler": "forget_performance_audio_decision",
+        "method": "DELETE",
+        "path": "/{project_id}/audio-intelligence/decisions/{decision_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "PerformanceAudioDecisionProjection"
+      },
+      {
+        "handler": "get_performance_audio_department_signal",
+        "method": "GET",
+        "path": "/{project_id}/audio-intelligence/department-signal",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "PerformanceAudioDepartmentSignal"
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/performance_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "analyze_performance",
+        "method": "POST",
+        "path": "/{project_id}/performance-intelligence/analyze",
+        "request_model_candidates": [
+          "str",
+          "PerformanceAnalysisRequest"
+        ],
+        "response_model": "PerformanceAnalysisResponse"
+      },
+      {
+        "handler": "get_scene_performance",
+        "method": "GET",
+        "path": "/{project_id}/performance-intelligence/scenes/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "PerformanceAnalysisResponse"
+      },
+      {
+        "handler": "get_character_performance_history",
+        "method": "GET",
+        "path": "/{project_id}/performance-intelligence/characters/{character_id}/history",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_performance_prompt_context",
+        "method": "GET",
+        "path": "/{project_id}/performance-intelligence/scenes/{scene_id}/prompt-context",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "PerformanceContextBundle"
+      },
+      {
+        "handler": "get_performance_voice_context",
+        "method": "GET",
+        "path": "/{project_id}/performance-intelligence/scenes/{scene_id}/voice-context/{character_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": "PerformanceContextBundle"
+      },
+      {
+        "handler": "get_performance_screening_context",
+        "method": "GET",
+        "path": "/{project_id}/performance-intelligence/scenes/{scene_id}/screening-context",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "PerformanceContextBundle"
+      },
+      {
+        "handler": "save_performance_decision",
+        "method": "POST",
+        "path": "/{project_id}/performance-intelligence/decisions",
+        "request_model_candidates": [
+          "str",
+          "PerformanceSaveDecisionRequest"
+        ],
+        "response_model": "PerformanceDecisionMemoryProjection"
+      },
+      {
+        "handler": "update_performance_decision",
+        "method": "PATCH",
+        "path": "/{project_id}/performance-intelligence/decisions/{decision_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "PerformanceUpdateDecisionRequest"
+        ],
+        "response_model": "PerformanceDecisionMemoryProjection"
+      },
+      {
+        "handler": "forget_performance_decision",
+        "method": "DELETE",
+        "path": "/{project_id}/performance-intelligence/decisions/{decision_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "PerformanceDecisionMemoryProjection"
+      }
+    ],
+    "router_prefixes": [
+      "/api/projects"
+    ]
+  },
+  "studio-backend/app/routes/pitch_deck.py": {
+    "route_defs": [
+      {
+        "handler": "generate_pitch_deck",
+        "method": "POST",
+        "path": "/{project_id}/pitch-deck",
+        "request_model_candidates": [
+          "str",
+          "GeneratePitchDeckRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_pitch_decks",
+        "method": "GET",
+        "path": "/{project_id}/pitch-decks",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_pitch_deck",
+        "method": "GET",
+        "path": "/{project_id}/pitch-decks/{deck_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/previs_routes.py": {
+    "route_defs": [
+      {
+        "handler": "generate_scene_previs",
+        "method": "POST",
+        "path": "/projects/{project_id}/previs/generate-scene/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "int",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_scene_previs_images",
+        "method": "GET",
+        "path": "/projects/{project_id}/previs/images/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_all_previs",
+        "method": "POST",
+        "path": "/projects/{project_id}/previs/generate-all",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "enhance_prompt",
+        "method": "POST",
+        "path": "/projects/{project_id}/previs/enhance-prompt",
+        "request_model_candidates": [
+          "str",
+          "EnhancePromptRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "previs_director_notes",
+        "method": "POST",
+        "path": "/projects/{project_id}/previs/director-notes",
+        "request_model_candidates": [
+          "str",
+          "DirectorNoteRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "recommend_shot_count",
+        "method": "POST",
+        "path": "/projects/{project_id}/previs/shot-count",
+        "request_model_candidates": [
+          "str",
+          "ShotCountRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "recommend_generation_settings",
+        "method": "POST",
+        "path": "/projects/{project_id}/previs/generation-settings",
+        "request_model_candidates": [
+          "str",
+          "GenerationSettingsRequest"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      null
+    ]
+  },
+  "studio-backend/app/routes/proactive.py": {
+    "route_defs": [
+      {
+        "handler": "proactive_check",
+        "method": "POST",
+        "path": "/projects/{project_id}/co-director/proactive-check",
+        "request_model_candidates": [
+          "str",
+          "ProactiveCheckRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "co_director_chat",
+        "method": "POST",
+        "path": "/projects/{project_id}/co-director/chat",
+        "request_model_candidates": [
+          "str",
+          "ChatRequest"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/production_acceptance.py": {
+    "route_defs": [
+      {
+        "handler": "run_production_acceptance",
+        "method": "POST",
+        "path": "/projects/{project_id}/production-acceptance",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_production_acceptance_reports",
+        "method": "GET",
+        "path": "/projects/{project_id}/production-acceptance",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "latest_production_acceptance",
+        "method": "GET",
+        "path": "/projects/{project_id}/production-acceptance/latest",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_production_acceptance_report",
+        "method": "GET",
+        "path": "/production-acceptance/{acceptance_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_package_acceptance_guard",
+        "method": "GET",
+        "path": "/final-short-film-packages/{package_id}/acceptance-guard",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/production_design_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "create_production_design_plan",
+        "method": "POST",
+        "path": "/{project_id}/production-design/plans",
+        "request_model_candidates": [
+          "str",
+          "ProductionDesignPlanRequest"
+        ],
+        "response_model": "ProductionDesignPlanResponse"
+      },
+      {
+        "handler": "list_production_design_plans",
+        "method": "GET",
+        "path": "/{project_id}/production-design/plans",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_production_design_plan",
+        "method": "GET",
+        "path": "/{project_id}/production-design/plans/{plan_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_production_design_environment_profile",
+        "method": "POST",
+        "path": "/{project_id}/production-design/environment-profiles",
+        "request_model_candidates": [
+          "str",
+          "EnvironmentDesignProfileRequest"
+        ],
+        "response_model": "EnvironmentDesignProfile"
+      },
+      {
+        "handler": "list_production_design_environment_profiles",
+        "method": "GET",
+        "path": "/{project_id}/production-design/environment-profiles",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_production_design_prop_record",
+        "method": "POST",
+        "path": "/{project_id}/production-design/prop-records",
+        "request_model_candidates": [
+          "str",
+          "PropContinuityRecordRequest"
+        ],
+        "response_model": "PropContinuityRecord"
+      },
+      {
+        "handler": "list_production_design_prop_records",
+        "method": "GET",
+        "path": "/{project_id}/production-design/prop-records",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_production_design_costume_record",
+        "method": "POST",
+        "path": "/{project_id}/production-design/costume-records",
+        "request_model_candidates": [
+          "str",
+          "CostumeContinuityRecordRequest"
+        ],
+        "response_model": "CostumeContinuityRecord"
+      },
+      {
+        "handler": "list_production_design_costume_records",
+        "method": "GET",
+        "path": "/{project_id}/production-design/costume-records",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_production_design_observation",
+        "method": "POST",
+        "path": "/{project_id}/production-design/observations",
+        "request_model_candidates": [
+          "str",
+          "ProductionDesignObservationRequest"
+        ],
+        "response_model": "ProductionDesignObservationResponse"
+      },
+      {
+        "handler": "list_production_design_observations",
+        "method": "GET",
+        "path": "/{project_id}/production-design/observations",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_production_design_assessment",
+        "method": "POST",
+        "path": "/{project_id}/production-design/assessments",
+        "request_model_candidates": [
+          "str",
+          "ProductionDesignAssessmentRequest"
+        ],
+        "response_model": "ProductionDesignAssessmentResponse"
+      },
+      {
+        "handler": "list_production_design_assessments",
+        "method": "GET",
+        "path": "/{project_id}/production-design/assessments",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_production_design_render_context",
+        "method": "POST",
+        "path": "/{project_id}/production-design/render-context",
+        "request_model_candidates": [
+          "str",
+          "ProductionDesignRenderContextRequest"
+        ],
+        "response_model": "ProductionDesignRenderContext"
+      },
+      {
+        "handler": "get_production_design_department_signal",
+        "method": "GET",
+        "path": "/{project_id}/production-design/department-signal",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "ProductionDesignDepartmentSignal"
+      },
+      {
+        "handler": "save_production_design_decision",
+        "method": "POST",
+        "path": "/{project_id}/production-design/decisions",
+        "request_model_candidates": [
+          "str",
+          "ProductionDesignDecisionRequest"
+        ],
+        "response_model": "ProductionDesignDecisionProjection"
+      },
+      {
+        "handler": "update_production_design_decision",
+        "method": "PATCH",
+        "path": "/{project_id}/production-design/decisions/{decision_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "ProductionDesignDecisionUpdateRequest"
+        ],
+        "response_model": "ProductionDesignDecisionProjection"
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/production_queue.py": {
+    "route_defs": [
+      {
+        "handler": "create_queue_item",
+        "method": "POST",
+        "path": "/items",
+        "request_model_candidates": [
+          "ProductionQueueItemCreate"
+        ],
+        "response_model": "ProductionQueueItem"
+      },
+      {
+        "handler": "queue_scene_generation",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/queue",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "QueueSceneRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_queue_item",
+        "method": "GET",
+        "path": "/items/{queue_item_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "ProductionQueueItem"
+      },
+      {
+        "handler": "list_project_queue_items",
+        "method": "GET",
+        "path": "/projects/{project_id}/items",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": "ProductionQueuePage"
+      },
+      {
+        "handler": "get_global_queue_summary",
+        "method": "GET",
+        "path": "/summary",
+        "request_model_candidates": [],
+        "response_model": "ProductionQueueSummary"
+      },
+      {
+        "handler": "get_project_queue_summary",
+        "method": "GET",
+        "path": "/projects/{project_id}/summary",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "ProductionQueueSummary"
+      },
+      {
+        "handler": "cancel_queue_item",
+        "method": "POST",
+        "path": "/items/{queue_item_id}/cancel",
+        "request_model_candidates": [
+          "str",
+          "QueueCancelRequest"
+        ],
+        "response_model": "ProductionQueueItem"
+      },
+      {
+        "handler": "retry_queue_item",
+        "method": "POST",
+        "path": "/items/{queue_item_id}/retry",
+        "request_model_candidates": [
+          "str",
+          "QueueRetryRequest"
+        ],
+        "response_model": "ProductionQueueItem"
+      },
+      {
+        "handler": "list_queue_events",
+        "method": "GET",
+        "path": "/items/{queue_item_id}/events",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_queue_diagnostics",
+        "method": "GET",
+        "path": "/diagnostics",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "recover_queue_leases",
+        "method": "POST",
+        "path": "/recover",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "run_queue_worker_once",
+        "method": "POST",
+        "path": "/worker/run-once",
+        "request_model_candidates": [],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/production-queue"
+    ]
+  },
+  "studio-backend/app/routes/production_recovery.py": {
+    "route_defs": [
+      {
+        "handler": "start_production_recovery",
+        "method": "POST",
+        "path": "/recover",
+        "request_model_candidates": [
+          "BackgroundTasks"
+        ],
+        "response_model": "RecoveryResponse"
+      },
+      {
+        "handler": "get_recovery_status",
+        "method": "GET",
+        "path": "/status",
+        "request_model_candidates": [],
+        "response_model": "RecoveryStatusResponse"
+      },
+      {
+        "handler": "reset_recovery_state",
+        "method": "POST",
+        "path": "/reset",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "health_check",
+        "method": "GET",
+        "path": "/health",
+        "request_model_candidates": [],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/production-recovery"
+    ]
+  },
+  "studio-backend/app/routes/production_scan.py": {
+    "route_defs": [
+      {
+        "handler": "run_production_scan",
+        "method": "POST",
+        "path": "",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "ProductionScanReport"
+      },
+      {
+        "handler": "get_production_scan_report",
+        "method": "GET",
+        "path": "/{scan_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "ProductionScanReport"
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects/{project_id}/scan"
+    ]
+  },
+  "studio-backend/app/routes/projects.py": {
+    "route_defs": [
+      {
+        "handler": "list_projects",
+        "method": "GET",
+        "path": "/projects",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "create_project",
+        "method": "POST",
+        "path": "/projects",
+        "request_model_candidates": [
+          "CreateProjectPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_project",
+        "method": "PUT",
+        "path": "/projects/{project_id}",
+        "request_model_candidates": [
+          "str",
+          "UpdateProjectPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "delete_project",
+        "method": "DELETE",
+        "path": "/projects/{project_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "migrate_characters",
+        "method": "POST",
+        "path": "/admin/migrate-characters",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "generate_scenes",
+        "method": "POST",
+        "path": "/projects/{project_id}/generate-scenes",
+        "request_model_candidates": [
+          "str",
+          "GenerateScenesPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_scene_review",
+        "method": "PUT",
+        "path": "/projects/{project_id}/scene-review",
+        "request_model_candidates": [
+          "str",
+          "SceneReviewPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_film_cut",
+        "method": "PUT",
+        "path": "/projects/{project_id}/film-cut",
+        "request_model_candidates": [
+          "str",
+          "FilmCutPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_motion",
+        "method": "POST",
+        "path": "/projects/{project_id}/generate-motion",
+        "request_model_candidates": [
+          "str",
+          "MotionPreviewPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_short_film",
+        "method": "POST",
+        "path": "/projects/{project_id}/generate-short-film",
+        "request_model_candidates": [
+          "str",
+          "GenerateShortFilmPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "stitch_short_film",
+        "method": "POST",
+        "path": "/projects/{project_id}/stitch-short-film",
+        "request_model_candidates": [
+          "str",
+          "StitchShortFilmPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "stitch_scene",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/stitch",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "StitchScenePayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_scene_pipeline",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/pipeline/generate",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "GenerateScenePipelinePayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_or_get_collaboration_session",
+        "method": "POST",
+        "path": "/projects/{project_id}/collaboration/session",
+        "request_model_candidates": [
+          "str",
+          "CollaborationSessionPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "save_creative_decision_memory",
+        "method": "POST",
+        "path": "/projects/{project_id}/creative-memories",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_creative_decision_memories",
+        "method": "GET",
+        "path": "/projects/{project_id}/creative-memories",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_creative_decision_memory",
+        "method": "PATCH",
+        "path": "/projects/{project_id}/creative-memories/{memory_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "delete_creative_decision_memory",
+        "method": "DELETE",
+        "path": "/projects/{project_id}/creative-memories/{memory_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_director_memory",
+        "method": "GET",
+        "path": "/projects/{project_id}/director-memory",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "scan_director_memory",
+        "method": "POST",
+        "path": "/projects/{project_id}/director-memory/scan",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_director_memory_entries",
+        "method": "GET",
+        "path": "/projects/{project_id}/director-memory/{kind}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "save_director_memory_entry",
+        "method": "POST",
+        "path": "/projects/{project_id}/director-memory/{kind}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_director_memory_entry",
+        "method": "PATCH",
+        "path": "/projects/{project_id}/director-memory/{kind}/{entry_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "delete_director_memory_entry",
+        "method": "DELETE",
+        "path": "/projects/{project_id}/director-memory/{kind}/{entry_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_collaboration_state",
+        "method": "GET",
+        "path": "/projects/{project_id}/collaboration",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_collaboration_room",
+        "method": "PUT",
+        "path": "/projects/{project_id}/collaboration/room",
+        "request_model_candidates": [
+          "str",
+          "CollaborationRoomPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_collaboration_screening",
+        "method": "PUT",
+        "path": "/projects/{project_id}/collaboration/screening",
+        "request_model_candidates": [
+          "str",
+          "CollaborationScreeningPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "post_collaboration_comment",
+        "method": "POST",
+        "path": "/projects/{project_id}/collaboration/comments",
+        "request_model_candidates": [
+          "str",
+          "CollaborationCommentPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "cast_collaboration_vote",
+        "method": "POST",
+        "path": "/projects/{project_id}/collaboration/votes",
+        "request_model_candidates": [
+          "str",
+          "CollaborationVotePayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "add_collaboration_co_direction_note",
+        "method": "POST",
+        "path": "/projects/{project_id}/collaboration/co-direction",
+        "request_model_candidates": [
+          "str",
+          "CollaborationCoDirectionPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_scenes",
+        "method": "GET",
+        "path": "/projects/{project_id}/scenes",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_scene",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes",
+        "request_model_candidates": [
+          "str",
+          "CreateScenePayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_scene",
+        "method": "GET",
+        "path": "/projects/{project_id}/scenes/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_scene_rationale",
+        "method": "GET",
+        "path": "/projects/{project_id}/scenes/{scene_id}/rationale",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_scene",
+        "method": "PUT",
+        "path": "/projects/{project_id}/scenes/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "UpdateScenePayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "delete_scene",
+        "method": "DELETE",
+        "path": "/projects/{project_id}/scenes/{scene_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_short_film_review",
+        "method": "POST",
+        "path": "/projects/{project_id}/short-film-review",
+        "request_model_candidates": [
+          "str",
+          "CreateReviewPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_short_film_reviews",
+        "method": "GET",
+        "path": "/projects/{project_id}/short-film-reviews",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_latest_short_film_review",
+        "method": "GET",
+        "path": "/projects/{project_id}/short-film-review/latest",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_short_film_review_decision",
+        "method": "POST",
+        "path": "/projects/{project_id}/short-film-review/{review_id}/decision",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "UpdateReviewDecisionPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_clip_revision",
+        "method": "POST",
+        "path": "/projects/{project_id}/clip-revisions",
+        "request_model_candidates": [
+          "str",
+          "CreateClipRevisionPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_clip_revisions_for_project",
+        "method": "GET",
+        "path": "/projects/{project_id}/clip-revisions",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_clip_revision",
+        "method": "GET",
+        "path": "/clip-revisions/{revision_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "submit_clip_revision_render",
+        "method": "POST",
+        "path": "/clip-revisions/{revision_id}/submit",
+        "request_model_candidates": [
+          "str",
+          "SubmitClipRevisionPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "cancel_clip_revision",
+        "method": "POST",
+        "path": "/clip-revisions/{revision_id}/cancel",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "complete_clip_revision_from_job",
+        "method": "POST",
+        "path": "/clip-revisions/{revision_id}/complete-from-job",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "restitch_project_with_revisions",
+        "method": "POST",
+        "path": "/projects/{project_id}/restitch-with-revisions",
+        "request_model_candidates": [
+          "str",
+          "RestitchWithRevisionPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "extract_video_asset_keyframes",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/extract-keyframes",
+        "request_model_candidates": [
+          "str",
+          "ExtractKeyframesPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_asset_keyframes",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/keyframes",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_keyframes",
+        "method": "GET",
+        "path": "/projects/{project_id}/keyframes",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_video_keyframe",
+        "method": "GET",
+        "path": "/video-keyframes/{keyframe_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "detect_video_asset_shots",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/detect-shots",
+        "request_model_candidates": [
+          "str",
+          "DetectShotsPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_asset_shots",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/shots",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "ingest_video_asset_scene_memory",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/scene-memory/ingest",
+        "request_model_candidates": [
+          "str",
+          "IngestSceneMemoryPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_asset_scene_memory",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/scene-memory",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "search_scene_memories",
+        "method": "GET",
+        "path": "/scene-memory/search",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "related_scene_memories",
+        "method": "GET",
+        "path": "/scene-memory/{memory_id}/related",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "analyze_project_continuity",
+        "method": "POST",
+        "path": "/projects/{project_id}/analyze-continuity",
+        "request_model_candidates": [
+          "str",
+          "AnalyzeContinuityPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "analyze_project_continuity_legacy",
+        "method": "POST",
+        "path": "/projects/{project_id}/continuity/analyze",
+        "request_model_candidates": [
+          "str",
+          "AnalyzeContinuityPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_continuity_issues",
+        "method": "GET",
+        "path": "/projects/{project_id}/continuity-issues",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_continuity_issues_legacy",
+        "method": "GET",
+        "path": "/projects/{project_id}/continuity/issues",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_decision_gate",
+        "method": "GET",
+        "path": "/projects/{project_id}/decision-gate",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_timeline_intelligence",
+        "method": "GET",
+        "path": "/projects/{project_id}/timeline-intelligence",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_editorial_revision_intelligence",
+        "method": "GET",
+        "path": "/projects/{project_id}/editorial-revision-intelligence",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_director_signature",
+        "method": "POST",
+        "path": "/projects/{project_id}/build-director-signature",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_director_signature",
+        "method": "GET",
+        "path": "/projects/{project_id}/director-signature",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "detect_style_drift",
+        "method": "POST",
+        "path": "/projects/{project_id}/detect-style-drift",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_style_drift_issues",
+        "method": "GET",
+        "path": "/projects/{project_id}/style-drift-issues",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_project_style_signature",
+        "method": "POST",
+        "path": "/projects/{project_id}/style-signatures/build",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_style_signatures",
+        "method": "GET",
+        "path": "/projects/{project_id}/style-signatures",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_style_signature",
+        "method": "GET",
+        "path": "/style-signatures/{signature_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "compare_style_signatures",
+        "method": "POST",
+        "path": "/style-signatures/compare",
+        "request_model_candidates": [
+          "CompareStyleSignaturesPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "retrieve_style_patterns",
+        "method": "GET",
+        "path": "/projects/{project_id}/style-patterns",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_video_understanding_status",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/understanding-status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_video_understanding_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/video-understanding-status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_director_commentary",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/director-commentary/generate",
+        "request_model_candidates": [
+          "str",
+          "GenerateCommentaryPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_director_commentary",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/director-commentary",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "register_frame_analysis",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/frame-analysis",
+        "request_model_candidates": [
+          "str",
+          "RegisterFrameAnalysisPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "analyze_video_keyframe",
+        "method": "POST",
+        "path": "/video-keyframes/{keyframe_id}/analyze",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "analyze_video_asset_keyframes",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/analyze-keyframes",
+        "request_model_candidates": [
+          "str",
+          "AnalyzeAssetKeyframesPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_asset_frame_analyses",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/frame-analyses",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_frame_analyses",
+        "method": "GET",
+        "path": "/projects/{project_id}/frame-analyses",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "embed_video_keyframe",
+        "method": "POST",
+        "path": "/video-keyframes/{keyframe_id}/embed",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "embed_video_asset_keyframes",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/embed-keyframes",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_asset_embeddings",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/embeddings",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_embeddings",
+        "method": "GET",
+        "path": "/projects/{project_id}/embeddings",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "find_similar_video_keyframes",
+        "method": "POST",
+        "path": "/video-keyframes/{keyframe_id}/similar",
+        "request_model_candidates": [
+          "str",
+          "SimilarKeyframesPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_project_cinematic_memory",
+        "method": "POST",
+        "path": "/projects/{project_id}/build-memory",
+        "request_model_candidates": [
+          "str",
+          "BuildMemoryPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_cinematic_memory",
+        "method": "GET",
+        "path": "/projects/{project_id}/memory",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "search_project_cinematic_memory",
+        "method": "POST",
+        "path": "/projects/{project_id}/search-memory",
+        "request_model_candidates": [
+          "str",
+          "SearchMemoryPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "related_memory_for_keyframe",
+        "method": "GET",
+        "path": "/video-keyframes/{keyframe_id}/related-memory",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "search_similar_scenes",
+        "method": "GET",
+        "path": "/scene-search/similar",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "search_scenes_by_mood",
+        "method": "GET",
+        "path": "/scene-search/by-mood",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "search_scenes_by_visual_style",
+        "method": "GET",
+        "path": "/scene-search/by-visual-style",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_final_short_film_package",
+        "method": "POST",
+        "path": "/projects/{project_id}/final-short-film-package",
+        "request_model_candidates": [
+          "str",
+          "CreateFinalShortFilmPackagePayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_final_short_film_packages_for_project",
+        "method": "GET",
+        "path": "/projects/{project_id}/final-short-film-packages",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_latest_final_short_film_package_for_project",
+        "method": "GET",
+        "path": "/projects/{project_id}/final-short-film-package/latest",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_final_short_film_package",
+        "method": "GET",
+        "path": "/final-short-film-packages/{package_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_final_short_film_package_status",
+        "method": "POST",
+        "path": "/final-short-film-packages/{package_id}/status",
+        "request_model_candidates": [
+          "str",
+          "UpdatePackageStatusPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "seed_demo_project",
+        "method": "POST",
+        "path": "/dev/seed-demo-project",
+        "request_model_candidates": [
+          "SeedDemoProjectPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_characters",
+        "method": "GET",
+        "path": "/projects/{project_id}/characters",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_character",
+        "method": "PUT",
+        "path": "/projects/{project_id}/characters/{character_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "dict"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_character_skeleton",
+        "method": "POST",
+        "path": "/projects/{project_id}/characters",
+        "request_model_candidates": [
+          "str",
+          "CharacterSkeletonPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "upload_character_descriptor",
+        "method": "POST",
+        "path": "/projects/{project_id}/characters/{character_id}/upload-descriptor",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "UploadFile"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_provider_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/provider-status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_scene_provider_override",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/provider-override",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "SceneProviderOverridePayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_project_poster",
+        "method": "POST",
+        "path": "/projects/{project_id}/poster/generate",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_project_poster",
+        "method": "GET",
+        "path": "/projects/{project_id}/poster",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_elevenlabs_voices",
+        "method": "GET",
+        "path": "/projects/{project_id}/elevenlabs/voices",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_character_voice",
+        "method": "GET",
+        "path": "/projects/{project_id}/characters/{character_id}/voice",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "set_character_voice",
+        "method": "PUT",
+        "path": "/projects/{project_id}/characters/{character_id}/voice",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "VoiceAssignmentPayload"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/reference_assets.py": {
+    "route_defs": [
+      {
+        "handler": "propose_reference_asset",
+        "method": "POST",
+        "path": "/{project_id}/shots/{shot_id}/propose-reference",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "ProposeReferenceBody"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "confirm_reference_asset",
+        "method": "POST",
+        "path": "/{project_id}/reference-assets",
+        "request_model_candidates": [
+          "str",
+          "ReferenceAsset"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_reference_assets",
+        "method": "GET",
+        "path": "/{project_id}/reference-assets",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/render.py": {
+    "route_defs": [
+      {
+        "handler": "list_providers",
+        "method": "GET",
+        "path": "/providers",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_provider",
+        "method": "GET",
+        "path": "/providers/{provider_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "enable_provider",
+        "method": "POST",
+        "path": "/providers/{provider_id}/enable",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "disable_provider",
+        "method": "POST",
+        "path": "/providers/{provider_id}/disable",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "configure_provider",
+        "method": "POST",
+        "path": "/providers",
+        "request_model_candidates": [
+          "ProviderConfig"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_render_job",
+        "method": "POST",
+        "path": "/jobs",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "bool",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "queue_existing_render_job",
+        "method": "POST",
+        "path": "/jobs/{job_id}/queue",
+        "request_model_candidates": [
+          "str",
+          "QueueRenderJobRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "submit_render_job",
+        "method": "POST",
+        "path": "/jobs/{job_id}/submit",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_render_job",
+        "method": "GET",
+        "path": "/jobs/{job_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_render_job_status",
+        "method": "GET",
+        "path": "/jobs/{job_id}/status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "delete_render_job",
+        "method": "DELETE",
+        "path": "/jobs/{job_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "cancel_render_job",
+        "method": "POST",
+        "path": "/jobs/{job_id}/cancel",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "retry_render_job",
+        "method": "POST",
+        "path": "/jobs/{job_id}/retry",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "retry_render_job_for_adherence",
+        "method": "POST",
+        "path": "/jobs/{job_id}/adherence-retry",
+        "request_model_candidates": [
+          "str",
+          "AdherenceRetryRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "reconcile_render_job",
+        "method": "POST",
+        "path": "/jobs/{job_id}/reconcile",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "refresh_render_job_output_url",
+        "method": "POST",
+        "path": "/jobs/{job_id}/refresh-url",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_render_job_outputs",
+        "method": "GET",
+        "path": "/jobs/{job_id}/outputs",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_recommended_shot_duration",
+        "method": "GET",
+        "path": "/projects/{project_id}/shots/{shot_id}/recommended-duration",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_render_jobs",
+        "method": "GET",
+        "path": "/jobs",
+        "request_model_candidates": [
+          "int",
+          "bool"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_render_diagnostics",
+        "method": "GET",
+        "path": "/diagnostics",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "backfill_project_state_render_jobs",
+        "method": "POST",
+        "path": "/backfill-project-state",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "recover_render_output_urls",
+        "method": "POST",
+        "path": "/recover-output-urls",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "update_shot_seed",
+        "method": "PATCH",
+        "path": "/projects/{project_id}/scenes/{scene_id}/shots/{shot_id}/seed",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "ShotSeedPayload"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      null
+    ]
+  },
+  "studio-backend/app/routes/scene_continuity_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "scene_continuity_intelligence",
+        "method": "POST",
+        "path": "/projects/{project_id}/scene-continuity-intelligence",
+        "request_model_candidates": [
+          "str",
+          "SceneContinuityIntelligencePayload"
+        ],
+        "response_model": "SceneContinuityIntelligenceResponse"
+      },
+      {
+        "handler": "get_motif_threads",
+        "method": "GET",
+        "path": "/projects/{project_id}/motif-threads",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_render_batch",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/render-batch",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "RenderBatchRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_render_batch_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/render-batch/{batch_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "retry_render_job_with_context",
+        "method": "POST",
+        "path": "/projects/{project_id}/render-jobs/{job_id}/retry",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/scene_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "import_scene_intelligence",
+        "method": "POST",
+        "path": "/import",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "list_scene_intelligence",
+        "method": "GET",
+        "path": "",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_scene_intelligence",
+        "method": "GET",
+        "path": "/{scene_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_scene_animation_prompt",
+        "method": "POST",
+        "path": "/{scene_id}/animation-prompt",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "link_scene_intelligence_video",
+        "method": "PATCH",
+        "path": "/{scene_id}/link-video",
+        "request_model_candidates": [
+          "str",
+          "LinkVideoPayload"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/scene-intelligence"
+    ]
+  },
+  "studio-backend/app/routes/script_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "get_scene_breakdown",
+        "method": "GET",
+        "path": "/{project_id}/script-analysis/breakdown",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "SceneBreakdownAnalysis"
+      },
+      {
+        "handler": "get_character_arcs",
+        "method": "GET",
+        "path": "/{project_id}/script-analysis/characters",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "CharacterArcAnalysis"
+      },
+      {
+        "handler": "get_tone_consistency",
+        "method": "GET",
+        "path": "/{project_id}/script-analysis/tone",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "ToneConsistencyAnalysis"
+      },
+      {
+        "handler": "generate_scene_prompts",
+        "method": "POST",
+        "path": "/{project_id}/script-analysis/prompts",
+        "request_model_candidates": [
+          "str",
+          "PromptGenerationRequest"
+        ],
+        "response_model": "PromptGenerationResult"
+      },
+      {
+        "handler": "get_transition_intelligence",
+        "method": "GET",
+        "path": "/{project_id}/script-analysis/transitions",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "SceneTransitionIntelligence"
+      },
+      {
+        "handler": "get_sound_intelligence",
+        "method": "GET",
+        "path": "/{project_id}/script-analysis/sound",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "SceneSoundIntelligence"
+      },
+      {
+        "handler": "simulate_character",
+        "method": "POST",
+        "path": "/{project_id}/characters/{character_id}/simulate",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "CharacterSimRequest"
+        ],
+        "response_model": "CharacterMindSimulation"
+      },
+      {
+        "handler": "get_character_sim_history",
+        "method": "GET",
+        "path": "/{project_id}/characters/{character_id}/history",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "CharacterSimulationHistory"
+      },
+      {
+        "handler": "save_sim_to_notes",
+        "method": "POST",
+        "path": "/{project_id}/characters/{character_id}/notes",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "CharacterMindSimulation"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "migrate_project_characters",
+        "method": "POST",
+        "path": "/{project_id}/migrate-characters",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/projects"
+    ]
+  },
+  "studio-backend/app/routes/session_debrief.py": {
+    "route_defs": [
+      {
+        "handler": "generate_session_debrief",
+        "method": "POST",
+        "path": "/{project_id}/session-debrief",
+        "request_model_candidates": [
+          "str",
+          "GenerateDebriefRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_session_debriefs",
+        "method": "GET",
+        "path": "/{project_id}/session-debriefs",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_session_debrief",
+        "method": "GET",
+        "path": "/{project_id}/session-debriefs/{debrief_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/standing_corrections.py": {
+    "route_defs": [
+      {
+        "handler": "propose_standing_correction",
+        "method": "POST",
+        "path": "/{project_id}/standing-corrections/propose",
+        "request_model_candidates": [
+          "str",
+          "ProposeCorrectionBody"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "confirm_standing_correction",
+        "method": "POST",
+        "path": "/{project_id}/standing-corrections/confirm",
+        "request_model_candidates": [
+          "str",
+          "CorrectionProposal"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  },
+  "studio-backend/app/routes/stitching.py": {
+    "route_defs": [
+      {
+        "handler": "trigger_stitch",
+        "method": "POST",
+        "path": "/projects/{project_id}/stitch",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_stitch_status",
+        "method": "GET",
+        "path": "/projects/{project_id}/stitch/status",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "download_stitched_film",
+        "method": "GET",
+        "path": "/projects/{project_id}/stitch/download",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/storyboard_blueprints.py": {
+    "route_defs": [
+      {
+        "handler": "create_storyboard_blueprint",
+        "method": "POST",
+        "path": "/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "CreateStoryboardBlueprintRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_storyboard_blueprint",
+        "method": "GET",
+        "path": "/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_storyboard_blueprints",
+        "method": "GET",
+        "path": "/projects/{project_id}/storyboard-blueprints",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "backfill_storyboard_blueprints",
+        "method": "POST",
+        "path": "/projects/{project_id}/storyboard-blueprints/backfill",
+        "request_model_candidates": [
+          "str",
+          "BackfillStoryboardBlueprintsRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "approve_storyboard_version",
+        "method": "POST",
+        "path": "/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "ApproveStoryboardVersionRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "run_storyboard_continuity_review",
+        "method": "POST",
+        "path": "/storyboard-blueprints/{blueprint_id}/versions/{version_id}/continuity-review",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "RunContinuityReviewRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_storyboard_shot",
+        "method": "PATCH",
+        "path": "/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "UpdateStoryboardShotRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "lock_storyboard_shot",
+        "method": "PATCH",
+        "path": "/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/lock",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "LockStoryboardShotRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_storyboard_render_contract",
+        "method": "POST",
+        "path": "/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/render-contract",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "render_storyboard_shot",
+        "method": "POST",
+        "path": "/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/render",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "RenderStoryboardShotRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "generate_storyboard_shot_image",
+        "method": "POST",
+        "path": "/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/studio_brain.py": {
+    "route_defs": [
+      {
+        "handler": "create_studio_brain_session",
+        "method": "POST",
+        "path": "/sessions",
+        "request_model_candidates": [
+          "str",
+          "StudioBrainOpenSessionRequest"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "list_studio_brain_sessions",
+        "method": "GET",
+        "path": "/sessions",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_studio_brain_session",
+        "method": "GET",
+        "path": "/sessions/{session_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "refresh_studio_brain_signals",
+        "method": "POST",
+        "path": "/sessions/{session_id}/signals/refresh",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "generate_studio_brain_plan",
+        "method": "POST",
+        "path": "/sessions/{session_id}/plan",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "detect_studio_brain_conflicts",
+        "method": "POST",
+        "path": "/sessions/{session_id}/conflicts/detect",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "resolve_studio_brain_conflict",
+        "method": "POST",
+        "path": "/sessions/{session_id}/conflicts/{conflict_id}/resolve",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "StudioBrainResolveConflictRequest"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "create_studio_brain_readiness",
+        "method": "POST",
+        "path": "/sessions/{session_id}/readiness",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "propose_studio_brain_directives",
+        "method": "POST",
+        "path": "/sessions/{session_id}/directives",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "dispatch_studio_brain_directive",
+        "method": "POST",
+        "path": "/sessions/{session_id}/directives/{directive_id}/dispatch",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "str",
+          "StudioBrainDispatchDirectiveRequest"
+        ],
+        "response_model": "StudioBrainSessionResponse"
+      },
+      {
+        "handler": "get_latest_studio_brain_session",
+        "method": "GET",
+        "path": "/latest",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects/{project_id}/brain"
+    ]
+  },
+  "studio-backend/app/routes/studio_knowledge.py": {
+    "route_defs": [
+      {
+        "handler": "register_knowledge_bible",
+        "method": "POST",
+        "path": "/{project_id}/knowledge/bibles",
+        "request_model_candidates": [
+          "str",
+          "KnowledgeBibleCreateRequest"
+        ],
+        "response_model": "KnowledgeBibleResponse"
+      },
+      {
+        "handler": "upload_knowledge_bible",
+        "method": "POST",
+        "path": "/{project_id}/knowledge/bibles/upload",
+        "request_model_candidates": [
+          "str",
+          "UploadFile",
+          "str",
+          "str"
+        ],
+        "response_model": "KnowledgeBibleResponse"
+      },
+      {
+        "handler": "list_knowledge_bibles",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/bibles",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_knowledge_bible",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/bibles/{bible_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "KnowledgeBibleResponse"
+      },
+      {
+        "handler": "parse_knowledge_bible",
+        "method": "POST",
+        "path": "/{project_id}/knowledge/bibles/{bible_id}/parse",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "KnowledgeBibleResponse"
+      },
+      {
+        "handler": "rebuild_knowledge_index",
+        "method": "POST",
+        "path": "/{project_id}/knowledge/rebuild",
+        "request_model_candidates": [
+          "str",
+          "KnowledgeRebuildRequest"
+        ],
+        "response_model": "KnowledgeRebuildRun"
+      },
+      {
+        "handler": "list_knowledge_rebuilds",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/rebuilds",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_knowledge_rebuild",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/rebuilds/{run_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_knowledge_atoms",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/atoms",
+        "request_model_candidates": [
+          "str",
+          "int",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "build_knowledge_context_pack",
+        "method": "POST",
+        "path": "/{project_id}/knowledge/context",
+        "request_model_candidates": [
+          "str",
+          "KnowledgeContextRequest"
+        ],
+        "response_model": "KnowledgeContextPack"
+      },
+      {
+        "handler": "list_knowledge_conflicts",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/conflicts",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "acknowledge_knowledge_conflict",
+        "method": "POST",
+        "path": "/{project_id}/knowledge/conflicts/{conflict_id}/acknowledge",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "KnowledgeConflictAcknowledgeRequest"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_knowledge_traces",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/traces",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_knowledge_trace",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/traces/{trace_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_knowledge_sources",
+        "method": "GET",
+        "path": "/{project_id}/knowledge/sources",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/projects"
+    ]
+  },
+  "studio-backend/app/routes/studio_workflow.py": {
+    "route_defs": [
+      {
+        "handler": "get_project_workflow",
+        "method": "GET",
+        "path": "",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "StudioWorkflowSummary"
+      },
+      {
+        "handler": "upsert_workflow_collaborator",
+        "method": "POST",
+        "path": "/collaborators",
+        "request_model_candidates": [
+          "str",
+          "StudioCollaboratorUpsert"
+        ],
+        "response_model": "StudioCollaborator"
+      },
+      {
+        "handler": "update_workflow_phase",
+        "method": "PUT",
+        "path": "/phase",
+        "request_model_candidates": [
+          "str",
+          "WorkflowPhasePayload"
+        ],
+        "response_model": "StudioWorkflowProjectState"
+      },
+      {
+        "handler": "list_workflow_collaborators",
+        "method": "GET",
+        "path": "/collaborators",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_workflow_version",
+        "method": "POST",
+        "path": "/versions",
+        "request_model_candidates": [
+          "str",
+          "StudioArtifactVersionCreate"
+        ],
+        "response_model": "StudioArtifactVersion"
+      },
+      {
+        "handler": "list_workflow_versions",
+        "method": "GET",
+        "path": "/versions",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_workflow_version",
+        "method": "GET",
+        "path": "/versions/{version_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "create_workflow_gate",
+        "method": "POST",
+        "path": "/gates",
+        "request_model_candidates": [
+          "str",
+          "StudioApprovalGateCreate"
+        ],
+        "response_model": "StudioApprovalGate"
+      },
+      {
+        "handler": "list_workflow_gates",
+        "method": "GET",
+        "path": "/gates",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_workflow_gate",
+        "method": "GET",
+        "path": "/gates/{gate_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "evaluate_workflow_gate",
+        "method": "POST",
+        "path": "/gates/{gate_id}/evaluate",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "StudioApprovalGate"
+      },
+      {
+        "handler": "record_workflow_decision",
+        "method": "POST",
+        "path": "/gates/{gate_id}/decisions",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "StudioApprovalDecisionCreate"
+        ],
+        "response_model": "StudioApprovalDecision"
+      },
+      {
+        "handler": "post_workflow_comment",
+        "method": "POST",
+        "path": "/comments",
+        "request_model_candidates": [
+          "str",
+          "StudioWorkflowCommentCreate"
+        ],
+        "response_model": "StudioWorkflowComment"
+      },
+      {
+        "handler": "list_workflow_comments",
+        "method": "GET",
+        "path": "/comments",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_workflow_tasks",
+        "method": "GET",
+        "path": "/tasks",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "resolve_workflow_comment",
+        "method": "POST",
+        "path": "/comments/{comment_id}/resolve",
+        "request_model_candidates": [
+          "str",
+          "str",
+          "ResolveCommentPayload"
+        ],
+        "response_model": "StudioWorkflowComment"
+      },
+      {
+        "handler": "list_workflow_events",
+        "method": "GET",
+        "path": "/events",
+        "request_model_candidates": [
+          "str",
+          "int"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_workflow_compatibility",
+        "method": "GET",
+        "path": "/compatibility",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects/{project_id}/workflow"
+    ]
+  },
+  "studio-backend/app/routes/test_casting_intelligence_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_cinematography_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_colorist_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_crew_intelligence_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_performance_audio_intelligence_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_performance_intelligence_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_production_acceptance_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_production_design_intelligence_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_recommended_duration_route.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_studio_brain_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_studio_knowledge_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/test_studio_workflow_routes.py": {
+    "route_defs": [],
+    "router_prefixes": []
+  },
+  "studio-backend/app/routes/universe_graph.py": {
+    "route_defs": [
+      {
+        "handler": "get_universe_graph",
+        "method": "GET",
+        "path": "",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "UniverseGraph"
+      },
+      {
+        "handler": "save_node",
+        "method": "POST",
+        "path": "/nodes",
+        "request_model_candidates": [
+          "str",
+          "UniverseNode"
+        ],
+        "response_model": "bool"
+      },
+      {
+        "handler": "delete_node",
+        "method": "DELETE",
+        "path": "/nodes/{node_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "bool"
+      },
+      {
+        "handler": "save_relationship",
+        "method": "POST",
+        "path": "/relationships",
+        "request_model_candidates": [
+          "str",
+          "UniverseRelationship"
+        ],
+        "response_model": "bool"
+      },
+      {
+        "handler": "delete_relationship",
+        "method": "DELETE",
+        "path": "/relationships/{relationship_id}",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": "bool"
+      },
+      {
+        "handler": "get_absences",
+        "method": "GET",
+        "path": "/absences",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "AbsenceReport"
+      },
+      {
+        "handler": "export_universe_bible",
+        "method": "GET",
+        "path": "/export",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "str"
+      },
+      {
+        "handler": "force_auto_populate",
+        "method": "POST",
+        "path": "/auto-populate",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "UniverseGraph"
+      }
+    ],
+    "router_prefixes": [
+      "/projects/{project_id}/universe-graph"
+    ]
+  },
+  "studio-backend/app/routes/video_analysis.py": {
+    "route_defs": [
+      {
+        "handler": "extract_video_asset_keyframes",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/extract-keyframes",
+        "request_model_candidates": [
+          "str",
+          "ExtractKeyframesPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_asset_keyframes",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/keyframes",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_keyframes",
+        "method": "GET",
+        "path": "/projects/{project_id}/keyframes",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "get_video_keyframe",
+        "method": "GET",
+        "path": "/video-keyframes/{keyframe_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "analyze_video_keyframe",
+        "method": "POST",
+        "path": "/video-keyframes/{keyframe_id}/analyze",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "analyze_video_asset_keyframes",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/analyze-keyframes",
+        "request_model_candidates": [
+          "str",
+          "AnalyzeAssetKeyframesPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_asset_frame_analyses",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/frame-analyses",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_project_frame_analyses",
+        "method": "GET",
+        "path": "/projects/{project_id}/frame-analyses",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/video_assets.py": {
+    "route_defs": [
+      {
+        "handler": "register_video_asset",
+        "method": "POST",
+        "path": "/projects/{project_id}/video-assets",
+        "request_model_candidates": [
+          "str",
+          "RegisterVideoAssetPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_assets_for_project",
+        "method": "GET",
+        "path": "/projects/{project_id}/video-assets",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_video_assets",
+        "method": "GET",
+        "path": "/video-assets",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "upload_video_asset",
+        "method": "POST",
+        "path": "/video-assets/upload",
+        "request_model_candidates": [
+          "UploadFile"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "upload_video_asset",
+        "method": "POST",
+        "path": "/video-assets/upload/",
+        "request_model_candidates": [
+          "UploadFile"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_unmatched_assets",
+        "method": "GET",
+        "path": "/video-assets/unmatched",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_video_asset",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "update_video_asset_status",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/status",
+        "request_model_candidates": [
+          "str",
+          "UpdateVideoAssetStatusPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "attach_video_asset_to_project",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/attach-project",
+        "request_model_candidates": [
+          "str",
+          "AttachVideoAssetProjectPayload"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "auto_match_metadata",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/auto-match-metadata",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "list_metadata_matches",
+        "method": "GET",
+        "path": "/video-assets/{asset_id}/metadata-matches",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "confirm_metadata_match",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/metadata-matches/{match_id}/confirm",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "reject_metadata_match",
+        "method": "POST",
+        "path": "/video-assets/{asset_id}/metadata-matches/{match_id}/reject",
+        "request_model_candidates": [
+          "str",
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio"
+    ]
+  },
+  "studio-backend/app/routes/workflows.py": {
+    "route_defs": [
+      {
+        "handler": "list_workflow_definitions",
+        "method": "GET",
+        "path": "/definitions",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_workflow_definition",
+        "method": "GET",
+        "path": "/definitions/{workflow_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "WorkflowDefinitionResponse"
+      },
+      {
+        "handler": "list_workflow_categories_endpoint",
+        "method": "GET",
+        "path": "/categories",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "execute_workflow",
+        "method": "POST",
+        "path": "/execute",
+        "request_model_candidates": [
+          "ExecuteWorkflowRequest",
+          "BackgroundTasks"
+        ],
+        "response_model": "WorkflowExecutionResponse"
+      },
+      {
+        "handler": "list_workflow_executions",
+        "method": "GET",
+        "path": "/executions",
+        "request_model_candidates": [],
+        "response_model": null
+      },
+      {
+        "handler": "get_workflow_execution",
+        "method": "GET",
+        "path": "/executions/{execution_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": "WorkflowExecutionResponse"
+      },
+      {
+        "handler": "cancel_workflow_execution",
+        "method": "POST",
+        "path": "/executions/{execution_id}/cancel",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      },
+      {
+        "handler": "delete_workflow_execution",
+        "method": "DELETE",
+        "path": "/executions/{execution_id}",
+        "request_model_candidates": [
+          "str"
+        ],
+        "response_model": null
+      }
+    ],
+    "router_prefixes": [
+      "/api/workflows"
+    ]
+  },
+  "studio-backend/app/routes/writers_intelligence.py": {
+    "route_defs": [
+      {
+        "handler": "simulate_character_mind",
+        "method": "POST",
+        "path": "/{project_id}/character-mind",
+        "request_model_candidates": [
+          "str",
+          "CharacterMindRequest"
+        ],
+        "response_model": "CharacterMindResponse"
+      },
+      {
+        "handler": "debate_scene",
+        "method": "POST",
+        "path": "/{project_id}/debate",
+        "request_model_candidates": [
+          "str",
+          "DebateRequest"
+        ],
+        "response_model": "DebateResponse"
+      }
+    ],
+    "router_prefixes": [
+      "/api/f51/studio/projects"
+    ]
+  }
+}

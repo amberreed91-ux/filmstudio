@@ -1,0 +1,65 @@
+[
+  {
+    "method": "GET",
+    "path": "/openapi.json",
+    "name": "openapi",
+    "class": "Route",
+    "include_in_schema": false
+  },
+  {
+    "method": "GET",
+    "path": "/docs",
+    "name": "swagger_ui_html",
+    "class": "Route",
+    "include_in_schema": false
+  },
+  {
+    "method": "GET",
+    "path": "/docs/oauth2-redirect",
+    "name": "swagger_ui_redirect",
+    "class": "Route",
+    "include_in_schema": false
+  },
+  {
+    "method": "GET",
+    "path": "/redoc",
+    "name": "redoc_html",
+    "class": "Route",
+    "include_in_schema": false
+  },
+  {
+    "method": "",
+    "path": "/previs-assets",
+    "name": "previs-assets",
+    "class": "Mount",
+    "include_in_schema": null
+  },
+  {
+    "method": "",
+    "path": "/outputs",
+    "name": "outputs",
+    "class": "Mount",
+    "include_in_schema": null
+  },
+  {
+    "method": "",
+    "path": "/static",
+    "name": "static",
+    "class": "Mount",
+    "include_in_schema": null
+  },
+  {
+    "method": "",
+    "path": "/ws/jobs",
+    "name": "websocket_jobs_endpoint",
+    "class": "APIWebSocketRoute",
+    "include_in_schema": null
+  },
+  {
+    "method": "",
+    "path": "/ws/jobs/{job_id}",
+    "name": "websocket_job_updates",
+    "class": "APIWebSocketRoute",
+    "include_in_schema": null
+  }
+]
