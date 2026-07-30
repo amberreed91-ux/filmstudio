@@ -1,0 +1,52 @@
+diff --git a/studio-backend/main.py b/studio-backend/main.py
+index c4b56862..18802d2b 100644
+--- a/studio-backend/main.py
++++ b/studio-backend/main.py
+@@ -28,7 +28,6 @@ from app.routes.memory import router as memory_router
+ from app.routes.scene_intelligence import router as scene_intelligence_router
+ from app.routes.projects import router as projects_persistence_router
+ from app.routes.video_assets import router as video_assets_router
+-from app.routes.video_analysis import router as video_analysis_router
+ from app.routes.workflows import router as workflows_router
+ from app.routes.production_recovery import router as production_recovery_router
+ from app.routes.scene_continuity_intelligence import router as scene_continuity_intelligence_router
+@@ -48,7 +47,6 @@ from app.routes.audio import router as audio_router
+ from app.routes.stitching import router as stitching_router
+ from app.routes.export import router as final_export_router
+ from app.routes.proactive import router as proactive_router
+-from app.routes.co_director_chat import router as co_director_chat_router
+ from app.routes.compose import router as compose_router
+ from app.routes.assembly import router as assembly_router
+ from app.routes.emotion_analysis import router as emotion_analysis_router
+@@ -68,6 +66,7 @@ from app.routes.colorist import router as colorist_router
+ from app.routes.casting_intelligence import router as casting_intelligence_router
+ from app.routes.studio_knowledge import router as studio_knowledge_router
+ from app.routes.studio_brain import router as studio_brain_router
++from app.routes.reference_assets import router as reference_assets_router
+ from app.services.render import set_job_update_callback, set_storage
+ from app.data.storage import get_storage
+ from app.auth import AuthService, demo_login
+@@ -335,7 +334,6 @@ app.include_router(overview_router, prefix="/api/f51/studio")
+ app.include_router(projects_router, prefix="/api/f51/studio")
+ app.include_router(projects_persistence_router)
+ app.include_router(video_assets_router)
+-app.include_router(video_analysis_router)
+ app.include_router(exports_router)
+ app.include_router(render_router, prefix="/api/f51/studio/render")
+ app.include_router(auth_router, prefix="/api/f51/studio/auth")
+@@ -363,7 +361,6 @@ app.include_router(audio_router)
+ app.include_router(stitching_router)
+ app.include_router(final_export_router)
+ app.include_router(proactive_router)
+-app.include_router(co_director_chat_router)
+ app.include_router(compose_router)
+ app.include_router(assembly_router)
+ app.include_router(emotion_analysis_router)
+@@ -383,6 +380,7 @@ app.include_router(colorist_router)
+ app.include_router(casting_intelligence_router)
+ app.include_router(studio_knowledge_router)
+ app.include_router(studio_brain_router)
++app.include_router(reference_assets_router)
+ 
+ OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
+ OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)

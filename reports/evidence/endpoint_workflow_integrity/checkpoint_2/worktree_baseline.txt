@@ -1,0 +1,42 @@
+ M studio-app/src/components/KnowledgeLibraryPanel.test.tsx
+ M studio-app/src/components/KnowledgeLibraryPanel.tsx
+ M studio-app/src/lib/previsStoryboard.test.ts
+ M studio-app/src/lib/previsStoryboard.ts
+ M studio-app/src/lib/studioApi.ts
+ M studio-app/src/lib/studioKnowledgeApi.ts
+ M studio-app/src/pages/PrevisRoom.tsx
+ M studio-app/src/pages/StudyRoom.tsx
+ M studio-backend/app/adapters/__init__.py
+ M studio-backend/app/routes/__init__.py
+ M studio-backend/app/routes/render.py
+ M studio-backend/app/routes/storyboard_blueprints.py
+ M studio-backend/app/routes/studio_knowledge.py
+ M studio-backend/app/routes/test_studio_knowledge_routes.py
+ M studio-backend/app/services/character_visual_reference_service.py
+ M studio-backend/app/services/generate_short_film_workflow_service.py
+ M studio-backend/app/services/projects.py
+ M studio-backend/app/services/render.py
+ M studio-backend/app/services/render_retry_service.py
+ M studio-backend/app/services/script_parser.py
+ M studio-backend/app/services/shot_prompt_builder.py
+ M studio-backend/app/services/storyboard_blueprint_service.py
+ M studio-backend/app/services/test_render_create_route.py
+ M studio-backend/app/services/test_runway_provider_hardening.py
+ M studio-backend/app/services/test_wan_adapter.py
+ M studio-backend/data/project_state_store.json
+ M studio-backend/data/projects.json
+ M studio-backend/tests/test_combined_reorder_strategy.py
+ M studio-backend/tests/test_storyboard_blueprint_routes.py
+?? reports/evidence/endpoint_workflow_integrity/checkpoint_2/
+?? scripts/install_ai_film_studio_mac_app.sh
+?? scripts/launch_ai_film_studio.sh
+?? studio-backend/app/services/character_name_matching.py
+?? studio-backend/app/services/department_render_context_service.py
+?? studio-backend/app/services/render_context_enrichment_service.py
+?? studio-backend/app/services/test_department_render_context.py
+?? studio-backend/app/services/test_render_canon_integration.py
+?? studio-backend/app/services/test_studio_brain_library_service.py
+?? studio-backend/data/project_state_store.json.cleanup-backup-20260729073804
+?? studio-backend/data/projects.json.cleanup-backup-20260729073804
+?? studio-backend/data/studio.db.cleanup-backup-20260729073804
+?? studio-backend/data/studio_brain_library/

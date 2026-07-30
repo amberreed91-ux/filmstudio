@@ -1,0 +1,5 @@
+Checkpoint 2 final summary
+Verdict: CHECKPOINT 2 PARTIALLY COMPLETE
+Repaired: reference_assets router mount; duplicate co-director alias mount; duplicate video_analysis mount.
+Tests: backend focused route tests 22 passed; frontend API URL tests 42 passed.
+Live HTTP: health, OpenAPI, and repaired routes verified on 127.0.0.1:8022.

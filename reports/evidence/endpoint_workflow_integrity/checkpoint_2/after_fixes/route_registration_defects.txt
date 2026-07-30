@@ -1,0 +1,16 @@
+total_effective_routes=565
+path=/api/f51/studio/projects/{project_id}/reference-assets matches=2
+   ('/api/f51/studio/projects/{project_id}/reference-assets', ('POST',), 'confirm_reference_asset', 'app.routes.reference_assets')
+   ('/api/f51/studio/projects/{project_id}/reference-assets', ('GET',), 'list_reference_assets', 'app.routes.reference_assets')
+path=/api/f51/studio/projects/{project_id}/shots/{shot_id}/propose-reference matches=1
+   ('/api/f51/studio/projects/{project_id}/shots/{shot_id}/propose-reference', ('POST',), 'propose_reference_asset', 'app.routes.reference_assets')
+path=/api/f51/studio/projects/{project_id}/co-director/proactive-check matches=1
+   ('/api/f51/studio/projects/{project_id}/co-director/proactive-check', ('POST',), 'proactive_check', 'app.routes.proactive')
+path=/api/f51/studio/projects/{project_id}/co-director/chat matches=1
+   ('/api/f51/studio/projects/{project_id}/co-director/chat', ('POST',), 'co_director_chat', 'app.routes.proactive')
+path=/api/f51/studio/video-assets/{asset_id}/extract-keyframes matches=1
+   ('/api/f51/studio/video-assets/{asset_id}/extract-keyframes', ('POST',), 'extract_video_asset_keyframes', 'app.routes.projects')
+duplicate_method_path_count= 2
+duplicate_operation_warnings= []
+reference-assets-openapi-paths= ['/api/f51/studio/projects/{project_id}/reference-assets']
+operation_count= 554

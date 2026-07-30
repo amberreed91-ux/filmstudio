@@ -1,0 +1,12 @@
+GET /openapi.json -> 200 bytes=720542 operations=554
+openapi_path /api/f51/studio/projects/{project_id}/co-director/chat methods=['post']
+openapi_path /api/f51/studio/projects/{project_id}/co-director/proactive-check methods=['post']
+openapi_path /api/f51/studio/projects/{project_id}/frame-analyses methods=['get']
+openapi_path /api/f51/studio/projects/{project_id}/keyframes methods=['get']
+openapi_path /api/f51/studio/projects/{project_id}/reference-assets methods=['get', 'post']
+openapi_path /api/f51/studio/video-assets/{asset_id}/analyze-keyframes methods=['post']
+openapi_path /api/f51/studio/video-assets/{asset_id}/extract-keyframes methods=['post']
+openapi_path /api/f51/studio/video-assets/{asset_id}/frame-analyses methods=['get']
+openapi_path /api/f51/studio/video-assets/{asset_id}/keyframes methods=['get']
+openapi_path /api/f51/studio/video-keyframes/{keyframe_id} methods=['get']
+openapi_path /api/f51/studio/video-keyframes/{keyframe_id}/analyze methods=['post']

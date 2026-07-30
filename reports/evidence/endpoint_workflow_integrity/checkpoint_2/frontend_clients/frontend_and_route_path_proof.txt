@@ -1,0 +1,45 @@
+studio-backend/app/routes/video_analysis.py:37:@router.post("/video-assets/{asset_id}/extract-keyframes")
+studio-backend/app/routes/video_analysis.py:53:@router.get("/video-assets/{asset_id}/keyframes")
+studio-backend/app/routes/video_analysis.py:62:@router.get("/projects/{project_id}/keyframes")
+studio-backend/app/routes/video_analysis.py:71:@router.get("/video-keyframes/{keyframe_id}")
+studio-backend/app/routes/video_analysis.py:79:@router.post("/video-keyframes/{keyframe_id}/analyze")
+studio-backend/app/routes/video_analysis.py:88:@router.post("/video-assets/{asset_id}/analyze-keyframes")
+studio-backend/app/routes/video_analysis.py:100:@router.get("/video-assets/{asset_id}/frame-analyses")
+studio-backend/app/routes/video_analysis.py:109:@router.get("/projects/{project_id}/frame-analyses")
+studio-backend/app/routes/projects.py:1684:@router.post("/video-assets/{asset_id}/extract-keyframes")
+studio-backend/app/routes/projects.py:1701:@router.get("/video-assets/{asset_id}/keyframes")
+studio-backend/app/routes/projects.py:1710:@router.get("/projects/{project_id}/keyframes")
+studio-backend/app/routes/projects.py:1719:@router.get("/video-keyframes/{keyframe_id}")
+studio-backend/app/routes/projects.py:2059:@router.post("/video-keyframes/{keyframe_id}/analyze")
+studio-backend/app/routes/projects.py:2069:@router.post("/video-assets/{asset_id}/analyze-keyframes")
+studio-backend/app/routes/projects.py:2082:@router.get("/video-assets/{asset_id}/frame-analyses")
+studio-backend/app/routes/projects.py:2091:@router.get("/projects/{project_id}/frame-analyses")
+studio-backend/app/routes/projects.py:2099:@router.post("/video-keyframes/{keyframe_id}/embed")
+studio-backend/app/routes/projects.py:2108:@router.post("/video-assets/{asset_id}/embed-keyframes")
+studio-backend/app/routes/projects.py:2137:@router.post("/video-keyframes/{keyframe_id}/similar")
+studio-backend/app/routes/projects.py:2194:@router.get("/video-keyframes/{keyframe_id}/related-memory")
+studio-backend/app/routes/reference_assets.py:6:  2. POST /{project_id}/reference-assets
+studio-backend/app/routes/reference_assets.py:8:  3. GET  /{project_id}/reference-assets
+studio-backend/app/routes/reference_assets.py:22:router = APIRouter(prefix="/api/f51/studio/projects", tags=["reference-assets"])
+studio-backend/app/routes/reference_assets.py:51:    The caller must POST to /{project_id}/reference-assets with the
+studio-backend/app/routes/reference_assets.py:66:@router.post("/{project_id}/reference-assets")
+studio-backend/app/routes/reference_assets.py:84:@router.get("/{project_id}/reference-assets")
+studio-app/src/pages/ScreeningRoom.tsx:985:      const url = `/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/co-director/chat`
+studio-backend/app/routes/proactive.py:4:POST /api/f51/studio/projects/{project_id}/co-director/proactive-check
+studio-backend/app/routes/proactive.py:9:POST /api/f51/studio/projects/{project_id}/co-director/chat
+studio-backend/app/routes/proactive.py:51:@router.post("/projects/{project_id}/co-director/proactive-check")
+studio-backend/app/routes/proactive.py:173:@router.post("/projects/{project_id}/co-director/chat")
+studio-app/src/lib/studioApi.ts:5228:  return fetchJson<{ keyframes: VideoKeyframe[] }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/extract-keyframes`, {
+studio-app/src/lib/studioApi.ts:5236:  return fetchJson<{ keyframes: VideoKeyframe[] }>(`/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/keyframes`, init)
+studio-app/src/lib/studioApi.ts:5240:  return fetchJson<{ keyframes: VideoKeyframe[] }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/keyframes`)
+studio-app/src/lib/studioApi.ts:5244:  return fetchJson<{ keyframe: VideoKeyframe }>(`/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}`)
+studio-app/src/lib/studioApi.ts:5381:    `/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/analyze`,
+studio-app/src/lib/studioApi.ts:5390:    `/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/analyze-keyframes`,
+studio-app/src/lib/studioApi.ts:5404:    `/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/frame-analyses`,
+studio-app/src/lib/studioApi.ts:5414:    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/frame-analyses`,
+studio-app/src/lib/studioApi.ts:5421:    `/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/embed`,
+studio-app/src/lib/studioApi.ts:5428:    `/api/f51/studio/video-assets/${encodeURIComponent(assetId)}/embed-keyframes`,
+studio-app/src/lib/studioApi.ts:5451:    `/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/similar`,
+studio-app/src/lib/studioApi.ts:5502:    `/api/f51/studio/video-keyframes/${encodeURIComponent(keyframeId)}/related-memory`,
+studio-app/src/hooks/useProactiveCoDirector.ts:96:          `${BASE_URL}/api/f51/studio/projects/${projectId}/co-director/proactive-check`,
+studio-app/src/components/CoDirectorDrawer.tsx:205:        `/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? '')}/co-director/chat`,

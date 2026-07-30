@@ -1,0 +1,45 @@
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID extract_video_asset_keyframes_api_f51_studio_video_assets__asset_id__extract_keyframes_post for function extract_video_asset_keyframes at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID list_video_asset_keyframes_api_f51_studio_video_assets__asset_id__keyframes_get for function list_video_asset_keyframes at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID list_project_keyframes_api_f51_studio_projects__project_id__keyframes_get for function list_project_keyframes at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID get_video_keyframe_api_f51_studio_video_keyframes__keyframe_id__get for function get_video_keyframe at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID analyze_video_keyframe_api_f51_studio_video_keyframes__keyframe_id__analyze_post for function analyze_video_keyframe at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID analyze_video_asset_keyframes_api_f51_studio_video_assets__asset_id__analyze_keyframes_post for function analyze_video_asset_keyframes at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID list_video_asset_frame_analyses_api_f51_studio_video_assets__asset_id__frame_analyses_get for function list_video_asset_frame_analyses at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID list_project_frame_analyses_api_f51_studio_projects__project_id__frame_analyses_get for function list_project_frame_analyses at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/video_analysis.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID proactive_check_api_f51_studio_projects__project_id__co_director_proactive_check_post for function proactive_check at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/proactive.py
+  warnings.warn(message, stacklevel=1)
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/fastapi/openapi/utils.py:252: UserWarning: Duplicate Operation ID co_director_chat_api_f51_studio_projects__project_id__co_director_chat_post for function co_director_chat at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/routes/proactive.py
+  warnings.warn(message, stacklevel=1)
+total_effective_routes=572
+path=/api/f51/studio/projects/{project_id}/reference-assets matches=0
+path=/api/f51/studio/projects/{project_id}/shots/{shot_id}/propose-reference matches=0
+path=/api/f51/studio/projects/{project_id}/co-director/proactive-check matches=2
+   ('/api/f51/studio/projects/{project_id}/co-director/proactive-check', ('POST',), 'proactive_check', 'app.routes.proactive')
+   ('/api/f51/studio/projects/{project_id}/co-director/proactive-check', ('POST',), 'proactive_check', 'app.routes.proactive')
+path=/api/f51/studio/projects/{project_id}/co-director/chat matches=2
+   ('/api/f51/studio/projects/{project_id}/co-director/chat', ('POST',), 'co_director_chat', 'app.routes.proactive')
+   ('/api/f51/studio/projects/{project_id}/co-director/chat', ('POST',), 'co_director_chat', 'app.routes.proactive')
+path=/api/f51/studio/video-assets/{asset_id}/extract-keyframes matches=2
+   ('/api/f51/studio/video-assets/{asset_id}/extract-keyframes', ('POST',), 'extract_video_asset_keyframes', 'app.routes.projects')
+   ('/api/f51/studio/video-assets/{asset_id}/extract-keyframes', ('POST',), 'extract_video_asset_keyframes', 'app.routes.video_analysis')
+duplicate_method_path_count= 12
+duplicate ('POST',) /api/f51/studio/projects/{project_id}/co-director/chat count=2 handlers=[('co_director_chat', 'app.routes.proactive'), ('co_director_chat', 'app.routes.proactive')]
+duplicate ('POST',) /api/f51/studio/projects/{project_id}/co-director/proactive-check count=2 handlers=[('proactive_check', 'app.routes.proactive'), ('proactive_check', 'app.routes.proactive')]
+duplicate ('GET',) /api/f51/studio/projects/{project_id}/frame-analyses count=2 handlers=[('list_project_frame_analyses', 'app.routes.projects'), ('list_project_frame_analyses', 'app.routes.video_analysis')]
+duplicate ('GET',) /api/f51/studio/projects/{project_id}/keyframes count=2 handlers=[('list_project_keyframes', 'app.routes.projects'), ('list_project_keyframes', 'app.routes.video_analysis')]
+duplicate ('POST',) /api/f51/studio/video-assets/{asset_id}/analyze-keyframes count=2 handlers=[('analyze_video_asset_keyframes', 'app.routes.projects'), ('analyze_video_asset_keyframes', 'app.routes.video_analysis')]
+duplicate ('POST',) /api/f51/studio/video-assets/{asset_id}/extract-keyframes count=2 handlers=[('extract_video_asset_keyframes', 'app.routes.projects'), ('extract_video_asset_keyframes', 'app.routes.video_analysis')]
+duplicate ('GET',) /api/f51/studio/video-assets/{asset_id}/frame-analyses count=2 handlers=[('list_video_asset_frame_analyses', 'app.routes.projects'), ('list_video_asset_frame_analyses', 'app.routes.video_analysis')]
+duplicate ('GET',) /api/f51/studio/video-assets/{asset_id}/keyframes count=2 handlers=[('list_video_asset_keyframes', 'app.routes.projects'), ('list_video_asset_keyframes', 'app.routes.video_analysis')]
+duplicate ('GET',) /api/f51/studio/video-keyframes/{keyframe_id} count=2 handlers=[('get_video_keyframe', 'app.routes.projects'), ('get_video_keyframe', 'app.routes.video_analysis')]
+duplicate ('POST',) /api/f51/studio/video-keyframes/{keyframe_id}/analyze count=2 handlers=[('analyze_video_keyframe', 'app.routes.projects'), ('analyze_video_keyframe', 'app.routes.video_analysis')]
+reference-assets-openapi-paths= []
+operation_count= 551

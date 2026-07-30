@@ -1,0 +1,83 @@
+diff --git a/studio-backend/tests/test_checkpoint_2_route_registration.py b/studio-backend/tests/test_checkpoint_2_route_registration.py
+new file mode 100644
+index 00000000..a5cb46bc
+--- /dev/null
++++ b/studio-backend/tests/test_checkpoint_2_route_registration.py
+@@ -0,0 +1,77 @@
++from __future__ import annotations
++
++import warnings
++from collections import Counter
++
++
++def _effective_routes(app):
++    for route in app.router.routes:
++        effective_candidates = getattr(route, "effective_candidates", None)
++        if callable(effective_candidates):
++            yield from effective_candidates()
++        else:
++            yield route
++
++
++def _method_path_counts(app):
++    counts: Counter[tuple[str, tuple[str, ...]]] = Counter()
++    handlers: dict[tuple[str, tuple[str, ...]], list[str]] = {}
++    for route in _effective_routes(app):
++        path = getattr(route, "path", None)
++        methods = tuple(sorted(getattr(route, "methods", []) or []))
++        endpoint = getattr(route, "endpoint", None)
++        if not path or not methods:
++            continue
++        key = (path, methods)
++        counts[key] += 1
++        handlers.setdefault(key, []).append(
++            f"{getattr(endpoint, '__module__', '')}.{getattr(endpoint, '__name__', '')}"
++        )
++    return counts, handlers
++
++
++def test_checkpoint_2_priority_routes_are_mounted_once():
++    from main import app
++
++    counts, handlers = _method_path_counts(app)
++    required_once = {
++        ("/api/f51/studio/projects/{project_id}/reference-assets", ("GET",)),
++        ("/api/f51/studio/projects/{project_id}/reference-assets", ("POST",)),
++        (
++            "/api/f51/studio/projects/{project_id}/shots/{shot_id}/propose-reference",
++            ("POST",),
++        ),
++        (
++            "/api/f51/studio/projects/{project_id}/co-director/proactive-check",
++            ("POST",),
++        ),
++        ("/api/f51/studio/projects/{project_id}/co-director/chat", ("POST",)),
++        ("/api/f51/studio/video-assets/{asset_id}/extract-keyframes", ("POST",)),
++        ("/api/f51/studio/video-assets/{asset_id}/keyframes", ("GET",)),
++        ("/api/f51/studio/projects/{project_id}/keyframes", ("GET",)),
++        ("/api/f51/studio/video-keyframes/{keyframe_id}", ("GET",)),
++        ("/api/f51/studio/video-keyframes/{keyframe_id}/analyze", ("POST",)),
++        ("/api/f51/studio/video-assets/{asset_id}/analyze-keyframes", ("POST",)),
++        ("/api/f51/studio/video-assets/{asset_id}/frame-analyses", ("GET",)),
++        ("/api/f51/studio/projects/{project_id}/frame-analyses", ("GET",)),
++    }
++
++    for key in required_once:
++        assert counts[key] == 1, f"{key} registered {counts[key]} times via {handlers.get(key, [])}"
++
++
++def test_checkpoint_2_openapi_has_reference_assets_without_duplicate_warnings():
++    from main import app
++
++    app.openapi_schema = None
++    with warnings.catch_warnings(record=True) as captured:
++        warnings.simplefilter("always")
++        schema = app.openapi()
++
++    warning_text = "\n".join(str(item.message) for item in captured)
++    assert "Duplicate Operation ID" not in warning_text
++    assert "/api/f51/studio/projects/{project_id}/reference-assets" in schema["paths"]
++    assert (
++        "/api/f51/studio/projects/{project_id}/shots/{shot_id}/propose-reference"
++        in schema["paths"]
++    )

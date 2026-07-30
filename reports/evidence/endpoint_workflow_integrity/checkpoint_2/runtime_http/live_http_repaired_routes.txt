@@ -1,0 +1,34 @@
+GET /health -> 200
+{"status":"healthy","version":"1.0.0","git_commit":"116d1f388b4bfa46d22983f4659cf4efe20b0811","uptime_seconds":21.2,"timestamp":1785416347.458266,"components":{"database":{"status":"ok","error":null,"latency_ms":1.77},"render_service":{"status":"ok","active_jobs":45,"providers_available":[]},"production_queue":{"status":"ok","counts_by_status":{},"stale_leases":0,"worker":{"enabled":true,"owner_id":"studio-api-61970-0c6306a8","running":true,"last_heartbeat_at":"2026-07-30T08:59:06.284129","active_item_id":null,"loop_interval_seconds":2.0,"lease_seconds":300}},"circuit_breakers":{"simulated":{"provider":"simulated","state":"closed","failures":0,"last_failure":null,"next_attempt":null},"higgsfield":{"provider":"higgsfield","state":"closed","failures":0,"last_failure":null,"next_attempt":null},"generic":{"provider":"generic","state":"closed","failures":0,"last_failure":null,"next_attempt":null}},"background_tasks":{"daily-backup":"running","queue-worker":"running","render-polling":"running"},"system":{"cpu_percent":0.0,"memory_percent":62.5,"disk_percent":53.6}}}
+---
+GET /api/f51/studio/projects/checkpoint-2/reference-assets -> 200
+{"reference_assets":[],"count":0}
+---
+POST /api/f51/studio/projects/checkpoint-2/reference-assets -> 422
+{"detail":[{"type":"missing","loc":["body","ref_id"],"msg":"Field required","input":{"asset_id":"bad"}},{"type":"missing","loc":["body","kind"],"msg":"Field required","input":{"asset_id":"bad"}},{"type":"missing","loc":["body","image_url"],"msg":"Field required","input":{"asset_id":"bad"}},{"type":"missing","loc":["body","project_id"],"msg":"Field required","input":{"asset_id":"bad"}}]}
+---
+POST /api/f51/studio/projects/checkpoint-2/shots/shot-1/propose-reference -> 404
+{"detail":"No render attempts found for shot shot-1 in project checkpoint-2"}
+---
+POST /api/f51/studio/projects/checkpoint-2/co-director/proactive-check -> 400
+{"detail":"Unknown trigger_type 'invalid'. Expected one of: cut_assembly, project_open, scene_save"}
+---
+POST /api/f51/studio/projects/checkpoint-2/co-director/chat -> 422
+{"detail":"Input should be one of: director, evaluator, memory_archivist, provider_router, writer"}
+---
+POST /api/f51/studio/video-assets/missing-asset/extract-keyframes -> 400
+{"detail":"Video asset not found"}
+---
+GET /openapi.json -> 200 bytes=1200
+Traceback (most recent call last):
+  File "<stdin>", line 38, in <module>
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/json/decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+               ^^^^^^^^^^^^^^^^^^^^^^
+json.decoder.JSONDecodeError: Unterminated string starting at: line 1 column 1186 (char 1185)

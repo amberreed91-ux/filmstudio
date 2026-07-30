@@ -1,0 +1,32 @@
+
+> studio-app@0.0.0 test
+> vitest run --run src/lib/previsStoryboard.test.ts src/lib/studioApi.test.ts
+
+
+ RUN  v3.2.4 /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app
+
+ ✓ src/lib/previsStoryboard.test.ts (14 tests) 3ms
+stderr | src/lib/studioApi.test.ts > generateScenePipeline > returns an error object when scene pipeline generation fails
+[Studio API Error] /api/f51/studio/projects/proj-scene/scenes/scene_003/pipeline/generate: Error: Scene soundtrack enabled but missing audio source
+    at fetchJson (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:401:13)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at generateScenePipeline (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:2931:20)
+    at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.test.ts:490:22
+    at file:///Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/lib/studioApi.test.ts > getSceneRationale > throws on 404
+[Studio API Error] /api/f51/studio/projects/proj-1/scenes/nonexistent/rationale: Error: Scene not found
+    at fetchJson (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:401:13)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.test.ts:642:5
+    at file:///Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+ ✓ src/lib/studioApi.test.ts (28 tests) 32ms
+
+ Test Files  2 passed (2)
+      Tests  42 passed (42)
+   Start at  08:58:18
+   Duration  672ms (transform 302ms, setup 0ms, collect 488ms, tests 35ms, environment 0ms, prepare 124ms)
+
+
+EXIT_CODE=0
