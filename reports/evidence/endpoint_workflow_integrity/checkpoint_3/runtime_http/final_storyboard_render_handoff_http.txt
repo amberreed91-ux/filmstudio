@@ -1,0 +1,52 @@
+working_directory: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend
+timestamp: 2026-07-30T13:39:35Z
+command: ./.venv/bin/python - <<PY [...TestClient storyboard render handoff verification...]
+
+exit_code: 0
+
+stdout:
+create_status 200
+blueprint_id sbp_cp3_final_b4654101_scene_001_b82cf737
+version_id sbv_2245eeb5a81a
+storyboard_shot_id sbs_407b0f815318
+initial_blueprint_status draft
+initial_shot_status ready
+draft_render_status 422
+draft_render_detail {"detail":{"error_type":"validation_error","message":"Approve storyboard version before rendering storyboard shot","stage":"storyboard_shot_render","metadata":{"blueprint_id":"sbp_cp3_final_b4654101_scene_001_b82cf737","version_id":"sbv_2245eeb5a81a","storyboard_shot_id":"sbs_407b0f815318"}}}
+draft_render_jobs []
+draft_render_links []
+review_status 200
+approve_status 200
+approved_version_id sbv_2245eeb5a81a
+approved_shot_status approved
+approved_render_status 200
+approved_render_job_id job-20260730093941-76a1ba0b-scene_001_shot_001
+approved_storyboard_meta {'blueprint_id': 'sbp_cp3_final_b4654101_scene_001_b82cf737', 'version_id': 'sbv_2245eeb5a81a', 'storyboard_shot_id': 'sbs_407b0f815318', 'project_id': 'cp3_final_b4654101', 'scene_id': 'scene_001', 'shot_id': 'scene_001_shot_001', 'shot_number': 1}
+approved_render_links [{'link_id': 'sbrl_32e797fa4f64', 'project_id': 'cp3_final_b4654101', 'scene_id': 'scene_001', 'shot_id': 'scene_001_shot_001', 'storyboard_shot_id': 'sbs_407b0f815318', 'blueprint_id': 'sbp_cp3_final_b4654101_scene_001_b82cf737', 'version_id': 'sbv_2245eeb5a81a', 'render_job_id': 'job-20260730093941-76a1ba0b-scene_001_shot_001', 'link_type': 'initial_render', 'created_at': '2026-07-30T13:39:42.025806+00:00', 'metadata': {}}]
+stale_render_status 409
+stale_render_detail {"detail":{"error_type":"state_error","message":"Storyboard shot belongs to a stale storyboard version","stage":"storyboard_shot_render","metadata":{"blueprint_id":"sbp_cp3_final_b4654101_scene_001_b82cf737","current_version_id":"sbv_newer_current_version","approved_version_id":"sbv_2245eeb5a81a","shot_version_id":"sbv_2245eeb5a81a","storyboard_shot_id":"sbs_407b0f815318"}}}
+fresh_current_version sbv_newer_current_version
+fresh_approved_version sbv_2245eeb5a81a
+fresh_shot_version sbv_2245eeb5a81a
+fresh_shot_status StoryboardShotStatus.APPROVED
+
+stderr:
+SHOT_PROMPT_BUILT | shot=1 | take=1 | length=282 | type=Wide establishing shot. Camera far back. Full envi
+project_id=cp3_final_b4654101 job_id=storyboard_scene_001 provider=internal stage=storyboard_blueprint_create duration_ms=18
+{"timestamp": 1785418781.9573739, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/projects/cp3_final_b4654101/scenes/scene_001/storyboard-blueprint", "query": null, "status_code": 200, "duration_ms": 154.93, "client_ip": "testclient", "user_agent": "testclient"}
+HTTP Request: POST http://testserver/api/f51/studio/projects/cp3_final_b4654101/scenes/scene_001/storyboard-blueprint "HTTP/1.1 200 OK"
+{"timestamp": 1785418781.962801, "level": "warning", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/shots/sbs_407b0f815318/render", "query": null, "status_code": 422, "duration_ms": 3.68, "client_ip": "testclient", "user_agent": "testclient"}
+HTTP Request: POST http://testserver/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/shots/sbs_407b0f815318/render "HTTP/1.1 422 Unprocessable Entity"
+project_id=cp3_final_b4654101 job_id=storyboard_scene_001 provider=internal stage=storyboard_continuity_review duration_ms=3
+{"timestamp": 1785418781.971508, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/versions/sbv_2245eeb5a81a/continuity-review", "query": null, "status_code": 200, "duration_ms": 5.8, "client_ip": "testclient", "user_agent": "testclient"}
+HTTP Request: POST http://testserver/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/versions/sbv_2245eeb5a81a/continuity-review "HTTP/1.1 200 OK"
+{"timestamp": 1785418781.9757912, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/versions/sbv_2245eeb5a81a/approve", "query": null, "status_code": 200, "duration_ms": 3.05, "client_ip": "testclient", "user_agent": "testclient"}
+HTTP Request: POST http://testserver/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/versions/sbv_2245eeb5a81a/approve "HTTP/1.1 200 OK"
+stability_event={'project_id': 'cp3_final_b4654101', 'job_id': 'job-20260730093941-76a1ba0b-scene_001_shot_001', 'provider': 'simulated', 'stage': 'render_context_enrichment', 'duration_ms': 8, 'selected_atom_count': 0}
+ENVIRONMENT_CONTINUITY_CONTEXT | project=cp3_final_b4654101 | shot=scene_001_shot_001 | location=frame | warnings=0 | refs=0
+RENDER_JOB_CREATED | job_id=job-20260730093941-76a1ba0b-scene_001_shot_001 | provider=simulated | hosted=False | key_present=True | test_mode=none | use_mock=False | missing=none
+FINAL_RENDER_PROMPT | scene=scene_001 | prompt=Wide establishing shot. Camera far back. Full environment visible. Characters small in frame. Sets the location and mood.. cinematic scene, day. Story
+{"timestamp": 1785418782.0262988, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/shots/sbs_407b0f815318/render", "query": null, "status_code": 200, "duration_ms": 49.23, "client_ip": "testclient", "user_agent": "testclient"}
+HTTP Request: POST http://testserver/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/shots/sbs_407b0f815318/render "HTTP/1.1 200 OK"
+{"timestamp": 1785418782.033809, "level": "warning", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/shots/sbs_407b0f815318/render", "query": null, "status_code": 409, "duration_ms": 3.69, "client_ip": "testclient", "user_agent": "testclient"}
+HTTP Request: POST http://testserver/api/f51/studio/storyboard-blueprints/sbp_cp3_final_b4654101_scene_001_b82cf737/shots/sbs_407b0f815318/render "HTTP/1.1 409 Conflict"

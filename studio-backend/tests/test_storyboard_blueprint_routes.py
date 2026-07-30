@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from main import app
 from app.services.project_store import project_store
+from app.services.render import render_service
 from app.services.storyboard_blueprint_service import storyboard_blueprint_service
 
 
@@ -35,6 +36,21 @@ def test_storyboard_blueprint_route_create_approve_and_render_contract() -> None
     contract = contract_response.json()
     assert contract["provider_neutral_prompt"]
     assert contract["render_readiness"] == "ready"
+
+    draft_render_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/render",
+        json={"provider": "simulated", "submit": False},
+    )
+    assert draft_render_response.status_code == 422, draft_render_response.text
+    assert "Approve storyboard version" in draft_render_response.text
+    assert render_service.list_jobs(project_id=project_id) == []
+    assert (
+        storyboard_blueprint_service.storage.list_storyboard_render_links(
+            project_id=project_id,
+            shot_id=detail["shots"][0]["shot_id"],
+        )
+        == []
+    )
 
     approve_response = client.post(
         f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
@@ -66,6 +82,40 @@ def test_storyboard_blueprint_route_create_approve_and_render_contract() -> None
     )
     assert links
     assert links[0]["version_id"] == version_id
+
+
+def test_storyboard_render_rejects_stale_approved_version() -> None:
+    client = TestClient(app)
+    project_id = f"project_stale_{uuid4().hex[:8]}"
+    scene_id = "scene_001"
+
+    create_response = client.post(
+        f"/api/f51/studio/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
+        json={"shot_count": 1, "regeneration_reason": "stale_version_test"},
+    )
+    assert create_response.status_code == 200, create_response.text
+    detail = create_response.json()
+    blueprint_id = detail["blueprint"]["blueprint_id"]
+    version_id = detail["version"]["version_id"]
+    storyboard_shot_id = detail["shots"][0]["storyboard_shot_id"]
+
+    approve_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
+        json={"approved_by": "creator"},
+    )
+    assert approve_response.status_code == 200, approve_response.text
+
+    blueprint = storyboard_blueprint_service.storage.get_storyboard_blueprint_by_id(blueprint_id)
+    assert blueprint is not None
+    blueprint.current_version_id = "sbv_newer_current_version"
+    storyboard_blueprint_service.storage.save_storyboard_blueprint(blueprint)
+
+    stale_render_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/render",
+        json={"provider": "simulated", "submit": False},
+    )
+    assert stale_render_response.status_code == 409, stale_render_response.text
+    assert "stale storyboard version" in stale_render_response.text
 
 
 def test_storyboard_blueprint_route_update_lock_and_backfill() -> None:

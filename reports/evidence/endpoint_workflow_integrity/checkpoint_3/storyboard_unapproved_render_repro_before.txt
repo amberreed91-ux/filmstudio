@@ -1,0 +1,7 @@
+create_status 200
+blueprint_id sbp_cp3_unapproved_3d2a3ad9_scene_001_0b2ee53a
+version_id sbv_e4924414b90a
+shot_status ready
+blueprint_status draft
+render_status 200
+render_body {"id":"job-20260730093049-b1191c11-scene_001_shot_001","project_id":"cp3_unapproved_3d2a3ad9","shot_id":"scene_001_shot_001","provider":"simulated","provider_job_id":null,"status":"pending","progress":0,"input_payload":{"shot_id":"scene_001_shot_001","prompt":"Wide establishing shot. Camera far back. Full environment visible. Characters small in frame. Sets the location and mood.. cinematic scene, day. Storyboard fallback scene generated from the requested scene identifier.. Mood: neutral. Cinematic, film quality, single continuous shot. establishing_shot. cinematic scene. day neutral. Shot 1 of 1. Scene 001. A beat that earns its place in the larger composition\n\n[ENVIRONMENT CONTINUITY]\nEnvironment identity: frame (frame)","referenceAssets":[],"parameters":{"duration":5,"ratio":"1280:720","shot_planning":{"purpose":"establishing_shot","framing":"establishing_shot","camera":"match_cut","continuity":"cinematic scene","rationale":"Scene 001. A beat that earns its place in the larger composition."},"storyboard":{"blueprint_id":"sbp_cp3_unapproved_3d2a3ad9_scene_001_0b2ee53a","version_id":"sbv_e4924414b90a","storyboard_shot_id":"sbs_98657d5256d1","project_id":"cp3_unapproved_3d2a3ad

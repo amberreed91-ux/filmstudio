@@ -1,0 +1,19 @@
+create_status 200
+blueprint_id sbp_cp3_approved_3bd0a39c_scene_001_aede5c61
+version_id sbv_6ae69527db79
+storyboard_shot_id sbs_3ce07bb886a5
+draft_render_status 422
+draft_render_body {"detail":{"error_type":"validation_error","message":"Approve storyboard version before rendering storyboard shot","stage":"storyboard_shot_render","metadata":{"blueprint_id":"sbp_cp3_approved_3bd0a39c_scene_001_aede5c61","version_id":"sbv_6ae69527db79","storyboard_shot_id":"sbs_3ce07bb886a5"}}}
+draft_render_links []
+review_status 200
+approve_status 200
+approved_version_id sbv_6ae69527db79
+approved_shot_status approved
+approved_render_status 200
+render_job_id job-20260730093230-04aa9fcc-scene_001_shot_001
+job_storyboard_meta {'blueprint_id': 'sbp_cp3_approved_3bd0a39c_scene_001_aede5c61', 'version_id': 'sbv_6ae69527db79', 'storyboard_shot_id': 'sbs_3ce07bb886a5', 'project_id': 'cp3_approved_3bd0a39c', 'scene_id': 'scene_001', 'shot_id': 'scene_001_shot_001', 'shot_number': 1}
+stored_render_links [{'link_id': 'sbrl_f6f39647a21b', 'project_id': 'cp3_approved_3bd0a39c', 'scene_id': 'scene_001', 'shot_id': 'scene_001_shot_001', 'storyboard_shot_id': 'sbs_3ce07bb886a5', 'blueprint_id': 'sbp_cp3_approved_3bd0a39c_scene_001_aede5c61', 'version_id': 'sbv_6ae69527db79', 'render_job_id': 'job-20260730093230-04aa9fcc-scene_001_shot_001', 'link_type': 'initial_render', 'created_at': '2026-07-30T13:32:30.883979+00:00', 'metadata': {}}]
+fresh_blueprint_current_version sbv_6ae69527db79
+fresh_blueprint_approved_version sbv_6ae69527db79
+fresh_shot_version sbv_6ae69527db79
+fresh_shot_status StoryboardShotStatus.APPROVED

@@ -1,0 +1,11 @@
+working_directory: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend
+timestamp: 2026-07-30T13:38:57Z
+command: ./.venv/bin/python -m pytest tests/test_checkpoint_2_route_registration.py app/routes/test_recommended_duration_route.py app/routes/test_studio_workflow_routes.py app/routes/test_studio_knowledge_routes.py app/services/test_render_create_route.py tests/test_storyboard_blueprint_routes.py -q
+
+exit_code: 0
+
+stdout:
+.......................                                                  [100%]
+23 passed in 9.25s
+
+stderr:

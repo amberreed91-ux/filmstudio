@@ -1,0 +1,146 @@
+# Checkpoint 3 worktree baseline
+
+## git status --short
+ M studio-app/src/components/KnowledgeLibraryPanel.test.tsx
+ M studio-app/src/components/KnowledgeLibraryPanel.tsx
+ M studio-app/src/lib/previsStoryboard.test.ts
+ M studio-app/src/lib/previsStoryboard.ts
+ M studio-app/src/lib/studioApi.ts
+ M studio-app/src/lib/studioKnowledgeApi.ts
+ M studio-app/src/pages/PrevisRoom.tsx
+ M studio-app/src/pages/StudyRoom.tsx
+ M studio-backend/app/adapters/__init__.py
+ M studio-backend/app/routes/__init__.py
+ M studio-backend/app/routes/render.py
+ M studio-backend/app/routes/storyboard_blueprints.py
+ M studio-backend/app/routes/studio_knowledge.py
+ M studio-backend/app/routes/test_studio_knowledge_routes.py
+ M studio-backend/app/services/character_visual_reference_service.py
+ M studio-backend/app/services/generate_short_film_workflow_service.py
+ M studio-backend/app/services/projects.py
+ M studio-backend/app/services/render.py
+ M studio-backend/app/services/render_retry_service.py
+ M studio-backend/app/services/script_parser.py
+ M studio-backend/app/services/shot_prompt_builder.py
+ M studio-backend/app/services/storyboard_blueprint_service.py
+ M studio-backend/app/services/test_render_create_route.py
+ M studio-backend/app/services/test_runway_provider_hardening.py
+ M studio-backend/app/services/test_wan_adapter.py
+ M studio-backend/data/project_state_store.json
+ M studio-backend/data/projects.json
+ M studio-backend/tests/test_combined_reorder_strategy.py
+ M studio-backend/tests/test_storyboard_blueprint_routes.py
+?? reports/evidence/endpoint_workflow_integrity/checkpoint_3/
+?? scripts/install_ai_film_studio_mac_app.sh
+?? scripts/launch_ai_film_studio.sh
+?? studio-backend/app/services/character_name_matching.py
+?? studio-backend/app/services/department_render_context_service.py
+?? studio-backend/app/services/render_context_enrichment_service.py
+?? studio-backend/app/services/test_department_render_context.py
+?? studio-backend/app/services/test_render_canon_integration.py
+?? studio-backend/app/services/test_studio_brain_library_service.py
+?? studio-backend/data/project_state_store.json.cleanup-backup-20260729073804
+?? studio-backend/data/projects.json.cleanup-backup-20260729073804
+?? studio-backend/data/studio.db.cleanup-backup-20260729073804
+?? studio-backend/data/studio_brain_library/
+
+## staged files
+
+## unstaged files
+M	studio-app/src/components/KnowledgeLibraryPanel.test.tsx
+M	studio-app/src/components/KnowledgeLibraryPanel.tsx
+M	studio-app/src/lib/previsStoryboard.test.ts
+M	studio-app/src/lib/previsStoryboard.ts
+M	studio-app/src/lib/studioApi.ts
+M	studio-app/src/lib/studioKnowledgeApi.ts
+M	studio-app/src/pages/PrevisRoom.tsx
+M	studio-app/src/pages/StudyRoom.tsx
+M	studio-backend/app/adapters/__init__.py
+M	studio-backend/app/routes/__init__.py
+M	studio-backend/app/routes/render.py
+M	studio-backend/app/routes/storyboard_blueprints.py
+M	studio-backend/app/routes/studio_knowledge.py
+M	studio-backend/app/routes/test_studio_knowledge_routes.py
+M	studio-backend/app/services/character_visual_reference_service.py
+M	studio-backend/app/services/generate_short_film_workflow_service.py
+M	studio-backend/app/services/projects.py
+M	studio-backend/app/services/render.py
+M	studio-backend/app/services/render_retry_service.py
+M	studio-backend/app/services/script_parser.py
+M	studio-backend/app/services/shot_prompt_builder.py
+M	studio-backend/app/services/storyboard_blueprint_service.py
+M	studio-backend/app/services/test_render_create_route.py
+M	studio-backend/app/services/test_runway_provider_hardening.py
+M	studio-backend/app/services/test_wan_adapter.py
+M	studio-backend/data/project_state_store.json
+M	studio-backend/data/projects.json
+M	studio-backend/tests/test_combined_reorder_strategy.py
+M	studio-backend/tests/test_storyboard_blueprint_routes.py
+
+## untracked files
+reports/evidence/endpoint_workflow_integrity/checkpoint_3/worktree_baseline.txt
+scripts/install_ai_film_studio_mac_app.sh
+scripts/launch_ai_film_studio.sh
+studio-backend/app/services/character_name_matching.py
+studio-backend/app/services/department_render_context_service.py
+studio-backend/app/services/render_context_enrichment_service.py
+studio-backend/app/services/test_department_render_context.py
+studio-backend/app/services/test_render_canon_integration.py
+studio-backend/app/services/test_studio_brain_library_service.py
+studio-backend/data/project_state_store.json.cleanup-backup-20260729073804
+studio-backend/data/projects.json.cleanup-backup-20260729073804
+studio-backend/data/studio.db.cleanup-backup-20260729073804
+studio-backend/data/studio_brain_library/AAVE Ebonics study.md
+studio-backend/data/studio_brain_library/STUDIO BRAIN FILM SCHOOL.md
+studio-backend/data/studio_brain_library/STUDIO BRAIN TOP100 FILMS.md
+studio-backend/data/studio_brain_library/a24-filmmaking.md
+studio-backend/data/studio_brain_library/acting-for-the-camera.md
+studio-backend/data/studio_brain_library/antagonist-design.md
+studio-backend/data/studio_brain_library/audiences-and-responses.md
+studio-backend/data/studio_brain_library/character-profiles.md
+studio-backend/data/studio_brain_library/cinematography-and-camera-language.md
+studio-backend/data/studio_brain_library/color-in-film.md
+studio-backend/data/studio_brain_library/continuity-techniques-in-movies.md
+studio-backend/data/studio_brain_library/crime-film-and-neo-noir.md
+studio-backend/data/studio_brain_library/documentary-film.md
+studio-backend/data/studio_brain_library/drama-and-character-study.md
+studio-backend/data/studio_brain_library/editing-rhythm.md
+studio-backend/data/studio_brain_library/editing-theory-and-techniques.md
+studio-backend/data/studio_brain_library/famous-directors.md
+studio-backend/data/studio_brain_library/famous-screenwriters-and-techniques.md
+studio-backend/data/studio_brain_library/film-score-and-sound-design.md
+studio-backend/data/studio_brain_library/foreign-films.md
+studio-backend/data/studio_brain_library/gargoyle lore.md
+studio-backend/data/studio_brain_library/genre-conventions-zombie.md
+studio-backend/data/studio_brain_library/independent-film-and-mumblecore.md
+studio-backend/data/studio_brain_library/lighting-in-film.md
+studio-backend/data/studio_brain_library/location-atlas.md
+studio-backend/data/studio_brain_library/lower wacker chicago lore.md
+studio-backend/data/studio_brain_library/mapogo lions.md
+studio-backend/data/studio_brain_library/pixar-disney-films.md
+studio-backend/data/studio_brain_library/production-design-and-set-as-character.md
+studio-backend/data/studio_brain_library/production-design-art-direction.md
+studio-backend/data/studio_brain_library/production-design.md
+studio-backend/data/studio_brain_library/psychology-of-audience.md
+studio-backend/data/studio_brain_library/roots-of-filmmaking.md
+studio-backend/data/studio_brain_library/science-fiction-cinema.md
+studio-backend/data/studio_brain_library/short-film-structure 2.md
+studio-backend/data/studio_brain_library/short-film-structure.md
+studio-backend/data/studio_brain_library/sound-design-notes.md
+studio-backend/data/studio_brain_library/story-structure-beyond-three-acts.md
+studio-backend/data/studio_brain_library/survivor-group-dynamics.md
+studio-backend/data/studio_brain_library/the-directors-process.md
+studio-backend/data/studio_brain_library/the-musical-film.md
+studio-backend/data/studio_brain_library/the-romantic-drama.md
+studio-backend/data/studio_brain_library/the-war-film.md
+studio-backend/data/studio_brain_library/thematic-core.md
+studio-backend/data/studio_brain_library/tone-and-mood-references.md
+studio-backend/data/studio_brain_library/tone-mood.md
+studio-backend/data/studio_brain_library/types-of-anime.md
+studio-backend/data/studio_brain_library/types-of-horror.md
+studio-backend/data/studio_brain_library/types-of-humor-in-movies.md
+studio-backend/data/studio_brain_library/visual-language.md
+studio-backend/data/studio_brain_library/western-and-neo-western.md
+studio-backend/data/studio_brain_library/world-cinema-movements.md
+studio-backend/data/studio_brain_library/world-rules.md
+studio-backend/data/studio_brain_library/writing-dialogue-for-film.md

@@ -404,8 +404,11 @@ class StoryboardBlueprintService:
         from app.services.render import render_service as default_render_service
 
         shot = self.storage.get_storyboard_shot(storyboard_shot_id)
-        if shot is None or shot.blueprint_id != blueprint_id:
-            raise StateError("Storyboard shot not found", stage="storyboard_render_contract_build")
+        self._validate_shot_renderable(
+            shot=shot,
+            blueprint_id=blueprint_id,
+            stage="storyboard_shot_render",
+        )
         svc = render_service or default_render_service
         parameters = dict(shot.render_contract.structured_parameters or {})
         parameters["storyboard"] = self._storyboard_metadata_for_shot(shot)
@@ -421,6 +424,84 @@ class StoryboardBlueprintService:
         )
         self.link_render_job(shot=shot, render_job_id=job.id, link_type=link_type)
         return job
+
+    def _validate_shot_renderable(
+        self,
+        *,
+        shot: StoryboardShot | None,
+        blueprint_id: str,
+        stage: str,
+    ) -> None:
+        if shot is None or shot.blueprint_id != blueprint_id:
+            raise StateError("Storyboard shot not found", stage=stage)
+        blueprint = self.storage.get_storyboard_blueprint_by_id(blueprint_id)
+        if blueprint is None or blueprint.blueprint_id != shot.blueprint_id:
+            raise StateError("Storyboard blueprint not found", stage=stage)
+        version = self.storage.get_storyboard_blueprint_version(shot.version_id)
+        if version is None or version.blueprint_id != blueprint.blueprint_id:
+            raise StateError("Storyboard version not found", stage=stage)
+
+        approved_version_id = str(blueprint.approved_version_id or "").strip()
+        current_version_id = str(blueprint.current_version_id or "").strip()
+        if not approved_version_id:
+            raise ValidationError(
+                "Approve storyboard version before rendering storyboard shot",
+                stage=stage,
+                metadata={
+                    "blueprint_id": blueprint.blueprint_id,
+                    "version_id": shot.version_id,
+                    "storyboard_shot_id": shot.storyboard_shot_id,
+                },
+            )
+        if shot.version_id != approved_version_id or shot.version_id != current_version_id:
+            raise StateError(
+                "Storyboard shot belongs to a stale storyboard version",
+                stage=stage,
+                metadata={
+                    "blueprint_id": blueprint.blueprint_id,
+                    "current_version_id": current_version_id,
+                    "approved_version_id": approved_version_id,
+                    "shot_version_id": shot.version_id,
+                    "storyboard_shot_id": shot.storyboard_shot_id,
+                },
+            )
+        if version.status != StoryboardBlueprintStatus.APPROVED:
+            raise ValidationError(
+                "Approve storyboard version before rendering storyboard shot",
+                stage=stage,
+                metadata={
+                    "blueprint_id": blueprint.blueprint_id,
+                    "version_id": version.version_id,
+                    "status": version.status.value if hasattr(version.status, "value") else version.status,
+                },
+            )
+        if shot.status not in {
+            StoryboardShotStatus.APPROVED,
+            StoryboardShotStatus.LOCKED,
+            StoryboardShotStatus.RENDERED,
+        }:
+            raise ValidationError(
+                "Approve storyboard shot before rendering",
+                stage=stage,
+                metadata={
+                    "blueprint_id": blueprint.blueprint_id,
+                    "version_id": version.version_id,
+                    "storyboard_shot_id": shot.storyboard_shot_id,
+                    "status": shot.status.value if hasattr(shot.status, "value") else shot.status,
+                },
+            )
+        blockers = list(shot.render_contract.render_blockers or [])
+        if blockers:
+            raise ValidationError(
+                "Storyboard shot has render blockers",
+                stage=stage,
+                metadata={
+                    "blueprint_id": blueprint.blueprint_id,
+                    "version_id": version.version_id,
+                    "storyboard_shot_id": shot.storyboard_shot_id,
+                    "blockers": blockers,
+                },
+            )
 
     def link_render_job(self, *, shot: StoryboardShot, render_job_id: str, link_type: str = "initial_render") -> StoryboardRenderLink:
         link = StoryboardRenderLink(

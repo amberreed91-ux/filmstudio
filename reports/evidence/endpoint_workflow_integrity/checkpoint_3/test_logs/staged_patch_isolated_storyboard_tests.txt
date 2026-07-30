@@ -1,0 +1,11 @@
+working_directory: /tmp/cp3-staged-worktree/studio-backend
+timestamp: 2026-07-30T13:43:22Z
+command: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/bin/python -m pytest tests/test_storyboard_blueprint_routes.py -q
+
+exit_code: 0
+
+stdout:
+...                                                                      [100%]
+3 passed in 13.44s
+
+stderr:
