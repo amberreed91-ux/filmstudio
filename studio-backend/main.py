@@ -68,6 +68,7 @@ from app.routes.studio_knowledge import router as studio_knowledge_router
 from app.routes.studio_brain import router as studio_brain_router
 from app.routes.reference_assets import router as reference_assets_router
 from app.routes.screening_room import router as screening_room_router
+from app.routes.canonical_workflow import router as canonical_workflow_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
 from app.auth import AuthService, demo_login
@@ -383,6 +384,7 @@ app.include_router(studio_knowledge_router)
 app.include_router(studio_brain_router)
 app.include_router(reference_assets_router)
 app.include_router(screening_room_router)
+app.include_router(canonical_workflow_router)
 
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)

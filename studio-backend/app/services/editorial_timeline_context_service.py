@@ -118,7 +118,12 @@ class EditorialTimelineContextService:
         render_jobs = storage.list_jobs(project_id=project_id, limit=1000) or []
         scene_compositions = storage.list_scene_compositions_for_project(project_id) or []
         final_packages = storage.list_final_short_film_packages_for_project(project_id) or []
-        latest_package = self._resolve_package(final_packages, source_package_id)
+        latest_package = self._resolve_package(
+            final_packages,
+            source_package_id,
+            storage=storage,
+            project_id=project_id,
+        )
         source_package = _as_str(_attr(latest_package, "package_id", "")) if latest_package else ""
 
         video_assets = self._safe_list(storage, "list_video_assets_for_project", project_id)
@@ -190,12 +195,27 @@ class EditorialTimelineContextService:
             evidence_counts=evidence_counts,
         )
 
-    def _resolve_package(self, packages: list[Any], source_package_id: str) -> Any | None:
+    def _resolve_package(
+        self,
+        packages: list[Any],
+        source_package_id: str,
+        *,
+        storage: Any,
+        project_id: str,
+    ) -> Any | None:
         clean = _as_str(source_package_id)
         if clean:
             for package in packages:
                 if _as_str(_attr(package, "package_id", "")) == clean:
                     return package
+            get_previs_package = getattr(storage, "get_previs_production_package", None)
+            previs_package = get_previs_package(clean) if callable(get_previs_package) else None
+            if (
+                isinstance(previs_package, dict)
+                and previs_package.get("project_id") == project_id
+            ):
+                return previs_package
+            raise StateError("Editorial source package not found", stage="editorial_context")
         return packages[0] if packages else None
 
     def _safe_list(self, storage: Any, method_name: str, project_id: str) -> list[Any]:

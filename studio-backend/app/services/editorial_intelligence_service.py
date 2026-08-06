@@ -258,8 +258,8 @@ class EditorialIntelligenceService:
             "version_number": max((row["version_number"] for row in versions), default=0) + 1,
             "status": "draft",
             "source_cut_id": current["cut_id"],
-            "source_analysis_id": None,
-            "source_application_id": None,
+            "source_analysis_id": _as_str((metadata or {}).get("source_analysis_id")) or None,
+            "source_application_id": _as_str((metadata or {}).get("source_application_id")) or None,
             "scene_order": normalized_order,
             "timeline": normalized_timeline,
             "metadata": {"change_type": "timeline_update", **(metadata or {})},
@@ -584,6 +584,7 @@ class EditorialIntelligenceService:
                 "include_frame_analysis": request.include_frame_analysis,
                 "evidence_counts": context.evidence_counts,
                 "decision_gate_status": context.decision_gate_status,
+                **(request.metadata or {}),
             },
         )
 

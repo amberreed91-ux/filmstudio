@@ -3507,6 +3507,54 @@ class DatabaseStorage:
                     CHECK (current_cut_id != '')
                 );
             """),
+            (56, "Add canonical production workflow runs and transition ledger", """
+                CREATE TABLE IF NOT EXISTS canonical_workflow_runs (
+                    run_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    script_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL,
+                    blueprint_id TEXT NOT NULL,
+                    blueprint_version_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    context_hash TEXT NOT NULL,
+                    data_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (run_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (script_id != ''),
+                    CHECK (scene_id != ''),
+                    CHECK (blueprint_id != ''),
+                    CHECK (blueprint_version_id != ''),
+                    CHECK (status != ''),
+                    CHECK (context_hash != '')
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_workflow_source
+                    ON canonical_workflow_runs(project_id, scene_id, blueprint_version_id);
+                CREATE INDEX IF NOT EXISTS idx_canonical_workflow_project_status
+                    ON canonical_workflow_runs(project_id, status, updated_at);
+
+                CREATE TABLE IF NOT EXISTS canonical_workflow_transitions (
+                    transition_id TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL,
+                    idempotency_key TEXT NOT NULL,
+                    from_status TEXT NOT NULL,
+                    to_status TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    CHECK (transition_id != ''),
+                    CHECK (run_id != ''),
+                    CHECK (idempotency_key != ''),
+                    CHECK (from_status != ''),
+                    CHECK (to_status != ''),
+                    CHECK (event_type != '')
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_workflow_transition_idempotency
+                    ON canonical_workflow_transitions(run_id, idempotency_key);
+                CREATE INDEX IF NOT EXISTS idx_canonical_workflow_transition_order
+                    ON canonical_workflow_transitions(run_id, created_at, transition_id);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -11767,6 +11815,176 @@ class DatabaseStorage:
         data = dict(row)
         data["approved"] = bool(data.get("approved"))
         data["metadata"] = json.loads(data.pop("metadata_json") or "{}")
+        return data
+
+    # =========================================================================
+    # CANONICAL PRODUCTION WORKFLOW
+    # =========================================================================
+
+    def create_canonical_workflow_run(self, run: dict[str, Any]) -> dict[str, Any]:
+        """Create one workflow run per approved Blueprint version, idempotently."""
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            existing = cursor.execute(
+                """SELECT * FROM canonical_workflow_runs
+                   WHERE project_id = ? AND scene_id = ? AND blueprint_version_id = ?""",
+                (run["project_id"], run["scene_id"], run["blueprint_version_id"]),
+            ).fetchone()
+            if existing is not None:
+                conn.commit()
+                return self._canonical_workflow_row_to_dict(existing)
+            cursor.execute(
+                """
+                INSERT INTO canonical_workflow_runs (
+                    run_id, project_id, script_id, scene_id, blueprint_id,
+                    blueprint_version_id, status, context_hash, data_json,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run["run_id"],
+                    run["project_id"],
+                    run["script_id"],
+                    run["scene_id"],
+                    run["blueprint_id"],
+                    run["blueprint_version_id"],
+                    run["status"],
+                    run["context_hash"],
+                    json.dumps(run.get("data") or {}, sort_keys=True),
+                    run.get("created_at") or now,
+                    run.get("updated_at") or now,
+                ),
+            )
+            created = cursor.execute(
+                "SELECT * FROM canonical_workflow_runs WHERE run_id = ?",
+                (run["run_id"],),
+            ).fetchone()
+            conn.commit()
+        return self._canonical_workflow_row_to_dict(created)
+
+    def get_canonical_workflow_run(self, run_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM canonical_workflow_runs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+        return self._canonical_workflow_row_to_dict(row) if row else None
+
+    def get_canonical_workflow_run_for_source(
+        self,
+        project_id: str,
+        scene_id: str,
+        blueprint_version_id: str,
+    ) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                """SELECT * FROM canonical_workflow_runs
+                   WHERE project_id = ? AND scene_id = ? AND blueprint_version_id = ?""",
+                (project_id, scene_id, blueprint_version_id),
+            ).fetchone()
+        return self._canonical_workflow_row_to_dict(row) if row else None
+
+    def list_canonical_workflow_runs(self, project_id: str) -> list[dict[str, Any]]:
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT * FROM canonical_workflow_runs
+                   WHERE project_id = ? ORDER BY created_at, run_id""",
+                (project_id,),
+            ).fetchall()
+        return [self._canonical_workflow_row_to_dict(row) for row in rows]
+
+    def commit_canonical_workflow_transition(
+        self,
+        run: dict[str, Any],
+        transition: dict[str, Any],
+        *,
+        expected_status: str,
+    ) -> dict[str, Any]:
+        """Atomically persist state before exposing its transition event."""
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            current = cursor.execute(
+                "SELECT * FROM canonical_workflow_runs WHERE run_id = ?",
+                (run["run_id"],),
+            ).fetchone()
+            if current is None:
+                conn.rollback()
+                raise ValueError("Canonical workflow run not found")
+            duplicate = cursor.execute(
+                """SELECT transition_id FROM canonical_workflow_transitions
+                   WHERE run_id = ? AND idempotency_key = ?""",
+                (run["run_id"], transition["idempotency_key"]),
+            ).fetchone()
+            if duplicate is not None:
+                conn.commit()
+                return self._canonical_workflow_row_to_dict(current)
+            if current["status"] != expected_status:
+                conn.rollback()
+                raise ValueError(
+                    f"Canonical workflow state changed: expected {expected_status}, found {current['status']}"
+                )
+            cursor.execute(
+                """UPDATE canonical_workflow_runs
+                   SET status = ?, context_hash = ?, data_json = ?, updated_at = ?
+                   WHERE run_id = ? AND status = ?""",
+                (
+                    run["status"],
+                    run["context_hash"],
+                    json.dumps(run.get("data") or {}, sort_keys=True),
+                    run.get("updated_at") or now,
+                    run["run_id"],
+                    expected_status,
+                ),
+            )
+            if cursor.rowcount != 1:
+                conn.rollback()
+                raise ValueError("Canonical workflow transition lost an ownership race")
+            cursor.execute(
+                """
+                INSERT INTO canonical_workflow_transitions (
+                    transition_id, run_id, idempotency_key, from_status,
+                    to_status, event_type, payload_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    transition["transition_id"],
+                    run["run_id"],
+                    transition["idempotency_key"],
+                    transition["from_status"],
+                    transition["to_status"],
+                    transition["event_type"],
+                    json.dumps(transition.get("payload") or {}, sort_keys=True),
+                    transition.get("created_at") or now,
+                ),
+            )
+            updated = cursor.execute(
+                "SELECT * FROM canonical_workflow_runs WHERE run_id = ?",
+                (run["run_id"],),
+            ).fetchone()
+            conn.commit()
+        return self._canonical_workflow_row_to_dict(updated)
+
+    def list_canonical_workflow_transitions(self, run_id: str) -> list[dict[str, Any]]:
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT * FROM canonical_workflow_transitions
+                   WHERE run_id = ? ORDER BY created_at, transition_id""",
+                (run_id,),
+            ).fetchall()
+        return [self._canonical_workflow_transition_row_to_dict(row) for row in rows]
+
+    def _canonical_workflow_row_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        data = dict(row)
+        data["data"] = json.loads(data.pop("data_json") or "{}")
+        return data
+
+    def _canonical_workflow_transition_row_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        data = dict(row)
+        data["payload"] = json.loads(data.pop("payload_json") or "{}")
         return data
 
     def get_scene_previs_seed(self, project_id: str, scene_id: str) -> Optional[int]:
