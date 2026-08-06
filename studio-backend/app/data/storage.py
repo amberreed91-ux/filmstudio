@@ -11886,13 +11886,25 @@ class DatabaseStorage:
             ).fetchone()
         return self._canonical_workflow_row_to_dict(row) if row else None
 
-    def list_canonical_workflow_runs(self, project_id: str) -> list[dict[str, Any]]:
+    def list_canonical_workflow_runs(
+        self,
+        project_id: str,
+        scene_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         with self._get_connection() as conn:
-            rows = conn.execute(
-                """SELECT * FROM canonical_workflow_runs
-                   WHERE project_id = ? ORDER BY created_at, run_id""",
-                (project_id,),
-            ).fetchall()
+            if scene_id:
+                rows = conn.execute(
+                    """SELECT * FROM canonical_workflow_runs
+                       WHERE project_id = ? AND scene_id = ?
+                       ORDER BY created_at, run_id""",
+                    (project_id, scene_id),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM canonical_workflow_runs
+                       WHERE project_id = ? ORDER BY created_at, run_id""",
+                    (project_id,),
+                ).fetchall()
         return [self._canonical_workflow_row_to_dict(row) for row in rows]
 
     def commit_canonical_workflow_transition(

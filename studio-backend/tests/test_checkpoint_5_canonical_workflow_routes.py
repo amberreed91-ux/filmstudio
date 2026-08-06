@@ -46,6 +46,18 @@ class RouteWorkflowService:
         self.get(run_id)
         return []
 
+    def list_for_project(self, project_id: str, *, scene_id: str = ""):
+        if project_id != self.run["project_id"]:
+            raise StateError("Project not found", stage="workflow_ownership")
+        if scene_id and scene_id != self.run["scene_id"]:
+            return []
+        return [self.run]
+
+    def current_blueprint_version_id(self, project_id: str, scene_id: str):
+        if project_id != self.run["project_id"] or scene_id != self.run["scene_id"]:
+            return ""
+        return self.run["blueprint_version_id"]
+
 
 def test_canonical_workflow_routes_are_mounted_once_and_reachable(monkeypatch) -> None:
     fake = RouteWorkflowService()
@@ -73,6 +85,14 @@ def test_canonical_workflow_routes_are_mounted_once_and_reachable(monkeypatch) -
     loaded = client.get("/api/f51/studio/production-threads/workflow-route-001")
     assert loaded.status_code == 200, loaded.text
     assert loaded.json()["run"]["status"] == "blueprint_approved"
+
+    listed = client.get(
+        "/api/f51/studio/projects/project-route/production-threads",
+        params={"scene_id": "scene-route"},
+    )
+    assert listed.status_code == 200, listed.text
+    assert [row["run_id"] for row in listed.json()["runs"]] == ["workflow-route-001"]
+    assert listed.json()["current_blueprint_version_id"] == "version-route"
 
 
 def test_canonical_workflow_route_formats_ownership_errors(monkeypatch) -> None:

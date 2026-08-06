@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   projectIdFromLocationState,
   resolveActiveProjectId,
+  withProductionContext,
   withProjectQuery,
 } from './projectContext'
 
@@ -147,5 +148,21 @@ describe('withProjectQuery', () => {
   it('encodes special characters in project id', () => {
     const result = withProjectQuery('/studio/previs', 'proj/with spaces')
     expect(result).toContain('project_id=proj%2Fwith+spaces')
+  })
+})
+
+describe('withProductionContext', () => {
+  it('preserves project, scene, and shot across room navigation', () => {
+    expect(withProductionContext('/studio/screening-room', {
+      projectId: 'project 1',
+      sceneId: 'scene/2',
+      shotNumber: 3,
+    })).toBe('/studio/screening-room?project_id=project+1&scene=scene%2F2&shot=3')
+  })
+
+  it('does not serialize undefined identifiers', () => {
+    const url = withProductionContext('/studio/previs', {})
+    expect(url).toBe('/studio/previs')
+    expect(url).not.toContain('undefined')
   })
 })

@@ -53,6 +53,29 @@ export function withProjectQuery(path: string, projectId?: string | null): strin
   return hashPart ? `${next}#${hashPart}` : next
 }
 
+export function withProductionContext(
+  path: string,
+  context: {
+    projectId?: string | null
+    sceneId?: string | null
+    shotNumber?: number | null
+  },
+): string {
+  const [base, hashPart = ''] = path.split('#')
+  const [pathname, query = ''] = base.split('?')
+  const params = new URLSearchParams(query)
+  const projectId = clean(context.projectId)
+  const sceneId = clean(context.sceneId)
+  if (projectId) params.set('project_id', projectId)
+  if (sceneId) params.set('scene', sceneId)
+  if (context.shotNumber && context.shotNumber > 0) {
+    params.set('shot', String(Math.floor(context.shotNumber)))
+  }
+  const nextQuery = params.toString()
+  const next = nextQuery ? `${pathname}?${nextQuery}` : pathname
+  return hashPart ? `${next}#${hashPart}` : next
+}
+
 export function readPersistedActiveProjectId(): string {
   return clean(localStorage.getItem('studio:activeProjectId') || localStorage.getItem('studio:selected-project-id'))
 }

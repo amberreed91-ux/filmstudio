@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.canonical_workflow import (
     ApprovalRequest,
     BeginCanonicalWorkflowRequest,
+    CanonicalWorkflowListResponse,
     CanonicalWorkflowResponse,
     EditorialDecisionWorkflowRequest,
     EditorialWorkflowRequest,
@@ -39,6 +40,30 @@ def _response(run_id: str) -> CanonicalWorkflowResponse:
         run=canonical_production_workflow_service.get(run_id),
         transitions=canonical_production_workflow_service.transitions(run_id),
     )
+
+
+@router.get(
+    "/projects/{project_id}/production-threads",
+    response_model=CanonicalWorkflowListResponse,
+)
+def list_production_threads(
+    project_id: str,
+    scene_id: str = "",
+) -> CanonicalWorkflowListResponse:
+    try:
+        return CanonicalWorkflowListResponse(
+            runs=canonical_production_workflow_service.list_for_project(
+                project_id,
+                scene_id=scene_id,
+            ),
+            current_blueprint_version_id=(
+                canonical_production_workflow_service.current_blueprint_version_id(project_id, scene_id)
+                if scene_id
+                else ""
+            ),
+        )
+    except StabilityError as exc:
+        raise _http_error(exc) from exc
 
 
 @router.post(

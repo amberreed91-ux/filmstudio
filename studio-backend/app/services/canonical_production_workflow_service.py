@@ -218,9 +218,23 @@ class CanonicalProductionWorkflowService:
             raise StateError("Canonical workflow run not found", stage="workflow_load")
         return run
 
-    def list_for_project(self, project_id: str) -> list[dict[str, Any]]:
+    def list_for_project(
+        self,
+        project_id: str,
+        *,
+        scene_id: str = "",
+    ) -> list[dict[str, Any]]:
         self._project(project_id)
-        return self.storage.list_canonical_workflow_runs(project_id)
+        return self.storage.list_canonical_workflow_runs(
+            project_id,
+            _text(scene_id) or None,
+        )
+
+    def current_blueprint_version_id(self, project_id: str, scene_id: str) -> str:
+        project = self._project(project_id)
+        self._scene(project, scene_id)
+        blueprint = self.storage.get_storyboard_blueprint(project_id, scene_id)
+        return _text(getattr(blueprint, "approved_version_id", "")) if blueprint else ""
 
     def transitions(self, run_id: str) -> list[dict[str, Any]]:
         self.get(run_id)
@@ -781,32 +795,38 @@ class CanonicalProductionWorkflowService:
         original = self.renderer.get_job(revision.original_job_id)
         if original is None or original.project_id != run["project_id"]:
             raise StateError("Original render job not found", stage="workflow_revision_render")
-        parameters = dict(original.input_payload.parameters or {})
-        parameters["idempotency_key"] = f"{run_id}:revision:{revision_id}"
-        parameters["canonical_workflow"] = {
-            **dict(parameters.get("canonical_workflow") or {}),
-            "run_id": run_id,
-            "revision_id": revision_id,
-            "original_job_id": revision.original_job_id,
-            "film_cut_id": run["data"]["identifiers"]["film_cut_id"],
-            "editorial_analysis_id": run["data"]["identifiers"]["editorial_analysis_id"],
-            "editorial_application_id": run["data"]["identifiers"]["editorial_application_id"],
-            "changed_fields": revision.metadata.get("changed_fields") or [],
-        }
         try:
-            job = self.renderer.create_job(
-                project_id=run["project_id"],
-                shot_id=original.shot_id,
-                provider=provider,
-                prompt=revision.revision_prompt,
-                reference_assets=list(original.input_payload.referenceAssets or []),
-                parameters=parameters,
-            )
-            revision.new_job_id = job.id
-            revision.status = "submitted"
-            revision.updated_at = _now()
-            self.storage.update_clip_revision(revision)
-            submitted = await self.renderer.submit_job(job.id)
+            if revision.new_job_id and revision.status == "submitted":
+                job = self.renderer.get_job(revision.new_job_id)
+                if job is None or job.project_id != run["project_id"]:
+                    raise StateError("Revision render job not found", stage="workflow_revision_render")
+                submitted = await self.renderer.get_job_status(job.id)
+            else:
+                parameters = dict(original.input_payload.parameters or {})
+                parameters["idempotency_key"] = f"{run_id}:revision:{revision_id}"
+                parameters["canonical_workflow"] = {
+                    **dict(parameters.get("canonical_workflow") or {}),
+                    "run_id": run_id,
+                    "revision_id": revision_id,
+                    "original_job_id": revision.original_job_id,
+                    "film_cut_id": run["data"]["identifiers"]["film_cut_id"],
+                    "editorial_analysis_id": run["data"]["identifiers"]["editorial_analysis_id"],
+                    "editorial_application_id": run["data"]["identifiers"]["editorial_application_id"],
+                    "changed_fields": revision.metadata.get("changed_fields") or [],
+                }
+                job = self.renderer.create_job(
+                    project_id=run["project_id"],
+                    shot_id=original.shot_id,
+                    provider=provider,
+                    prompt=revision.revision_prompt,
+                    reference_assets=list(original.input_payload.referenceAssets or []),
+                    parameters=parameters,
+                )
+                revision.new_job_id = job.id
+                revision.status = "submitted"
+                revision.updated_at = _now()
+                self.storage.update_clip_revision(revision)
+                submitted = await self.renderer.submit_job(job.id)
             if submitted.status != "complete" or not _text(getattr(submitted.output_payload, "asset_url", "")):
                 if submitted.status in {"failed", "cancelled"}:
                     raise ProviderError(
@@ -814,7 +834,22 @@ class CanonicalProductionWorkflowService:
                         stage="workflow_revision_render",
                         metadata={"job_id": job.id, "status": submitted.status},
                     )
-                return run
+                data = deepcopy(run["data"])
+                data["artifacts"]["revision"] = revision.model_dump(mode="json")
+                data["identifiers"]["revision_render_job_id"] = revision.new_job_id
+                data["identifiers"]["revised_clip_id"] = f"clip:{revision.new_job_id}"
+                if _text(_dict(run["data"]["artifacts"].get("revision")).get("status")) == "submitted":
+                    return run
+                submitted_run = self._transition(
+                    run,
+                    to_status="revision_pending",
+                    event_type="revision_render_submitted",
+                    idempotency_key="revision-render-submitted",
+                    data=data,
+                    payload={"revision_id": revision_id, "render_job_id": revision.new_job_id},
+                )
+                self._log(submitted_run, "workflow_revision_submit", started, provider=provider)
+                return submitted_run
             revision.status = "complete"
             revision.output_url = submitted.output_payload.asset_url
             revision.updated_at = _now()

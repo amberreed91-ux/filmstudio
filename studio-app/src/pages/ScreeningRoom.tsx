@@ -30,6 +30,7 @@ import PerformanceAudioPanel from '../components/PerformanceAudioPanel'
 import ProductionDesignIntelligencePanel from '../components/ProductionDesignIntelligencePanel'
 import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
 import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
+import CanonicalWorkflowPanel from '../components/CanonicalWorkflowPanel'
 import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
 import {
@@ -43,7 +44,6 @@ import {
   getLatestFinalShortFilmPackageForProject,
   listProductionAcceptanceReports,
   getSceneAudioBrief,
-  getSceneComposition,
   getSceneRationale,
   getScreeningManifest,
   listRenderJobs,
@@ -66,7 +66,10 @@ import {
 } from '../lib/studioApi'
 import type { ProjectAudienceSimulation, SceneAudienceSimulation } from '../types/audienceSimulator'
 import { normalizeJobStatus } from '../lib/jobStatus'
-import { persistActiveProjectId } from '../lib/projectContext'
+import { persistActiveProjectId, resolveActiveProjectId } from '../lib/projectContext'
+import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
+import { browserPlaybackUrl } from '../lib/studioMedia'
+import { fetchOptionalJson } from '../lib/optionalStudioApi'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -163,12 +166,19 @@ function sceneAssemblyTime(value?: string): number {
 
 export default function ScreeningRoom() {
   const { projectId } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryProjectId = searchParams.get('project_id') || ''
+  const querySceneId = searchParams.get('scene') || ''
+  const queryShotNumber = Number.parseInt(searchParams.get('shot') || '', 10)
   const navigate = useNavigate()
-  const { activeProject, activeProjectId } = useStudio()
+  const { activeProject, activeProjectId, loadProject } = useStudio()
 
-  const effectiveProjectId = activeProjectId || projectId || queryProjectId
+  const effectiveProjectId = resolveActiveProjectId({
+    queryProjectId,
+    routeProjectId: projectId,
+    contextProjectId: activeProjectId,
+  })
+  const routeLoadKey = useRef('')
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [scenes, setScenes] = useState<Scene[]>([])
@@ -193,6 +203,30 @@ export default function ScreeningRoom() {
   // ── Shot navigation state ───────────────────────────────────────────────
   const [activeShotNumber, setActiveShotNumber] = useState(1)
   const [activeShotTakeIndex, setActiveShotTakeIndex] = useState(0)
+
+  useEffect(() => {
+    if (!effectiveProjectId || activeProject?.project_id === effectiveProjectId) return
+    if (routeLoadKey.current === effectiveProjectId) return
+    routeLoadKey.current = effectiveProjectId
+    void loadProject(effectiveProjectId).catch((caught) => {
+      setError(caught instanceof Error ? caught.message : 'The selected project could not be loaded.')
+    })
+  }, [activeProject?.project_id, effectiveProjectId, loadProject])
+
+  useEffect(() => {
+    setScenes([])
+    setRenderJobs([])
+    setScreeningManifest(null)
+    setSceneTakes([])
+    setActiveTakeIndex(0)
+    setActiveShotNumber(1)
+    setActiveShotTakeIndex(0)
+    setSceneAudienceCache({})
+    setEmotionAnalysisCache({})
+    setSceneCompositionsCache({})
+    setError('')
+    setSuccess('')
+  }, [effectiveProjectId])
 
   // ── Scene composition state ────────────────────────────────────────────
   const [sceneComposition, setSceneComposition] = useState<SceneComposition | null>(null)
@@ -344,10 +378,8 @@ export default function ScreeningRoom() {
       }
     }
     void loadManifest()
-    const timer = setInterval(loadManifest, 15000)
     return () => {
       cancelled = true
-      clearInterval(timer)
     }
   }, [effectiveProjectId])
 
@@ -381,19 +413,26 @@ export default function ScreeningRoom() {
       return
     }
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const startedAt = Date.now()
     async function loadJobs() {
       try {
         const jobs = await listRenderJobs(effectiveProjectId)
-        if (!cancelled) setRenderJobs(Array.isArray(jobs) ? jobs : [])
-      } catch {
-        if (!cancelled) setRenderJobs([])
+        if (cancelled) return
+        const nextJobs = Array.isArray(jobs) ? jobs : []
+        setRenderJobs(nextJobs)
+        const hasActiveJob = nextJobs.some((job) => ['pending', 'rendering'].includes(normalizeJobStatus(job.status)))
+        if (hasActiveJob && Date.now() - startedAt < 10 * 60 * 1000) {
+          timer = setTimeout(loadJobs, 15000)
+        }
+      } catch (caught) {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Render jobs could not be refreshed.')
       }
     }
     void loadJobs()
-    const timer = setInterval(loadJobs, 15000)
     return () => {
       cancelled = true
-      clearInterval(timer)
+      if (timer) clearTimeout(timer)
     }
   }, [effectiveProjectId])
 
@@ -422,11 +461,12 @@ export default function ScreeningRoom() {
       ) || []
       const registeredScene = registered.find((output) => output.output_type === 'scene')
       const registeredShot = registered.find((output) => output.output_type === 'shot')
-      const videoUrl = registeredScene?.playback_url
-        || registeredShot?.playback_url
-        || sceneAssembly?.output_url
-        || jobWithUrl?.output_payload?.asset_url
-        || undefined
+      const videoUrl = [
+        registeredScene?.playback_url,
+        registeredShot?.playback_url,
+        sceneAssembly?.output_url,
+        jobWithUrl?.output_payload?.asset_url,
+      ].map(browserPlaybackUrl).find(Boolean) || undefined
       return {
         sceneId: scene.scene_id,
         sceneName: scene.scene_name || `Scene ${index + 1}`,
@@ -444,7 +484,10 @@ export default function ScreeningRoom() {
     let cancelled = false
     async function loadFinalPackage() {
       try {
-        const { package: pkg } = await getLatestFinalShortFilmPackageForProject(effectiveProjectId)
+        const result = await fetchOptionalJson<{ package: FinalShortFilmPackage }>(
+          `/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/final-short-film-package/latest`,
+        )
+        const pkg = result?.package
         if (!cancelled && pkg) {
           setFinalPackage(pkg)
           try {
@@ -464,25 +507,11 @@ export default function ScreeningRoom() {
     }
   }, [effectiveProjectId])
 
-  // ── Load scene composition when active take changes ──────────────────────
+  // ── Select the active scene composition from the project cache ───────────
   useEffect(() => {
     const active = sceneTakes[activeTakeIndex]
-    if (!active?.sceneId || !effectiveProjectId) {
-      setSceneComposition(null)
-      return
-    }
-    let cancelled = false
-    async function loadComposition() {
-      try {
-        const comp = await getSceneComposition(effectiveProjectId, active.sceneId)
-        if (!cancelled) setSceneComposition(comp)
-      } catch {
-        if (!cancelled) setSceneComposition(null)
-      }
-    }
-    void loadComposition()
-    return () => { cancelled = true }
-  }, [effectiveProjectId, sceneTakes, activeTakeIndex])
+    setSceneComposition(active?.sceneId ? sceneCompositionsCache[active.sceneId] ?? null : null)
+  }, [sceneTakes, activeTakeIndex, sceneCompositionsCache])
 
   // ── Load compositions for all scenes (for status badges) ─────────────────
   useEffect(() => {
@@ -492,7 +521,9 @@ export default function ScreeningRoom() {
       const cache: Record<string, SceneComposition | null> = {}
       const promises = scenes.map(async (sc) => {
         try {
-          const comp = await getSceneComposition(effectiveProjectId, sc.scene_id)
+          const comp = await fetchOptionalJson<SceneComposition>(
+            `/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/scenes/${encodeURIComponent(sc.scene_id)}/composition`,
+          )
           cache[sc.scene_id] = comp
         } catch {
           cache[sc.scene_id] = null
@@ -526,6 +557,48 @@ export default function ScreeningRoom() {
   }, [effectiveProjectId, scenes])
 
   const activeTake = sceneTakes[activeTakeIndex]
+  const canonicalSceneId = activeTake?.sceneId || querySceneId
+  const canonicalSceneContext = useMemo(
+    () => extractCanonicalSceneContext(
+      activeProject?.project_id === effectiveProjectId ? activeProject : null,
+      canonicalSceneId,
+    ),
+    [activeProject, canonicalSceneId, effectiveProjectId],
+  )
+
+  useEffect(() => {
+    setActiveShotNumber(1)
+    setActiveShotTakeIndex(0)
+    setCurrentTime(0)
+    setDuration(0)
+    setIsPlaying(false)
+    setIsFullFilm(false)
+    setSuccess('')
+  }, [effectiveProjectId, activeTake?.sceneId])
+
+  useEffect(() => {
+    if (!querySceneId || sceneTakes.length === 0) return
+    const sceneIndex = sceneTakes.findIndex((take) => take.sceneId === querySceneId)
+    if (sceneIndex >= 0 && sceneIndex !== activeTakeIndex) setActiveTakeIndex(sceneIndex)
+    if (Number.isFinite(queryShotNumber) && queryShotNumber > 0) {
+      setActiveShotNumber(queryShotNumber)
+    }
+  }, [activeTakeIndex, querySceneId, queryShotNumber, sceneTakes])
+
+  useEffect(() => {
+    if (!activeTake?.sceneId) return
+    const next = new URLSearchParams(searchParams)
+    let changed = false
+    if (next.get('scene') !== activeTake.sceneId) {
+      next.set('scene', activeTake.sceneId)
+      changed = true
+    }
+    if (next.get('shot') !== String(activeShotNumber)) {
+      next.set('shot', String(activeShotNumber))
+      changed = true
+    }
+    if (changed) setSearchParams(next, { replace: true })
+  }, [activeShotNumber, activeTake?.sceneId, searchParams, setSearchParams])
 
   // ── Emotion analysis cache (Groq) — load on scene change ─────────────────
   useEffect(() => {
@@ -813,17 +886,17 @@ export default function ScreeningRoom() {
 
   // Active video URL: assembled film takes highest priority in full-film mode
   const activeVideoUrl = useMemo(() => {
-    if (isFullFilm && screeningManifest?.current_final_output?.playback_url) {
-      return screeningManifest.current_final_output.playback_url
-    }
-    if (isFullFilm && assembledFilmUrl) return assembledFilmUrl
-    if (activeRegisteredOutput?.playback_url) return activeRegisteredOutput.playback_url
-    if (activeScenePipelineAssembly?.output_url) return activeScenePipelineAssembly.output_url
-    if (sceneComposition?.composed_url) return sceneComposition.composed_url
     const takes = shotTakes[activeShotNumber]
     const job = takes?.[activeShotTakeIndex]
-    if (job?.output_payload?.asset_url) return job.output_payload.asset_url
-    return activeTake?.videoUrl || ''
+    return [
+      isFullFilm ? screeningManifest?.current_final_output?.playback_url : '',
+      isFullFilm ? assembledFilmUrl : '',
+      activeRegisteredOutput?.playback_url,
+      activeScenePipelineAssembly?.output_url,
+      sceneComposition?.composed_url,
+      job?.output_payload?.asset_url,
+      activeTake?.videoUrl,
+    ].map(browserPlaybackUrl).find(Boolean) || ''
   }, [isFullFilm, screeningManifest, assembledFilmUrl, activeRegisteredOutput, activeScenePipelineAssembly, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
 
   const activeRenderJob = useMemo(() => {
@@ -858,6 +931,8 @@ export default function ScreeningRoom() {
   // Reset take index when shot changes
   useEffect(() => {
     setActiveShotTakeIndex(0)
+    setCurrentTime(0)
+    setIsPlaying(false)
   }, [activeShotNumber])
 
   /** True if cached simulation has valid audience_reactions (not empty/malformed). */
@@ -1126,10 +1201,6 @@ export default function ScreeningRoom() {
   // APPLY TO SHOT: PATCH /projects/{id}/scenes/{sid}/shots/{shid} — does NOT exist
   // SEND TO PAGE:  PUT /projects/{id}/scenes/{sid} — exists via updateScene() (uses `notes` field)
   // SAVE TO MEMORY: POST /projects/{id}/creative-memories — exists via saveCreativeDecisionMemory()
-  console.warn(
-    '[ScreeningRoom] Route check: PATCH /api/f51/studio/projects/{project_id}/scenes/{scene_id}/shots/{shot_id} — NOT FOUND. APPLY TO SHOT button will not render.',
-  )
-
   // ── Note action handlers ─────────────────────────────────────────────────
   const handleSendToPage = useCallback(async () => {
     if (!effectiveProjectId || !activeTake?.sceneId || coDirectorNotes.length === 0) return
@@ -1212,8 +1283,8 @@ export default function ScreeningRoom() {
     if (!effectiveProjectId) return
     let cancelled = false
     setPosterLoading(true)
-    fetchJson<{ poster_url: string }>(`/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/poster`)
-      .then((data) => { if (!cancelled) setPosterUrl(data.poster_url) })
+    fetchOptionalJson<{ poster_url: string }>(`/api/f51/studio/projects/${encodeURIComponent(effectiveProjectId)}/poster`)
+      .then((data) => { if (!cancelled) setPosterUrl(data?.poster_url ?? null) })
       .catch(() => { if (!cancelled) setPosterUrl(null) })
       .finally(() => { if (!cancelled) setPosterLoading(false) })
     return () => { cancelled = true }
@@ -1263,6 +1334,15 @@ export default function ScreeningRoom() {
                 </div>
               )}
             </div>
+
+            {effectiveProjectId && canonicalSceneId ? (
+              <CanonicalWorkflowPanel
+                projectId={effectiveProjectId}
+                sceneId={canonicalSceneId}
+                sceneContext={canonicalSceneContext}
+                surface="screening"
+              />
+            ) : null}
 
             {/* ── TWO-PANEL LAYOUT ────────────────────────────────────────── */}
             <div className="flex h-[calc(100vh-140px)] w-full max-w-full gap-4 px-4 pb-4" style={{ overflowX: 'hidden' }}>
@@ -1834,7 +1914,7 @@ export default function ScreeningRoom() {
                       const padL = 4, padR = 4, padT = 4, padB = 16
                       const plotW = w - padL - padR
                       const plotH = h - padT - padB
-                      const xScale = (i: number) => padL + (i / (arc.length - 1)) * plotW
+                      const xScale = (i: number) => padL + (i / Math.max(1, arc.length - 1)) * plotW
                       const yScale = (v: number) => h - padB - (v / 100) * plotH
                       const lineD = arc.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(v).toFixed(1)}`).join(' ')
                       return (

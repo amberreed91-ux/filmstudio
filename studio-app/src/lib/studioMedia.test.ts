@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RenderJob } from './studioApi'
-import { selectPrimaryStudioMedia } from './studioMedia'
+import { browserPlaybackUrl, selectPrimaryStudioMedia } from './studioMedia'
 
 function job(overrides: Partial<RenderJob>): RenderJob {
   return {
@@ -23,6 +23,13 @@ function job(overrides: Partial<RenderJob>): RenderJob {
 }
 
 describe('selectPrimaryStudioMedia', () => {
+  it('rejects local filesystem paths before they reach browser playback', () => {
+    expect(browserPlaybackUrl('/Users/creator/private/render.mp4')).toBe('')
+    expect(browserPlaybackUrl('file:///tmp/render.mp4')).toBe('')
+    expect(browserPlaybackUrl('C:\\renders\\take.mp4')).toBe('')
+    expect(browserPlaybackUrl('/outputs/project/take.mp4')).toBe('/outputs/project/take.mp4')
+  })
+
   it('prefers hosted render output over keyframe fallback', () => {
     const hosted = job({
       output_payload: {

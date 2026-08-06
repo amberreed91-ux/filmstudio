@@ -41,6 +41,16 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+export function browserPlaybackUrl(value: unknown): string {
+  const url = asString(value).trim()
+  if (!url) return ''
+  const lower = url.toLowerCase()
+  if (lower.startsWith('file:') || /^[a-z]:[\\/]/i.test(url) || url.includes('\\')) return ''
+  if (/^\/(users|home|var|tmp|private|volumes|opt)\//i.test(url)) return ''
+  if (url.startsWith('..')) return ''
+  return url
+}
+
 function isCompletedStatus(status: string): boolean {
   const value = status.trim().toLowerCase()
   return value === 'complete' || value === 'completed' || value === 'success'
@@ -135,7 +145,7 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
   const pool = matchingJobs.length > 0 ? matchingJobs : jobs
 
   const hostedOutput = pool.find((job) => {
-    const outputUrl = jobOutputUrl(job)
+    const outputUrl = browserPlaybackUrl(jobOutputUrl(job))
     if (!outputUrl) return false
     const mode = providerModeFromJob(job)
     if (mode === 'hosted_api') return true
@@ -148,7 +158,7 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
     return isLikelyHostedUrl(outputUrl)
   })
   if (hostedOutput) {
-    const url = jobOutputUrl(hostedOutput)
+    const url = browserPlaybackUrl(jobOutputUrl(hostedOutput))
     const kind = mediaKindFromUrl(url)
     return {
       url,
@@ -160,9 +170,9 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
     }
   }
 
-  const previewJob = pool.find((job) => Boolean(jobPreviewUrl(job)))
+  const previewJob = pool.find((job) => Boolean(browserPlaybackUrl(jobPreviewUrl(job))))
   if (previewJob) {
-    const url = jobPreviewUrl(previewJob)
+    const url = browserPlaybackUrl(jobPreviewUrl(previewJob))
     const kind = mediaKindFromUrl(url)
     return {
       url,
@@ -176,10 +186,10 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
 
   const mockOutput = pool.find((job) => {
     const mode = providerModeFromJob(job)
-    return mode === 'mock_success' && Boolean(jobOutputUrl(job))
+    return mode === 'mock_success' && Boolean(browserPlaybackUrl(jobOutputUrl(job)))
   })
   if (mockOutput) {
-    const url = jobOutputUrl(mockOutput)
+    const url = browserPlaybackUrl(jobOutputUrl(mockOutput))
     const kind = mediaKindFromUrl(url)
     return {
       url,
@@ -191,7 +201,7 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
     }
   }
 
-  const packageUrl = (input.packageUrl || '').trim()
+  const packageUrl = browserPlaybackUrl(input.packageUrl)
   if (packageUrl) {
     return {
       url: packageUrl,
@@ -202,7 +212,7 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
     }
   }
 
-  const reviewUrl = (input.reviewUrl || '').trim()
+  const reviewUrl = browserPlaybackUrl(input.reviewUrl)
   if (reviewUrl) {
     return {
       url: reviewUrl,
@@ -213,7 +223,7 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
     }
   }
 
-  const keyframeUrl = (input.keyframeUrl || '').trim()
+  const keyframeUrl = browserPlaybackUrl(input.keyframeUrl)
   if (keyframeUrl) {
     return {
       url: keyframeUrl,
@@ -225,8 +235,8 @@ export function selectPrimaryStudioMedia(input: SelectPrimaryStudioMediaInput): 
   }
 
   return {
-    url: (input.placeholderUrl || '').trim(),
-    kind: mediaKindFromUrl(input.placeholderUrl || ''),
+    url: browserPlaybackUrl(input.placeholderUrl),
+    kind: mediaKindFromUrl(browserPlaybackUrl(input.placeholderUrl)),
     source: 'placeholder',
     providerMode: '',
     label: 'Placeholder',

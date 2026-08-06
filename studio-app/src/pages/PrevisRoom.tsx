@@ -23,6 +23,7 @@ import PerformanceAudioPanel from '../components/PerformanceAudioPanel'
 import ProductionDesignIntelligencePanel from '../components/ProductionDesignIntelligencePanel'
 import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
 import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
+import CanonicalWorkflowPanel from '../components/CanonicalWorkflowPanel'
 import { useStudio } from '../context/StudioContext'
 import {
   approveStoryboardVersion,
@@ -54,7 +55,9 @@ import {
   type GenerationSettingsResponse,
 } from '../lib/studioApi'
 import { normalizeJobStatus } from '../lib/jobStatus'
-import { persistActiveProjectId } from '../lib/projectContext'
+import { persistActiveProjectId, resolveActiveProjectId, withProductionContext } from '../lib/projectContext'
+import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
+import { browserPlaybackUrl } from '../lib/studioMedia'
 import {
   buildPrevisScenePipelinePayload,
   canGeneratePrevisScenePipeline,
@@ -403,9 +406,15 @@ export default function PrevisRoom() {
   const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
   const navigate = useNavigate()
-  const { activeProject, activeProjectId } = useStudio()
+  const { activeProject, activeProjectId, loadProject } = useStudio()
 
-  const effectiveProjectId = activeProjectId || projectId || queryProjectId
+  const effectiveProjectId = resolveActiveProjectId({
+    queryProjectId,
+    routeProjectId: projectId,
+    locationState: location.state,
+    contextProjectId: activeProjectId,
+  })
+  const routeLoadKey = useRef('')
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [scenes, setScenes] = useState<Scene[]>([])
@@ -435,6 +444,26 @@ export default function PrevisRoom() {
   const [promptText, setPromptText] = useState('')
   const [originalPrompt, setOriginalPrompt] = useState('')
   const [selectedSceneId, setSelectedSceneId] = useState('')
+
+  useEffect(() => {
+    if (!effectiveProjectId || activeProject?.project_id === effectiveProjectId) return
+    if (routeLoadKey.current === effectiveProjectId) return
+    routeLoadKey.current = effectiveProjectId
+    void loadProject(effectiveProjectId).catch((caught) => {
+      setError(caught instanceof Error ? caught.message : 'The selected project could not be loaded.')
+    })
+  }, [activeProject?.project_id, effectiveProjectId, loadProject])
+
+  useEffect(() => {
+    setScenes([])
+    setSelectedSceneId('')
+    setRenderJobs([])
+    setActiveShotNumber(1)
+    setCurrentJobId(null)
+    setRendering(false)
+    setError('')
+    setSuccess('')
+  }, [effectiveProjectId])
 
   useEffect(() => {
     if (!selectedSceneId || searchParams.get('scene') === selectedSceneId) return
@@ -578,7 +607,7 @@ export default function PrevisRoom() {
           shot_number: shotNumber,
           hasPromptSlots: Boolean(parameters.prompt_slots),
           thumbnailUrl: job.output_payload?.thumbnail_url || job.preview_url || undefined,
-          videoUrl: job.output_payload?.asset_url || job.output_url || undefined,
+          videoUrl: browserPlaybackUrl(job.output_payload?.asset_url || job.output_url) || undefined,
         }
       })
       .sort((a, b) => b.jobId.localeCompare(a.jobId))
@@ -624,6 +653,13 @@ export default function PrevisRoom() {
   const selectedScene = useMemo(
     () => scenes.find((scene) => scene.scene_id === selectedSceneId) || null,
     [scenes, selectedSceneId],
+  )
+  const canonicalSceneContext = useMemo(
+    () => extractCanonicalSceneContext(
+      activeProject?.project_id === effectiveProjectId ? activeProject : null,
+      selectedSceneId,
+    ),
+    [activeProject, effectiveProjectId, selectedSceneId],
   )
 
   const activeStoryboardShotId = useMemo(
@@ -688,10 +724,10 @@ export default function PrevisRoom() {
   }, [activeShotNumber, currentStoryboardImageUrl, loading])
 
   const scenePipelineOutputUrl = useMemo(() => {
-    return scenePipelineResult?.output_url
+    return browserPlaybackUrl(scenePipelineResult?.output_url
       || scenePipelineResult?.stitch?.output_url
       || latestScenePipelineAssembly?.output_url
-      || null
+      || null) || null
   }, [scenePipelineResult, latestScenePipelineAssembly])
 
   const currentVideoUrl = useMemo(() => {
@@ -702,7 +738,7 @@ export default function PrevisRoom() {
     }
     const firstTakeWithUrl = takes.find(t => t.videoUrl)
     if (firstTakeWithUrl?.videoUrl) return firstTakeWithUrl.videoUrl
-    return shotVideoUrls[activeShotNumber] || composedUrl || scenePipelineOutputUrl || null
+    return browserPlaybackUrl(shotVideoUrls[activeShotNumber] || composedUrl || scenePipelineOutputUrl) || null
   }, [selectedTakeByShot, activeShotNumber, takes, shotVideoUrls, composedUrl, scenePipelineOutputUrl])
 
   const activeTakeNumber = useMemo(() => {
@@ -801,8 +837,7 @@ export default function PrevisRoom() {
   }, [selectedSceneId, effectiveProjectId, scenePipelineRunning, manualScorePath, sceneScoreMode])
 
   // ── Polling ref ───────────────────────────────────────────────────────────
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const healthTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Persist project ID ────────────────────────────────────────────────────
   useEffect(() => {
@@ -866,19 +901,26 @@ export default function PrevisRoom() {
       return
     }
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const startedAt = Date.now()
     async function loadJobs() {
       try {
         const jobs = await listRenderJobs(effectiveProjectId)
-        if (!cancelled) setRenderJobs(Array.isArray(jobs) ? jobs : [])
-      } catch {
-        if (!cancelled) setRenderJobs([])
+        if (cancelled) return
+        const nextJobs = Array.isArray(jobs) ? jobs : []
+        setRenderJobs(nextJobs)
+        const hasActiveJob = nextJobs.some((job) => ['pending', 'rendering'].includes(normalizeJobStatus(job.status)))
+        if (hasActiveJob && Date.now() - startedAt < 10 * 60 * 1000) {
+          timer = setTimeout(loadJobs, 10000)
+        }
+      } catch (caught) {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Render jobs could not be refreshed.')
       }
     }
     void loadJobs()
-    const timer = setInterval(loadJobs, 10000)
     return () => {
       cancelled = true
-      clearInterval(timer)
+      if (timer) clearTimeout(timer)
     }
   }, [effectiveProjectId])
 
@@ -890,31 +932,33 @@ export default function PrevisRoom() {
       setLastHealthCheck(new Date())
     }
     void check()
-    healthTimerRef.current = setInterval(check, 30000)
-    return () => {
-      if (healthTimerRef.current) clearInterval(healthTimerRef.current)
-    }
   }, [])
 
   // ── Poll job status when rendering ────────────────────────────────────────
   useEffect(() => {
     if (!currentJobId || !rendering) {
       if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current)
+        clearTimeout(pollTimerRef.current)
         pollTimerRef.current = null
       }
       return
     }
 
     let cancelled = false
+    const startedAt = Date.now()
 
     async function pollJob() {
+      if (Date.now() - startedAt >= 10 * 60 * 1000) {
+        setRendering(false)
+        setError('Render polling stopped after ten minutes. Refresh to check the durable server state.')
+        return
+      }
       try {
         const jobs = await listRenderJobs(effectiveProjectId || '')
         if (cancelled) return
         const job = Array.isArray(jobs) ? jobs.find((j) => j.id === currentJobId) : null
         if (!job) {
-          // Job not found yet, keep polling
+          pollTimerRef.current = setTimeout(pollJob, 3000)
           return
         }
         const status = normalizeJobStatus(job.status)
@@ -979,28 +1023,33 @@ export default function PrevisRoom() {
           setRendering(false)
           setCurrentJobId(null)
           setSuccess(`Shot ${completedShotNumber} Take ${takeNumber} complete (${shotLabel})!`)
-          if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+          if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
         } else if (status === 'failed') {
           setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'failed' })
           setProgress(0)
           setRendering(false)
+          setCurrentJobId(null)
           setError(job.error_message ? `Render failed — ${job.error_message}` : 'Render failed — check the pipeline status')
-          if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+          if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
         }
 
         // Update progress based on pipeline simulation
         if (status === 'pending' || status === 'rendering') {
           setProgress((prev) => Math.min(prev + 5, 90))
+          pollTimerRef.current = setTimeout(pollJob, 3000)
         }
-      } catch {
-        // Silently retry
+      } catch (caught) {
+        if (!cancelled) {
+          setRendering(false)
+          setError(caught instanceof Error ? caught.message : 'Render polling failed.')
+        }
       }
     }
 
-    pollTimerRef.current = setInterval(pollJob, 3000)
+    void pollJob()
     return () => {
       cancelled = true
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
     }
   }, [currentJobId, rendering, effectiveProjectId, genConfig.duration, genConfig.model, genConfig.resolution, promptText, activeShotNumber, selectedSceneId, visibleRenderHistory])
 
@@ -1055,7 +1104,7 @@ export default function PrevisRoom() {
     })
     const completed = sceneJobs.slice(0, 5).map((job) => {
       const scene = scenes.find((s) => s.scene_id === selectedSceneId)
-      const historyVideoUrl = job.output_payload?.asset_url || job.output_url || undefined
+      const historyVideoUrl = browserPlaybackUrl(job.output_payload?.asset_url || job.output_url) || undefined
       const shotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
       const shot_number = shotNumMatch ? parseInt(shotNumMatch[1], 10) : 1
       return {
@@ -1077,7 +1126,7 @@ export default function PrevisRoom() {
       const shotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
       if (shotNumMatch) {
         const shotNum = parseInt(shotNumMatch[1], 10)
-        const url = job.output_payload?.asset_url || job.output_url || ''
+        const url = browserPlaybackUrl(job.output_payload?.asset_url || job.output_url)
         if (url) urlMap[shotNum] = url
       }
     }
@@ -1469,6 +1518,15 @@ export default function PrevisRoom() {
             </div>
           )}
         </div>
+
+        {effectiveProjectId && selectedSceneId ? (
+          <CanonicalWorkflowPanel
+            projectId={effectiveProjectId}
+            sceneId={selectedSceneId}
+            sceneContext={canonicalSceneContext}
+            surface="previs"
+          />
+        ) : null}
 
         {/* ── THREE-PANEL LAYOUT ────────────────────────────────────────── */}
         <div className="flex h-[calc(100vh-180px)] w-full gap-4 px-4 pb-4">
@@ -2342,7 +2400,11 @@ export default function PrevisRoom() {
                         <CheckCircle2 size={10} /> Scene composed
                       </span>
                       <button
-                        onClick={() => navigate(`/studio/screening?project=${effectiveProjectId}&scene=${selectedSceneId}`)}
+                        onClick={() => navigate(withProductionContext('/studio/screening-room', {
+                          projectId: effectiveProjectId,
+                          sceneId: selectedSceneId,
+                          shotNumber: activeShotNumber,
+                        }))}
                         className="w-full py-2 text-xs font-medium rounded bg-emerald-900/60 border border-emerald-600/40 text-emerald-200 hover:bg-emerald-800/60"
                       >
                         VIEW IN THEATER

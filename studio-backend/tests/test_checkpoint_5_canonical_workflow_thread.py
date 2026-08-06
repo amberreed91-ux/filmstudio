@@ -21,6 +21,8 @@ class DeterministicRenderer:
         self.by_idempotency: dict[str, str] = {}
         self.create_count = 0
         self.fail_next_submission = False
+        self.delay_next_submission = False
+        self.complete_on_next_status = False
 
     def create_job(
         self,
@@ -67,6 +69,12 @@ class DeterministicRenderer:
             job.updated_at = "2026-08-06T12:01:00+00:00"
             self.storage.save_job(job)
             return job
+        if self.delay_next_submission:
+            self.delay_next_submission = False
+            self.complete_on_next_status = True
+            job.status = "pending"
+            self.storage.save_job(job)
+            return job
         job.status = "complete"
         job.provider_job_id = f"provider-{job.id}"
         job.output_payload = RenderJobOutput(
@@ -79,7 +87,19 @@ class DeterministicRenderer:
         return job
 
     async def get_job_status(self, job_id: str) -> RenderJobModel:
-        return self.jobs[job_id]
+        job = self.jobs[job_id]
+        if self.complete_on_next_status and job.status == "pending":
+            self.complete_on_next_status = False
+            job.status = "complete"
+            job.provider_job_id = f"provider-{job.id}"
+            job.output_payload = RenderJobOutput(
+                asset_url=f"https://media.example.test/{job.id}.mp4",
+                metadata={"deterministic": True},
+            )
+            job.completed_at = "2026-08-06T12:02:00+00:00"
+            job.updated_at = job.completed_at
+            self.storage.save_job(job)
+        return job
 
     def get_job(self, job_id: str) -> RenderJobModel | None:
         return self.jobs.get(job_id)
@@ -338,8 +358,17 @@ def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path) -> No
     assert revision.metadata["film_cut_id"] == cut_id
     assert revision.metadata["preserved_continuity"] is True
 
+    renderer.delay_next_submission = True
+    revision_create_count = renderer.create_count
+    submitted_run = asyncio.run(service.render_revision(run_id, provider="simulated"))
+    assert submitted_run["status"] == "revision_pending"
+    assert submitted_run["data"]["artifacts"]["revision"]["status"] == "submitted"
+    assert submitted_run["data"]["identifiers"]["revision_render_job_id"]
+    assert renderer.create_count == revision_create_count + 1
+
     run = asyncio.run(service.render_revision(run_id, provider="simulated"))
     assert run["status"] == "revision_completed"
+    assert renderer.create_count == revision_create_count + 1
     revision = storage.get_clip_revision(revision_id)
     assert revision.status == "complete"
     assert revision.new_job_id == run["data"]["identifiers"]["revision_render_job_id"]

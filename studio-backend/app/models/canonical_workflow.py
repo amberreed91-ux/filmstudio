@@ -102,3 +102,8 @@ class MemoryWorkflowRequest(BaseModel):
 class CanonicalWorkflowResponse(BaseModel):
     run: CanonicalWorkflowRun
     transitions: list[CanonicalWorkflowTransition] = Field(default_factory=list)
+
+
+class CanonicalWorkflowListResponse(BaseModel):
+    runs: list[CanonicalWorkflowRun] = Field(default_factory=list)
+    current_blueprint_version_id: str = ""
