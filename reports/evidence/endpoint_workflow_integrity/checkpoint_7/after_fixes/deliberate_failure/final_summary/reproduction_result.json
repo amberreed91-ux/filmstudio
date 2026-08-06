@@ -1,0 +1,7 @@
+{
+  "classification": "SIMULATED PROVIDER VERIFICATION",
+  "completed_at": "2026-08-06T13:14:15.780080+00:00",
+  "failure": "deliberate failure injection requested by --deliberate-failure",
+  "paid_provider_calls": false,
+  "result": "FAILED"
+}

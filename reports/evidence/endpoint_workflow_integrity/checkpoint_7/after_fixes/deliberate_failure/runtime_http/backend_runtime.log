@@ -1,0 +1,36 @@
+
+=== backend start 2026-08-06T13:14:10.101342+00:00 ===
+INFO:     Started server process [87444]
+INFO:     Waiting for application startup.
+Starting Studio API
+Studio API build commit: a2c85ea84be09d4094c2479bca94f5f862d91ae6
+Runway API configured: True
+Database backup initialized: {'backup_dir': 'backups', 'total_backups': 0, 'last_backup': None, 'max_retention': 7}
+Loaded 0 jobs from database
+Render recovery summary: {'hydrated_jobs': 0, 'recovered_jobs': 0, 'stale_recovered_jobs': 0, 'orphan_reconciled_jobs': 0, 'error_count': 0, 'errors': []}
+Render retry/adherence service initialized with storage and media services
+Study memory service initialized with storage
+Short film review service initialized with storage
+Clip revision service initialized with storage and render service
+Final short film package service initialized with storage and other services
+Standing corrections service initialized with storage
+Production queue initialized: {'expired_leases': 0, 'recovered_at': '2026-08-06T09:14:15.267958'}
+Task registry: registered 'queue-worker'
+Started production queue worker task
+Task registry: registered 'render-polling'
+Started background Runway job polling task
+PRODUCTION_QUEUE_WORKER_STARTED | owner=studio-api-87444-fa9ee0a8
+POLLING_LOOP_STARTED | interval=10s | statuses=['queued', 'pending', 'rendering', 'processing', 'submitted']
+POLLING_CYCLE | checking=0 jobs
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:56843 (Press CTRL+C to quit)
+{"timestamp": 1786022055.7791219, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/health", "query": null, "status_code": 200, "duration_ms": 274.3, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:56869 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+Shutting down Studio API
+Task registry: cancelling 2 tasks
+PRODUCTION_QUEUE_WORKER_STOPPED | owner=studio-api-87444-fa9ee0a8
+Studio API shutdown complete
+INFO:     Application shutdown complete.
+INFO:     Finished server process [87444]

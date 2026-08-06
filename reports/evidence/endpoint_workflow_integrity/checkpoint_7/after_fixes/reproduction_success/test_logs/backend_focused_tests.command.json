@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_checkpoint_5_canonical_workflow_thread.py",
+    "tests/test_checkpoint_5_canonical_workflow_routes.py"
+  ],
+  "duration_ms": 10564.8,
+  "environment": {
+    "paid_provider_calls": false
+  },
+  "exit_code": 0,
+  "failure_total": 0,
+  "finished_at": "2026-08-06T13:14:57.467659+00:00",
+  "pass_total": 5,
+  "skip_total": 0,
+  "started_at": "2026-08-06T13:14:46.901939+00:00",
+  "stderr": "backend_focused_tests.stderr.txt",
+  "stdout": "backend_focused_tests.stdout.txt",
+  "working_directory": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend"
+}

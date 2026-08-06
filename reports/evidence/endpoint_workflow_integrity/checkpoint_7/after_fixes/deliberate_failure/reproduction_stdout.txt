@@ -1,0 +1,4 @@
+[2026-08-06T13:14:09.853113+00:00] Checkpoint 7 independent verification started
+[2026-08-06T13:14:10.099647+00:00] PASS dependencies validated
+[2026-08-06T13:14:15.779965+00:00] PASS managed backend became healthy
+[2026-08-06T13:14:15.780056+00:00] FAIL independent reproduction: deliberate failure injection requested by --deliberate-failure

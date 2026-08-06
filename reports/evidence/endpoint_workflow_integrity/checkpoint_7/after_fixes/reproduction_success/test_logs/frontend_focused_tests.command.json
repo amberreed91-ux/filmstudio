@@ -1,0 +1,27 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "--run",
+    "src/lib/canonicalWorkflowApi.test.ts",
+    "src/lib/canonicalWorkflowContext.test.ts",
+    "src/lib/optionalStudioApi.test.ts",
+    "src/lib/projectContext.test.ts",
+    "src/lib/studioMedia.test.ts",
+    "src/components/CanonicalWorkflowPanel.test.tsx"
+  ],
+  "duration_ms": 1469.27,
+  "environment": {
+    "paid_provider_calls": false
+  },
+  "exit_code": 0,
+  "failure_total": 0,
+  "finished_at": "2026-08-06T13:14:58.938000+00:00",
+  "pass_total": 45,
+  "skip_total": 0,
+  "started_at": "2026-08-06T13:14:57.467928+00:00",
+  "stderr": "frontend_focused_tests.stderr.txt",
+  "stdout": "frontend_focused_tests.stdout.txt",
+  "working_directory": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app"
+}

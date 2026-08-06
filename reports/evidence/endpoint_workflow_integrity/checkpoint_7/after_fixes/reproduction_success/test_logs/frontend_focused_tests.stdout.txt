@@ -1,0 +1,19 @@
+
+> studio-app@0.0.0 test
+> vitest run --run src/lib/canonicalWorkflowApi.test.ts src/lib/canonicalWorkflowContext.test.ts src/lib/optionalStudioApi.test.ts src/lib/projectContext.test.ts src/lib/studioMedia.test.ts src/components/CanonicalWorkflowPanel.test.tsx
+
+
+ RUN  v3.2.4 /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app
+
+ ✓ src/lib/studioMedia.test.ts (14 tests) 4ms
+ ✓ src/lib/canonicalWorkflowContext.test.ts (4 tests) 2ms
+ ✓ src/lib/projectContext.test.ts (19 tests) 3ms
+ ✓ src/lib/optionalStudioApi.test.ts (3 tests) 6ms
+ ✓ src/lib/canonicalWorkflowApi.test.ts (4 tests) 6ms
+ ✓ src/components/CanonicalWorkflowPanel.test.tsx (1 test) 12ms
+
+ Test Files  6 passed (6)
+      Tests  45 passed (45)
+   Start at  09:14:58
+   Duration  627ms (transform 361ms, setup 0ms, collect 796ms, tests 33ms, environment 1ms, prepare 401ms)
+

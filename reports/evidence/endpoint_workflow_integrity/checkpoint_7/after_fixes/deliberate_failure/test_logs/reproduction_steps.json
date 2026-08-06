@@ -1,0 +1,24 @@
+[
+  {
+    "details": {
+      "python": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/bin/python"
+    },
+    "name": "dependencies validated",
+    "status": "passed",
+    "timestamp": "2026-08-06T13:14:10.099580+00:00"
+  },
+  {
+    "details": {
+      "base_url": "http://127.0.0.1:56843"
+    },
+    "name": "managed backend became healthy",
+    "status": "passed",
+    "timestamp": "2026-08-06T13:14:15.779952+00:00"
+  },
+  {
+    "message": "deliberate failure injection requested by --deliberate-failure",
+    "name": "independent reproduction",
+    "status": "failed",
+    "timestamp": "2026-08-06T13:14:15.780053+00:00"
+  }
+]
