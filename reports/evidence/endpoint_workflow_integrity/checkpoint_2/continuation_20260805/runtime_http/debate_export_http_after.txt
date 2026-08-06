@@ -1,0 +1,18 @@
+Timestamp: 2026-08-05T23:12:00-04:00
+Working directory: studio-backend
+Backend: restarted uvicorn on http://127.0.0.1:8023 after repairs
+Command: Python urllib probes
+Exit code: 0
+
+POST /api/f51/studio/debate/trigger -> 422
+{"detail":[{"type":"missing","loc":["body","project_id"],"msg":"Field required","input":{}},{"type":"missing","loc":["body","query"],"msg":"Field required","input":{}}]}
+POST /f51/studio/debate/trigger -> 404
+{"detail":"Not Found"}
+GET /api/f51/studio/projects/checkpoint-2-runtime/export/status -> 200
+{"status":"not_started","progress":0,"advisory":"No export job found. POST /export to begin.","mock_mode":true}
+GET /api/f51/studio/projects/checkpoint-2-runtime/export/download -> 404
+{"detail":"No export job found. POST /export to begin."}
+GET /api/f51/studio/projects/checkpoint-2-runtime/export/shot-list -> 404
+{"detail":"Project not found"}
+
+The 422 proves the repaired debate route reached Pydantic request validation. Export status/download responses prove the canonical export router owns the static routes; `shot-list` independently reaches the artifact handler.

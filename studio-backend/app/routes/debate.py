@@ -3,7 +3,7 @@ from app.models.debate import CoDirectorDebate, DebateRoundRequest, DebateAction
 from app.services.debate_service import debate_service
 from app.services.director_memory_service import director_memory_service
 
-router = APIRouter(prefix="/f51/studio/debate", tags=["debate"])
+router = APIRouter(prefix="/api/f51/studio/debate", tags=["debate"])
 
 @router.post("/trigger")
 def trigger_debate(request: DebateRoundRequest):

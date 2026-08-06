@@ -1,0 +1,9 @@
+Timestamp: 2026-08-05T23:16:00-04:00
+Working directory: studio-app
+Command: `npm run build`
+Exit code: 0
+
+TypeScript build: passed
+Vite modules transformed: 2851
+Final build result after URL-helper hardening: completed in 653ms
+Warning: vendor-three output chunk remains larger than the configured advisory threshold. This is a pre-existing performance warning, not a route or type-check failure.

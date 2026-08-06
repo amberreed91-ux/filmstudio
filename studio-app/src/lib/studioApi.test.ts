@@ -16,9 +16,11 @@ import {
   refreshRenderJobOutputUrl,
   recordWorkflowDecision,
   retryRenderJobForAdherence,
+  buildStudioApiUrl,
   resolveStudioApiBase,
   seedDemoStudioProject,
   updateWorkflowPhase,
+  triggerDebate,
 } from './studioApi'
 
 describe('camera grammar API', () => {
@@ -603,6 +605,35 @@ describe('resolveStudioApiBase', () => {
   it('normalizes stale local 8012 configuration to relative proxy URLs', () => {
     expect(resolveStudioApiBase({ VITE_API_BASE_URL: 'http://127.0.0.1:8012' })).toBe('')
     expect(resolveStudioApiBase({ VITE_STUDIO_API_BASE: 'http://localhost:8012/' })).toBe('')
+  })
+
+  it('joins API paths without duplicating an /api base suffix', () => {
+    expect(buildStudioApiUrl('/api/f51/studio/projects', 'https://studio.example/api/'))
+      .toBe('https://studio.example/api/f51/studio/projects')
+    expect(buildStudioApiUrl('/api/f51/studio/projects', 'https://studio.example'))
+      .toBe('https://studio.example/api/f51/studio/projects')
+    expect(buildStudioApiUrl('/outputs/project/final.mp4', 'https://studio.example/api'))
+      .toBe('https://studio.example/outputs/project/final.mp4')
+    expect(buildStudioApiUrl('/api/f51/studio/projects', ''))
+      .toBe('/api/f51/studio/projects')
+  })
+})
+
+describe('co-director debate API', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('uses the mounted canonical debate prefix', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ debate: { debate_id: 'debate-1' } }), { status: 200 }),
+    )
+
+    await triggerDebate({ project_id: 'project-1', query: 'Hold on the final reaction?' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toBe('/api/f51/studio/debate/trigger')
+    expect((init?.method || '').toUpperCase()).toBe('POST')
   })
 })
 

@@ -1,0 +1,12 @@
+Timestamp: 2026-08-05T23:09:52-04:00
+Working directory: studio-backend
+Backend: uvicorn on http://127.0.0.1:8023
+Command: Python urllib POST probes with application/json body `{}`
+Exit code: 0
+
+POST /api/f51/studio/debate/trigger -> 404
+{"detail":"Not Found"}
+POST /f51/studio/debate/trigger -> 422
+{"detail":[{"type":"missing","loc":["body","project_id"],"msg":"Field required","input":{}},{"type":"missing","loc":["body","query"],"msg":"Field required","input":{}}]}
+
+Interpretation: the production frontend path did not exist while the unversioned route was mounted and reached request validation.

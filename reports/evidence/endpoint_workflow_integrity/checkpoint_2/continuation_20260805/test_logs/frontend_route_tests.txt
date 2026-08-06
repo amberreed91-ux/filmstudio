@@ -1,0 +1,16 @@
+Timestamp: 2026-08-05T23:16:00-04:00
+Working directory: studio-app
+Command: `npm test -- --run src/lib/previsStoryboard.test.ts src/lib/studioApi.test.ts src/lib/exportApi.test.ts src/lib/stitchingApi.test.ts`
+Exit code: 0
+
+Test Files  4 passed (4)
+Tests       46 passed (46)
+Duration    790ms
+
+Expected stderr was emitted by two negative-path tests which deliberately exercise a failed scene-pipeline request and a missing scene rationale. Both tests passed; no unhandled test failure occurred.
+
+Final URL-helper rerun after root-mounted media URL coverage was added:
+
+- Command: `npm test -- --run src/lib/studioApi.test.ts src/lib/exportApi.test.ts src/lib/stitchingApi.test.ts`
+- Result: `32 passed`, 3 files passed
+- Exit code: `0`

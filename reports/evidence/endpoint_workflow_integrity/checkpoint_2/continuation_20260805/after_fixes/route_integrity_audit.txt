@@ -1,0 +1,26 @@
+Timestamp: 2026-08-05T23:14:00-04:00
+Working directory: studio-backend
+Command: `.venv/bin/python ../reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/route_integrity_audit.py`
+Exit code: 0
+
+effective_http_operations=558
+openapi_operations=554
+normalized_duplicate_operations=0
+static_routes_shadowed=0
+runtime_openapi_match=True
+forbidden_prefixes=0
+storyboard: operations=14 modules=2
+previs: operations=8 modules=2
+screening_review: operations=8 modules=3
+production: operations=12 modules=1
+rendering: operations=38 modules=10
+revisions: operations=9 modules=2
+editorial: operations=7 modules=2
+film_cut_timeline: operations=2 modules=1
+project_state: operations=379 modules=40
+memory: operations=33 modules=3
+continuity: operations=7 modules=4
+precise_routes=0
+theatre_routes=0
+theater_routes=0
+status=PASS

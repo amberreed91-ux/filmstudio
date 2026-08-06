@@ -1,0 +1,22 @@
+Timestamp: 2026-08-05T23:14:00-04:00
+Working directory: studio-app
+Command: `node ../reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/frontend_route_audit.mjs`
+Backend OpenAPI: http://127.0.0.1:8023/openapi.json
+Exit code: 0
+
+production_client_calls_parsed=330
+production_client_calls_directly_matched=322
+dynamic_export_clients=1
+dynamic_export_missing_static_routes=0
+legacy_non_priority_unmatched=7
+legacy_dependency=POST /api/f51/studio/projects/{}/share/generate src/lib/studioApi.ts:1765
+legacy_dependency=POST /api/f51/studio/projects/{}/share/collaborator src/lib/studioApi.ts:1771
+legacy_dependency=POST /api/f51/studio/scenes/{}/comments src/lib/studioApi.ts:1778
+legacy_dependency=DELETE /api/f51/studio/scenes/{}/comments/{} src/lib/studioApi.ts:1785
+legacy_dependency=POST /api/f51/studio/scenes/{}/approval src/lib/studioApi.ts:1791
+legacy_dependency=GET /api/f51/studio/projects/{}/activity src/lib/studioApi.ts:1798
+legacy_dependency=GET /api/f51/studio/share/{} src/lib/studioApi.ts:1802
+unexpected_priority_unmatched=0
+status=PASS
+
+The seven unmatched calls belong to the legacy Batch J sharing/collaboration UI, not the canonical production workflow route groups. They are retained as explicit frontend-integration dependencies; no backend business logic or fake compatibility persistence was invented in this route-only checkpoint.

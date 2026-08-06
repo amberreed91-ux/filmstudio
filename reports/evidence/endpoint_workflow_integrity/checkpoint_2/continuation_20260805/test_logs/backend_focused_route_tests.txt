@@ -1,0 +1,7 @@
+Timestamp: 2026-08-05T23:16:00-04:00
+Working directory: studio-backend
+Command: `.venv/bin/python -m pytest tests/test_checkpoint_2_route_registration.py app/routes/test_recommended_duration_route.py app/routes/test_studio_workflow_routes.py app/routes/test_studio_knowledge_routes.py app/services/test_render_create_route.py tests/test_storyboard_blueprint_routes.py -q`
+Exit code: 0
+
+...........................                                              [100%]
+27 passed in 11.60s

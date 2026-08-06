@@ -13,6 +13,7 @@ import {
   getExportStatus,
   triggerExport,
 } from '../lib/exportApi'
+import { buildStudioApiUrl } from '../lib/studioApi'
 
 interface Props {
   projectId: string
@@ -135,10 +136,9 @@ export default function ExportPanel({
     try {
       const res = await getExportDownload(projectId)
       if (res?.download_url) {
-        const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8010'
         const url = res.download_url.startsWith('http')
           ? res.download_url
-          : `${apiBase}${res.download_url}`
+          : buildStudioApiUrl(res.download_url)
         const a = document.createElement('a')
         a.href = url
         a.download = `${projectId}_export.${format}`
@@ -151,10 +151,9 @@ export default function ExportPanel({
 
   function handleShare() {
     if (!job?.output_url) return
-    const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8010'
     const url = job.output_url.startsWith('http')
       ? job.output_url
-      : `${apiBase}${job.output_url}`
+      : buildStudioApiUrl(job.output_url)
     setShareUrl(url)
     void navigator.clipboard.writeText(url).catch(() => {/* ignore */})
   }

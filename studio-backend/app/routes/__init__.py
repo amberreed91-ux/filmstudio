@@ -303,20 +303,6 @@ def get_project(project_id: str, session_id: Optional[str] = None):
     raise HTTPException(status_code=404, detail="Project not found")
 
 
-@projects_router.get("/projects/{project_id}/export/status")
-async def get_final_export_status_compat(project_id: str):
-    from app.routes.export import get_export_status
-
-    return await get_export_status(project_id)
-
-
-@projects_router.get("/projects/{project_id}/export/download")
-async def download_final_export_compat(project_id: str):
-    from app.routes.export import download_export
-
-    return await download_export(project_id)
-
-
 @projects_router.get("/projects/{project_id}/export/{artifact_type}")
 def export_project_artifact(project_id: str, artifact_type: str):
     project = project_service.get_project(project_id)

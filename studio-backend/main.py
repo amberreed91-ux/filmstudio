@@ -331,6 +331,7 @@ async def security_headers(request: Request, call_next):
 
 # Routers
 app.include_router(overview_router, prefix="/api/f51/studio")
+app.include_router(final_export_router)
 app.include_router(projects_router, prefix="/api/f51/studio")
 app.include_router(projects_persistence_router)
 app.include_router(video_assets_router)
@@ -359,7 +360,6 @@ app.include_router(production_scan_router)
 app.include_router(production_acceptance_router)
 app.include_router(audio_router)
 app.include_router(stitching_router)
-app.include_router(final_export_router)
 app.include_router(proactive_router)
 app.include_router(compose_router)
 app.include_router(assembly_router)

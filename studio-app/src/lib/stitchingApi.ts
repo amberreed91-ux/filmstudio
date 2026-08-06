@@ -6,7 +6,7 @@
  * GET  /api/f51/studio/projects/{id}/stitch/download
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8010'
+import { buildStudioApiUrl } from './studioApi'
 
 export interface StitchJob {
   job_id: string
@@ -40,7 +40,7 @@ export interface StitchDownloadResponse {
 }
 
 async function fetchStitch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(buildStudioApiUrl(path), {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })

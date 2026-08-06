@@ -1,16 +1,19 @@
 # Checkpoint 2 — Router Registration, Endpoint Path, and Direct Route Repair
 
-Verdict: **CHECKPOINT 2 PARTIALLY COMPLETE**
+Verdict: **CHECKPOINT 2 COMPLETE**
 
 ## Executive summary
 
-Checkpoint 2 repaired three confirmed direct route-registration defects:
+Checkpoint 2 repaired six confirmed route-registration and direct-client defects across its original pass and the 2026-08-05 completion pass:
 
 1. Mounted the missing `reference_assets` router so the existing ReferenceAsset propose/confirm/list endpoints reach their canonical route implementation.
 2. Removed duplicate Co-Director route registration caused by mounting both `proactive_router` and the backwards-compatible `co_director_chat_router` alias for the same router object.
 3. Removed duplicate video-analysis route registration caused by mounting `video_analysis_router` alongside the richer canonical project router endpoints for the same method/path combinations.
+4. Removed duplicate final-export status/download registrations and ordered the canonical static export router before the generic artifact route.
+5. Moved the Co-Director debate router from the unversioned `/f51/studio/debate` prefix to the frontend's canonical `/api/f51/studio/debate` prefix.
+6. Unified active Co-Director, stitching, export, playback, and shared API calls behind one base-URL joiner that prevents hardcoded localhost routing and duplicate `/api/api` paths.
 
-No frontend code changes were required: existing frontend callers already use the canonical `/api/f51/studio` paths for the repaired Co-Director and video-analysis surfaces. ReferenceAsset routes had no confirmed frontend caller in the priority scan, but the existing backend router was a confirmed unmounted route surface from Checkpoint 1.
+The completion audit covers all 558 effective HTTP operations, all 554 OpenAPI operations, and 330 statically discoverable production frontend calls. It reports zero normalized duplicate operations, zero static routes shadowed by dynamic routes, exact runtime/OpenAPI agreement, and zero unexpected unmatched priority frontend calls.
 
 ## Baseline worktree state
 
@@ -131,24 +134,89 @@ Live HTTP:
 
 - `POST /api/f51/studio/video-assets/missing-asset/extract-keyframes -> 400` for missing asset, proving the canonical project-router handler is reached.
 
+### CP2-RR-004 — Final-export duplicate ownership and latent static-route shadowing
+
+Feature: Screening Room final export.
+
+Original behavior:
+
+- `GET /api/f51/studio/projects/{project_id}/export/status` was registered twice.
+- `GET /api/f51/studio/projects/{project_id}/export/download` was registered twice.
+- The earlier generic `GET .../export/{artifact_type}` route would shadow both canonical static routes if the compatibility duplicates were removed without correcting router order.
+
+Root cause:
+
+- `projects_router` contained compatibility wrappers for handlers already owned by `app.routes.export`.
+- `main.py` mounted the generic project router before the canonical final-export router.
+
+Repair:
+
+- Removed the duplicate compatibility wrappers.
+- Mounted `final_export_router` before `projects_router` so `status` and `download` resolve before `{artifact_type}`.
+- Kept the generic artifact route and canonical export service behavior unchanged.
+
+Verification:
+
+- Whole-application uniqueness and static/dynamic ordering tests pass.
+- Live `status`, `download`, and `shot-list` requests reach their distinct intended handlers.
+
+### CP2-RR-005 — Active debate frontend called an unmounted prefix
+
+Feature: Co-Director debate in Screening and Universe surfaces.
+
+Original behavior:
+
+- Frontend: `POST /api/f51/studio/debate/trigger`.
+- Runtime: `POST /f51/studio/debate/trigger`.
+- Live canonical request returned framework `404 Not Found`; the unversioned path reached validation with `422`.
+
+Repair:
+
+- Changed the router prefix to `/api/f51/studio/debate`.
+- Preserved handler methods and request contracts.
+
+Verification:
+
+- Canonical path now returns deliberate `422` request validation for `{}`.
+- Obsolete unversioned path now returns `404`.
+- Route registration and frontend URL tests cover the canonical path.
+
+### CP2-RR-006 — Active clients bypassed the configured API base
+
+Feature: Previs Co-Director, Screening Room stitching, and final export.
+
+Original behavior:
+
+- Several clients used `VITE_API_URL ?? http://localhost:8010` while the application uses `VITE_API_BASE_URL` / `VITE_STUDIO_API_BASE` and relative proxy URLs.
+- A configured base ending in `/api` could produce `/api/api/...`.
+- Deployed clients could fall back to the user's localhost instead of the application backend.
+
+Repair:
+
+- Added `buildStudioApiUrl()` beside the canonical `STUDIO_API_BASE` resolver.
+- Updated `fetchJson`, Co-Director proactive checks, stitching, final export, and output/download URL handling to use it.
+- Added URL and method tests for the affected priority clients.
+
 ## Findings determined not to be defects
 
 - `Theatre` remains unimplemented by design. No backend route was introduced.
 - `Theater` remains frontend presentation naming only.
 - `Precise` remains unimplemented by design. No backend route was introduced.
-- Existing export status/download duplicate registrations remain outside this repair. They are compatibility surfaces and were not part of the confirmed priority defects repaired here.
+- Legacy Batch J share-token, scene-comment, scene-approval, and activity clients have no backend route implementation. They are not canonical priority production-thread endpoints and were not given fake compatibility handlers in this route-only checkpoint. They remain explicit Checkpoint 6 frontend-integration dependencies.
 
 ## Router registration repairs
 
-Changed `studio-backend/main.py` only:
+Router registration changes:
 
 - Added `reference_assets_router`.
 - Removed duplicate `co_director_chat_router` mount.
 - Removed duplicate `video_analysis_router` mount.
+- Mounted `final_export_router` before the generic project router.
+- Removed duplicate final-export compatibility handlers from `app/routes/__init__.py`.
 
 ## Route-ordering repairs
 
-No route-ordering collision repair was required for the confirmed defects.
+The canonical final-export router now precedes `projects_router`, preventing `export/{artifact_type}` from capturing `export/status` or `export/download`.
 
 ## Prefix repairs
 
@@ -156,7 +224,7 @@ Mounted ReferenceAsset routes under their existing router prefix:
 
 - `/api/f51/studio/projects`
 
-No new public prefix was introduced.
+Moved the Co-Director debate endpoints from `/f51/studio/debate` to the canonical `/api/f51/studio/debate` prefix already used by production frontend callers.
 
 ## HTTP-method repairs
 
@@ -171,15 +239,19 @@ No method changes were made. Existing method contracts were preserved and tested
 
 ## Frontend route-client repairs
 
-No frontend code was changed. Evidence shows existing frontend callers already use the repaired runtime paths:
+The original pass confirmed the ReferenceAsset, proactive Co-Director, and video-analysis paths. The completion pass additionally repaired active client URL construction in:
 
 - `studio-app/src/hooks/useProactiveCoDirector.ts`
-- `studio-app/src/components/CoDirectorDrawer.tsx`
+- `studio-app/src/lib/exportApi.ts`
+- `studio-app/src/lib/stitchingApi.ts`
+- `studio-app/src/components/ExportPanel.tsx`
+- `studio-app/src/components/StitchingPanel.tsx`
 - `studio-app/src/lib/studioApi.ts`
 
 Frontend proof:
 
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_2/frontend_clients/frontend_and_route_path_proof.txt`
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/after_fixes/frontend_route_audit.txt`
 
 ## Compatibility decisions
 
@@ -189,7 +261,7 @@ Frontend proof:
 
 ## Direct route-safety repairs
 
-No ownership/version/approval logic was changed or bypassed. The repair only changed router mounting in `main.py`.
+No ownership, version, approval, storage, or provider logic was changed or bypassed. Changes are limited to router mounting/order, one router prefix, shared frontend URL construction, and regression/evidence coverage.
 
 ## Runtime source-versus-OpenAPI comparison
 
@@ -207,6 +279,15 @@ After:
 - ReferenceAsset paths present in OpenAPI.
 - Duplicate operation warnings absent for the repaired route groups.
 
+Completion audit:
+
+- Effective HTTP operations: 558.
+- OpenAPI operations: 554.
+- Normalized duplicate operations: 0.
+- Static routes shadowed by earlier dynamic routes: 0.
+- Forbidden `/f51/studio` or `/api/api` prefixes: 0.
+- Runtime schema operations exactly match OpenAPI: true.
+
 Evidence:
 
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_2/before_fixes/route_registration_defects.txt`
@@ -220,17 +301,19 @@ Added:
 
 - `studio-backend/tests/test_checkpoint_2_route_registration.py`
 
-The test verifies required repaired paths are mounted exactly once and OpenAPI generation does not emit duplicate operation ID warnings.
+The test now verifies required repaired paths are mounted exactly once, every normalized method/path is unique, no dynamic route shadows a later static route, runtime schema operations exactly match OpenAPI, final-export ordering is stable, and OpenAPI generation emits no duplicate operation ID warnings.
+
+Frontend URL tests cover the common base joiner, Co-Director debate, storyboard/Previs clients, final export, and stitching.
 
 ## Exact test results
 
-Backend focused route tests:
+Original-pass backend focused route tests:
 
 - Command: `./.venv/bin/python -m pytest tests/test_checkpoint_2_route_registration.py app/routes/test_recommended_duration_route.py app/routes/test_studio_workflow_routes.py app/routes/test_studio_knowledge_routes.py app/services/test_render_create_route.py tests/test_storyboard_blueprint_routes.py -q`
 - Result: `22 passed`
 - Exit code: `0`
 
-Frontend API URL-construction tests:
+Original-pass frontend API URL-construction tests:
 
 - Command: `npm test -- --run src/lib/previsStoryboard.test.ts src/lib/studioApi.test.ts`
 - Result: `42 passed`
@@ -240,6 +323,20 @@ Evidence:
 
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_2/test_logs/backend_focused_route_tests.txt`
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_2/test_logs/frontend_api_url_tests.txt`
+
+Completion-pass verification:
+
+- Backend focused route tests: `27 passed`, exit `0`.
+- Frontend route tests: `46 passed`, exit `0`.
+- TypeScript/Vite production build: passed, exit `0`.
+- Route integrity audit: passed, exit `0`.
+- Frontend/OpenAPI audit: passed with zero unexpected priority mismatches, exit `0`.
+- Isolated staged snapshot: backend `23 passed`, frontend `44 passed`, production build passed; all exit `0`.
+
+Evidence:
+
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/test_logs/`
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/after_fixes/`
 
 ## Live HTTP results
 
@@ -262,10 +359,34 @@ Evidence:
 
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_2/runtime_http/live_http_repaired_routes.txt`
 
+Completion-pass backend:
+
+- Host: `http://127.0.0.1:8023` after a clean process restart.
+- Health and OpenAPI: `200`.
+- Storyboard, Previs, Production Queue, Render, Screening review, Editorial, Timeline, Memory, Continuity, and final-export groups reached deliberate handlers.
+- Canonical debate path: `422` validation for `{}`; obsolete unversioned path: `404`.
+- Final-export `status`, `download`, and generic artifact routes reached distinct handlers.
+
+Evidence:
+
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/runtime_http/priority_route_probes.txt`
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/runtime_http/debate_export_http_after.txt`
+
 ## Files changed
 
 Checkpoint 2 production/test files:
 
+- `studio-app/src/components/ExportPanel.tsx`
+- `studio-app/src/components/StitchingPanel.tsx`
+- `studio-app/src/hooks/useProactiveCoDirector.ts`
+- `studio-app/src/lib/exportApi.ts`
+- `studio-app/src/lib/exportApi.test.ts`
+- `studio-app/src/lib/stitchingApi.ts`
+- `studio-app/src/lib/stitchingApi.test.ts`
+- `studio-app/src/lib/studioApi.ts` (completion-pass hunks only)
+- `studio-app/src/lib/studioApi.test.ts`
+- `studio-backend/app/routes/__init__.py` (final-export hunk only)
+- `studio-backend/app/routes/debate.py`
 - `studio-backend/main.py`
 - `studio-backend/tests/test_checkpoint_2_route_registration.py`
 
@@ -282,12 +403,12 @@ The following modified/untracked paths were present before Checkpoint 2 and are 
 - `studio-app/src/components/KnowledgeLibraryPanel.tsx`
 - `studio-app/src/lib/previsStoryboard.test.ts`
 - `studio-app/src/lib/previsStoryboard.ts`
-- `studio-app/src/lib/studioApi.ts`
+- unrelated pre-existing hunks in `studio-app/src/lib/studioApi.ts`
 - `studio-app/src/lib/studioKnowledgeApi.ts`
 - `studio-app/src/pages/PrevisRoom.tsx`
 - `studio-app/src/pages/StudyRoom.tsx`
 - `studio-backend/app/adapters/__init__.py`
-- `studio-backend/app/routes/__init__.py`
+- unrelated pre-existing hunks in `studio-backend/app/routes/__init__.py`
 - `studio-backend/app/routes/render.py`
 - `studio-backend/app/routes/storyboard_blueprints.py`
 - `studio-backend/app/routes/studio_knowledge.py`
@@ -300,8 +421,7 @@ The following modified/untracked paths were present before Checkpoint 2 and are 
 
 ## Remaining route risks
 
-- Full priority-route live HTTP coverage was not completed for every system named in the Checkpoint 2 brief.
-- Existing export status/download duplicate registrations remain as compatibility behavior but were not newly regression-tested in this checkpoint.
+- Seven legacy Batch J collaboration/share frontend calls remain intentionally identified as noncanonical dependencies. Their missing persistence and contracts belong to backend-integrity and frontend-workflow checkpoints; inventing route-only fake success would violate this checkpoint's boundary.
 - Broader project-state source-of-truth issues remain deferred to later checkpoints.
 - Storyboard Wall vs Storyboard Blueprint consolidation remains deferred.
 
@@ -311,6 +431,7 @@ The following modified/untracked paths were present before Checkpoint 2 and are 
 - Storyboard Wall and Storyboard Blueprint source-of-truth alignment.
 - Full workflow orchestration and persistence repair.
 - General route security hardening beyond direct mounting/duplicate registration.
+- Legacy sharing/collaboration contract and persistence decisions.
 
 ## Evidence paths
 
@@ -325,9 +446,13 @@ The following modified/untracked paths were present before Checkpoint 2 and are 
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_2/test_logs/frontend_api_url_tests.txt`
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_2/diff_review/`
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_2/hashes/checkpoint_2_sha256.txt`
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/before_fixes/`
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/after_fixes/`
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/runtime_http/`
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/continuation_20260805/test_logs/`
 
 ## Checkpoint verdict
 
-**CHECKPOINT 2 PARTIALLY COMPLETE**
+**CHECKPOINT 2 COMPLETE**
 
-The confirmed direct route-registration defects repaired in this checkpoint are fixed, regression-tested, and live-HTTP verified. The verdict is partial because the brief's complete exit criteria require exhaustive priority-route auditing and live HTTP coverage beyond the repaired confirmed defects.
+All priority routers are mounted exactly once; runtime schema routes and OpenAPI agree; no normalized duplicate, duplicate prefix, or static/dynamic shadow remains; active priority frontend clients resolve to valid paths and methods; focused tests and the production build pass; and live HTTP evidence covers every named priority route group. No business logic was replaced with a placeholder.

@@ -315,6 +315,16 @@ export const STUDIO_API_BASE: string = resolveStudioApiBase({
   VITE_STUDIO_API_BASE: import.meta.env.VITE_STUDIO_API_BASE,
 })
 
+export function buildStudioApiUrl(path: string, base = STUDIO_API_BASE): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  const normalizedBase = base.trim().replace(/\/+$/, '')
+  if (!normalizedBase) return normalizedPath
+  const originBase = normalizedBase.endsWith('/api')
+    ? normalizedBase.slice(0, -4)
+    : normalizedBase
+  return `${originBase}${normalizedPath}`
+}
+
 function normalizeStudioProject(raw: StudioProject): StudioProject {
   const project = raw as Record<string, unknown>
   const executionSummary = project.execution_summary
@@ -350,7 +360,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
 
   try {
     const rest = init || {}
-    const response = await fetch(`${STUDIO_API_BASE}${path}`, {
+    const response = await fetch(buildStudioApiUrl(path), {
       ...rest,
       signal,
       headers: {
@@ -5105,7 +5115,7 @@ export async function uploadVideoAsset(payload: {
   const tryUpload = async (path: string): Promise<{ asset: VideoAsset }> => {
     if (import.meta.env.DEV) {
       console.log('[StudyRoomUpload] request', {
-        url: `${STUDIO_API_BASE}${path}`,
+        url: buildStudioApiUrl(path),
         method: 'POST',
         file: payload.file?.name,
       })

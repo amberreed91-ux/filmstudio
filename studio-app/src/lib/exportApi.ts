@@ -6,7 +6,7 @@
  * GET  /api/f51/studio/projects/{id}/export/download
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8010'
+import { buildStudioApiUrl } from './studioApi'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,7 +55,7 @@ export interface ExportDownloadResponse {
 // ---------------------------------------------------------------------------
 
 async function fetchExport<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(buildStudioApiUrl(path), {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })

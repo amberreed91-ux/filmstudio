@@ -22,8 +22,7 @@
  */
 
 import { useCallback, useState } from 'react'
-
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8010'
+import { buildStudioApiUrl } from '../lib/studioApi'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,7 +92,7 @@ export function useProactiveCoDirector(projectId: string) {
         if (options.lastEdited) body.last_edited = options.lastEdited
 
         const res = await fetch(
-          `${BASE_URL}/api/f51/studio/projects/${projectId}/co-director/proactive-check`,
+          buildStudioApiUrl(`/api/f51/studio/projects/${projectId}/co-director/proactive-check`),
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

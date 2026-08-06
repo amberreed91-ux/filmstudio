@@ -12,6 +12,7 @@ import {
   getStitchStatus,
   triggerStitch,
 } from '../lib/stitchingApi'
+import { buildStudioApiUrl } from '../lib/studioApi'
 
 interface Props {
   projectId: string
@@ -104,10 +105,9 @@ export default function StitchingPanel({ projectId, approvedSceneCount }: Props)
     try {
       const res = await getStitchDownload(projectId)
       if (res?.download_url) {
-        const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8010'
         const url = res.download_url.startsWith('http')
           ? res.download_url
-          : `${apiBase}${res.download_url}`
+          : buildStudioApiUrl(res.download_url)
         const a = document.createElement('a')
         a.href = url
         a.download = `${projectId}_final.mp4`
@@ -249,7 +249,7 @@ export default function StitchingPanel({ projectId, approvedSceneCount }: Props)
             href={
               downloadUrl.startsWith('http')
                 ? downloadUrl
-                : `${import.meta.env.VITE_API_URL ?? 'http://localhost:8010'}${downloadUrl}`
+                : buildStudioApiUrl(downloadUrl)
             }
             target="_blank"
             rel="noreferrer"

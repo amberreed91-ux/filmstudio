@@ -1,0 +1,19 @@
+Timestamp: 2026-08-05T23:24:00-04:00
+Isolation: detached temporary worktree at parent commit d0cc0490 with only the staged Checkpoint 2 patch applied
+
+Backend command:
+`.venv/bin/python -m pytest tests/test_checkpoint_2_route_registration.py app/routes/test_recommended_duration_route.py app/routes/test_studio_workflow_routes.py app/routes/test_studio_knowledge_routes.py app/services/test_render_create_route.py tests/test_storyboard_blueprint_routes.py -q`
+Result: 23 passed in 36.80s
+Exit code: 0
+
+Frontend command:
+`npm test -- --run src/lib/previsStoryboard.test.ts src/lib/studioApi.test.ts src/lib/exportApi.test.ts src/lib/stitchingApi.test.ts`
+Result: 44 passed across 4 files
+Exit code: 0
+
+Production build command:
+`npm run build`
+Result: TypeScript and Vite build passed; 2851 modules transformed in 655ms
+Exit code: 0
+
+The different focused totals from the dirty-worktree run are expected: two Previs tests and four backend tests belong to unrelated unstaged work and are absent from the isolated staged snapshot.

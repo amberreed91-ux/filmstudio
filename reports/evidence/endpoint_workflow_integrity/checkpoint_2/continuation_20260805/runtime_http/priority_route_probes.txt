@@ -1,0 +1,44 @@
+Timestamp: 2026-08-05T23:07:23-04:00
+Working directory: studio-backend
+Backend: uvicorn on http://127.0.0.1:8023
+Command: Python urllib GET probes (response bodies truncated to 520 bytes for diagnostics)
+Exit code: 0
+
+GET /health -> 200
+{"status":"healthy","version":"1.0.0","git_commit":"d0cc0490d8b7c722c2ac3ccb034e94ac41e6f309"...}
+GET /openapi.json -> 200
+{"openapi":"3.1.0","info":{"title":"Studio API","version":"1.0.0"}...}
+GET /api/f51/studio/projects/checkpoint-2-runtime -> 404
+{"detail":"Project not found"}
+GET /api/f51/studio/projects/checkpoint-2-runtime/scenes/scene-1/storyboard-blueprint -> 404
+{"detail":{"error_type":"state_error","message":"Storyboard blueprint not found","stage":"storyboard_blueprint_get","metadata":{}}}
+GET /api/f51/studio/projects/checkpoint-2-runtime/storyboard-blueprints -> 200
+[]
+GET /api/f51/studio/projects/checkpoint-2-runtime/previs/images/scene-1 -> 200
+[]
+GET /api/f51/studio/production-queue/diagnostics -> 200
+{"captured_at":"2026-08-05T23:07:23.438540"...}
+GET /api/f51/studio/production-queue/projects/checkpoint-2-runtime/summary -> 200
+{"project_id":"checkpoint-2-runtime"...}
+GET /api/f51/studio/render/diagnostics -> 200
+{"captured_at":"2026-08-06T03:07:23.452027+00:00"...}
+GET /api/f51/studio/render/providers -> 200
+[{"provider_key":"runway"...}]
+GET /api/f51/studio/projects/checkpoint-2-runtime/short-film-reviews -> 200
+{"reviews":[]}
+GET /api/f51/studio/projects/checkpoint-2-runtime/editorial-intelligence -> 200
+{"analyses":[]}
+GET /api/f51/studio/projects/checkpoint-2-runtime/timeline-intelligence -> 404
+{"detail":"Project not found"}
+GET /api/f51/studio/memory/checkpoint-2-runtime -> 200
+{"project_id":"checkpoint-2-runtime","project":{},"scenes":{},"characters":{},"style":{},"reviews":[],"versions":[]}
+GET /api/f51/studio/projects/checkpoint-2-runtime/continuity/issues -> 404
+{"detail":"Project not found"}
+GET /api/f51/studio/projects/checkpoint-2-runtime/export/status -> 200
+{"status":"not_started","progress":0,"advisory":"No export job found. POST /export to begin.","mock_mode":true}
+GET /api/f51/studio/projects/checkpoint-2-runtime/export/download -> 404
+{"detail":"No export job found. POST /export to begin."}
+GET /api/f51/studio/projects/checkpoint-2-runtime/export/shot-list -> 404
+{"detail":"Project not found"}
+
+The 404 responses above are deliberate handler-level missing-record errors, not framework `{"detail":"Not Found"}` route misses.
