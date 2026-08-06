@@ -3237,6 +3237,7 @@ export function createStoryboardBlueprint(
     source?: string
     preserve_locked_shots?: boolean
     regeneration_reason?: string
+    create_new_version?: boolean
   } = {},
 ) {
   return fetchJson<StoryboardBlueprintDetail>(
@@ -3297,6 +3298,69 @@ export function approveStoryboardVersion(
   )
 }
 
+export function listStoryboardVersions(blueprintId: string) {
+  return fetchJson<StoryboardBlueprintVersion[]>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions`,
+    { timeoutMs: 10000 },
+  )
+}
+
+export function createStoryboardVersion(
+  blueprintId: string,
+  payload: { shot_count?: number | null; preserve_locked_shots?: boolean; change_reason?: string } = {},
+) {
+  return fetchJson<StoryboardBlueprintDetail>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      timeoutMs: 30000,
+    },
+  )
+}
+
+export function createStoryboardShot(
+  blueprintId: string,
+  payload: {
+    shot_id?: string | null
+    intent?: Record<string, unknown>
+    visual_plan?: Record<string, unknown>
+    continuity_plan?: Record<string, unknown>
+    render_contract?: Record<string, unknown>
+    change_reason?: string
+  },
+) {
+  return fetchJson<StoryboardShot>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export function reorderStoryboardShots(blueprintId: string, orderedStoryboardShotIds: string[]) {
+  return fetchJson<StoryboardShot[]>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/reorder`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ordered_storyboard_shot_ids: orderedStoryboardShotIds }),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export function deleteStoryboardShot(blueprintId: string, storyboardShotId: string) {
+  return fetchJson<StoryboardShot[]>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}`,
+    { method: 'DELETE', timeoutMs: 10000 },
+  )
+}
+
 export function updateStoryboardShot(
   blueprintId: string,
   storyboardShotId: string,
@@ -3326,6 +3390,157 @@ export function lockStoryboardShot(blueprintId: string, storyboardShotId: string
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ locked }),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export type PrevisImage = {
+  id: string
+  project_id: string
+  scene_id: string
+  shot_id?: string | null
+  image_path: string
+  job_id: string
+  status: string
+  prompt_used: string
+  fallback: boolean
+  blueprint_id?: string | null
+  blueprint_version_id?: string | null
+  storyboard_shot_id?: string | null
+  approved: boolean
+  approved_at?: string | null
+  approved_by?: string | null
+  failure_reason?: string | null
+  source_previs_image_id?: string | null
+  attempt_number: number
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type PrevisGenerateResult = {
+  job_id: string
+  status: string
+  scene_id: string
+  previs_image_id?: string | null
+  blueprint_id?: string | null
+  blueprint_version_id?: string | null
+  storyboard_shot_id?: string | null
+  duplicate: boolean
+  message?: string | null
+}
+
+export function generatePrevisScene(
+  projectId: string,
+  sceneId: string,
+  options: {
+    shotNumber?: number
+    takeNumber?: number
+    storyboardShotId?: string | null
+    allowApprovedRevision?: boolean
+  } = {},
+) {
+  const params = new URLSearchParams({
+    shot_number: String(Math.max(1, options.shotNumber || 1)),
+    take_number: String(Math.max(1, options.takeNumber || 1)),
+  })
+  if (options.storyboardShotId) params.set('storyboard_shot_id', options.storyboardShotId)
+  if (options.allowApprovedRevision) params.set('allow_approved_revision', 'true')
+  return fetchJson<PrevisGenerateResult>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/generate-scene/${encodeURIComponent(sceneId)}?${params.toString()}`,
+    { method: 'POST', timeoutMs: 30000 },
+  )
+}
+
+export function listPrevisImages(projectId: string, sceneId: string) {
+  return fetchJson<PrevisImage[]>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/images/${encodeURIComponent(sceneId)}`,
+    { timeoutMs: 10000 },
+  )
+}
+
+export function approvePrevisImage(projectId: string, imageId: string, approvedBy = 'creator') {
+  return fetchJson<PrevisImage>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/records/${encodeURIComponent(imageId)}/approve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved_by: approvedBy }),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export function cancelPrevisImage(projectId: string, imageId: string) {
+  return fetchJson<PrevisImage>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/records/${encodeURIComponent(imageId)}/cancel`,
+    { method: 'POST', timeoutMs: 10000 },
+  )
+}
+
+export function retryPrevisImage(projectId: string, imageId: string) {
+  return fetchJson<PrevisGenerateResult>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/records/${encodeURIComponent(imageId)}/retry`,
+    { method: 'POST', timeoutMs: 30000 },
+  )
+}
+
+export function createPrevisProductionPackage(projectId: string, sceneId: string) {
+  return fetchJson<Record<string, unknown>>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/production-packages/${encodeURIComponent(sceneId)}`,
+    { method: 'POST', timeoutMs: 10000 },
+  )
+}
+
+export type ScreeningOutput = {
+  screening_output_id: string
+  project_id: string
+  scene_id?: string | null
+  shot_id?: string | null
+  source_type: 'render_job' | 'render_audio' | 'scene_assembly' | 'final_package' | string
+  source_id: string
+  output_type: 'shot' | 'scene' | 'audio' | 'final' | string
+  playback_url: string
+  mime_type: string
+  media_status: 'available' | 'missing' | string
+  approved: boolean
+  approved_at?: string | null
+  approved_by?: string | null
+  supersedes_output_id?: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type ScreeningManifest = {
+  project_id: string
+  outputs: ScreeningOutput[]
+  current_final_output?: ScreeningOutput | null
+  completion_status: 'in_progress' | 'complete' | string
+  completed_at?: string | null
+  warnings: Array<{ source_id: string; reason: string }>
+  duration_ms?: number
+}
+
+export function getScreeningManifest(projectId: string, refresh = true) {
+  return fetchJson<ScreeningManifest>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/screening/manifest?refresh=${refresh ? 'true' : 'false'}`,
+    { timeoutMs: 15000 },
+  )
+}
+
+export function approveScreeningOutput(
+  projectId: string,
+  screeningOutputId: string,
+  approvedBy = 'creator',
+) {
+  return fetchJson<ScreeningOutput>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/screening/outputs/${encodeURIComponent(screeningOutputId)}/approve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmed: true, approved_by: approvedBy }),
       timeoutMs: 10000,
     },
   )
@@ -5599,6 +5814,80 @@ export async function analyzeEditorialIntelligence(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       timeoutMs: 45000,
+    },
+  )
+}
+
+export type FilmCutVersion = {
+  cut_id: string
+  project_id: string
+  version_number: number
+  status: 'draft' | 'approved' | 'superseded' | 'archived' | string
+  source_cut_id?: string | null
+  source_analysis_id?: string | null
+  source_application_id?: string | null
+  scene_order: string[]
+  timeline: Array<Record<string, unknown>>
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  approved_at?: string | null
+  approved_by?: string | null
+}
+
+export async function getCurrentFilmCut(projectId: string): Promise<{ film_cut: FilmCutVersion }> {
+  return fetchJson<{ film_cut: FilmCutVersion }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-cut`,
+  )
+}
+
+export async function listFilmCutVersions(projectId: string): Promise<{ versions: FilmCutVersion[] }> {
+  return fetchJson<{ versions: FilmCutVersion[] }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-cut/versions`,
+  )
+}
+
+export async function updateFilmCutTimeline(
+  projectId: string,
+  payload: {
+    expected_cut_id: string
+    scene_order: string[]
+    timeline: Array<Record<string, unknown>>
+    creator_confirmation: boolean
+    metadata?: Record<string, unknown>
+  },
+): Promise<{ film_cut: FilmCutVersion }> {
+  return fetchJson<{ film_cut: FilmCutVersion }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-cut/timeline`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function compareFilmCutVersions(projectId: string, leftCutId: string, rightCutId: string) {
+  const params = new URLSearchParams({ left_cut_id: leftCutId, right_cut_id: rightCutId })
+  return fetchJson<{
+    project_id: string
+    left_cut_id: string
+    right_cut_id: string
+    added_scenes: string[]
+    removed_scenes: string[]
+    moved_scenes: Array<{ scene_id: string; from_index: number; to_index: number }>
+    timeline_changed: boolean
+    provenance: Record<string, unknown>
+  }>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-cut/compare?${params.toString()}`)
+}
+
+export async function approveFilmCut(projectId: string, cutId: string, approvedBy = 'creator') {
+  return fetchJson<{ film_cut: FilmCutVersion }>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/film-cut/${encodeURIComponent(cutId)}/approve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creator_confirmation: true, approved_by: approvedBy }),
     },
   )
 }

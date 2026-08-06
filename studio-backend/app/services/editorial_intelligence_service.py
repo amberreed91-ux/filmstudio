@@ -25,6 +25,7 @@ from app.services.editorial_timeline_context_service import (
     EditorialTimelineContextService,
     editorial_timeline_context_service,
 )
+from app.services.stability import PersistenceError, StateError, ValidationError
 
 logger = logging.getLogger("studio-editorial-intelligence")
 
@@ -84,6 +85,9 @@ class EditorialIntelligenceService:
     ) -> EditorialAnalysisRecord:
         start = _now_ms()
         request = request or EditorialAnalysisRequest()
+        current_cut = self.ensure_film_cut(project_id)
+        if not request.source_cut_id:
+            request = request.model_copy(update={"source_cut_id": current_cut["cut_id"]})
         logger.info(
             "EDITORIAL_ANALYSIS_STARTED | project_id=%s | provider=internal | stage=analyze_project",
             project_id,
@@ -124,6 +128,208 @@ class EditorialIntelligenceService:
     def list_analyses(self, project_id: str, limit: int = 20) -> list[EditorialAnalysisRecord]:
         return self._storage_ref().list_editorial_analysis_records_for_project(project_id, limit=limit)
 
+    def ensure_film_cut(self, project_id: str) -> dict[str, Any]:
+        storage = self._storage_ref()
+        get_current = getattr(storage, "get_current_film_cut", None)
+        current = get_current(project_id) if callable(get_current) else None
+        if current:
+            return current
+        project_store = self._project_store_ref()
+        project = project_store.get_project(project_id)
+        stored = storage.get_project(project_id)
+        stored_data = (
+            stored.model_dump(mode="json")
+            if hasattr(stored, "model_dump")
+            else dict(stored.__dict__)
+            if hasattr(stored, "__dict__")
+            else stored
+        )
+        if not isinstance(project, dict):
+            project = stored_data
+        elif isinstance(stored_data, dict):
+            stored_cut = stored_data.get("film_cut") if isinstance(stored_data.get("film_cut"), dict) else {}
+            project_cut = project.get("film_cut") if isinstance(project.get("film_cut"), dict) else {}
+            merged_cut = dict(stored_cut)
+            for key, value in project_cut.items():
+                if value in (None, "", [], {}) and merged_cut.get(key) not in (None, "", [], {}):
+                    continue
+                merged_cut[key] = value
+            project = {
+                **stored_data,
+                **project,
+                "film_cut": merged_cut,
+            }
+        if not isinstance(project, dict):
+            raise StateError("Project not found", stage="film_cut_load")
+        legacy = project.get("film_cut") if isinstance(project.get("film_cut"), dict) else {}
+        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+        scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+        scene_order = [
+            _as_str(scene_id)
+            for scene_id in (
+                legacy.get("scene_order")
+                or legacy.get("included_scenes")
+                or [scene.get("scene_id") for scene in scenes if isinstance(scene, dict)]
+            )
+            if _as_str(scene_id)
+        ]
+        now = editorial_utc_now_iso()
+        cut = {
+            "cut_id": _as_str(legacy.get("cut_id")) or f"film-cut-{project_id}-v1",
+            "project_id": project_id,
+            "version_number": 1,
+            "status": _as_str(legacy.get("status")) or "draft",
+            "source_cut_id": None,
+            "source_analysis_id": None,
+            "source_application_id": None,
+            "scene_order": scene_order,
+            "timeline": legacy.get("timeline") if isinstance(legacy.get("timeline"), list) else [
+                {"scene_id": scene_id, "order_index": index}
+                for index, scene_id in enumerate(scene_order)
+            ],
+            "metadata": {"bootstrap_source": "legacy_project_film_cut" if legacy else "project_scenes"},
+            "created_at": _as_str(legacy.get("created_at")) or now,
+            "updated_at": now,
+            "approved_at": legacy.get("approved_at"),
+            "approved_by": legacy.get("approved_by"),
+        }
+        commit = getattr(storage, "commit_film_cut_version", None)
+        if callable(commit):
+            try:
+                current = commit(cut)
+            except Exception as exc:
+                raise PersistenceError(
+                    "Initial Film Cut persistence failed",
+                    stage="film_cut_create",
+                    metadata={"cause": type(exc).__name__},
+                ) from exc
+            self._mirror_cut(project_id, current)
+            return current
+        return {**legacy, **cut}
+
+    def get_current_cut(self, project_id: str) -> dict[str, Any]:
+        return self.ensure_film_cut(project_id)
+
+    def list_cut_versions(self, project_id: str) -> list[dict[str, Any]]:
+        self.ensure_film_cut(project_id)
+        method = getattr(self._storage_ref(), "list_film_cut_versions", None)
+        return method(project_id) if callable(method) else [self.ensure_film_cut(project_id)]
+
+    def update_timeline(
+        self,
+        project_id: str,
+        *,
+        expected_cut_id: str,
+        scene_order: list[str],
+        timeline: list[dict[str, Any]],
+        creator_confirmation: bool,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if not creator_confirmation:
+            raise ValidationError("Explicit creator confirmation is required", stage="film_cut_update")
+        current = self.ensure_film_cut(project_id)
+        if not expected_cut_id or expected_cut_id != current["cut_id"]:
+            raise StateError("stale_film_cut", stage="film_cut_update")
+        normalized_order = [_as_str(value) for value in scene_order if _as_str(value)]
+        if (
+            not normalized_order
+            or len(set(normalized_order)) != len(normalized_order)
+            or set(normalized_order) != set(current.get("scene_order") or [])
+        ):
+            raise ValidationError("scene_order must contain each current scene exactly once", stage="film_cut_update")
+        normalized_timeline: list[dict[str, Any]] = []
+        seen_keys: set[str] = set()
+        for index, raw in enumerate(timeline):
+            if not isinstance(raw, dict):
+                raise ValidationError("timeline entries must be objects", stage="film_cut_update")
+            scene_id = _as_str(raw.get("scene_id"))
+            if scene_id not in normalized_order:
+                raise ValidationError("timeline entry references an unknown scene", stage="film_cut_update")
+            key = _as_str(raw.get("clip_id")) or f"scene:{scene_id}"
+            if key in seen_keys:
+                raise ValidationError("timeline entries must be unique", stage="film_cut_update")
+            seen_keys.add(key)
+            normalized_timeline.append({**raw, "scene_id": scene_id, "order_index": index})
+        versions = self.list_cut_versions(project_id)
+        now = editorial_utc_now_iso()
+        cut = {
+            "cut_id": f"film-cut-{project_id}-v{max((row['version_number'] for row in versions), default=0) + 1}-{uuid.uuid4().hex[:6]}",
+            "project_id": project_id,
+            "version_number": max((row["version_number"] for row in versions), default=0) + 1,
+            "status": "draft",
+            "source_cut_id": current["cut_id"],
+            "source_analysis_id": None,
+            "source_application_id": None,
+            "scene_order": normalized_order,
+            "timeline": normalized_timeline,
+            "metadata": {"change_type": "timeline_update", **(metadata or {})},
+            "created_at": now,
+            "updated_at": now,
+        }
+        try:
+            persisted = self._storage_ref().commit_film_cut_version(
+                cut,
+                supersede_cut_id=current["cut_id"] if current.get("status") == "draft" else None,
+            )
+        except Exception as exc:
+            raise PersistenceError(
+                "Film Cut timeline persistence failed",
+                stage="film_cut_update",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
+        self._mirror_cut(project_id, persisted)
+        return persisted
+
+    def compare_cut_versions(self, project_id: str, left_cut_id: str, right_cut_id: str) -> dict[str, Any]:
+        storage = self._storage_ref()
+        left = storage.get_film_cut_version(left_cut_id)
+        right = storage.get_film_cut_version(right_cut_id)
+        if (
+            left is None or right is None
+            or left.get("project_id") != project_id
+            or right.get("project_id") != project_id
+        ):
+            raise StateError("Film Cut version not found", stage="film_cut_compare")
+        left_order = left.get("scene_order") or []
+        right_order = right.get("scene_order") or []
+        return {
+            "project_id": project_id,
+            "left_cut_id": left_cut_id,
+            "right_cut_id": right_cut_id,
+            "added_scenes": [scene for scene in right_order if scene not in left_order],
+            "removed_scenes": [scene for scene in left_order if scene not in right_order],
+            "moved_scenes": [
+                {"scene_id": scene, "from_index": left_order.index(scene), "to_index": right_order.index(scene)}
+                for scene in right_order
+                if scene in left_order and left_order.index(scene) != right_order.index(scene)
+            ],
+            "timeline_changed": left.get("timeline") != right.get("timeline"),
+            "provenance": {
+                "right_source_cut_id": right.get("source_cut_id"),
+                "source_analysis_id": right.get("source_analysis_id"),
+                "source_application_id": right.get("source_application_id"),
+            },
+        }
+
+    def approve_cut(
+        self,
+        project_id: str,
+        cut_id: str,
+        *,
+        creator_confirmation: bool,
+        approved_by: str = "creator",
+    ) -> dict[str, Any]:
+        if not creator_confirmation:
+            raise ValidationError("Explicit creator confirmation is required", stage="film_cut_approve")
+        try:
+            approved = self._storage_ref().approve_film_cut(project_id, cut_id, approved_by)
+        except ValueError as exc:
+            raise StateError(str(exc), stage="film_cut_approve") from exc
+        if approved is None:
+            raise StateError("Film Cut version not found", stage="film_cut_approve")
+        self._mirror_cut(project_id, approved)
+        return approved
+
     def apply_decisions(
         self,
         project_id: str,
@@ -136,7 +342,21 @@ class EditorialIntelligenceService:
         analysis = self.get_analysis(analysis_id)
         if analysis is None or analysis.project_id != project_id:
             raise LookupError("Editorial analysis not found")
-        if request.expected_context_hash and request.expected_context_hash != analysis.context_hash:
+        if not request.expected_context_hash:
+            raise ValueError("expected_context_hash is required before applying editorial decisions")
+        if request.expected_context_hash != analysis.context_hash:
+            raise RuntimeError("stale_editorial_analysis")
+        current_cut = self.ensure_film_cut(project_id)
+        if current_cut["cut_id"] != analysis.source_cut_id:
+            raise RuntimeError("stale_editorial_analysis")
+        current_context = self._context_service.build_context(
+            project_id=project_id,
+            source_package_id=analysis.source_package_id,
+            source_cut_id=analysis.source_cut_id,
+            include_shot_boundaries=bool(analysis.metadata.get("include_shot_boundaries", True)),
+            include_frame_analysis=bool(analysis.metadata.get("include_frame_analysis", True)),
+        )
+        if current_context.context_hash != analysis.context_hash:
             raise RuntimeError("stale_editorial_analysis")
 
         selected_ids = set(request.decision_ids)
@@ -148,9 +368,19 @@ class EditorialIntelligenceService:
         skipped: list[str] = []
         notes: list[str] = []
         result_cut_id = ""
+        pending_cut: dict[str, Any] | None = None
+        application_id = f"editorial-application-{uuid.uuid4().hex[:12]}"
 
         if request.apply_mode == "update_cut":
-            result_cut_id = self._apply_cut_updates(project_id, analysis, decisions, applied_effects, skipped, notes)
+            result_cut_id, pending_cut = self._apply_cut_updates(
+                project_id,
+                analysis,
+                decisions,
+                applied_effects,
+                skipped,
+                notes,
+                application_id=application_id,
+            )
         elif request.apply_mode == "next_stitch":
             stitchable_types = {"replace_transition", "hold", "compress_escalation", "trim"}
             applied_effects.extend(self._next_stitch_effects(decisions))
@@ -164,7 +394,7 @@ class EditorialIntelligenceService:
             notes.append("No media was altered; this application is audit metadata only.")
 
         result = EditorialApplyResult(
-            application_id=f"editorial-application-{uuid.uuid4().hex[:12]}",
+            application_id=application_id,
             project_id=project_id,
             analysis_id=analysis_id,
             decision_ids=list(request.decision_ids),
@@ -177,6 +407,7 @@ class EditorialIntelligenceService:
             metadata={
                 "apply_mode": request.apply_mode,
                 "context_hash": analysis.context_hash,
+                "source_cut_version": current_cut.get("version_number"),
                 "transition_advisories": [
                     advisory.model_dump(mode="json")
                     for advisory in analysis.transition_advisories
@@ -191,7 +422,23 @@ class EditorialIntelligenceService:
                 **(request.metadata or {}),
             },
         )
-        self._storage_ref().save_editorial_decision_application(result)
+        storage = self._storage_ref()
+        if pending_cut is not None and callable(getattr(storage, "commit_film_cut_version", None)):
+            try:
+                storage.commit_film_cut_version(
+                    pending_cut,
+                    supersede_cut_id=current_cut["cut_id"] if current_cut.get("status") == "draft" else None,
+                    application=result,
+                )
+            except Exception as exc:
+                raise PersistenceError(
+                    "Editorial Film Cut application failed",
+                    stage="editorial_apply",
+                    metadata={"cause": type(exc).__name__},
+                ) from exc
+            self._mirror_cut(project_id, pending_cut)
+        else:
+            storage.save_editorial_decision_application(result)
         logger.info(
             "EDITORIAL_DECISION_APPLICATION_COMPLETED | project_id=%s | analysis_id=%s | provider=internal | stage=apply_decisions | duration_ms=%d",
             project_id,
@@ -333,6 +580,8 @@ class EditorialIntelligenceService:
             metadata={
                 "analysis_depth": request.analysis_depth,
                 "revision_emphasis": request.revision_emphasis,
+                "include_shot_boundaries": request.include_shot_boundaries,
+                "include_frame_analysis": request.include_frame_analysis,
                 "evidence_counts": context.evidence_counts,
                 "decision_gate_status": context.decision_gate_status,
             },
@@ -741,20 +990,18 @@ class EditorialIntelligenceService:
         applied_effects: list[str],
         skipped: list[str],
         notes: list[str],
-    ) -> str:
+        *,
+        application_id: str,
+    ) -> tuple[str, dict[str, Any] | None]:
         reorder_decisions = [decision for decision in decisions if decision.decision_type == "reorder_scene"]
         if not reorder_decisions:
             skipped.extend([decision.decision_id for decision in decisions])
             notes.append("No scene reorder decisions were selected; the canonical film cut was not changed.")
-            return ""
-        project_store = self._project_store_ref()
-        project = project_store.get_project(project_id)
-        if not isinstance(project, dict):
-            raise LookupError("Project not found")
-        film_cut = project.get("film_cut") if isinstance(project.get("film_cut"), dict) else {}
+            return "", None
+        film_cut = self.ensure_film_cut(project_id)
         current_order = [
             _as_str(scene_id)
-            for scene_id in (film_cut.get("scene_order") or film_cut.get("included_scenes") or [])
+            for scene_id in (film_cut.get("scene_order") or [])
             if _as_str(scene_id)
         ]
         selected_decision_ids: list[str] = []
@@ -769,22 +1016,74 @@ class EditorialIntelligenceService:
 
         if proposed_order is None:
             notes.append("No selected reorder decision contained a valid proposed scene order.")
-            return ""
+            return "", None
 
-        result_cut_id = f"{analysis.source_cut_id}-editorial-{uuid.uuid4().hex[:6]}"
-        film_cut = {
-            **film_cut,
+        versions = self.list_cut_versions(project_id)
+        version_number = max((row.get("version_number", 0) for row in versions), default=0) + 1
+        result_cut_id = f"film-cut-{project_id}-v{version_number}-{uuid.uuid4().hex[:6]}"
+        rank = {scene_id: index for index, scene_id in enumerate(proposed_order)}
+        source_timeline = film_cut.get("timeline") if isinstance(film_cut.get("timeline"), list) else []
+        proposed_timeline = sorted(
+            [dict(row) for row in source_timeline if isinstance(row, dict)],
+            key=lambda row: (rank.get(_as_str(row.get("scene_id")), len(rank)), int(row.get("order_index") or 0)),
+        )
+        for index, row in enumerate(proposed_timeline):
+            row["order_index"] = index
+        now = editorial_utc_now_iso()
+        pending_cut = {
             "cut_id": result_cut_id,
+            "project_id": project_id,
+            "version_number": version_number,
+            "status": "draft",
+            "source_cut_id": analysis.source_cut_id,
+            "source_analysis_id": analysis.analysis_id,
+            "source_application_id": application_id,
             "scene_order": proposed_order,
-            "included_scenes": proposed_order,
-            "editorial_source_analysis_id": analysis.analysis_id,
-            "editorial_application_decision_ids": selected_decision_ids,
-            "updated_at": editorial_utc_now_iso(),
+            "timeline": proposed_timeline,
+            "metadata": {
+                "change_type": "editorial_decision",
+                "editorial_source_analysis_id": analysis.analysis_id,
+                "editorial_application_decision_ids": selected_decision_ids,
+                "source_context_hash": analysis.context_hash,
+            },
+            "created_at": now,
+            "updated_at": now,
         }
-        project["film_cut"] = film_cut
-        project_store.save_project(project)
+        if not callable(getattr(self._storage_ref(), "commit_film_cut_version", None)):
+            self._mirror_cut(project_id, pending_cut)
         applied_effects.append("Updated canonical film_cut metadata for selected editorial reorder decisions.")
-        return result_cut_id
+        return result_cut_id, pending_cut
+
+    def _mirror_cut(self, project_id: str, cut: dict[str, Any]) -> None:
+        """Keep the legacy project JSON readable while SQLite remains canonical."""
+        try:
+            project_store = self._project_store_ref()
+            project = project_store.get_project(project_id)
+            if not isinstance(project, dict):
+                return
+            metadata = cut.get("metadata") if isinstance(cut.get("metadata"), dict) else {}
+            project["film_cut"] = {
+                "cut_id": cut["cut_id"],
+                "version_number": cut.get("version_number", 1),
+                "status": cut.get("status") or "draft",
+                "source_cut_id": cut.get("source_cut_id"),
+                "scene_order": list(cut.get("scene_order") or []),
+                "included_scenes": list(cut.get("scene_order") or []),
+                "timeline": list(cut.get("timeline") or []),
+                "editorial_source_analysis_id": cut.get("source_analysis_id") or metadata.get("editorial_source_analysis_id"),
+                "editorial_application_decision_ids": metadata.get("editorial_application_decision_ids") or [],
+                "approved_at": cut.get("approved_at"),
+                "approved_by": cut.get("approved_by"),
+                "created_at": cut.get("created_at"),
+                "updated_at": cut.get("updated_at"),
+            }
+            project_store.save_project(project)
+        except Exception as exc:
+            logger.warning(
+                "project_id=%s job_id=- provider=internal stage=film_cut_legacy_mirror duration_ms=0 cause=%s",
+                project_id,
+                type(exc).__name__,
+            )
 
     def _validated_scene_order(self, decision: EditorialDecision, current_order: list[str]) -> list[str] | None:
         proposed_raw = decision.metadata.get("proposed_scene_order") if isinstance(decision.metadata, dict) else None

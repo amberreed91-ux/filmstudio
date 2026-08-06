@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.data.storage import DatabaseStorage
+from app.models import StudioProject
 from app.services.storyboard_blueprint_service import StoryboardBlueprintService
 from app.services.stability import StateError
 
@@ -13,6 +14,13 @@ def _make_storage(tmp_path: Path) -> DatabaseStorage:
 
 def test_create_approve_and_render_storyboard_blueprint(tmp_path: Path) -> None:
     storage = _make_storage(tmp_path)
+    storage.save_project(
+        StudioProject(
+            project_id="project-test",
+            title="Storyboard Test",
+            execution_summary={"scenes": [{"scene_id": "scene_001", "description": "A held look."}]},
+        )
+    )
     service = StoryboardBlueprintService(storage)
 
     detail = service.get_or_create_blueprint(
@@ -98,6 +106,13 @@ def test_create_approve_and_render_storyboard_blueprint(tmp_path: Path) -> None:
 
 def test_update_and_lock_storyboard_shot_preserves_editable_contract(tmp_path: Path) -> None:
     storage = _make_storage(tmp_path)
+    storage.save_project(
+        StudioProject(
+            project_id="project-edit",
+            title="Storyboard Edit",
+            execution_summary={"scenes": [{"scene_id": "scene_001", "description": "A quiet reset."}]},
+        )
+    )
     service = StoryboardBlueprintService(storage)
 
     detail = service.get_or_create_blueprint(

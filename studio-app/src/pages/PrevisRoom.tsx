@@ -31,6 +31,7 @@ import {
   createStoryboardBlueprint,
   deleteRenderJob,
   enhancePrevisPrompt,
+  generatePrevisScene,
   generatePrevisDirectorNotes,
   generateScenePipeline,
   generateSceneStoryboard,
@@ -60,12 +61,9 @@ import {
   type PrevisSceneScoreMode,
 } from '../lib/scenePipeline'
 import {
-  buildStoryboardRenderReferences,
-  buildShotPlanningRenderPayload,
   chooseDurationForProvider,
   initialStoryboardImageState,
   promptChangedAfterEnhancement,
-  providerIdForPrevisEngine,
   type PrevisRenderEngine,
   type StoryboardImageStatus,
 } from '../lib/previsStoryboard'
@@ -405,7 +403,7 @@ export default function PrevisRoom() {
   const queryProjectId = searchParams.get('project_id') || ''
   const location = useLocation()
   const navigate = useNavigate()
-  const { activeProject, activeProjectId, createJob, submitJob } = useStudio()
+  const { activeProject, activeProjectId } = useStudio()
 
   const effectiveProjectId = activeProjectId || projectId || queryProjectId
 
@@ -1153,93 +1151,28 @@ export default function PrevisRoom() {
       const existingTakes = visibleRenderHistory.filter((t) => t.shot_number === activeShotNumber)
       const takeNumber = existingTakes.length + 1
 
-      const shotId = `${selectedSceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`
       const shotLabel = getShotTypeLabel(activeShotNumber)
+      const storyboardShotId = (
+        activeBlueprintShot
+        && storyboardBlueprint?.blueprint.approved_version_id === activeBlueprintShot.version_id
+      ) ? activeBlueprintShot.storyboard_shot_id : undefined
+      const generated = await generatePrevisScene(effectiveProjectId, selectedSceneId || '', {
+        shotNumber: activeShotNumber,
+        takeNumber,
+        storyboardShotId,
+        allowApprovedRevision: true,
+      })
+      setCurrentJobId(generated.job_id)
+      setSuccess(generated.duplicate
+        ? `Render already active — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})`
+        : `Render queued — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})`)
 
-      // Use locked storyboard seed if available and locked, otherwise use genConfig seed or generate new
-      const seedToUse = (seedLocked && storyboardSeed !== null) ? storyboardSeed : (genConfig.seed ?? generateSeed())
-      const shotPlanningPayload = buildShotPlanningRenderPayload(activeShotPlanningDetails)
-      const storyboardReferenceUrl = currentStoryboardImageUrl.trim()
-      const renderReferenceAssets = buildStoryboardRenderReferences(
-        storyboardReferenceUrl,
-        activeBlueprintShot?.render_contract.reference_assets || [],
-      )
-      const blueprintParameters = activeBlueprintShot
-        ? {
-            ...(activeBlueprintShot.render_contract.structured_parameters || {}),
-            storyboard: {
-              blueprint_id: activeBlueprintShot.blueprint_id,
-              version_id: activeBlueprintShot.version_id,
-              storyboard_shot_id: activeBlueprintShot.storyboard_shot_id,
-              project_id: activeBlueprintShot.project_id,
-              scene_id: activeBlueprintShot.scene_id,
-              shot_id: activeBlueprintShot.shot_id,
-              shot_number: activeBlueprintShot.shot_number,
-              storyboard_image_url: storyboardReferenceUrl || activeBlueprintShot.storyboard_image_url || null,
-              link_type: 'initial_render',
-            },
-          }
-        : {}
-
-      const job = await createJob(
-        shotId,
-        providerIdForPrevisEngine(genConfig.model),
-        genConfig.model,
-        renderPrompt,
-        renderReferenceAssets,
-        {
-          ...blueprintParameters,
-          duration: genConfig.duration,
-          duration_seconds: genConfig.duration,
-          fps: genConfig.fps,
-          resolution: genConfig.resolution,
-          ratio: '16:9',
-          seed: seedToUse,
-          shot_number: activeShotNumber,
-          take_number: takeNumber,
-          shot_type: shotLabel,
-          structured_prompt: true,
-          storyboard_reference_url: storyboardReferenceUrl || null,
-          shot_planning: shotPlanningPayload,
-        },
-      )
-
-      const submitted = await submitJob(job.id)
-      setCurrentJobId(submitted.id)
-
-      setSuccess(`Render queued — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})${seedLocked ? ' [Seed Locked]' : ''}`)
-
-      // If job completed during submit (local/simulated/fast providers), handle immediately
-      if (submitted.status === 'failed') {
-        setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'failed' })
-        setProgress(0)
-        setRendering(false)
-        setCurrentJobId(null)
-        setSuccess('')
-        setError(submitted.error_message ? `Render failed — ${submitted.error_message}` : 'Render failed — check the pipeline status')
-      } else if (submitted.status === 'complete') {
+      if (generated.status === 'complete') {
         setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'done' })
         setProgress(100)
         setSuccess('Render complete!')
         setRendering(false)
         setCurrentJobId(null)
-        const immediateVideoUrl = submitted.output_payload?.asset_url || submitted.output_url || undefined
-        console.log('Video URL:', immediateVideoUrl)
-        setShotVideoUrls(prev => ({ ...prev, [activeShotNumber]: immediateVideoUrl || '' }))
-        setRenderHistory((prev) => [
-          {
-            jobId: submitted.id,
-            sceneName: `Shot ${activeShotNumber} Take ${takeNumber}`,
-            duration: genConfig.duration,
-            status: 'complete',
-            prompt: renderPrompt.slice(0, 100),
-            shot_number: activeShotNumber,
-            hasPromptSlots: Boolean(submitted.input_payload?.parameters?.prompt_slots),
-            thumbnailUrl: submitted.output_payload?.thumbnail_url || submitted.preview_url || undefined,
-            videoUrl: immediateVideoUrl,
-          },
-          ...prev.slice(0, 4),
-        ])
         try {
           const noteResult = await generatePrevisDirectorNotes(effectiveProjectId!, {
             scene_id: selectedSceneId || '',
@@ -1269,7 +1202,7 @@ export default function PrevisRoom() {
       setRendering(false)
       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
     }
-  }, [effectiveProjectId, activeBlueprintShot, promptText, genConfig, createJob, submitJob, selectedSceneId, activeShotNumber, visibleRenderHistory, seedLocked, storyboardSeed, activeShotPlanningDetails, currentStoryboardImageUrl])
+  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, selectedSceneId, activeShotNumber, visibleRenderHistory])
 
   // ── Delete render job ────────────────────────────────────────────────────
   const handleDeleteRender = useCallback(async (jobId: string) => {

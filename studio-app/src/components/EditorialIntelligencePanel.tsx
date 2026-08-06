@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Brain, CheckCircle2, Loader2, Scissors } from 'lucide-react'
 import {
   analyzeEditorialIntelligence,
+  approveFilmCut,
   applyEditorialDecisions,
+  getCurrentFilmCut,
   getLatestEditorialIntelligence,
   type EditorialAnalysisRecord,
   type EditorialApplyResult,
+  type FilmCutVersion,
 } from '../lib/studioApi'
 import { isStitchableEditorialDecision } from '../lib/editorialDecision'
 
@@ -21,9 +24,11 @@ export default function EditorialIntelligencePanel({
   onApplied,
 }: EditorialIntelligencePanelProps) {
   const [analysis, setAnalysis] = useState<EditorialAnalysisRecord | null>(null)
+  const [filmCut, setFilmCut] = useState<FilmCutVersion | null>(null)
   const [selected, setSelected] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
+  const [approvingCut, setApprovingCut] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
@@ -34,6 +39,13 @@ export default function EditorialIntelligencePanel({
     void getLatestEditorialIntelligence(projectId)
       .then((payload) => {
         if (!cancelled) setAnalysis(payload.analysis)
+      })
+    void getCurrentFilmCut(projectId)
+      .then((payload) => {
+        if (!cancelled) setFilmCut(payload.film_cut)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Film Cut unavailable')
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Editorial intelligence unavailable')
@@ -74,12 +86,14 @@ export default function EditorialIntelligencePanel({
 
   async function onApplyToNextStitch() {
     if (!projectId || !analysis || selected.length === 0) return
+    const decisionIds = selected.filter((decisionId) => stitchableDecisionIds.includes(decisionId))
+    if (decisionIds.length === 0) return
     setApplying(true)
     setError('')
     setMessage('')
     try {
       const payload = await applyEditorialDecisions(projectId, analysis.analysis_id, {
-        decision_ids: selected,
+        decision_ids: decisionIds,
         apply_mode: 'next_stitch',
         expected_context_hash: analysis.context_hash,
         creator_confirmation: true,
@@ -93,6 +107,51 @@ export default function EditorialIntelligencePanel({
     }
   }
 
+  async function onApplyCutRevision() {
+    if (!projectId || !analysis) return
+    const decisionIds = analysis.edit_decisions
+      .filter((decision) => decision.decision_type === 'reorder_scene' && selected.includes(decision.decision_id))
+      .map((decision) => decision.decision_id)
+    if (decisionIds.length === 0) return
+    if (!window.confirm('Create a new Film Cut version from the selected editorial decision? The current version will remain in history.')) return
+    setApplying(true)
+    setError('')
+    setMessage('')
+    try {
+      const payload = await applyEditorialDecisions(projectId, analysis.analysis_id, {
+        decision_ids: decisionIds,
+        apply_mode: 'update_cut',
+        expected_context_hash: analysis.context_hash,
+        creator_confirmation: true,
+      })
+      const current = await getCurrentFilmCut(projectId)
+      setFilmCut(current.film_cut)
+      setSelected([])
+      setMessage(`Film Cut v${current.film_cut.version_number} created from this analysis.`)
+      onApplied?.(payload.result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create Film Cut revision')
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  async function onApproveCut() {
+    if (!projectId || !filmCut || filmCut.status === 'approved') return
+    if (!window.confirm(`Approve Film Cut v${filmCut.version_number} as the current cut?`)) return
+    setApprovingCut(true)
+    setError('')
+    try {
+      const payload = await approveFilmCut(projectId, filmCut.cut_id)
+      setFilmCut(payload.film_cut)
+      setMessage(`Film Cut v${payload.film_cut.version_number} approved.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Film Cut approval failed')
+    } finally {
+      setApprovingCut(false)
+    }
+  }
+
   function toggleDecision(decisionId: string) {
     setSelected((current) => (
       current.includes(decisionId)
@@ -101,7 +160,10 @@ export default function EditorialIntelligencePanel({
     ))
   }
 
-  const canApply = selected.length > 0 && Boolean(analysis)
+  const canApplyToStitch = selected.some((decisionId) => stitchableDecisionIds.includes(decisionId)) && Boolean(analysis)
+  const canApplyCutRevision = Boolean(analysis?.edit_decisions.some(
+    (decision) => decision.decision_type === 'reorder_scene' && selected.includes(decision.decision_id),
+  ))
 
   return (
     <section className="glass-panel rounded-xl p-4" data-testid="editorial-intelligence-panel">
@@ -123,6 +185,20 @@ export default function EditorialIntelligencePanel({
           Read Cut
         </button>
       </div>
+
+      {filmCut ? (
+        <div className="mt-3 flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] uppercase tracking-[0.1em] text-zinc-300">
+          <span>Film Cut v{filmCut.version_number} · {filmCut.status.replace(/_/g, ' ')}</span>
+          <button
+            type="button"
+            onClick={() => void onApproveCut()}
+            disabled={approvingCut || filmCut.status === 'approved'}
+            className="rounded border border-amber-400/40 px-2 py-1 font-bold text-amber-200 disabled:opacity-50"
+          >
+            {approvingCut ? 'Approving…' : filmCut.status === 'approved' ? 'Approved' : 'Approve Cut'}
+          </button>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mt-3 rounded-lg border border-rose-400/30 bg-rose-500/10 p-2 text-xs text-rose-100">
@@ -195,7 +271,7 @@ export default function EditorialIntelligencePanel({
             <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-violet-200">Decisions</div>
             <div className="mt-2 space-y-2">
               {analysis.edit_decisions.slice(0, 4).map((decision) => {
-                const selectable = stitchableDecisionIds.includes(decision.decision_id)
+                const selectable = stitchableDecisionIds.includes(decision.decision_id) || decision.decision_type === 'reorder_scene'
                 return (
                   <label key={decision.decision_id} className="flex gap-2 rounded border border-white/10 bg-white/5 p-2 text-[11px] text-zinc-300">
                     <input
@@ -223,11 +299,20 @@ export default function EditorialIntelligencePanel({
             <button
               type="button"
               onClick={onApplyToNextStitch}
-              disabled={!canApply || applying}
+              disabled={!canApplyToStitch || applying}
               className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-100 transition-all hover:bg-emerald-500/20 disabled:opacity-50"
             >
               {applying ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
               Apply To Next Stitch
+            </button>
+            <button
+              type="button"
+              onClick={() => void onApplyCutRevision()}
+              disabled={!canApplyCutRevision || applying}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 transition-all hover:bg-amber-500/20 disabled:opacity-50"
+            >
+              {applying ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />}
+              Create Film Cut Revision
             </button>
           </div>
         </div>

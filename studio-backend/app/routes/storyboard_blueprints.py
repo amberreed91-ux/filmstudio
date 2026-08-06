@@ -18,6 +18,7 @@ class CreateStoryboardBlueprintRequest(BaseModel):
     source: str = "scene"
     preserve_locked_shots: bool = True
     regeneration_reason: str = "initial_storyboard"
+    create_new_version: bool = False
 
 
 class ApproveStoryboardVersionRequest(BaseModel):
@@ -45,6 +46,25 @@ class LockStoryboardShotRequest(BaseModel):
 class BackfillStoryboardBlueprintsRequest(BaseModel):
     shot_count: int | None = Field(default=None, ge=1, le=20)
     preserve_locked_shots: bool = True
+
+
+class CreateStoryboardVersionRequest(BaseModel):
+    shot_count: int | None = Field(default=None, ge=1, le=20)
+    preserve_locked_shots: bool = True
+    change_reason: str = "creator_storyboard_regeneration"
+
+
+class CreateStoryboardShotRequest(BaseModel):
+    shot_id: str | None = None
+    intent: dict[str, Any] = Field(default_factory=dict)
+    visual_plan: dict[str, Any] = Field(default_factory=dict)
+    continuity_plan: dict[str, Any] = Field(default_factory=dict)
+    render_contract: dict[str, Any] = Field(default_factory=dict)
+    change_reason: str = "creator_shot_create"
+
+
+class ReorderStoryboardShotsRequest(BaseModel):
+    ordered_storyboard_shot_ids: list[str]
 
 
 def _serialize(value: Any) -> Any:
@@ -84,6 +104,7 @@ def create_storyboard_blueprint(
                 shot_count=payload.shot_count,
                 change_reason=payload.regeneration_reason or payload.mode,
                 preserve_locked_shots=payload.preserve_locked_shots,
+                create_new_version=payload.create_new_version,
             )
         )
     except StabilityError as exc:
@@ -144,6 +165,69 @@ def approve_storyboard_version(
         raise _handle_stability(exc) from exc
 
 
+@router.get("/storyboard-blueprints/{blueprint_id}/versions")
+def list_storyboard_versions(blueprint_id: str) -> list[dict[str, Any]]:
+    try:
+        return _serialize(storyboard_blueprint_service.list_versions(blueprint_id))
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.post("/storyboard-blueprints/{blueprint_id}/versions")
+def create_storyboard_version(
+    blueprint_id: str,
+    payload: CreateStoryboardVersionRequest = Body(default_factory=CreateStoryboardVersionRequest),
+) -> dict[str, Any]:
+    try:
+        return _serialize(
+            storyboard_blueprint_service.create_version(
+                blueprint_id=blueprint_id,
+                shot_count=payload.shot_count,
+                change_reason=payload.change_reason,
+                preserve_locked_shots=payload.preserve_locked_shots,
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.post("/storyboard-blueprints/{blueprint_id}/shots")
+def create_storyboard_shot(
+    blueprint_id: str,
+    payload: CreateStoryboardShotRequest,
+) -> dict[str, Any]:
+    try:
+        return _serialize(
+            storyboard_blueprint_service.create_shot(
+                blueprint_id=blueprint_id,
+                shot_id=payload.shot_id,
+                intent=payload.intent,
+                visual_plan=payload.visual_plan,
+                continuity_plan=payload.continuity_plan,
+                render_contract=payload.render_contract,
+                change_reason=payload.change_reason,
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.put("/storyboard-blueprints/{blueprint_id}/shots/reorder")
+def reorder_storyboard_shots(
+    blueprint_id: str,
+    payload: ReorderStoryboardShotsRequest,
+) -> list[dict[str, Any]]:
+    try:
+        return _serialize(
+            storyboard_blueprint_service.reorder_shots(
+                blueprint_id=blueprint_id,
+                ordered_storyboard_shot_ids=payload.ordered_storyboard_shot_ids,
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
 @router.patch("/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}")
 def update_storyboard_shot(
     blueprint_id: str,
@@ -160,6 +244,22 @@ def update_storyboard_shot(
                 continuity_plan=payload.continuity_plan,
                 render_contract=payload.render_contract,
                 change_reason=payload.change_reason,
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.delete("/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}")
+def delete_storyboard_shot(
+    blueprint_id: str,
+    storyboard_shot_id: str,
+) -> list[dict[str, Any]]:
+    try:
+        return _serialize(
+            storyboard_blueprint_service.delete_shot(
+                blueprint_id=blueprint_id,
+                storyboard_shot_id=storyboard_shot_id,
             )
         )
     except StabilityError as exc:
@@ -235,6 +335,7 @@ def generate_storyboard_shot_image(
             scene_id=shot.scene_id,
             provider=provider,
             shot_number=shot.shot_number,
+            storyboard_shot_id=shot.storyboard_shot_id,
         )
     except StabilityError as exc:
         raise _handle_stability(exc) from exc

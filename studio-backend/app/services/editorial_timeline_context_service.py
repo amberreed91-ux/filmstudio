@@ -7,7 +7,7 @@ from typing import Any
 
 from app.data import get_storage
 from app.models.editorial_intelligence import EditorialEvidenceRef, EditorialTimelineClip
-from app.services.stability import PersistenceError
+from app.services.stability import PersistenceError, StateError
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -97,8 +97,24 @@ class EditorialTimelineContextService:
         if not project:
             raise ValueError("Project not found")
 
-        film_cut = project.get("film_cut") if isinstance(project.get("film_cut"), dict) else {}
-        source_cut = source_cut_id or _as_str(film_cut.get("cut_id")) or "default"
+        legacy_cut = project.get("film_cut") if isinstance(project.get("film_cut"), dict) else {}
+        canonical_cut = None
+        get_version = getattr(storage, "get_film_cut_version", None)
+        get_current = getattr(storage, "get_current_film_cut", None)
+        if source_cut_id:
+            canonical_cut = get_version(source_cut_id) if callable(get_version) else None
+            if canonical_cut is None and _as_str(legacy_cut.get("cut_id")) == source_cut_id:
+                canonical_cut = legacy_cut
+            if canonical_cut is None and not callable(get_version):
+                canonical_cut = {**legacy_cut, "cut_id": source_cut_id, "project_id": project_id}
+            if canonical_cut is None or (
+                canonical_cut.get("project_id") not in {None, "", project_id}
+            ):
+                raise StateError("Film Cut version not found", stage="editorial_context")
+        else:
+            canonical_cut = get_current(project_id) if callable(get_current) else None
+        film_cut = canonical_cut or legacy_cut
+        source_cut = _as_str(film_cut.get("cut_id")) or "default"
         render_jobs = storage.list_jobs(project_id=project_id, limit=1000) or []
         scene_compositions = storage.list_scene_compositions_for_project(project_id) or []
         final_packages = storage.list_final_short_film_packages_for_project(project_id) or []

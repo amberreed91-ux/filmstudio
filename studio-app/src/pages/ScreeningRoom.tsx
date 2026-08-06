@@ -34,6 +34,7 @@ import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
 import {
   analyzeSceneEmotion,
+  approveScreeningOutput,
   applyAudioBrief,
   assembleFilm,
   fetchExportPackage,
@@ -44,6 +45,7 @@ import {
   getSceneAudioBrief,
   getSceneComposition,
   getSceneRationale,
+  getScreeningManifest,
   listRenderJobs,
   listScenes,
   saveCreativeDecisionMemory,
@@ -59,6 +61,7 @@ import {
   type Scene,
   type SceneComposition,
   type SceneRationaleResponse,
+  type ScreeningManifest,
   type SoundAdvisory,
 } from '../lib/studioApi'
 import type { ProjectAudienceSimulation, SceneAudienceSimulation } from '../types/audienceSimulator'
@@ -170,6 +173,8 @@ export default function ScreeningRoom() {
   // ── Core state ────────────────────────────────────────────────────────────
   const [scenes, setScenes] = useState<Scene[]>([])
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
+  const [screeningManifest, setScreeningManifest] = useState<ScreeningManifest | null>(null)
+  const [approvingScreeningOutput, setApprovingScreeningOutput] = useState(false)
   const [, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -323,6 +328,29 @@ export default function ScreeningRoom() {
     if (effectiveProjectId) persistActiveProjectId(effectiveProjectId)
   }, [effectiveProjectId])
 
+  // Canonical Screening Room registry: project-scoped, browser-safe playback URLs.
+  useEffect(() => {
+    if (!effectiveProjectId) {
+      setScreeningManifest(null)
+      return
+    }
+    let cancelled = false
+    async function loadManifest() {
+      try {
+        const manifest = await getScreeningManifest(effectiveProjectId || '')
+        if (!cancelled) setScreeningManifest(manifest)
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Screening media could not be loaded')
+      }
+    }
+    void loadManifest()
+    const timer = setInterval(loadManifest, 15000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [effectiveProjectId])
+
   // ── Load scenes ───────────────────────────────────────────────────────────
   const loadScenes = useCallback(async () => {
     if (!effectiveProjectId) return
@@ -389,7 +417,16 @@ export default function ScreeningRoom() {
         const url = j.output_payload?.asset_url
         return typeof url === 'string' && url.trim().length > 0
       })
-      const videoUrl = sceneAssembly?.output_url || jobWithUrl?.output_payload?.asset_url || undefined
+      const registered = screeningManifest?.outputs.filter(
+        (output) => output.scene_id === scene.scene_id && output.media_status === 'available',
+      ) || []
+      const registeredScene = registered.find((output) => output.output_type === 'scene')
+      const registeredShot = registered.find((output) => output.output_type === 'shot')
+      const videoUrl = registeredScene?.playback_url
+        || registeredShot?.playback_url
+        || sceneAssembly?.output_url
+        || jobWithUrl?.output_payload?.asset_url
+        || undefined
       return {
         sceneId: scene.scene_id,
         sceneName: scene.scene_name || `Scene ${index + 1}`,
@@ -399,7 +436,7 @@ export default function ScreeningRoom() {
       }
     })
     setSceneTakes(takes)
-  }, [scenes, renderJobs, scenePipelineAssemblies])
+  }, [scenes, renderJobs, scenePipelineAssemblies, screeningManifest])
 
   // ── Load final package ────────────────────────────────────────────────────
   useEffect(() => {
@@ -714,16 +751,80 @@ export default function ScreeningRoom() {
 
   const activeScenePipelineAssembly = activeTake?.sceneId ? scenePipelineAssemblies[activeTake.sceneId] : undefined
 
+  const activeRegisteredOutput = useMemo(() => {
+    const outputs = screeningManifest?.outputs || []
+    const takes = shotTakes[activeShotNumber]
+    const activeJob = takes?.[activeShotTakeIndex]
+    if (activeJob) {
+      const exact = outputs.find(
+        (output) => output.source_type === 'render_job'
+          && output.source_id === activeJob.id
+          && output.media_status === 'available',
+      )
+      if (exact) return exact
+    }
+    if (!activeTake?.sceneId) return null
+    return outputs.find(
+      (output) => output.scene_id === activeTake.sceneId
+        && output.output_type === 'scene'
+        && output.media_status === 'available',
+    ) || outputs.find(
+      (output) => output.scene_id === activeTake.sceneId
+        && output.output_type === 'shot'
+        && output.media_status === 'available',
+    ) || null
+  }, [screeningManifest, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake?.sceneId])
+
+  const screeningApprovalTarget = useMemo(() => {
+    if (isFullFilm && finalPackage) {
+      return screeningManifest?.outputs.find(
+        (output) => output.output_type === 'final' && output.source_id === finalPackage.package_id,
+      ) || null
+    }
+    return activeRegisteredOutput
+  }, [isFullFilm, finalPackage, screeningManifest, activeRegisteredOutput])
+
+  const handleApproveScreeningOutput = useCallback(async () => {
+    if (!effectiveProjectId || !screeningApprovalTarget || screeningApprovalTarget.approved) return
+    const confirmed = window.confirm(
+      screeningApprovalTarget.output_type === 'final'
+        ? 'Approve this as the current final film output? Earlier approved outputs will remain in history.'
+        : 'Approve this screening output? Earlier approved takes will remain in history.',
+    )
+    if (!confirmed) return
+    setApprovingScreeningOutput(true)
+    setError('')
+    try {
+      await approveScreeningOutput(
+        effectiveProjectId,
+        screeningApprovalTarget.screening_output_id,
+      )
+      const manifest = await getScreeningManifest(effectiveProjectId, false)
+      setScreeningManifest(manifest)
+      setSuccess(screeningApprovalTarget.output_type === 'final'
+        ? 'Final film output approved'
+        : 'Screening output approved')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Screening approval failed')
+    } finally {
+      setApprovingScreeningOutput(false)
+    }
+  }, [effectiveProjectId, screeningApprovalTarget])
+
   // Active video URL: assembled film takes highest priority in full-film mode
   const activeVideoUrl = useMemo(() => {
+    if (isFullFilm && screeningManifest?.current_final_output?.playback_url) {
+      return screeningManifest.current_final_output.playback_url
+    }
     if (isFullFilm && assembledFilmUrl) return assembledFilmUrl
+    if (activeRegisteredOutput?.playback_url) return activeRegisteredOutput.playback_url
     if (activeScenePipelineAssembly?.output_url) return activeScenePipelineAssembly.output_url
     if (sceneComposition?.composed_url) return sceneComposition.composed_url
     const takes = shotTakes[activeShotNumber]
     const job = takes?.[activeShotTakeIndex]
     if (job?.output_payload?.asset_url) return job.output_payload.asset_url
     return activeTake?.videoUrl || ''
-  }, [isFullFilm, assembledFilmUrl, activeScenePipelineAssembly, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
+  }, [isFullFilm, screeningManifest, assembledFilmUrl, activeRegisteredOutput, activeScenePipelineAssembly, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
 
   const activeRenderJob = useMemo(() => {
     const takes = shotTakes[activeShotNumber]
@@ -1337,6 +1438,29 @@ export default function ScreeningRoom() {
                         Take {idx + 1}
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {screeningApprovalTarget && (
+                  <div className="mb-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void handleApproveScreeningOutput()}
+                      disabled={approvingScreeningOutput || screeningApprovalTarget.approved}
+                      className="rounded border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] disabled:opacity-60"
+                      style={{
+                        borderColor: screeningApprovalTarget.approved ? 'rgba(52,211,153,0.45)' : 'rgba(251,191,36,0.45)',
+                        color: screeningApprovalTarget.approved ? '#6ee7b7' : '#fbbf24',
+                      }}
+                    >
+                      {approvingScreeningOutput
+                        ? 'APPROVING…'
+                        : screeningApprovalTarget.approved
+                          ? 'APPROVED OUTPUT'
+                          : screeningApprovalTarget.output_type === 'final'
+                            ? 'APPROVE FINAL OUTPUT'
+                            : 'APPROVE THIS OUTPUT'}
+                    </button>
                   </div>
                 )}
 

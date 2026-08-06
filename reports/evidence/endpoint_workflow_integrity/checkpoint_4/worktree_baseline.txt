@@ -1,0 +1,54 @@
+# Checkpoint 4 worktree baseline
+
+## HEAD
+
+becdf2bf fix: enforce backend contracts and persistence integrity
+
+## Staged files
+
+(none)
+
+## Pre-existing modified files
+
+- studio-app/src/components/KnowledgeLibraryPanel.test.tsx
+- studio-app/src/components/KnowledgeLibraryPanel.tsx
+- studio-app/src/lib/previsStoryboard.test.ts
+- studio-app/src/lib/previsStoryboard.ts
+- studio-app/src/lib/studioApi.ts
+- studio-app/src/lib/studioKnowledgeApi.ts
+- studio-app/src/pages/PrevisRoom.tsx
+- studio-app/src/pages/StudyRoom.tsx
+- studio-backend/app/adapters/__init__.py
+- studio-backend/app/routes/__init__.py
+- studio-backend/app/routes/render.py
+- studio-backend/app/routes/storyboard_blueprints.py
+- studio-backend/app/routes/studio_knowledge.py
+- studio-backend/app/routes/test_studio_knowledge_routes.py
+- studio-backend/app/services/character_visual_reference_service.py
+- studio-backend/app/services/generate_short_film_workflow_service.py
+- studio-backend/app/services/projects.py
+- studio-backend/app/services/render.py
+- studio-backend/app/services/render_retry_service.py
+- studio-backend/app/services/script_parser.py
+- studio-backend/app/services/shot_prompt_builder.py
+- studio-backend/app/services/storyboard_blueprint_service.py
+- studio-backend/app/services/test_render_create_route.py
+- studio-backend/app/services/test_runway_provider_hardening.py
+- studio-backend/app/services/test_storyboard_blueprint_service.py
+- studio-backend/app/services/test_wan_adapter.py
+- studio-backend/data/project_state_store.json
+- studio-backend/data/projects.json
+- studio-backend/data/reference_memory.json
+- studio-backend/data/scene_intelligence.json
+- studio-backend/tests/test_combined_reorder_strategy.py
+- studio-backend/tests/test_storyboard_blueprint_routes.py
+
+## Pre-existing untracked scope
+
+- launcher scripts
+- render-context/name-matching services and tests
+- Studio Brain library service/test/data
+- backend data cleanup backups
+
+All existing modifications remain user-owned. Checkpoint 4 will use hunk-level
+staging for any overlapping file.

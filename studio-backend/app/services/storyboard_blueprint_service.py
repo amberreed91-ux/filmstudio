@@ -54,25 +54,24 @@ class StoryboardBlueprintService:
         shot_count: int | None = None,
         change_reason: str = "create_or_update_draft",
         preserve_locked_shots: bool = True,
+        create_new_version: bool = False,
     ) -> dict[str, Any]:
         started = perf_counter()
         self._validate_ids(project_id, scene_id)
         existing = self.storage.get_storyboard_blueprint(project_id, scene_id)
         if existing and existing.current_version_id:
+            if create_new_version:
+                return self.create_version(
+                    blueprint_id=existing.blueprint_id,
+                    shot_count=shot_count,
+                    change_reason=change_reason,
+                    preserve_locked_shots=preserve_locked_shots,
+                )
             return self.get_blueprint_detail(project_id=project_id, scene_id=scene_id)
 
         scene = self._get_scene(project_id, scene_id)
         if scene is None:
-            scene = {
-                "scene_id": scene_id,
-                "heading": scene_id.replace("_", " ").title(),
-                "description": "Storyboard fallback scene generated from the requested scene identifier.",
-                "location": "cinematic scene",
-                "time_of_day": "day",
-                "emotional_tone": "neutral",
-                "characters": [],
-                "metadata": {"fallback_scene": True},
-            }
+            raise StateError("Scene not found", stage="storyboard_blueprint_create")
 
         blueprint_id = f"sbp_{project_id}_{scene_id}_{uuid4().hex[:8]}"
         version_id = f"sbv_{uuid4().hex[:12]}"
@@ -110,10 +109,7 @@ class StoryboardBlueprintService:
             version_id=version_id,
             requested_shot_count=shot_count,
         )
-        self.storage.save_storyboard_blueprint(blueprint)
-        self.storage.save_storyboard_blueprint_version(version)
-        for shot in shots:
-            self.storage.save_storyboard_shot(shot)
+        self._persist_version_bundle(blueprint=blueprint, version=version, shots=shots)
         self._sync_scene_memory(project_id, scene_id, shots, approved=False)
 
         logger.info(
@@ -134,12 +130,122 @@ class StoryboardBlueprintService:
             if blueprint.current_version_id
             else None
         )
+        if version is None or version.blueprint_id != blueprint.blueprint_id:
+            raise StateError("Current storyboard version not found", stage="storyboard_blueprint_get")
         shots = self.storage.list_storyboard_shots(
             blueprint.blueprint_id,
             blueprint.current_version_id,
         )
         inspection = self._inspect(blueprint, version, shots)
         return {"blueprint": blueprint, "version": version, "shots": shots, "inspection": inspection}
+
+    def list_versions(self, blueprint_id: str) -> list[StoryboardBlueprintVersion]:
+        self._require_blueprint(blueprint_id)
+        return self.storage.list_storyboard_blueprint_versions(blueprint_id)
+
+    def create_version(
+        self,
+        *,
+        blueprint_id: str,
+        shot_count: int | None = None,
+        change_reason: str = "storyboard_regeneration",
+        preserve_locked_shots: bool = True,
+    ) -> dict[str, Any]:
+        blueprint = self._require_blueprint(blueprint_id)
+        if blueprint.locked:
+            raise StateError("Storyboard blueprint is locked", stage="storyboard_version_create")
+        source_version = (
+            self.storage.get_storyboard_blueprint_version(blueprint.current_version_id)
+            if blueprint.current_version_id
+            else None
+        )
+        if source_version is None or source_version.blueprint_id != blueprint.blueprint_id:
+            raise StateError("Current storyboard version not found", stage="storyboard_version_create")
+        source_shots = self.storage.list_storyboard_shots(blueprint.blueprint_id, source_version.version_id)
+        scene = self._get_scene(blueprint.project_id, blueprint.scene_id)
+        if scene is None:
+            raise StateError("Scene not found", stage="storyboard_version_create")
+
+        versions = self.storage.list_storyboard_blueprint_versions(blueprint.blueprint_id)
+        version_number = max((item.version_number for item in versions), default=0) + 1
+        version_id = f"sbv_{uuid4().hex[:12]}"
+        provenance = self._build_provenance(blueprint.project_id, blueprint.scene_id, scene)
+        inspection = StoryboardBlueprintInspection(
+            blueprint_id=blueprint.blueprint_id,
+            version_id=version_id,
+            render_readiness="ready",
+            provenance=provenance,
+        )
+        version = StoryboardBlueprintVersion(
+            version_id=version_id,
+            blueprint_id=blueprint.blueprint_id,
+            project_id=blueprint.project_id,
+            scene_id=blueprint.scene_id,
+            version_number=version_number,
+            status=StoryboardBlueprintStatus.DRAFT,
+            change_reason=change_reason,
+            source_version_id=source_version.version_id,
+            provenance=provenance,
+            inspection=inspection,
+        )
+
+        if shot_count is None and source_shots:
+            shots = [
+                self._clone_shot_for_version(
+                    shot,
+                    version_id=version_id,
+                    preserve_lock=preserve_locked_shots,
+                )
+                for shot in source_shots
+            ]
+        else:
+            shots = self._build_initial_shots(
+                project_id=blueprint.project_id,
+                scene_id=blueprint.scene_id,
+                scene=scene,
+                blueprint_id=blueprint.blueprint_id,
+                version_id=version_id,
+                requested_shot_count=shot_count,
+            )
+            if preserve_locked_shots:
+                generated_by_id = {shot.shot_id: shot for shot in shots}
+                for source_shot in source_shots:
+                    if not source_shot.locked:
+                        continue
+                    generated_by_id[source_shot.shot_id] = self._clone_shot_for_version(
+                        source_shot,
+                        version_id=version_id,
+                        preserve_lock=True,
+                    )
+                shots = sorted(generated_by_id.values(), key=lambda item: (item.shot_number, item.shot_id))
+                for position, shot in enumerate(shots, start=1):
+                    shot.shot_number = position
+
+        superseded_version = None
+        if source_version.status in {
+            StoryboardBlueprintStatus.DRAFT,
+            StoryboardBlueprintStatus.NEEDS_REVIEW,
+        }:
+            superseded_version = source_version.model_copy(deep=True)
+            superseded_version.status = StoryboardBlueprintStatus.SUPERSEDED
+
+        blueprint.current_version_id = version.version_id
+        blueprint.status = StoryboardBlueprintStatus.DRAFT
+        blueprint.updated_at = utc_now_iso()
+        blueprint.metadata = {
+            key: value
+            for key, value in (blueprint.metadata or {}).items()
+            if key != "continuity_review"
+        }
+        blueprint.metadata["preserve_locked_shots"] = preserve_locked_shots
+        self._persist_version_bundle(
+            blueprint=blueprint,
+            version=version,
+            shots=shots,
+            superseded_version=superseded_version,
+        )
+        self._sync_scene_memory(blueprint.project_id, blueprint.scene_id, shots, approved=False)
+        return self.get_blueprint_detail(project_id=blueprint.project_id, scene_id=blueprint.scene_id)
 
     def list_project_blueprints(self, project_id: str) -> list[dict[str, Any]]:
         if not project_id.strip():
@@ -170,6 +276,33 @@ class StoryboardBlueprintService:
                 }
             )
         return rows
+
+    def project_wall_projection(self, project_id: str) -> list[dict[str, Any]]:
+        """Return the legacy wall shape derived from canonical current versions."""
+        if not project_id.strip():
+            raise ValidationError("project_id is required", stage="storyboard_wall")
+        projection: list[dict[str, Any]] = []
+        for blueprint in self.storage.list_storyboard_blueprints(project_id):
+            if not blueprint.current_version_id:
+                continue
+            for shot in self.storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.current_version_id):
+                projection.append(
+                    {
+                        "shot_id": shot.shot_id,
+                        "scene_id": shot.scene_id,
+                        "description": shot.intent.narrative_function or shot.intent.purpose,
+                        "camera_angle": shot.visual_plan.camera_angle or shot.visual_plan.framing,
+                        "status": shot.status.value if hasattr(shot.status, "value") else shot.status,
+                        "storyboard_image": shot.storyboard_image_url,
+                        "storyboard_shot_id": shot.storyboard_shot_id,
+                        "blueprint_id": shot.blueprint_id,
+                        "version_id": shot.version_id,
+                        "shot_number": shot.shot_number,
+                        "canonical": True,
+                    }
+                )
+        projection.sort(key=lambda row: (str(row["scene_id"]), int(row["shot_number"]), str(row["shot_id"])))
+        return projection
 
     def backfill_project_blueprints(
         self,
@@ -252,14 +385,135 @@ class StoryboardBlueprintService:
         return self.get_blueprint_detail(project_id=blueprint.project_id, scene_id=blueprint.scene_id)
 
     def lock_shot(self, *, blueprint_id: str, storyboard_shot_id: str, locked: bool) -> StoryboardShot:
-        shot = self.storage.get_storyboard_shot(storyboard_shot_id)
-        if shot is None or shot.blueprint_id != blueprint_id:
-            raise StateError("Storyboard shot not found", stage="storyboard_shot_lock")
+        _, _, shot = self._require_current_editable_shot(
+            blueprint_id,
+            storyboard_shot_id,
+            stage="storyboard_shot_lock",
+            allow_locked=True,
+        )
         shot.locked = bool(locked)
         shot.status = StoryboardShotStatus.LOCKED if locked else StoryboardShotStatus.READY
         shot.updated_at = utc_now_iso()
         self.storage.save_storyboard_shot(shot)
         return shot
+
+    def create_shot(
+        self,
+        *,
+        blueprint_id: str,
+        shot_id: str | None = None,
+        intent: dict[str, Any] | None = None,
+        visual_plan: dict[str, Any] | None = None,
+        continuity_plan: dict[str, Any] | None = None,
+        render_contract: dict[str, Any] | None = None,
+        change_reason: str = "creator_shot_create",
+    ) -> StoryboardShot:
+        blueprint, version = self._require_current_editable_blueprint(
+            blueprint_id,
+            stage="storyboard_shot_create",
+        )
+        current = self.storage.list_storyboard_shots(blueprint.blueprint_id, version.version_id)
+        stable_shot_id = str(shot_id or f"{blueprint.scene_id}_shot_{uuid4().hex[:8]}").strip()
+        if not stable_shot_id:
+            raise ValidationError("shot_id is required", stage="storyboard_shot_create")
+        if any(shot.shot_id == stable_shot_id for shot in current):
+            raise StateError("Storyboard shot_id already exists in this version", stage="storyboard_shot_create")
+
+        contract = StoryboardShotRenderContract(**(render_contract or {}))
+        if not contract.provider_neutral_prompt.strip():
+            contract.render_readiness = "not_ready"
+            contract.render_blockers = list(dict.fromkeys([
+                *contract.render_blockers,
+                "Provider-neutral prompt is required",
+            ]))
+        contract.provenance = {
+            **contract.provenance,
+            "blueprint_id": blueprint.blueprint_id,
+            "version_id": version.version_id,
+            "shot_id": stable_shot_id,
+        }
+        now = utc_now_iso()
+        shot = StoryboardShot(
+            storyboard_shot_id=f"sbs_{uuid4().hex[:12]}",
+            blueprint_id=blueprint.blueprint_id,
+            version_id=version.version_id,
+            project_id=blueprint.project_id,
+            scene_id=blueprint.scene_id,
+            shot_id=stable_shot_id,
+            shot_number=len(current) + 1,
+            status=StoryboardShotStatus.READY,
+            intent=StoryboardShotIntent(**(intent or {})),
+            visual_plan=StoryboardShotVisualPlan(**(visual_plan or {})),
+            continuity_plan=StoryboardShotContinuityPlan(**(continuity_plan or {})),
+            render_contract=contract,
+            rationale=str((intent or {}).get("rationale") or ""),
+            created_at=now,
+            updated_at=now,
+            metadata={"last_change_reason": change_reason},
+        )
+        self.storage.save_storyboard_shot(shot)
+        self._sync_scene_memory(shot.project_id, shot.scene_id, [shot], approved=False)
+        return shot
+
+    def delete_shot(self, *, blueprint_id: str, storyboard_shot_id: str) -> list[StoryboardShot]:
+        blueprint, version, shot = self._require_current_editable_shot(
+            blueprint_id,
+            storyboard_shot_id,
+            stage="storyboard_shot_delete",
+        )
+        current = self.storage.list_storyboard_shots(blueprint.blueprint_id, version.version_id)
+        if len(current) <= 1:
+            raise ValidationError("Storyboard version must keep at least one shot", stage="storyboard_shot_delete")
+        delete = getattr(self.storage, "delete_storyboard_shot", None)
+        if not callable(delete) or not delete(shot.storyboard_shot_id, version.version_id):
+            raise PersistenceError("Storyboard shot deletion failed", stage="storyboard_shot_delete")
+        remaining = [item for item in current if item.storyboard_shot_id != shot.storyboard_shot_id]
+        return self.reorder_shots(
+            blueprint_id=blueprint.blueprint_id,
+            ordered_storyboard_shot_ids=[item.storyboard_shot_id for item in remaining],
+        )
+
+    def reorder_shots(
+        self,
+        *,
+        blueprint_id: str,
+        ordered_storyboard_shot_ids: list[str],
+    ) -> list[StoryboardShot]:
+        blueprint, version = self._require_current_editable_blueprint(
+            blueprint_id,
+            stage="storyboard_shot_reorder",
+        )
+        current = self.storage.list_storyboard_shots(blueprint.blueprint_id, version.version_id)
+        ordered = [str(value).strip() for value in ordered_storyboard_shot_ids]
+        if any(not value for value in ordered) or len(ordered) != len(set(ordered)):
+            raise ValidationError("Storyboard reorder contains invalid or duplicate shot IDs", stage="storyboard_shot_reorder")
+        current_ids = [shot.storyboard_shot_id for shot in current]
+        if set(ordered) != set(current_ids) or len(ordered) != len(current_ids):
+            raise ValidationError(
+                "Storyboard reorder must contain every current shot exactly once",
+                stage="storyboard_shot_reorder",
+            )
+        old_positions = {storyboard_shot_id: index for index, storyboard_shot_id in enumerate(current_ids)}
+        new_positions = {storyboard_shot_id: index for index, storyboard_shot_id in enumerate(ordered)}
+        moved_locked = [
+            shot.storyboard_shot_id
+            for shot in current
+            if shot.locked and old_positions[shot.storyboard_shot_id] != new_positions[shot.storyboard_shot_id]
+        ]
+        if moved_locked:
+            raise StateError(
+                "Locked storyboard shots cannot be reordered",
+                stage="storyboard_shot_reorder",
+                metadata={"storyboard_shot_ids": moved_locked},
+            )
+        reorder = getattr(self.storage, "reorder_storyboard_shots", None)
+        if not callable(reorder):
+            raise PersistenceError("Storyboard shot reorder is unavailable", stage="storyboard_shot_reorder")
+        try:
+            reorder(version.version_id, ordered)
+        except ValueError as exc:
+            raise ValidationError(str(exc), stage="storyboard_shot_reorder") from exc
+        return self.storage.list_storyboard_shots(blueprint.blueprint_id, version.version_id)
 
     def update_shot(
         self,
@@ -272,17 +526,11 @@ class StoryboardBlueprintService:
         render_contract: dict[str, Any] | None = None,
         change_reason: str = "shot_update",
     ) -> StoryboardShot:
-        shot = self.storage.get_storyboard_shot(storyboard_shot_id)
-        if shot is None or shot.blueprint_id != blueprint_id:
-            raise StateError("Storyboard shot not found", stage="storyboard_shot_update")
-        blueprint = self.storage.get_storyboard_blueprint_by_id(blueprint_id)
-        if blueprint and blueprint.locked:
-            raise StateError("Storyboard blueprint is locked", stage="storyboard_shot_update")
-        version = self.storage.get_storyboard_blueprint_version(shot.version_id)
-        if version and version.status in {StoryboardBlueprintStatus.APPROVED, StoryboardBlueprintStatus.LOCKED}:
-            raise StateError("Approved storyboard versions cannot be edited", stage="storyboard_shot_update")
-        if shot.locked:
-            raise StateError("Storyboard shot is locked", stage="storyboard_shot_update")
+        _, _, shot = self._require_current_editable_shot(
+            blueprint_id,
+            storyboard_shot_id,
+            stage="storyboard_shot_update",
+        )
         if intent:
             shot.intent = shot.intent.model_copy(update=intent)
         if visual_plan:
@@ -305,13 +553,23 @@ class StoryboardBlueprintService:
         scene_id: str,
         provider: str = "qwen-image-max",
         shot_number: int = 1,
+        storyboard_shot_id: str | None = None,
     ) -> dict[str, Any]:
         detail = self.get_or_create_blueprint(project_id=project_id, scene_id=scene_id)
         shots = detail["shots"]
         safe_shot_number = max(1, int(shot_number or 1))
-        shot = next((item for item in shots if item.shot_number == safe_shot_number), None)
+        shot = (
+            next((item for item in shots if item.storyboard_shot_id == storyboard_shot_id), None)
+            if storyboard_shot_id
+            else next((item for item in shots if item.shot_number == safe_shot_number), None)
+        )
         if shot is None:
             raise StateError("Storyboard shot not found", stage="storyboard_image_generation")
+        _, _, shot = self._require_current_editable_shot(
+            shot.blueprint_id,
+            shot.storyboard_shot_id,
+            stage="storyboard_image_generation",
+        )
 
         existing_seed = self.storage.get_scene_previs_seed(project_id, scene_id)
         seed = existing_seed if existing_seed is not None else random.randint(1, 999999)
@@ -913,6 +1171,125 @@ class StoryboardBlueprintService:
                 metadata={"cause": type(exc).__name__},
             ) from exc
         return [character for character in characters if isinstance(character, dict)]
+
+    def _require_blueprint(self, blueprint_id: str) -> StoryboardBlueprint:
+        blueprint = self.storage.get_storyboard_blueprint_by_id(blueprint_id)
+        if blueprint is None:
+            raise StateError("Storyboard blueprint not found", stage="storyboard_blueprint")
+        return blueprint
+
+    def _require_current_editable_blueprint(
+        self,
+        blueprint_id: str,
+        *,
+        stage: str,
+    ) -> tuple[StoryboardBlueprint, StoryboardBlueprintVersion]:
+        blueprint = self._require_blueprint(blueprint_id)
+        if blueprint.locked:
+            raise StateError("Storyboard blueprint is locked", stage=stage)
+        version = (
+            self.storage.get_storyboard_blueprint_version(blueprint.current_version_id)
+            if blueprint.current_version_id
+            else None
+        )
+        if version is None or version.blueprint_id != blueprint.blueprint_id:
+            raise StateError("Current storyboard version not found", stage=stage)
+        if version.status in {
+            StoryboardBlueprintStatus.APPROVED,
+            StoryboardBlueprintStatus.LOCKED,
+            StoryboardBlueprintStatus.SUPERSEDED,
+            StoryboardBlueprintStatus.ARCHIVED,
+        }:
+            raise StateError("Approved or historical storyboard versions cannot be edited", stage=stage)
+        return blueprint, version
+
+    def _require_current_editable_shot(
+        self,
+        blueprint_id: str,
+        storyboard_shot_id: str,
+        *,
+        stage: str,
+        allow_locked: bool = False,
+    ) -> tuple[StoryboardBlueprint, StoryboardBlueprintVersion, StoryboardShot]:
+        blueprint, version = self._require_current_editable_blueprint(blueprint_id, stage=stage)
+        shot = self.storage.get_storyboard_shot(storyboard_shot_id)
+        if (
+            shot is None
+            or shot.blueprint_id != blueprint.blueprint_id
+            or shot.version_id != version.version_id
+            or shot.project_id != blueprint.project_id
+            or shot.scene_id != blueprint.scene_id
+        ):
+            raise StateError("Storyboard shot not found in the current version", stage=stage)
+        if shot.locked and not allow_locked:
+            raise StateError("Storyboard shot is locked", stage=stage)
+        return blueprint, version, shot
+
+    def _clone_shot_for_version(
+        self,
+        source: StoryboardShot,
+        *,
+        version_id: str,
+        preserve_lock: bool,
+    ) -> StoryboardShot:
+        now = utc_now_iso()
+        clone = source.model_copy(deep=True)
+        clone.storyboard_shot_id = f"sbs_{uuid4().hex[:12]}"
+        clone.version_id = version_id
+        clone.status = StoryboardShotStatus.LOCKED if preserve_lock and source.locked else StoryboardShotStatus.READY
+        clone.locked = bool(preserve_lock and source.locked)
+        clone.created_at = now
+        clone.updated_at = now
+        clone.render_contract.provenance = {
+            **clone.render_contract.provenance,
+            "blueprint_id": clone.blueprint_id,
+            "version_id": version_id,
+            "shot_id": clone.shot_id,
+        }
+        clone.metadata = {
+            **(clone.metadata or {}),
+            "source_storyboard_shot_id": source.storyboard_shot_id,
+            "source_version_id": source.version_id,
+        }
+        return clone
+
+    def _persist_version_bundle(
+        self,
+        *,
+        blueprint: StoryboardBlueprint,
+        version: StoryboardBlueprintVersion,
+        shots: list[StoryboardShot],
+        superseded_version: StoryboardBlueprintVersion | None = None,
+    ) -> None:
+        commit = getattr(self.storage, "commit_storyboard_blueprint_version", None)
+        if callable(commit):
+            try:
+                commit(
+                    blueprint=blueprint,
+                    version=version,
+                    shots=shots,
+                    superseded_version=superseded_version,
+                )
+            except Exception as exc:
+                raise PersistenceError(
+                    "Storyboard version persistence failed",
+                    stage="storyboard_version_persistence",
+                    metadata={"cause": type(exc).__name__},
+                ) from exc
+            return
+        try:
+            if superseded_version is not None:
+                self.storage.save_storyboard_blueprint_version(superseded_version)
+            self.storage.save_storyboard_blueprint(blueprint)
+            self.storage.save_storyboard_blueprint_version(version)
+            for shot in shots:
+                self.storage.save_storyboard_shot(shot)
+        except Exception as exc:
+            raise PersistenceError(
+                "Storyboard version persistence failed",
+                stage="storyboard_version_persistence",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
 
     def _validate_ids(self, project_id: str, scene_id: str) -> None:
         if not project_id.strip() or not scene_id.strip():

@@ -6,7 +6,7 @@ plus AI-enhanced Previs Bay features wired to The Study context.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 import json
 import logging
@@ -15,6 +15,7 @@ import shutil
 import os
 
 from app.services.previs_service import previs_service
+from app.services.stability import PersistenceError, ProviderError, StabilityError, StateError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,11 @@ class PrevisGenerateResponse(BaseModel):
     job_id: str
     status: str
     scene_id: str
+    previs_image_id: Optional[str] = None
+    blueprint_id: Optional[str] = None
+    blueprint_version_id: Optional[str] = None
+    storyboard_shot_id: Optional[str] = None
+    duplicate: bool = False
     message: Optional[str] = None
 
 
@@ -45,8 +51,38 @@ class PrevisImageResponse(BaseModel):
     status: str
     prompt_used: str
     fallback: bool
+    previs_seed: Optional[int] = None
+    seed_locked: bool = False
+    blueprint_id: Optional[str] = None
+    blueprint_version_id: Optional[str] = None
+    storyboard_shot_id: Optional[str] = None
+    approved: bool = False
+    approved_at: Optional[str] = None
+    approved_by: Optional[str] = None
+    failure_reason: Optional[str] = None
+    source_previs_image_id: Optional[str] = None
+    attempt_number: int = 1
+    metadata: dict = Field(default_factory=dict)
     created_at: str
     updated_at: str
+
+
+class ApprovePrevisRequest(BaseModel):
+    approved_by: str = "creator"
+
+
+def _raise_previs_http(exc: StabilityError) -> None:
+    if isinstance(exc, ValidationError):
+        status_code = 422
+    elif isinstance(exc, ProviderError):
+        status_code = 502
+    elif isinstance(exc, PersistenceError):
+        status_code = 500
+    elif isinstance(exc, StateError) and "not found" in exc.message.lower():
+        status_code = 404
+    else:
+        status_code = 409
+    raise HTTPException(status_code=status_code, detail=exc.to_dict()) from exc
 
 
 @router.post("/projects/{project_id}/previs/generate-scene/{scene_id}")
@@ -55,6 +91,8 @@ async def generate_scene_previs(
     scene_id: str,
     shot_number: int = 1,
     take_number: int = 1,
+    storyboard_shot_id: Optional[str] = None,
+    allow_approved_revision: bool = False,
 ) -> PrevisGenerateResponse:
     """
     Generate a preview image for a scene shot.
@@ -80,19 +118,71 @@ async def generate_scene_previs(
             scene_id,
             shot_number,
             take_number,
+            storyboard_shot_id=storyboard_shot_id,
+            allow_approved_revision=allow_approved_revision,
         )
         return PrevisGenerateResponse(**result)
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as e:
+    except StabilityError as exc:
         logger.error(
-            "PREVIS_GENERATE_FAILED | scene=%s | shot=%d | take=%d | error=%s",
-            scene_id,
-            shot_number,
-            take_number,
-            str(e),
+            "project_id=%s job_id=- provider=runway stage=%s duration_ms=0 error_type=%s",
+            project_id,
+            exc.stage,
+            exc.error_type,
         )
-        raise HTTPException(status_code=500, detail=f"Failed to generate preview: {str(e)}")
+        _raise_previs_http(exc)
+    except Exception as exc:
+        logger.exception(
+            "project_id=%s job_id=- provider=runway stage=previs_generate duration_ms=0 cause=%s",
+            project_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(status_code=500, detail="Previs generation failed") from exc
+
+
+@router.get("/projects/{project_id}/previs/records/{image_id}")
+async def get_previs_image(project_id: str, image_id: str) -> PrevisImageResponse:
+    try:
+        return PrevisImageResponse(**previs_service.get_image(project_id, image_id))
+    except StabilityError as exc:
+        _raise_previs_http(exc)
+
+
+@router.post("/projects/{project_id}/previs/records/{image_id}/approve")
+async def approve_previs_image(
+    project_id: str,
+    image_id: str,
+    body: ApprovePrevisRequest,
+) -> PrevisImageResponse:
+    try:
+        return PrevisImageResponse(
+            **previs_service.approve_image(project_id, image_id, body.approved_by)
+        )
+    except StabilityError as exc:
+        _raise_previs_http(exc)
+
+
+@router.post("/projects/{project_id}/previs/records/{image_id}/cancel")
+async def cancel_previs_image(project_id: str, image_id: str) -> PrevisImageResponse:
+    try:
+        return PrevisImageResponse(**await previs_service.cancel_image(project_id, image_id))
+    except StabilityError as exc:
+        _raise_previs_http(exc)
+
+
+@router.post("/projects/{project_id}/previs/records/{image_id}/retry")
+async def retry_previs_image(project_id: str, image_id: str) -> PrevisGenerateResponse:
+    try:
+        return PrevisGenerateResponse(**await previs_service.retry_image(project_id, image_id))
+    except StabilityError as exc:
+        _raise_previs_http(exc)
+
+
+@router.post("/projects/{project_id}/previs/production-packages/{scene_id}")
+async def create_previs_production_package(project_id: str, scene_id: str) -> dict:
+    try:
+        return previs_service.create_production_package(project_id, scene_id)
+    except StabilityError as exc:
+        _raise_previs_http(exc)
 
 
 @router.get("/projects/{project_id}/previs/images/{scene_id}")
@@ -102,12 +192,15 @@ async def get_scene_previs_images(project_id: str, scene_id: str) -> list[Previs
     
     Returns a list of previs image records with their current status.
     """
-    images = await previs_service.list_scene_images(
-        project_id,
-        scene_id,
-        use_video_url_fallback=not FFMPEG_AVAILABLE,
-    )
-    return [PrevisImageResponse(**image) for image in images]
+    try:
+        images = await previs_service.list_scene_images(
+            project_id,
+            scene_id,
+            use_video_url_fallback=not FFMPEG_AVAILABLE,
+        )
+        return [PrevisImageResponse(**image) for image in images]
+    except StabilityError as exc:
+        _raise_previs_http(exc)
 
 
 @router.post("/projects/{project_id}/previs/generate-all")
@@ -119,8 +212,8 @@ async def generate_all_previs(project_id: str) -> dict:
     """
     try:
         return await previs_service.generate_all(project_id)
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+    except StabilityError as exc:
+        _raise_previs_http(exc)
 
 
 # ===========================================================================

@@ -10,10 +10,29 @@ from app.services.render import render_service
 from app.services.storyboard_blueprint_service import storyboard_blueprint_service
 
 
+def _seed_storyboard_project(project_id: str, scene_id: str = "scene_001") -> None:
+    project_store.save_project(
+        {
+            "project_id": project_id,
+            "title": "Storyboard Route Test",
+            "execution_summary": {
+                "scenes": [
+                    {
+                        "scene_id": scene_id,
+                        "heading": "INT. EDIT BAY - NIGHT",
+                        "description": "A creator studies the cut in silence.",
+                    }
+                ]
+            },
+        }
+    )
+
+
 def test_storyboard_blueprint_route_create_approve_and_render_contract() -> None:
     client = TestClient(app)
     project_id = f"project_route_{uuid4().hex[:8]}"
     scene_id = "scene_001"
+    _seed_storyboard_project(project_id, scene_id)
 
     create_response = client.post(
         f"/api/f51/studio/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
@@ -88,6 +107,7 @@ def test_storyboard_render_rejects_stale_approved_version() -> None:
     client = TestClient(app)
     project_id = f"project_stale_{uuid4().hex[:8]}"
     scene_id = "scene_001"
+    _seed_storyboard_project(project_id, scene_id)
 
     create_response = client.post(
         f"/api/f51/studio/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
@@ -167,3 +187,66 @@ def test_storyboard_blueprint_route_update_lock_and_backfill() -> None:
     )
     assert lock_response.status_code == 200, lock_response.text
     assert lock_response.json()["locked"] is True
+
+
+def test_storyboard_version_and_shot_lifecycle_routes() -> None:
+    client = TestClient(app)
+    project_id = f"project_lifecycle_{uuid4().hex[:8]}"
+    scene_id = "scene_001"
+    _seed_storyboard_project(project_id, scene_id)
+
+    created = client.post(
+        f"/api/f51/studio/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
+        json={"shot_count": 2},
+    )
+    assert created.status_code == 200, created.text
+    blueprint_id = created.json()["blueprint"]["blueprint_id"]
+
+    wall_response = client.get(f"/api/f51/studio/projects/{project_id}/storyboard-wall")
+    assert wall_response.status_code == 200, wall_response.text
+    assert wall_response.json()["source"] == "storyboard_blueprint"
+    assert all(row["canonical"] is True for row in wall_response.json()["storyboard_wall"])
+
+    version_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions",
+        json={"change_reason": "route_regeneration", "preserve_locked_shots": True},
+    )
+    assert version_response.status_code == 200, version_response.text
+    assert version_response.json()["version"]["version_number"] == 2
+
+    versions_response = client.get(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions"
+    )
+    assert versions_response.status_code == 200, versions_response.text
+    assert [row["version_number"] for row in versions_response.json()] == [1, 2]
+    assert versions_response.json()[0]["status"] == "superseded"
+
+    shot_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots",
+        json={
+            "shot_id": "scene_001_route_insert",
+            "intent": {"purpose": "reaction"},
+            "render_contract": {
+                "provider_neutral_prompt": "A held reaction in the edit bay.",
+                "render_readiness": "ready",
+            },
+        },
+    )
+    assert shot_response.status_code == 200, shot_response.text
+
+    current_ids = [
+        shot["storyboard_shot_id"]
+        for shot in version_response.json()["shots"]
+    ] + [shot_response.json()["storyboard_shot_id"]]
+    reordered = client.put(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/reorder",
+        json={"ordered_storyboard_shot_ids": list(reversed(current_ids))},
+    )
+    assert reordered.status_code == 200, reordered.text
+    assert [shot["storyboard_shot_id"] for shot in reordered.json()] == list(reversed(current_ids))
+
+    deleted = client.delete(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{current_ids[0]}"
+    )
+    assert deleted.status_code == 200, deleted.text
+    assert current_ids[0] not in {shot["storyboard_shot_id"] for shot in deleted.json()}

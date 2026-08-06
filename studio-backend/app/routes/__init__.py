@@ -472,10 +472,18 @@ def set_render_mode(
 @projects_router.get("/projects/{project_id}/storyboard-wall")
 def get_storyboard_wall(project_id: str):
     """Get storyboard wall entries for a project"""
+    from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+
+    try:
+        canonical = storyboard_blueprint_service.project_wall_projection(project_id)
+    except StabilityError as exc:
+        raise _project_state_http_error(exc) from exc
+    if canonical:
+        return {"project_id": project_id, "storyboard_wall": canonical, "source": "storyboard_blueprint"}
     storyboard = project_service.get_storyboard_wall(project_id)
     if storyboard is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    return {"project_id": project_id, "storyboard_wall": storyboard}
+    return {"project_id": project_id, "storyboard_wall": storyboard, "source": "legacy_project"}
 
 
 @projects_router.post("/projects/{project_id}/scenes/{scene_id}/storyboard")

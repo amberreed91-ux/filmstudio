@@ -3394,6 +3394,119 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_studio_brain_traces_session_created
                     ON studio_brain_reasoning_traces(session_id, created_at);
             """),
+            (53, "Add durable Previs lifecycle and production package provenance", """
+                ALTER TABLE previs_images ADD COLUMN blueprint_id TEXT;
+                ALTER TABLE previs_images ADD COLUMN blueprint_version_id TEXT;
+                ALTER TABLE previs_images ADD COLUMN storyboard_shot_id TEXT;
+                ALTER TABLE previs_images ADD COLUMN approved INTEGER NOT NULL DEFAULT 0 CHECK (approved IN (0, 1));
+                ALTER TABLE previs_images ADD COLUMN approved_at TEXT;
+                ALTER TABLE previs_images ADD COLUMN approved_by TEXT;
+                ALTER TABLE previs_images ADD COLUMN failure_reason TEXT;
+                ALTER TABLE previs_images ADD COLUMN source_previs_image_id TEXT;
+                ALTER TABLE previs_images ADD COLUMN attempt_number INTEGER NOT NULL DEFAULT 1;
+                ALTER TABLE previs_images ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';
+                CREATE INDEX IF NOT EXISTS idx_previs_images_provenance
+                    ON previs_images(project_id, scene_id, storyboard_shot_id, blueprint_version_id);
+                CREATE INDEX IF NOT EXISTS idx_previs_images_approved
+                    ON previs_images(project_id, scene_id, approved);
+
+                CREATE TABLE IF NOT EXISTS previs_production_packages (
+                    package_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL,
+                    blueprint_id TEXT NOT NULL,
+                    blueprint_version_id TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'ready',
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (package_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (scene_id != ''),
+                    CHECK (blueprint_id != ''),
+                    CHECK (blueprint_version_id != '')
+                );
+                CREATE INDEX IF NOT EXISTS idx_previs_packages_project_scene
+                    ON previs_production_packages(project_id, scene_id, created_at);
+            """),
+            (54, "Add canonical Screening Room output registry and approval state", """
+                CREATE TABLE IF NOT EXISTS screening_outputs (
+                    screening_output_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    scene_id TEXT,
+                    shot_id TEXT,
+                    source_type TEXT NOT NULL,
+                    source_id TEXT NOT NULL,
+                    output_type TEXT NOT NULL,
+                    original_url TEXT NOT NULL,
+                    playback_url TEXT NOT NULL,
+                    mime_type TEXT NOT NULL DEFAULT 'video/mp4',
+                    media_status TEXT NOT NULL DEFAULT 'available',
+                    approved INTEGER NOT NULL DEFAULT 0 CHECK (approved IN (0, 1)),
+                    approved_at TEXT,
+                    approved_by TEXT,
+                    supersedes_output_id TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (screening_output_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (source_type != ''),
+                    CHECK (source_id != ''),
+                    CHECK (original_url != ''),
+                    CHECK (playback_url != '')
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_screening_outputs_source
+                    ON screening_outputs(project_id, source_type, source_id, original_url);
+                CREATE INDEX IF NOT EXISTS idx_screening_outputs_project_scene
+                    ON screening_outputs(project_id, scene_id, output_type, created_at);
+                CREATE INDEX IF NOT EXISTS idx_screening_outputs_approved
+                    ON screening_outputs(project_id, output_type, approved, approved_at);
+
+                CREATE TABLE IF NOT EXISTS screening_project_state (
+                    project_id TEXT PRIMARY KEY,
+                    current_final_output_id TEXT,
+                    completion_status TEXT NOT NULL DEFAULT 'in_progress',
+                    completed_at TEXT,
+                    updated_at TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    CHECK (project_id != '')
+                );
+            """),
+            (55, "Add versioned Film Cut and timeline persistence", """
+                CREATE TABLE IF NOT EXISTS film_cut_versions (
+                    cut_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'draft',
+                    source_cut_id TEXT,
+                    source_analysis_id TEXT,
+                    source_application_id TEXT,
+                    scene_order_json TEXT NOT NULL DEFAULT '[]',
+                    timeline_json TEXT NOT NULL DEFAULT '[]',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    approved_at TEXT,
+                    approved_by TEXT,
+                    CHECK (cut_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (version_number > 0)
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_film_cut_project_version
+                    ON film_cut_versions(project_id, version_number);
+                CREATE INDEX IF NOT EXISTS idx_film_cut_project_created
+                    ON film_cut_versions(project_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS film_cut_state (
+                    project_id TEXT PRIMARY KEY,
+                    current_cut_id TEXT NOT NULL,
+                    approved_cut_id TEXT,
+                    updated_at TEXT NOT NULL,
+                    CHECK (project_id != ''),
+                    CHECK (current_cut_id != '')
+                );
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -8534,6 +8647,161 @@ class DatabaseStorage:
         reports = self.list_production_acceptance_reports_for_project(project_id, package_id=package_id, limit=1)
         return reports[0] if reports else None
 
+    # =========================================================================
+    # FILM CUT VERSIONS + TIMELINE
+    # =========================================================================
+
+    def commit_film_cut_version(
+        self,
+        cut: dict[str, Any],
+        *,
+        supersede_cut_id: str | None = None,
+        application: Any | None = None,
+    ) -> dict[str, Any]:
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            if supersede_cut_id:
+                cursor.execute(
+                    """UPDATE film_cut_versions SET status = 'superseded', updated_at = ?
+                       WHERE cut_id = ? AND project_id = ? AND status = 'draft'""",
+                    (now, supersede_cut_id, cut["project_id"]),
+                )
+            cursor.execute(
+                """
+                INSERT INTO film_cut_versions (
+                    cut_id, project_id, version_number, status, source_cut_id,
+                    source_analysis_id, source_application_id, scene_order_json,
+                    timeline_json, metadata_json, created_at, updated_at,
+                    approved_at, approved_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    cut["cut_id"],
+                    cut["project_id"],
+                    int(cut["version_number"]),
+                    cut.get("status") or "draft",
+                    cut.get("source_cut_id"),
+                    cut.get("source_analysis_id"),
+                    cut.get("source_application_id"),
+                    json.dumps(cut.get("scene_order") or []),
+                    json.dumps(cut.get("timeline") or []),
+                    json.dumps(cut.get("metadata") or {}, sort_keys=True),
+                    cut.get("created_at") or now,
+                    cut.get("updated_at") or now,
+                    cut.get("approved_at"),
+                    cut.get("approved_by"),
+                ),
+            )
+            cursor.execute(
+                """
+                INSERT INTO film_cut_state (project_id, current_cut_id, approved_cut_id, updated_at)
+                VALUES (?, ?, NULL, ?)
+                ON CONFLICT(project_id) DO UPDATE SET
+                    current_cut_id = excluded.current_cut_id,
+                    updated_at = excluded.updated_at
+                """,
+                (cut["project_id"], cut["cut_id"], now),
+            )
+            if application is not None:
+                payload = application.model_dump(mode="json") if hasattr(application, "model_dump") else dict(application)
+                cursor.execute(
+                    """
+                    INSERT INTO editorial_decision_applications (
+                        application_id, project_id, analysis_id, decision_ids_json,
+                        source_cut_id, result_cut_id, application_status,
+                        payload_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        payload["application_id"],
+                        payload["project_id"],
+                        payload["analysis_id"],
+                        json.dumps(payload.get("decision_ids") or []),
+                        payload.get("source_cut_id") or "default",
+                        payload.get("result_cut_id") or "",
+                        payload.get("application_status") or "applied",
+                        json.dumps(payload),
+                        payload.get("created_at") or now,
+                    ),
+                )
+            conn.commit()
+        return self.get_film_cut_version(cut["cut_id"]) or {}
+
+    def get_film_cut_version(self, cut_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT * FROM film_cut_versions WHERE cut_id = ?", (cut_id,)).fetchone()
+        return self._film_cut_row_to_dict(row) if row else None
+
+    def get_current_film_cut(self, project_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                """SELECT v.* FROM film_cut_state s
+                   JOIN film_cut_versions v ON v.cut_id = s.current_cut_id
+                   WHERE s.project_id = ?""",
+                (project_id,),
+            ).fetchone()
+        return self._film_cut_row_to_dict(row) if row else None
+
+    def list_film_cut_versions(self, project_id: str) -> list[dict[str, Any]]:
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT * FROM film_cut_versions
+                   WHERE project_id = ? ORDER BY version_number ASC""",
+                (project_id,),
+            ).fetchall()
+        return [self._film_cut_row_to_dict(row) for row in rows]
+
+    def approve_film_cut(self, project_id: str, cut_id: str, approved_by: str) -> dict[str, Any] | None:
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            state = cursor.execute(
+                "SELECT current_cut_id FROM film_cut_state WHERE project_id = ?",
+                (project_id,),
+            ).fetchone()
+            if state is None or state["current_cut_id"] != cut_id:
+                conn.rollback()
+                raise ValueError("Only the current Film Cut can be approved")
+            row = cursor.execute(
+                "SELECT * FROM film_cut_versions WHERE cut_id = ? AND project_id = ?",
+                (cut_id, project_id),
+            ).fetchone()
+            if row is None:
+                conn.rollback()
+                return None
+            cursor.execute(
+                """UPDATE film_cut_versions
+                   SET status = 'approved', approved_at = ?, approved_by = ?, updated_at = ?
+                   WHERE cut_id = ? AND project_id = ?""",
+                (now, approved_by, now, cut_id, project_id),
+            )
+            cursor.execute(
+                """UPDATE film_cut_state SET approved_cut_id = ?, updated_at = ?
+                   WHERE project_id = ?""",
+                (cut_id, now, project_id),
+            )
+            updated = cursor.execute(
+                "SELECT * FROM film_cut_versions WHERE cut_id = ?",
+                (cut_id,),
+            ).fetchone()
+            conn.commit()
+        return self._film_cut_row_to_dict(updated)
+
+    def get_film_cut_state(self, project_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT * FROM film_cut_state WHERE project_id = ?", (project_id,)).fetchone()
+        return dict(row) if row else None
+
+    def _film_cut_row_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        data = dict(row)
+        data["scene_order"] = json.loads(data.pop("scene_order_json") or "[]")
+        data["timeline"] = json.loads(data.pop("timeline_json") or "[]")
+        data["metadata"] = json.loads(data.pop("metadata_json") or "{}")
+        return data
+
     def save_editorial_analysis_record(self, record) -> Any:
         payload = record.model_dump(mode="json") if hasattr(record, "model_dump") else dict(record)
         with self._get_connection() as conn:
@@ -9878,6 +10146,146 @@ class DatabaseStorage:
                 )
             return [self._row_to_storyboard_shot(row) for row in cursor.fetchall()]
 
+    def commit_storyboard_blueprint_version(
+        self,
+        *,
+        blueprint: Any,
+        version: Any,
+        shots: list[Any],
+        superseded_version: Any | None = None,
+    ) -> Any:
+        """Persist a blueprint pointer, version, and its shots in one transaction."""
+        blueprint_data = blueprint.model_dump(mode="json") if hasattr(blueprint, "model_dump") else dict(blueprint)
+        version_data = version.model_dump(mode="json") if hasattr(version, "model_dump") else dict(version)
+        superseded_data = (
+            superseded_version.model_dump(mode="json")
+            if hasattr(superseded_version, "model_dump")
+            else dict(superseded_version)
+        ) if superseded_version is not None else None
+        shot_rows = [
+            shot.model_dump(mode="json") if hasattr(shot, "model_dump") else dict(shot)
+            for shot in shots
+        ]
+
+        def _write_version(cursor: sqlite3.Cursor, data: dict[str, Any]) -> None:
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO storyboard_blueprint_versions (
+                    version_id, blueprint_id, project_id, scene_id, version_number,
+                    status, change_reason, source_version_id, provenance_json,
+                    inspection_json, created_at, approved_at, approved_by, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    data["version_id"], data["blueprint_id"], data["project_id"], data["scene_id"],
+                    int(data.get("version_number") or 1), data.get("status", "draft"),
+                    data.get("change_reason") or "", data.get("source_version_id"),
+                    self._json_dumps(data.get("provenance", {})),
+                    self._json_dumps(data.get("inspection", {})),
+                    data.get("created_at") or datetime.now().isoformat(), data.get("approved_at"),
+                    data.get("approved_by") or "", self._json_dumps(data.get("metadata", {})),
+                ),
+            )
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("BEGIN")
+                    if superseded_data is not None:
+                        _write_version(cursor, superseded_data)
+                    cursor.execute(
+                        """
+                        INSERT OR REPLACE INTO storyboard_blueprints (
+                            blueprint_id, project_id, scene_id, current_version_id,
+                            status, approved_version_id, locked, created_at, updated_at,
+                            created_by, metadata
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            blueprint_data["blueprint_id"], blueprint_data["project_id"],
+                            blueprint_data["scene_id"], blueprint_data.get("current_version_id"),
+                            blueprint_data.get("status", "draft"), blueprint_data.get("approved_version_id"),
+                            1 if blueprint_data.get("locked") else 0,
+                            blueprint_data.get("created_at") or datetime.now().isoformat(),
+                            blueprint_data.get("updated_at") or datetime.now().isoformat(),
+                            blueprint_data.get("created_by") or "",
+                            self._json_dumps(blueprint_data.get("metadata", {})),
+                        ),
+                    )
+                    _write_version(cursor, version_data)
+                    for data in shot_rows:
+                        cursor.execute(
+                            """
+                            INSERT INTO storyboard_shots (
+                                storyboard_shot_id, blueprint_id, version_id, project_id, scene_id,
+                                shot_id, shot_number, status, intent_json, visual_plan_json,
+                                continuity_plan_json, render_contract_json, department_notes_json,
+                                storyboard_image_url, previs_image_id, rationale, locked,
+                                created_at, updated_at, metadata
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                data["storyboard_shot_id"], data["blueprint_id"], data["version_id"],
+                                data["project_id"], data["scene_id"], data["shot_id"],
+                                int(data.get("shot_number") or 1), data.get("status", "draft"),
+                                self._json_dumps(data.get("intent", {})), self._json_dumps(data.get("visual_plan", {})),
+                                self._json_dumps(data.get("continuity_plan", {})),
+                                self._json_dumps(data.get("render_contract", {})),
+                                self._json_dumps(data.get("department_notes", [])), data.get("storyboard_image_url"),
+                                data.get("previs_image_id"), data.get("rationale") or "",
+                                1 if data.get("locked") else 0,
+                                data.get("created_at") or datetime.now().isoformat(),
+                                data.get("updated_at") or datetime.now().isoformat(),
+                                self._json_dumps(data.get("metadata", {})),
+                            ),
+                        )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+
+        self._execute_write_with_retry("commit_storyboard_blueprint_version", _write)
+        return version
+
+    def delete_storyboard_shot(self, storyboard_shot_id: str, version_id: str) -> bool:
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "DELETE FROM storyboard_shots WHERE storyboard_shot_id = ? AND version_id = ?",
+                    (storyboard_shot_id, version_id),
+                )
+                conn.commit()
+                return cursor.rowcount > 0
+
+        return bool(self._execute_write_with_retry("delete_storyboard_shot", _write))
+
+    def reorder_storyboard_shots(self, version_id: str, ordered_storyboard_shot_ids: list[str]) -> bool:
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("BEGIN")
+                    cursor.execute(
+                        "SELECT storyboard_shot_id FROM storyboard_shots WHERE version_id = ?",
+                        (version_id,),
+                    )
+                    existing = {str(row["storyboard_shot_id"]) for row in cursor.fetchall()}
+                    if existing != set(ordered_storyboard_shot_ids) or len(existing) != len(ordered_storyboard_shot_ids):
+                        raise ValueError("Storyboard reorder must contain every current shot exactly once")
+                    for position, storyboard_shot_id in enumerate(ordered_storyboard_shot_ids, start=1):
+                        cursor.execute(
+                            "UPDATE storyboard_shots SET shot_number = ?, updated_at = ? WHERE storyboard_shot_id = ? AND version_id = ?",
+                            (position, datetime.now().isoformat(), storyboard_shot_id, version_id),
+                        )
+                    conn.commit()
+                    return True
+                except Exception:
+                    conn.rollback()
+                    raise
+
+        return bool(self._execute_write_with_retry("reorder_storyboard_shots", _write))
+
     def save_storyboard_render_link(self, link: Any) -> Any:
         data = link.model_dump(mode="json") if hasattr(link, "model_dump") else dict(link)
 
@@ -10893,7 +11301,16 @@ class DatabaseStorage:
         prompt_used: str,
         fallback: bool,
         previs_seed: Optional[int] = None,
-        seed_locked: bool = False
+        seed_locked: bool = False,
+        *,
+        image_id: str | None = None,
+        blueprint_id: str | None = None,
+        blueprint_version_id: str | None = None,
+        storyboard_shot_id: str | None = None,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        failure_reason: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """
         Save or update a previs image record.
@@ -10913,24 +11330,24 @@ class DatabaseStorage:
         Returns:
             True if saved successfully
         """
-        import uuid
-        from datetime import datetime
-
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
-            image_id = f"previs_{project_id}_{scene_id}_{shot_id or 'hero'}_{uuid.uuid4().hex[:8]}"
+            record_id = image_id or f"previs_{project_id}_{scene_id}_{shot_id or 'hero'}_{uuid4().hex[:8]}"
             now = datetime.now().isoformat()
 
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO previs_images (
+                INSERT INTO previs_images (
                     id, project_id, scene_id, shot_id, image_path,
-                    job_id, status, prompt_used, fallback, previs_seed, seed_locked, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    job_id, status, prompt_used, fallback, previs_seed, seed_locked,
+                    blueprint_id, blueprint_version_id, storyboard_shot_id,
+                    source_previs_image_id, attempt_number, failure_reason, metadata_json,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    image_id,
+                    record_id,
                     project_id,
                     scene_id,
                     shot_id,
@@ -10941,6 +11358,13 @@ class DatabaseStorage:
                     1 if fallback else 0,
                     previs_seed,
                     1 if seed_locked else 0,
+                    blueprint_id,
+                    blueprint_version_id,
+                    storyboard_shot_id,
+                    source_previs_image_id,
+                    max(1, int(attempt_number)),
+                    failure_reason,
+                    json.dumps(metadata or {}, sort_keys=True),
                     now,
                     now,
                 ),
@@ -10997,6 +11421,16 @@ class DatabaseStorage:
                     "fallback": bool(row_dict["fallback"]),
                     "previs_seed": row_dict.get("previs_seed"),
                     "seed_locked": bool(row_dict.get("seed_locked", 0)),
+                    "blueprint_id": row_dict.get("blueprint_id"),
+                    "blueprint_version_id": row_dict.get("blueprint_version_id"),
+                    "storyboard_shot_id": row_dict.get("storyboard_shot_id"),
+                    "approved": bool(row_dict.get("approved", 0)),
+                    "approved_at": row_dict.get("approved_at"),
+                    "approved_by": row_dict.get("approved_by"),
+                    "failure_reason": row_dict.get("failure_reason"),
+                    "source_previs_image_id": row_dict.get("source_previs_image_id"),
+                    "attempt_number": int(row_dict.get("attempt_number") or 1),
+                    "metadata": json.loads(row_dict.get("metadata_json") or "{}"),
                     "created_at": row_dict["created_at"],
                     "updated_at": row_dict.get("updated_at", row_dict["created_at"]),
                 })
@@ -11007,7 +11441,8 @@ class DatabaseStorage:
         self,
         job_id: str,
         status: str,
-        image_path: Optional[str] = None
+        image_path: Optional[str] = None,
+        failure_reason: str | None = None,
     ) -> bool:
         """
         Update the status of a previs image by job_id.
@@ -11020,33 +11455,319 @@ class DatabaseStorage:
         Returns:
             True if updated successfully
         """
-        from datetime import datetime
-
         with self._get_connection() as conn:
             cursor = conn.cursor()
             now = datetime.now().isoformat()
 
-            if image_path:
-                cursor.execute(
-                    """
-                    UPDATE previs_images
-                    SET status = ?, image_path = ?, updated_at = ?
-                    WHERE job_id = ?
-                    """,
-                    (status, image_path, now, job_id),
-                )
-            else:
-                cursor.execute(
-                    """
-                    UPDATE previs_images
-                    SET status = ?, updated_at = ?
-                    WHERE job_id = ?
-                    """,
-                    (status, now, job_id),
-                )
+            cursor.execute(
+                """
+                UPDATE previs_images
+                SET status = ?,
+                    image_path = CASE WHEN ? IS NULL THEN image_path ELSE ? END,
+                    failure_reason = ?,
+                    updated_at = ?
+                WHERE job_id = ?
+                """,
+                (status, image_path, image_path, failure_reason, now, job_id),
+            )
 
             conn.commit()
             return cursor.rowcount > 0
+
+    def get_previs_image(self, image_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT * FROM previs_images WHERE id = ?", (image_id,)).fetchone()
+        return self._previs_row_to_dict(row) if row else None
+
+    def get_previs_image_by_job(self, job_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT * FROM previs_images WHERE job_id = ?", (job_id,)).fetchone()
+        return self._previs_row_to_dict(row) if row else None
+
+    def approve_previs_image(self, image_id: str, project_id: str, approved_by: str) -> dict[str, Any] | None:
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            row = cursor.execute(
+                "SELECT * FROM previs_images WHERE id = ? AND project_id = ?",
+                (image_id, project_id),
+            ).fetchone()
+            if row is None:
+                conn.rollback()
+                return None
+            current = dict(row)
+            if current["status"] not in {"complete", "approved"} or not str(current["image_path"] or "").strip():
+                conn.rollback()
+                raise ValueError("Only completed Previs images with an output can be approved")
+            target_column = "storyboard_shot_id" if current.get("storyboard_shot_id") else "shot_id"
+            target_value = current.get(target_column)
+            cursor.execute(
+                f"""
+                UPDATE previs_images
+                SET approved = 0,
+                    status = CASE WHEN status = 'approved' THEN 'superseded' ELSE status END,
+                    updated_at = ?
+                WHERE project_id = ? AND scene_id = ? AND {target_column} = ? AND id != ? AND approved = 1
+                """,
+                (now, project_id, current["scene_id"], target_value, image_id),
+            )
+            cursor.execute(
+                """
+                UPDATE previs_images
+                SET approved = 1, status = 'approved', approved_at = ?, approved_by = ?, updated_at = ?
+                WHERE id = ? AND project_id = ?
+                """,
+                (now, approved_by, now, image_id, project_id),
+            )
+            updated = cursor.execute("SELECT * FROM previs_images WHERE id = ?", (image_id,)).fetchone()
+            conn.commit()
+        return self._previs_row_to_dict(updated)
+
+    def save_previs_production_package(self, package: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now().isoformat()
+        package_id = str(package.get("package_id") or f"previs_pkg_{uuid4().hex[:12]}")
+        payload = dict(package.get("payload") or {})
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO previs_production_packages (
+                    package_id, project_id, scene_id, blueprint_id, blueprint_version_id,
+                    status, payload_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    package_id,
+                    package["project_id"],
+                    package["scene_id"],
+                    package["blueprint_id"],
+                    package["blueprint_version_id"],
+                    package.get("status") or "ready",
+                    json.dumps(payload, sort_keys=True),
+                    package.get("created_at") or now,
+                    now,
+                ),
+            )
+            conn.commit()
+        return self.get_previs_production_package(package_id) or {}
+
+    def get_previs_production_package(self, package_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM previs_production_packages WHERE package_id = ?",
+                (package_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        data = dict(row)
+        data["payload"] = json.loads(data.pop("payload_json") or "{}")
+        return data
+
+    def list_previs_production_packages(self, project_id: str, scene_id: str | None = None) -> list[dict[str, Any]]:
+        with self._get_connection() as conn:
+            if scene_id:
+                rows = conn.execute(
+                    """SELECT * FROM previs_production_packages
+                       WHERE project_id = ? AND scene_id = ? ORDER BY created_at DESC""",
+                    (project_id, scene_id),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM previs_production_packages
+                       WHERE project_id = ? ORDER BY scene_id, created_at DESC""",
+                    (project_id,),
+                ).fetchall()
+        packages = []
+        for row in rows:
+            data = dict(row)
+            data["payload"] = json.loads(data.pop("payload_json") or "{}")
+            packages.append(data)
+        return packages
+
+    def _previs_row_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        data = dict(row)
+        return {
+            "id": data["id"],
+            "project_id": data["project_id"],
+            "scene_id": data["scene_id"],
+            "shot_id": data["shot_id"],
+            "image_path": data["image_path"],
+            "job_id": data["job_id"],
+            "status": data["status"],
+            "prompt_used": data["prompt_used"],
+            "fallback": bool(data["fallback"]),
+            "previs_seed": data.get("previs_seed"),
+            "seed_locked": bool(data.get("seed_locked", 0)),
+            "blueprint_id": data.get("blueprint_id"),
+            "blueprint_version_id": data.get("blueprint_version_id"),
+            "storyboard_shot_id": data.get("storyboard_shot_id"),
+            "approved": bool(data.get("approved", 0)),
+            "approved_at": data.get("approved_at"),
+            "approved_by": data.get("approved_by"),
+            "failure_reason": data.get("failure_reason"),
+            "source_previs_image_id": data.get("source_previs_image_id"),
+            "attempt_number": int(data.get("attempt_number") or 1),
+            "metadata": json.loads(data.get("metadata_json") or "{}"),
+            "created_at": data["created_at"],
+            "updated_at": data.get("updated_at") or data["created_at"],
+        }
+
+    # =========================================================================
+    # SCREENING ROOM OUTPUTS
+    # =========================================================================
+
+    def upsert_screening_output(self, record: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO screening_outputs (
+                    screening_output_id, project_id, scene_id, shot_id, source_type,
+                    source_id, output_type, original_url, playback_url, mime_type,
+                    media_status, metadata_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(screening_output_id) DO UPDATE SET
+                    scene_id = excluded.scene_id,
+                    shot_id = excluded.shot_id,
+                    original_url = excluded.original_url,
+                    playback_url = excluded.playback_url,
+                    mime_type = excluded.mime_type,
+                    media_status = excluded.media_status,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    record["screening_output_id"],
+                    record["project_id"],
+                    record.get("scene_id"),
+                    record.get("shot_id"),
+                    record["source_type"],
+                    record["source_id"],
+                    record["output_type"],
+                    record["original_url"],
+                    record["playback_url"],
+                    record.get("mime_type") or "video/mp4",
+                    record.get("media_status") or "available",
+                    json.dumps(record.get("metadata") or {}, sort_keys=True),
+                    record.get("created_at") or now,
+                    now,
+                ),
+            )
+            conn.commit()
+        return self.get_screening_output(record["screening_output_id"]) or {}
+
+    def get_screening_output(self, screening_output_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM screening_outputs WHERE screening_output_id = ?",
+                (screening_output_id,),
+            ).fetchone()
+        return self._screening_row_to_dict(row) if row else None
+
+    def list_screening_outputs(self, project_id: str) -> list[dict[str, Any]]:
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT * FROM screening_outputs
+                   WHERE project_id = ? ORDER BY created_at DESC, screening_output_id DESC""",
+                (project_id,),
+            ).fetchall()
+        return [self._screening_row_to_dict(row) for row in rows]
+
+    def approve_screening_output(
+        self,
+        screening_output_id: str,
+        project_id: str,
+        approved_by: str,
+    ) -> dict[str, Any] | None:
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            row = cursor.execute(
+                "SELECT * FROM screening_outputs WHERE screening_output_id = ? AND project_id = ?",
+                (screening_output_id, project_id),
+            ).fetchone()
+            if row is None:
+                conn.rollback()
+                return None
+            target = dict(row)
+            if target["media_status"] != "available":
+                conn.rollback()
+                raise ValueError("Only available media can be approved")
+            if target["output_type"] == "final":
+                scope_sql = "output_type = 'final'"
+                scope_params: tuple[Any, ...] = ()
+            elif target.get("shot_id"):
+                scope_sql = "output_type = ? AND shot_id = ?"
+                scope_params = (target["output_type"], target["shot_id"])
+            else:
+                scope_sql = "output_type = ? AND scene_id = ?"
+                scope_params = (target["output_type"], target.get("scene_id"))
+            previous = cursor.execute(
+                f"""SELECT screening_output_id FROM screening_outputs
+                    WHERE project_id = ? AND {scope_sql} AND approved = 1 AND screening_output_id != ?
+                    ORDER BY approved_at DESC LIMIT 1""",
+                (project_id, *scope_params, screening_output_id),
+            ).fetchone()
+            previous_id = previous["screening_output_id"] if previous else None
+            cursor.execute(
+                f"""UPDATE screening_outputs SET approved = 0, updated_at = ?
+                    WHERE project_id = ? AND {scope_sql} AND screening_output_id != ? AND approved = 1""",
+                (now, project_id, *scope_params, screening_output_id),
+            )
+            cursor.execute(
+                """UPDATE screening_outputs
+                   SET approved = 1, approved_at = ?, approved_by = ?,
+                       supersedes_output_id = COALESCE(?, supersedes_output_id), updated_at = ?
+                   WHERE screening_output_id = ? AND project_id = ?""",
+                (now, approved_by, previous_id, now, screening_output_id, project_id),
+            )
+            if target["output_type"] == "final":
+                cursor.execute(
+                    """
+                    INSERT INTO screening_project_state (
+                        project_id, current_final_output_id, completion_status,
+                        completed_at, updated_at, metadata_json
+                    ) VALUES (?, ?, 'complete', ?, ?, '{}')
+                    ON CONFLICT(project_id) DO UPDATE SET
+                        current_final_output_id = excluded.current_final_output_id,
+                        completion_status = 'complete',
+                        completed_at = excluded.completed_at,
+                        updated_at = excluded.updated_at
+                    """,
+                    (project_id, screening_output_id, now, now),
+                )
+            updated = cursor.execute(
+                "SELECT * FROM screening_outputs WHERE screening_output_id = ?",
+                (screening_output_id,),
+            ).fetchone()
+            conn.commit()
+        return self._screening_row_to_dict(updated)
+
+    def get_screening_project_state(self, project_id: str) -> dict[str, Any]:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM screening_project_state WHERE project_id = ?",
+                (project_id,),
+            ).fetchone()
+        if row is None:
+            return {
+                "project_id": project_id,
+                "current_final_output_id": None,
+                "completion_status": "in_progress",
+                "completed_at": None,
+                "updated_at": None,
+                "metadata": {},
+            }
+        data = dict(row)
+        data["metadata"] = json.loads(data.pop("metadata_json") or "{}")
+        return data
+
+    def _screening_row_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        data = dict(row)
+        data["approved"] = bool(data.get("approved"))
+        data["metadata"] = json.loads(data.pop("metadata_json") or "{}")
+        return data
 
     def get_scene_previs_seed(self, project_id: str, scene_id: str) -> Optional[int]:
         """

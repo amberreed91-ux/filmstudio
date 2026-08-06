@@ -10,6 +10,13 @@ import {
   getProjectDecisionGate,
   getStudioProject,
   enhancePrevisPrompt,
+  generatePrevisScene,
+  approvePrevisImage,
+  getScreeningManifest,
+  approveScreeningOutput,
+  getCurrentFilmCut,
+  updateFilmCutTimeline,
+  approveFilmCut,
   generateSceneStoryboard,
   generateScenePipeline,
   recommendGenerationSettings,
@@ -189,6 +196,137 @@ describe('generateSceneStoryboard', () => {
 
     const [url] = fetchMock.mock.calls[0]
     expect(String(url)).toContain('provider=pollinations')
+  })
+})
+
+describe('Previs lifecycle API', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('threads the exact storyboard shot into generation', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        job_id: 'job-previs-1',
+        status: 'pending',
+        scene_id: 'scene_001',
+        previs_image_id: 'previs-1',
+        storyboard_shot_id: 'storyboard-shot-1',
+        duplicate: false,
+      }), { status: 200 }),
+    )
+
+    const result = await generatePrevisScene('project-1', 'scene_001', {
+      shotNumber: 2,
+      takeNumber: 3,
+      storyboardShotId: 'storyboard-shot-1',
+      allowApprovedRevision: true,
+    })
+
+    expect(result.previs_image_id).toBe('previs-1')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/projects/project-1/previs/generate-scene/scene_001')
+    expect(String(url)).toContain('storyboard_shot_id=storyboard-shot-1')
+    expect(String(url)).toContain('allow_approved_revision=true')
+    expect((init?.method || '').toUpperCase()).toBe('POST')
+  })
+
+  it('uses the deliberate approval endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        id: 'previs-1', project_id: 'project-1', scene_id: 'scene_001', image_path: 'https://media.test/1.mp4',
+        job_id: 'job-1', status: 'approved', prompt_used: 'held close-up', fallback: false,
+        approved: true, attempt_number: 1, metadata: {}, created_at: 'now', updated_at: 'now',
+      }), { status: 200 }),
+    )
+
+    await approvePrevisImage('project-1', 'previs-1', 'creator')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/projects/project-1/previs/records/previs-1/approve')
+    expect(JSON.parse(String(init?.body))).toEqual({ approved_by: 'creator' })
+  })
+})
+
+describe('Screening Room lifecycle API', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('loads the project-scoped browser-safe manifest', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        project_id: 'project-1',
+        outputs: [],
+        current_final_output: null,
+        completion_status: 'in_progress',
+        warnings: [],
+      }), { status: 200 }),
+    )
+    await getScreeningManifest('project-1')
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/projects/project-1/screening/manifest?refresh=true')
+  })
+
+  it('sends explicit creator confirmation for approval', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        screening_output_id: 'screening-1', project_id: 'project-1', source_type: 'render_job',
+        source_id: 'job-1', output_type: 'shot', playback_url: '/screening/media/1', mime_type: 'video/mp4',
+        media_status: 'available', approved: true, metadata: {}, created_at: 'now', updated_at: 'now',
+      }), { status: 200 }),
+    )
+    await approveScreeningOutput('project-1', 'screening-1', 'creator')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/projects/project-1/screening/outputs/screening-1/approve')
+    expect(JSON.parse(String(init?.body))).toEqual({ confirmed: true, approved_by: 'creator' })
+  })
+})
+
+describe('Film Cut lifecycle API', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const cut = {
+    cut_id: 'cut-v2', project_id: 'project-1', version_number: 2, status: 'draft',
+    source_cut_id: 'cut-v1', scene_order: ['scene_001'], timeline: [], metadata: {},
+    created_at: 'now', updated_at: 'now',
+  }
+
+  it('loads the canonical current Film Cut', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ film_cut: cut }), { status: 200 }),
+    )
+    const result = await getCurrentFilmCut('project-1')
+    expect(result.film_cut.cut_id).toBe('cut-v2')
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/projects/project-1/film-cut')
+  })
+
+  it('threads the expected version and explicit confirmation into timeline updates', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ film_cut: cut }), { status: 200 }),
+    )
+    await updateFilmCutTimeline('project-1', {
+      expected_cut_id: 'cut-v2',
+      scene_order: ['scene_001'],
+      timeline: [{ scene_id: 'scene_001', clip_id: 'clip-1' }],
+      creator_confirmation: true,
+    })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/projects/project-1/film-cut/timeline')
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      expected_cut_id: 'cut-v2', creator_confirmation: true,
+    })
+  })
+
+  it('uses the explicit Film Cut approval endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ film_cut: { ...cut, status: 'approved' } }), { status: 200 }),
+    )
+    await approveFilmCut('project-1', 'cut-v2')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/projects/project-1/film-cut/cut-v2/approve')
+    expect(JSON.parse(String(init?.body))).toEqual({ creator_confirmation: true, approved_by: 'creator' })
   })
 })
 
