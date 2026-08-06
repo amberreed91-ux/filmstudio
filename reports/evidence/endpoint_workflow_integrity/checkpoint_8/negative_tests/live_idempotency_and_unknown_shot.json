@@ -1,0 +1,41 @@
+{
+  "database": "disposable Checkpoint 8 browser seed database (deleted after verification)",
+  "project_id": "checkpoint7-226b67f779",
+  "run_id": "workflow-76e30cbfc425",
+  "before": {
+    "render_jobs": 3,
+    "editorial_decision_applications": 1,
+    "canonical_workflow_transitions": 15
+  },
+  "unknown_shot": {
+    "method": "POST",
+    "path": "/api/f51/studio/storyboard-blueprints/sbp_checkpoint7-226b67f779_scene_001_2ab24fca/shots/checkpoint8-unknown-shot/render-contract",
+    "status": 404,
+    "error_type": "state_error",
+    "message": "Storyboard shot not found",
+    "stage": "storyboard_render_contract_build"
+  },
+  "duplicate_render_submission": {
+    "method": "POST",
+    "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+    "status": 200,
+    "returned_run_status": "revision_completed"
+  },
+  "repeated_editorial_application": {
+    "method": "POST",
+    "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/decide",
+    "status": 200,
+    "returned_run_status": "revision_completed"
+  },
+  "after": {
+    "render_jobs": 3,
+    "editorial_decision_applications": 1,
+    "canonical_workflow_transitions": 15
+  },
+  "deltas": {
+    "render_jobs": 0,
+    "editorial_decision_applications": 0,
+    "canonical_workflow_transitions": 0
+  },
+  "result": "passed"
+}

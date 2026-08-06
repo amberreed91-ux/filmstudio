@@ -1,6 +1,6 @@
 # Endpoint workflow integrity evidence manifest
 
-Checkpoint 7 manifest date: 2026-08-06
+Final manifest date: 2026-08-06
 
 SHA256 values for every file below, including this manifest, are recorded in `checkpoint_7/hashes/checkpoint_7_sha256.txt` to avoid a self-referential manifest hash.
 
@@ -30,3 +30,31 @@ SHA256 values for every file below, including this manifest, are recorded in `ch
 | `reports/checkpoints/checkpoint_7_evidence_and_integrity.md` | Final checkpoint report | Evidence synthesis | 2026-08-06 | Hash index | Narrative without support | 8–10 | Report |
 
 The hash index additionally covers every raw stdout/stderr file, command JSON, summary file, screenshot, and Checkpoint 7 evidence file not individually expanded above.
+
+## Checkpoint 8 clean-state final verification
+
+SHA256 values for the complete Checkpoint 8 evidence tree and final report are recorded in `checkpoint_8/hashes/checkpoint_8_sha256.txt`.
+
+| Path | Purpose | Classification |
+| --- | --- | --- |
+| `checkpoint_8/before_verification/worktree_baseline.md` | Preserve the dirty-worktree scope boundary | Real repository state |
+| `checkpoint_8/clean_state/reproduction/test_logs/reproduction_command_record.json` | Main independent reproduction command, totals, environment, and exit | Real local HTTP/SQLite; simulated render provider |
+| `checkpoint_8/clean_state/reproduction/runtime_http/requests.json` | 102-request clean API trace | Real local HTTP |
+| `checkpoint_8/clean_state/reproduction/openapi/runtime_openapi.json` | Current runtime schema | Real local runtime |
+| `checkpoint_8/clean_state/reproduction/runtime_http/route_inventory.json` | Current canonical route presence and path count | Derived from runtime OpenAPI |
+| `checkpoint_8/clean_state/reproduction/database/persistence_export.json` | HTTP/SQLite equality and restart persistence | Disposable SQLite data |
+| `checkpoint_8/clean_state/reproduction/provider/provider_evidence.json` | Simulated-provider truth and artifact lineage | Simulated render-provider verification |
+| `checkpoint_8/clean_state/reproduction/final_summary/reproduction_result.json` | Machine-readable terminal workflow result | Verified simulated run |
+| `checkpoint_8/test_logs/backend_focused.xml` | 76-test backend route/contract/persistence/workflow/state result | Real tests |
+| `checkpoint_8/test_logs/frontend_focused.xml` | 100-test frontend workflow/API/route result | Real tests |
+| `checkpoint_8/test_logs/verification_command_summary.md` | Typecheck/build/test command synthesis | Audit |
+| `checkpoint_8/browser/seed_reproduction/**` | Independent disposable project retained for restarted browser verification | Real local HTTP/SQLite; simulated render provider |
+| `checkpoint_8/browser/live_session/browser_evidence.json` | Final network, refresh, error visibility, and page-error record | Real browser; peripheral emotion endpoint intercepted |
+| `checkpoint_8/browser/live_session/*.png` | Terminal state, refreshed state, and visible unknown-project error | Real browser screenshots |
+| `checkpoint_8/browser/attempt_1_rate_limited/**` | Preserved failed over-broad browser attempt | Controlled/observed failure evidence |
+| `checkpoint_8/browser/browser_verification_summary.md` | Browser classification, 404/429 interpretation, external-call disclosure, cleanup | Audit |
+| `checkpoint_8/negative_tests/live_idempotency_and_unknown_shot.json` | Live unknown-shot and zero-delta duplicate-operation proof | Real local HTTP/SQLite |
+| `checkpoint_8/negative_tests/required_negative_matrix.md` | All ten required negative cases | Audit mapped to real tests/runtime |
+| `checkpoint_8/final_summary/contradiction_check.md` | Ten-point contradiction audit | Audit |
+| `checkpoint_8/diff_review/final_checkpoint_8_diff_review.md` | Isolated final file/diff/risk review | Audit |
+| `reports/endpoint_route_and_workflow_integrity_report.md` | Required consolidated report and final verdict | Final report |

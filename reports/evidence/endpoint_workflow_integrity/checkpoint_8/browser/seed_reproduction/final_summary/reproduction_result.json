@@ -1,0 +1,27 @@
+{
+  "classification": "SIMULATED PROVIDER VERIFICATION",
+  "completed_at": "2026-08-06T16:08:51.759201+00:00",
+  "failure_total": 0,
+  "paid_provider_calls": false,
+  "pass_total": 111,
+  "result": "VERIFIED",
+  "skip_total": 0,
+  "workflow": {
+    "blueprint_id": "sbp_checkpoint7-226b67f779_scene_001_2ab24fca",
+    "blueprint_version_id": "sbv_ce016dee578d",
+    "production_package_id": "previs_pkg_cb07ff4ec547",
+    "project_id": "checkpoint7-226b67f779",
+    "render_job_ids": [
+      "job-20260806120833-ddb58ed1-scene_001_shot_001"
+    ],
+    "revision_job_id": "job-20260806120839-37df58c3-scene_001_shot_001",
+    "run_id": "workflow-76e30cbfc425",
+    "scene_id": "scene_001",
+    "screening_output_ids": [
+      "screening_1ba19a7f11bb5897"
+    ],
+    "script_id": "script-226b67f779",
+    "status": "revision_completed",
+    "transition_count": 15
+  }
+}

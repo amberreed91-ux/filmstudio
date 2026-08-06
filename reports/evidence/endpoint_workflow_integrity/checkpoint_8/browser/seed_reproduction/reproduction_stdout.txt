@@ -1,0 +1,113 @@
+[2026-08-06T16:08:25.959237+00:00] Checkpoint 7 independent verification started
+[2026-08-06T16:08:26.262569+00:00] PASS dependencies validated
+[2026-08-06T16:08:31.933174+00:00] PASS managed backend became healthy
+[2026-08-06T16:08:31.939066+00:00] PASS backend health
+[2026-08-06T16:08:33.137167+00:00] PASS runtime OpenAPI
+[2026-08-06T16:08:33.186584+00:00] PASS required runtime routes are mounted
+[2026-08-06T16:08:33.337850+00:00] PASS create clean project through API
+[2026-08-06T16:08:33.347042+00:00] PASS persist canonical script and scene through API
+[2026-08-06T16:08:33.354093+00:00] PASS load clean project scenes
+[2026-08-06T16:08:33.361969+00:00] PASS create Storyboard blueprint
+[2026-08-06T16:08:33.368228+00:00] PASS exercise Storyboard continuity review
+[2026-08-06T16:08:33.373118+00:00] PASS approve Storyboard version
+[2026-08-06T16:08:33.379097+00:00] PASS reject invalid workflow ownership
+[2026-08-06T16:08:33.384229+00:00] PASS begin canonical production thread
+[2026-08-06T16:08:33.470328+00:00] PASS generate Previs
+[2026-08-06T16:08:33.474726+00:00] PASS repeat Previs generation idempotently
+[2026-08-06T16:08:33.474755+00:00] PASS Previs duplicate submission prevented
+[2026-08-06T16:08:33.478378+00:00] PASS reject unconfirmed Previs approval
+[2026-08-06T16:08:33.485358+00:00] PASS approve Previs
+[2026-08-06T16:08:33.491225+00:00] PASS create production package
+[2026-08-06T16:08:33.507862+00:00] PASS render production package with simulated provider
+[2026-08-06T16:08:33.777014+00:00] PASS poll provider job 1 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:33.787920+00:00] PASS poll canonical render 1
+[2026-08-06T16:08:34.045621+00:00] PASS poll provider job 2 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:34.050856+00:00] PASS poll canonical render 2
+[2026-08-06T16:08:34.312400+00:00] PASS poll provider job 3 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:34.320460+00:00] PASS poll canonical render 3
+[2026-08-06T16:08:34.582940+00:00] PASS poll provider job 4 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:34.587558+00:00] PASS poll canonical render 4
+[2026-08-06T16:08:34.844007+00:00] PASS poll provider job 5 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:34.848627+00:00] PASS poll canonical render 5
+[2026-08-06T16:08:35.111635+00:00] PASS poll provider job 6 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:35.117248+00:00] PASS poll canonical render 6
+[2026-08-06T16:08:35.378975+00:00] PASS poll provider job 7 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:35.384946+00:00] PASS poll canonical render 7
+[2026-08-06T16:08:35.650237+00:00] PASS poll provider job 8 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:35.659451+00:00] PASS poll canonical render 8
+[2026-08-06T16:08:35.927629+00:00] PASS poll provider job 9 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:35.932655+00:00] PASS poll canonical render 9
+[2026-08-06T16:08:36.191791+00:00] PASS poll provider job 10 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:36.200035+00:00] PASS poll canonical render 10
+[2026-08-06T16:08:36.460885+00:00] PASS poll provider job 11 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:36.466732+00:00] PASS poll canonical render 11
+[2026-08-06T16:08:36.728865+00:00] PASS poll provider job 12 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:36.734808+00:00] PASS poll canonical render 12
+[2026-08-06T16:08:37.001730+00:00] PASS poll provider job 13 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:37.007773+00:00] PASS poll canonical render 13
+[2026-08-06T16:08:37.265339+00:00] PASS poll provider job 14 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:37.273419+00:00] PASS poll canonical render 14
+[2026-08-06T16:08:37.533253+00:00] PASS poll provider job 15 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:37.539562+00:00] PASS poll canonical render 15
+[2026-08-06T16:08:37.807899+00:00] PASS poll provider job 16 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:37.815107+00:00] PASS poll canonical render 16
+[2026-08-06T16:08:38.080404+00:00] PASS poll provider job 17 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:38.086516+00:00] PASS poll canonical render 17
+[2026-08-06T16:08:38.352759+00:00] PASS poll provider job 18 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:38.361606+00:00] PASS poll canonical render 18
+[2026-08-06T16:08:38.626978+00:00] PASS poll provider job 19 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:38.635132+00:00] PASS poll canonical render 19
+[2026-08-06T16:08:38.894373+00:00] PASS poll provider job 20 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:38.901794+00:00] PASS poll canonical render 20
+[2026-08-06T16:08:39.169803+00:00] PASS poll provider job 21 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:39.177470+00:00] PASS poll canonical render 21
+[2026-08-06T16:08:39.444470+00:00] PASS poll provider job 22 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:39.449805+00:00] PASS poll canonical render 22
+[2026-08-06T16:08:39.711182+00:00] PASS poll provider job 23 (job-20260806120833-ddb58ed1-scene_001_shot_001)
+[2026-08-06T16:08:39.718507+00:00] PASS poll canonical render 23
+[2026-08-06T16:08:39.725315+00:00] PASS repeat production render idempotently
+[2026-08-06T16:08:39.725341+00:00] PASS production render duplicate submission prevented
+[2026-08-06T16:08:39.736313+00:00] PASS sync Screening output
+[2026-08-06T16:08:39.741174+00:00] PASS reject unconfirmed Screening approval
+[2026-08-06T16:08:39.751388+00:00] PASS approve Screening output
+[2026-08-06T16:08:39.767914+00:00] PASS exercise Editorial analysis
+[2026-08-06T16:08:39.773125+00:00] PASS reject unconfirmed Editorial decision
+[2026-08-06T16:08:39.784841+00:00] PASS apply Editorial decision
+[2026-08-06T16:08:39.792796+00:00] PASS update Film Cut
+[2026-08-06T16:08:39.797406+00:00] PASS reject unconfirmed Film Cut approval
+[2026-08-06T16:08:39.804417+00:00] PASS approve Film Cut
+[2026-08-06T16:08:39.810928+00:00] PASS create clip revision
+[2026-08-06T16:08:39.880969+00:00] PASS submit revision render
+[2026-08-06T16:08:40.156097+00:00] PASS poll canonical revision render 1
+[2026-08-06T16:08:40.417923+00:00] PASS poll canonical revision render 2
+[2026-08-06T16:08:40.691577+00:00] PASS poll canonical revision render 3
+[2026-08-06T16:08:40.959094+00:00] PASS poll canonical revision render 4
+[2026-08-06T16:08:41.231710+00:00] PASS poll canonical revision render 5
+[2026-08-06T16:08:41.502664+00:00] PASS poll canonical revision render 6
+[2026-08-06T16:08:41.774493+00:00] PASS poll canonical revision render 7
+[2026-08-06T16:08:42.047085+00:00] PASS poll canonical revision render 8
+[2026-08-06T16:08:42.319721+00:00] PASS poll canonical revision render 9
+[2026-08-06T16:08:42.595828+00:00] PASS poll canonical revision render 10
+[2026-08-06T16:08:42.864087+00:00] PASS poll canonical revision render 11
+[2026-08-06T16:08:43.125836+00:00] PASS poll canonical revision render 12
+[2026-08-06T16:08:43.390438+00:00] PASS poll canonical revision render 13
+[2026-08-06T16:08:43.654747+00:00] PASS poll canonical revision render 14
+[2026-08-06T16:08:43.921913+00:00] PASS poll canonical revision render 15
+[2026-08-06T16:08:44.195268+00:00] PASS poll canonical revision render 16
+[2026-08-06T16:08:44.453841+00:00] PASS poll canonical revision render 17
+[2026-08-06T16:08:44.724000+00:00] PASS poll canonical revision render 18
+[2026-08-06T16:08:44.986795+00:00] PASS poll canonical revision render 19
+[2026-08-06T16:08:45.257514+00:00] PASS poll canonical revision render 20
+[2026-08-06T16:08:45.528126+00:00] PASS poll canonical revision render 21
+[2026-08-06T16:08:45.798273+00:00] PASS poll canonical revision render 22
+[2026-08-06T16:08:46.072035+00:00] PASS poll canonical revision render 23
+[2026-08-06T16:08:46.072067+00:00] PASS revision polling reused submitted job
+[2026-08-06T16:08:46.077065+00:00] PASS reject implicit memory save
+[2026-08-06T16:08:46.085992+00:00] PASS save approved memory explicitly
+[2026-08-06T16:08:46.091999+00:00] PASS reload durable canonical run
+[2026-08-06T16:08:46.097527+00:00] PASS list canonical runs for exact scene
+[2026-08-06T16:08:46.103059+00:00] PASS SQLite persistence matches API state
+[2026-08-06T16:08:51.750708+00:00] PASS managed backend became healthy
+[2026-08-06T16:08:51.758534+00:00] PASS reload canonical run after backend restart
+[2026-08-06T16:08:51.758562+00:00] PASS persistence survived backend restart
+[2026-08-06T16:08:51.759580+00:00] VERIFIED run=workflow-76e30cbfc425 status=revision_completed transitions=15 provider=SIMULATED

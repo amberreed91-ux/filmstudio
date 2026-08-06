@@ -1,0 +1,1198 @@
+[
+  {
+    "details": {
+      "python": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/bin/python"
+    },
+    "name": "dependencies validated",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:26.262531+00:00"
+  },
+  {
+    "details": {
+      "base_url": "http://127.0.0.1:50537"
+    },
+    "name": "managed backend became healthy",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:31.933146+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.63,
+      "method": "GET",
+      "path": "/health",
+      "status": 200
+    },
+    "name": "backend health",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:31.939063+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 1192.11,
+      "method": "GET",
+      "path": "/openapi.json",
+      "status": 200
+    },
+    "name": "runtime OpenAPI",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.137164+00:00"
+  },
+  {
+    "details": {
+      "required_path_count": 4
+    },
+    "name": "required runtime routes are mounted",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.186574+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 151.17,
+      "method": "POST",
+      "path": "/api/f51/studio/projects",
+      "status": 200
+    },
+    "name": "create clean project through API",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.337848+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 9.09,
+      "method": "PUT",
+      "path": "/api/f51/studio/projects/checkpoint7-226b67f779",
+      "status": 200
+    },
+    "name": "persist canonical script and scene through API",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.347040+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.99,
+      "method": "GET",
+      "path": "/api/f51/studio/projects/checkpoint7-226b67f779/scenes",
+      "status": 200
+    },
+    "name": "load clean project scenes",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.354091+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.77,
+      "method": "POST",
+      "path": "/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/storyboard-blueprint",
+      "status": 200
+    },
+    "name": "create Storyboard blueprint",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.361967+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.18,
+      "method": "POST",
+      "path": "/api/f51/studio/storyboard-blueprints/sbp_checkpoint7-226b67f779_scene_001_2ab24fca/versions/sbv_ce016dee578d/continuity-review",
+      "status": 200
+    },
+    "name": "exercise Storyboard continuity review",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.368227+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.77,
+      "method": "POST",
+      "path": "/api/f51/studio/storyboard-blueprints/sbp_checkpoint7-226b67f779_scene_001_2ab24fca/versions/sbv_ce016dee578d/approve",
+      "status": 200
+    },
+    "name": "approve Storyboard version",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.373116+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.9,
+      "method": "POST",
+      "path": "/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/production-thread",
+      "status": 409
+    },
+    "name": "reject invalid workflow ownership",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.379095+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.01,
+      "method": "POST",
+      "path": "/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/production-thread",
+      "status": 200
+    },
+    "name": "begin canonical production thread",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.384227+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 85.96,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/previs/generate",
+      "status": 200
+    },
+    "name": "generate Previs",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.470325+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.27,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/previs/generate",
+      "status": 200
+    },
+    "name": "repeat Previs generation idempotently",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.474724+00:00"
+  },
+  {
+    "details": {
+      "render_job_ids": [
+        "job-20260806120833-a53c68f9-scene_001_shot_001"
+      ]
+    },
+    "name": "Previs duplicate submission prevented",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.474754+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 3.56,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/previs/approve",
+      "status": 422
+    },
+    "name": "reject unconfirmed Previs approval",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.478376+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.87,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/previs/approve",
+      "status": 200
+    },
+    "name": "approve Previs",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.485356+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.73,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/production-package",
+      "status": 200
+    },
+    "name": "create production package",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.491224+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 16.49,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "render production package with simulated provider",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.507860+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.76,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 1 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.777009+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 10.61,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 1",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:33.787914+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.23,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 2 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:34.045619+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.09,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 2",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:34.050854+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 3.81,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 3 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:34.312397+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.9,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 3",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:34.320457+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 3.75,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 4 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:34.582938+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.48,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 4",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:34.587556+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 3.2,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 5 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:34.844004+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.49,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 5",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:34.848625+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 3.64,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 6 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:35.111633+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.47,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 6",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:35.117246+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.0,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 7 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:35.378972+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.82,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 7",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:35.384944+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.29,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 8 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:35.650232+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.94,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 8",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:35.659447+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.38,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 9 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:35.927627+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.89,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 9",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:35.932653+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.08,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 10 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:36.191787+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.07,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 10",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:36.200029+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 9.22,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 11 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:36.460882+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.7,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 11",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:36.466730+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.46,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 12 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:36.728863+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.78,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 12",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:36.734806+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.4,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 13 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:37.001728+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.9,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 13",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:37.007770+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.84,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 14 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:37.265334+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.83,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 14",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:37.273415+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.48,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 15 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:37.533251+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.16,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 15",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:37.539559+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.12,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 16 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:37.807897+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.07,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 16",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:37.815105+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.05,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 17 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:38.080402+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.96,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 17",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:38.086514+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.92,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 18 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:38.352755+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.51,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 18",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:38.361602+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.98,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 19 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:38.626974+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.89,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 19",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:38.635128+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.79,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 20 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:38.894371+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.16,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 20",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:38.901791+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.77,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 21 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.169800+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.43,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 21",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.177467+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.19,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 22 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.444467+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.13,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 22",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.449803+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 9.47,
+      "method": "GET",
+      "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status",
+      "status": 200
+    },
+    "name": "poll provider job 23 (job-20260806120833-ddb58ed1-scene_001_shot_001)",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.711178+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.07,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "poll canonical render 23",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.718503+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.57,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders",
+      "status": 200
+    },
+    "name": "repeat production render idempotently",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.725312+00:00"
+  },
+  {
+    "details": {
+      "render_job_ids": [
+        "job-20260806120833-ddb58ed1-scene_001_shot_001"
+      ]
+    },
+    "name": "production render duplicate submission prevented",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.725337+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 10.68,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/screening/sync",
+      "status": 200
+    },
+    "name": "sync Screening output",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.736309+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.76,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/screening/approve",
+      "status": 422
+    },
+    "name": "reject unconfirmed Screening approval",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.741172+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 9.95,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/screening/approve",
+      "status": 200
+    },
+    "name": "approve Screening output",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.751386+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 16.23,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/analyze",
+      "status": 200
+    },
+    "name": "exercise Editorial analysis",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.767912+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.13,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/decide",
+      "status": 422
+    },
+    "name": "reject unconfirmed Editorial decision",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.773122+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 11.48,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/decide",
+      "status": 200
+    },
+    "name": "apply Editorial decision",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.784839+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.7,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/update",
+      "status": 200
+    },
+    "name": "update Film Cut",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.792794+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.54,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/approve",
+      "status": 422
+    },
+    "name": "reject unconfirmed Film Cut approval",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.797404+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.8,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/approve",
+      "status": 200
+    },
+    "name": "approve Film Cut",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.804414+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.25,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision",
+      "status": 200
+    },
+    "name": "create clip revision",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.810926+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 69.2,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "submit revision render",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:39.880967+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 18.93,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 1",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:40.156093+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.97,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 2",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:40.417921+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 22.83,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 3",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:40.691572+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 16.24,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 4",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:40.959090+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 11.97,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 5",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:41.231705+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 9.77,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 6",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:41.502661+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 10.53,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 7",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:41.774481+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 12.11,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 8",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:42.047083+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 10.85,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 9",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:42.319718+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 15.38,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 10",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:42.595825+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 13.07,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 11",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:42.864085+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 6.12,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 12",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:43.125833+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 12.26,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 13",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:43.390435+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.26,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 14",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:43.654745+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.83,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 15",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:43.921911+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 11.87,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 16",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:44.195266+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.73,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 17",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:44.453838+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 9.61,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 18",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:44.723998+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 9.81,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 19",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:44.986790+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 10.21,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 20",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:45.257512+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 10.0,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 21",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:45.528123+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 12.53,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 22",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:45.798271+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 10.65,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render",
+      "status": 200
+    },
+    "name": "poll canonical revision render 23",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:46.072028+00:00"
+  },
+  {
+    "details": {
+      "revision_job_id": "job-20260806120839-37df58c3-scene_001_shot_001"
+    },
+    "name": "revision polling reused submitted job",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:46.072065+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.9,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/memory",
+      "status": 422
+    },
+    "name": "reject implicit memory save",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:46.077062+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 8.57,
+      "method": "POST",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/memory",
+      "status": 200
+    },
+    "name": "save approved memory explicitly",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:46.085989+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 4.64,
+      "method": "GET",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425",
+      "status": 200
+    },
+    "name": "reload durable canonical run",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:46.091996+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 5.22,
+      "method": "GET",
+      "path": "/api/f51/studio/projects/checkpoint7-226b67f779/production-threads?scene_id=scene_001",
+      "status": 200
+    },
+    "name": "list canonical runs for exact scene",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:46.097523+00:00"
+  },
+  {
+    "details": {},
+    "name": "SQLite persistence matches API state",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:46.103040+00:00"
+  },
+  {
+    "details": {
+      "base_url": "http://127.0.0.1:50537"
+    },
+    "name": "managed backend became healthy",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:51.750678+00:00"
+  },
+  {
+    "details": {
+      "duration_ms": 7.5,
+      "method": "GET",
+      "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425",
+      "status": 200
+    },
+    "name": "reload canonical run after backend restart",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:51.758532+00:00"
+  },
+  {
+    "details": {
+      "run_id": "workflow-76e30cbfc425"
+    },
+    "name": "persistence survived backend restart",
+    "status": "passed",
+    "timestamp": "2026-08-06T16:08:51.758560+00:00"
+  }
+]

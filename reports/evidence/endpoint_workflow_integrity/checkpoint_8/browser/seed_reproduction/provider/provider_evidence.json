@@ -1,0 +1,59 @@
+{
+  "attached_application_record": "workflow-76e30cbfc425",
+  "classification": "SIMULATED PROVIDER VERIFICATION",
+  "final_status": "revision_completed",
+  "paid_provider_calls": false,
+  "provider": "simulated",
+  "provider_job_ids": [
+    "sim-job-20260806120833-ddb58ed1-scene_001_shot_001"
+  ],
+  "render_artifacts": [
+    {
+      "asset_id": "asset:job-20260806120833-ddb58ed1-scene_001_shot_001",
+      "clip_id": "clip:job-20260806120833-ddb58ed1-scene_001_shot_001",
+      "output_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "previs_image_id": "previs_checkpoint7-226b67f779_scene_001_job-20260806120833-a53c68f9-scene_001_shot_001",
+      "provider_job_id": "sim-job-20260806120833-ddb58ed1-scene_001_shot_001",
+      "render_job_id": "job-20260806120833-ddb58ed1-scene_001_shot_001",
+      "render_request_id": "render-request:job-20260806120833-ddb58ed1-scene_001_shot_001",
+      "shot_id": "scene_001_shot_001",
+      "status": "complete",
+      "storyboard_shot_id": "sbs_108c57df295e"
+    }
+  ],
+  "request": {
+    "blueprint_version_id": "sbv_ce016dee578d",
+    "project_id": "checkpoint7-226b67f779",
+    "run_id": "workflow-76e30cbfc425"
+  },
+  "revision": {
+    "created_at": "2026-08-06T16:08:39.807669+00:00",
+    "metadata": {
+      "blueprint_id": "sbp_checkpoint7-226b67f779_scene_001_2ab24fca",
+      "blueprint_version_id": "sbv_ce016dee578d",
+      "canonical_workflow_run_id": "workflow-76e30cbfc425",
+      "changed_fields": [
+        "timing",
+        "performance_guidance"
+      ],
+      "editorial_analysis_id": "editorial-analysis-b15f96c915af",
+      "editorial_application_id": "editorial-application-be8819d5e689",
+      "film_cut_id": "film-cut-checkpoint7-226b67f779-v2-f2fe17",
+      "preserved_continuity": true,
+      "production_package_id": "previs_pkg_cb07ff4ec547",
+      "source_cut_id": "default"
+    },
+    "new_job_id": "job-20260806120839-37df58c3-scene_001_shot_001",
+    "original_job_id": "job-20260806120833-ddb58ed1-scene_001_shot_001",
+    "output_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "project_id": "checkpoint7-226b67f779",
+    "provider": "simulated",
+    "review_id": "review-workflow-76e30cbfc425",
+    "revision_id": "revision-724e2985244d",
+    "revision_prompt": "Hold one additional breath before the cut.",
+    "revision_reason": "Protect the emotional residue selected in Editorial.",
+    "status": "complete",
+    "updated_at": "2026-08-06T16:08:46.067955+00:00"
+  },
+  "timestamp": "2026-08-06T16:08:51.758574+00:00"
+}

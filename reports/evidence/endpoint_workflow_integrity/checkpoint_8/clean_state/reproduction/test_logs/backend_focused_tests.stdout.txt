@@ -1,0 +1,12 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.9, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend
+configfile: pytest.ini
+plugins: anyio-4.14.1, typeguard-4.5.2, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 5 items
+
+tests/test_checkpoint_5_canonical_workflow_thread.py ...                 [ 60%]
+tests/test_checkpoint_5_canonical_workflow_routes.py ..                  [100%]
+
+============================== 5 passed in 9.10s ===============================

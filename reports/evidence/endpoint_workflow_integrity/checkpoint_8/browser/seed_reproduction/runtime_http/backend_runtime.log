@@ -1,0 +1,340 @@
+
+=== backend start 2026-08-06T16:08:26.263871+00:00 ===
+INFO:     Started server process [93035]
+INFO:     Waiting for application startup.
+Starting Studio API
+Studio API build commit: f41e1605eef8e08e8c44032a992e9549c604dace
+Runway API configured: True
+Database backup initialized: {'backup_dir': 'backups', 'total_backups': 0, 'last_backup': None, 'max_retention': 7}
+Loaded 0 jobs from database
+Render recovery summary: {'hydrated_jobs': 0, 'recovered_jobs': 0, 'stale_recovered_jobs': 0, 'orphan_reconciled_jobs': 0, 'error_count': 0, 'errors': []}
+Render retry/adherence service initialized with storage and media services
+Study memory service initialized with storage
+Short film review service initialized with storage
+Clip revision service initialized with storage and render service
+Final short film package service initialized with storage and other services
+Standing corrections service initialized with storage
+Production queue initialized: {'expired_leases': 0, 'recovered_at': '2026-08-06T12:08:31.611579'}
+Task registry: registered 'queue-worker'
+Started production queue worker task
+Task registry: registered 'render-polling'
+Started background Runway job polling task
+PRODUCTION_QUEUE_WORKER_STARTED | owner=studio-api-93035-ef778737
+POLLING_LOOP_STARTED | interval=10s | statuses=['queued', 'pending', 'rendering', 'processing', 'submitted']
+POLLING_CYCLE | checking=0 jobs
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:50537 (Press CTRL+C to quit)
+{"timestamp": 1786032511.9323761, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/health", "query": null, "status_code": 200, "duration_ms": 252.2, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50565 - "GET /health HTTP/1.1" 200 OK
+{"timestamp": 1786032511.938123, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/health", "query": null, "status_code": 200, "duration_ms": 3.97, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50566 - "GET /health HTTP/1.1" 200 OK
+{"timestamp": 1786032513.1296399, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/openapi.json", "query": null, "status_code": 200, "duration_ms": 1189.51, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50567 - "GET /openapi.json HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': '', 'provider': '', 'stage': 'project_creation', 'duration_ms': 147}
+{"timestamp": 1786032513.337135, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/projects", "query": null, "status_code": 200, "duration_ms": 149.43, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50572 - "POST /api/f51/studio/projects HTTP/1.1" 200 OK
+{"timestamp": 1786032513.3462882, "level": "info", "logger": "studio-http", "request_id": "", "method": "PUT", "path": "/api/f51/studio/projects/checkpoint7-226b67f779", "query": null, "status_code": 200, "duration_ms": 7.51, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50573 - "PUT /api/f51/studio/projects/checkpoint7-226b67f779 HTTP/1.1" 200 OK
+{"timestamp": 1786032513.353195, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/projects/checkpoint7-226b67f779/scenes", "query": null, "status_code": 200, "duration_ms": 5.32, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50574 - "GET /api/f51/studio/projects/checkpoint7-226b67f779/scenes HTTP/1.1" 200 OK
+SHOT_PROMPT_BUILT | shot=1 | take=1 | length=250 | type=Wide establishing shot. Camera far back. Full envi
+project_id=checkpoint7-226b67f779 job_id=storyboard_scene_001 provider=internal stage=storyboard_blueprint_create duration_ms=2
+{"timestamp": 1786032513.361221, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/storyboard-blueprint", "query": null, "status_code": 200, "duration_ms": 6.32, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50575 - "POST /api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/storyboard-blueprint HTTP/1.1" 200 OK
+project_id=checkpoint7-226b67f779 job_id=storyboard_scene_001 provider=internal stage=storyboard_continuity_review duration_ms=2
+{"timestamp": 1786032513.3674629, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/storyboard-blueprints/sbp_checkpoint7-226b67f779_scene_001_2ab24fca/versions/sbv_ce016dee578d/continuity-review", "query": null, "status_code": 200, "duration_ms": 4.61, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50576 - "POST /api/f51/studio/storyboard-blueprints/sbp_checkpoint7-226b67f779_scene_001_2ab24fca/versions/sbv_ce016dee578d/continuity-review HTTP/1.1" 200 OK
+{"timestamp": 1786032513.3724248, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/storyboard-blueprints/sbp_checkpoint7-226b67f779_scene_001_2ab24fca/versions/sbv_ce016dee578d/approve", "query": null, "status_code": 200, "duration_ms": 3.34, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50577 - "POST /api/f51/studio/storyboard-blueprints/sbp_checkpoint7-226b67f779_scene_001_2ab24fca/versions/sbv_ce016dee578d/approve HTTP/1.1" 200 OK
+{"timestamp": 1786032513.3784409, "level": "warning", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/production-thread", "query": null, "status_code": 409, "duration_ms": 4.53, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50578 - "POST /api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/production-thread HTTP/1.1" 409 Conflict
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_begin', 'duration_ms': 0, 'scene_id': 'scene_001', 'status': 'blueprint_approved'}
+{"timestamp": 1786032513.3835819, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/production-thread", "query": null, "status_code": 200, "duration_ms": 3.74, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50579 - "POST /api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/production-thread HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'job-20260806120833-a53c68f9-scene_001_shot_001', 'provider': 'runway', 'stage': 'render_context_enrichment', 'duration_ms': 1, 'selected_atom_count': 0}
+ENVIRONMENT_CONTINUITY_CONTEXT | project=checkpoint7-226b67f779 | shot=scene_001_shot_001 | location=frame | warnings=0 | refs=0
+RENDER_JOB_CREATED | job_id=job-20260806120833-a53c68f9-scene_001_shot_001 | provider=runway | hosted=False | key_present=True | test_mode=mock_success | use_mock=False | missing=none
+FINAL_RENDER_PROMPT | scene=scene_001 | prompt=Wide establishing shot. Camera far back. Full environment visible. Characters small in frame. Sets the location and mood.. Maya holds one breath, then
+Submitting job job-20260806120833-a53c68f9-scene_001_shot_001 to provider runway
+SEED_GENERATED | job=job-20260806120833-a53c68f9-scene_001_shot_001 | shot=scene_001_shot_001 | seed=1313460243
+Runway mock_success used for job=job-20260806120833-a53c68f9-scene_001_shot_001 provider_job_id=mock-task-job-20260806120833-a53c68f9-scene_001_shot_001
+AUDIT: submit_job render_job:job-20260806120833-a53c68f9-scene_001_shot_001 by None - provider=runway
+CONTINUITY_REVIEW_PASSED | scene=scene_001 | job=job-20260806120833-a53c68f9-scene_001_shot_001
+URL_REFRESHED | job=job-20260806120833-a53c68f9-scene_001_shot_001 | old_url=/outputs/mock-video/sample.mp4 | new_url=/outputs/mock-video/sample.mp4
+LOCAL_RENDER_VIDEO_REGISTERED | shot=scene_001_shot_001 | source=/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/mock-video/sample.mp4 | local_path=/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/renders/checkpoint7-226b67f779/sample.mp4
+Failed to extract frames for quality check | job=job-20260806120833-a53c68f9-scene_001_shot_001 | error=FFmpeg probe failed: [mov,mp4,m4a,3gp,3g2,mj2 @ 0x8e3420000] moov atom not found
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/renders/checkpoint7-226b67f779/sample.mp4: Invalid data found when processing input
+RENDER_QUALITY_CHECK_COMPLETE | job=job-20260806120833-a53c68f9-scene_001_shot_001 | project=checkpoint7-226b67f779 | shot=scene_001_shot_001
+project_id=checkpoint7-226b67f779 job_id=job-20260806120833-a53c68f9-scene_001_shot_001 provider=runway stage=previs_submit duration_ms=79
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_previs_generate', 'duration_ms': 82, 'scene_id': 'scene_001', 'status': 'previs_generated'}
+{"timestamp": 1786032513.469293, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/previs/generate", "query": null, "status_code": 200, "duration_ms": 84.26, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50580 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/previs/generate HTTP/1.1" 200 OK
+{"timestamp": 1786032513.473979, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/previs/generate", "query": null, "status_code": 200, "duration_ms": 2.66, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50581 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/previs/generate HTTP/1.1" 200 OK
+{"timestamp": 1786032513.477857, "level": "warning", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/previs/approve", "query": null, "status_code": 422, "duration_ms": 2.34, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50582 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/previs/approve HTTP/1.1" 422 Unprocessable Entity
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_previs_approve', 'duration_ms': 2, 'scene_id': 'scene_001', 'status': 'previs_approved'}
+{"timestamp": 1786032513.4847019, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/previs/approve", "query": null, "status_code": 200, "duration_ms": 5.62, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50583 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/previs/approve HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_package', 'duration_ms': 1, 'scene_id': 'scene_001', 'status': 'package_ready'}
+{"timestamp": 1786032513.490358, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/production-package", "query": null, "status_code": 200, "duration_ms": 4.13, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50584 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/production-package HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'job-20260806120833-ddb58ed1-scene_001_shot_001', 'provider': 'simulated', 'stage': 'render_context_enrichment', 'duration_ms': 0, 'selected_atom_count': 0}
+ENVIRONMENT_CONTINUITY_CONTEXT | project=checkpoint7-226b67f779 | shot=scene_001_shot_001 | location=frame | warnings=0 | refs=1
+RENDER_JOB_CREATED | job_id=job-20260806120833-ddb58ed1-scene_001_shot_001 | provider=simulated | hosted=False | key_present=True | test_mode=mock_success | use_mock=False | missing=none
+FINAL_RENDER_PROMPT | scene=scene_001 | prompt=Wide establishing shot. Camera far back. Full environment visible. Characters small in frame. Sets the location and mood.. Maya holds one breath, then
+Submitting job job-20260806120833-ddb58ed1-scene_001_shot_001 to provider simulated
+SEED_REUSED | job=job-20260806120833-ddb58ed1-scene_001_shot_001 | shot=scene_001_shot_001 | seed=1313460243 | locked=False
+AUDIT: submit_job render_job:job-20260806120833-ddb58ed1-scene_001_shot_001 by None - provider=simulated
+{"timestamp": 1786032513.507123, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 15.14, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50585 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032513.775618, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 5.93, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50586 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032513.7865758, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 8.14, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50587 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032514.04492, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 1.91, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50588 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032514.0501912, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 3.73, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50589 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032514.311569, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 2.14, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50590 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032514.319683, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 6.35, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50591 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032514.581931, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 2.01, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50592 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032514.586933, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 2.95, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50593 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032514.843402, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 1.66, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50594 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032514.847872, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 3.19, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50595 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032515.110542, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 1.9, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50596 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032515.116491, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 3.97, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50597 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032515.3782458, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 2.19, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50598 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032515.384189, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 4.46, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50599 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032515.648465, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 4.46, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50600 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032515.657989, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 6.61, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50601 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032515.926912, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 3.93, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50602 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032515.9320068, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 3.37, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50603 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032516.190478, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 4.3, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50605 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032516.19908, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 5.91, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50606 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032516.460118, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 4.08, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50607 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032516.465791, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 3.47, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50608 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032516.7278268, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 2.24, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50609 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032516.734019, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 4.22, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50610 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032517.0009751, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 3.99, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50611 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032517.0069811, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 3.97, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50612 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032517.264111, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 3.87, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50615 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032517.272285, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 5.72, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50616 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032517.5322602, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 5.74, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50617 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032517.538916, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 4.58, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50618 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032517.8068988, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 5.98, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50619 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032517.8142662, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 5.26, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50620 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032518.079472, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 2.65, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50621 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032518.085784, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 4.56, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50622 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032518.3515399, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 3.59, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50624 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032518.3603442, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 5.82, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50625 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032518.625931, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 3.15, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50626 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032518.633964, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 5.51, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50627 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032518.893443, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 2.54, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50628 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032518.900842, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 5.44, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50629 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032519.168523, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 3.79, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50630 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032519.176419, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 5.53, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50631 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032519.443452, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 3.1, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50632 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+{"timestamp": 1786032519.448997, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 3.31, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50633 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032519.709931, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status", "query": null, "status_code": 200, "duration_ms": 3.27, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50634 - "GET /api/f51/studio/render/jobs/job-20260806120833-ddb58ed1-scene_001_shot_001/status HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'simulated', 'stage': 'workflow_render', 'duration_ms': 1, 'scene_id': 'scene_001', 'status': 'render_completed'}
+{"timestamp": 1786032519.717437, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 5.09, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50635 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+{"timestamp": 1786032519.724301, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/renders", "query": null, "status_code": 200, "duration_ms": 4.47, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50636 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/renders HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_screening', 'duration_ms': 4, 'scene_id': 'scene_001', 'status': 'screening_ready'}
+{"timestamp": 1786032519.734949, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/screening/sync", "query": null, "status_code": 200, "duration_ms": 8.58, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50637 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/screening/sync HTTP/1.1" 200 OK
+{"timestamp": 1786032519.740393, "level": "warning", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/screening/approve", "query": null, "status_code": 422, "duration_ms": 3.07, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50638 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/screening/approve HTTP/1.1" 422 Unprocessable Entity
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_screening_approve', 'duration_ms': 4, 'scene_id': 'scene_001', 'status': 'screening_approved'}
+{"timestamp": 1786032519.750415, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/screening/approve", "query": null, "status_code": 200, "duration_ms": 8.32, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50639 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/screening/approve HTTP/1.1" 200 OK
+EDITORIAL_ANALYSIS_STARTED | project_id=checkpoint7-226b67f779 | provider=internal | stage=analyze_project
+EDITORIAL_CONTEXT_BUILT | project_id=checkpoint7-226b67f779 | provider=internal | stage=build_context | duration_ms=6 | cut_id=default | package_id=previs_pkg_cb07ff4ec547
+EDITORIAL_ANALYSIS_COMPLETED | project_id=checkpoint7-226b67f779 | analysis_id=editorial-analysis-b15f96c915af | provider=internal | stage=analyze_project | duration_ms=6
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_editorial_analyze', 'duration_ms': 10, 'scene_id': 'scene_001', 'status': 'editorial_analyzed'}
+{"timestamp": 1786032519.766923, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/analyze", "query": null, "status_code": 200, "duration_ms": 14.48, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50640 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/analyze HTTP/1.1" 200 OK
+{"timestamp": 1786032519.77245, "level": "warning", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/decide", "query": null, "status_code": 422, "duration_ms": 3.6, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50641 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/decide HTTP/1.1" 422 Unprocessable Entity
+EDITORIAL_DECISION_APPLICATION_COMPLETED | project_id=checkpoint7-226b67f779 | analysis_id=editorial-analysis-b15f96c915af | provider=internal | stage=apply_decisions | duration_ms=5
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_editorial_decide', 'duration_ms': 6, 'scene_id': 'scene_001', 'status': 'editorial_decided'}
+{"timestamp": 1786032519.78394, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/decide", "query": null, "status_code": 200, "duration_ms": 10.0, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50642 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/editorial/decide HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_cut_update', 'duration_ms': 2, 'scene_id': 'scene_001', 'status': 'cut_updated'}
+{"timestamp": 1786032519.792036, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/update", "query": null, "status_code": 200, "duration_ms": 6.28, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50643 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/update HTTP/1.1" 200 OK
+{"timestamp": 1786032519.796101, "level": "warning", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/approve", "query": null, "status_code": 422, "duration_ms": 2.46, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50644 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/approve HTTP/1.1" 422 Unprocessable Entity
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_cut_approve', 'duration_ms': 2, 'scene_id': 'scene_001', 'status': 'cut_approved'}
+{"timestamp": 1786032519.8036191, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/approve", "query": null, "status_code": 200, "duration_ms": 5.54, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50645 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/film-cut/approve HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_revision_create', 'duration_ms': 1, 'scene_id': 'scene_001', 'status': 'revision_pending'}
+{"timestamp": 1786032519.810096, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision", "query": null, "status_code": 200, "duration_ms": 4.93, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50646 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision HTTP/1.1" 200 OK
+SLOTTED_PROMPT_BUILT | shot=1 | budget_used=179 | budget_remaining=333
+RENDER_PROMPT_FROM_SCENE | scene=scene_001 | content_length=76 | action_length=54 | prompt_length=179 | slots={'character_state': 0, 'action': 54, 'environment_persistence': 8, 'camera': 70, 'lighting': 15, 'reserve': 0}
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'job-20260806120839-37df58c3-scene_001_shot_001', 'provider': 'simulated', 'stage': 'render_context_enrichment', 'duration_ms': 0, 'selected_atom_count': 0}
+crew_reasoning_created project_id=checkpoint7-226b67f779 task_id=None agent_role=cinematographer reasoning_id=reasoning-f84099b61456 stage=crew_reasoning_create duration_ms=0 trace_id=trace-1c3726f90fa0
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'job-20260806120839-37df58c3-scene_001_shot_001', 'provider': 'internal', 'stage': 'camera_grammar_plan_create', 'duration_ms': 1, 'plan_id': 'cam-plan-ebedecf3c602', 'scene_id': 'scene_001'}
+crew_reasoning_created project_id=checkpoint7-226b67f779 task_id=None agent_role=production_designer reasoning_id=reasoning-8ab030c9f9bd stage=crew_reasoning_create duration_ms=0 trace_id=trace-83a1067eef32
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'job-20260806120839-37df58c3-scene_001_shot_001', 'provider': 'internal', 'stage': 'production_design_plan_create', 'duration_ms': 1, 'plan_id': 'pd-plan-751119bff563', 'scene_id': 'scene_001'}
+crew_reasoning_created project_id=checkpoint7-226b67f779 task_id=None agent_role=colorist reasoning_id=reasoning-2d1f570c1d32 stage=crew_reasoning_create duration_ms=0 trace_id=trace-da12b432206f
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': '', 'provider': 'internal', 'stage': 'color_look_bible_create', 'duration_ms': 14, 'look_bible_id': 'color-look-6efc8fdf574b'}
+crew_reasoning_created project_id=checkpoint7-226b67f779 task_id=None agent_role=colorist reasoning_id=reasoning-959ae819ae21 stage=crew_reasoning_create duration_ms=0 trace_id=trace-d8b99d33c0f1
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'job-20260806120839-37df58c3-scene_001_shot_001', 'provider': 'internal', 'stage': 'colorist_look_plan_create', 'duration_ms': 19, 'plan_id': 'color-plan-95800a22d630', 'scene_id': 'scene_001'}
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': '', 'provider': 'internal', 'stage': 'casting_role_breakdown_build', 'duration_ms': 0, 'role_count': 1}
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'job-20260806120839-37df58c3-scene_001_shot_001', 'provider': 'internal', 'stage': 'department_render_context', 'duration_ms': 48, 'source_count': 4, 'warnings': 0}
+RENDER_JOB_CREATED | job_id=job-20260806120839-37df58c3-scene_001_shot_001 | provider=simulated | hosted=False | key_present=True | test_mode=mock_success | use_mock=False | missing=none
+FINAL_RENDER_PROMPT | scene=scene_001 | prompt=MAYA: wardrobe continuity from character memory; MAYA casting demands; must not contradict canonical character identity memory; carry MAYA's scene obj
+Submitting job job-20260806120839-37df58c3-scene_001_shot_001 to provider simulated
+SEED_REUSED | job=job-20260806120839-37df58c3-scene_001_shot_001 | shot=scene_001_shot_001 | seed=1313460243 | locked=False
+AUDIT: submit_job render_job:job-20260806120839-37df58c3-scene_001_shot_001 by None - provider=simulated
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'simulated', 'stage': 'workflow_revision_submit', 'duration_ms': 64, 'scene_id': 'scene_001', 'status': 'revision_pending'}
+{"timestamp": 1786032519.87956, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 67.85, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50647 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032520.154412, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 13.08, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50648 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032520.4170408, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 5.98, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50649 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032520.689918, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 16.59, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50650 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032520.95696, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 12.79, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50651 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032521.230264, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 7.27, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50652 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032521.5011961, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 6.86, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50653 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+POLLING_CYCLE | checking=1 jobs
+{"timestamp": 1786032521.773537, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 7.37, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50654 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032522.045953, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 5.88, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50655 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032522.317975, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 8.06, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50658 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032522.59405, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 7.66, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50659 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032522.863255, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 7.02, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50660 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032523.1248488, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 4.01, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50661 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032523.388913, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 7.1, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50663 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032523.653883, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 5.06, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50664 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032523.921, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 3.89, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50665 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032524.19437, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 8.58, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50666 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032524.452685, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 5.98, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50667 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032524.7231302, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 4.77, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50668 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032524.985368, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 6.69, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50669 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032525.2567139, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 4.85, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50670 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032525.5272121, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 6.73, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50671 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032525.797347, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 6.08, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50672 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_revision_render', 'duration_ms': 3, 'scene_id': 'scene_001', 'status': 'revision_completed'}
+{"timestamp": 1786032526.0709188, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render", "query": null, "status_code": 200, "duration_ms": 8.27, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50673 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/revision/render HTTP/1.1" 200 OK
+{"timestamp": 1786032526.076284, "level": "warning", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/memory", "query": null, "status_code": 422, "duration_ms": 3.03, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50674 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/memory HTTP/1.1" 422 Unprocessable Entity
+stability_event={'project_id': 'checkpoint7-226b67f779', 'job_id': 'workflow-76e30cbfc425', 'provider': 'internal', 'stage': 'workflow_memory_save', 'duration_ms': 3, 'scene_id': 'scene_001', 'status': 'revision_completed'}
+{"timestamp": 1786032526.084996, "level": "info", "logger": "studio-http", "request_id": "", "method": "POST", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425/memory", "query": null, "status_code": 200, "duration_ms": 6.99, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50675 - "POST /api/f51/studio/production-threads/workflow-76e30cbfc425/memory HTTP/1.1" 200 OK
+{"timestamp": 1786032526.089969, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425", "query": null, "status_code": 200, "duration_ms": 3.07, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50676 - "GET /api/f51/studio/production-threads/workflow-76e30cbfc425 HTTP/1.1" 200 OK
+{"timestamp": 1786032526.0965528, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/projects/checkpoint7-226b67f779/production-threads", "query": "scene_id=scene_001", "status_code": 200, "duration_ms": 3.71, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50677 - "GET /api/f51/studio/projects/checkpoint7-226b67f779/production-threads?scene_id=scene_001 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+Shutting down Studio API
+Task registry: cancelling 2 tasks
+PRODUCTION_QUEUE_WORKER_STOPPED | owner=studio-api-93035-ef778737
+Studio API shutdown complete
+INFO:     Application shutdown complete.
+INFO:     Finished server process [93035]
+
+=== backend start 2026-08-06T16:08:46.358933+00:00 ===
+INFO:     Started server process [93095]
+INFO:     Waiting for application startup.
+Starting Studio API
+Studio API build commit: f41e1605eef8e08e8c44032a992e9549c604dace
+Runway API configured: True
+Database backup initialized: {'backup_dir': 'backups', 'total_backups': 0, 'last_backup': None, 'max_retention': 7}
+Loaded 3 jobs from database
+Render recovery summary: {'hydrated_jobs': 3, 'recovered_jobs': 0, 'stale_recovered_jobs': 0, 'orphan_reconciled_jobs': 0, 'error_count': 0, 'errors': []}
+Render retry/adherence service initialized with storage and media services
+Study memory service initialized with storage
+Short film review service initialized with storage
+Clip revision service initialized with storage and render service
+Final short film package service initialized with storage and other services
+Standing corrections service initialized with storage
+Production queue initialized: {'expired_leases': 0, 'recovered_at': '2026-08-06T12:08:51.406870'}
+Task registry: registered 'queue-worker'
+Started production queue worker task
+Task registry: registered 'render-polling'
+Started background Runway job polling task
+PRODUCTION_QUEUE_WORKER_STARTED | owner=studio-api-93095-fe0e403d
+POLLING_LOOP_STARTED | interval=10s | statuses=['queued', 'pending', 'rendering', 'processing', 'submitted']
+POLLING_CYCLE | checking=0 jobs
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:50537 (Press CTRL+C to quit)
+{"timestamp": 1786032531.749738, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/health", "query": null, "status_code": 200, "duration_ms": 258.48, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50704 - "GET /health HTTP/1.1" 200 OK
+{"timestamp": 1786032531.757459, "level": "info", "logger": "studio-http", "request_id": "", "method": "GET", "path": "/api/f51/studio/production-threads/workflow-76e30cbfc425", "query": null, "status_code": 200, "duration_ms": 5.73, "client_ip": "127.0.0.1", "user_agent": "Python-urllib/3.11"}
+INFO:     127.0.0.1:50705 - "GET /api/f51/studio/production-threads/workflow-76e30cbfc425 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+Shutting down Studio API
+Task registry: cancelling 2 tasks
+PRODUCTION_QUEUE_WORKER_STOPPED | owner=studio-api-93095-fe0e403d
+Studio API shutdown complete
+INFO:     Application shutdown complete.
+INFO:     Finished server process [93095]

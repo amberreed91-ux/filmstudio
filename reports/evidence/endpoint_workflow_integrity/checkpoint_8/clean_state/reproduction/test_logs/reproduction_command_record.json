@@ -1,0 +1,27 @@
+{
+  "command": [
+    "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/bin/python",
+    "tools/verify_endpoint_workflow_integrity.py",
+    "--with-test-suite",
+    "--evidence-dir",
+    "reports/evidence/endpoint_workflow_integrity/checkpoint_8/clean_state/reproduction"
+  ],
+  "environment": {
+    "app_env": "local",
+    "external_backend": false,
+    "paid_provider_calls": false,
+    "platform": "darwin",
+    "provider_verification": "SIMULATED PROVIDER VERIFICATION",
+    "python_version": "3.11.9",
+    "render_provider_test_mode": "mock_success"
+  },
+  "exit_code": 0,
+  "failure_total": 0,
+  "finished_at": "2026-08-06T16:05:32.124565+00:00",
+  "pass_total": 114,
+  "skip_total": 0,
+  "started_at": "2026-08-06T16:04:41.108819+00:00",
+  "stderr": "reproduction_stderr.txt",
+  "stdout": "reproduction_stdout.txt",
+  "working_directory": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project"
+}

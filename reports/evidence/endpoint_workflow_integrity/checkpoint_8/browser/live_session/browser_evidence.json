@@ -1,0 +1,732 @@
+{
+  "target_url": "http://127.0.0.1:5001",
+  "project_id": "checkpoint7-226b67f779",
+  "run_id": "workflow-76e30cbfc425",
+  "started_at": "2026-08-06T16:12:41.433Z",
+  "checks": [
+    {
+      "name": "terminal canonical state rendered",
+      "status": "passed",
+      "details": {
+        "workflow_status": "revision_completed",
+        "project_id": "checkpoint7-226b67f779",
+        "scene_id": "scene_001"
+      }
+    },
+    {
+      "name": "browser refresh restored terminal state",
+      "status": "passed",
+      "details": {
+        "url": "http://127.0.0.1:5001/studio/screening-room?project_id=checkpoint7-226b67f779&scene=scene_001&shot=1"
+      }
+    },
+    {
+      "name": "explicit workflow refresh retained terminal state",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "canonical browser network paths resolved",
+      "status": "passed",
+      "details": {
+        "observed": 5,
+        "statuses": [
+          200
+        ]
+      }
+    },
+    {
+      "name": "no uncaught browser page errors during valid project and refresh checks",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "unknown project error visible in frontend",
+      "status": "passed",
+      "details": {
+        "unknown_project_id": "checkpoint8-unknown-1786032764931",
+        "alert": "{\"error_type\":\"state_error\",\"message\":\"Project not found\",\"stage\":\"workflow_ownership\",\"metadata\":{}}"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/providers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/providers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/overview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/overview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/editorial-intelligence/latest",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/film-cut",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/final-short-film-package/latest",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/jobs?project_id=checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/screening/manifest?refresh=true",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/poster",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/production-threads?scene_id=scene_001",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/editorial-intelligence/latest",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/film-cut",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/jobs?project_id=checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/final-short-film-package/latest",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/screening/manifest?refresh=true",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5001/api/f51/studio/emotion-analysis/projects/checkpoint7-226b67f779/scenes/scene_001/analyze",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/composition",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/poster",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/assembly-status",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/audio-brief",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5001/api/f51/studio/audience-simulator/projects/checkpoint7-226b67f779/scenes/scene_001/simulate",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/rationale",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/talent",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/roles",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/department-signal",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/talent",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/roles",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/department-signal",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/production-threads/workflow-76e30cbfc425",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/screening/media/screening_8856c47366af3d9f",
+      "status": 307
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/audio-brief",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/composition",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/assembly-status",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/crew/projects/checkpoint7-226b67f779/intelligence",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/crew/projects/checkpoint7-226b67f779/intelligence",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/rationale",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/audio-brief",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/rationale",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/providers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/providers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/overview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/overview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/editorial-intelligence/latest",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/film-cut",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/screening/manifest?refresh=true",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/final-short-film-package/latest",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/jobs?project_id=checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/poster",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/production-threads?scene_id=scene_001",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/film-cut",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/editorial-intelligence/latest",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/screening/manifest?refresh=true",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/final-short-film-package/latest",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/jobs?project_id=checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/composition",
+      "status": 404
+    },
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5001/api/f51/studio/emotion-analysis/projects/checkpoint7-226b67f779/scenes/scene_001/analyze",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/crew/projects/checkpoint7-226b67f779/intelligence",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/assembly-status",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/poster",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/audio-brief",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/crew/projects/checkpoint7-226b67f779/intelligence",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/rationale",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/talent",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/roles",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/department-signal",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5001/api/f51/studio/audience-simulator/projects/checkpoint7-226b67f779/scenes/scene_001/simulate",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/roles",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/talent",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/casting/department-signal",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/production-threads/workflow-76e30cbfc425",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/screening/media/screening_8856c47366af3d9f",
+      "status": 307
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/composition",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/assembly-status",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/audio-brief",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779/scenes/scene_001/rationale",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/production-threads/workflow-76e30cbfc425",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/providers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/providers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/overview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/overview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint7-226b67f779",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/editorial-intelligence/latest",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/film-cut",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/screening/manifest?refresh=true",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/final-short-film-package/latest",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/jobs?project_id=checkpoint8-unknown-1786032764931",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/scenes",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/poster",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/editorial-intelligence/latest",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/film-cut",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/screening/manifest?refresh=true",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/render/jobs?project_id=checkpoint8-unknown-1786032764931",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/final-short-film-package/latest",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/scenes",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/poster",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/editorial-intelligence/latest",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/production-threads?scene_id=scene_001",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/film-cut",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/crew/projects/checkpoint7-226b67f779/intelligence",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/editorial-intelligence/latest",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/projects/checkpoint8-unknown-1786032764931/film-cut",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5001/api/f51/studio/crew/projects/checkpoint7-226b67f779/intelligence",
+      "status": 200
+    }
+  ],
+  "console_errors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/film-cut: Error: {\"error_type\":\"state_error\",\"message\":\"Project not found\",\"stage\":\"film_cut_load\",\"metadata\":{}}\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931: Error: Project not found\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)\n    at async loadProject (http://127.0.0.1:5001/src/context/StudioContext.tsx:125:20)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/screening/manifest?refresh=true: Error: {\"error_type\":\"state_error\",\"message\":\"Project not found\",\"stage\":\"screening_project\",\"metadata\":{}}\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)\n    at async loadManifest (http://127.0.0.1:5001/src/pages/ScreeningRoom.tsx:272:22)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/scenes: Error: Project not found\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)\n    at async listScenes (http://127.0.0.1:5001/src/lib/studioApi.ts:507:20)\n    at async http://127.0.0.1:5001/src/pages/ScreeningRoom.tsx:289:19",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/film-cut: Error: {\"error_type\":\"state_error\",\"message\":\"Project not found\",\"stage\":\"film_cut_load\",\"metadata\":{}}\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/screening/manifest?refresh=true: Error: {\"error_type\":\"state_error\",\"message\":\"Project not found\",\"stage\":\"screening_project\",\"metadata\":{}}\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)\n    at async loadManifest (http://127.0.0.1:5001/src/pages/ScreeningRoom.tsx:272:22)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/scenes: Error: Project not found\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)\n    at async listScenes (http://127.0.0.1:5001/src/lib/studioApi.ts:507:20)\n    at async http://127.0.0.1:5001/src/pages/ScreeningRoom.tsx:289:19",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/production-threads?scene_id=scene_001: Error: {\"error_type\":\"state_error\",\"message\":\"Project not found\",\"stage\":\"workflow_ownership\",\"metadata\":{}}\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/film-cut: Error: {\"error_type\":\"state_error\",\"message\":\"Project not found\",\"stage\":\"film_cut_load\",\"metadata\":{}}\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)",
+    "[Studio API Error] /api/f51/studio/projects/checkpoint8-unknown-1786032764931/film-cut: Error: {\"error_type\":\"state_error\",\"message\":\"Project not found\",\"stage\":\"film_cut_load\",\"metadata\":{}}\n    at fetchJson (http://127.0.0.1:5001/src/lib/studioApi.ts:89:10)"
+  ],
+  "page_errors": [],
+  "intercepted_peripheral_requests": [
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5001/api/f51/studio/emotion-analysis/projects/checkpoint7-226b67f779/scenes/scene_001/analyze",
+      "reason": "Prevent external LLM activity during canonical workflow browser verification"
+    },
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5001/api/f51/studio/emotion-analysis/projects/checkpoint7-226b67f779/scenes/scene_001/analyze",
+      "reason": "Prevent external LLM activity during canonical workflow browser verification"
+    }
+  ],
+  "exit_code": 0,
+  "finished_at": "2026-08-06T16:12:46.090Z"
+}

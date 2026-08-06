@@ -1,0 +1,20 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "duration_ms": 10153.04,
+  "environment": {
+    "paid_provider_calls": false
+  },
+  "exit_code": 0,
+  "failure_total": 0,
+  "finished_at": "2026-08-06T16:05:31.936778+00:00",
+  "pass_total": 1,
+  "skip_total": 0,
+  "started_at": "2026-08-06T16:05:21.782945+00:00",
+  "stderr": "frontend_production_build.stderr.txt",
+  "stdout": "frontend_production_build.stdout.txt",
+  "working_directory": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app"
+}

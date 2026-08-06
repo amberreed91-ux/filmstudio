@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="100" failures="0" errors="0" time="0.161331459">
+    <testsuite name="src/routes.production-board.test.ts" timestamp="2026-08-06T16:07:27.221Z" hostname="Ambers-MacBook-Pro.local" tests="5" failures="0" errors="0" skipped="0" time="0.005106917">
+        <testcase classname="src/routes.production-board.test.ts" name="Production Board navigation contract &gt; primary nav includes Production Board at /studio/production-board" time="0.002123708">
+        </testcase>
+        <testcase classname="src/routes.production-board.test.ts" name="Production Board navigation contract &gt; app routes include Production Board component route" time="0.000380959">
+        </testcase>
+        <testcase classname="src/routes.production-board.test.ts" name="Production Board navigation contract &gt; production board keeps empty state render and has no writers-room redirect" time="0.001047292">
+        </testcase>
+        <testcase classname="src/routes.production-board.test.ts" name="Production Board navigation contract &gt; studio room aliases exist for workspace and development room navigation" time="0.000503125">
+        </testcase>
+        <testcase classname="src/routes.production-board.test.ts" name="Production Board navigation contract &gt; primary nav uses /studio/approval-room while preserving /studio/dashboard alias" time="0.000198834">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/hooks/useProductionRecovery.test.ts" timestamp="2026-08-06T16:07:27.222Z" hostname="Ambers-MacBook-Pro.local" tests="6" failures="0" errors="0" skipped="0" time="0.0021175">
+        <testcase classname="src/hooks/useProductionRecovery.test.ts" name="isProductionRecoveryContractError &gt; detects known backend contract method gaps" time="0.000697125">
+        </testcase>
+        <testcase classname="src/hooks/useProductionRecovery.test.ts" name="isProductionRecoveryContractError &gt; does not flag unrelated errors" time="0.000294458">
+        </testcase>
+        <testcase classname="src/hooks/useProductionRecovery.test.ts" name="shouldAutoRecoverProductionBoard &gt; does not auto-recover without project id" time="0.000184167">
+        </testcase>
+        <testcase classname="src/hooks/useProductionRecovery.test.ts" name="shouldAutoRecoverProductionBoard &gt; does not auto-recover when polling is disabled after an error" time="0.000074417">
+        </testcase>
+        <testcase classname="src/hooks/useProductionRecovery.test.ts" name="shouldAutoRecoverProductionBoard &gt; does not auto-recover when autoRecover is disabled" time="0.000089834">
+        </testcase>
+        <testcase classname="src/hooks/useProductionRecovery.test.ts" name="shouldAutoRecoverProductionBoard &gt; auto-recovers only when idle and explicitly enabled" time="0.000070875">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/components/CanonicalWorkflowPanel.test.tsx" timestamp="2026-08-06T16:07:27.223Z" hostname="Ambers-MacBook-Pro.local" tests="1" failures="0" errors="0" skipped="0" time="0.009228041">
+        <testcase classname="src/components/CanonicalWorkflowPanel.test.tsx" name="CanonicalWorkflowPanel &gt; renders exact project and scene context with an explicit start action" time="0.008580875">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/components/ProductionExecutionBay.test.tsx" timestamp="2026-08-06T16:07:27.223Z" hostname="Ambers-MacBook-Pro.local" tests="9" failures="0" errors="0" skipped="0" time="0.074732292">
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; renders execution bay structure" time="0.013042459">
+        </testcase>
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; shows honest empty job copy" time="0.007269209">
+        </testcase>
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; shows screening-ready guidance for completed jobs" time="0.010218042">
+        </testcase>
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; renders selected job hosted video preview when output exists" time="0.003878875">
+        </testcase>
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; prefers hosted output from render pool for selected shot context" time="0.004863417">
+        </testcase>
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; prefers hosted output even when hosted shot id differs from first selected local job" time="0.00708425">
+        </testcase>
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; shows failed render recovery guidance" time="0.002498375">
+        </testcase>
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; labels mock provider mode honestly" time="0.00781825">
+        </testcase>
+        <testcase classname="src/components/ProductionExecutionBay.test.tsx" name="ProductionExecutionBay &gt; preserves project id in CTAs" time="0.017179834">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/components/ScreeningEditorialComparisonPanel.test.tsx" timestamp="2026-08-06T16:07:27.224Z" hostname="Ambers-MacBook-Pro.local" tests="5" failures="0" errors="0" skipped="0" time="0.009604084">
+        <testcase classname="src/components/ScreeningEditorialComparisonPanel.test.tsx" name="ScreeningEditorialComparisonPanel &gt; renders low-data comparison prompt when context is not ready" time="0.00580675">
+        </testcase>
+        <testcase classname="src/components/ScreeningEditorialComparisonPanel.test.tsx" name="ScreeningEditorialComparisonPanel &gt; renders emotional residue emphasis label" time="0.000883458">
+        </testcase>
+        <testcase classname="src/components/ScreeningEditorialComparisonPanel.test.tsx" name="ScreeningEditorialComparisonPanel &gt; renders structural clarity emphasis label" time="0.001164917">
+        </testcase>
+        <testcase classname="src/components/ScreeningEditorialComparisonPanel.test.tsx" name="ScreeningEditorialComparisonPanel &gt; keeps copy free from numeric scoring language" time="0.000593958">
+        </testcase>
+        <testcase classname="src/components/ScreeningEditorialComparisonPanel.test.tsx" name="ScreeningEditorialComparisonPanel &gt; renders canonical editorial read when backend provides it" time="0.000491208">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/components/ScreeningTimelineIntelligencePanel.test.tsx" timestamp="2026-08-06T16:07:27.224Z" hostname="Ambers-MacBook-Pro.local" tests="3" failures="0" errors="0" skipped="0" time="0.009509875">
+        <testcase classname="src/components/ScreeningTimelineIntelligencePanel.test.tsx" name="ScreeningTimelineIntelligencePanel &gt; renders stitched-film timeline read" time="0.00759625">
+        </testcase>
+        <testcase classname="src/components/ScreeningTimelineIntelligencePanel.test.tsx" name="ScreeningTimelineIntelligencePanel &gt; renders low-data fallback reason" time="0.00056725">
+        </testcase>
+        <testcase classname="src/components/ScreeningTimelineIntelligencePanel.test.tsx" name="ScreeningTimelineIntelligencePanel &gt; avoids numeric scoring language in panel copy" time="0.000691375">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/canonicalWorkflowApi.test.ts" timestamp="2026-08-06T16:07:27.224Z" hostname="Ambers-MacBook-Pro.local" tests="4" failures="0" errors="0" skipped="0" time="0.006258917">
+        <testcase classname="src/lib/canonicalWorkflowApi.test.ts" name="canonical workflow API &gt; lists the exact project and scene without duplicating the API prefix" time="0.00384075">
+        </testcase>
+        <testcase classname="src/lib/canonicalWorkflowApi.test.ts" name="canonical workflow API &gt; begins a thread with explicit canonical identifiers and ordered beats" time="0.000743875">
+        </testcase>
+        <testcase classname="src/lib/canonicalWorkflowApi.test.ts" name="canonical workflow API &gt; rejects undefined identifiers before issuing a request" time="0.000652791">
+        </testcase>
+        <testcase classname="src/lib/canonicalWorkflowApi.test.ts" name="canonical workflow API &gt; uses one POST against the existing run when render is confirmed" time="0.000386708">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/canonicalWorkflowContext.test.ts" timestamp="2026-08-06T16:07:27.225Z" hostname="Ambers-MacBook-Pro.local" tests="4" failures="0" errors="0" skipped="0" time="0.004514292">
+        <testcase classname="src/lib/canonicalWorkflowContext.test.ts" name="canonical workflow context &gt; extracts identifiers from only the selected scene and preserves beat order" time="0.001975625">
+        </testcase>
+        <testcase classname="src/lib/canonicalWorkflowContext.test.ts" name="canonical workflow context &gt; does not leak a different scene when the requested scene is absent" time="0.000548417">
+        </testcase>
+        <testcase classname="src/lib/canonicalWorkflowContext.test.ts" name="canonical workflow context &gt; keeps room-specific approvals in Screening while Previs becomes read-only" time="0.00052925">
+        </testcase>
+        <testcase classname="src/lib/canonicalWorkflowContext.test.ts" name="canonical workflow context &gt; polls only queued work and submitted revisions" time="0.000507292">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/previsStoryboard.test.ts" timestamp="2026-08-06T16:07:27.225Z" hostname="Ambers-MacBook-Pro.local" tests="14" failures="0" errors="0" skipped="0" time="0.00287975">
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="initialStoryboardImageState &gt; starts successful image URLs in loading state" time="0.000687708">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="initialStoryboardImageState &gt; shows unavailable for missing URLs" time="0.000092958">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="initialStoryboardImageState &gt; keeps generation-in-progress distinct from unavailable" time="0.000058916">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="chooseDurationForProvider &gt; keeps editable custom durations when the provider supports them" time="0.000100042">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="chooseDurationForProvider &gt; uses the nearest valid option for fixed-duration providers" time="0.000059792">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="chooseDurationForProvider &gt; clamps malformed direct edits to a usable duration" time="0.000085916">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="providerIdForPrevisEngine &gt; routes named previs model choices through a backend-supported render provider" time="0.000091958">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="providerIdForPrevisEngine &gt; lets auto selection fall through to the backend default provider" time="0.000040834">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="promptChangedAfterEnhancement &gt; rejects unchanged prompt responses even when whitespace differs" time="0.000075917">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="promptChangedAfterEnhancement &gt; accepts genuinely changed enhanced prompt text" time="0.00006425">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="buildShotPlanningRenderPayload &gt; keeps only concrete shot-planning guidance for the render payload" time="0.000399459">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="buildStoryboardRenderReferences &gt; puts the active storyboard image first for image-conditioned video renders" time="0.0000795">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="shotNumberFromContinuityLabel &gt; targets the numbered shot from continuity review labels" time="0.000128417">
+        </testcase>
+        <testcase classname="src/lib/previsStoryboard.test.ts" name="shotNumberFromContinuityLabel &gt; rejects empty or unusable shot labels" time="0.000076125">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/previsVisualResolver.test.ts" timestamp="2026-08-06T16:07:27.226Z" hostname="Ambers-MacBook-Pro.local" tests="9" failures="0" errors="0" skipped="0" time="0.003335541">
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; matches exact shot_id first" time="0.0013615">
+        </testcase>
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; matches scene_id from metadata when shot_id differs" time="0.000185625">
+        </testcase>
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; matches exact scene_id field when present on render job" time="0.0001095">
+        </testcase>
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; matches normalized scene title" time="0.000183833">
+        </testcase>
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; matches normalized shot title" time="0.000115417">
+        </testcase>
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; falls back safely to project-level latest completed render" time="0.000169166">
+        </testcase>
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; ignores unrelated project outputs" time="0.0001455">
+        </testcase>
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; matches uploaded keyframe when render jobs are unavailable" time="0.000185">
+        </testcase>
+        <testcase classname="src/lib/previsVisualResolver.test.ts" name="resolveVisualForSceneAndShot &gt; returns honest empty state when no match exists" time="0.000094791">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/studioApi.test.ts" timestamp="2026-08-06T16:07:27.227Z" hostname="Ambers-MacBook-Pro.local" tests="37" failures="0" errors="0" skipped="0" time="0.0239005">
+        <testcase classname="src/lib/studioApi.test.ts" name="camera grammar API &gt; creates camera grammar plans through the cinematography API" time="0.003530166">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="camera grammar API &gt; builds camera grammar render context through the slot endpoint" time="0.000819125">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="enhancePrevisPrompt &gt; preserves exact context-supplied provenance from the API response" time="0.000521334">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="generateSceneStoryboard &gt; defaults storyboard generation to Qwen Image Max" time="0.000502625">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="generateSceneStoryboard &gt; can request the legacy storyboard provider" time="0.00023025">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="Previs lifecycle API &gt; threads the exact storyboard shot into generation" time="0.000343125">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="Previs lifecycle API &gt; uses the deliberate approval endpoint" time="0.000289042">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="Screening Room lifecycle API &gt; loads the project-scoped browser-safe manifest" time="0.000201917">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="Screening Room lifecycle API &gt; sends explicit creator confirmation for approval" time="0.00030025">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="Film Cut lifecycle API &gt; loads the canonical current Film Cut" time="0.00032925">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="Film Cut lifecycle API &gt; threads the expected version and explicit confirmation into timeline updates" time="0.000248958">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="Film Cut lifecycle API &gt; uses the explicit Film Cut approval endpoint" time="0.000227417">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="recommendGenerationSettings &gt; returns duration constraints with the recommendation" time="0.000257708">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="recommendGenerationSettings &gt; backfills duration constraints from an older backend response" time="0.000209083">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="getStudioProject &gt; includes session_id query when provided" time="0.000280833">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="getStudioProject &gt; omits session_id query when absent" time="0.000207459">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="getStudioProject &gt; preserves execution_summary.scene_intent from project response" time="0.0001945">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="getProjectDecisionGate &gt; normalizes wrapped decision gate payloads" time="0.000232667">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="getTimelineIntelligence &gt; fetches project timeline intelligence from the dedicated endpoint" time="0.00017975">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="getEditorialRevisionIntelligence &gt; calls editorial revision intelligence endpoint with revision ids and emphasis" time="0.000232125">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="generateScenePipeline &gt; calls the scene pipeline endpoint with manual post-render soundtrack payload" time="0.000292916">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="generateScenePipeline &gt; returns an error object when scene pipeline generation fails" time="0.008009125">
+            <system-err>
+[Studio API Error] /api/f51/studio/projects/proj-scene/scenes/scene_003/pipeline/generate: Error: Scene soundtrack enabled but missing audio source
+    at fetchJson (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:411:13)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at generateScenePipeline (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:2941:20)
+    at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.test.ts:630:22
+    at file:///Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="clip revision API helpers &gt; uses centralized API base for clip revision calls" time="0.000277333">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="render refresh helper &gt; posts to the refresh-url endpoint for a render job" time="0.000218917">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="retryRenderJobForAdherence &gt; posts to the explicit adherence retry endpoint with combined strategy" time="0.000218">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="seed demo studio project helper &gt; posts to the demo seed endpoint with deterministic project id" time="0.000204583">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="resolveStudioApiBase &gt; defaults to relative URLs when no env is provided" time="0.000060334">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="resolveStudioApiBase &gt; prefers configured VITE_API_BASE_URL when provided" time="0.000078333">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="resolveStudioApiBase &gt; normalizes stale local 8012 configuration to relative proxy URLs" time="0.000091541">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="resolveStudioApiBase &gt; joins API paths without duplicating an /api base suffix" time="0.00007425">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="co-director debate API &gt; uses the mounted canonical debate prefix" time="0.000170416">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="getSceneRationale &gt; fetches rationale with correct URL" time="0.000360875">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="getSceneRationale &gt; throws on 404" time="0.001899417">
+            <system-err>
+[Studio API Error] /api/f51/studio/projects/proj-1/scenes/nonexistent/rationale: Error: Scene not found
+    at fetchJson (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:411:13)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.test.ts:811:5
+    at file:///Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="studio workflow API &gt; loads project workflow summary from the canonical workflow route" time="0.000307833">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="studio workflow API &gt; creates workflow versions with JSON payloads" time="0.000279875">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="studio workflow API &gt; records workflow decisions against a gate" time="0.000625625">
+        </testcase>
+        <testcase classname="src/lib/studioApi.test.ts" name="studio workflow API &gt; updates workflow phase with a PUT request" time="0.000274667">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/ProductionBoard.test.tsx" timestamp="2026-08-06T16:07:27.230Z" hostname="Ambers-MacBook-Pro.local" tests="3" failures="0" errors="0" skipped="0" time="0.01014375">
+        <testcase classname="src/pages/ProductionBoard.test.tsx" name="buildScenePrompt &gt; starts with the scene description and stays within the length cap" time="0.000848625">
+        </testcase>
+        <testcase classname="src/pages/ProductionBoard.test.tsx" name="buildScenePrompt &gt; falls back to scene text when description is missing" time="0.00008125">
+        </testcase>
+        <testcase classname="src/pages/ProductionBoard.test.tsx" name="resolveSceneStoryboardUrl &gt; uses a per-shot storyboard image when the scene-level image is absent" time="0.008528458">
+        </testcase>
+    </testsuite>
+</testsuites>

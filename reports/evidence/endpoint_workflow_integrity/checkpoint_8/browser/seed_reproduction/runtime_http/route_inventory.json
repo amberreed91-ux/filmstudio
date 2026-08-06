@@ -1,0 +1,28 @@
+{
+  "canonical_paths": [
+    "/api/f51/studio/production-threads/{run_id}",
+    "/api/f51/studio/production-threads/{run_id}/editorial/analyze",
+    "/api/f51/studio/production-threads/{run_id}/editorial/decide",
+    "/api/f51/studio/production-threads/{run_id}/film-cut/approve",
+    "/api/f51/studio/production-threads/{run_id}/film-cut/update",
+    "/api/f51/studio/production-threads/{run_id}/memory",
+    "/api/f51/studio/production-threads/{run_id}/previs/approve",
+    "/api/f51/studio/production-threads/{run_id}/previs/generate",
+    "/api/f51/studio/production-threads/{run_id}/production-package",
+    "/api/f51/studio/production-threads/{run_id}/renders",
+    "/api/f51/studio/production-threads/{run_id}/revision",
+    "/api/f51/studio/production-threads/{run_id}/revision/render",
+    "/api/f51/studio/production-threads/{run_id}/screening/approve",
+    "/api/f51/studio/production-threads/{run_id}/screening/sync",
+    "/api/f51/studio/projects/{project_id}/production-threads",
+    "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/production-thread"
+  ],
+  "path_count": 527,
+  "required_paths": [
+    "/api/f51/studio/projects/{project_id}",
+    "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/storyboard-blueprint",
+    "/api/f51/studio/projects/{project_id}/scenes/{scene_id}/production-thread",
+    "/api/f51/studio/production-threads/{run_id}"
+  ],
+  "required_paths_present": true
+}
