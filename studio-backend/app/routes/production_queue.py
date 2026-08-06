@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel
 
 from app.models.production_queue import (
@@ -39,7 +39,11 @@ def create_queue_item(payload: ProductionQueueItemCreate):
 
 
 @router.post("/projects/{project_id}/scenes/{scene_id}/queue")
-def queue_scene_generation(project_id: str, scene_id: str, payload: QueueSceneRequest = QueueSceneRequest()):
+def queue_scene_generation(
+    project_id: str,
+    scene_id: str,
+    payload: QueueSceneRequest = Body(default_factory=QueueSceneRequest),
+):
     try:
         from app.services.project_store import project_store
 
@@ -102,7 +106,10 @@ def get_project_queue_summary(project_id: str):
 
 
 @router.post("/items/{queue_item_id}/cancel", response_model=ProductionQueueItem)
-def cancel_queue_item(queue_item_id: str, payload: QueueCancelRequest = QueueCancelRequest()):
+def cancel_queue_item(
+    queue_item_id: str,
+    payload: QueueCancelRequest = Body(default_factory=QueueCancelRequest),
+):
     try:
         return production_queue_service.cancel_item(queue_item_id, reason=payload.reason)
     except ValueError as exc:
@@ -110,7 +117,10 @@ def cancel_queue_item(queue_item_id: str, payload: QueueCancelRequest = QueueCan
 
 
 @router.post("/items/{queue_item_id}/retry", response_model=ProductionQueueItem)
-def retry_queue_item(queue_item_id: str, payload: QueueRetryRequest = QueueRetryRequest()):
+def retry_queue_item(
+    queue_item_id: str,
+    payload: QueueRetryRequest = Body(default_factory=QueueRetryRequest),
+):
     try:
         return production_queue_service.retry_item(queue_item_id, reason=payload.reason)
     except ValueError as exc:

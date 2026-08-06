@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
 import json
@@ -292,7 +292,10 @@ def create_render_job(
 
 
 @router.post("/jobs/{job_id}/queue")
-def queue_existing_render_job(job_id: str, payload: QueueRenderJobRequest = QueueRenderJobRequest()):
+def queue_existing_render_job(
+    job_id: str,
+    payload: QueueRenderJobRequest = Body(default_factory=QueueRenderJobRequest),
+):
     """Attach an existing render job to the durable production queue."""
     try:
         from app.services.production_queue_service import production_queue_service
@@ -357,7 +360,7 @@ async def retry_render_job(job_id: str):
 @router.post("/jobs/{job_id}/adherence-retry")
 async def retry_render_job_for_adherence(
     job_id: str,
-    payload: AdherenceRetryRequest = AdherenceRetryRequest(),
+    payload: AdherenceRetryRequest = Body(default_factory=AdherenceRetryRequest),
 ):
     """Run the explicit prompt-adherence retry loop for a completed render."""
     job = render_service.get_job(job_id)

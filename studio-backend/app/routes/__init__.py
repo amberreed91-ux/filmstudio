@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 
 from app.services.project_store import project_store
+from app.services.project_persistence_service import project_persistence_service
+from app.services.stability import StabilityError
 from app.services.service_registry import (
     project_service,
     reference_study_service as study_service,
@@ -15,6 +17,20 @@ from app.services.previs_seed_service import previs_seed_service
 from app.models import StudioProject
 
 logger = logging.getLogger(__name__)
+
+
+def _project_state_http_error(exc: StabilityError) -> HTTPException:
+    if exc.error_type == "validation_error":
+        status = 422
+    elif exc.error_type == "state_error":
+        status = 404 if "not found" in exc.message.lower() else 409
+    elif exc.error_type == "persistence_error":
+        status = 503
+    elif exc.error_type == "provider_error":
+        status = 502
+    else:
+        status = 500
+    return HTTPException(status_code=status, detail=exc.to_dict())
 
 
 def _sync_to_project_store(project) -> None:
@@ -293,12 +309,12 @@ async def study_reference_upload(
 # Project endpoints
 @projects_router.get("/projects/{project_id}")
 def get_project(project_id: str, session_id: Optional[str] = None):
-    persisted = project_store.get_project(project_id)
+    try:
+        persisted = project_persistence_service.load(project_id)
+    except StabilityError as exc:
+        raise _project_state_http_error(exc) from exc
     if persisted is not None:
         return persisted
-    project = _load_project_from_sqlite(project_id, session_id=session_id)
-    if project is not None:
-        return project
     logger.warning("PROJECT_NOT_FOUND | id=%s | db_checked=True", project_id)
     raise HTTPException(status_code=404, detail="Project not found")
 
@@ -543,19 +559,6 @@ def get_pending_shots(project_id: str):
     if error:
         raise HTTPException(status_code=400, detail=error)
     return {"project_id": project_id, "pending_shots": pending}
-def _load_project_from_sqlite(project_id: str, session_id: Optional[str] = None):
-    project = project_service.get_project(project_id, session_id=session_id)
-    if project is None:
-        return None
-
-    try:
-        if hasattr(project, "model_dump"):
-            project_store.save_project(project.model_dump(mode="json"))
-        elif isinstance(project, dict):
-            project_store.save_project(project)
-    except Exception as exc:
-        logger.debug("Could not mirror SQLite project %s to project_store: %s", project_id, exc)
-    return project
 
 
 # ---------------------------------------------------------------------------

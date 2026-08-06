@@ -86,34 +86,49 @@ def test_update_scene_review_and_film_cut():
     client = _client_with_store()
     created = client.post("/api/f51/studio/projects", json={"title": "Film"}).json()
     project_id = created["project_id"]
+    generated = client.post(
+        f"/api/f51/studio/projects/{project_id}/generate-scenes",
+        json={
+            "script_text": "INT. KITCHEN - NIGHT\nMara waits.\n\nINT. HALLWAY - NIGHT\nEli listens."
+        },
+    )
+    assert generated.status_code == 200
+    scenes = generated.json()["execution_summary"]["scenes"]
+    scene_ids = [scene["scene_id"] for scene in scenes[:2]]
+    assert len(scene_ids) == 2
 
     scene_review = client.put(
         f"/api/f51/studio/projects/{project_id}/scene-review",
         json={
-            "approved_scenes": ["scene_001"],
-            "reviewed_scenes": ["scene_001", "scene_002"],
-            "scene_review_status": {"scene_001": "approved", "scene_002": "needs_work"},
+            "approved_scenes": [scene_ids[0]],
+            "reviewed_scenes": scene_ids,
+            "scene_review_status": {scene_ids[0]: "approved", scene_ids[1]: "needs_work"},
         },
     )
     assert scene_review.status_code == 200
     review_payload = scene_review.json()
-    assert review_payload["approved_scenes"] == ["scene_001"]
+    assert review_payload["approved_scenes"] == [scene_ids[0]]
 
     cut_update = client.put(
         f"/api/f51/studio/projects/{project_id}/film-cut",
         json={
             "film_cut": {
                 "cut_id": "default",
-                "scene_order": ["scene_001", "scene_002"],
-                "included_scenes": ["scene_001"],
-                "excluded_scenes": ["scene_002"],
+                "scene_order": scene_ids,
+                "included_scenes": [scene_ids[0]],
+                "excluded_scenes": [scene_ids[1]],
                 "created_at": "2026-01-01T00:00:00Z",
             }
         },
     )
     assert cut_update.status_code == 200
     cut_payload = cut_update.json()
-    assert cut_payload["film_cut"]["included_scenes"] == ["scene_001"]
+    assert cut_payload["film_cut"]["included_scenes"] == [scene_ids[0]]
+
+    stored = get_storage("sqlite").get_project(project_id)
+    assert stored is not None
+    assert stored.approved_scenes == [scene_ids[0]]
+    assert stored.film_cut["included_scenes"] == [scene_ids[0]]
 
 
 def test_missing_project_safe_response():

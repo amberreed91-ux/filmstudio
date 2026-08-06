@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+
+from app.services.stability import PersistenceError
 
 
 ProjectState = Dict[str, Any]
@@ -111,17 +114,46 @@ class ProjectStore:
             return {"projects": {}}
         try:
             payload = json.loads(self._path.read_text(encoding="utf-8"))
-            if not isinstance(payload, dict):
-                return {"projects": {}}
-            projects = payload.get("projects")
-            if not isinstance(projects, dict):
-                payload["projects"] = {}
-            return payload
-        except Exception:
-            return {"projects": {}}
+        except Exception as exc:
+            raise PersistenceError(
+                "Project state store is unreadable",
+                stage="project_state_read",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("projects"), dict):
+            raise PersistenceError(
+                "Project state store has an invalid structure",
+                stage="project_state_read",
+            )
+        return payload
 
     def _write(self, payload: Dict[str, Any]) -> None:
-        self._path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self._path.parent,
+                prefix=f".{self._path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temporary_path = Path(handle.name)
+                json.dump(payload, handle, indent=2, ensure_ascii=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, self._path)
+        except Exception as exc:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            raise PersistenceError(
+                "Project state store write failed",
+                stage="project_state_write",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
 
     def list_projects(self) -> List[ProjectState]:
         with self._lock:

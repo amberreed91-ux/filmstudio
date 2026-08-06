@@ -1,200 +1,311 @@
-# Checkpoint 3 — Backend Contracts, Versioning, Approval, and Persistence Integrity
+# Checkpoint 3 — Backend Contracts, Errors, and Persistence
 
-Verdict: **CHECKPOINT 3 PARTIALLY COMPLETE**
+Verdict: **CHECKPOINT 3 COMPLETE**
 
-This checkpoint repaired one runtime-confirmed backend integrity defect in the canonical Storyboard Blueprint to render handoff.
+Checkpoint 3 repaired the priority backend integrity failures identified through
+the project, professional workflow, Storyboard Blueprint, editorial context,
+and character-memory paths. No frontend workflow redesign or Checkpoint 4
+subsystem work was started.
 
-The larger Checkpoint 3 audit surface remains broader than this repair. No claim is made that every listed priority system has been exhaustively repaired.
+## Scope and Baseline Safety
 
-## Baseline Safety
-
-Required baseline was captured before editing:
+The worktree already contained substantial unrelated frontend, Studio Brain,
+render-context, backend data, and script changes. The pre-edit inventory is
+preserved at:
 
 - `reports/evidence/endpoint_workflow_integrity/checkpoint_3/worktree_baseline.txt`
 
-The baseline showed substantial unrelated pre-existing worktree changes across frontend files, backend routes/services/tests, backend data files, scripts, and Studio Brain library files.
+The Checkpoint 3 commit stages only owned code/test/report hunks. Pre-existing
+changes remain unstaged. Four overlapping files required hunk-level staging:
 
-Checkpoint 3 intentional code changes were limited to new hunks in:
+- `studio-backend/app/routes/__init__.py`
+- `studio-backend/app/routes/render.py`
+- `studio-backend/app/routes/storyboard_blueprints.py`
+- `studio-backend/app/services/storyboard_blueprint_service.py`
+
+Final staged-scope review:
+
+- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/diff_review/final_backend_integrity_staged_scope.md`
+
+The earlier Storyboard Blueprint render-handoff repair was committed separately
+as `d0cc0490` and remains part of this checkpoint's evidence and exit decision.
+
+## Canonical Integrity Decisions
+
+- SQLite `projects` records are canonical for durable project reconstruction.
+- `ProjectStore` remains a coordinated JSON compatibility/state mirror.
+- Professional workflow versions, gates, decisions, tasks, comments, and events
+  remain canonical SQLite records.
+- Storyboard Blueprint is canonical; `storyboard_wall` remains a legacy
+  projection.
+- Workflow project projections are compatibility state, not the authority for
+  gate or version approval.
+- `Previs` and `ScreeningRoom` remain the canonical names established in CP1;
+  no `Precise`, `Theatre`, or backend `Theater` system was invented.
+
+## Defects Repaired
+
+### CP3-BI-001 — Unapproved or stale Storyboard shots could render
+
+Status: **Repaired and verified**
+
+The Storyboard Blueprint render handoff previously created render jobs for draft
+shots. The service now requires the current approved blueprint version, an
+approved/renderable shot lifecycle state, and no render blockers. Draft render
+returns `422`; stale-version render returns `409`; approved render preserves the
+blueprint version in the render link.
+
+Primary files:
 
 - `studio-backend/app/services/storyboard_blueprint_service.py`
 - `studio-backend/tests/test_storyboard_blueprint_routes.py`
 
-Both files already contained pre-existing modifications at baseline. Exact Checkpoint 3 hunk ownership is documented in:
+Evidence:
 
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/diff_review/checkpoint_3_hunk_summary.md`
+- `storyboard_unapproved_render_repro_before.txt`
+- `runtime_http/final_storyboard_render_handoff_http.txt`
+- `test_logs/focused_storyboard_render_handoff.txt`
 
-Checkpoint 3 evidence artifacts were added under:
-
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/`
-
-## Authoritative Inputs Used
-
-- `reports/checkpoints/checkpoint_1_repository_mapping.md`
-- `reports/checkpoints/checkpoint_2_route_repair.md`
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_1/feature_endpoint_summary.md`
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_1/sqlite_table_inventory.txt`
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_2/after_fixes/route_registration_defects.txt`
-
-Canonical ownership used:
-
-- `StoryboardBlueprint` is canonical.
-- `storyboard_wall` is a legacy projection.
-- `Previs` is canonical.
-- `ScreeningRoom` is canonical.
-- No `Precise`, `Theatre`, or backend `Theater` implementation was introduced.
-
-## Baseline Test Evidence
-
-Before editing, the focused backend checkpoint suite passed:
-
-- Command: `./.venv/bin/python -m pytest tests/test_checkpoint_2_route_registration.py app/routes/test_recommended_duration_route.py app/routes/test_studio_workflow_routes.py app/routes/test_studio_knowledge_routes.py app/services/test_render_create_route.py tests/test_storyboard_blueprint_routes.py -q`
-- Result: `22 passed`
-- Evidence: `reports/evidence/endpoint_workflow_integrity/checkpoint_3/backend_focused_tests_before.txt`
-
-## CP3-BI-001 — Draft storyboard shots could create render jobs
+### CP3-BI-002 — Workflow identifiers crossed project boundaries
 
 Status: **Repaired and verified**
 
-Systems:
+Before repair, Project A could open a gate on Project B's version and approve
+Project B's gate through Project A's URL. Missing parent versions were also
+accepted. The workflow service now scopes versions, gates, decisions, queue
+references, comments, and comment parents to their route project.
 
-- Storyboard Blueprint
-- Storyboard Blueprint versions
-- Storyboard shots
-- Render requests
-- Render jobs
-- Project ownership
-- Scene ownership
-- Shot ownership
-- Version validation
-- Stale-version rejection
-- Approval enforcement
-- Provenance persistence
+It also binds a version to the exact artifact type and stable artifact ID. A
+version for `scene_other` cannot become the source, gate target, or comment
+version for `scene_target`, even inside the same project.
 
-### Finding
+Primary files:
 
-`POST /api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/render` could create a render job for a draft storyboard version before creator approval.
+- `studio-backend/app/services/studio_workflow_service.py`
+- `studio-backend/app/routes/studio_workflow.py`
+- `studio-backend/tests/test_checkpoint_3_backend_integrity.py`
 
-The route correctly went through `StoryboardBlueprintService`, but `render_storyboard_shot()` only checked that the shot existed and belonged to the blueprint. It did not validate:
+Before evidence:
 
-- the blueprint had an approved version,
-- the shot belonged to the current approved version,
-- the persisted version status was approved,
-- the shot status was approved or otherwise renderable,
-- the shot had no render blockers.
+- `workflow_ownership_reproduction_before.txt`
 
-### Reproduction
+After behavior:
 
-The failure was reproduced through the real HTTP route using `TestClient`.
+- cross-project/missing version: `404 validation_error`
+- same-project wrong artifact version: `422 validation_error`
+- stale active gate targeting a different version: `409 state_error`
+- cross-project gate decision: `404 validation_error`
+
+### CP3-BI-003 — Approval transitions could partially persist
+
+Status: **Repaired and verified**
+
+Approval decisions, gate closure, version status, and revision-task creation
+were formerly separate writes. A mid-transition failure could leave a decision
+without its matching gate/version state. `DatabaseStorage` now commits those
+canonical records in one explicit SQLite transaction with rollback.
+
+Additional transition repairs:
+
+- closed gates reject repeated decisions with `409`;
+- duplicate actor/decision operations are rejected;
+- override decisions now perform the documented approval transition;
+- gate and linked version ownership is revalidated before mutation;
+- storage failures return structured `503 persistence_error` without sensitive
+  paths or stack traces.
+
+The rollback regression intentionally fails after earlier SQL statements and
+proves that no decision is left behind and the gate/version remain unchanged.
+
+Primary files:
+
+- `studio-backend/app/data/storage.py`
+- `studio-backend/app/services/studio_workflow_service.py`
+- `studio-backend/app/routes/studio_workflow.py`
+
+### CP3-BI-004 — Project dual storage hid failures and diverged
+
+Status: **Repaired and verified**
+
+Project routes previously mixed direct JSON writes with opportunistic SQLite
+sync, and several read paths converted storage failures into empty or missing
+success. A coordinated `ProjectPersistenceService` now owns priority project
+create, list, load, update, delete, scene review, Film Cut, and route save
+callbacks.
+
+Repairs include:
+
+- duplicate explicit project IDs return `409` without overwrite;
+- JSON creation is removed if the canonical write fails;
+- JSON updates are restored if the canonical write fails;
+- canonical delete occurs transactionally before mirror delete, with canonical
+  compensation if mirror deletion fails;
+- canonical-only records are restored into the JSON mirror;
+- malformed JSON returns `503 persistence_error`, not an empty project list;
+- project GET/list distinguish storage failure from not found;
+- JSON writes use fsync plus atomic replace rather than direct truncation.
+
+Primary files:
+
+- `studio-backend/app/services/project_persistence_service.py`
+- `studio-backend/app/services/project_store.py`
+- `studio-backend/app/routes/projects.py`
+- `studio-backend/app/routes/__init__.py`
+
+### CP3-BI-005 — Canonical response filtering discarded durable state
+
+Status: **Repaired and verified**
+
+`StudioProject` did not declare several fields written by project workflows, so
+Pydantic filtering silently removed Film Cut, approval, memory, collaboration,
+archive, and provider-override data before canonical SQLite persistence. The
+canonical model now declares those response/persistence fields and uses
+`default_factory` for mutable values.
+
+Cold-reload verification deletes the temporary JSON mirror, recreates the
+service/backend process, and reads back `film_cut.cut_id=cp3_cut_v2`, scene
+membership, approved workflow version, actor, timestamp, and decision event
+from SQLite.
+
+Primary file:
+
+- `studio-backend/app/models/__init__.py`
+
+### CP3-BI-006 — Scene review and Film Cut accepted foreign identifiers
+
+Status: **Repaired and verified**
+
+Scene review and Film Cut mutations now validate stable scene IDs against the
+project's canonical scene set. They reject:
+
+- foreign or unknown scene IDs;
+- duplicate scene membership;
+- approved scenes absent from reviewed scenes;
+- approved entries without approved status;
+- invalid review status enums;
+- missing Film Cut IDs;
+- include/exclude overlap;
+- included/excluded scenes absent from scene order.
+
+Invalid operations return `422` and do not mutate canonical persistence.
+
+### CP3-BI-007 — Optional evidence failures appeared as empty success
+
+Status: **Repaired for the priority paths**
+
+Storage exceptions are no longer silently converted to missing scenes, empty
+previs provenance, absent character identity records, or empty editorial
+evidence in the audited priority paths. They now raise structured
+`persistence_error` with a stage/source and sanitized exception type.
+
+Primary files:
+
+- `studio-backend/app/services/storyboard_blueprint_service.py`
+- `studio-backend/app/services/editorial_timeline_context_service.py`
+- `studio-backend/app/services/editorial_revision_intelligence_service.py`
+- `studio-backend/app/services/character_identity_memory_service.py`
+
+### CP3-BI-008 — Mutable request body instances were shared
+
+Status: **Repaired and statically verified**
+
+Priority optional request bodies now use FastAPI `Body(default_factory=...)`.
+The audit command below returns no route matches:
+
+```text
+rg -n "payload:\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[A-Za-z_][A-Za-z0-9_]*\(\)" app/routes
+(no matches)
+```
+
+The create-project contract now requires `title`; blank titles return structured
+`422 validation_error` rather than silently creating “Untitled Project.”
+
+## Verification
+
+### Focused affected backend suite
+
+Command from `studio-backend`:
+
+```text
+./.venv/bin/python -m pytest tests/test_checkpoint_3_backend_integrity.py app/routes/test_studio_workflow_routes.py app/services/test_studio_workflow_service.py app/services/test_projects.py app/services/test_character_identity_memory_service.py app/services/test_editorial_revision_intelligence_service.py app/services/test_storyboard_blueprint_service.py tests/test_storyboard_blueprint_routes.py tests/test_scene_stitching_routes.py -q --tb=short
+```
+
+Result:
+
+```text
+65 passed in 39.32s
+```
+
+The Git index was then exported to a clean temporary tree and the same suite
+was run without any unstaged/untracked worktree files:
+
+```text
+65 passed in 126.31s (0:02:06)
+```
 
 Evidence:
 
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/storyboard_unapproved_render_repro_before.txt`
+- `test_logs/backend_integrity_affected_suite.txt`
 
-Before the repair:
+### Real HTTP and restart verification
 
-- Create draft storyboard blueprint: `200`
-- Draft blueprint status: `draft`
-- Draft shot status: `ready`
-- Render draft shot: `200`
-- Render job created with storyboard metadata from an unapproved version
+An isolated backend was started on `127.0.0.1:8024` with temporary SQLite and
+JSON paths. Real HTTP calls proved:
 
-### Root Cause
+- missing title: `422`;
+- duplicate project: `409`;
+- missing parent version: `404`;
+- cross-project version/gate/decision: `404`;
+- cross-project scene review: `422`;
+- valid approval: `200`;
+- repeated approval: `409`;
+- valid Film Cut persistence: `200`.
 
-The render handoff path lacked service-layer lifecycle validation. The route had no project or scene path parameters, so backend ownership and version integrity had to be enforced by the canonical service before render job creation.
-
-### Repair
-
-Added `StoryboardBlueprintService._validate_shot_renderable()`.
-
-The render handoff now rejects:
-
-- missing shot/blueprint/version,
-- storyboard shots without an approved blueprint version,
-- shots belonging to stale non-current versions,
-- versions not marked `approved`,
-- shots not in an approved/renderable lifecycle state,
-- shots with render blockers.
-
-The route remains thin and continues to delegate to the canonical service.
-
-### Regression Tests
-
-Strengthened `studio-backend/tests/test_storyboard_blueprint_routes.py`:
-
-- draft storyboard render is rejected with `422`,
-- approved storyboard render still succeeds,
-- stale-version render is rejected with `409`,
-- render links preserve the approved storyboard version id.
-
-Focused storyboard test result:
-
-- Command: `./.venv/bin/python -m pytest tests/test_storyboard_blueprint_routes.py -q`
-- Result: `3 passed`
-- Evidence: `reports/evidence/endpoint_workflow_integrity/checkpoint_3/storyboard_blueprint_tests_after.txt`
-- Final rerun evidence: `reports/evidence/endpoint_workflow_integrity/checkpoint_3/test_logs/focused_storyboard_render_handoff.txt`
-
-Focused backend checkpoint suite after repair:
-
-- Command: `./.venv/bin/python -m pytest tests/test_checkpoint_2_route_registration.py app/routes/test_recommended_duration_route.py app/routes/test_studio_workflow_routes.py app/routes/test_studio_knowledge_routes.py app/services/test_render_create_route.py tests/test_storyboard_blueprint_routes.py -q`
-- Result: `23 passed`
-- Evidence: `reports/evidence/endpoint_workflow_integrity/checkpoint_3/backend_focused_tests_after.txt`
-- Final rerun evidence: `reports/evidence/endpoint_workflow_integrity/checkpoint_3/test_logs/focused_checkpoint_3_backend_suite.txt`
-
-Test integrity review:
-
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/test_logs/test_integrity_review.md`
-
-### HTTP and Persistence Verification
-
-After the repair:
-
-- Draft render route returns `422` with structured `validation_error`.
-- Draft render creates no `storyboard_render_links` record.
-- Continuity review route returns `200`.
-- Approval route returns `200`.
-- Approved render route returns `200`.
-- Created render job includes storyboard metadata:
-  - `blueprint_id`
-  - `version_id`
-  - `storyboard_shot_id`
-  - `project_id`
-  - `scene_id`
-  - `shot_id`
-  - `shot_number`
-- Stored `storyboard_render_links` record preserves the approved `version_id`.
-- A fresh `StoryboardBlueprintService` instance reads back the same current version, approved version, shot version, and approved shot status.
+The process was stopped, the temporary JSON mirror was deleted, and the backend
+was restarted. Project, scene, Film Cut, approved version, approver, approval
+timestamp, and decision event all reloaded from SQLite.
 
 Evidence:
 
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/storyboard_render_approval_after_http_persistence.txt`
-- Final rerun evidence: `reports/evidence/endpoint_workflow_integrity/checkpoint_3/runtime_http/final_storyboard_render_handoff_http.txt`
+- `runtime_http/backend_contract_ownership_restart.txt`
 
-## Deferred / Not Repaired In This Pass
+### Full-suite attempt and classification
 
-The full Checkpoint 3 priority list includes many backend systems beyond the repaired Storyboard Blueprint render handoff. Those systems were not broadly redesigned or exhaustively repaired in this pass.
+The full backend suite reached `2989 passed` before generated pytest databases
+exhausted disk space, producing 112 late disk errors. After deleting only those
+disposable pytest temp directories, affected failures were rerun individually.
+Scene-pipeline and standing-corrections tests pass. Seven render prompt
+compaction assertions remain reproducible and belong to pre-existing,
+uncommitted render-context work outside CP3.
 
-Deferred broader Checkpoint 3 areas include:
+Evidence:
 
-- full request and response contract matrix,
-- exhaustive project, scene, and shot ownership testing,
-- complete dual-storage audit,
-- full restart-persistence matrix,
-- complete provider-failure matrix,
-- complete idempotency matrix,
-- complete approval and state-transition matrix,
-- exhaustive live HTTP coverage across all priority backend systems.
+- `test_logs/full_backend_suite_attempt.txt`
+- `test_logs/confirmed_dependency_render_prompt_compaction.txt`
 
-No new `Precise`, `Theatre`, or backend `Theater` implementation was created.
+## Exit Criteria
 
-No broad frontend workflow repair was performed.
+1. Priority models and runtime project/workflow responses retain required
+   contract fields: **pass**.
+2. Valid requests succeed: **pass**.
+3. Invalid requests return deliberate client errors: **pass**.
+4. Project, scene, version, gate, decision, and comment ownership is enforced:
+   **pass**.
+5. Missing, foreign, mismatched, and stale versions are rejected: **pass**.
+6. Storyboard and workflow approvals are enforced and repeated transitions are
+   rejected: **pass**.
+7. Project, Film Cut, workflow version, decision, and approval state survive
+   reload/restart: **pass**.
+8. Audited storage failures are not disguised as empty success: **pass**.
+9. Relevant backend tests pass: **pass — 65 tests**.
+10. Focused commit prepared with hunk-level protection for unrelated work:
+    **pass**.
 
-## Diff Evidence
+## Confirmed Dependency, Not Repaired Early
 
-Final diff evidence:
+Pre-existing render-context prompt compaction truncates some adherence strings
+before provider submission. This is a confirmed later-checkpoint dependency,
+not a project/workflow persistence failure. It remains unstaged and is documented
+in `test_logs/confirmed_dependency_render_prompt_compaction.txt`.
 
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/diff_review/storyboard_blueprint_service.diff`
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/diff_review/test_storyboard_blueprint_routes.diff`
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/diff_review/checkpoint_3_hunk_summary.md`
-- `reports/evidence/endpoint_workflow_integrity/checkpoint_3/diff_review/status_after_fixes.txt`
-
-Unrelated pre-existing worktree changes remain unstaged and outside this Checkpoint 3 repair scope.
+No Checkpoint 4 implementation was started.

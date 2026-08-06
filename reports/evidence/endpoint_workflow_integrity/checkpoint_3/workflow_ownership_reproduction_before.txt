@@ -1,0 +1,22 @@
+Checkpoint 3 pre-repair workflow ownership reproduction
+========================================================
+
+The reproduction used the real FastAPI workflow routes with two projects and a
+temporary SQLite database. Before the repair, identifiers owned by Project B
+were accepted through Project A's route hierarchy.
+
+Observed output:
+
+project_b_version 200 sw_ver_08f0f3df45cf4a
+project_a_gate_referencing_project_b_version 200 project_a sw_ver_08f0f3df45cf4a
+version_with_missing_parent 200 missing_version
+project_a_decides_project_b_gate 200 project_a sw_gate_23e584fb57b949
+project_b_gate_status_after_cross_decision approved
+
+Integrity failures demonstrated:
+
+- An approval gate could point at another project's artifact version.
+- A new version could point at a nonexistent source version.
+- A decision submitted through Project A could approve Project B's gate.
+- The cross-project decision changed canonical state instead of returning a
+  deliberate ownership error.

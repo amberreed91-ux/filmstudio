@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from app.data import get_storage
+from app.services.stability import PersistenceError
 
 
 class EditorialRevisionIntelligenceService:
@@ -55,6 +56,8 @@ class EditorialRevisionIntelligenceService:
                 request=EditorialAnalysisRequest(revision_emphasis=emphasis),
                 persist=False,
             )
+        except PersistenceError:
+            raise
         except Exception:
             return {}
 

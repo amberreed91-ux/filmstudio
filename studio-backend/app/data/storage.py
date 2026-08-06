@@ -10462,6 +10462,147 @@ class DatabaseStorage:
         self._execute_write_with_retry("save_studio_approval_decision", _write)
         return decision
 
+    def commit_studio_approval_transition(
+        self,
+        *,
+        decision: Any,
+        gate: Any,
+        version: Any | None = None,
+        task: Any | None = None,
+    ) -> Any:
+        """Atomically persist the canonical records changed by one approval decision."""
+        decision_data = decision.model_dump(mode="json") if hasattr(decision, "model_dump") else dict(decision)
+        gate_data = gate.model_dump(mode="json") if hasattr(gate, "model_dump") else dict(gate)
+        version_data = (
+            version.model_dump(mode="json") if hasattr(version, "model_dump") else dict(version)
+        ) if version is not None else None
+        task_data = (
+            task.model_dump(mode="json") if hasattr(task, "model_dump") else dict(task)
+        ) if task is not None else None
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("BEGIN")
+                    cursor.execute(
+                        """
+                        INSERT OR REPLACE INTO studio_approval_decisions (
+                            decision_id, project_id, gate_id, version_id, actor_id,
+                            actor_role, decision, rationale, notes, evidence_json, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            decision_data["decision_id"],
+                            decision_data["project_id"],
+                            decision_data["gate_id"],
+                            decision_data.get("version_id"),
+                            decision_data["actor_id"],
+                            decision_data.get("actor_role") or "reviewer",
+                            decision_data["decision"],
+                            decision_data.get("rationale") or "",
+                            decision_data.get("notes") or "",
+                            self._json_dumps(decision_data.get("evidence", [])),
+                            decision_data.get("created_at") or datetime.now().isoformat(),
+                        ),
+                    )
+                    cursor.execute(
+                        """
+                        INSERT OR REPLACE INTO studio_approval_gates (
+                            gate_id, project_id, gate_type, target_type, target_id, version_id,
+                            status, required_role, required_decision, queue_item_id,
+                            manual_dependency_id, evidence_policy_json, latest_evaluation_json,
+                            opened_by, closed_by, closed_at, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            gate_data["gate_id"],
+                            gate_data["project_id"],
+                            gate_data["gate_type"],
+                            gate_data["target_type"],
+                            gate_data["target_id"],
+                            gate_data.get("version_id"),
+                            gate_data.get("status") or "pending",
+                            gate_data.get("required_role") or "producer",
+                            gate_data.get("required_decision") or "approve",
+                            gate_data.get("queue_item_id"),
+                            gate_data.get("manual_dependency_id"),
+                            self._json_dumps(gate_data.get("evidence_policy", {})),
+                            self._json_dumps(gate_data.get("latest_evaluation", {})),
+                            gate_data.get("opened_by") or "",
+                            gate_data.get("closed_by") or "",
+                            gate_data.get("closed_at"),
+                            gate_data.get("created_at") or datetime.now().isoformat(),
+                            gate_data.get("updated_at") or datetime.now().isoformat(),
+                        ),
+                    )
+                    if version_data is not None:
+                        cursor.execute(
+                            """
+                            INSERT OR REPLACE INTO studio_artifact_versions (
+                                version_id, project_id, artifact_type, artifact_id, version_number,
+                                status, title, summary, source_version_id, canonical_ref_type,
+                                canonical_ref_id, snapshot_json, evidence_json, created_by,
+                                approved_by, approved_at, locked_at, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                version_data["version_id"],
+                                version_data["project_id"],
+                                version_data["artifact_type"],
+                                version_data["artifact_id"],
+                                int(version_data.get("version_number") or 1),
+                                version_data.get("status") or "draft",
+                                version_data.get("title") or "",
+                                version_data.get("summary") or "",
+                                version_data.get("source_version_id"),
+                                version_data.get("canonical_ref_type") or "",
+                                version_data.get("canonical_ref_id") or "",
+                                self._json_dumps(version_data.get("snapshot", {})),
+                                self._json_dumps(version_data.get("evidence", [])),
+                                version_data.get("created_by") or "",
+                                version_data.get("approved_by") or "",
+                                version_data.get("approved_at"),
+                                version_data.get("locked_at"),
+                                version_data.get("created_at") or datetime.now().isoformat(),
+                                version_data.get("updated_at") or datetime.now().isoformat(),
+                            ),
+                        )
+                    if task_data is not None:
+                        cursor.execute(
+                            """
+                            INSERT OR REPLACE INTO studio_workflow_tasks (
+                                workflow_task_id, project_id, title, task_type, target_type, target_id,
+                                version_id, assignee_actor_id, status, priority, queue_item_id,
+                                due_at, metadata_json, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                task_data["workflow_task_id"],
+                                task_data["project_id"],
+                                task_data["title"],
+                                task_data["task_type"],
+                                task_data.get("target_type") or "",
+                                task_data.get("target_id") or "",
+                                task_data.get("version_id"),
+                                task_data.get("assignee_actor_id") or "",
+                                task_data.get("status") or "open",
+                                task_data.get("priority") or "normal",
+                                task_data.get("queue_item_id"),
+                                task_data.get("due_at"),
+                                self._json_dumps(task_data.get("metadata", {})),
+                                task_data.get("created_at") or datetime.now().isoformat(),
+                                task_data.get("updated_at") or datetime.now().isoformat(),
+                            ),
+                        )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+
+        self._execute_write_with_retry("commit_studio_approval_transition", _write)
+        return decision
+
     def list_studio_approval_decisions(self, project_id: str, gate_id: str | None = None, limit: int = 50) -> list[Any]:
         with self._get_connection() as conn:
             cursor = conn.cursor()

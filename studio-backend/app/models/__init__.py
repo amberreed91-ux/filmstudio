@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional, Any, List, Dict, Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # Import agent models
@@ -268,29 +268,38 @@ class ContinuityRegister(BaseModel):
 class StudioProject(BaseModel):
     project_id: str
     title: str = ""
+    created_at: str = ""
     updated_at: str = ""
     script_text: str = ""
-    source_stats: SourceStats = SourceStats()
+    source_stats: SourceStats = Field(default_factory=SourceStats)
     render_provider: Optional[RenderProvider] = None
     production_bible: Optional[ProductionBible] = None
-    render_provider_integrations: list[ProviderIntegration] = []
-    crew_agents: list[CrewAgent] = []
-    shot_approval_gates: list[ApprovalGate] = []
-    storyboard_wall: list[StoryboardShot] = []
-    render_queue: list[RenderJob] = []
+    render_provider_integrations: list[ProviderIntegration] = Field(default_factory=list)
+    crew_agents: list[CrewAgent] = Field(default_factory=list)
+    shot_approval_gates: list[ApprovalGate] = Field(default_factory=list)
+    storyboard_wall: list[StoryboardShot] = Field(default_factory=list)
+    render_queue: list[RenderJob] = Field(default_factory=list)
     rights_safety_clearance_board: Optional[RightsSafetyBoard] = None
     reference_study_library: Optional[ReferenceStudyLibrary] = None
     interactive_modules: Optional[InteractiveModules] = None
     producer_dashboard: Optional[ProducerDashboard] = None
     project_dashboard: Optional[ProjectDashboard] = None
-    agent_activity_timeline: list[AgentActivity] = []
+    agent_activity_timeline: list[AgentActivity] = Field(default_factory=list)
     continuity_register: Optional[ContinuityRegister] = None
-    risk_register: list[str] = []
-    next_actions: list[str] = []
+    risk_register: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
     co_director_workflow: Optional[dict[str, Any]] = None
     co_director: Optional[dict[str, Any]] = None
     execution_summary: Optional[dict[str, Any]] = None
     director_intent: Optional[dict[str, Any]] = None
+    approved_scenes: list[str] = Field(default_factory=list)
+    reviewed_scenes: list[str] = Field(default_factory=list)
+    scene_review_status: dict[str, Any] = Field(default_factory=dict)
+    film_cut: dict[str, Any] = Field(default_factory=dict)
+    archive_snapshots: list[Any] = Field(default_factory=list)
+    memory_context: dict[str, Any] = Field(default_factory=dict)
+    collaboration: dict[str, Any] = Field(default_factory=dict)
+    provider_overrides: dict[str, Any] = Field(default_factory=dict)
 
 
 class BuildInfo(BaseModel):

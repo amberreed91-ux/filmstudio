@@ -1,0 +1,58 @@
+Checkpoint 3 affected backend integrity suite
+=============================================
+
+Command (from studio-backend):
+
+./.venv/bin/python -m pytest \
+  tests/test_checkpoint_3_backend_integrity.py \
+  app/routes/test_studio_workflow_routes.py \
+  app/services/test_studio_workflow_service.py \
+  app/services/test_projects.py \
+  app/services/test_character_identity_memory_service.py \
+  app/services/test_editorial_revision_intelligence_service.py \
+  app/services/test_storyboard_blueprint_service.py \
+  tests/test_storyboard_blueprint_routes.py \
+  tests/test_scene_stitching_routes.py \
+  -q --tb=short
+
+Result:
+
+.................................................................        [100%]
+65 passed in 39.32s
+
+Staged-patch isolation verification
+-----------------------------------
+
+The Git index was exported with `git checkout-index` into a clean temporary
+tree. The same command was run there with the workspace virtual environment,
+so no unstaged or untracked project files were present.
+
+Result:
+
+.................................................................        [100%]
+65 passed in 126.31s (0:02:06)
+
+Coverage represented in this focused set:
+
+- request and response contracts
+- project duplicate and title validation
+- project, scene, gate, version, and comment ownership
+- stale and repeated approval decisions
+- atomic approval transition rollback
+- JSON/canonical-store compensation
+- service recreation and canonical reload
+- Film Cut persistence and scene identifier validation
+- storyboard approval and render handoff validation
+- storyboard/editorial/character storage error propagation
+- route-level scene-pipeline persistence callback wiring
+
+Additional post-disk-cleanup regression rerun:
+
+./.venv/bin/python -m pytest \
+  tests/test_scene_stitching_routes.py \
+  tests/test_standing_corrections.py::TestGroqResponseValidation \
+  -q --tb=short
+
+Result:
+
+17 passed in 12.00s

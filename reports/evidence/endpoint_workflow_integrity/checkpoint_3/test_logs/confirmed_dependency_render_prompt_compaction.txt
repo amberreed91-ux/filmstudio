@@ -1,0 +1,24 @@
+Confirmed dependency outside Checkpoint 3: render prompt compaction
+===================================================================
+
+Command (from studio-backend):
+
+./.venv/bin/python -m pytest \
+  app/services/test_render_canon_integration.py \
+  tests/test_path_a_staging_wiring.py \
+  tests/test_path_b_staging_wiring.py \
+  -q --tb=short
+
+Result:
+
+7 failed, 7 passed, 6 skipped in 8.76s
+
+The failures assert that complete live adherence strings such as
+`fresh bruise on her left cheek`, `practical light`, and
+`Patient locked-off camera` survive prompt assembly. The observed prompts
+contain truncated forms such as `fresh bruis...` and `Pa...`.
+
+These failures reproduce without the Checkpoint 3 project/workflow persistence
+paths and arise in pre-existing, uncommitted render-context and prompt-builder
+work. They are recorded as a later-checkpoint dependency and were not repaired
+here.

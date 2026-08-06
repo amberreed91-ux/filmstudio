@@ -12,6 +12,7 @@ from app.models.character_profile import (
     CharacterProfile,
     CharacterVisualReference,
 )
+from app.services.stability import PersistenceError
 
 
 class CharacterIdentityMemoryService:
@@ -338,8 +339,12 @@ class CharacterIdentityMemoryService:
     ) -> list[CanonicalCharacterIdentityRecord]:
         try:
             characters = storage.get_characters(project_id)
-        except Exception:
-            return []
+        except Exception as exc:
+            raise PersistenceError(
+                "Character identity memory lookup failed",
+                stage="character_identity_memory",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         clean_ids = {str(item).strip() for item in (character_ids or []) if str(item).strip()}
         try:
             locks = storage.list_character_reference_locks(project_id, list(clean_ids) if clean_ids else None, None)
@@ -348,10 +353,18 @@ class CharacterIdentityMemoryService:
             for status in ("locked", "provisional", "superseded", "disabled"):
                 try:
                     locks.extend(storage.list_character_reference_locks(project_id, list(clean_ids) if clean_ids else None, status))
-                except Exception:
-                    continue
-        except Exception:
-            locks = []
+                except Exception as exc:
+                    raise PersistenceError(
+                        "Character reference lock lookup failed",
+                        stage="character_identity_memory",
+                        metadata={"cause": type(exc).__name__},
+                    ) from exc
+        except Exception as exc:
+            raise PersistenceError(
+                "Character reference lock lookup failed",
+                stage="character_identity_memory",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         records: list[CanonicalCharacterIdentityRecord] = []
         for character in characters:
             cid = str(character.get("id") or "").strip()

@@ -28,7 +28,7 @@ from app.models.storyboard_blueprint import (
 from app.services.project_store import project_store
 from app.services.shot_rationale_service import shot_rationale_service
 from app.services.shot_sequence_service import shot_sequence_service
-from app.services.stability import StateError, ValidationError
+from app.services.stability import PersistenceError, StateError, ValidationError
 from app.utils.helpers import derive_scene_id_from_shot_id
 
 logger = logging.getLogger("storyboard-blueprint-service")
@@ -701,8 +701,12 @@ class StoryboardBlueprintService:
         try:
             if self.storage.load_previs_images(project_id, scene_id):
                 provenance.canonical_sources["previs_images"] = True
-        except Exception:
-            pass
+        except Exception as exc:
+            raise PersistenceError(
+                "Storyboard previs provenance lookup failed",
+                stage="storyboard_provenance",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         project = self.project_store.get_project(project_id) or {}
         if isinstance(project.get("storyboard_wall"), list):
             provenance.canonical_sources["storyboard_wall"] = True
@@ -841,8 +845,12 @@ class StoryboardBlueprintService:
             project = self.storage.get_project(project_id)
             project_data = project.model_dump(mode="json") if hasattr(project, "model_dump") else project
             add_from_project(project_data if isinstance(project_data, dict) else None)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise PersistenceError(
+                "Storyboard scene ownership lookup failed",
+                stage="storyboard_blueprint",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         if not scene_ids:
             raise StateError("Project has no scenes to backfill", stage="storyboard_blueprint_backfill")
         return scene_ids
@@ -870,8 +878,12 @@ class StoryboardBlueprintService:
                 for scene in project_data.get("scenes") or []:
                     if isinstance(scene, dict) and scene.get("scene_id") == scene_id:
                         return scene
-        except Exception:
-            pass
+        except Exception as exc:
+            raise PersistenceError(
+                "Storyboard scene ownership lookup failed",
+                stage="storyboard_blueprint",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         return None
 
     def _scene_text(self, scene: dict[str, Any]) -> str:
@@ -894,8 +906,12 @@ class StoryboardBlueprintService:
     def _project_characters_for_prompt(self, project_id: str) -> list[dict[str, Any]]:
         try:
             characters = self.storage.get_characters(project_id)
-        except Exception:
-            return []
+        except Exception as exc:
+            raise PersistenceError(
+                "Storyboard character reference lookup failed",
+                stage="storyboard_prompt_context",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         return [character for character in characters if isinstance(character, dict)]
 
     def _validate_ids(self, project_id: str, scene_id: str) -> None:

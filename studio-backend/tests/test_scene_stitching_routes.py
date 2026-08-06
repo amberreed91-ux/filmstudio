@@ -95,10 +95,9 @@ def test_generate_scene_pipeline_route_calls_orchestrator(monkeypatch):
         lambda _project: None,
     )
 
-    class FakeProjectStore:
-        def update_project(self, project_id, updates):
-            captured["saved"] = {"project_id": project_id, "updates": updates}
-            return {"project_id": project_id, **updates}
+    def _fake_update_project_persisted(project_id, updates):
+        captured["saved"] = {"project_id": project_id, "updates": updates}
+        return {"project_id": project_id, **updates}
 
     async def _fake_generate_scene(**kwargs):
         captured["kwargs"] = kwargs
@@ -111,7 +110,10 @@ def test_generate_scene_pipeline_route_calls_orchestrator(monkeypatch):
             "output_url": "/outputs/scene_assemblies/proj-1_scene_001.mp4",
         }
 
-    monkeypatch.setattr("app.routes.projects.project_store", FakeProjectStore())
+    monkeypatch.setattr(
+        "app.routes.projects._update_project_persisted",
+        _fake_update_project_persisted,
+    )
     monkeypatch.setattr(
         "app.routes.projects.scene_production_pipeline_service.generate_scene",
         _fake_generate_scene,
@@ -159,9 +161,8 @@ def test_generate_scene_pipeline_route_forwards_dialogue_only_score_mode(monkeyp
         lambda _project: None,
     )
 
-    class FakeProjectStore:
-        def update_project(self, project_id, updates):
-            return {"project_id": project_id, **updates}
+    def _fake_update_project_persisted(project_id, updates):
+        return {"project_id": project_id, **updates}
 
     async def _fake_generate_scene(**kwargs):
         captured["kwargs"] = kwargs
@@ -173,7 +174,10 @@ def test_generate_scene_pipeline_route_forwards_dialogue_only_score_mode(monkeyp
             "score_ambient_provider": kwargs["score_ambient_provider"],
         }
 
-    monkeypatch.setattr("app.routes.projects.project_store", FakeProjectStore())
+    monkeypatch.setattr(
+        "app.routes.projects._update_project_persisted",
+        _fake_update_project_persisted,
+    )
     monkeypatch.setattr(
         "app.routes.projects.scene_production_pipeline_service.generate_scene",
         _fake_generate_scene,

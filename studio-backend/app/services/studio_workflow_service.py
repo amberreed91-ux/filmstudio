@@ -37,7 +37,7 @@ from app.models.studio_workflow import (
     StudioWorkflowTaskStatus,
     utc_now_iso,
 )
-from app.services.stability import StateError, ValidationError, elapsed_ms, log_stage_event, start_timer
+from app.services.stability import PersistenceError, StateError, ValidationError, elapsed_ms, log_stage_event, start_timer
 
 logger = logging.getLogger("studio-workflow")
 
@@ -95,7 +95,17 @@ class StudioWorkflowService:
         self._acceptance_service = acceptance_service
 
     def _storage_ref(self):
-        return self._storage or get_storage("sqlite")
+        try:
+            storage = self._storage or get_storage("sqlite")
+        except Exception as exc:
+            raise PersistenceError(
+                "Studio workflow storage is unavailable",
+                stage="workflow_storage",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
+        if storage is None:
+            raise PersistenceError("Studio workflow storage is unavailable", stage="workflow_storage")
+        return storage
 
     def set_storage(self, storage: Any) -> None:
         self._storage = storage
@@ -141,16 +151,51 @@ class StudioWorkflowService:
             project = self._project_store_ref().get_project(project_id)
             if project is not None:
                 return True
-        except Exception:
-            pass
+        except Exception as exc:
+            raise PersistenceError(
+                "Project ownership lookup failed",
+                stage="workflow_project_lookup",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         try:
             return self._storage_ref().get_project(project_id) is not None
-        except Exception:
-            return False
+        except PersistenceError:
+            raise
+        except Exception as exc:
+            raise PersistenceError(
+                "Canonical project ownership lookup failed",
+                stage="workflow_project_lookup",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
 
     def _require_project(self, project_id: str) -> None:
         if not self._project_exists(project_id):
             raise ValidationError(f"Project {project_id} not found")
+
+    def _require_version(self, project_id: str, version_id: str) -> StudioArtifactVersion:
+        version = self._storage_ref().get_studio_artifact_version(version_id)
+        if version is None or version.project_id != project_id:
+            raise ValidationError("Version not found")
+        return version
+
+    def _require_version_for_artifact(
+        self,
+        project_id: str,
+        version_id: str,
+        *,
+        artifact_type: str,
+        artifact_id: str,
+    ) -> StudioArtifactVersion:
+        version = self._require_version(project_id, version_id)
+        if version.artifact_type.value != artifact_type or version.artifact_id != artifact_id:
+            raise ValidationError("Version does not belong to the target artifact")
+        return version
+
+    def _require_gate(self, project_id: str, gate_id: str) -> StudioApprovalGate:
+        gate = self._storage_ref().get_studio_approval_gate(gate_id)
+        if gate is None or gate.project_id != project_id:
+            raise ValidationError("Approval gate not found")
+        return gate
 
     def _event(
         self,
@@ -246,8 +291,12 @@ class StudioWorkflowService:
             return
         try:
             project = self._project_store_ref().get_project(state.project_id)
-        except Exception:
-            project = None
+        except Exception as exc:
+            raise PersistenceError(
+                "Legacy collaboration projection lookup failed",
+                stage="workflow_migration",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         if not isinstance(project, dict):
             state.metadata["legacy_collaboration_migrated"] = True
             state.updated_at = _now()
@@ -390,6 +439,13 @@ class StudioWorkflowService:
         artifact_id = payload.artifact_id.strip()
         if not artifact_id:
             raise ValidationError("artifact_id is required")
+        if payload.source_version_id:
+            self._require_version_for_artifact(
+                project_id,
+                payload.source_version_id,
+                artifact_type=payload.artifact_type.value,
+                artifact_id=artifact_id,
+            )
         version_number = self._storage_ref().next_studio_artifact_version_number(
             project_id,
             payload.artifact_type.value,
@@ -482,8 +538,13 @@ class StudioWorkflowService:
         self._require_project(project_id)
         if not payload.target_type.strip() or not payload.target_id.strip():
             raise ValidationError("target_type and target_id are required")
-        if payload.version_id and self._storage_ref().get_studio_artifact_version(payload.version_id) is None:
-            raise ValidationError("version_id not found")
+        if payload.version_id:
+            self._require_version_for_artifact(
+                project_id,
+                payload.version_id,
+                artifact_type=payload.target_type.strip(),
+                artifact_id=payload.target_id.strip(),
+            )
         existing = self._storage_ref().list_studio_approval_gates(
             project_id=project_id,
             target_type=payload.target_type,
@@ -493,7 +554,9 @@ class StudioWorkflowService:
         )
         for gate in existing:
             if gate.status.value in _ACTIVE_GATE_STATUSES:
-                return gate
+                if gate.version_id == payload.version_id:
+                    return gate
+                raise StateError("An active approval gate already targets another version")
         now = _now()
         gate = StudioApprovalGate(
             gate_id=_id("sw_gate"),
@@ -570,9 +633,12 @@ class StudioWorkflowService:
         persist: bool = True,
     ) -> StudioApprovalGate:
         self._require_project(project_id)
-        gate = gate_or_id if isinstance(gate_or_id, StudioApprovalGate) else self._storage_ref().get_studio_approval_gate(gate_or_id)
-        if gate is None:
-            raise ValidationError("Approval gate not found")
+        if isinstance(gate_or_id, StudioApprovalGate):
+            gate = gate_or_id
+            if gate.project_id != project_id:
+                raise ValidationError("Approval gate not found")
+        else:
+            gate = self._require_gate(project_id, gate_or_id)
         evidence: list[StudioWorkflowEvidenceRef] = []
         blockers: list[str] = []
         warnings: list[str] = []
@@ -595,8 +661,9 @@ class StudioWorkflowService:
             warnings.append(f"Studio decision gate unavailable: {exc}")
 
         if gate.version_id:
-            version = self._storage_ref().get_studio_artifact_version(gate.version_id)
-            if version is None:
+            try:
+                version = self._require_version(project_id, gate.version_id)
+            except ValidationError:
                 blockers.append("Target version no longer exists.")
             else:
                 evidence.append(
@@ -612,10 +679,16 @@ class StudioWorkflowService:
         if gate.queue_item_id:
             try:
                 queue_item = self._storage_ref().get_queue_item(gate.queue_item_id)
-            except Exception:
-                queue_item = None
+            except Exception as exc:
+                raise PersistenceError(
+                    "Approval gate queue reference lookup failed",
+                    stage="workflow_gate_evaluation",
+                    metadata={"cause": type(exc).__name__},
+                ) from exc
             if queue_item is None:
                 warnings.append("Linked queue item is unavailable.")
+            elif str(getattr(queue_item, "project_id", "")) != project_id:
+                blockers.append("Linked queue item belongs to another project.")
             else:
                 evidence.append(
                     StudioWorkflowEvidenceRef(
@@ -703,9 +776,9 @@ class StudioWorkflowService:
     ) -> StudioApprovalDecision:
         timer = start_timer()
         self._require_project(project_id)
-        gate = self._storage_ref().get_studio_approval_gate(gate_id)
-        if gate is None:
-            raise ValidationError("Approval gate not found")
+        gate = self._require_gate(project_id, gate_id)
+        if gate.status.value not in _ACTIVE_GATE_STATUSES:
+            raise StateError(f"Approval gate is already {gate.status.value}")
         actor_id = payload.actor_id.strip()
         if not actor_id:
             raise ValidationError("actor_id is required")
@@ -719,6 +792,24 @@ class StudioWorkflowService:
             StudioApprovalDecisionValue.CANCEL,
         } and not self._role_allowed(payload.actor_role, gate.required_role):
             raise ValidationError(f"{payload.actor_role.value} cannot decide a gate requiring {gate.required_role.value}")
+
+        try:
+            existing_decisions = self._storage_ref().list_studio_approval_decisions(
+                project_id,
+                gate_id=gate.gate_id,
+                limit=200,
+            )
+        except Exception as exc:
+            raise PersistenceError(
+                "Approval decision history lookup failed",
+                stage="record_approval_decision",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
+        if any(
+            row.actor_id == actor_id and row.decision == payload.decision
+            for row in existing_decisions
+        ):
+            raise StateError("Duplicate approval decision")
 
         gate = self.evaluate_gate(project_id, gate.gate_id)
         if payload.decision == StudioApprovalDecisionValue.APPROVE and gate.status == StudioApprovalGateStatus.BLOCKED:
@@ -742,16 +833,39 @@ class StudioWorkflowService:
             evidence=evidence,
             created_at=_now(),
         )
-        self._storage_ref().save_studio_approval_decision(decision)
+        version, revision_task = self._prepare_approval_transition(
+            gate,
+            decision,
+            create_revision_task=payload.create_revision_task,
+        )
+        storage = self._storage_ref()
+        commit_transition = getattr(storage, "commit_studio_approval_transition", None)
+        if not callable(commit_transition):
+            raise PersistenceError(
+                "Workflow storage does not support atomic approval transitions",
+                stage="record_approval_decision",
+            )
+        try:
+            commit_transition(
+                decision=decision,
+                gate=gate,
+                version=version,
+                task=revision_task,
+            )
+        except Exception as exc:
+            raise PersistenceError(
+                "Approval transition persistence failed",
+                stage="record_approval_decision",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
 
-        if payload.decision == StudioApprovalDecisionValue.APPROVE:
-            self._approve_gate(gate, decision, release_queue=payload.release_queue)
-        elif payload.decision == StudioApprovalDecisionValue.REQUEST_CHANGES:
-            self._request_changes(gate, decision, create_revision_task=payload.create_revision_task)
-        elif payload.decision == StudioApprovalDecisionValue.REJECT:
-            self._close_gate(gate, decision, StudioApprovalGateStatus.REJECTED)
-        elif payload.decision == StudioApprovalDecisionValue.CANCEL:
-            self._close_gate(gate, decision, StudioApprovalGateStatus.CANCELLED)
+        if payload.decision in {
+            StudioApprovalDecisionValue.APPROVE,
+            StudioApprovalDecisionValue.OVERRIDE,
+        }:
+            self._after_gate_approved(gate, decision, release_queue=payload.release_queue)
+        if payload.decision != StudioApprovalDecisionValue.ABSTAIN:
+            self._project_gate_projection(gate, decision)
 
         self._event(
             project_id=project_id,
@@ -775,21 +889,72 @@ class StudioWorkflowService:
         )
         return decision
 
-    def _approve_gate(self, gate: StudioApprovalGate, decision: StudioApprovalDecision, *, release_queue: bool) -> None:
+    def _prepare_approval_transition(
+        self,
+        gate: StudioApprovalGate,
+        decision: StudioApprovalDecision,
+        *,
+        create_revision_task: bool,
+    ) -> tuple[StudioArtifactVersion | None, StudioWorkflowTask | None]:
         now = _now()
-        gate.status = StudioApprovalGateStatus.APPROVED
-        gate.closed_by = decision.actor_id
-        gate.closed_at = now
-        gate.updated_at = now
-        self._storage_ref().save_studio_approval_gate(gate)
-        if gate.version_id:
-            version = self._storage_ref().get_studio_artifact_version(gate.version_id)
-            if version:
+        version: StudioArtifactVersion | None = None
+        task: StudioWorkflowTask | None = None
+        if decision.decision in {
+            StudioApprovalDecisionValue.APPROVE,
+            StudioApprovalDecisionValue.OVERRIDE,
+        }:
+            gate.status = StudioApprovalGateStatus.APPROVED
+            gate.closed_by = decision.actor_id
+            gate.closed_at = now
+            gate.updated_at = now
+            if gate.version_id:
+                version = self._require_version(gate.project_id, gate.version_id)
                 version.status = StudioArtifactVersionStatus.APPROVED
                 version.approved_by = decision.actor_id
                 version.approved_at = now
                 version.updated_at = now
-                self._storage_ref().save_studio_artifact_version(version)
+        elif decision.decision == StudioApprovalDecisionValue.REQUEST_CHANGES:
+            gate.status = StudioApprovalGateStatus.CHANGES_REQUESTED
+            gate.closed_by = decision.actor_id
+            gate.closed_at = now
+            gate.updated_at = now
+            if gate.version_id:
+                version = self._require_version(gate.project_id, gate.version_id)
+                version.status = StudioArtifactVersionStatus.CHANGES_REQUESTED
+                version.updated_at = now
+            if create_revision_task:
+                task = StudioWorkflowTask(
+                    workflow_task_id=_id("sw_task"),
+                    project_id=gate.project_id,
+                    title=f"Revise {gate.target_type} {gate.target_id}",
+                    task_type="revision",
+                    target_type=gate.target_type,
+                    target_id=gate.target_id,
+                    version_id=gate.version_id,
+                    assignee_actor_id="",
+                    status=StudioWorkflowTaskStatus.OPEN,
+                    priority="normal",
+                    metadata={"decision_id": decision.decision_id, "notes": decision.notes},
+                )
+        elif decision.decision == StudioApprovalDecisionValue.REJECT:
+            gate.status = StudioApprovalGateStatus.REJECTED
+            gate.closed_by = decision.actor_id
+            gate.closed_at = now
+            gate.updated_at = now
+        elif decision.decision == StudioApprovalDecisionValue.CANCEL:
+            gate.status = StudioApprovalGateStatus.CANCELLED
+            gate.closed_by = decision.actor_id
+            gate.closed_at = now
+            gate.updated_at = now
+        return version, task
+
+    def _after_gate_approved(
+        self,
+        gate: StudioApprovalGate,
+        decision: StudioApprovalDecision,
+        *,
+        release_queue: bool,
+    ) -> None:
         if release_queue:
             released = self._storage_ref().satisfy_manual_queue_dependencies(
                 gate.manual_dependency_id or gate.gate_id,
@@ -800,8 +965,12 @@ class StudioWorkflowService:
                     gate.gate_id,
                     reason=f"Released by workflow decision {decision.decision_id}",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Compatibility queue dependency release failed for gate %s: %s",
+                    gate.gate_id,
+                    type(exc).__name__,
+                )
             if released:
                 try:
                     self._queue_ref().refresh_waiting_dependencies(limit=100)
@@ -820,7 +989,6 @@ class StudioWorkflowService:
                 )
         if gate.gate_type == StudioApprovalGateType.MEMORY_DECISION_SAVE:
             self._save_explicit_creative_memory(gate, decision)
-        self._project_gate_projection(gate, decision)
 
     def _save_explicit_creative_memory(self, gate: StudioApprovalGate, decision: StudioApprovalDecision) -> None:
         memory_data = gate.evidence_policy.get("memory_data") if isinstance(gate.evidence_policy, dict) else None
@@ -855,55 +1023,6 @@ class StudioWorkflowService:
             details={"memory_id": memory.get("memory_id", ""), "decision_type": memory.get("decision_type", "")},
         )
 
-    def _request_changes(
-        self,
-        gate: StudioApprovalGate,
-        decision: StudioApprovalDecision,
-        *,
-        create_revision_task: bool,
-    ) -> None:
-        now = _now()
-        gate.status = StudioApprovalGateStatus.CHANGES_REQUESTED
-        gate.closed_by = decision.actor_id
-        gate.closed_at = now
-        gate.updated_at = now
-        self._storage_ref().save_studio_approval_gate(gate)
-        if gate.version_id:
-            version = self._storage_ref().get_studio_artifact_version(gate.version_id)
-            if version:
-                version.status = StudioArtifactVersionStatus.CHANGES_REQUESTED
-                version.updated_at = now
-                self._storage_ref().save_studio_artifact_version(version)
-        if create_revision_task:
-            task = StudioWorkflowTask(
-                workflow_task_id=_id("sw_task"),
-                project_id=gate.project_id,
-                title=f"Revise {gate.target_type} {gate.target_id}",
-                task_type="revision",
-                target_type=gate.target_type,
-                target_id=gate.target_id,
-                version_id=gate.version_id,
-                assignee_actor_id="",
-                status=StudioWorkflowTaskStatus.OPEN,
-                priority="normal",
-                metadata={"decision_id": decision.decision_id, "notes": decision.notes},
-            )
-            self._storage_ref().save_studio_workflow_task(task)
-        self._project_gate_projection(gate, decision)
-
-    def _close_gate(
-        self,
-        gate: StudioApprovalGate,
-        decision: StudioApprovalDecision,
-        status: StudioApprovalGateStatus,
-    ) -> None:
-        gate.status = status
-        gate.closed_by = decision.actor_id
-        gate.closed_at = _now()
-        gate.updated_at = gate.closed_at
-        self._storage_ref().save_studio_approval_gate(gate)
-        self._project_gate_projection(gate, decision)
-
     def _project_gate_projection(self, gate: StudioApprovalGate, decision: StudioApprovalDecision) -> None:
         try:
             project_store = self._project_store_ref()
@@ -921,7 +1040,10 @@ class StudioWorkflowService:
                 status_map = project.get("scene_review_status") if isinstance(project.get("scene_review_status"), dict) else {}
                 if scene_id not in reviewed:
                     reviewed.append(scene_id)
-                if decision.decision == StudioApprovalDecisionValue.APPROVE:
+                if decision.decision in {
+                    StudioApprovalDecisionValue.APPROVE,
+                    StudioApprovalDecisionValue.OVERRIDE,
+                }:
                     if scene_id not in approved:
                         approved.append(scene_id)
                     status_map[scene_id] = "approved"
@@ -975,6 +1097,17 @@ class StudioWorkflowService:
         body = payload.body.strip()
         if not body:
             raise ValidationError("Comment body is required")
+        if payload.version_id:
+            self._require_version_for_artifact(
+                project_id,
+                payload.version_id,
+                artifact_type=payload.target_type.strip(),
+                artifact_id=payload.target_id.strip(),
+            )
+        if payload.parent_comment_id:
+            parent_matches = self._storage_ref().list_studio_workflow_comments(project_id, limit=200)
+            if not any(row.comment_id == payload.parent_comment_id for row in parent_matches):
+                raise ValidationError("Parent comment not found")
         comment = StudioWorkflowComment(
             comment_id=_id("swc"),
             project_id=project_id,
@@ -1098,8 +1231,12 @@ class StudioWorkflowService:
     def _legacy_projection(self, project_id: str) -> dict[str, Any]:
         try:
             project = self._project_store_ref().get_project(project_id)
-        except Exception:
-            project = None
+        except Exception as exc:
+            raise PersistenceError(
+                "Workflow compatibility projection lookup failed",
+                stage="workflow_compatibility",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
         if not isinstance(project, dict):
             return {}
         return {

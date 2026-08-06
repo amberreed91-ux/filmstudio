@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel
 
 from app.models.studio_workflow import (
@@ -22,7 +22,7 @@ from app.models.studio_workflow import (
     StudioWorkflowSummary,
     StudioWorkflowTask,
 )
-from app.services.stability import StateError, ValidationError
+from app.services.stability import PersistenceError, StateError, StabilityError, ValidationError
 from app.services.studio_workflow_service import studio_workflow_service
 
 
@@ -44,13 +44,17 @@ def _http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ValidationError):
         lowered = message.lower()
         if "not found" in lowered:
-            return HTTPException(status_code=404, detail=message)
+            return HTTPException(status_code=404, detail=exc.to_dict())
         if "cannot decide" in lowered or "cannot close" in lowered:
-            return HTTPException(status_code=403, detail=message)
-        return HTTPException(status_code=400, detail=message)
+            return HTTPException(status_code=403, detail=exc.to_dict())
+        return HTTPException(status_code=422, detail=exc.to_dict())
     if isinstance(exc, StateError):
-        return HTTPException(status_code=409, detail=message)
-    return HTTPException(status_code=500, detail=message)
+        return HTTPException(status_code=409, detail=exc.to_dict())
+    if isinstance(exc, PersistenceError):
+        return HTTPException(status_code=503, detail=exc.to_dict())
+    if isinstance(exc, StabilityError):
+        return HTTPException(status_code=500, detail=exc.to_dict())
+    return HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("", response_model=StudioWorkflowSummary)
@@ -223,7 +227,11 @@ def list_workflow_tasks(
 
 
 @router.post("/comments/{comment_id}/resolve", response_model=StudioWorkflowComment)
-def resolve_workflow_comment(project_id: str, comment_id: str, payload: ResolveCommentPayload = ResolveCommentPayload()):
+def resolve_workflow_comment(
+    project_id: str,
+    comment_id: str,
+    payload: ResolveCommentPayload = Body(default_factory=ResolveCommentPayload),
+):
     try:
         return studio_workflow_service.resolve_comment(project_id, comment_id, payload.actor_id)
     except Exception as exc:

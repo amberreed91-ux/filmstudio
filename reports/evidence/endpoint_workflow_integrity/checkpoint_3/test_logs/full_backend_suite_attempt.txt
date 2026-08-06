@@ -1,0 +1,26 @@
+Checkpoint 3 full backend suite attempt
+=======================================
+
+The full backend suite was attempted once after the integrity repairs.
+
+Observed summary:
+
+11 failed, 2989 passed, 10 skipped, 2 warnings, 112 errors in 1127.88s
+
+The run exhausted the filesystem through generated pytest temporary databases.
+The late error population consistently reported `No space left on device` or
+`database or disk is full`; it is therefore not valid pass/fail evidence for
+those late tests. Only disposable pytest temp directories created by the run
+were deleted. Available space increased from approximately 124 MiB to 2.8 GiB.
+
+The failures named before or apart from the disk errors were rerun in isolation:
+
+- Scene pipeline persistence callback: repaired test double; 5 route tests pass.
+- Standing corrections validation: passes after disk recovery.
+- Render-context prompt compaction: 7 failures reproduce in isolation and are
+  attributable to pre-existing, uncommitted render-context work outside this
+  checkpoint. They are documented separately and were not mixed into CP3.
+
+The checkpoint conclusion relies on the clean affected-suite result in
+`backend_integrity_affected_suite.txt`, not on this environmentally invalid
+full-suite attempt.

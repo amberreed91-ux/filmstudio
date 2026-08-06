@@ -7,6 +7,7 @@ from typing import Any
 
 from app.data import get_storage
 from app.models.editorial_intelligence import EditorialEvidenceRef, EditorialTimelineClip
+from app.services.stability import PersistenceError
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -187,8 +188,12 @@ class EditorialTimelineContextService:
             return []
         try:
             return method(project_id) or []
-        except Exception:
-            return []
+        except Exception as exc:
+            raise PersistenceError(
+                "Editorial evidence lookup failed",
+                stage="editorial_context",
+                metadata={"source": method_name, "cause": type(exc).__name__},
+            ) from exc
 
     def _shot_boundaries_for_assets(
         self,
@@ -214,8 +219,12 @@ class EditorialTimelineContextService:
         for asset_id in sorted(asset_ids):
             try:
                 rows = method(asset_id) or []
-            except Exception:
-                continue
+            except Exception as exc:
+                raise PersistenceError(
+                    "Editorial shot-boundary lookup failed",
+                    stage="editorial_context",
+                    metadata={"cause": type(exc).__name__},
+                ) from exc
             for row in rows:
                 boundary_id = _as_str(_attr(row, "boundary_id", ""))
                 dedupe_key = boundary_id or f"{asset_id}:{_attr(row, 'start_time', '')}:{_attr(row, 'end_time', '')}"

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, File, Form, UploadFile
+from fastapi import APIRouter, Body, HTTPException, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
 from app.services.project_store import project_store
@@ -74,16 +74,48 @@ logger = logging.getLogger(__name__)
 
 def _project_exists(project_id: str) -> bool:
     """Treat persisted canonical projects as valid even when project_store is cold."""
-    return project_persistence_service.exists(project_id)
+    try:
+        return project_persistence_service.exists(project_id)
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
+
+
+def _project_http_error(exc: StabilityError) -> HTTPException:
+    if isinstance(exc, ValidationError):
+        status = 422
+    elif isinstance(exc, StateError):
+        status = 409
+    elif isinstance(exc, PersistenceError):
+        status = 503
+    elif isinstance(exc, ProviderError):
+        status = 502
+    elif isinstance(exc, PlaybackError):
+        status = 503
+    else:
+        status = 500
+    return HTTPException(status_code=status, detail=exc.to_dict())
 
 
 def _sync_project_to_canonical_store(project: Dict[str, Any]) -> None:
     """Ensure the canonical SQLite projects table has the current project row."""
-    project_persistence_service.sync(project)
+    try:
+        project_persistence_service.sync(project)
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
 
 
 def _load_project_from_store(project_id: str):
-    return project_persistence_service.load(project_id)
+    try:
+        return project_persistence_service.load(project_id)
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
+
+
+def _update_project_persisted(project_id: str, updates: Dict[str, Any]):
+    try:
+        return project_persistence_service.update(project_id, updates)
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
 
 configure_project_route_dependencies()
 
@@ -154,7 +186,7 @@ def _ensure_scene_fallback(summary: Dict[str, Any], script_text: str) -> Dict[st
 
 
 class CreateProjectPayload(BaseModel):
-    title: str = ""
+    title: str
     project_id: Optional[str] = None
 
 
@@ -268,7 +300,10 @@ class UpdateScenePayload(BaseModel):
 
 @router.get("/projects")
 def list_projects():
-    return {"projects": project_store.list_projects()}
+    try:
+        return {"projects": project_persistence_service.list()}
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
 
 
 @router.post("/projects")
@@ -277,14 +312,13 @@ def create_project(payload: CreateProjectPayload):
     try:
         title = str(payload.title or "").strip()
         if not title:
-            title = "Untitled Project"
-        created = project_store.create_project(title=title, project_id=payload.project_id)
+            raise ValidationError("Project title is required", stage="project_creation")
+        created = project_persistence_service.create(title=title, project_id=payload.project_id)
         if not isinstance(created, dict) or not created.get("project_id"):
             raise PersistenceError("Project creation returned invalid payload", stage="project_creation")
-        _sync_project_to_canonical_store(created)
         return created
     except StabilityError as exc:
-        raise HTTPException(status_code=400, detail=exc.to_dict())
+        raise _project_http_error(exc) from exc
     finally:
         log_stage_event(
             project_id=(payload.project_id or ""),
@@ -298,10 +332,9 @@ def create_project(payload: CreateProjectPayload):
 @router.put("/projects/{project_id}")
 def update_project(project_id: str, payload: UpdateProjectPayload):
     updates = payload.model_dump(exclude_none=True)
-    updated = project_store.update_project(project_id, updates)
+    updated = _update_project_persisted(project_id, updates)
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    _sync_project_to_canonical_store(updated)
     return updated
 
 
@@ -314,9 +347,11 @@ def delete_project(project_id: str):
         project_persistence_service.delete(project_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
     except Exception as exc:
-        logger.error("PROJECT_DELETE_ERROR | project=%s | error=%s", project_id, exc)
-        raise HTTPException(status_code=500, detail=f"Failed to delete project: {exc}")
+        logger.error("PROJECT_DELETE_ERROR | project=%s | error=%s", project_id, type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Failed to delete project") from exc
     
     logger.info("PROJECT_DELETED | project=%s | elapsed=%dms", project_id, elapsed_ms(timer))
     
@@ -379,7 +414,7 @@ def generate_scenes(project_id: str, payload: GenerateScenesPayload):
         "created_at": str(film_cut.get("created_at") or current.get("updated_at") or ""),
     }
 
-    updated = project_store.update_project(
+    updated = _update_project_persisted(
         project_id,
         {
             "script_text": payload.script_text or "",
@@ -393,9 +428,6 @@ def generate_scenes(project_id: str, payload: GenerateScenesPayload):
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Sync to SQLite BEFORE universe auto-populate so scenes are readable from DB
-    _sync_project_to_canonical_store(updated)
-
     try:
         universe_graph_service.auto_populate_from_scenes(project_id)
     except Exception as exc:
@@ -406,14 +438,15 @@ def generate_scenes(project_id: str, payload: GenerateScenesPayload):
 
 @router.put("/projects/{project_id}/scene-review")
 def update_scene_review(project_id: str, payload: SceneReviewPayload):
-    updated = project_store.update_project(
-        project_id,
-        {
-            "approved_scenes": payload.approved_scenes,
-            "reviewed_scenes": payload.reviewed_scenes,
-            "scene_review_status": payload.scene_review_status,
-        },
-    )
+    try:
+        updated = project_persistence_service.update_scene_review(
+            project_id,
+            approved_scenes=payload.approved_scenes,
+            reviewed_scenes=payload.reviewed_scenes,
+            scene_review_status=payload.scene_review_status,
+        )
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return updated
@@ -421,7 +454,10 @@ def update_scene_review(project_id: str, payload: SceneReviewPayload):
 
 @router.put("/projects/{project_id}/film-cut")
 def update_film_cut(project_id: str, payload: FilmCutPayload):
-    updated = project_store.update_project(project_id, {"film_cut": payload.film_cut})
+    try:
+        updated = project_persistence_service.update_film_cut(project_id, payload.film_cut)
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return updated
@@ -454,7 +490,7 @@ def generate_motion(project_id: str, payload: MotionPreviewPayload):
         provider_config,
     ).get("video_render_summary", {})
 
-    updated = project_store.update_project(project_id, {"execution_summary": merged_summary})
+    updated = _update_project_persisted(project_id, {"execution_summary": merged_summary})
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return {
@@ -648,7 +684,7 @@ async def generate_scene_pipeline(project_id: str, scene_id: str, payload: Gener
                 loop_to_duration=bool(soundtrack_raw.get("loop_to_duration", True)),
                 style_label=str(soundtrack_raw.get("style_label") or ""),
             ),
-            save_project=lambda updated: project_store.update_project(
+            save_project=lambda updated: _update_project_persisted(
                 project_id,
                 {"execution_summary": updated.get("execution_summary", {})},
             ),
@@ -1164,7 +1200,7 @@ def create_scene(project_id: str, payload: CreateScenePayload):
     film_cut["excluded_scenes"] = []
     
     # Update project
-    updated = project_store.update_project(
+    updated = _update_project_persisted(
         project_id,
         {
             "execution_summary": summary,
@@ -1175,8 +1211,6 @@ def create_scene(project_id: str, payload: CreateScenePayload):
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    _sync_project_to_canonical_store(updated)
-
     try:
         universe_graph_service.auto_populate_from_scenes(project_id)
     except Exception as exc:
@@ -1292,12 +1326,10 @@ def update_scene(project_id: str, scene_id: str, payload: UpdateScenePayload):
     summary["scenes"] = scenes
     
     # Update project
-    updated = project_store.update_project(project_id, {"execution_summary": summary})
+    updated = _update_project_persisted(project_id, {"execution_summary": summary})
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    _sync_project_to_canonical_store(updated)
-
     try:
         universe_graph_service.auto_populate_from_scenes(project_id)
     except Exception as exc:
@@ -1331,7 +1363,7 @@ def delete_scene(project_id: str, scene_id: str):
     film_cut["excluded_scenes"] = excluded_scenes
     
     # Update project
-    updated = project_store.update_project(
+    updated = _update_project_persisted(
         project_id,
         {
             "execution_summary": summary,
@@ -1342,8 +1374,6 @@ def delete_scene(project_id: str, scene_id: str):
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    _sync_project_to_canonical_store(updated)
-
     try:
         universe_graph_service.auto_populate_from_scenes(project_id)
     except Exception as exc:
@@ -2325,7 +2355,9 @@ def update_final_short_film_package_status(package_id: str, payload: UpdatePacka
 
 
 @router.post("/dev/seed-demo-project")
-def seed_demo_project(payload: SeedDemoProjectPayload = SeedDemoProjectPayload()):
+def seed_demo_project(
+    payload: SeedDemoProjectPayload = Body(default_factory=SeedDemoProjectPayload),
+):
     """Dev-only deterministic studio project seed for product demos."""
     return demo_seed_service.seed_demo_project(project_id=payload.project_id)
 
@@ -2499,7 +2531,7 @@ def set_scene_provider_override(
 
     overrides[scene_id] = mode
 
-    updated = project_store.update_project(project_id, {"provider_overrides": overrides})
+    updated = _update_project_persisted(project_id, {"provider_overrides": overrides})
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
 

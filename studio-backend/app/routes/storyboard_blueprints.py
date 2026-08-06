@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.stability import StabilityError
@@ -65,6 +65,8 @@ def _handle_stability(exc: StabilityError) -> HTTPException:
         return HTTPException(status_code=status, detail=exc.to_dict())
     if exc.error_type == "provider_error":
         return HTTPException(status_code=502, detail=exc.to_dict())
+    if exc.error_type == "persistence_error":
+        return HTTPException(status_code=503, detail=exc.to_dict())
     return HTTPException(status_code=500, detail=exc.to_dict())
 
 
@@ -72,7 +74,7 @@ def _handle_stability(exc: StabilityError) -> HTTPException:
 def create_storyboard_blueprint(
     project_id: str,
     scene_id: str,
-    payload: CreateStoryboardBlueprintRequest = CreateStoryboardBlueprintRequest(),
+    payload: CreateStoryboardBlueprintRequest = Body(default_factory=CreateStoryboardBlueprintRequest),
 ) -> dict[str, Any]:
     try:
         return _serialize(
@@ -112,7 +114,7 @@ def list_storyboard_blueprints(project_id: str) -> list[dict[str, Any]]:
 @router.post("/projects/{project_id}/storyboard-blueprints/backfill")
 def backfill_storyboard_blueprints(
     project_id: str,
-    payload: BackfillStoryboardBlueprintsRequest = BackfillStoryboardBlueprintsRequest(),
+    payload: BackfillStoryboardBlueprintsRequest = Body(default_factory=BackfillStoryboardBlueprintsRequest),
 ) -> dict[str, Any]:
     try:
         return storyboard_blueprint_service.backfill_project_blueprints(
@@ -128,7 +130,7 @@ def backfill_storyboard_blueprints(
 def approve_storyboard_version(
     blueprint_id: str,
     version_id: str,
-    payload: ApproveStoryboardVersionRequest = ApproveStoryboardVersionRequest(),
+    payload: ApproveStoryboardVersionRequest = Body(default_factory=ApproveStoryboardVersionRequest),
 ) -> dict[str, Any]:
     try:
         return _serialize(
@@ -199,7 +201,7 @@ def build_storyboard_render_contract(blueprint_id: str, storyboard_shot_id: str)
 async def render_storyboard_shot(
     blueprint_id: str,
     storyboard_shot_id: str,
-    payload: RenderStoryboardShotRequest = RenderStoryboardShotRequest(),
+    payload: RenderStoryboardShotRequest = Body(default_factory=RenderStoryboardShotRequest),
 ) -> dict[str, Any]:
     try:
         job = storyboard_blueprint_service.render_storyboard_shot(

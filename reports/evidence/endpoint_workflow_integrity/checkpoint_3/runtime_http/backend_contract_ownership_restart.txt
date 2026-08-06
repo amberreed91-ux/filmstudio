@@ -1,0 +1,111 @@
+Checkpoint 3 real HTTP, ownership, approval, and restart verification
+=====================================================================
+
+Runtime:
+
+- Backend: `uvicorn main:app --host 127.0.0.1 --port 8024`
+- Canonical SQLite and JSON mirror paths were isolated under a temporary
+  `/tmp/ai-film-studio-cp3-live.*` directory.
+- No paid provider operation was invoked.
+
+Contract and duplicate checks
+-----------------------------
+
+POST /api/f51/studio/projects with `{}`
+HTTP 422
+Response identifies missing body field `title`.
+
+POST /api/f51/studio/projects with project_id=cp3_project_a
+HTTP 200
+
+POST /api/f51/studio/projects with project_id=cp3_project_b
+HTTP 200
+
+Repeat POST for project_id=cp3_project_a
+HTTP 409
+error_type=state_error
+message=Project already exists
+
+Version and ownership checks
+----------------------------
+
+POST cp3_project_a/workflow/versions
+HTTP 200
+version_id=sw_ver_300c26fbf37946
+
+POST cp3_project_b/workflow/versions
+HTTP 200
+version_id=sw_ver_1b99a176cc694c
+
+POST cp3_project_a/workflow/versions with source_version_id=missing_version
+HTTP 404
+error_type=validation_error
+message=Version not found
+
+POST cp3_project_a/workflow/gates referencing Project B's version
+HTTP 404
+error_type=validation_error
+message=Version not found
+
+POST cp3_project_b/workflow/gates referencing its own version
+HTTP 200
+gate_id=sw_gate_1e6d3e0a34014a
+
+POST a decision through cp3_project_a for Project B's gate
+HTTP 404
+error_type=validation_error
+message=Approval gate not found
+
+POST an approve decision through cp3_project_b
+HTTP 200
+decision_id=sw_dec_769f20eaa47e40
+
+Repeat the same approval on the now-closed gate
+HTTP 409
+error_type=state_error
+message=Approval gate is already approved
+
+Scene and Film Cut ownership checks
+-----------------------------------
+
+POST cp3_project_a/scenes
+HTTP 200
+scene_id=scene_001
+
+PUT cp3_project_a/film-cut with cut_id=cp3_cut_v2 and scene_001
+HTTP 200
+
+PUT cp3_project_a/scene-review referencing scene_from_b
+HTTP 422
+error_type=validation_error
+stage=scene_review
+metadata.scene_ids=[scene_from_b]
+
+Process restart and mirror-loss check
+-------------------------------------
+
+The backend was shut down cleanly. Only the temporary JSON mirror
+`projects.json` was deleted; the temporary canonical SQLite database remained.
+The backend was then restarted with the same isolated environment.
+
+GET /api/f51/studio/projects/cp3_project_a
+HTTP 200
+Observed after restart:
+
+- title=Checkpoint 3 Project A
+- execution_summary.scenes[0].scene_id=scene_001
+- film_cut.cut_id=cp3_cut_v2
+- film_cut.included_scenes=[scene_001]
+
+GET /api/f51/studio/projects/cp3_project_b/workflow
+HTTP 200
+Observed after restart:
+
+- active version sw_ver_1b99a176cc694c has status=approved
+- approved_by=producer_a
+- approval timestamp persisted
+- decision_recorded event persisted
+- the closed gate is absent from active_gates
+
+This proves real runtime behavior, canonical reload after process restart, and
+reconstruction after loss of the noncanonical JSON mirror.
