@@ -126,9 +126,17 @@ def failing_score():
                 expected="Neon signs",
                 observed="Neon signs only in frame 1",
             ),
+            # identity_continuity is scored on every real result. It held here —
+            # the drift in this fixture is wardrobe/environment, not likeness.
+            "identity_continuity": DimensionScore(
+                score=80,
+                evidence="Face and build match the locked reference across frames",
+                expected="Same woman as locked reference",
+                observed="Consistent face across all three frames",
+            ),
         },
         temporal_drift={"start_score": 60, "end_score": 45},
-        adherence_score=56.25,
+        adherence_score=63.25,
         verdict="correctable",
         failed_slots=["character_state", "environment_persistence"],
     )
@@ -143,12 +151,13 @@ def test_adherence_score_calculation(failing_score):
     # Manually calculate expected score
     expected = (
         35 * DIMENSION_WEIGHTS["character_state"] +
+        80 * DIMENSION_WEIGHTS["identity_continuity"] +
         75 * DIMENSION_WEIGHTS["action"] +
         80 * DIMENSION_WEIGHTS["camera"] +
         70 * DIMENSION_WEIGHTS["lighting"] +
         40 * DIMENSION_WEIGHTS["environment_persistence"]
     )
-    
+
     assert abs(failing_score.adherence_score - expected) < 0.1
 
 
@@ -568,6 +577,9 @@ async def test_qwen_vision_result_feeds_loop1_scoring(monkeypatch, base_slots):
 
     expected_score = (
         42 * DIMENSION_WEIGHTS["character_state"]
+        # This evaluator returns no identity dimension, so it is back-filled from
+        # character_state and carries that score into the aggregate.
+        + 42 * DIMENSION_WEIGHTS["identity_continuity"]
         + 76 * DIMENSION_WEIGHTS["action"]
         + 82 * DIMENSION_WEIGHTS["camera"]
         + 71 * DIMENSION_WEIGHTS["lighting"]

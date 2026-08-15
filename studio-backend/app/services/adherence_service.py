@@ -24,20 +24,40 @@ from groq import Groq
 logger = logging.getLogger("adherence_service")
 
 
-# Dimension weights for aggregate adherence score
+# Dimension weights for aggregate adherence score.
+#
+# identity_continuity carried weight 0.0 until Aug 2026, which meant a shot where
+# the character rendered as a visibly different person scored identically to one
+# where they did not — and, because the verdict derives from this weighted
+# aggregate, identity drift could never trigger a retry. It now carries real
+# weight, taken from character_state (the two overlap: character_state covers
+# pose/wardrobe/expression as described, identity_continuity covers "is this the
+# same person").
 DIMENSION_WEIGHTS = {
-    "character_state": 0.25,
-    "identity_continuity": 0.0,
+    "character_state": 0.15,
+    "identity_continuity": 0.20,
     "action": 0.20,
     "camera": 0.15,
-    "lighting": 0.15,
-    "environment_persistence": 0.25,
+    "lighting": 0.10,
+    "environment_persistence": 0.20,
 }
 
 # Verdict thresholds
 VERDICT_PASS_THRESHOLD = 80
 VERDICT_CORRECTABLE_MIN = 50
 MAX_ATTEMPTS = 3
+
+# Identity is not a dimension that should average out against good lighting: a
+# face that reads as a different actor fails the shot no matter how well the rest
+# scored. Any *real* identity score at or below this floor forces a correctable
+# verdict regardless of the weighted aggregate.
+IDENTITY_HARD_GATE_THRESHOLD = 65
+
+# Marker written by _ensure_identity_continuity_dimension when the evaluator did
+# not return a separate identity dimension and it was back-filled from
+# character_state. Inferred scores must not drive the hard gate or failed_slots —
+# they are not evidence about identity.
+IDENTITY_INFERRED_MARKER = "inferred from character_state"
 
 
 @dataclass
@@ -232,7 +252,32 @@ class AdherenceService:
             verdict = "correctable"
         else:
             verdict = "manual_review"
-        
+
+        # Identity hard gate — independent of the weighted aggregate.
+        #
+        # A shot can score well overall while the character reads as a different
+        # person; averaging hides exactly the failure the director most needs
+        # caught. If the evaluator actually looked at identity and scored it at or
+        # below the floor, the shot cannot pass on the strength of other
+        # dimensions.
+        identity_dim = dimensions.get("identity_continuity")
+        identity_gate_tripped = (
+            identity_dim is not None
+            and not self._identity_score_is_inferred(identity_dim)
+            and identity_dim.score <= IDENTITY_HARD_GATE_THRESHOLD
+        )
+        if identity_gate_tripped and verdict == "pass":
+            verdict = "correctable" if attempt_n < MAX_ATTEMPTS else "manual_review"
+            logger.info(
+                "ADHERENCE_IDENTITY_GATE | shot=%s | attempt=%d | identity=%.1f | "
+                "aggregate=%.1f | verdict_overridden_to=%s",
+                shot_id,
+                attempt_n,
+                identity_dim.score,
+                adherence_score,
+                verdict,
+            )
+
         # Identify failed slots (score <= 70)
         # Changed from < 50 to align with correctable range (50-79)
         # Any dimension scoring 70 or below is a correction candidate
@@ -241,9 +286,22 @@ class AdherenceService:
             if score_obj.score <= 70
             and not (
                 dim == "identity_continuity"
-                and "inferred from character_state" in score_obj.evidence.lower()
+                and self._identity_score_is_inferred(score_obj)
             )
         ]
+
+        # identity_continuity is a scoring dimension, not a prompt slot — the
+        # correction paths iterate ALL_SLOTS, so an identity-only failure would
+        # otherwise carry every slot forward verbatim and retry the exact same
+        # prompt. character_state is the slot that actually carries identity text,
+        # so route the correction there.
+        if "identity_continuity" in failed_slots and "character_state" not in failed_slots:
+            failed_slots.append("character_state")
+            logger.info(
+                "ADHERENCE_IDENTITY_ROUTED_TO_CHARACTER_STATE | shot=%s | attempt=%d",
+                shot_id,
+                attempt_n,
+            )
         
         score_result = AdherenceScore(
             shot_id=shot_id,
@@ -1148,6 +1206,17 @@ Respond ONLY with valid JSON matching this exact schema:
             raise
 
     @staticmethod
+    def _identity_score_is_inferred(score_obj: DimensionScore) -> bool:
+        """True when this identity score was back-filled from character_state.
+
+        An inferred score is not evidence about identity — it must not drive the
+        hard gate or land in failed_slots, or every evaluator that omits the
+        dimension would look like identity drift.
+        """
+        evidence = str(getattr(score_obj, "evidence", "") or "").lower()
+        return IDENTITY_INFERRED_MARKER in evidence
+
+    @staticmethod
     def _ensure_identity_continuity_dimension(
         result: Dict[str, Any],
         *,
@@ -1160,7 +1229,7 @@ Respond ONLY with valid JSON matching this exact schema:
         dimensions["identity_continuity"] = {
             "score": character_dim.get("score", 0),
             "evidence": (
-                "Identity continuity inferred from character_state because this evaluator "
+                f"Identity continuity {IDENTITY_INFERRED_MARKER} because this evaluator "
                 "did not return a separate visual identity dimension."
             ),
             "expected": expected_identity,

@@ -138,6 +138,9 @@ class PrevisService:
                     stage="previs_prompt_context",
                     metadata={"cause": type(exc).__name__},
                 ) from exc
+            # total_shots is left to resolve_total_shots, which reads shot_count /
+            # shots off the execution_summary scene dict. Previs has no separate
+            # shot list of its own, and the scene dict is the authoritative count.
             prompt = build_shot_aware_prompt(
                 scene_data=scene,
                 shot_number=shot_number,

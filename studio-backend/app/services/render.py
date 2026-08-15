@@ -295,15 +295,41 @@ async def _run_character_reference_lock(job: RenderJobModel) -> None:
             character_visual_reference_service as _char_ref_svc,
         )
 
+        # Verify identity BEFORE locking. Afterwards the job's own frames are in
+        # the lock set and the comparison would include this render against
+        # itself.
+        identity_report = None
+        try:
+            identity_report = _char_ref_svc.verify_shot_identity(job=job, storage=storage)
+        except Exception as verify_exc:
+            logger.debug("Shot identity verification skipped for job %s: %s", job.id, verify_exc)
+
         locks = _char_ref_svc.lock_first_references_for_completed_job(
             job=job,
             storage=storage,
         )
-        if locks:
+        if locks or identity_report:
             job.metadata = dict(job.metadata or {})
-            job.metadata["character_reference_locks_created"] = [
-                lock.model_dump(mode="json") for lock in locks
-            ]
+            if locks:
+                job.metadata["character_reference_locks_created"] = [
+                    lock.model_dump(mode="json") for lock in locks
+                ]
+            if identity_report:
+                job.metadata["character_identity_verification"] = identity_report
+                if identity_report.get("status") == "identity_drift":
+                    drifted = [
+                        row.get("character_name") or row.get("character_id")
+                        for row in identity_report.get("characters", [])
+                        if row.get("status") == "identity_drift"
+                    ]
+                    logger.warning(
+                        "CHARACTER_IDENTITY_DRIFT | job=%s | shot=%s | characters=%s | "
+                        "measures_identity=%s",
+                        job.id,
+                        job.shot_id,
+                        ", ".join(str(name) for name in drifted if name),
+                        identity_report.get("measures_identity"),
+                    )
             _persist_job(job)
     except Exception as exc:
         logger.debug("Character reference lock skipped for job %s: %s", job.id, exc)
@@ -1912,6 +1938,42 @@ class RenderService:
             _zero_touch_debug["identity_conflict_warnings"] = _canonical_identity_context.get("conflict_warnings", [])
         _input_parameters["zero_touch_debug"] = _zero_touch_debug
 
+        # ── Negative prompt (separate channel, not part of the 512-char budget) ──
+        # Built here rather than in the slot builder because it needs the resolved
+        # cast and the selected provider. Providers without a negative prompt
+        # field get an empty string and are unaffected.
+        _negative_prompt = ""
+        try:
+            from app.services.negative_prompt_builder import (
+                build_negative_prompt as _build_negative_prompt,
+                provider_supports_negative_prompt as _provider_supports_negative,
+            )
+
+            if _provider_supports_negative(provider):
+                _negative_prompt = _build_negative_prompt(
+                    cast_names=_render_scene_chars or [],
+                    extra_terms=[
+                        str(term)
+                        for term in (_input_parameters.get("negative_prompt_terms") or [])
+                        if str(term or "").strip()
+                    ],
+                    disabled_groups=[
+                        str(group)
+                        for group in (_input_parameters.get("negative_prompt_disabled_groups") or [])
+                        if str(group or "").strip()
+                    ],
+                )
+                if _negative_prompt:
+                    logger.info(
+                        "RENDER_NEGATIVE_PROMPT_BUILT | project=%s | shot=%s | provider=%s | length=%d",
+                        project_id,
+                        shot_id,
+                        provider,
+                        len(_negative_prompt),
+                    )
+        except Exception as _exc:
+            logger.debug("Negative prompt build skipped for %s/%s: %s", project_id, shot_id, _exc)
+
         job = RenderJobModel(
             id=job_id,
             project_id=project_id,
@@ -1921,6 +1983,7 @@ class RenderService:
             input_payload=RenderJobInput(
                 shot_id=shot_id,
                 prompt=prompt,
+                negative_prompt=_negative_prompt,
                 referenceAssets=reference_assets or [],
                 parameters=_input_parameters,
                 consistency_payload=_consistency_payload,

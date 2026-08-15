@@ -245,6 +245,45 @@ def _determine_shot_type(shot_number: int, segment: str) -> str:
     return SHOT_FRAMING_BY_POSITION[4]
 
 
+def resolve_total_shots(
+    scene_data: dict,
+    shot_number: int,
+    explicit_total: int | None = None,
+) -> int:
+    """Determine how many shots this scene is actually broken into.
+
+    Scene text is segmented evenly across the shot count, so getting this wrong
+    hands most shots the wrong beat: with a hardcoded assumption of 3, shot 2 of
+    a 6-shot scene receives the action text belonging to roughly shot 3, and the
+    prompt is then confidently, precisely about the wrong moment. Adherence
+    scoring compares the render against that prompt and happily confirms a match.
+
+    Resolution order:
+      1. An explicit count passed by the caller.
+      2. A count carried on the scene dict (`shot_count` / `total_shots`, or the
+         length of a `shots` list) — both shapes exist in project state.
+      3. The legacy `max(shot_number, 3)` heuristic, as a last resort.
+    """
+    if explicit_total and explicit_total > 0:
+        return max(int(explicit_total), shot_number)
+
+    if isinstance(scene_data, dict):
+        for key in ("shot_count", "total_shots", "num_shots"):
+            raw = scene_data.get(key)
+            try:
+                candidate = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if candidate > 0:
+                return max(candidate, shot_number)
+
+        shots = scene_data.get("shots")
+        if isinstance(shots, list) and shots:
+            return max(len(shots), shot_number)
+
+    return max(shot_number, 3)
+
+
 def build_shot_aware_prompt(
     scene_data: dict,
     shot_number: int,
@@ -253,10 +292,11 @@ def build_shot_aware_prompt(
     audio_brief: dict | None = None,
     performance_context: dict | None = None,
     max_length: int = 512,
+    total_shots: int | None = None,
 ) -> str:
     """
     Build a shot-aware prompt for previs generation.
-    
+
     Args:
         scene_data: Scene dict with text, location, time_of_day, emotional_tone, etc.
         shot_number: Shot number (1-based)
@@ -265,7 +305,9 @@ def build_shot_aware_prompt(
         audio_brief: Audio context dict (optional)
         performance_context: Provider-neutral acting context with visible prompt lines (optional)
         max_length: Max prompt length (default 512 for Runway)
-    
+        total_shots: Real number of shots in this scene. Falls back to the scene
+            dict, then to a heuristic, when not supplied.
+
     Returns:
         Formatted prompt string following cinematic structure
     """
@@ -274,12 +316,12 @@ def build_shot_aware_prompt(
     time_of_day = scene_data.get("time_of_day") or ""
     emotional_tone = scene_data.get("emotional_tone") or ""
     
-    # Determine total shots from scene (or assume based on shot_number)
-    # This is a heuristic — frontend should pass total_shots if available
-    total_shots = max(shot_number, 3)  # Assume at least 3 shots if not specified
-    
+    # Determine how many shots this scene is actually cut into, so the scene text
+    # is segmented against the real breakdown rather than an assumed one.
+    resolved_total_shots = resolve_total_shots(scene_data, shot_number, total_shots)
+
     # Segment scene text by shot
-    segments = _segment_scene_text(scene_text, total_shots)
+    segments = _segment_scene_text(scene_text, resolved_total_shots)
     shot_segment = segments[shot_number - 1] if shot_number <= len(segments) else ""
     
     # Determine shot type

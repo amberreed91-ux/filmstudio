@@ -319,6 +319,10 @@ class StudioOverview(BaseModel):
 class RenderJobInput(BaseModel):
     shot_id: str = ""
     prompt: str = ""
+    # Carried as its own field rather than inside `prompt` so it never competes
+    # for the positive prompt's 512-character budget. Providers without a
+    # negative prompt parameter simply ignore it.
+    negative_prompt: str = ""
     referenceAssets: list[str] = []
     parameters: dict = {}
     consistency_payload: Optional[ConsistencyPayload] = None

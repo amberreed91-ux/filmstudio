@@ -284,6 +284,7 @@ def test_service_builds_character_scoped_consistency_payload(tmp_path, monkeypat
     assert payload is not None
     assert payload.project_id == "proj-lock"
     assert len(payload.refs) == 1
-    assert payload.refs[0].ref_id == f"charlock:{character['id']}"
+    # ref_id is role-scoped now that a character can hold several locked views.
+    assert payload.refs[0].ref_id == f"charlock:{character['id']}:general"
     assert payload.refs[0].image_url == "https://cdn.example.test/maya.jpg"
     assert "Maya" in payload.fallback_text[payload.refs[0].ref_id]

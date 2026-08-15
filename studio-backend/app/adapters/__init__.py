@@ -1524,6 +1524,9 @@ class HappyHorseAdapter(RenderProviderAdapter):
                 "watermark": bool(params.get("watermark", False)),
             },
         }
+        negative_prompt = str(getattr(job.input_payload, "negative_prompt", "") or "").strip()
+        if negative_prompt:
+            payload["input"]["negative_prompt"] = negative_prompt
         if seed is not None:
             payload["parameters"]["seed"] = int(seed)
         return payload
@@ -1874,6 +1877,9 @@ class HappyHorseR2VAdapter(HappyHorseAdapter):
                 "watermark": bool(params.get("watermark", False)),
             },
         }
+        negative_prompt = str(getattr(job.input_payload, "negative_prompt", "") or "").strip()
+        if negative_prompt:
+            payload["input"]["negative_prompt"] = negative_prompt
         if seed is not None:
             payload["parameters"]["seed"] = int(seed)
         return payload

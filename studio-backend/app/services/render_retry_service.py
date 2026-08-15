@@ -89,6 +89,7 @@ class RenderRetryService:
     def _dimension_label(slot: str) -> str:
         labels = {
             "character_state": "Character presence",
+            "identity_continuity": "Character likeness",
             "action": "Action",
             "camera": "Camera language",
             "lighting": "Light and tone",
@@ -1172,15 +1173,24 @@ class RenderRetryService:
         Ties preserve ALL_SLOTS order, which keeps behavior stable across runs.
         Missing scores are treated as passing so unscored slots do not jump ahead
         of known failures.
+
+        identity_continuity is a dimension without a slot of its own; the prompt
+        text it depends on lives in character_state. So character_state is ordered
+        by the weaker of the two — otherwise a shot whose blocking read fine but
+        whose face drifted would leave character_state at the back of the prompt,
+        where the provider weights it least (POSITIONAL_WEIGHTING_FINDING.md).
         """
-        return sorted(
-            ALL_SLOTS,
-            key=lambda slot: (
-                dimension_scores[slot].score
-                if slot in dimension_scores and dimension_scores[slot] is not None
-                else 100
-            ),
-        )
+        def _score_for(slot: str) -> float:
+            entry = dimension_scores.get(slot)
+            base = entry.score if entry is not None else 100
+            if slot != "character_state":
+                return base
+            identity = dimension_scores.get("identity_continuity")
+            if identity is None:
+                return base
+            return min(base, identity.score)
+
+        return sorted(ALL_SLOTS, key=_score_for)
 
     async def _reconstruct_original_score(
         self,

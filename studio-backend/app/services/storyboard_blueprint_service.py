@@ -937,6 +937,9 @@ class StoryboardBlueprintService:
                 take_number=1,
                 all_characters=self._project_characters_for_prompt(project_id),
                 max_length=512,
+                # This service already knows the real breakdown; passing it keeps
+                # scene-text segmentation aligned with the actual shot list.
+                total_shots=shot_count,
             )
         except Exception:
             prompt = ""

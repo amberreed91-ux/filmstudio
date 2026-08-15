@@ -3555,6 +3555,14 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_canonical_workflow_transition_order
                     ON canonical_workflow_transitions(run_id, created_at, transition_id);
             """),
+            (58, "Allow multiple locked character references per role", """
+                DROP INDEX IF EXISTS idx_character_reference_locks_active;
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_character_reference_locks_active_role
+                    ON character_reference_locks(project_id, character_id, reference_role)
+                    WHERE lock_status = 'locked';
+                CREATE INDEX IF NOT EXISTS idx_character_reference_locks_character_status
+                    ON character_reference_locks(project_id, character_id, lock_status);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -12940,8 +12948,41 @@ class DatabaseStorage:
         project_id: str,
         character_id: str,
         lock_status: str = "locked",
+        reference_role: str | None = None,
     ) -> dict | None:
-        """Return a character's active visual reference lock within a project."""
+        """Return a character's active visual reference lock within a project.
+
+        A character can now hold one locked reference per role, so `reference_role`
+        narrows to a specific one. Omitting it keeps the original behaviour of
+        returning the most recent lock of any role.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            query = (
+                "SELECT * FROM character_reference_locks "
+                "WHERE project_id = ? AND character_id = ? AND lock_status = ?"
+            )
+            params: list = [project_id, character_id, lock_status]
+            if reference_role:
+                query += " AND reference_role = ?"
+                params.append(reference_role)
+            query += " ORDER BY created_at DESC LIMIT 1"
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def list_character_reference_locks_for_character(
+        self,
+        project_id: str,
+        character_id: str,
+        lock_status: str = "locked",
+        limit: int = 9,
+    ) -> list[dict]:
+        """Return every locked reference held for one character, newest first.
+
+        happyhorse-1.1-r2v accepts up to 9 reference images, so this is the
+        multi-view read path that replaces fetching a single lock per character.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -12949,12 +12990,11 @@ class DatabaseStorage:
                 SELECT * FROM character_reference_locks
                 WHERE project_id = ? AND character_id = ? AND lock_status = ?
                 ORDER BY created_at DESC
-                LIMIT 1
+                LIMIT ?
                 """,
-                (project_id, character_id, lock_status),
+                (project_id, character_id, lock_status, max(1, limit)),
             )
-            row = cursor.fetchone()
-            return dict(row) if row else None
+            return [dict(row) for row in cursor.fetchall()]
 
     def list_character_reference_locks(
         self,

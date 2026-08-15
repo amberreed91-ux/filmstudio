@@ -23,7 +23,13 @@ class CharacterReferenceLock(BaseModel):
     lock_status: Literal["provisional", "locked", "disabled", "superseded"] = "locked"
     provider: str = ""
     capture_method: str = "thumbnail"
-    reference_role: Literal["face", "full_body", "wardrobe", "temporary_state", "general"] = "general"
+    # "alternate_angle" holds a second, temporally-distant frame of the same
+    # character from the same clip. happyhorse-1.1-r2v accepts up to 9 reference
+    # images and identity holds noticeably better with more than one view, so a
+    # character is no longer represented by a single frame.
+    reference_role: Literal[
+        "face", "full_body", "wardrobe", "temporary_state", "general", "alternate_angle"
+    ] = "general"
     reliability: Literal["low", "medium", "high"] = "medium"
     source_job_id: str = ""
     source_status: Literal["approved", "provisional", "rejected", "failed", "superseded"] = "provisional"

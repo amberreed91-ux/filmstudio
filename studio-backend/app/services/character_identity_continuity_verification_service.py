@@ -6,7 +6,12 @@ from typing import Any
 from app.models import RenderJobModel
 from app.models.character_profile import CanonicalCharacterIdentityRecord
 from app.services.character_identity_memory_service import character_identity_memory_service
-from app.services.visual_embedding_adapter import VisualEmbeddingAdapter, build_visual_embedding_adapter
+from app.services.visual_embedding_adapter import (
+    EMBEDDING_KIND_OPAQUE,
+    VisualEmbeddingAdapter,
+    build_visual_embedding_adapter,
+    match_label,
+)
 
 
 class CharacterIdentityContinuityVerificationService:
@@ -50,12 +55,19 @@ class CharacterIdentityContinuityVerificationService:
         return sum(left * right for left, right in zip(a, b))
 
     @staticmethod
-    def _match_label(similarity: float) -> str:
-        if similarity >= 0.97:
-            return "consistent"
-        if similarity >= 0.82:
-            return "plausibly_consistent"
-        return "identity_drift"
+    def _match_label(similarity: float, kind: str = EMBEDDING_KIND_OPAQUE) -> str:
+        """Classify similarity using thresholds calibrated for the embedding kind.
+
+        A face-identity cosine and a CLIP-family cosine live on completely
+        different scales — 0.6 is a confident match for the former and a weak
+        one for the latter — so a single hardcoded threshold pair was wrong for
+        whichever adapter was not the one it was written for.
+        """
+        return match_label(similarity, kind)
+
+    @property
+    def embedding_kind(self) -> str:
+        return getattr(self._embedding_adapter, "kind", EMBEDDING_KIND_OPAQUE)
 
     def _embed(self, image_path: str, context: dict[str, Any]) -> list[float]:
         result = self._embedding_adapter.embed_image(image_path, context)
@@ -120,6 +132,24 @@ class CharacterIdentityContinuityVerificationService:
                 output_image,
                 {"project_id": project_id, "shot_id": job.shot_id, "job_id": job.id, "role": "rendered_output"},
             )
+            if not output_vector:
+                # No embedding means no evidence. Scoring on an empty vector
+                # would make every cosine 0.0 and report universal identity
+                # drift — which is how this check looked "wired" while telling
+                # nobody anything.
+                warnings.append(
+                    f"{job.shot_id}: visual embedding unavailable; identity continuity was not measured."
+                )
+                shot_reports.append(
+                    {
+                        "shot_id": job.shot_id,
+                        "job_id": job.id,
+                        "status": "manual_review",
+                        "reason": "embedding_unavailable",
+                        "characters": [],
+                    }
+                )
+                continue
             character_reports: list[dict[str, Any]] = []
             for record in records:
                 if scene_names and record.name.lower() not in scene_names and record.character_id.lower() not in scene_names:
@@ -156,12 +186,16 @@ class CharacterIdentityContinuityVerificationService:
                             "role": "approved_identity_reference",
                         },
                     )
+                    if not ref_vector:
+                        continue
                     similarity = self._cosine(output_vector, ref_vector)
-                    label = self._match_label(similarity)
+                    label = self._match_label(similarity, self.embedding_kind)
                     candidate = {
                         "character_id": record.character_id,
                         "character_name": record.name,
                         "status": label,
+                        "similarity": round(similarity, 4),
+                        "embedding_kind": self.embedding_kind,
                         "viewer_belief": (
                             "same_character"
                             if label in {"consistent", "plausibly_consistent"}
