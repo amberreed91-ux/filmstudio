@@ -254,3 +254,85 @@ async def test_a_vision_result_without_proposals_still_scores():
 
     assert score.proposed_corrections == {}
     assert score.verdict == "pass"
+
+
+# ── B3 lookup correctness (regression: ordering and project scoping) ─────────
+
+
+class _StubStorage:
+    """Mimics storage.list_jobs, which returns newest-first and is project-scoped."""
+
+    def __init__(self, jobs):
+        self._jobs = jobs
+        self.calls = []
+
+    def list_jobs(self, project_id=None, status=None, limit=100):
+        self.calls.append({"project_id": project_id, "limit": limit})
+        rows = [j for j in self._jobs if project_id is None or j.project_id == project_id]
+        return rows[:limit]
+
+
+def _job_with_dropped(job_id, shot_id, phrase, project_id="proj-a"):
+    from app.models import RenderJobInput, RenderJobModel
+
+    return RenderJobModel(
+        id=job_id,
+        project_id=project_id,
+        shot_id=shot_id,
+        provider="happyhorse",
+        status="complete",
+        input_payload=RenderJobInput(
+            shot_id=shot_id,
+            parameters={
+                "intent_fidelity": {
+                    "status": "reduced",
+                    "slots": {"character_state": {"dropped_elements": [phrase]}},
+                }
+            },
+        ),
+        created_at="2026-08-16T00:00:00",
+        updated_at="2026-08-16T00:00:00",
+    )
+
+
+def _service_with(storage):
+    from app.services.render_retry_service import RenderRetryService
+
+    service = RenderRetryService()
+    service.set_storage(storage)
+    return service
+
+
+def test_lookup_takes_the_most_recent_render_not_the_oldest():
+    """list_jobs is newest-first; the render being corrected is the newest one."""
+    storage = _StubStorage([
+        _job_with_dropped("job-new", "scene_001_shot_002", "newest phrasing"),
+        _job_with_dropped("job-old", "scene_001_shot_002", "superseded phrasing"),
+    ])
+    dropped = _service_with(storage)._dropped_elements_for_shot("scene_001_shot_002", "proj-a")
+    assert dropped["character_state"] == ["newest phrasing"]
+
+
+def test_lookup_is_scoped_to_the_project():
+    storage = _StubStorage([
+        _job_with_dropped("job-other", "scene_001_shot_002", "other project", project_id="proj-b"),
+        _job_with_dropped("job-mine", "scene_001_shot_002", "this project", project_id="proj-a"),
+    ])
+    dropped = _service_with(storage)._dropped_elements_for_shot("scene_001_shot_002", "proj-a")
+    assert dropped["character_state"] == ["this project"]
+    assert storage.calls[0]["project_id"] == "proj-a"
+
+
+def test_lookup_ignores_other_shots():
+    storage = _StubStorage([
+        _job_with_dropped("job-elsewhere", "scene_009_shot_001", "different shot"),
+        _job_with_dropped("job-here", "scene_001_shot_002", "this shot"),
+    ])
+    dropped = _service_with(storage)._dropped_elements_for_shot("scene_001_shot_002", "proj-a")
+    assert dropped["character_state"] == ["this shot"]
+
+
+def test_lookup_without_storage_returns_nothing():
+    from app.services.render_retry_service import RenderRetryService
+
+    assert RenderRetryService()._dropped_elements_for_shot("scene_001_shot_002", "proj-a") == {}

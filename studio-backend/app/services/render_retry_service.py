@@ -619,7 +619,11 @@ class RenderRetryService:
             )
             return ""
 
-    def _dropped_elements_for_shot(self, shot_id: str) -> Dict[str, List[str]]:
+    def _dropped_elements_for_shot(
+        self,
+        shot_id: str,
+        project_id: str = "",
+    ) -> Dict[str, List[str]]:
         """Phrasing that budget compression removed before the original render.
 
         The intent-fidelity check records what it cut (see
@@ -634,19 +638,28 @@ class RenderRetryService:
         if not self._storage:
             return {}
         try:
-            # Storage has no by-shot job accessor, so filter the recent list.
+            # Storage has no by-shot job accessor, so filter a scoped list.
             # The record lives on the render job rather than render_attempts,
             # because it is produced at prompt-assembly time, before an attempt
             # exists.
+            #
+            # Scoped by project: an unscoped fetch takes the most recent jobs
+            # across every project, so on a busy install this shot's jobs can
+            # fall outside the window and the restoration silently does nothing.
             jobs = [
                 job
-                for job in (self._storage.list_jobs(limit=200) or [])
+                for job in (
+                    self._storage.list_jobs(project_id=project_id or None, limit=200) or []
+                )
                 if getattr(job, "shot_id", None) == shot_id
             ]
         except Exception:
             return {}
 
-        for job in reversed(jobs):
+        # list_jobs returns newest-first. The render being corrected is the most
+        # recent one for this shot, so take that record — not the oldest, which
+        # would restore phrasing from a superseded assembly.
+        for job in jobs:
             parameters = getattr(getattr(job, "input_payload", None), "parameters", None)
             if not isinstance(parameters, dict):
                 continue
@@ -1105,7 +1118,7 @@ class RenderRetryService:
             full_prompt = await self._adherence_service.build_full_corrected_prompt(
                 score=original_score,
                 current_slots=original_slots,
-                dropped_elements=self._dropped_elements_for_shot(shot_id),
+                dropped_elements=self._dropped_elements_for_shot(shot_id, project_id),
             )
             slot_order = self._reorder_slots_by_failure(original_score.dimensions)
             full_prompt.prompt = self._assemble_prompt_from_slots(
