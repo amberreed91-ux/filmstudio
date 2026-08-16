@@ -16,7 +16,7 @@ import asyncio
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from groq import Groq
@@ -80,6 +80,11 @@ class AdherenceScore:
     adherence_score: float  # 0-100 weighted aggregate
     verdict: str  # pass | correctable | manual_review
     failed_slots: List[str]
+    # Corrected slot text proposed by the vision model in the same call that
+    # scored the frames. It is the only component that has seen both the intent
+    # and the pixels — the text corrector downstream works from a summary of
+    # what the vision model said, one remove from the evidence.
+    proposed_corrections: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -303,6 +308,20 @@ class AdherenceService:
                 attempt_n,
             )
         
+        raw_corrections = vision_result.get("proposed_corrections")
+        proposed_corrections = {
+            str(slot): str(text).strip()
+            for slot, text in (raw_corrections or {}).items()
+            if isinstance(slot, str) and str(text or "").strip()
+        } if isinstance(raw_corrections, dict) else {}
+        if proposed_corrections:
+            logger.info(
+                "ADHERENCE_VISION_PROPOSED_CORRECTIONS | shot=%s | attempt=%d | slots=%s",
+                shot_id,
+                attempt_n,
+                ",".join(sorted(proposed_corrections)),
+            )
+
         score_result = AdherenceScore(
             shot_id=shot_id,
             attempt_n=attempt_n,
@@ -312,6 +331,7 @@ class AdherenceService:
             adherence_score=adherence_score,
             verdict=verdict,
             failed_slots=failed_slots,
+            proposed_corrections=proposed_corrections,
         )
         
         logger.info(
@@ -625,6 +645,7 @@ class AdherenceService:
         score: AdherenceScore,
         current_slots: Dict[str, str],
         max_prompt_length: int = 512,
+        dropped_elements: Optional[Dict[str, List[str]]] = None,
     ) -> FullCorrectedPrompt:
         """
         Build a complete corrected prompt that restates ALL 5 slots.
@@ -636,7 +657,9 @@ class AdherenceService:
         restates all 5 slots:
 
         - Passing slots → carried forward VERBATIM (exact original text)
-        - Failing slots → corrected by the Groq corrector
+        - Failing slots → corrected, preferring the vision model's own proposal
+          over the text corrector, and restoring any phrasing that budget
+          compression removed before the render (see intent_fidelity_service)
 
         Design decisions (resolving the open questions from the finding):
         1. Verbatim: passing slots are copied character-for-character from
@@ -663,6 +686,8 @@ class AdherenceService:
             FullCorrectedPrompt with slots, provenance, assembled prompt, and
             compression metadata.
         """
+        from app.services.shot_prompt_builder import SLOT_BUDGETS as _slot_budgets
+
         # Step 1: Call the full corrector with ALL 5 slots + pass/fail status
         corrector_result = await self._call_groq_full_corrector(
             score=score,
@@ -674,16 +699,41 @@ class AdherenceService:
         #   - Failing slots: use the corrector's corrected text
         final_slots: Dict[str, str] = {}
         provenance: Dict[str, str] = {}
+        correction_sources: Dict[str, str] = {}
 
         for slot in self.ALL_SLOTS:
             if slot in score.failed_slots:
-                # Failing slot — use corrected text from the corrector
-                corrected_text = corrector_result.get("slots", {}).get(slot, "")
+                # Prefer the vision model's proposal. It saw the frames and the
+                # intent; the text corrector only ever sees a summary of what the
+                # vision model reported, one remove from the evidence.
+                corrected_text = str(score.proposed_corrections.get(slot) or "").strip()
+                source = "vision"
                 if not corrected_text:
-                    # Fallback: if corrector didn't return this slot, keep original
+                    corrected_text = corrector_result.get("slots", {}).get(slot, "")
+                    source = "text_corrector"
+                if not corrected_text:
+                    # Neither produced anything — keep the original rather than
+                    # emptying a slot.
                     corrected_text = current_slots.get(slot, "")
+                    source = "unchanged"
+
+                # Restore anything budget compression removed from this slot
+                # before the render, if it still fits. A correction that
+                # reinvents text the director already wrote is worse than one
+                # that puts it back.
+                restorable = [
+                    phrase for phrase in (dropped_elements or {}).get(slot, [])
+                    if phrase and phrase.lower() not in corrected_text.lower()
+                ]
+                for phrase in restorable:
+                    candidate = f"{corrected_text}; {phrase}" if corrected_text else phrase
+                    if len(candidate) <= _slot_budgets.get(slot, 110):
+                        corrected_text = candidate
+                        source = f"{source}+restored"
+
                 final_slots[slot] = corrected_text
                 provenance[slot] = "corrected"
+                correction_sources[slot] = source
             else:
                 # Passing slot — VERBATIM from current_slots
                 final_slots[slot] = current_slots.get(slot, "")
@@ -702,6 +752,14 @@ class AdherenceService:
             )
 
         chars_remaining = max_prompt_length - len(prompt)
+
+        if correction_sources:
+            logger.info(
+                "CORRECTION_SOURCES | shot=%s | attempt=%d | %s",
+                score.shot_id,
+                score.attempt_n,
+                ", ".join(f"{slot}={source}" for slot, source in sorted(correction_sources.items())),
+            )
 
         logger.info(
             "FULL_CORRECTED_PROMPT_BUILT | shot=%s | attempt=%d | "
@@ -1038,6 +1096,7 @@ Expected Lighting: {expected_lighting}
 Expected Environment: {expected_environment}
 
 Analyze the 3 provided frames (10%, 50%, 90% of shot duration) and score each dimension 0-100.
+For any dimension you score at or below 70, also propose replacement prompt text for that dimension: a short, concrete phrase describing what should have been on screen, written as a render instruction rather than a critique. You are the only reader that has seen both the intended shot and the actual frames, so your proposal is better grounded than one written from your summary alone. Keep each proposal under 110 characters and omit dimensions you scored above 70.
 Identity continuity means whether recurring characters remain recognizably the same actor and character across face, body, silhouette, skin tone, hair, age presentation, wardrobe continuity, accessories, persistent props, and temporary marks when those traits are expected.
 Detect temporal drift across the shot.
 
@@ -1051,7 +1110,8 @@ Respond ONLY with valid JSON matching this exact schema:
     "lighting": {{"score": 0-100, "evidence": "str", "expected": "{expected_lighting}", "observed": "str"}},
     "environment_persistence": {{"score": 0-100, "evidence": "str", "expected": "{expected_environment}", "observed": "str"}}
   }},
-  "temporal_drift": {{"start_score": 0-100, "end_score": 0-100}}
+  "temporal_drift": {{"start_score": 0-100, "end_score": 0-100}},
+  "proposed_corrections": {{"<dimension name>": "replacement prompt text"}}
 }}"""
         
         # Load frames as PIL Image objects for Gemini

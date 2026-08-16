@@ -30,6 +30,16 @@ class CharacterReferenceLock(BaseModel):
     reference_role: Literal[
         "face", "full_body", "wardrobe", "temporary_state", "general", "alternate_angle"
     ] = "general"
+    # A character can look materially different across a film — a costume change,
+    # an injury, rain-soaked vs dry. One canonical reference per character forces
+    # all of those through a single image, so the later look fights the reference
+    # on every shot. Locks are keyed by look as well as role; "default" is the
+    # single-look case and stays the common path.
+    look_id: str = "default"
+    # Frame quality at capture (edge-energy score from _score_candidate_frame).
+    # Retained so a later, cleaner frame can be recognised as an upgrade rather
+    # than merely different. 0.0 means unscored — e.g. a thumbnail or remote URL.
+    frame_score: float = 0.0
     reliability: Literal["low", "medium", "high"] = "medium"
     source_job_id: str = ""
     source_status: Literal["approved", "provisional", "rejected", "failed", "superseded"] = "provisional"

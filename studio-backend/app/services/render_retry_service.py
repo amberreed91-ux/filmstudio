@@ -619,6 +619,55 @@ class RenderRetryService:
             )
             return ""
 
+    def _dropped_elements_for_shot(self, shot_id: str) -> Dict[str, List[str]]:
+        """Phrasing that budget compression removed before the original render.
+
+        The intent-fidelity check records what it cut (see
+        intent_fidelity_service). Handing that to the correction path means a
+        retry can put the director's own words back rather than inventing
+        replacement text for something that was never wrong — it was only too
+        long to fit.
+
+        Returns {} when nothing was recorded, which leaves correction behaviour
+        exactly as it was.
+        """
+        if not self._storage:
+            return {}
+        try:
+            # Storage has no by-shot job accessor, so filter the recent list.
+            # The record lives on the render job rather than render_attempts,
+            # because it is produced at prompt-assembly time, before an attempt
+            # exists.
+            jobs = [
+                job
+                for job in (self._storage.list_jobs(limit=200) or [])
+                if getattr(job, "shot_id", None) == shot_id
+            ]
+        except Exception:
+            return {}
+
+        for job in reversed(jobs):
+            parameters = getattr(getattr(job, "input_payload", None), "parameters", None)
+            if not isinstance(parameters, dict):
+                continue
+            record = parameters.get("intent_fidelity")
+            if not isinstance(record, dict) or record.get("status") != "reduced":
+                continue
+            dropped: Dict[str, List[str]] = {}
+            for slot, slot_report in (record.get("slots") or {}).items():
+                if not isinstance(slot_report, dict):
+                    continue
+                phrases = [
+                    str(item).strip()
+                    for item in (slot_report.get("dropped_elements") or [])
+                    if str(item or "").strip()
+                ]
+                if phrases:
+                    dropped[str(slot)] = phrases
+            if dropped:
+                return dropped
+        return {}
+
     def _get_previous_score(self, shot_id: str, attempt_n: int) -> Optional[float]:
         """
         Get adherence score from previous attempt for stuck shot detection.
@@ -1056,6 +1105,7 @@ class RenderRetryService:
             full_prompt = await self._adherence_service.build_full_corrected_prompt(
                 score=original_score,
                 current_slots=original_slots,
+                dropped_elements=self._dropped_elements_for_shot(shot_id),
             )
             slot_order = self._reorder_slots_by_failure(original_score.dimensions)
             full_prompt.prompt = self._assemble_prompt_from_slots(

@@ -328,7 +328,8 @@ def test_relock_rejects_an_empty_image(tmp_path):
 
 def test_capture_collapses_to_one_view_without_a_local_video():
     captures = CharacterVisualReferenceService().capture_reference_images(_job(), count=3)
-    assert captures == [("https://cdn.example.test/thumb.jpg", "thumbnail", "general")]
+    # The fourth element is the capture quality score; a thumbnail is unscored.
+    assert captures == [("https://cdn.example.test/thumb.jpg", "thumbnail", "general", 0.0)]
 
 
 def test_capture_labels_additional_views_as_alternate_angles(monkeypatch, tmp_path):
@@ -345,7 +346,9 @@ def test_capture_labels_additional_views_as_alternate_angles(monkeypatch, tmp_pa
     )
 
     captures = CharacterVisualReferenceService().capture_reference_images(_job(), count=3)
-    assert [role for _, _, role in captures] == ["general", "alternate_angle"]
+    assert [role for _, _, role, _score in captures] == ["general", "alternate_angle"]
+    # Scores travel with the captures so an upgrade can be recognised later.
+    assert [score for _, _, _, score in captures] == [9.0, 7.0]
 
 
 def test_role_for_rank_is_honest_about_what_it_knows():

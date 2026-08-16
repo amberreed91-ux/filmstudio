@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from datetime import datetime
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -41,6 +42,48 @@ class CharacterVisualReferenceService:
         "full_body": 0.65,
         "temporary_state": 0.6,
     }
+
+    # A frame materially cleaner than the stored one is an upgrade; a marginally
+    # different one is churn. Re-locking on every small improvement would keep
+    # rewriting a character's canonical reference for no visible gain.
+    FRAME_UPGRADE_RATIO = 1.25
+
+    @staticmethod
+    def resolve_look_id_for_shot(
+        *,
+        project_id: str,
+        character_id: str,
+        shot_id: str,
+        storage: Any,
+    ) -> str:
+        """Which of a character's looks this shot belongs to.
+
+        Derived from the per-scene `appearance_override` already stored on
+        character_stagings, which is where a costume change, an injury, or a
+        rain-soaked state is expressed today. Two shots carrying the same
+        override share a look; a different override is a different look and gets
+        its own canonical reference instead of fighting the first one.
+
+        Returns "default" when no override applies, which is the single-look case
+        and stays the common path.
+        """
+        if not shot_id or not character_id:
+            return "default"
+        scene_id = derive_scene_id_from_shot_id(shot_id)
+        reader = getattr(storage, "get_character_staging", None)
+        if not callable(reader):
+            return "default"
+        try:
+            row = reader(character_id, scene_id, shot_id)
+        except Exception:
+            row = None
+        override = str(row.get("appearance_override") or "").strip() if isinstance(row, dict) else ""
+        if not override:
+            return "default"
+        # Stable, content-derived id so the same wardrobe note always resolves to
+        # the same look without anyone having to name it.
+        digest = sha1(" ".join(override.lower().split()).encode("utf-8")).hexdigest()[:10]
+        return f"look_{digest}"
 
     @classmethod
     def prominence_by_character(
@@ -176,7 +219,15 @@ class CharacterVisualReferenceService:
             character_name = str(character.get("name") or "").strip()
             if not character_id:
                 continue
-            locks = self.get_reference_locks_for_character(storage, project_id, character_id)
+            look_id = self.resolve_look_id_for_shot(
+                project_id=project_id,
+                character_id=character_id,
+                shot_id=shot_id,
+                storage=storage,
+            )
+            locks = self.get_reference_locks_for_character(
+                storage, project_id, character_id, look_id
+            )
             if not locks:
                 continue
 
@@ -189,7 +240,12 @@ class CharacterVisualReferenceService:
                     continue
                 lock_status = str(lock.get("lock_status") or "locked").strip()
                 role = str(lock.get("reference_role") or "general").strip()
-                ref_id = f"charlock:{character_id}:{role}"
+                lock_look = str(lock.get("look_id") or "default")
+                ref_id = (
+                    f"charlock:{character_id}:{role}"
+                    if lock_look == "default"
+                    else f"charlock:{character_id}:{lock_look}:{role}"
+                )
                 refs.append(
                     ReferenceAsset(
                         ref_id=ref_id,
@@ -338,6 +394,7 @@ class CharacterVisualReferenceService:
         storage: Any,
         project_id: str,
         character_id: str,
+        look_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Every usable reference for one character, best first.
 
@@ -350,9 +407,17 @@ class CharacterVisualReferenceService:
         reader = getattr(storage, "list_character_reference_locks_for_character", None)
         if callable(reader):
             try:
-                rows = list(reader(project_id, character_id, "locked") or [])
+                rows = list(reader(project_id, character_id, "locked", 9, look_id) or [])
             except Exception as exc:
                 logger.debug("Multi-reference lookup failed for %s/%s: %s", project_id, character_id, exc)
+                rows = []
+        if not rows and look_id and look_id != "default":
+            # This look has nothing locked yet — a character's first shot in a new
+            # costume. The default look is still better evidence for face and
+            # build than no reference at all.
+            try:
+                rows = list(reader(project_id, character_id, "locked", 9, "default") or []) if callable(reader) else []
+            except Exception:
                 rows = []
         if not rows:
             single = storage.get_character_reference_lock(project_id, character_id, "locked")
@@ -384,6 +449,8 @@ class CharacterVisualReferenceService:
         source_job_id: str = "",
         capture_method: str = "director_override",
         reason: str = "",
+        look_id: str = "default",
+        frame_score: float = 0.0,
     ) -> CharacterReferenceLock | None:
         """Replace a character's locked reference for one role.
 
@@ -400,8 +467,22 @@ class CharacterVisualReferenceService:
 
         now = datetime.now().isoformat()
         existing = storage.get_character_reference_lock(
-            project_id, character_id, "locked", reference_role
+            project_id, character_id, "locked", reference_role, look_id
         )
+        if (
+            existing
+            and capture_method != "director_override"
+            and str(existing.get("capture_method") or "") == "director_override"
+        ):
+            # A director chose this frame deliberately. Automation does not get to
+            # quietly replace a human decision, however good the new frame looks.
+            logger.info(
+                "CHARACTER_REFERENCE_UPGRADE_DECLINED | project=%s | character=%s | "
+                "reason=director_override_protected",
+                project_id,
+                character_id,
+            )
+            return CharacterReferenceLock(**existing)
         if existing:
             if str(existing.get("image_url") or "").strip() == clean_image:
                 return CharacterReferenceLock(**existing)
@@ -425,6 +506,8 @@ class CharacterVisualReferenceService:
             provider=str((existing or {}).get("provider") or ""),
             capture_method=capture_method,
             reference_role=reference_role,  # type: ignore[arg-type]
+            look_id=look_id,
+            frame_score=frame_score,
             reliability="high",
             source_job_id=source_job_id,
             source_status="approved",
@@ -437,9 +520,10 @@ class CharacterVisualReferenceService:
         if not saved:
             return None
         logger.info(
-            "CHARACTER_REFERENCE_RELOCKED | project=%s | character=%s | role=%s | method=%s",
+            "CHARACTER_REFERENCE_RELOCKED | project=%s | character=%s | look=%s | role=%s | method=%s",
             project_id,
             character_id,
+            look_id,
             reference_role,
             capture_method,
         )
@@ -564,10 +648,13 @@ class CharacterVisualReferenceService:
         self,
         job: RenderJobModel,
         count: int | None = None,
-    ) -> list[tuple[str, str, str]]:
+    ) -> list[tuple[str, str, str, float]]:
         """Capture up to `count` reference views from a completed job.
 
-        Returns [(image_url, capture_method, reference_role), ...] best first.
+        Returns [(image_url, capture_method, reference_role, frame_score), ...]
+        best first. frame_score is the capture quality, retained so a later,
+        cleaner frame can be recognised as an upgrade rather than merely
+        different; 0.0 means unscored.
         Only the local-video path can yield more than one view; still images,
         thumbnails, and remote URLs collapse to the single primary reference.
         """
@@ -587,15 +674,15 @@ class CharacterVisualReferenceService:
             frames = self._extract_reference_frames(job, local_path, count=limit)
             if frames:
                 return [
-                    (image_url, "representative_frame", self._role_for_rank(index))
-                    for index, (image_url, _score) in enumerate(frames)
+                    (image_url, "representative_frame", self._role_for_rank(index), score)
+                    for index, (image_url, score) in enumerate(frames)
                 ]
 
         primary = self.capture_reference_image(job)
         if not primary:
             return []
         image_url, capture_method = primary
-        return [(image_url, capture_method, "general")]
+        return [(image_url, capture_method, "general", 0.0)]
 
     @staticmethod
     def _role_for_rank(index: int) -> str:
@@ -632,7 +719,18 @@ class CharacterVisualReferenceService:
             character_id = str(character.get("id") or "").strip()
             if not character_id:
                 continue
-            existing_locked = storage.get_character_reference_lock(job.project_id, character_id, "locked")
+            existing_locked = storage.get_character_reference_lock(
+                job.project_id,
+                character_id,
+                "locked",
+                None,
+                self.resolve_look_id_for_shot(
+                    project_id=job.project_id,
+                    character_id=character_id,
+                    shot_id=job.shot_id,
+                    storage=storage,
+                ),
+            )
             if existing_locked:
                 continue
             existing_provisional = storage.get_character_reference_lock(
@@ -658,7 +756,13 @@ class CharacterVisualReferenceService:
             # Lock every captured view, not just one. Uniqueness is per
             # (project, character, role), so the primary frame and any
             # additional angles coexist and are all sent to r2v.
-            for image_url, capture_method, reference_role in captures:
+            character_look_id = self.resolve_look_id_for_shot(
+                project_id=job.project_id,
+                character_id=character_id,
+                shot_id=job.shot_id,
+                storage=storage,
+            )
+            for image_url, capture_method, reference_role, frame_score in captures:
                 lock = CharacterReferenceLock(
                     lock_id=f"charlock_{uuid4().hex[:12]}",
                     project_id=job.project_id,
@@ -670,6 +774,8 @@ class CharacterVisualReferenceService:
                     provider=job.provider,
                     capture_method=capture_method,
                     reference_role=reference_role,  # type: ignore[arg-type]
+                    look_id=character_look_id,
+                    frame_score=frame_score,
                     reliability="high" if reference_role == "general" else "medium",
                     source_job_id=job.id,
                     source_status="approved",
@@ -690,6 +796,94 @@ class CharacterVisualReferenceService:
                 len(locked),
             )
         return locked
+
+    def upgrade_references_from_verified_job(
+        self,
+        *,
+        job: RenderJobModel,
+        storage: Any,
+        identity_report: dict[str, Any] | None,
+    ) -> list[CharacterReferenceLock]:
+        """Replace a locked reference when a later render yields a better frame.
+
+        A lock made from a mediocre frame used to be permanent, and because a
+        weak reference makes later shots more likely to fail, nothing ever
+        promoted a better one. This closes that loop — but conservatively, since
+        a reference silently churning under the director is its own problem:
+
+        - Only on a render whose identity actually verified as consistent. A
+          shot that drifted is not evidence of a better likeness.
+        - Only when the new frame is materially cleaner (FRAME_UPGRADE_RATIO),
+          not merely different.
+        - Never over a director's explicit choice; `relock_character_reference`
+          enforces that.
+        """
+        if job.status != "complete" or not isinstance(identity_report, dict):
+            return []
+        if identity_report.get("status") != "consistent":
+            return []
+
+        captures = self.capture_reference_images(job, count=1)
+        if not captures:
+            return []
+        image_url, capture_method, _role, frame_score = captures[0]
+        if capture_method != "representative_frame" or frame_score <= 0.0:
+            # Only scored frames can be compared; a thumbnail says nothing about
+            # quality relative to what is already locked.
+            return []
+
+        upgraded: list[CharacterReferenceLock] = []
+        for row in identity_report.get("characters") or []:
+            if not isinstance(row, dict):
+                continue
+            character_id = str(row.get("character_id") or "").strip()
+            if not character_id:
+                continue
+            look_id = self.resolve_look_id_for_shot(
+                project_id=job.project_id,
+                character_id=character_id,
+                shot_id=job.shot_id,
+                storage=storage,
+            )
+            existing = storage.get_character_reference_lock(
+                job.project_id, character_id, "locked", "general", look_id
+            )
+            if not existing:
+                continue
+            existing_score = float(existing.get("frame_score") or 0.0)
+            if existing_score > 0.0 and frame_score < existing_score * self.FRAME_UPGRADE_RATIO:
+                continue
+            if existing_score <= 0.0 and capture_method != "representative_frame":
+                continue
+
+            lock = self.relock_character_reference(
+                project_id=job.project_id,
+                character_id=character_id,
+                image_url=image_url,
+                storage=storage,
+                reference_role="general",
+                character_name=str(row.get("character_name") or ""),
+                source_shot_id=job.shot_id,
+                source_job_id=job.id,
+                capture_method="automatic_upgrade",
+                reason=(
+                    "A later verified-consistent render produced a cleaner frame "
+                    f"({frame_score:.1f} vs {existing_score:.1f})."
+                ),
+                look_id=look_id,
+                frame_score=frame_score,
+            )
+            if lock is not None and lock.capture_method == "automatic_upgrade":
+                upgraded.append(lock)
+
+        if upgraded:
+            logger.info(
+                "CHARACTER_REFERENCE_UPGRADED | job=%s | shot=%s | characters=%d",
+                job.id,
+                job.shot_id,
+                len(upgraded),
+            )
+        return upgraded
 
     def verify_shot_identity(
         self,

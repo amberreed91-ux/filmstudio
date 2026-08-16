@@ -308,11 +308,30 @@ async def _run_character_reference_lock(job: RenderJobModel) -> None:
             job=job,
             storage=storage,
         )
-        if locks or identity_report:
+
+        # Close the loop: a lock made from a mediocre frame stayed permanent
+        # because a weak reference makes later shots more likely to fail, so
+        # nothing ever promoted a better one. Only runs on a verified-consistent
+        # render, and never over a director's explicit choice.
+        upgraded = []
+        try:
+            upgraded = _char_ref_svc.upgrade_references_from_verified_job(
+                job=job,
+                storage=storage,
+                identity_report=identity_report,
+            )
+        except Exception as upgrade_exc:
+            logger.debug("Reference upgrade skipped for job %s: %s", job.id, upgrade_exc)
+
+        if locks or identity_report or upgraded:
             job.metadata = dict(job.metadata or {})
             if locks:
                 job.metadata["character_reference_locks_created"] = [
                     lock.model_dump(mode="json") for lock in locks
+                ]
+            if upgraded:
+                job.metadata["character_reference_locks_upgraded"] = [
+                    lock.model_dump(mode="json") for lock in upgraded
                 ]
             if identity_report:
                 job.metadata["character_identity_verification"] = identity_report

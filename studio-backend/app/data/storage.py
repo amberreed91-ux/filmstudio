@@ -3563,6 +3563,16 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_character_reference_locks_character_status
                     ON character_reference_locks(project_id, character_id, lock_status);
             """),
+            (59, "Scope character reference locks by look", """
+                ALTER TABLE character_reference_locks ADD COLUMN look_id TEXT NOT NULL DEFAULT 'default';
+                ALTER TABLE character_reference_locks ADD COLUMN frame_score REAL NOT NULL DEFAULT 0.0;
+                DROP INDEX IF EXISTS idx_character_reference_locks_active_role;
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_character_reference_locks_active_look
+                    ON character_reference_locks(project_id, character_id, look_id, reference_role)
+                    WHERE lock_status = 'locked';
+                CREATE INDEX IF NOT EXISTS idx_character_reference_locks_look
+                    ON character_reference_locks(project_id, character_id, look_id);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -12908,8 +12918,8 @@ class DatabaseStorage:
                      source_shot_id, image_url, lock_status, provider,
                      capture_method, created_at, updated_at, reference_role,
                      reliability, source_job_id, source_status, review_status,
-                     trace_notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     trace_notes, look_id, frame_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         lock_id,
@@ -12931,6 +12941,8 @@ class DatabaseStorage:
                         ),
                         lock.get("review_status") or "unreviewed",
                         lock.get("trace_notes", ""),
+                        lock.get("look_id") or "default",
+                        float(lock.get("frame_score") or 0.0),
                     ),
                 )
                 conn.commit()
@@ -12949,6 +12961,7 @@ class DatabaseStorage:
         character_id: str,
         lock_status: str = "locked",
         reference_role: str | None = None,
+        look_id: str | None = None,
     ) -> dict | None:
         """Return a character's active visual reference lock within a project.
 
@@ -12966,6 +12979,9 @@ class DatabaseStorage:
             if reference_role:
                 query += " AND reference_role = ?"
                 params.append(reference_role)
+            if look_id:
+                query += " AND look_id = ?"
+                params.append(look_id)
             query += " ORDER BY created_at DESC LIMIT 1"
             cursor.execute(query, params)
             row = cursor.fetchone()
@@ -12977,6 +12993,7 @@ class DatabaseStorage:
         character_id: str,
         lock_status: str = "locked",
         limit: int = 9,
+        look_id: str | None = None,
     ) -> list[dict]:
         """Return every locked reference held for one character, newest first.
 
@@ -12989,10 +13006,11 @@ class DatabaseStorage:
                 """
                 SELECT * FROM character_reference_locks
                 WHERE project_id = ? AND character_id = ? AND lock_status = ?
+                  AND (? IS NULL OR look_id = ?)
                 ORDER BY created_at DESC
                 LIMIT ?
                 """,
-                (project_id, character_id, lock_status, max(1, limit)),
+                (project_id, character_id, lock_status, look_id, look_id, max(1, limit)),
             )
             return [dict(row) for row in cursor.fetchall()]
 
