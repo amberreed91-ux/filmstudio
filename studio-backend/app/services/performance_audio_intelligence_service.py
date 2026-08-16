@@ -105,7 +105,20 @@ class PerformanceAudioIntelligenceService:
             try:
                 from app.services.crew_intelligence_service import crew_intelligence_service
 
-                crew_intelligence_service._storage = self.storage
+                # Deliberately NOT rebinding crew_intelligence_service._storage
+                # here. That assignment overwrote a process-wide singleton's
+                # storage with this department's, so whichever department
+                # resolved the crew service last won permanently. When a caller
+                # holds a scoped storage — a test using a TemporaryDirectory, for
+                # instance — the crew service was left pointing at a directory
+                # that no longer exists, and failed on the next pooled-connection
+                # miss with "unable to open database file".
+                #
+                # The crew service resolves its own storage (`self._storage or
+                # get_storage("sqlite")`), which is the same storage in
+                # production. A caller needing a scoped storage should set it on
+                # the crew service explicitly rather than have it happen as a
+                # side effect of attribute access.
                 self._crew_intelligence_service = crew_intelligence_service
             except Exception:
                 self._crew_intelligence_service = None
