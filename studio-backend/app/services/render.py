@@ -1984,13 +1984,31 @@ class RenderService:
             )
 
             if _provider_supports_negative(provider):
+                # The director's "what to avoid" belongs here, not in the
+                # positive prompt. Asking a video model to honour "Avoid:
+                # melodrama" inside the positive prompt relies on it processing
+                # a negation, which is unreliable — naming the thing can summon
+                # it. In the negative channel an exclusion actually excludes.
+                _intent_avoid_terms: list[str] = []
+                try:
+                    from app.utils.director_intent_injection import (
+                        director_intent_negative_terms as _intent_negatives,
+                    )
+                    from app.data.storage import get_storage as _get_storage_for_intent
+
+                    _intent_avoid_terms = _intent_negatives(
+                        _get_storage_for_intent().load_director_intent(project_id)
+                    )
+                except Exception as _intent_exc:
+                    logger.debug("Director intent negatives skipped for %s: %s", project_id, _intent_exc)
+
                 _negative_prompt = _build_negative_prompt(
                     cast_names=_render_scene_chars or [],
                     extra_terms=[
                         str(term)
                         for term in (_input_parameters.get("negative_prompt_terms") or [])
                         if str(term or "").strip()
-                    ],
+                    ] + _intent_avoid_terms,
                     disabled_groups=[
                         str(group)
                         for group in (_input_parameters.get("negative_prompt_disabled_groups") or [])
@@ -2294,7 +2312,9 @@ class RenderService:
             from app.services.continuity_intelligence_service import (
                 continuity_intelligence_service as _cont_svc,
             )
-            from app.utils.director_intent_injection import build_director_intent_prefix
+            from app.utils.director_intent_injection import (
+                build_director_intent_render_guidance,
+            )
             from app.data.storage import get_storage
             
             _scene_id = derive_scene_id_from_shot_id(shot_id)
@@ -2306,15 +2326,29 @@ class RenderService:
                 or _ctx.get("continuity_anchors")
             )
             
-            # Build director intent prefix
+            # Director intent, in render-facing form.
+            #
+            # This used to prepend the multi-line prose block built for Claude
+            # system prompts. Because the provider weights early tokens most
+            # heavily (POSITIONAL_WEIGHTING_FINDING.md), that put project-level
+            # abstractions — genre, "what success looks like" — ahead of who is
+            # on screen and what they do, and with a realistic intent the prefix
+            # ran longer than the entire slotted prompt it was prefixing.
+            #
+            # The shot leads now; standing project context trails it, bounded.
             _director_storage = get_storage()
             _intent = _director_storage.load_director_intent(project_id)
-            _intent_prefix = build_director_intent_prefix(_intent)
-            
-            # Prepend director intent if it exists
-            if _intent_prefix:
-                job.input_payload.prompt = _intent_prefix + (job.input_payload.prompt or "")
-                logger.info("DIRECTOR_INTENT_INJECTION | project=%s", project_id)
+            _intent_guidance = build_director_intent_render_guidance(_intent)
+
+            if _intent_guidance:
+                _existing_prompt = (job.input_payload.prompt or "").rstrip()
+                _separator = " " if _existing_prompt.endswith(".") else ". "
+                job.input_payload.prompt = f"{_existing_prompt}{_separator}Tone: {_intent_guidance}."
+                logger.info(
+                    "DIRECTOR_INTENT_INJECTION | project=%s | guidance_chars=%d",
+                    project_id,
+                    len(_intent_guidance),
+                )
             
             # Append continuity context if it exists
             if _has_context:
@@ -2336,6 +2370,26 @@ class RenderService:
                 )
         except Exception as _exc:  # never block a render
             logger.debug("Continuity context injection skipped: %s", _exc)
+
+        # ── Final prompt-budget enforcement ──────────────────────────────────
+        # The slot system assembles within 512 characters, then intent guidance
+        # and the continuity block are appended after it. Nothing enforced the
+        # ceiling again afterwards, so the prompt could leave here over budget
+        # and be sent to the provider raw.
+        #
+        # Truncation keeps the head, which is the shot itself — the provider
+        # weights it most heavily, and standing project context is the right
+        # thing to lose first.
+        _final_prompt = job.input_payload.prompt or ""
+        if len(_final_prompt) > _PROMPT_BUDGET:
+            job.input_payload.prompt = _final_prompt[:_PROMPT_BUDGET].rstrip()
+            logger.warning(
+                "RENDER_PROMPT_BUDGET_TRIMMED | job=%s | shot=%s | from=%d | to=%d",
+                job_id,
+                shot_id,
+                len(_final_prompt),
+                len(job.input_payload.prompt),
+            )
 
         _zero_touch_debug = _zero_touch_debug_metadata(
             project_id=project_id,
