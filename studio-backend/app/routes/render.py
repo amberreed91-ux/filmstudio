@@ -586,3 +586,66 @@ def update_shot_seed(project_id: str, scene_id: str, shot_id: str, payload: Shot
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+
+
+# ── Shot signals ──────────────────────────────────────────────────────────────
+
+class CharacterReferenceRelockRequest(BaseModel):
+    """Director override: make a specific image the canonical reference."""
+    project_id: str
+    character_id: str
+    image_url: str
+    reference_role: str = "general"
+    character_name: str = ""
+    source_shot_id: str = ""
+    reason: str = ""
+
+
+@router.get("/jobs/{job_id}/signals")
+def get_render_job_signals(job_id: str):
+    """Director-facing signals recorded on a render job.
+
+    Intent fidelity, character identity, the references that conditioned the
+    render, and the exclusions sent with it. Carries no scores or percentages —
+    the underlying records hold those for logging, and they stop at the service
+    boundary.
+    """
+    job = render_service.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    from app.services.shot_signals_service import build_shot_signals
+
+    return build_shot_signals(job)
+
+
+@router.post("/character-references/relock")
+def relock_character_reference(payload: CharacterReferenceRelockRequest):
+    """Replace a character's locked visual reference.
+
+    Locks were previously permanent: the first render that passed adherence
+    defined a character for the rest of the film with no way to correct a bad
+    frame. This is the correction path.
+    """
+    from app.data.storage import get_storage
+    from app.services.character_visual_reference_service import (
+        character_visual_reference_service,
+    )
+
+    storage = get_storage("sqlite")
+    if storage is None:
+        raise HTTPException(status_code=503, detail="Storage unavailable")
+
+    lock = character_visual_reference_service.relock_character_reference(
+        project_id=payload.project_id,
+        character_id=payload.character_id,
+        image_url=payload.image_url,
+        storage=storage,
+        reference_role=payload.reference_role,
+        character_name=payload.character_name,
+        source_shot_id=payload.source_shot_id,
+        capture_method="director_override",
+        reason=payload.reason,
+    )
+    if lock is None:
+        raise HTTPException(status_code=400, detail="Could not re-lock reference")
+    return {"lock": lock.model_dump(mode="json"), "advisory_only": False}
