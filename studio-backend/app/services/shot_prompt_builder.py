@@ -554,54 +554,83 @@ def build_slotted_prompt(
             - "prompt": assembled prompt string (<=512 chars)
             - "slots": dict of {slot_name: text} for slot-level addressing
             - "budget_used": total characters used
+            - "source_slots": slot text before budget compression, for the
+              intent-fidelity check
+            - "defaulted_slots": slots filled from a builder template rather than
+              caller input, which the intent-fidelity check ignores
             - "budget_remaining": characters remaining
     """
     from app.services.script_parser import sanitize_render_slot
     
-    # Build slots with budget enforcement
+    # Build slots with budget enforcement.
+    #
+    # `source_slots` holds each slot sanitized but NOT yet compressed. It is the
+    # last point at which the director's intent is still intact: everything after
+    # this is budget enforcement, which silently removes text. Keeping it lets the
+    # intent-fidelity check measure exactly what compression took out, instead of
+    # trying to reconstruct it after the fact.
     slots = {}
+    source_slots = {}
+    # Slots the builder filled from a built-in template because the caller
+    # supplied nothing. Compressing a default is not losing the director's
+    # intent — there was none to lose — so the intent-fidelity check skips these.
+    # Without this, the camera default (longer than its 70-char budget) would
+    # report a loss on almost every shot and the signal would be worthless.
+    defaulted_slots: list[str] = []
     
     # 1. character_state (140 chars) - visual canon only
     if character_visual_canon:
         sanitized = sanitize_render_slot("character_state", character_visual_canon)
+        source_slots["character_state"] = sanitized
         slots["character_state"] = _fit_character_state_to_budget(
             sanitized,
             SLOT_BUDGETS["character_state"],
         )
     else:
+        source_slots["character_state"] = ""
         slots["character_state"] = ""
     
     # 2. action (110 chars) - one action per shot
     if action_text:
         sanitized = sanitize_render_slot("action", action_text)
+        source_slots["action"] = sanitized
         slots["action"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["action"])
     else:
+        source_slots["action"] = ""
         slots["action"] = ""
     
     # 3. environment_persistence (100 chars) - recurring motifs
     if environment_motifs:
         sanitized = sanitize_render_slot("environment_persistence", environment_motifs)
+        source_slots["environment_persistence"] = sanitized
         slots["environment_persistence"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["environment_persistence"])
     else:
+        source_slots["environment_persistence"] = ""
         slots["environment_persistence"] = ""
     
     # 4. camera (70 chars) - controlled vocabulary
     if camera_direction:
         sanitized = sanitize_render_slot("camera", camera_direction)
+        source_slots["camera"] = sanitized
         slots["camera"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["camera"])
     else:
         # Default based on shot number
         shot_type = _determine_shot_type(shot_number, "")
+        source_slots["camera"] = shot_type
         slots["camera"] = _truncate_to_budget(shot_type, SLOT_BUDGETS["camera"])
+        defaulted_slots.append("camera")
     
     # 5. lighting (60 chars) - controlled vocabulary
     if lighting_direction:
         sanitized = sanitize_render_slot("lighting", lighting_direction)
+        source_slots["lighting"] = sanitized
         slots["lighting"] = _truncate_to_budget(sanitized, SLOT_BUDGETS["lighting"])
     else:
+        source_slots["lighting"] = ""
         slots["lighting"] = ""
     
     # 6. reserve (32 chars) - leave empty for now (correction headroom)
+    source_slots["reserve"] = ""
     slots["reserve"] = ""
     
     # Assemble prompt from non-empty slots (shared reassembly path)
@@ -620,6 +649,8 @@ def build_slotted_prompt(
     return {
         "prompt": base_prompt,
         "slots": slots,
+        "source_slots": source_slots,
+        "defaulted_slots": defaulted_slots,
         "budget_used": budget_used,
         "budget_remaining": budget_remaining,
     }

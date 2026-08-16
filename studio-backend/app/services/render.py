@@ -640,6 +640,38 @@ def _infer_scene_characters_from_text(
     return []
 
 
+def _build_intent_fidelity(slotted: dict, shot_id: str) -> dict | None:
+    """Compare the director's pre-budget slot text against the outgoing prompt.
+
+    Runs before the render is submitted and never blocks it. Everything else in
+    the pipeline measures the render against the prompt; this is the only check
+    that measures the prompt against what was asked for.
+    """
+    try:
+        from app.services.intent_fidelity_service import build_intent_fidelity_report
+
+        if not isinstance(slotted, dict):
+            return None
+        report = build_intent_fidelity_report(
+            source_slots=slotted.get("source_slots"),
+            final_slots=slotted.get("slots"),
+            prompt=str(slotted.get("prompt") or ""),
+            shot_id=shot_id,
+            defaulted_slots=slotted.get("defaulted_slots"),
+        )
+        if report.get("status") == "reduced":
+            logger.warning(
+                "INTENT_FIDELITY_REDUCED | shot=%s | slots=%s | note=%s",
+                shot_id,
+                ",".join(report.get("reduced_slots") or []),
+                report.get("advisory_note", ""),
+            )
+        return report
+    except Exception as exc:
+        logger.debug("Intent fidelity check skipped for %s: %s", shot_id, exc)
+        return None
+
+
 def _format_visible_cast_constraint(character_names: list[str]) -> str:
     names = _normalize_character_names(character_names)
     if not names:
@@ -1503,6 +1535,7 @@ class RenderService:
             or "Cinematic quality" in prompt
         )
         _prompt_slots_for_adherence: dict[str, str] | None = None
+        _intent_fidelity_report: dict | None = None
         
         if _is_generic:
             try:
@@ -1735,6 +1768,7 @@ class RenderService:
                                 for _slot_name, _slot_value in (_slotted.get("slots") or {}).items()
                                 if _slot_name != "reserve"
                             }
+                            _intent_fidelity_report = _build_intent_fidelity(_slotted, shot_id)
 
                             logger.info(
                                 "RENDER_PROMPT_FROM_SCENE | scene=%s | content_length=%d | action_length=%d | prompt_length=%d | slots=%s",
@@ -1973,6 +2007,11 @@ class RenderService:
                     )
         except Exception as _exc:
             logger.debug("Negative prompt build skipped for %s/%s: %s", project_id, shot_id, _exc)
+
+        # Record what budget compression removed from the director's intent, so a
+        # silent loss is visible before the render is paid for rather than never.
+        if _intent_fidelity_report:
+            _input_parameters["intent_fidelity"] = _intent_fidelity_report
 
         job = RenderJobModel(
             id=job_id,
@@ -2232,6 +2271,12 @@ class RenderService:
                     for _slot, _value in (_slotted.get("slots") or {}).items()
                     if _slot != "reserve"
                 }
+                # This path rebuilds the prompt after job creation, so the
+                # fidelity record from job creation is stale — recompute against
+                # what is actually going out.
+                _structured_fidelity = _build_intent_fidelity(_slotted, shot_id)
+                if _structured_fidelity:
+                    job.input_payload.parameters["intent_fidelity"] = _structured_fidelity
                 logger.info(
                     "STRUCTURED_PREVIS_PROMPT_APPLIED | job=%s | scene=%s | shot_planning=%s | slots=%s",
                     job_id,
