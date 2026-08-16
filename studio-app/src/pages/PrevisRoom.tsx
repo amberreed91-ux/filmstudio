@@ -58,6 +58,8 @@ import { normalizeJobStatus } from '../lib/jobStatus'
 import { persistActiveProjectId, resolveActiveProjectId, withProductionContext } from '../lib/projectContext'
 import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
 import { browserPlaybackUrl } from '../lib/studioMedia'
+import ShotSignalsPanel from '../components/ShotSignalsPanel'
+import { getShotSignals, type ShotSignalsEnvelope } from '../lib/shotSignals'
 import {
   buildPrevisScenePipelinePayload,
   canGeneratePrevisScenePipeline,
@@ -623,6 +625,34 @@ export default function PrevisRoom() {
     }
     return merged
   }, [renderHistory, persistedRenderHistory])
+
+  // Shot Signals — what the pipeline noticed about the most recent completed
+  // render in view: intent the prompt dropped, character likeness, the
+  // references that conditioned it, and what was excluded. The panel draws
+  // nothing when there is nothing to say, so it stays quiet on a clean shot.
+  const [shotSignals, setShotSignals] = useState<ShotSignalsEnvelope | null>(null)
+
+  const latestCompletedJobId = useMemo(() => {
+    const completed = visibleRenderHistory.find((entry) => entry.status === 'complete')
+    return completed?.jobId ?? ''
+  }, [visibleRenderHistory])
+
+  useEffect(() => {
+    if (!latestCompletedJobId) {
+      setShotSignals(null)
+      return
+    }
+    const controller = new AbortController()
+    void (async () => {
+      try {
+        setShotSignals(await getShotSignals(latestCompletedJobId, controller.signal))
+      } catch {
+        // Advisory only — a failed lookup must never disturb the room.
+        setShotSignals(null)
+      }
+    })()
+    return () => controller.abort()
+  }, [latestCompletedJobId])
 
   const takes = useMemo(() =>
     visibleRenderHistory
@@ -2448,6 +2478,9 @@ export default function PrevisRoom() {
                 </div>
               )}
             </div>
+
+            {/* Shot Signals */}
+            <ShotSignalsPanel envelope={shotSignals} />
 
             {/* Render History */}
             <div className="glass-panel rounded-xl p-4">
