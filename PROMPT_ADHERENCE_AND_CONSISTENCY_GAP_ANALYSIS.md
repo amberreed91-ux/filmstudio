@@ -4,8 +4,92 @@
 **Scope:** `studio-backend/app/services` — adherence, retry, slot assembly, character reference locking
 **Question:** what else can be done so the render matches the director's exact vision, and characters stay the same person
 
-**Status:** Tiers 1 and 2 implemented and tested (Aug 15, 2026) — items A1, A2, A3, A4, A5, A7, B4,
-B5 below are DONE. Tier 3 is open. See "Suggested order" at the end for current state.
+**Status (Aug 16, 2026):** Every item in this analysis is implemented and committed —
+A1–A7 and B1–B6, plus the reporting surface and automatic reference upgrade.
+
+**One thing remains:** `scripts/validate_adherence_stack.py` has not been run.
+Nothing in this document has been proven against a real render — every check is
+a unit test. Phase 0 is free and offline; the single most useful thing it reports
+is whether this machine selects a face-identity embedder or only a general-visual
+one, which determines how much of the identity work is currently doing anything.
+
+The reporting surface is now mounted (`f319366c`), so the first real render will
+also be the first real test of everything underneath it — the panel displays data
+no render has yet produced.
+
+Frontend verified locally: `tsc --noEmit` clean, 680 tests across 76 files pass,
+`npm run build` succeeds.
+
+Commits on `backend-expansion-dependency-slicing`:
+- `7a0c1677` Fix prompt adherence and character identity consistency (Tiers 1 + 2)
+- `5ef072d8` Add intent-fidelity check before render submission (B1)
+- `cdf5527a` Put director intent into render-facing form (B2)
+- `8da221f2` Surface shot signals to the director (reporting surface)
+- `980048ad` Scope reference locks by look; upgrade them; improve corrections (A6, B3, B6, auto-upgrade)
+- `4b27e588` Fix dropped-phrase lookup ordering and scoping (defect in `980048ad`)
+- `f319366c` Mount Shot Signals in the Previs Bay
+
+**All items from this analysis are now implemented and committed.** A6, B3, and
+B6 closed in `980048ad`, along with automatic reference upgrade.
+
+**One defect was introduced and fixed.** `_dropped_elements_for_shot` (B3) iterated
+`storage.list_jobs` with `reversed()` — but that call returns newest-first, so it took the
+*oldest* render of a shot and would have restored phrasing from a superseded prompt
+assembly. It also queried across all projects unscoped, so on a busy install the shot's
+jobs fall outside the 200-row window and restoration silently does nothing. Fixed in
+`4b27e588` with four regression tests.
+
+Worth recording *why* it got through: every test written for B3 passed `dropped_elements`
+in as a parameter, so the lookup itself was never exercised against storage. The feature
+was fully tested and completely broken at the same time. Any future storage-reading helper
+should get a stubbed-storage test, not just a pure-function test.
+
+**HEAD has been tested in isolation** (2737 passed, 1 failed — the Linux-only
+`test_video_assets_routes`). Earlier runs, mine and Codex's, were all against the *working
+tree*, which carries uncommitted in-progress work; none of them tested what was actually
+committed until now.
+
+**Correction:** `test_render_canon_integration.py` is NOT in the repo. It is an uncommitted
+test belonging to the in-progress work in the tree, so its failure was never a repo-level
+problem and should not be treated as a baseline failure.
+
+**Verified on the real venv** (first local run of this work): 2743 passed,
+3 failed, 26m33s. My sandbox run was 2744 passed / 2 failed — same 2746 total, so
+no tests were missing on either side. The difference is environmental, not
+behavioural: `test_video_assets_routes` failed in the Linux sandbox and passed on
+macOS, and the flaky crew test failed locally and passed in the sandbox. No
+failures appeared outside the two known areas.
+
+`scripts/validate_adherence_stack.py` runs the checks below in cost order
+(offline → provider probe → one gated paid render).
+
+**Known flaky test — root cause found and fixed:**
+`app/routes/test_crew_intelligence_routes.py` failed intermittently with SQLite
+I/O errors (`unable to open database file`, locally `disk I/O error`).
+
+My first diagnosis was wrong and is recorded here so it is not repeated. I
+attributed it to disk pressure — the volume was 97% full — and to the same cause
+as the Aug 6 incident where git died mid-write and left a partial
+`.git/index.lock`. Space was freed. The test kept flaking. The disk was never
+the problem, and I had evidence pointing elsewhere at the time that I
+under-weighted.
+
+The real cause was a process-wide singleton being rebound to per-test storage.
+Four department services assigned `crew_intelligence_service._storage =
+self.storage` at construction. A test using `tmp_path` storage rebound the
+singleton to `/tmp/tmpXXXX/studio.db`; once pytest cleaned that directory up, any
+later test reaching the singleton opened a path whose parent no longer existed.
+Instrumenting `_create_connection` to print `db_path`, `parent_exists`, fd count
+and thread showed exactly that: `parent_exists=False` on a path under a deleted
+temp directory. Disk (28GB free at the time), fd exhaustion (peak 111 against a
+20000 limit), per-PID path variation, and test ordering were each ruled out
+individually.
+
+Fixed by removing those four assignments. Verified with 8 consecutive clean runs
+of a test that had been failing roughly one run in three.
+
+**Nothing here has been validated against a real render.** Every change is unit-tested against
+2673 passing tests; none has been proven on paid provider output. See "What is not yet proven".
 
 ---
 
@@ -349,6 +433,26 @@ failures as before, unrelated to this work. 47 new tests across two new files.
 
 **Not yet done:** local test run, and git commit. See Tier 1 note above — same two caveats apply.
 
+### Reporting surface (commit `8da221f2`)
+
+`shot_signals_service` assembles intent fidelity, character identity, the
+references that conditioned a render, and the exclusions sent with it into one
+director-facing payload, exposed at `GET /render/jobs/{job_id}/signals`.
+`POST /render/character-references/relock` is the first endpoint for the
+reference override — before it, a lock set from a bad frame could not be
+corrected through the API.
+
+Two AGENTS.md rules are enforced at that boundary and asserted by tests on both
+sides: no scores, ratings, or percentages reach the director, and a signal with
+nothing to say returns `quiet` so a room renders nothing rather than a
+reassuring row.
+
+**Not mounted.** `ShotSignalsPanel` exists and is tested but is not rendered in
+any room. Worth noting that `PrevisIntelligencePanel` — which predates this work
+— is also mounted nowhere. This codebase has a standing pattern of panels being
+built and never wired in, the same failure mode as the orphaned identity
+verification service found at the start of this work.
+
 ### Still open in the consistency area
 
 - **Look/wardrobe scoping (A6)** — see Tier 3. The lock key is now
@@ -359,13 +463,52 @@ failures as before, unrelated to this work. 47 new tests across two new files.
   better" is a small addition on top of the verification report now recorded on every job.
 - **A route for the director override** — the service method is there; no endpoint exposes it.
 
-### Tier 3 — the vision layer (OPEN)
+### Tier 3 — partially DONE
 
-10. Intent-fidelity pre-render diff (B1)
-11. Wire director intent into prompt + rubric (B2)
-12. Look/wardrobe-scoped locks (A6)
-13. Vision-model-authored corrections (B6)
-14. Record dropped text at truncation; semantic compression for `character_state` (B3)
+| # | Item | Status |
+|---|------|--------|
+| 10 | Intent-fidelity pre-render diff (B1) | DONE — `intent_fidelity_service.py`, commit `5ef072d8` |
+| 11 | Director intent into the render prompt (B2) | DONE — commit `cdf5527a` |
+| 12 | Look/wardrobe-scoped locks (A6) | OPEN |
+| 13 | Vision-model-authored corrections (B6) | OPEN |
+| 14 | Record dropped text at truncation (B3) | OPEN |
+
+**Correction to the original B2 analysis.** This document originally said director intent "is stored
+and never read". That was wrong. `director_intent_service` is unused, but `render.py` already called
+`build_director_intent_prefix` and prepended its output to the render prompt. The real problem was
+worse than the one described: that prefix is written for Claude system prompts, and on a video prompt
+it inverted the slot priority the whole system is built around. Measured on a representative intent,
+the prefix ran 299 characters against the slotted prompt's 191 — and because the provider weights
+early tokens most heavily, it placed genre and "what success looks like" ahead of who is on screen.
+`what_to_avoid` also sat in the positive prompt, where honouring it depends on the model processing a
+negation. Fixed in `cdf5527a`: bounded renderable guidance placed after the shot, avoid-terms routed
+to the negative channel, and 512-char enforcement added after all injections (nothing enforced it
+once intent and the continuity block were appended).
+
+### What is not yet proven
+
+Everything above is verified by unit tests. None of it has been exercised against a real render.
+Specifically unproven:
+
+- Whether the identity hard gate fires correctly on genuine drift in real footage, and whether
+  `IDENTITY_HARD_GATE_THRESHOLD = 65` is calibrated right — it was chosen from ArcFace verification
+  norms, not from this pipeline's output.
+- Whether the negative-prompt channel measurably improves adherence on HappyHorse. The field
+  reaches the provider request body on both the t2v and r2v paths — verified by
+  `scripts/validate_adherence_stack.py` Phase 0 — but whether HappyHorse honours
+  `input.negative_prompt` or silently ignores it is still unknown, and only a paid render
+  answers it.
+- Whether multi-view references improve identity hold versus the previous single image.
+- Whether candidate-frame scoring picks frames a human would also pick.
+- Whether the DashScope multimodal embedding endpoint responds in the shape
+  `DashScopeMultimodalEmbeddingAdapter._extract_vector` expects. A live probe returned HTTP 400,
+  so the request itself is malformed and the response shape remains untested. This now degrades a
+  fallback rather than the feature: with `insightface` installed,
+  `build_visual_embedding_adapter()` selects `LocalFaceEmbeddingAdapter` and DashScope multimodal
+  is second choice.
+
+The no-spend verifiers (`scripts/verify_character_reference_locking_capture.py`,
+`scripts/prove_new_render_pipeline_wiring.py`) can prove wiring. Only a paid render can prove effect.
 
 B1 remains the largest single gap in the system. Everything built so far — including all of Tier 1 —
 measures the render against the prompt. Nothing yet measures the prompt against what the director
