@@ -305,35 +305,148 @@ def phase_offline() -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _probe_cosine(left: list, right: list) -> float:
+    """Local cosine so the probe does not depend on any service's private helper."""
+    if not left or not right or len(left) != len(right):
+        return 0.0
+    dot = sum(a * b for a, b in zip(left, right))
+    norm_left = sum(a * a for a in left) ** 0.5
+    norm_right = sum(b * b for b in right) ** 0.5
+    if norm_left == 0.0 or norm_right == 0.0:
+        return 0.0
+    return dot / (norm_left * norm_right)
+
+
+def _probe_face_image() -> Path:
+    """A REAL face image to probe with.
+
+    A synthetic grey square is a valid probe for a general-visual embedder and
+    useless for a face embedder — no face is detected, the adapter correctly
+    reports "unavailable", and the check fails for a reason that has nothing to
+    do with the code under test. So probe with an actual locked character
+    reference frame, and refuse to invent a substitute if none exists.
+    """
+    candidate_roots = [
+        BACKEND_ROOT / "outputs" / "references",
+        BACKEND_ROOT / "outputs" / "previs",
+    ]
+    candidates: list[Path] = []
+    for root in candidate_roots:
+        if root.is_dir():
+            for suffix in ("*.png", "*.jpg", "*.jpeg", "*.webp"):
+                candidates.extend(sorted(root.rglob(suffix)))
+    if not candidates:
+        raise FileNotFoundError(
+            "No locked character reference image found under outputs/references "
+            "or outputs/previs. A face embedder cannot be probed with a "
+            "synthetic image; lock at least one character reference first."
+        )
+    return max(candidates, key=lambda p: p.stat().st_size)
+
+
 def phase_probe() -> list[dict]:
     checks: list[dict] = []
 
-    # Does the DashScope multimodal embedding endpoint return the shape
-    # _extract_vector expects? This was written against documentation, not
-    # against a live response, so it is the most likely thing to be wrong.
+    # 1. The adapter actually selected in production — not a hardcoded one.
+    #    Installing insightface changes which adapter build_visual_embedding_adapter()
+    #    returns, so probing a hardcoded class tests a path production no longer
+    #    takes. This check exercises whatever the app would really use, on a real
+    #    image, and reports the full metadata rather than a hand-picked subset.
+    selected_name = "unknown"
     try:
-        from PIL import Image
-        from app.services.visual_embedding_adapter import DashScopeMultimodalEmbeddingAdapter
+        from app.services.visual_embedding_adapter import (
+            build_visual_embedding_adapter,
+            SIMILARITY_THRESHOLDS,
+        )
 
-        probe_dir = BACKEND_ROOT / "outputs" / "validation"
-        probe_dir.mkdir(parents=True, exist_ok=True)
-        probe_image = probe_dir / "embedding_probe.jpg"
-        Image.new("RGB", (64, 64), (120, 120, 120)).save(probe_image)
+        adapter = build_visual_embedding_adapter()
+        selected_name = type(adapter).__name__
 
-        result = DashScopeMultimodalEmbeddingAdapter().embed_image(str(probe_image))
+        probe_image = _probe_face_image()
+        result = adapter.embed_image(str(probe_image))
+
         checks.append(_check(
-            "dashscope_embedding_response_shape",
+            "selected_adapter_returns_a_vector",
             result.status == "complete" and len(result.vector) > 0,
             {
+                "adapter": selected_name,
+                "kind": result.kind,
                 "status": result.status,
                 "dimension": result.dimension,
-                "message": result.metadata.get("message"),
-                "kind": result.kind,
+                "image": str(probe_image),
+                "metadata": dict(result.metadata or {}),
+                "thresholds_for_kind": SIMILARITY_THRESHOLDS.get(result.kind),
             },
-            "Does the live embedding response parse into a usable vector?",
+            "Does the adapter production would actually use return a usable vector "
+            "from a real image?",
         ))
     except Exception as exc:
-        checks.append(_check("dashscope_embedding_response_shape", False, {"error": repr(exc)}))
+        checks.append(_check(
+            "selected_adapter_returns_a_vector", False,
+            {"adapter": selected_name, "error": repr(exc)},
+        ))
+
+    # 2. Self-similarity. An embedder that returns vectors but scores an image
+    #    against itself below its own match threshold is broken in a way a
+    #    "did we get a vector" check cannot see.
+    try:
+        from app.services.visual_embedding_adapter import (
+            build_visual_embedding_adapter,
+            SIMILARITY_THRESHOLDS,
+        )
+
+        adapter = build_visual_embedding_adapter()
+        probe_image = _probe_face_image()
+        first = adapter.embed_image(str(probe_image))
+        second = adapter.embed_image(str(probe_image))
+        thresholds = SIMILARITY_THRESHOLDS.get(first.kind) or (0.0, 0.0)
+        match_threshold = thresholds[0]
+        self_similarity = _probe_cosine(first.vector, second.vector)
+        checks.append(_check(
+            "embedder_matches_an_image_to_itself",
+            self_similarity >= match_threshold,
+            {
+                "adapter": type(adapter).__name__,
+                "kind": first.kind,
+                "self_similarity": round(self_similarity, 4),
+                "match_threshold": match_threshold,
+                "image": str(probe_image),
+            },
+            "Does the embedder score an image against itself above its own "
+            "match threshold?",
+        ))
+    except Exception as exc:
+        checks.append(_check(
+            "embedder_matches_an_image_to_itself", False, {"error": repr(exc)},
+        ))
+
+    # 3. The hosted fallback, probed separately and reported in full. This is no
+    #    longer the production path when insightface is installed, so a failure
+    #    here degrades the fallback rather than the feature. The full error body
+    #    is included — the previous version of this check dropped it, which is
+    #    why an HTTP 400 arrived with no explanation attached.
+    try:
+        from app.services.visual_embedding_adapter import DashScopeMultimodalEmbeddingAdapter
+
+        fallback = DashScopeMultimodalEmbeddingAdapter()
+        result = fallback.embed_image(str(_probe_face_image()))
+        checks.append(_check(
+            "dashscope_fallback_response_shape",
+            result.status == "complete" and len(result.vector) > 0,
+            {
+                "model": fallback._model,
+                "endpoint_path": fallback.ENDPOINT_PATH,
+                "status": result.status,
+                "dimension": result.dimension,
+                "metadata": dict(result.metadata or {}),
+            },
+            "Does the hosted fallback parse into a usable vector? (Not the "
+            "production path when insightface is present.)",
+        ))
+    except Exception as exc:
+        checks.append(_check(
+            "dashscope_fallback_response_shape", False, {"error": repr(exc)},
+        ))
 
     return checks
 
