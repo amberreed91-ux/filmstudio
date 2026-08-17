@@ -24,7 +24,29 @@ SLOT_BUDGETS = {
     "reserve": 32,                # Unallocated headroom for corrections later
 }
 
-# Total must never exceed Runway's 512-char hard limit
+# KNOWN DEFECT -- diagnosed 2026-08-17, deliberately not patched here.
+#
+# 1. This ceiling is Runway's hard limit. Renders now go through
+#    DashScope/HappyHorse, which does not impose it, so the limit is inherited
+#    rather than required.
+# 2. SLOT_BUDGETS above sum to 582. With the ~34 chars reassemble_prompt_from_slots()
+#    adds, no render can fit 512, so every prompt truncates regardless of content.
+# 3. _truncate_to_budget() slices on a raw character index, producing severed
+#    fragments ("medium brown skin...", "A black man i...") and prompts that end
+#    mid-word. This is a prompt-adherence defect in its own right: the model is
+#    asked to follow text that was never coherent.
+#
+# Two fixes were tried and reverted, both green-to-red on the existing suite:
+# shrinking the slots to fit 512 breaks standing-correction injection into
+# `camera` and starves `action`; making truncation cut on word/clause boundaries
+# returns shorter strings, which changes upstream branching in _merge_slot_text
+# and drops injected corrections. Both regressions share one cause -- the budget
+# is over-subscribed, so any better-behaved truncation removes characters that
+# other features currently depend on surviving.
+#
+# Correct order of repair: make MAX_PROMPT_LENGTH provider-aware against the real
+# DashScope limit FIRST, then rebalance SLOT_BUDGETS to fit it, then make
+# truncation boundary-aware. Steps 2 and 3 are not safely separable from step 1.
 MAX_PROMPT_LENGTH = 512
 
 
