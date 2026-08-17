@@ -472,45 +472,72 @@ def phase_render(project_id: str, shot_id: str, prompt: str, duration: int) -> l
     checks: list[dict] = []
     try:
         from app.data.storage import get_storage
-        from app.services.render import render_service, set_storage
+        from app.services.project_store import project_store
+        from app.services.render import derive_scene_id_from_shot_id, render_service, set_storage
 
         storage = get_storage("sqlite")
         set_storage(storage)
 
-        # Precondition. If the project is not in the database this process
-        # opened, every check below reports on an empty world: no prompt, no
+        # Precondition. If create_job cannot resolve the project and the shot's
+        # scene, every check below reports on an empty world: no prompt, no
         # references, no intent record. That is four failures with one cause,
         # none of them about the code under test. Fail once, clearly, instead -
         # and do not create a paid job against a project that is not there.
+        #
+        # This must interrogate the store create_job actually reads. Project
+        # records live in TWO unsynchronized places: the `projects` table in
+        # studio.db, and the JSON-backed ProjectStore. create_job resolves
+        # scenes from the JSON store, so checking SQLite here reports success
+        # on a project the renderer cannot see. SQLite presence is still
+        # reported, because the child rows (shots, locks, renders) live there.
         db_path = str(getattr(storage, "db_path", "unknown"))
         try:
-            project = storage.get_project(project_id)
+            sqlite_project = storage.get_project(project_id)
+        except Exception:
+            sqlite_project = None
+
+        try:
+            render_project = project_store.get_project(project_id)
         except Exception as project_exc:
-            project = None
+            render_project = None
             project_error = repr(project_exc)
         else:
             project_error = None
-        if not project:
+
+        scene_id = derive_scene_id_from_shot_id(shot_id)
+        scenes = ((render_project or {}).get("execution_summary") or {}).get("scenes") or []
+        scene = next(
+            (s for s in scenes if isinstance(s, dict) and s.get("scene_id") == scene_id),
+            None,
+        )
+
+        resolution = {
+            "project_id": project_id,
+            "shot_id": shot_id,
+            "scene_id": scene_id,
+            "resolved_in_render_store": bool(render_project),
+            "render_store_path": str(getattr(project_store, "_path", "unknown")),
+            "present_in_sqlite": bool(sqlite_project),
+            "sqlite_path": db_path,
+            "scene_found": bool(scene),
+            "error": project_error,
+        }
+        if not render_project or not scene:
+            resolution["note"] = (
+                "create_job resolves scenes through ProjectStore (JSON), not the "
+                "projects table in studio.db. A project present only in SQLite "
+                "renders with an empty prompt and no references attached."
+                if not render_project
+                else f"Project resolved, but it carries no scene {scene_id!r}."
+            )
             checks.append(_check(
-                "project_exists_in_opened_database",
-                False,
-                {
-                    "project_id": project_id,
-                    "db_path": db_path,
-                    "error": project_error,
-                    "note": (
-                        "Run scripts/diagnose_storage_target.py. The script is "
-                        "probably opening a different database than the app."
-                    ),
-                },
-                "Is the target project present in the database this script opened?",
+                "project_resolvable_by_render_path", False, resolution,
+                "Can create_job actually resolve this project and the shot's scene?",
             ))
             return checks
         checks.append(_check(
-            "project_exists_in_opened_database",
-            True,
-            {"project_id": project_id, "db_path": db_path},
-            "Is the target project present in the database this script opened?",
+            "project_resolvable_by_render_path", True, resolution,
+            "Can create_job actually resolve this project and the shot's scene?",
         ))
 
         job = render_service.create_job(
