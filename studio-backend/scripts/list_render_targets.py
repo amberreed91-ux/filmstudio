@@ -2,8 +2,15 @@
 """List projects that can meaningfully exercise the paid render phase.
 
 Read-only inspection only: this script opens the studio SQLite database and
-reports whether each real project has shots, locked character references, and a
+reports whether each project has shots, locked character references, and a
 prior completed render for before/after comparison.
+
+Projects are enumerated from the union of every table that carries a
+project_id, not from the `projects` table alone. A project whose child rows
+survived but whose parent row did not would otherwise be invisible here, and
+such a project can still hold the only locked character references in the
+database. Those ids are reported with `orphaned: true` and are never treated as
+viable render targets until the parent row is restored.
 """
 
 from __future__ import annotations
@@ -28,8 +35,29 @@ def _loads_json(raw: str | None) -> dict[str, Any]:
     return loaded if isinstance(loaded, dict) else {}
 
 
-def _project_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return list(conn.execute("SELECT project_id, data FROM projects ORDER BY project_id"))
+# Every table consulted when enumerating project ids. `projects` is the parent;
+# the rest are children that can outlive it.
+PROJECT_ID_SOURCES = (
+    "projects",
+    "shots",
+    "character_reference_locks",
+    "render_jobs",
+)
+
+
+def _project_data_map(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
+    """Return the parsed `data` blob for each project that still has a parent row."""
+    rows = conn.execute("SELECT project_id, data FROM projects")
+    return {str(row["project_id"]): _loads_json(row["data"]) for row in rows}
+
+
+def _all_project_ids(conn: sqlite3.Connection) -> list[str]:
+    """Collect project ids from the parent table and from every child table."""
+    project_ids: set[str] = set()
+    for table in PROJECT_ID_SOURCES:
+        rows = conn.execute(f'SELECT DISTINCT project_id FROM "{table}"')  # noqa: S608 - fixed table names
+        project_ids.update(str(row["project_id"]) for row in rows if row["project_id"])
+    return sorted(project_ids)
 
 
 def _shot_ids(conn: sqlite3.Connection, project_id: str) -> list[str]:
@@ -76,17 +104,25 @@ def build_report() -> dict[str, Any]:
     try:
         projects: list[dict[str, Any]] = []
         viable: list[dict[str, Any]] = []
-        for project_row in _project_rows(conn):
-            project_id = str(project_row["project_id"])
-            project_data = _loads_json(project_row["data"])
+        orphaned_ids: list[str] = []
+        data_map = _project_data_map(conn)
+        for project_id in _all_project_ids(conn):
+            project_data = data_map.get(project_id, {})
+            is_orphaned = project_id not in data_map
             shot_ids = _shot_ids(conn, project_id)
             locked_references = _locked_reference_count(conn, project_id)
             completed_shot_ids = _completed_render_shot_ids(conn, project_id)
             comparable_completed_shot_ids = sorted(set(shot_ids) & set(completed_shot_ids))
-            is_viable = bool(shot_ids) and locked_references > 0 and bool(comparable_completed_shot_ids)
+            is_viable = (
+                not is_orphaned
+                and bool(shot_ids)
+                and locked_references > 0
+                and bool(comparable_completed_shot_ids)
+            )
             project = {
                 "project_id": project_id,
                 "title": str(project_data.get("title") or ""),
+                "orphaned": is_orphaned,
                 "shots": {
                     "count": len(shot_ids),
                     "shot_ids": shot_ids,
@@ -100,6 +136,8 @@ def build_report() -> dict[str, Any]:
                 "viable_render_target": is_viable,
             }
             projects.append(project)
+            if is_orphaned:
+                orphaned_ids.append(project_id)
             if is_viable:
                 viable.append(
                     {
@@ -115,6 +153,7 @@ def build_report() -> dict[str, Any]:
             "database": str(DB_PATH),
             "projects": projects,
             "viable_render_targets": viable,
+            "orphaned_project_ids": orphaned_ids,
             "conclusion": conclusion,
         }
     finally:
@@ -124,6 +163,11 @@ def build_report() -> dict[str, Any]:
 def main() -> int:
     report = build_report()
     print(json.dumps(report, indent=2))
+    if report["orphaned_project_ids"]:
+        print(
+            "\nORPHANED (child rows present, no `projects` row): "
+            + ", ".join(report["orphaned_project_ids"])
+        )
     print(f"\n{report['conclusion']}")
     return 0
 
