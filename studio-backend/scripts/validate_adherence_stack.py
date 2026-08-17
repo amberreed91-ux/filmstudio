@@ -470,6 +470,42 @@ def phase_render(project_id: str, shot_id: str, prompt: str, duration: int) -> l
         storage = get_storage("sqlite")
         set_storage(storage)
 
+        # Precondition. If the project is not in the database this process
+        # opened, every check below reports on an empty world: no prompt, no
+        # references, no intent record. That is four failures with one cause,
+        # none of them about the code under test. Fail once, clearly, instead -
+        # and do not create a paid job against a project that is not there.
+        db_path = str(getattr(storage, "db_path", "unknown"))
+        try:
+            project = storage.get_project(project_id)
+        except Exception as project_exc:
+            project = None
+            project_error = repr(project_exc)
+        else:
+            project_error = None
+        if not project:
+            checks.append(_check(
+                "project_exists_in_opened_database",
+                False,
+                {
+                    "project_id": project_id,
+                    "db_path": db_path,
+                    "error": project_error,
+                    "note": (
+                        "Run scripts/diagnose_storage_target.py. The script is "
+                        "probably opening a different database than the app."
+                    ),
+                },
+                "Is the target project present in the database this script opened?",
+            ))
+            return checks
+        checks.append(_check(
+            "project_exists_in_opened_database",
+            True,
+            {"project_id": project_id, "db_path": db_path},
+            "Is the target project present in the database this script opened?",
+        ))
+
         job = render_service.create_job(
             project_id=project_id,
             shot_id=shot_id,
@@ -491,11 +527,13 @@ def phase_render(project_id: str, shot_id: str, prompt: str, duration: int) -> l
             params.get("intent_fidelity"),
             "Did the intent-fidelity record attach to a production job?",
         ))
+        prompt_text = job.input_payload.prompt or ""
         checks.append(_check(
             "prompt_within_budget",
-            len(job.input_payload.prompt or "") <= 512,
-            {"prompt_length": len(job.input_payload.prompt or ""), "prompt": job.input_payload.prompt},
-            "Did the assembled prompt leave create_job within the 512-char budget?",
+            0 < len(prompt_text) <= 512,
+            {"prompt_length": len(prompt_text), "prompt": prompt_text},
+            "Did the assembled prompt leave create_job non-empty and within the "
+            "512-char budget?",
         ))
         consistency = job.input_payload.consistency_payload
         ref_count = len(getattr(consistency, "refs", []) or []) if consistency else 0
