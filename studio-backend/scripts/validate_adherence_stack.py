@@ -24,7 +24,7 @@ Usage
     # All phases — submits ONE paid render
     .venv/bin/python scripts/validate_adherence_stack.py \
         --probe-providers --real-render --confirm-spend \
-        --project-id project_3dba9330f43a --shot-id scene_002_shot_001
+        --project-id <project-id> --shot-id <shot-id>
 
 Writes a JSON evidence report to reports/adherence_stack_validation_<stamp>.json
 following the convention used by the other verifiers in this directory.
@@ -52,8 +52,15 @@ except Exception:
 
 REPORT_ROOT = BACKEND_ROOT / "reports"
 
-DEFAULT_PROJECT_ID = "project_3dba9330f43a"  # I Was Reborn
-DEFAULT_SHOT_ID = "scene_002_shot_001"
+# No default project id. The previous one was copied out of a design document
+# and pointed at a project that no longer existed, so --real-render silently ran
+# against an empty world and reported four uninformative results. If a paid
+# render is requested, the caller names the project.
+DEFAULT_PROJECT_ID = ""
+
+# No default shot id. The previous value only made sense with the removed
+# project id, so a paid render must name the exact comparison shot.
+DEFAULT_SHOT_ID = ""
 
 
 def _stamp() -> str:
@@ -577,6 +584,18 @@ def main() -> int:
     parser.add_argument("--real-render", action="store_true", help="Phase 2: create a real render job.")
     parser.add_argument("--confirm-spend", action="store_true", help="Required alongside --real-render.")
     args = parser.parse_args()
+    if args.real_render and not (args.project_id or "").strip():
+        parser.error(
+            "--real-render requires an explicit --project-id. "
+            "Run scripts/list_render_targets.py to see which projects have "
+            "shots, locked character references, and a prior completed render."
+        )
+    if args.real_render and not (args.shot_id or "").strip():
+        parser.error(
+            "--real-render requires an explicit --shot-id. "
+            "Run scripts/list_render_targets.py to see which shots already "
+            "have a prior completed render."
+        )
 
     report: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
