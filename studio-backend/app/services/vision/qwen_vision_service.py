@@ -101,26 +101,23 @@ class QwenVisionService:
 
         return result
 
-    async def score_adherence(
-        self,
+    @staticmethod
+    def _build_scoring_prompt(
         *,
-        frames: list[str],
         expected_character: str,
         expected_action: str,
         expected_camera: str,
         expected_lighting: str,
         expected_environment: str,
-    ) -> dict[str, Any]:
-        """
-        Score three extracted frames against Loop 1's five adherence slots.
+    ) -> str:
+        """The scoring prompt, shared by every provider that scores adherence.
 
-        Returns the raw dict shape expected by AdherenceService:
-        {"dimensions": {...}, "temporal_drift": {...}}.
+        Extracted so the OpenRouter path cannot drift from this one. The prompt
+        is part of what a score MEANS: two scores produced by differently-worded
+        prompts are not comparable even when the numbers look alike, and a
+        threshold calibrated under one wording does not transfer to the other.
         """
-        if len(frames) != 3:
-            raise ValueError(f"Expected 3 frames, got {len(frames)}")
-
-        prompt = f"""You are a strict film continuity and prompt-adherence reviewer.
+        return f"""You are a strict film continuity and prompt-adherence reviewer.
 
 Expected Character State: {expected_character}
 Expected Action: {expected_action}
@@ -142,6 +139,33 @@ Respond ONLY with valid JSON matching this exact schema:
   }},
   "temporal_drift": {{"start_score": 0-100, "end_score": 0-100}}
 }}"""
+
+    async def score_adherence(
+        self,
+        *,
+        frames: list[str],
+        expected_character: str,
+        expected_action: str,
+        expected_camera: str,
+        expected_lighting: str,
+        expected_environment: str,
+    ) -> dict[str, Any]:
+        """
+        Score three extracted frames against Loop 1's five adherence slots.
+
+        Returns the raw dict shape expected by AdherenceService:
+        {"dimensions": {...}, "temporal_drift": {...}}.
+        """
+        if len(frames) != 3:
+            raise ValueError(f"Expected 3 frames, got {len(frames)}")
+
+        prompt = self._build_scoring_prompt(
+            expected_character=expected_character,
+            expected_action=expected_action,
+            expected_camera=expected_camera,
+            expected_lighting=expected_lighting,
+            expected_environment=expected_environment,
+        )
 
         content: list[dict[str, Any]] = []
         for idx, frame in enumerate(frames):

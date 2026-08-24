@@ -85,6 +85,13 @@ class AdherenceScore:
     # and the pixels — the text corrector downstream works from a summary of
     # what the vision model said, one remove from the evidence.
     proposed_corrections: Dict[str, str] = field(default_factory=dict)
+    # Which model produced these numbers. A score is only meaningful next to the
+    # scorer that made it: OpenRouter hosts time-limited free preview models
+    # from undisclosed providers, and a threshold tuned against one that has
+    # since been withdrawn is indistinguishable, without this field, from a
+    # threshold tuned against the scorer still in use.
+    scored_by_provider: str = ""
+    scored_by_model: str = ""
 
 
 @dataclass
@@ -148,11 +155,16 @@ class AdherenceService:
     def __init__(self, storage=None):
         self._storage = storage
         self._vision_provider = os.getenv("ADHERENCE_VISION_PROVIDER", "qwen").strip().lower()
-        default_model = (
-            "gemini-2.5-flash"
-            if self._vision_provider == "gemini"
-            else "qwen-vl-max"
-        )
+        if self._vision_provider == "gemini":
+            default_model = "gemini-2.5-flash"
+        elif self._vision_provider == "openrouter":
+            # No default id on purpose. OpenRouter model ids change as previews
+            # come and go, and a hardcoded one silently points at nothing.
+            # OpenRouterVisionService raises with the discovery command if this
+            # is left empty.
+            default_model = ""
+        else:
+            default_model = "qwen-vl-max"
         self._vision_model = os.getenv("ADHERENCE_VISION_MODEL", default_model).strip()
         
     async def score_render_attempt(
@@ -332,6 +344,8 @@ class AdherenceService:
             verdict=verdict,
             failed_slots=failed_slots,
             proposed_corrections=proposed_corrections,
+            scored_by_provider=self._vision_provider,
+            scored_by_model=self._vision_model,
         )
         
         logger.info(
@@ -1065,6 +1079,26 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
         
         Returns dict matching the required JSON schema.
         """
+        if self._vision_provider in {"openrouter", "open-router"}:
+            from app.services.vision.openrouter_vision_service import (
+                OpenRouterVisionService,
+            )
+
+            service = OpenRouterVisionService(model=self._vision_model)
+            result = await service.score_adherence(
+                frames=frames,
+                expected_character=expected_character,
+                expected_action=expected_action,
+                expected_camera=expected_camera,
+                expected_lighting=expected_lighting,
+                expected_environment=expected_environment,
+            )
+            self._ensure_identity_continuity_dimension(
+                result,
+                expected_identity=expected_identity or expected_character,
+            )
+            return result
+
         if self._vision_provider in {"qwen", "qwen-vl", "dashscope"}:
             from app.services.vision.qwen_vision_service import QwenVisionService
 
