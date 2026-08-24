@@ -69,6 +69,10 @@ def format_adherence_score(score: AdherenceScore) -> str:
     lines.append(f"Frames Scored: {score.frames_scored}")
     lines.append(f"Overall Adherence Score: {score.adherence_score:.1f}/100")
     lines.append(f"Verdict: {score.verdict.upper()}")
+    lines.append(
+        f"Scored by: {score.scored_by_provider or 'unknown'} / "
+        f"{score.scored_by_model or 'unknown'}"
+    )
     lines.append("")
     
     lines.append("DIMENSION SCORES:")
@@ -159,10 +163,20 @@ async def run_adherence_check(
     # Validate inputs
     validate_frames(frames)
     
-    if not os.getenv("GEMINI_API_KEY"):
+    # Which credential is required depends on which vision provider is
+    # selected. This check used to demand GEMINI_API_KEY unconditionally, which
+    # refused to run against a correctly-configured qwen or openrouter scorer.
+    provider = os.getenv("ADHERENCE_VISION_PROVIDER", "qwen").strip().lower()
+    required_key = {
+        "gemini": "GEMINI_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+        "open-router": "OPENROUTER_API_KEY",
+    }.get(provider, "DASHSCOPE_API_KEY")
+    if not os.getenv(required_key):
         raise EnvironmentError(
-            "GEMINI_API_KEY not found in environment. "
-            "Please set it before running this script."
+            f"{required_key} not found in environment, but "
+            f"ADHERENCE_VISION_PROVIDER={provider!r} requires it. "
+            "Set it in studio-backend/.env before running this script."
         )
     
     # Build expected slots dict
