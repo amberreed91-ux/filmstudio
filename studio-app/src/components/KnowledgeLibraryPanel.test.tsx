@@ -10,16 +10,17 @@ vi.mock('../lib/studioKnowledgeApi', () => ({
   listKnowledgeConflicts: vi.fn(() => Promise.resolve({ conflicts: [] })),
   rebuildKnowledgeIndex: vi.fn(),
   registerKnowledgeBible: vi.fn(),
+  uploadKnowledgeBible: vi.fn(),
 }))
 
 describe('KnowledgeLibraryPanel', () => {
-  it('renders the canonical knowledge workflow shell', () => {
+  it('renders project Bibles with optional knowledge tools', () => {
     const html = renderToStaticMarkup(<KnowledgeLibraryPanel projectId="project-knowledge" />)
 
-    expect(html).toContain('Canonical Knowledge')
+    expect(html).toContain('Project Bibles')
     expect(html).toContain('Add Bible')
+    expect(html).toContain('Upload Markdown Bible')
     expect(html).toContain('Rebuild Index')
     expect(html).toContain('Department Context')
   })
 })
-

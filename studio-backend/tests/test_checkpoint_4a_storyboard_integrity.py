@@ -63,6 +63,10 @@ def test_regeneration_creates_distinct_version_and_preserves_approved_history(tm
         storyboard_shot_id=first["shots"][0].storyboard_shot_id,
         locked=True,
     )
+    service.run_continuity_review(
+        blueprint_id=first["blueprint"].blueprint_id,
+        version_id=first["version"].version_id,
+    )
     approved = service.approve_version(
         blueprint_id=first["blueprint"].blueprint_id,
         version_id=first["version"].version_id,
@@ -145,6 +149,10 @@ def test_approved_version_rejects_shot_mutation_and_image_replacement(tmp_path: 
         project_id="project_storyboard",
         scene_id="scene_001",
         shot_count=2,
+    )
+    service.run_continuity_review(
+        blueprint_id=detail["blueprint"].blueprint_id,
+        version_id=detail["version"].version_id,
     )
     approved = service.approve_version(
         blueprint_id=detail["blueprint"].blueprint_id,

@@ -1,0 +1,50 @@
+{
+  "preserved_tables": {
+    "projects": {
+      "unchanged": true,
+      "rows": 2
+    },
+    "render_jobs": {
+      "unchanged": true,
+      "rows": 43
+    },
+    "storyboard_blueprints": {
+      "unchanged": true,
+      "rows": 12
+    },
+    "storyboard_shots": {
+      "unchanged": true,
+      "rows": 60
+    }
+  },
+  "project_changes": {
+    "project_5907c60cddbc": [],
+    "project_ca31687b1ca7": []
+  },
+  "schema_version": 61,
+  "integrity": "ok",
+  "foreign_key_violations": 0,
+  "/ready": {
+    "body": {
+      "ready": true,
+      "components": {
+        "database": "ready",
+        "schema": "ready (v61)",
+        "background_tasks": "ready (3 active)"
+      },
+      "timestamp": 1788626227.755518
+    },
+    "seconds": 0.039,
+    "rate_limit": null
+  },
+  "/api/f51/studio/auth/access-mode": {
+    "body": {
+      "local_access": true
+    },
+    "seconds": 0.002,
+    "rate_limit": "600"
+  },
+  "invalid_provider": 422,
+  "forwarded_remote_anonymous": 401,
+  "listeners": "COMMAND     PID      USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\npython3.1 13800 amberreed   33u  IPv4 0xa9556c7b5a3534ef      0t0  TCP 127.0.0.1:8010 (LISTEN)\nnode      13822 amberreed   16u  IPv4 0x223912614b088396      0t0  TCP 127.0.0.1:5001 (LISTEN)\n"
+}

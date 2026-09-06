@@ -1,0 +1,46 @@
+
+> studio-app@0.0.0 test
+> vitest run --reporter=dot
+
+
+ RUN  v3.2.4 /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app
+
+stderr | src/lib/errorTelemetry.test.ts > errorTelemetry > reportError > does nothing when TELEMETRY_ENDPOINT is not configured
+[ErrorTelemetry] No endpoint configured: {
+  error_id: '1788621625585-luyhfxfh1',
+  timestamp: 1788621625585,
+  message: 'test error',
+  stack: 'Error: test error\n' +
+    '    at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/errorTelemetry.test.ts:19:19\n' +
+    '    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n' +
+    '    at file:///Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20',
+  component_stack: undefined,
+  url: 'http://localhost:5000/studio/dashboard',
+  user_agent: 'test-agent',
+  build_version: 'dev',
+  level: 'error',
+  context: undefined
+}
+
+··························································································································································stderr | src/lib/studioApi.test.ts > generateScenePipeline > returns an error object when scene pipeline generation fails
+[Studio API Error] /api/f51/studio/projects/proj-scene/scenes/scene_003/pipeline/generate: Error: Scene soundtrack enabled but missing audio source
+    at fetchJson (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:412:13)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at generateScenePipeline (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:2942:20)
+    at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.test.ts:641:22
+    at file:///Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+·······stderr | src/lib/studioApi.test.ts > getSceneRationale > throws on 404
+[Studio API Error] /api/f51/studio/projects/proj-1/scenes/nonexistent/rationale: Error: Scene not found
+    at fetchJson (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.ts:412:13)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/lib/studioApi.test.ts:822:5
+    at file:///Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+········································································································································································································································································································································································································································································································································
+
+ Test Files  76 passed (76)
+      Tests  681 passed (681)
+   Start at  11:20:24
+   Duration  7.61s (transform 2.87s, setup 0ms, collect 14.38s, tests 4.52s, environment 10ms, prepare 6.97s)
+

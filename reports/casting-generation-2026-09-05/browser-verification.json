@@ -1,0 +1,52 @@
+{
+  "passed": true,
+  "checks": [
+    "Saved profile opens casting inside third writing step with no automatic generation or approval",
+    "One explicit request submits saved revision, UUID and direction; accepted POST transport error recovers by GET with no duplicate POST",
+    "Reload resumes generation status without another paid request",
+    "Switching characters while polling does not replace the selected character or expose the other character’s options",
+    "Saved successes appear incrementally without automatic selection; a selected partial portrait survives completion polling",
+    "Portrait selection is separate from explicit approval and makes no write",
+    "Explicit approval saves chosen portrait; locked view hides generation",
+    "Generation returns only after explicit reopen; keep locked is inert",
+    "Partial set preserves successes, newest set shown first, prior sets disclosed, earlier-profile options marked for review",
+    "Failed set gives explicit next-set action and never retries automatically",
+    "Existing upload route remains available beside generated casting",
+    "Unsaved profile drafts block casting and locking until saved",
+    "Age alone cannot enable generation or approval without saved appearance"
+  ],
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/casting",
+      "payload": {
+        "request_id": "00e983a7-dee7-4ac3-aeff-f6827f215a75",
+        "direction": "A more reserved expression, softer window light.",
+        "expected_profile_revision": "revision-1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/approve",
+      "payload": {
+        "expected_profile_revision": "revision-4",
+        "face_image_url": "/outputs/references/character-looks/fixture-nia/portrait-2.jpg",
+        "body_image_url": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/revise",
+      "payload": {
+        "expected_profile_revision": "revision-5"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/reference",
+      "payload": null
+    }
+  ],
+  "errors": [],
+  "imageFixtureNote": "Existing local rendered character frames stand in for provider portraits; no image provider was called."
+}

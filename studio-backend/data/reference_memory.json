@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-07-29T11:20:11.487329Z",
+  "updated_at": "2026-08-30T07:37:29.861316Z",
   "projects": {
     "test_v2_project": {
       "visual_patterns": [],
@@ -32,7 +32,7 @@
           "last_used": null,
           "status": "staged",
           "source_reference": "sample_ref.txt",
-          "stored_at": "2026-07-29T09:48:20.727264Z"
+          "stored_at": "2026-08-30T07:15:31.988932Z"
         }
       ]
     },

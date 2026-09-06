@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Body, HTTPException
+from fastapi.encoders import jsonable_encoder
 from typing import Optional
 from datetime import datetime, timezone
 import json
@@ -8,6 +9,7 @@ import shutil
 logger = logging.getLogger(__name__)
 
 from app.services import render_service
+from app.services.stability import ProviderError
 from app.services.render_maintenance_service import render_maintenance_service
 from app.services.project_store import project_store
 from app.models import ProviderConfig, RenderJobModel
@@ -71,6 +73,14 @@ def _job_payload(job: Any) -> dict[str, Any]:
     payload["output_url"] = output_url
     payload["preview_url"] = preview_url
     payload["zero_touch_status"] = _zero_touch_status_summary(payload)
+    return payload
+
+
+def _adherence_retry_payload(result: dict[str, Any]) -> dict[str, Any]:
+    """Return only JSON-safe retry details to the client."""
+    payload = jsonable_encoder(result)
+    if not isinstance(payload, dict):
+        return {}
     return payload
 
 
@@ -312,7 +322,10 @@ def queue_existing_render_job(
 @router.post("/jobs/{job_id}/submit")
 async def submit_render_job(job_id: str):
     """Submit a render job to the provider"""
-    job = await render_service.submit_job(job_id)
+    try:
+        job = await render_service.submit_job(job_id)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
     return _job_payload(job)
 
 
@@ -366,6 +379,11 @@ async def retry_render_job_for_adherence(
     job = render_service.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "complete":
+        raise HTTPException(
+            status_code=409,
+            detail="Adherence retry is only available after a render completes.",
+        )
 
     parameters = job.input_payload.parameters if job.input_payload else {}
     slots = parameters.get("prompt_slots") if isinstance(parameters, dict) else None
@@ -377,13 +395,34 @@ async def retry_render_job_for_adherence(
 
     from app.services.render_retry_service import render_retry_service
 
-    return await render_retry_service.evaluate_and_select_best(
-        shot_id=job.shot_id,
-        project_id=job.project_id,
-        original_slots={str(key): str(value or "") for key, value in slots.items()},
-        max_attempts=payload.max_attempts,
-        submission_strategy=payload.submission_strategy,
-    )
+    try:
+        result = await render_retry_service.evaluate_and_select_best(
+            shot_id=job.shot_id,
+            project_id=job.project_id,
+            original_slots={str(key): str(value or "") for key, value in slots.items()},
+            max_attempts=payload.max_attempts,
+            submission_strategy=payload.submission_strategy,
+            source_job_id=job.id,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Adherence retry preparation failed for %s: %s", job_id, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not prepare adherence retry: {exc}",
+        ) from exc
+
+    if not result.get("jobs_submitted"):
+        submission_errors = result.get("submission_errors")
+        detail = "Adherence retry could not queue a new render attempt."
+        if submission_errors:
+            first_error = submission_errors[0] if isinstance(submission_errors, list) else submission_errors
+            if isinstance(first_error, dict) and first_error.get("error"):
+                detail = f"{detail} {first_error['error']}"
+        raise HTTPException(status_code=502, detail=detail)
+
+    return _adherence_retry_payload(result)
 
 
 @router.post("/jobs/{job_id}/reconcile")

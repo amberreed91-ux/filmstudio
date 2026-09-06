@@ -111,6 +111,166 @@ class Location:
     scenes: List[str] = field(default_factory=list)  # scene_ids
 
 
+@dataclass
+class ScriptBreakdownInput:
+    script_text: Any
+    project_id: str = "default_project"
+    active_cut_summary: Optional[Dict[str, Any]] = None
+    reference_analysis: Optional[Dict[str, Any]] = None
+    ignored_agent_decisions: List[Dict[str, Any]] = field(default_factory=list)
+    voice_direction_commands: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ScriptBreakdownGuardState:
+    real_multi_shot_results: List[Dict[str, Any]]
+    batch_execution_limit: Dict[str, Any]
+    shot_queue: List[Dict[str, Any]]
+    output_influence_guard_v2: Dict[str, Any]
+    visual_decision_boundary: Dict[str, Any]
+    shot_execution_lock: Dict[str, Any]
+    co_director_visual_contract: Dict[str, Any]
+    co_director_memory_contract: Dict[str, Any]
+    memory_influence_gate: Dict[str, Any]
+    memory_output_influence_contract: Dict[str, Any]
+    render_orchestration_contract: Dict[str, Any]
+    render_envelope_stub: Dict[str, Any]
+    boundary_audit: Dict[str, Any]
+    studio_safety_state: Dict[str, Any]
+    prompt_influence_gate_v1: Dict[str, Any]
+    visual_prompt_tokens: List[Any]
+    shot_prompt_tokens: List[Any]
+    prompt_envelope: Dict[str, Any]
+    prompt_safety_contract: Dict[str, Any]
+    render_activation_gate_v1: Dict[str, Any]
+    render_request: Any
+    render_output: Any
+    output_review: Any
+    output_evaluation: Dict[str, Any]
+    execution_iteration: Dict[str, Any]
+    retry_gate: Dict[str, Any]
+    execution_snapshot: Dict[str, Any]
+    iteration_record: Dict[str, Any]
+    take_history: Dict[str, Any]
+    take_artifacts: List[Any]
+    take_comparison_v2: Dict[str, Any]
+    take_preference_contract: Dict[str, Any]
+    output_review_matrix: List[Any]
+    retry_snapshot: Dict[str, Any]
+    take_comparison: Dict[str, Any]
+    take_advisory_note: Dict[str, Any]
+
+
+@dataclass
+class ScriptBreakdownInterventionState:
+    loop_readiness: Dict[str, Any]
+    next_take_preview: Dict[str, Any]
+    loop_constraint: Dict[str, Any]
+    loop_advisory: Dict[str, Any]
+    loop_contract: Dict[str, Any]
+    loop_execution_plan: Dict[str, Any]
+    simulated_iteration: Dict[str, Any]
+    simulated_output: Dict[str, Any]
+    loop_result_snapshot: Dict[str, Any]
+    loop_execution_contract: Dict[str, Any]
+    execution_permission: Dict[str, Any]
+
+
+@dataclass
+class ScriptBreakdownExecutionState:
+    execution_request: Dict[str, Any]
+    execution_status: Dict[str, Any]
+    execution_result: Dict[str, Any]
+    execution_contract: Dict[str, Any]
+    provider_payload: Dict[str, Any]
+    execution_result_v2: Dict[str, Any]
+    output_sync: Dict[str, Any]
+    execution_monitor: Dict[str, Any]
+    provider_config: Dict[str, Any]
+    default_provider: str
+    provider_config_snapshot: Dict[str, Any]
+    selection_request: Dict[str, Any]
+    provider_selection_state: Dict[str, Any]
+    provider_credential_state: Dict[str, Any]
+    selection_boundary_guard: Dict[str, Any]
+    provider_readiness_summary: Dict[str, Any]
+    provider_capability: Dict[str, Any]
+    provider_control_contract: Dict[str, Any]
+    provider_safety_contract: Dict[str, Any]
+
+
+@dataclass
+class ScriptBreakdownProviderHandoffState:
+    provider_registry_snapshot: Dict[str, Any]
+    provider_activation_state: Dict[str, Any]
+    provider_config_validation: Dict[str, Any]
+    credential_validation_summary: Dict[str, Any]
+    provider_enablement_gate: Dict[str, Any]
+    provider_intent_signal: Dict[str, Any]
+    provider_activation_contract: Dict[str, Any]
+    provider_safety_summary: Dict[str, Any]
+    local_render_capability: Dict[str, Any]
+    provider_payload_v2: Dict[str, Any]
+    execution_unlock_state: Dict[str, Any]
+    handoff_gate: Dict[str, Any]
+    handoff_envelope: Dict[str, Any]
+    handoff_audit: Dict[str, Any]
+    execution_intent: Dict[str, Any]
+    execution_eligibility: Dict[str, Any]
+    execution_request_envelope: Dict[str, Any]
+    local_render_gate: Dict[str, Any]
+    local_execution_trigger: Dict[str, Any]
+    local_single_shot_guard: Dict[str, Any]
+    local_render_contract: Dict[str, Any]
+    execution_control_contract: Dict[str, Any]
+    execution_trigger: Dict[str, Any]
+    real_execution_trigger: Dict[str, Any]
+
+
+@dataclass
+class ScriptBreakdownLocalExecutionState:
+    first_shot_id: Optional[str]
+    prompt_value: Any
+    local_execution_result: Dict[str, Any]
+    local_render_output: Dict[str, Any]
+    local_artifact_log: Dict[str, Any]
+
+
+@dataclass
+class ScriptBreakdownExecutionRunState:
+    execution_request: Dict[str, Any]
+    provider_payload: Dict[str, Any]
+    execution_status: Dict[str, Any]
+    execution_result_v2: Dict[str, Any]
+    execution_result: Dict[str, Any]
+    output_sync: Dict[str, Any]
+    execution_monitor: Dict[str, Any]
+    execution_log: Dict[str, Any]
+    selection_boundary_guard: Dict[str, Any]
+    multi_shot_results: List[Dict[str, Any]]
+    real_multi_shot_results: List[Dict[str, Any]]
+    did_multi_shot_real_execution: bool
+    should_execute_real: bool
+    real_multi_shot_request_valid: bool
+
+
+@dataclass
+class ScriptBreakdownExecutionOutputState:
+    multi_shot_execution_ledger: List[Dict[str, Any]]
+    multi_shot_take_artifacts: List[Dict[str, Any]]
+    scene_generation_summary: Dict[str, Any]
+    scene_playback_preview: Dict[str, Any]
+    render_output: Any
+    shot_execution_ledger: List[Dict[str, Any]]
+    take_artifacts: List[Any]
+    take_comparison_v2: Dict[str, Any]
+
+
+@dataclass
+class ScriptBreakdownFinalBundleState:
+    final_bundle: Dict[str, Any]
+
+
 class ScriptParser:
     """
     Parser for screenplay text in standard format.
@@ -147,6 +307,39 @@ class ScriptParser:
         self.characters: Dict[str, Character] = {}
         self.locations: Dict[str, Location] = {}
         self._simple_heading_pattern = re.compile(r'^\s*(?:SCENE\s+\d+\s*:\s*)?(?:\d+\.\s*)?(INT\.|EXT\.)\s+.+$', re.IGNORECASE)
+
+    def _normalize_script_breakdown_input(self, script_text: Any) -> ScriptBreakdownInput:
+        """Normalize raw or envelope-style input for build_script_breakdown_bundle."""
+        normalized = ScriptBreakdownInput(script_text=script_text)
+        if not isinstance(script_text, dict):
+            return normalized
+
+        active_cut_summary = script_text.get("active_cut_summary")
+        if isinstance(active_cut_summary, dict):
+            normalized.active_cut_summary = active_cut_summary
+
+        project_id = script_text.get("project_id")
+        if isinstance(project_id, str) and project_id.strip():
+            normalized.project_id = project_id.strip()
+
+        reference_analysis = script_text.get("reference_analysis")
+        if isinstance(reference_analysis, dict):
+            normalized.reference_analysis = reference_analysis
+
+        raw_ignored_decisions = script_text.get("ignored_agent_decisions")
+        if isinstance(raw_ignored_decisions, list):
+            normalized.ignored_agent_decisions = [
+                row for row in raw_ignored_decisions if isinstance(row, dict)
+            ][:50]
+
+        raw_voice_commands = script_text.get("voice_direction_commands")
+        if isinstance(raw_voice_commands, list):
+            normalized.voice_direction_commands = [
+                str(row).strip() for row in raw_voice_commands if str(row).strip()
+            ][:20]
+
+        normalized.script_text = script_text.get("script_text", "")
+        return normalized
 
     def extract_structured_scenes(self, script_text: str) -> Dict[str, Any]:
         """
@@ -679,39 +872,7 @@ class ScriptParser:
         summary["time_of_day_count"] = len(unique_times)
         return summary
 
-    def build_script_breakdown_bundle(self, script_text: Any) -> Dict[str, Any]:
-        """
-        Build a full script breakdown bundle from raw script text.
-
-        This method composes existing Phase 20 helpers only.
-        """
-        _function_start = time.time()
-        MAX_SAFE_ITER = 1000
-        dev_timeout_enabled = os.getenv("SCRIPT_PARSER_DEV_TIMEOUT", "0") == "1"
-        previous_alarm_handler = None
-        if dev_timeout_enabled:
-            def timeout_handler(signum: int, frame: Any) -> None:
-                raise TimeoutError("Parser exceeded safe execution time")
-
-            previous_alarm_handler = signal.getsignal(signal.SIGALRM)
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(10)
-
-        def _start_section(section_name: str) -> float:
-            logger.debug("START: %s", section_name)
-            return time.time()
-
-        def _end_section(section_name: str, section_start: float) -> None:
-            logger.debug("END: %s %.4f", section_name, time.time() - section_start)
-
-        empty_summary = {
-            "scene_count": 0,
-            "character_count": 0,
-            "location_count": 0,
-            "time_of_day_count": 0,
-        }
-        _guard_timer = _start_section("early guard construction")
-        # Initialize real_multi_shot_results, batch_execution_limit, and shot_queue early to ensure they're defined for later usage
+    def _build_script_breakdown_guard_state(self) -> ScriptBreakdownGuardState:
         real_multi_shot_results: List[Dict[str, Any]] = []
         batch_execution_limit: Dict[str, Any] = {
             "max_shots": 3,
@@ -902,8 +1063,53 @@ class ScriptParser:
                 "note": "",
             },
         )
-        _end_section("early guard construction", _guard_timer)
-        intervention_timer = _start_section("intervention layer")
+        return ScriptBreakdownGuardState(
+            real_multi_shot_results=real_multi_shot_results,
+            batch_execution_limit=batch_execution_limit,
+            shot_queue=shot_queue,
+            output_influence_guard_v2=output_influence_guard_v2,
+            visual_decision_boundary=visual_decision_boundary,
+            shot_execution_lock=shot_execution_lock,
+            co_director_visual_contract=co_director_visual_contract,
+            co_director_memory_contract=co_director_memory_contract,
+            memory_influence_gate=memory_influence_gate,
+            memory_output_influence_contract=memory_output_influence_contract,
+            render_orchestration_contract=render_orchestration_contract,
+            render_envelope_stub=render_envelope_stub,
+            boundary_audit=boundary_audit,
+            studio_safety_state=studio_safety_state,
+            prompt_influence_gate_v1=prompt_influence_gate_v1,
+            visual_prompt_tokens=visual_prompt_tokens,
+            shot_prompt_tokens=shot_prompt_tokens,
+            prompt_envelope=prompt_envelope,
+            prompt_safety_contract=prompt_safety_contract,
+            render_activation_gate_v1=render_activation_gate_v1,
+            render_request=render_request,
+            render_output=render_output,
+            output_review=output_review,
+            output_evaluation=output_evaluation,
+            execution_iteration=execution_iteration,
+            retry_gate=retry_gate,
+            execution_snapshot=execution_snapshot,
+            iteration_record=iteration_record,
+            take_history=take_history,
+            take_artifacts=take_artifacts,
+            take_comparison_v2=take_comparison_v2,
+            take_preference_contract=take_preference_contract,
+            output_review_matrix=output_review_matrix,
+            retry_snapshot=retry_snapshot,
+            take_comparison=take_comparison,
+            take_advisory_note=take_advisory_note,
+        )
+
+    def _build_script_breakdown_intervention_state(
+        self,
+        *,
+        retry_snapshot: Dict[str, Any],
+        execution_snapshot: Dict[str, Any],
+        execution_iteration: Dict[str, Any],
+        render_output: Any,
+    ) -> ScriptBreakdownInterventionState:
         loop_readiness = self.build_loop_readiness(
             retry_snapshot,
             execution_snapshot,
@@ -1008,7 +1214,26 @@ class ScriptParser:
                 "reason": "Execution mode not permitted",
             },
         )
-        _end_section("intervention layer", intervention_timer)
+        return ScriptBreakdownInterventionState(
+            loop_readiness=loop_readiness,
+            next_take_preview=next_take_preview,
+            loop_constraint=loop_constraint,
+            loop_advisory=loop_advisory,
+            loop_contract=loop_contract,
+            loop_execution_plan=loop_execution_plan,
+            simulated_iteration=simulated_iteration,
+            simulated_output=simulated_output,
+            loop_result_snapshot=loop_result_snapshot,
+            loop_execution_contract=loop_execution_contract,
+            execution_permission=execution_permission,
+        )
+
+    def _build_script_breakdown_execution_state(
+        self,
+        *,
+        render_request: Any,
+        execution_permission: Dict[str, Any],
+    ) -> ScriptBreakdownExecutionState:
         execution_request = self.build_execution_request(
             render_request,
             execution_permission,
@@ -1120,6 +1345,38 @@ class ScriptParser:
         )
         provider_control_contract = get_render_provider_control_contract()
         provider_safety_contract = get_render_provider_safety_contract()
+        return ScriptBreakdownExecutionState(
+            execution_request=execution_request,
+            execution_status=execution_status,
+            execution_result=execution_result,
+            execution_contract=execution_contract,
+            provider_payload=provider_payload,
+            execution_result_v2=execution_result_v2,
+            output_sync=output_sync,
+            execution_monitor=execution_monitor,
+            provider_config=provider_config,
+            default_provider=default_provider,
+            provider_config_snapshot=provider_config_snapshot,
+            selection_request=selection_request,
+            provider_selection_state=provider_selection_state,
+            provider_credential_state=provider_credential_state,
+            selection_boundary_guard=selection_boundary_guard,
+            provider_readiness_summary=provider_readiness_summary,
+            provider_capability=provider_capability,
+            provider_control_contract=provider_control_contract,
+            provider_safety_contract=provider_safety_contract,
+        )
+
+    def _build_script_breakdown_provider_handoff_state(
+        self,
+        *,
+        provider_config: Dict[str, Any],
+        provider_selection_state: Dict[str, Any],
+        provider_credential_state: Dict[str, Any],
+        provider_readiness_summary: Dict[str, Any],
+        provider_safety_contract: Dict[str, Any],
+        render_request: Any,
+    ) -> ScriptBreakdownProviderHandoffState:
         provider_registry_snapshot = self.build_provider_registry_snapshot().get(
             "provider_registry_snapshot",
             {
@@ -1367,6 +1624,40 @@ class ScriptParser:
                 "reason": "Real execution blocked",
             },
         )
+        return ScriptBreakdownProviderHandoffState(
+            provider_registry_snapshot=provider_registry_snapshot,
+            provider_activation_state=provider_activation_state,
+            provider_config_validation=provider_config_validation,
+            credential_validation_summary=credential_validation_summary,
+            provider_enablement_gate=provider_enablement_gate,
+            provider_intent_signal=provider_intent_signal,
+            provider_activation_contract=provider_activation_contract,
+            provider_safety_summary=provider_safety_summary,
+            local_render_capability=local_render_capability,
+            provider_payload_v2=provider_payload_v2,
+            execution_unlock_state=execution_unlock_state,
+            handoff_gate=handoff_gate,
+            handoff_envelope=handoff_envelope,
+            handoff_audit=handoff_audit,
+            execution_intent=execution_intent,
+            execution_eligibility=execution_eligibility,
+            execution_request_envelope=execution_request_envelope,
+            local_render_gate=local_render_gate,
+            local_execution_trigger=local_execution_trigger,
+            local_single_shot_guard=local_single_shot_guard,
+            local_render_contract=local_render_contract,
+            execution_control_contract=execution_control_contract,
+            execution_trigger=execution_trigger,
+            real_execution_trigger=real_execution_trigger,
+        )
+
+    def _build_script_breakdown_local_execution_state(
+        self,
+        *,
+        execution_request_envelope: Dict[str, Any],
+        prompt_envelope: Any,
+        local_execution_trigger: Dict[str, Any],
+    ) -> ScriptBreakdownLocalExecutionState:
         first_shot_id = None
         if isinstance(execution_request_envelope, dict):
             envelope_shot_id = execution_request_envelope.get("shot_id")
@@ -1412,6 +1703,1358 @@ class ScriptParser:
                 "timestamp": None,
             },
         )
+        return ScriptBreakdownLocalExecutionState(
+            first_shot_id=first_shot_id,
+            prompt_value=prompt_value,
+            local_execution_result=local_execution_result,
+            local_render_output=local_render_output,
+            local_artifact_log=local_artifact_log,
+        )
+
+    def _run_script_breakdown_execution_branch(
+        self,
+        *,
+        execution_trigger: Dict[str, Any],
+        first_shot_id: Optional[str],
+        prompt_value: Any,
+        selected_provider: Any,
+        real_execution_trigger: Dict[str, Any],
+        real_multi_shot_request_envelope: Any,
+        batch_execution_limit: Dict[str, Any],
+        shot_queue: List[Dict[str, Any]],
+        provider_config: Dict[str, Any],
+        provider_selection_state: Dict[str, Any],
+        max_safe_iter: int,
+        multi_shot_results: List[Dict[str, Any]],
+        real_multi_shot_results: List[Dict[str, Any]],
+    ) -> ScriptBreakdownExecutionRunState:
+        did_multi_shot_real_execution = False
+        multi_shot_results = (
+            multi_shot_results
+            if isinstance(multi_shot_results, list)
+            else []
+        )
+        should_execute_common = (
+            isinstance(execution_trigger, dict)
+            and execution_trigger.get("should_execute") is True
+            and isinstance(first_shot_id, str)
+            and bool(first_shot_id.strip())
+            and isinstance(prompt_value, dict)
+        )
+        should_execute_mock = should_execute_common and selected_provider == "mock"
+        should_execute_real = (
+            should_execute_common
+            and selected_provider == "real_stub"
+            and isinstance(real_execution_trigger, dict)
+            and real_execution_trigger.get("should_execute") is True
+        )
+        real_multi_shot_request_valid = (
+            isinstance(real_multi_shot_request_envelope, dict)
+            and real_multi_shot_request_envelope.get("request_valid") is True
+        )
+        should_execute = should_execute_mock or should_execute_real
+        if should_execute:
+            execution_provider = "real_stub" if should_execute_real else "mock"
+            execution_request = {
+                "enabled": True,
+                "shot_id": first_shot_id,
+                "prompt": copy.deepcopy(prompt_value),
+            }
+            provider_payload = {
+                "provider": execution_provider,
+                "shot_id": first_shot_id,
+                "prompt": copy.deepcopy(prompt_value),
+            }
+            if should_execute_real:
+                if real_multi_shot_request_valid:
+                    did_multi_shot_real_execution = True
+                    multi_shot_results = []
+                    allowed_shots = 0
+                    if isinstance(batch_execution_limit, dict):
+                        raw_allowed_shots = batch_execution_limit.get("allowed_shots")
+                        if isinstance(raw_allowed_shots, int) and raw_allowed_shots > 0:
+                            allowed_shots = raw_allowed_shots
+                    if isinstance(shot_queue, list) and isinstance(prompt_value, dict):
+                        for _shot_idx, shot in enumerate(shot_queue[:allowed_shots]):
+                            if _shot_idx >= max_safe_iter:
+                                logger.warning("loop guard triggered in multi-shot execution")
+                                break
+                            if not isinstance(shot, dict):
+                                continue
+                            shot_id = shot.get("shot_id")
+                            if not isinstance(shot_id, str) or not shot_id.strip():
+                                continue
+                            payload = {
+                                "provider": "real_stub",
+                                "shot_id": shot_id.strip(),
+                                "prompt": copy.deepcopy(prompt_value),
+                            }
+                            result = execution_layer.execute_render(
+                                "real_stub",
+                                payload,
+                                provider_config,
+                            )
+                            multi_shot_results.append(
+                                normalize_provider_result(result, "real_stub")
+                            )
+                    real_multi_shot_results = multi_shot_results
+                    executor_result = (
+                        multi_shot_results[0] if multi_shot_results else None
+                    )
+                else:
+                    executor_result = execution_layer.execute_render(
+                        "real_stub",
+                        provider_payload,
+                        provider_config,
+                    )
+            else:
+                executor_result = execute_render(
+                    provider_payload=provider_payload,
+                    provider_name="mock",
+                    config=provider_config,
+                )
+        else:
+            execution_request = {
+                "enabled": False,
+                "shot_id": None,
+                "prompt": None,
+            }
+            provider_payload = {
+                "provider": "mock",
+                "shot_id": None,
+                "prompt": None,
+            }
+            executor_result = None
+        execution_status = self.build_execution_status(execution_request).get(
+            "execution_status",
+            {
+                "state": "blocked",
+                "reason": "Execution not enabled",
+            },
+        )
+        execution_result_v2 = self.build_execution_result_v2(
+            execution_request,
+            provider_payload,
+            executor_result,
+        ).get(
+            "execution_result_v2",
+            {
+                "executed": False,
+                "render_id": None,
+                "status": "not_executed",
+            },
+        )
+        execution_result = {
+            "executed": execution_result_v2.get("executed") is True,
+            "render_id": execution_result_v2.get("render_id"),
+            "status": execution_result_v2.get("status")
+            if isinstance(execution_result_v2.get("status"), str)
+            else "not_executed",
+        }
+        output_sync = self.build_output_sync(execution_result_v2).get(
+            "output_sync",
+            {
+                "synced": False,
+                "render_id": None,
+            },
+        )
+        execution_monitor = self.build_execution_monitor(
+            execution_status,
+            execution_result_v2,
+        ).get(
+            "execution_monitor",
+            {
+                "state": "blocked",
+                "result": "not_executed",
+            },
+        )
+        execution_log = self.build_execution_log(
+            execution_result_v2.get("executed") is True,
+            selected_provider,
+            first_shot_id,
+        ).get(
+            "execution_log",
+            {
+                "executed": False,
+                "provider": "mock",
+                "provider_type": "mock",
+                "shot_id": None,
+                "timestamp": None,
+            },
+        )
+        selection_boundary_guard = self.build_selection_boundary_guard(
+            provider_selection_state,
+            execution_result,
+            execution_result_v2,
+        ).get(
+            "selection_boundary_guard",
+            {
+                "selection_applied": False,
+                "execution_triggered": False,
+                "reason": "No provider selection applied",
+            },
+        )
+        return ScriptBreakdownExecutionRunState(
+            execution_request=execution_request,
+            provider_payload=provider_payload,
+            execution_status=execution_status,
+            execution_result_v2=execution_result_v2,
+            execution_result=execution_result,
+            output_sync=output_sync,
+            execution_monitor=execution_monitor,
+            execution_log=execution_log,
+            selection_boundary_guard=selection_boundary_guard,
+            multi_shot_results=multi_shot_results,
+            real_multi_shot_results=real_multi_shot_results,
+            did_multi_shot_real_execution=did_multi_shot_real_execution,
+            should_execute_real=should_execute_real,
+            real_multi_shot_request_valid=real_multi_shot_request_valid,
+        )
+
+    def _sync_script_breakdown_execution_outputs(
+        self,
+        *,
+        should_execute_real: bool,
+        real_multi_shot_request_valid: bool,
+        multi_shot_results: List[Dict[str, Any]],
+        shot_queue: List[Dict[str, Any]],
+        max_safe_iter: int,
+        render_output: Any,
+        execution_result_v2: Dict[str, Any],
+        selected_provider: Any,
+        first_shot_id: Optional[str],
+        prompt_value: Any,
+        shot_execution_ledger: List[Dict[str, Any]],
+        multi_shot_execution_ledger: List[Dict[str, Any]],
+        multi_shot_take_artifacts: List[Dict[str, Any]],
+        scene_generation_summary: Dict[str, Any],
+        scene_playback_preview: Dict[str, Any],
+        take_artifacts: List[Any],
+        take_comparison_v2: Dict[str, Any],
+    ) -> ScriptBreakdownExecutionOutputState:
+        if should_execute_real and real_multi_shot_request_valid and isinstance(multi_shot_results, list):
+            planned_shot_ids: List[str] = []
+            if isinstance(shot_queue, list):
+                for queue_index, item in enumerate(shot_queue):
+                    if queue_index >= max_safe_iter:
+                        logger.warning("loop guard triggered in shot_queue")
+                        break
+                    if not isinstance(item, dict):
+                        continue
+                    shot_id = item.get("shot_id")
+                    if isinstance(shot_id, str) and shot_id.strip():
+                        planned_shot_ids.append(shot_id.strip())
+
+            multi_shot_execution_ledger = []
+            for index, shot_id in enumerate(planned_shot_ids):
+                if index >= max_safe_iter:
+                    logger.warning("loop guard triggered in multi_shot_execution_ledger")
+                    break
+                if index < len(multi_shot_results):
+                    result_row = (
+                        multi_shot_results[index]
+                        if isinstance(multi_shot_results[index], dict)
+                        else {}
+                    )
+                    row_meta = (
+                        result_row.get("meta")
+                        if isinstance(result_row.get("meta"), dict)
+                        else {"file_path": None, "url": None}
+                    )
+                    multi_shot_execution_ledger.append(
+                        {
+                            "shot_id": shot_id,
+                            "status": (
+                                "complete"
+                                if result_row.get("status") == "success"
+                                else "failed"
+                            ),
+                            "render_id": (
+                                result_row.get("render_id")
+                                if isinstance(result_row.get("render_id"), str)
+                                else None
+                            ),
+                            "meta": {
+                                "file_path": row_meta.get("file_path"),
+                                "url": row_meta.get("url"),
+                            },
+                        }
+                    )
+                else:
+                    multi_shot_execution_ledger.append(
+                        {
+                            "shot_id": shot_id,
+                            "status": "not_executed",
+                            "render_id": None,
+                            "meta": {"file_path": None, "url": None},
+                        }
+                    )
+
+            multi_shot_take_artifacts = []
+            for index, result_row in enumerate(multi_shot_results):
+                if index >= max_safe_iter:
+                    logger.warning("loop guard triggered in memory arrays")
+                    break
+                row_data = result_row if isinstance(result_row, dict) else {}
+                row_meta = (
+                    row_data.get("meta")
+                    if isinstance(row_data.get("meta"), dict)
+                    else {"file_path": None, "url": None}
+                )
+                multi_shot_take_artifacts.append(
+                    {
+                        "iteration": index + 1,
+                        "shot_id": (
+                            planned_shot_ids[index]
+                            if index < len(planned_shot_ids)
+                            else None
+                        ),
+                        "render_id": (
+                            row_data.get("render_id")
+                            if isinstance(row_data.get("render_id"), str)
+                            else None
+                        ),
+                        "status": (
+                            row_data.get("status")
+                            if isinstance(row_data.get("status"), str)
+                            else "failed"
+                        ),
+                        "provider": "real_stub",
+                        "meta": {
+                            "file_path": row_meta.get("file_path"),
+                            "url": row_meta.get("url"),
+                        },
+                    }
+                )
+
+            planned_shots = len(planned_shot_ids)
+            completed_shots = 0
+            for row_index, row in enumerate(multi_shot_results):
+                if row_index >= max_safe_iter:
+                    logger.warning("loop guard triggered in memory arrays")
+                    break
+                if isinstance(row, dict) and row.get("status") == "success":
+                    completed_shots += 1
+            scene_generation_summary = {
+                "planned_shots": planned_shots,
+                "completed_shots": completed_shots,
+                "provider": "real_stub",
+                "status": (
+                    "complete"
+                    if planned_shots > 0 and completed_shots == planned_shots
+                    else "partial"
+                    if completed_shots > 0 and completed_shots < planned_shots
+                    else "not_started"
+                ),
+            }
+
+            render_ids = []
+            has_success = False
+            for row_index, row in enumerate(multi_shot_results):
+                if row_index >= max_safe_iter:
+                    logger.warning("loop guard triggered in memory arrays")
+                    break
+                if not isinstance(row, dict):
+                    continue
+                if row.get("status") == "success":
+                    has_success = True
+                    render_id = row.get("render_id")
+                    if isinstance(render_id, str):
+                        render_ids.append(render_id)
+            scene_playback_preview = {
+                "available": has_success,
+                "shot_count": len(render_ids),
+                "render_ids": render_ids,
+                "status": scene_generation_summary.get("status", "partial"),
+            }
+            if isinstance(render_output, dict):
+                representative_render_id = render_ids[0] if render_ids else None
+                representative_status = "success" if has_success else "not_executed"
+                representative_meta = (
+                    multi_shot_results[0].get("meta")
+                    if multi_shot_results
+                    and isinstance(multi_shot_results[0], dict)
+                    and isinstance(multi_shot_results[0].get("meta"), dict)
+                    else {"file_path": None, "url": None}
+                )
+                render_output = {
+                    **render_output,
+                    "render_id": representative_render_id,
+                    "status": representative_status,
+                    "provider": "real_stub",
+                    "has_output": has_success,
+                    "file_path": representative_meta.get("file_path"),
+                    "url": representative_meta.get("url"),
+                }
+            updated_shot_execution_ledger: List[Dict[str, Any]] = []
+            for index, shot_id in enumerate(planned_shot_ids):
+                if index >= max_safe_iter:
+                    logger.warning("loop guard triggered in multi_shot_execution_ledger")
+                    break
+                if index < len(multi_shot_results):
+                    result_row = (
+                        multi_shot_results[index]
+                        if isinstance(multi_shot_results[index], dict)
+                        else {}
+                    )
+                    row_meta = (
+                        result_row.get("meta")
+                        if isinstance(result_row.get("meta"), dict)
+                        else {"file_path": None, "url": None}
+                    )
+                    updated_shot_execution_ledger.append(
+                        {
+                            "shot_id": shot_id,
+                            "status": (
+                                "complete"
+                                if result_row.get("status") == "success"
+                                else "failed"
+                            ),
+                            "render_id": (
+                                result_row.get("render_id")
+                                if isinstance(result_row.get("render_id"), str)
+                                else None
+                            ),
+                            "meta": {
+                                "file_path": row_meta.get("file_path"),
+                                "url": row_meta.get("url"),
+                            },
+                        }
+                    )
+                else:
+                    updated_shot_execution_ledger.append(
+                        {
+                            "shot_id": shot_id,
+                            "status": "not_executed",
+                            "render_id": None,
+                            "meta": {"file_path": None, "url": None},
+                        }
+                    )
+            shot_execution_ledger = updated_shot_execution_ledger
+
+            take_artifacts = list(multi_shot_take_artifacts)
+        elif execution_result_v2.get("executed") is True:
+            result_status = execution_result_v2.get("status")
+            result_render_id = execution_result_v2.get("render_id")
+            result_meta = (
+                execution_result_v2.get("meta")
+                if isinstance(execution_result_v2.get("meta"), dict)
+                else {"file_path": None, "url": None}
+            )
+            if isinstance(render_output, dict):
+                render_output = {
+                    **render_output,
+                    "render_id": result_render_id,
+                    "status": result_status if isinstance(result_status, str) else "failed",
+                    "provider": selected_provider if isinstance(selected_provider, str) else "mock",
+                    "has_output": result_status == "success",
+                    "file_path": result_meta.get("file_path"),
+                    "url": result_meta.get("url"),
+                }
+            elif isinstance(first_shot_id, str) and first_shot_id.strip():
+                render_output = {
+                    "render_id": result_render_id,
+                    "shot_id": first_shot_id,
+                    "status": result_status if isinstance(result_status, str) else "failed",
+                    "prompt_snapshot": (
+                        copy.deepcopy(prompt_value)
+                        if isinstance(prompt_value, dict)
+                        else None
+                    ),
+                    "provider": selected_provider if isinstance(selected_provider, str) else "mock",
+                    "has_output": result_status == "success",
+                    "file_path": result_meta.get("file_path"),
+                    "url": result_meta.get("url"),
+                }
+
+            updated_ledger: List[Dict[str, Any]] = []
+            for index, item in enumerate(shot_execution_ledger):
+                if index >= max_safe_iter:
+                    logger.warning("loop guard triggered in shot_queue")
+                    break
+                if not isinstance(item, dict):
+                    continue
+                if index == 0:
+                    updated_ledger.append(
+                        {
+                            "shot_id": item.get("shot_id"),
+                            "status": (
+                                "complete"
+                                if result_status == "success"
+                                else "not_executed"
+                            ),
+                            "render_id": (
+                                result_render_id
+                                if isinstance(result_render_id, str)
+                                else None
+                            ),
+                            "meta": {
+                                "file_path": result_meta.get("file_path"),
+                                "url": result_meta.get("url"),
+                            },
+                        }
+                    )
+                else:
+                    updated_ledger.append(
+                        {
+                            "shot_id": item.get("shot_id"),
+                            "status": item.get("status"),
+                            "render_id": None,
+                            "meta": {
+                                "file_path": None,
+                                "url": None,
+                            },
+                        }
+                    )
+            shot_execution_ledger = updated_ledger
+
+            base_take = {
+                "iteration": 1,
+                "render_id": (
+                    result_render_id if isinstance(result_render_id, str) else None
+                ),
+                "status": result_status if isinstance(result_status, str) else "failed",
+                "meta": {
+                    "file_path": result_meta.get("file_path"),
+                    "url": result_meta.get("url"),
+                },
+            }
+            if isinstance(selected_provider, str) and selected_provider == "real_stub":
+                base_take = {
+                    **base_take,
+                    "shot_id": first_shot_id,
+                    "provider": "real_stub",
+                }
+            take_artifacts = [base_take]
+            take_comparison_v2 = self.build_take_comparison_v2(
+                {"take_artifacts": take_artifacts}
+            ).get(
+                "take_comparison_v2",
+                {
+                    "comparable": False,
+                    "differences": [],
+                },
+            )
+        return ScriptBreakdownExecutionOutputState(
+            multi_shot_execution_ledger=multi_shot_execution_ledger,
+            multi_shot_take_artifacts=multi_shot_take_artifacts,
+            scene_generation_summary=scene_generation_summary,
+            scene_playback_preview=scene_playback_preview,
+            render_output=render_output,
+            shot_execution_ledger=shot_execution_ledger,
+            take_artifacts=take_artifacts,
+            take_comparison_v2=take_comparison_v2,
+        )
+
+    def _build_script_breakdown_final_bundle(
+        self,
+        context: Dict[str, Any],
+    ) -> ScriptBreakdownFinalBundleState:
+        active_cut_summary = context['active_cut_summary']
+        aggregate_agent_disagreements = context['aggregate_agent_disagreements']
+        alignment_status = context['alignment_status']
+        ambient_audio_timeline = context['ambient_audio_timeline']
+        ambient_tracks = context['ambient_tracks']
+        archive_snapshots = context['archive_snapshots']
+        archive_summary = context['archive_summary']
+        audio_asset_plan = context['audio_asset_plan']
+        audio_cues = context['audio_cues']
+        audio_dialogue_timeline = context['audio_dialogue_timeline']
+        audio_summary = context['audio_summary']
+        batch_execution_limit = context['batch_execution_limit']
+        best_cut_summary = context['best_cut_summary']
+        boundary_audit = context['boundary_audit']
+        character_consistency_notes = context['character_consistency_notes']
+        character_identity_memory = context['character_identity_memory']
+        character_profiles = context['character_profiles']
+        character_reference_context = context['character_reference_context']
+        co_director_memory_advisory = context['co_director_memory_advisory']
+        co_director_memory_authority_boundary = context['co_director_memory_authority_boundary']
+        co_director_memory_bridge = context['co_director_memory_bridge']
+        co_director_memory_contract = context['co_director_memory_contract']
+        co_director_memory_visibility = context['co_director_memory_visibility']
+        co_director_observation_contract = context['co_director_observation_contract']
+        co_director_observation_summary = context['co_director_observation_summary']
+        co_director_shot_observation = context['co_director_shot_observation']
+        co_director_suggestions = context['co_director_suggestions']
+        co_director_visual_contract = context['co_director_visual_contract']
+        co_director_visual_feed = context['co_director_visual_feed']
+        co_director_visual_observation = context['co_director_visual_observation']
+        continuity = context['continuity']
+        creative_tension_score = context['creative_tension_score']
+        credential_validation_summary = context['credential_validation_summary']
+        cut_analysis = context['cut_analysis']
+        dialogue_lines = context['dialogue_lines']
+        dialogue_timing_metadata = context['dialogue_timing_metadata']
+        director_notes = context['director_notes']
+        dispatch_pointer = context['dispatch_pointer']
+        dread_curve = context['dread_curve']
+        editing_intelligence_result = context['editing_intelligence_result']
+        emotional_arc_movement = context['emotional_arc_movement']
+        emotional_arc_profiles = context['emotional_arc_profiles']
+        emotional_climax_buildup = context['emotional_climax_buildup']
+        emotional_continuity = context['emotional_continuity']
+        emotional_identity_continuity = context['emotional_identity_continuity']
+        emotional_pacing_balance = context['emotional_pacing_balance']
+        emotional_scene_generation_lines = context['emotional_scene_generation_lines']
+        ending_impact = context['ending_impact']
+        execution_contract = context['execution_contract']
+        execution_control_contract = context['execution_control_contract']
+        execution_eligibility = context['execution_eligibility']
+        execution_intent = context['execution_intent']
+        execution_log = context['execution_log']
+        execution_monitor = context['execution_monitor']
+        execution_permission = context['execution_permission']
+        execution_request = context['execution_request']
+        execution_request_envelope = context['execution_request_envelope']
+        execution_result = context['execution_result']
+        execution_result_v2 = context['execution_result_v2']
+        execution_snapshot = context['execution_snapshot']
+        execution_status = context['execution_status']
+        execution_trigger = context['execution_trigger']
+        execution_unlock_state = context['execution_unlock_state']
+        film_assembly_result = context['film_assembly_result']
+        film_memory_snapshot = context['film_memory_snapshot']
+        film_progress = context['film_progress']
+        film_structure = context['film_structure']
+        film_validation = context['film_validation']
+        film_visual_style_profile = context['film_visual_style_profile']
+        final_film_audio_render_plan = context['final_film_audio_render_plan']
+        frame_analysis_snapshot = context['frame_analysis_snapshot']
+        frame_metadata = context['frame_metadata']
+        frame_stats = context['frame_stats']
+        handoff_audit = context['handoff_audit']
+        handoff_envelope = context['handoff_envelope']
+        handoff_gate = context['handoff_gate']
+        identity_drift_warnings = context['identity_drift_warnings']
+        ignored_agent_decisions = context['ignored_agent_decisions']
+        image_render_assets = context['image_render_assets']
+        iteration_comparison = context['iteration_comparison']
+        iteration_history = context['iteration_history']
+        iteration_impact = context['iteration_impact']
+        iteration_record = context['iteration_record']
+        link_completeness = context['link_completeness']
+        local_artifact_log = context['local_artifact_log']
+        local_execution_result = context['local_execution_result']
+        local_execution_trigger = context['local_execution_trigger']
+        local_render_capability = context['local_render_capability']
+        local_render_contract = context['local_render_contract']
+        local_render_gate = context['local_render_gate']
+        local_render_output = context['local_render_output']
+        local_single_shot_guard = context['local_single_shot_guard']
+        loop_advisory = context['loop_advisory']
+        loop_constraint = context['loop_constraint']
+        loop_contract = context['loop_contract']
+        loop_execution_contract = context['loop_execution_contract']
+        loop_execution_plan = context['loop_execution_plan']
+        loop_readiness = context['loop_readiness']
+        loop_result_snapshot = context['loop_result_snapshot']
+        memory_advisory_projection = context['memory_advisory_projection']
+        memory_aggregate = context['memory_aggregate']
+        memory_candidate_bundle = context['memory_candidate_bundle']
+        memory_candidates = context['memory_candidates']
+        memory_category_presence = context['memory_category_presence']
+        memory_consistency = context['memory_consistency']
+        memory_influence_gate = context['memory_influence_gate']
+        memory_output_influence_contract = context['memory_output_influence_contract']
+        memory_pattern_note = context['memory_pattern_note']
+        memory_records = context['memory_records']
+        memory_reuse_context = context['memory_reuse_context']
+        memory_snapshot_summary = context['memory_snapshot_summary']
+        memory_state_rollup = context['memory_state_rollup']
+        motif_evolution_report = context['motif_evolution_report']
+        motif_state = context['motif_state']
+        multi_shot_execution_contract = context['multi_shot_execution_contract']
+        multi_shot_execution_ledger = context['multi_shot_execution_ledger']
+        multi_shot_execution_trigger = context['multi_shot_execution_trigger']
+        multi_shot_execution_unlock = context['multi_shot_execution_unlock']
+        multi_shot_guard = context['multi_shot_guard']
+        multi_shot_readiness = context['multi_shot_readiness']
+        multi_shot_results = context['multi_shot_results']
+        multi_shot_take_artifacts = context['multi_shot_take_artifacts']
+        narrative_progression_score = context['narrative_progression_score']
+        next_iteration_strategy = context['next_iteration_strategy']
+        next_take_preview = context['next_take_preview']
+        orchestration_state_stub = context['orchestration_state_stub']
+        output_evaluation = context['output_evaluation']
+        output_influence_guard_v2 = context['output_influence_guard_v2']
+        output_review = context['output_review']
+        output_review_matrix = context['output_review_matrix']
+        output_sync = context['output_sync']
+        pattern_observations = context['pattern_observations']
+        patterns = context['patterns']
+        payload_sanitization = context['payload_sanitization']
+        previs_accuracy = context['previs_accuracy']
+        previs_asset_map = context['previs_asset_map']
+        previs_beat_shot_map = context['previs_beat_shot_map']
+        previs_continuity_map = context['previs_continuity_map']
+        previs_contract = context['previs_contract']
+        previs_scene_board = context['previs_scene_board']
+        production_summary = context['production_summary']
+        project_id_input = context['project_id_input']
+        prompt_envelope = context['prompt_envelope']
+        prompt_influence_gate_v1 = context['prompt_influence_gate_v1']
+        prompt_safety_contract = context['prompt_safety_contract']
+        prompt_warnings = context['prompt_warnings']
+        provider_activation_contract = context['provider_activation_contract']
+        provider_activation_state = context['provider_activation_state']
+        provider_adapter_contract = context['provider_adapter_contract']
+        provider_adapter_identity = context['provider_adapter_identity']
+        provider_adapter_readiness_gate = context['provider_adapter_readiness_gate']
+        provider_adapter_requirements = context['provider_adapter_requirements']
+        provider_adapter_status = context['provider_adapter_status']
+        provider_capability = context['provider_capability']
+        provider_config_snapshot = context['provider_config_snapshot']
+        provider_config_validation = context['provider_config_validation']
+        provider_control_contract = context['provider_control_contract']
+        provider_credential_state = context['provider_credential_state']
+        provider_enablement_gate = context['provider_enablement_gate']
+        provider_identity_context = context['provider_identity_context']
+        provider_intent_signal = context['provider_intent_signal']
+        provider_payload = context['provider_payload']
+        provider_payload_v2 = context['provider_payload_v2']
+        provider_readiness_summary = context['provider_readiness_summary']
+        provider_registry_snapshot = context['provider_registry_snapshot']
+        provider_safety_contract = context['provider_safety_contract']
+        provider_safety_summary = context['provider_safety_summary']
+        provider_selection_state = context['provider_selection_state']
+        provider_validation = context['provider_validation']
+        real_execution_trigger = context['real_execution_trigger']
+        real_multi_shot_capability = context['real_multi_shot_capability']
+        real_multi_shot_contract = context['real_multi_shot_contract']
+        real_multi_shot_dry_run = context['real_multi_shot_dry_run']
+        real_multi_shot_gate = context['real_multi_shot_gate']
+        real_multi_shot_intent = context['real_multi_shot_intent']
+        real_multi_shot_plan = context['real_multi_shot_plan']
+        real_multi_shot_request_envelope = context['real_multi_shot_request_envelope']
+        real_multi_shot_summary = context['real_multi_shot_summary']
+        relationships = context['relationships']
+        render_activation_gate_v1 = context['render_activation_gate_v1']
+        render_asset_summary = context['render_asset_summary']
+        render_envelope_stub = context['render_envelope_stub']
+        render_orchestration_contract = context['render_orchestration_contract']
+        render_output = context['render_output']
+        render_request = context['render_request']
+        request_schema_validation = context['request_schema_validation']
+        request_validation_contract = context['request_validation_contract']
+        request_validation_summary = context['request_validation_summary']
+        retry_gate = context['retry_gate']
+        retry_snapshot = context['retry_snapshot']
+        scene_assembly = context['scene_assembly']
+        scene_assembly_result = context['scene_assembly_result']
+        scene_coherence_report = context['scene_coherence_report']
+        scene_continuity = context['scene_continuity']
+        scene_continuity_check = context['scene_continuity_check']
+        scene_continuity_report = context['scene_continuity_report']
+        scene_coverage = context['scene_coverage']
+        scene_emotional_flow = context['scene_emotional_flow']
+        scene_generation_summary = context['scene_generation_summary']
+        scene_index = context['scene_index']
+        scene_intervention_plan = context['scene_intervention_plan']
+        scene_iterations = context['scene_iterations']
+        scene_playback_preview = context['scene_playback_preview']
+        scene_playback_status = context['scene_playback_status']
+        scene_quality_verdict = context['scene_quality_verdict']
+        scene_render_job_summary = context['scene_render_job_summary']
+        scene_render_jobs = context['scene_render_jobs']
+        scene_render_quality_warnings = context['scene_render_quality_warnings']
+        scene_sequence = context['scene_sequence']
+        scene_transitions = context['scene_transitions']
+        scene_variance_profile = context['scene_variance_profile']
+        scene_visual_brief_list = context['scene_visual_brief_list']
+        scene_visual_identity = context['scene_visual_identity']
+        scene_visual_links = context['scene_visual_links']
+        scenes = context['scenes']
+        score_map = context['score_map']
+        screening_playlist = context['screening_playlist']
+        screening_summary = context['screening_summary']
+        selected_iteration = context['selected_iteration']
+        selection_boundary_guard = context['selection_boundary_guard']
+        sequence_flow = context['sequence_flow']
+        sequence_status = context['sequence_status']
+        shot_advisory_note = context['shot_advisory_note']
+        shot_batch_plan = context['shot_batch_plan']
+        shot_candidates = context['shot_candidates']
+        shot_coverage = context['shot_coverage']
+        shot_execution_ledger = context['shot_execution_ledger']
+        shot_execution_lock = context['shot_execution_lock']
+        shot_intent = context['shot_intent']
+        shot_plan_bundle = context['shot_plan_bundle']
+        shot_planning_summary = context['shot_planning_summary']
+        shot_prompt_tokens = context['shot_prompt_tokens']
+        shot_queue = context['shot_queue']
+        shot_variety = context['shot_variety']
+        simulated_iteration = context['simulated_iteration']
+        simulated_output = context['simulated_output']
+        story_direction = context['story_direction']
+        studio_brain_orchestration = context['studio_brain_orchestration']
+        studio_safety_state = context['studio_safety_state']
+        style_consistency_notes = context['style_consistency_notes']
+        style_reference_context = context['style_reference_context']
+        symbolism_result = context['symbolism_result']
+        take_advisory_note = context['take_advisory_note']
+        take_artifacts = context['take_artifacts']
+        take_comparison = context['take_comparison']
+        take_comparison_v2 = context['take_comparison_v2']
+        take_history = context['take_history']
+        take_preference_contract = context['take_preference_contract']
+        top_alignment_note = context['top_alignment_note']
+        top_pattern_observation = context['top_pattern_observation']
+        transition_context = context['transition_context']
+        video_render_assets = context['video_render_assets']
+        video_render_summary = context['video_render_summary']
+        visual_bible = context['visual_bible']
+        visual_consistency = context['visual_consistency']
+        visual_continuity_score = context['visual_continuity_score']
+        visual_decision_boundary = context['visual_decision_boundary']
+        visual_pattern_summary = context['visual_pattern_summary']
+        visual_prompt_tokens = context['visual_prompt_tokens']
+        visual_reference_indexes = context['visual_reference_indexes']
+        visual_reference_summary = context['visual_reference_summary']
+        visual_references = context['visual_references']
+        visual_tension = context['visual_tension']
+        voice_direction_result = context['voice_direction_result']
+        voice_provider_plan = context['voice_provider_plan']
+
+        final_bundle = {
+            "scenes": scenes,
+            "scene_index": scene_index,
+            "character_presence": self.build_character_presence_index(scenes),
+            "location_presence": self.build_location_presence_index(scenes),
+            "time_of_day_presence": self.build_time_of_day_presence_index(scenes),
+            "summary": self.build_script_structure_summary(scenes),
+            "continuity": continuity,
+            "voice_direction_commands": voice_direction_result.get("voice_direction_commands", []),
+            "voice_direction_guidance": voice_direction_result.get(
+                "voice_direction_guidance",
+                {
+                    "advisory_only": True,
+                    "requires_creator_approval": True,
+                    "emotional_changes": [],
+                    "pacing_changes": [],
+                    "visual_style_updates": [],
+                    "guidance_lines": [],
+                },
+            ),
+            "character_profiles": [profile.model_dump() for profile in character_profiles],
+            "character_consistency": {
+                "reference_context": character_reference_context,
+                "scene_consistency_notes": character_consistency_notes,
+            },
+            "character_identity_memory": character_identity_memory,
+            "provider_identity_context": provider_identity_context,
+            "emotional_identity_continuity": emotional_identity_continuity,
+            "identity_drift_warnings": identity_drift_warnings,
+            "dialogue_lines": [line.model_dump() for line in dialogue_lines],
+            "dialogue_timing_metadata": dialogue_timing_metadata,
+            "voice_provider_plan": voice_provider_plan,
+            "audio_dialogue_timeline": audio_dialogue_timeline,
+            "ambient_audio_tracks": [track.model_dump() for track in ambient_tracks],
+            "ambient_audio_timeline": ambient_audio_timeline,
+            "final_film_audio_render_plan": final_film_audio_render_plan,
+            "emotional_arc_profiles": [profile.model_dump() for profile in emotional_arc_profiles],
+            "emotional_arc_movement": emotional_arc_movement,
+            "emotional_pacing_balance": emotional_pacing_balance,
+            "emotional_climax_buildup": emotional_climax_buildup,
+            "emotional_continuity_score": emotional_continuity,
+            "symbolism_nodes": symbolism_result.get("symbolism_nodes", []),
+            "recurring_imagery": symbolism_result.get("recurring_imagery", []),
+            "recurring_phrases": symbolism_result.get("recurring_phrases", []),
+            "emotional_callbacks": symbolism_result.get("emotional_callbacks", []),
+            "environmental_symbolism": symbolism_result.get("environmental_symbolism", []),
+            "symbolism_connections": symbolism_result.get("symbolism_connections", []),
+            "symbolism_graph_visualization": symbolism_result.get(
+                "symbolism_graph_visualization",
+                {"nodes": [], "edges": [], "layout": "force", "legend": ""},
+            ),
+            "memory_archivist_symbolism_context": {
+                "nodes": symbolism_result.get("symbolism_nodes", []),
+                "environmental_symbolism": symbolism_result.get("environmental_symbolism", []),
+            },
+            "emotional_arc_symbolism_context": {
+                "emotional_callbacks": symbolism_result.get("emotional_callbacks", []),
+                "recurring_phrases": symbolism_result.get("recurring_phrases", []),
+            },
+            "director_symbolism_context": {
+                "recurring_imagery": symbolism_result.get("recurring_imagery", []),
+                "symbolism_connections": symbolism_result.get("symbolism_connections", []),
+            },
+            "director_emotional_arc_context": {
+                "pacing_balance": emotional_pacing_balance,
+                "climax_buildup": emotional_climax_buildup,
+            },
+            "evaluator_emotional_arc_context": {
+                "movement": emotional_arc_movement,
+                "continuity_score": emotional_continuity,
+            },
+            "scene_generation_emotional_guidance": emotional_scene_generation_lines,
+            "scene_continuity": scene_continuity,
+            "director_continuity_context": {
+                "transition_context": transition_context,
+                "warnings": [
+                    *scene_continuity.get("warnings", []),
+                    *identity_drift_warnings,
+                ],
+            },
+            "memory_archivist_continuity_context": {
+                "scene_states": scene_continuity.get("scene_states", []),
+                "unresolved_tension": transition_context.get("unresolved_tension", ""),
+            },
+            "continuity_warnings": [
+                *scene_continuity.get("warnings", []),
+                *identity_drift_warnings,
+            ],
+            "film_visual_style_profile": film_visual_style_profile.model_dump(),
+            "style_consistency": {
+                "reference_context": style_reference_context,
+                "scene_consistency_notes": style_consistency_notes,
+                "visual_continuity_score": visual_continuity_score,
+            },
+            "relationships": relationships,
+            "patterns": patterns,
+            "pattern_observations": pattern_observations,
+            "top_pattern_observation": top_pattern_observation.get("top_pattern_observation"),
+            "memory_pattern_note": memory_pattern_note,
+            "memory_candidates": memory_candidates,
+            "memory_category_presence": memory_category_presence,
+            "memory_snapshot_summary": memory_snapshot_summary,
+            "memory_state_rollup": memory_state_rollup,
+            "memory_consistency": memory_consistency,
+            "memory_candidate_observations": memory_candidate_bundle["memory_candidate_observations"],
+            "top_memory_candidate_observation": memory_candidate_bundle["top_memory_candidate_observation"],
+            "memory_records": memory_records,
+            "memory_aggregate": memory_aggregate,
+            "director_reference_memory": {
+                "datasets": [],
+                "learned_patterns": {},
+                "reusable_rules": [],
+            },
+            "memory_influence_gate": memory_influence_gate,
+            "memory_output_influence_contract": memory_output_influence_contract,
+            "memory_advisory_projection": memory_advisory_projection,
+            "co_director_memory_visibility": co_director_memory_visibility,
+            "co_director_memory_advisory": co_director_memory_advisory,
+            "co_director_memory_bridge": co_director_memory_bridge,
+            "co_director_memory_contract": co_director_memory_contract,
+            "co_director_visual_contract": co_director_visual_contract,
+            "co_director_visual_feed": co_director_visual_feed,
+            "co_director_visual_observation": co_director_visual_observation,
+            "co_director_shot_observation": co_director_shot_observation,
+            "co_director_observation_summary": co_director_observation_summary,
+            "co_director_observation_contract": co_director_observation_contract,
+            "co_director_memory_authority_boundary": co_director_memory_authority_boundary,
+            "output_influence_guard_v2": output_influence_guard_v2,
+            "visual_decision_boundary": visual_decision_boundary,
+            "shot_execution_lock": shot_execution_lock,
+            "boundary_audit": boundary_audit,
+            "studio_safety_state": studio_safety_state,
+            "prompt_influence_gate_v1": prompt_influence_gate_v1,
+            "visual_prompt_tokens": visual_prompt_tokens,
+            "shot_prompt_tokens": shot_prompt_tokens,
+            "prompt_envelope": prompt_envelope,
+            "prompt_safety_contract": prompt_safety_contract,
+            "render_activation_gate_v1": render_activation_gate_v1,
+            "render_request": render_request,
+            "render_output": render_output,
+            "output_review": output_review,
+            "output_evaluation": output_evaluation,
+            "retry_gate": retry_gate,
+            "execution_snapshot": execution_snapshot,
+            "iteration_record": iteration_record,
+            "take_history": take_history,
+            "take_artifacts": take_artifacts,
+            "retry_snapshot": retry_snapshot,
+            "take_comparison": take_comparison,
+            "take_comparison_v2": take_comparison_v2,
+            "take_preference_contract": take_preference_contract,
+            "take_advisory_note": take_advisory_note,
+            "output_review_matrix": output_review_matrix,
+            "loop_readiness": loop_readiness,
+            "next_take_preview": next_take_preview,
+            "loop_constraint": loop_constraint,
+            "loop_advisory": loop_advisory,
+            "loop_contract": loop_contract,
+            "loop_execution_plan": loop_execution_plan,
+            "simulated_iteration": simulated_iteration,
+            "simulated_output": simulated_output,
+            "loop_result_snapshot": loop_result_snapshot,
+            "loop_execution_contract": loop_execution_contract,
+            "execution_permission": execution_permission,
+            "handoff_gate": handoff_gate,
+            "provider_payload_v2": provider_payload_v2,
+            "handoff_envelope": handoff_envelope,
+            "handoff_audit": handoff_audit,
+            "execution_unlock_state": execution_unlock_state,
+            "execution_intent": execution_intent,
+            "execution_eligibility": execution_eligibility,
+            "execution_request_envelope": execution_request_envelope,
+            "execution_trigger": execution_trigger,
+            "real_execution_trigger": real_execution_trigger,
+            "execution_control_contract": execution_control_contract,
+            "request_schema_validation": request_schema_validation,
+            "provider_validation": provider_validation,
+            "payload_sanitization": payload_sanitization,
+            "request_validation_summary": request_validation_summary,
+            "request_validation_contract": request_validation_contract,
+            "provider_adapter_identity": provider_adapter_identity,
+            "provider_adapter_status": provider_adapter_status,
+            "provider_adapter_requirements": provider_adapter_requirements,
+            "provider_adapter_readiness_gate": provider_adapter_readiness_gate,
+            "provider_adapter_contract": provider_adapter_contract,
+            "debug_control_state": {
+                "safe_mode": True,
+            },
+            "execution_request": execution_request,
+            "execution_status": execution_status,
+            "execution_result": execution_result,
+            "execution_contract": execution_contract,
+            "execution_log": execution_log,
+            "provider_payload": provider_payload,
+            "execution_result_v2": execution_result_v2,
+            "output_sync": output_sync,
+            "execution_monitor": execution_monitor,
+            "provider_config_snapshot": provider_config_snapshot,
+            "provider_credential_state": provider_credential_state,
+            "provider_selection_state": provider_selection_state,
+            "selection_boundary_guard": selection_boundary_guard,
+            "provider_readiness_summary": provider_readiness_summary,
+            "provider_capability": provider_capability,
+            "provider_control_contract": provider_control_contract,
+            "provider_safety_contract": provider_safety_contract,
+            "provider_registry_snapshot": provider_registry_snapshot,
+            "provider_activation_state": provider_activation_state,
+            "provider_config_validation": provider_config_validation,
+            "credential_validation_summary": credential_validation_summary,
+            "provider_enablement_gate": provider_enablement_gate,
+            "provider_intent_signal": provider_intent_signal,
+            "provider_activation_contract": provider_activation_contract,
+            "provider_safety_summary": provider_safety_summary,
+            "local_render_capability": local_render_capability,
+            "local_render_gate": local_render_gate,
+            "local_execution_trigger": local_execution_trigger,
+            "local_execution_result": local_execution_result,
+            "local_render_output": local_render_output,
+            "local_artifact_log": local_artifact_log,
+            "local_single_shot_guard": local_single_shot_guard,
+            "local_render_contract": local_render_contract,
+            "visual_references": visual_references,
+            "visual_reference_indexes": visual_reference_indexes,
+            "visual_reference_summary": visual_reference_summary,
+            "visual_pattern_summary": visual_pattern_summary,
+            "frame_metadata": frame_metadata,
+            "frame_stats": frame_stats,
+            "frame_analysis_snapshot": frame_analysis_snapshot,
+            "scene_visual_links": scene_visual_links,
+            "scene_visual_identity": scene_visual_identity,
+            "visual_consistency": visual_consistency,
+            "visual_tension": visual_tension,
+            "link_completeness": link_completeness,
+            "alignment_status": alignment_status,
+            "top_alignment_note": top_alignment_note,
+            "shot_candidates": shot_candidates,
+            "scene_render_jobs": scene_render_jobs,
+            "scene_render_job_summary": scene_render_job_summary,
+            "shot_coverage": shot_coverage,
+            "shot_plan_bundle": shot_plan_bundle,
+            "shot_queue": shot_queue,
+            "dispatch_pointer": dispatch_pointer,
+            "multi_shot_guard": multi_shot_guard,
+            "shot_execution_ledger": shot_execution_ledger,
+            "multi_shot_readiness": multi_shot_readiness,
+            "multi_shot_execution_unlock": multi_shot_execution_unlock,
+            "shot_batch_plan": shot_batch_plan,
+            "batch_execution_limit": batch_execution_limit,
+            "multi_shot_execution_trigger": multi_shot_execution_trigger,
+            "multi_shot_results": multi_shot_results,
+            "multi_shot_execution_ledger": multi_shot_execution_ledger,
+            "multi_shot_take_artifacts": multi_shot_take_artifacts,
+            "scene_generation_summary": scene_generation_summary,
+            "scene_playback_preview": scene_playback_preview,
+            "scene_visual_brief": scene_visual_brief_list,
+            "previs_accuracy": previs_accuracy,
+            "project_id": project_id_input,
+            "memory_reuse_context": memory_reuse_context,
+            "scene_coherence_report": scene_coherence_report,
+            "scene_emotional_flow": scene_emotional_flow,
+            "scene_quality_verdict": scene_quality_verdict,
+            "director_notes": director_notes,
+            "scene_intervention_plan": scene_intervention_plan,
+            "next_iteration_strategy": next_iteration_strategy,
+            "scene_iterations": scene_iterations,
+            "agent_disagreements": aggregate_agent_disagreements,
+            "ignored_agent_decisions": ignored_agent_decisions,
+            "creative_tension_score": creative_tension_score,
+            "studio_brain_orchestration": studio_brain_orchestration,
+            "studio_brain_timeline": studio_brain_orchestration.get("orchestration_timeline", []),
+            "studio_brain_reasoning_trace": studio_brain_orchestration.get("creative_reasoning_trace", []),
+            "selected_iteration": selected_iteration,
+            "iteration_history": iteration_history,
+            "active_cut_summary": active_cut_summary,
+            "iteration_comparison": iteration_comparison,
+            "iteration_impact": iteration_impact,
+            "story_direction": story_direction,
+            "score_map": score_map,
+            "audio_cues": audio_cues,
+            "audio_asset_plan": audio_asset_plan,
+            "audio_summary": audio_summary,
+            "screening_playlist": screening_playlist,
+            "screening_summary": screening_summary,
+            "production_summary": production_summary,
+            "cut_analysis": cut_analysis,
+            "visual_bible": visual_bible,
+            "image_render_assets": image_render_assets,
+            "render_asset_summary": render_asset_summary,
+            "video_render_assets": video_render_assets,
+            "video_render_summary": video_render_summary,
+            "prompt_warnings": prompt_warnings,
+            "render_quality_warnings": scene_render_quality_warnings,
+            "scene_variance_profile": scene_variance_profile,
+            "editing_intelligence": editing_intelligence_result.get(
+                "editing_intelligence",
+                {"advisory_only": True, "suggestions": [], "suggestion_count": 0},
+            ),
+            "editing_suggestions": editing_intelligence_result.get("editing_suggestions", []),
+            "film_assembly_editing_context": {
+                "advisory_only": True,
+                "suggestions": editing_intelligence_result.get("editing_suggestions", []),
+            },
+            "director_evaluator_editing_context": {
+                "advisory_only": True,
+                "suggestions": editing_intelligence_result.get("editing_suggestions", []),
+            },
+            "scene_transitions": scene_transitions,
+            "sequence_flow": sequence_flow,
+            "ending_impact": ending_impact,
+            "dread_curve": dread_curve,
+            "motif_state": motif_state,
+            "film_structure": film_structure,
+            "film_progress": film_progress,
+            "film_validation": film_validation,
+            "archive_snapshots": archive_snapshots,
+            "best_cut_summary": best_cut_summary,
+            "archive_summary": archive_summary,
+            "co_director_suggestions": co_director_suggestions,
+            "scene_continuity_report": scene_continuity_report,
+            "motif_evolution_report": motif_evolution_report,
+            "narrative_progression_score": narrative_progression_score,
+            "film_memory_snapshot": film_memory_snapshot,
+            "multi_shot_execution_contract": multi_shot_execution_contract,
+            "real_multi_shot_capability": real_multi_shot_capability,
+            "real_multi_shot_plan": real_multi_shot_plan,
+            "real_multi_shot_intent": real_multi_shot_intent,
+            "real_multi_shot_gate": real_multi_shot_gate,
+            "real_multi_shot_request_envelope": real_multi_shot_request_envelope,
+            "real_multi_shot_dry_run": real_multi_shot_dry_run,
+            "real_multi_shot_contract": real_multi_shot_contract,
+            "real_multi_shot_summary": real_multi_shot_summary,
+            "previs_scene_board": previs_scene_board,
+            "previs_beat_shot_map": previs_beat_shot_map,
+            "previs_continuity_map": previs_continuity_map,
+            "previs_asset_map": previs_asset_map,
+            "previs_contract": previs_contract,
+            "shot_intent": shot_intent,
+            "shot_variety": shot_variety,
+            "scene_coverage": scene_coverage,
+            "shot_planning_summary": shot_planning_summary,
+            "shot_advisory_note": shot_advisory_note,
+            "scene_sequence": scene_sequence,
+            "scene_assembly": scene_assembly,
+            "scene_assembly_v2": scene_assembly_result.get(
+                "scene_assembly_v2",
+                {"assembly_id": "asm_000_balanced", "ordered_shots": [], "runtime": 0.0, "transition_map": {}},
+            ),
+            "stitching_plan": scene_assembly_result.get(
+                "stitching_plan",
+                {"shot_ordering": [], "transition_timing": {}, "fade_cut_selection": {}, "pacing_aware_assembly": "balanced"},
+            ),
+            "stitched_export": scene_assembly_result.get(
+                "stitched_export",
+                {"format": "mp4", "path": "", "export_ready": False, "source_clips_preserved": True, "source_clips": []},
+            ),
+            "film_assembly_timeline": film_assembly_result.get(
+                "film_assembly_timeline",
+                {"timeline_id": "film_timeline_000", "ordered_scenes": [], "audio_tracks": [], "subtitles": [], "transitions": [], "title_cards": [], "credits": []},
+            ),
+            "film_export_pipeline": film_assembly_result.get(
+                "film_export_pipeline",
+                {
+                    "mp4_export": {"path": "output/renders/full_film_film_timeline_000.mp4", "ready": False},
+                    "archive_package": {"path": "output/archives/film_timeline_000.zip", "ready": False},
+                    "preview_render": {"path": "output/previews/film_timeline_000_preview.mp4", "ready": False},
+                },
+            ),
+            "film_runtime_metadata": film_assembly_result.get(
+                "film_runtime_metadata",
+                {"scene_count": 0, "ambient_track_count": 0, "dialogue_track_count": 0, "subtitle_count": 0, "transition_count": 0, "title_card_count": 0, "credits_count": 0},
+            ),
+            "sequence_status": sequence_status,
+            "scene_continuity_check": scene_continuity_check,
+            "scene_playback_status": scene_playback_status,
+            "render_envelope_stub": render_envelope_stub,
+            "orchestration_state_stub": orchestration_state_stub,
+            "render_orchestration_contract": render_orchestration_contract,
+        }
+        return ScriptBreakdownFinalBundleState(final_bundle=final_bundle)
+
+    def build_script_breakdown_bundle(self, script_text: Any) -> Dict[str, Any]:
+        """
+        Build a full script breakdown bundle from raw script text.
+
+        This method composes existing Phase 20 helpers only.
+        """
+        _function_start = time.time()
+        MAX_SAFE_ITER = 1000
+        dev_timeout_enabled = os.getenv("SCRIPT_PARSER_DEV_TIMEOUT", "0") == "1"
+        previous_alarm_handler = None
+        if dev_timeout_enabled:
+            def timeout_handler(signum: int, frame: Any) -> None:
+                raise TimeoutError("Parser exceeded safe execution time")
+
+            previous_alarm_handler = signal.getsignal(signal.SIGALRM)
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(10)
+
+        def _start_section(section_name: str) -> float:
+            logger.debug("START: %s", section_name)
+            return time.time()
+
+        def _end_section(section_name: str, section_start: float) -> None:
+            logger.debug("END: %s %.4f", section_name, time.time() - section_start)
+
+        empty_summary = {
+            "scene_count": 0,
+            "character_count": 0,
+            "location_count": 0,
+            "time_of_day_count": 0,
+        }
+        _guard_timer = _start_section("early guard construction")
+        guard_state = self._build_script_breakdown_guard_state()
+        real_multi_shot_results = guard_state.real_multi_shot_results
+        batch_execution_limit = guard_state.batch_execution_limit
+        shot_queue = guard_state.shot_queue
+        output_influence_guard_v2 = guard_state.output_influence_guard_v2
+        visual_decision_boundary = guard_state.visual_decision_boundary
+        shot_execution_lock = guard_state.shot_execution_lock
+        co_director_visual_contract = guard_state.co_director_visual_contract
+        co_director_memory_contract = guard_state.co_director_memory_contract
+        memory_influence_gate = guard_state.memory_influence_gate
+        memory_output_influence_contract = guard_state.memory_output_influence_contract
+        render_orchestration_contract = guard_state.render_orchestration_contract
+        render_envelope_stub = guard_state.render_envelope_stub
+        boundary_audit = guard_state.boundary_audit
+        studio_safety_state = guard_state.studio_safety_state
+        prompt_influence_gate_v1 = guard_state.prompt_influence_gate_v1
+        visual_prompt_tokens = guard_state.visual_prompt_tokens
+        shot_prompt_tokens = guard_state.shot_prompt_tokens
+        prompt_envelope = guard_state.prompt_envelope
+        prompt_safety_contract = guard_state.prompt_safety_contract
+        render_activation_gate_v1 = guard_state.render_activation_gate_v1
+        render_request = guard_state.render_request
+        render_output = guard_state.render_output
+        output_review = guard_state.output_review
+        output_evaluation = guard_state.output_evaluation
+        execution_iteration = guard_state.execution_iteration
+        retry_gate = guard_state.retry_gate
+        execution_snapshot = guard_state.execution_snapshot
+        iteration_record = guard_state.iteration_record
+        take_history = guard_state.take_history
+        take_artifacts = guard_state.take_artifacts
+        take_comparison_v2 = guard_state.take_comparison_v2
+        take_preference_contract = guard_state.take_preference_contract
+        output_review_matrix = guard_state.output_review_matrix
+        retry_snapshot = guard_state.retry_snapshot
+        take_comparison = guard_state.take_comparison
+        take_advisory_note = guard_state.take_advisory_note
+        _end_section("early guard construction", _guard_timer)
+        intervention_timer = _start_section("intervention layer")
+        intervention_state = self._build_script_breakdown_intervention_state(
+            retry_snapshot=retry_snapshot,
+            execution_snapshot=execution_snapshot,
+            execution_iteration=execution_iteration,
+            render_output=render_output,
+        )
+        loop_readiness = intervention_state.loop_readiness
+        next_take_preview = intervention_state.next_take_preview
+        loop_constraint = intervention_state.loop_constraint
+        loop_advisory = intervention_state.loop_advisory
+        loop_contract = intervention_state.loop_contract
+        loop_execution_plan = intervention_state.loop_execution_plan
+        simulated_iteration = intervention_state.simulated_iteration
+        simulated_output = intervention_state.simulated_output
+        loop_result_snapshot = intervention_state.loop_result_snapshot
+        loop_execution_contract = intervention_state.loop_execution_contract
+        execution_permission = intervention_state.execution_permission
+        _end_section("intervention layer", intervention_timer)
+        execution_state = self._build_script_breakdown_execution_state(
+            render_request=render_request,
+            execution_permission=execution_permission,
+        )
+        execution_request = execution_state.execution_request
+        execution_status = execution_state.execution_status
+        execution_result = execution_state.execution_result
+        execution_contract = execution_state.execution_contract
+        provider_payload = execution_state.provider_payload
+        execution_result_v2 = execution_state.execution_result_v2
+        output_sync = execution_state.output_sync
+        execution_monitor = execution_state.execution_monitor
+        provider_config = execution_state.provider_config
+        default_provider = execution_state.default_provider
+        provider_config_snapshot = execution_state.provider_config_snapshot
+        selection_request = execution_state.selection_request
+        provider_selection_state = execution_state.provider_selection_state
+        provider_credential_state = execution_state.provider_credential_state
+        selection_boundary_guard = execution_state.selection_boundary_guard
+        provider_readiness_summary = execution_state.provider_readiness_summary
+        provider_capability = execution_state.provider_capability
+        provider_control_contract = execution_state.provider_control_contract
+        provider_safety_contract = execution_state.provider_safety_contract
+        provider_handoff_state = self._build_script_breakdown_provider_handoff_state(
+            provider_config=provider_config,
+            provider_selection_state=provider_selection_state,
+            provider_credential_state=provider_credential_state,
+            provider_readiness_summary=provider_readiness_summary,
+            provider_safety_contract=provider_safety_contract,
+            render_request=render_request,
+        )
+        provider_registry_snapshot = provider_handoff_state.provider_registry_snapshot
+        provider_activation_state = provider_handoff_state.provider_activation_state
+        provider_config_validation = provider_handoff_state.provider_config_validation
+        credential_validation_summary = provider_handoff_state.credential_validation_summary
+        provider_enablement_gate = provider_handoff_state.provider_enablement_gate
+        provider_intent_signal = provider_handoff_state.provider_intent_signal
+        provider_activation_contract = provider_handoff_state.provider_activation_contract
+        provider_safety_summary = provider_handoff_state.provider_safety_summary
+        local_render_capability = provider_handoff_state.local_render_capability
+        provider_payload_v2 = provider_handoff_state.provider_payload_v2
+        selected_provider = (
+            provider_payload_v2.get("provider")
+            if isinstance(provider_payload_v2, dict)
+            else None
+        )
+        execution_unlock_state = provider_handoff_state.execution_unlock_state
+        handoff_gate = provider_handoff_state.handoff_gate
+        handoff_envelope = provider_handoff_state.handoff_envelope
+        handoff_audit = provider_handoff_state.handoff_audit
+        execution_intent = provider_handoff_state.execution_intent
+        execution_eligibility = provider_handoff_state.execution_eligibility
+        execution_request_envelope = provider_handoff_state.execution_request_envelope
+        local_render_gate = provider_handoff_state.local_render_gate
+        local_execution_trigger = provider_handoff_state.local_execution_trigger
+        local_single_shot_guard = provider_handoff_state.local_single_shot_guard
+        local_render_contract = provider_handoff_state.local_render_contract
+        execution_control_contract = provider_handoff_state.execution_control_contract
+        execution_trigger = provider_handoff_state.execution_trigger
+        real_execution_trigger = provider_handoff_state.real_execution_trigger
+        local_execution_state = self._build_script_breakdown_local_execution_state(
+            execution_request_envelope=execution_request_envelope,
+            prompt_envelope=prompt_envelope,
+            local_execution_trigger=local_execution_trigger,
+        )
+        first_shot_id = local_execution_state.first_shot_id
+        prompt_value = local_execution_state.prompt_value
+        local_execution_result = local_execution_state.local_execution_result
+        local_render_output = local_execution_state.local_render_output
+        local_artifact_log = local_execution_state.local_artifact_log
 
         should_execute_common = (
             isinstance(execution_trigger, dict)
@@ -2306,35 +3949,13 @@ class ScriptParser:
             },
             "render_orchestration_contract": render_orchestration_contract,
         }
-        active_cut_summary_input = None
-        project_id_input = "default_project"
-        staged_reference_analysis_input = None
-        ignored_agent_decisions_input: List[Dict[str, Any]] = []
-        voice_direction_commands_input: List[str] = []
-        if isinstance(script_text, dict):
-            active_cut_summary_input = (
-                script_text.get("active_cut_summary")
-                if isinstance(script_text.get("active_cut_summary"), dict)
-                else None
-            )
-            if isinstance(script_text.get("project_id"), str) and script_text.get("project_id").strip():
-                project_id_input = script_text.get("project_id").strip()
-            staged_reference_analysis_input = (
-                script_text.get("reference_analysis")
-                if isinstance(script_text.get("reference_analysis"), dict)
-                else None
-            )
-            raw_ignored_decisions = script_text.get("ignored_agent_decisions")
-            if isinstance(raw_ignored_decisions, list):
-                ignored_agent_decisions_input = [
-                    row for row in raw_ignored_decisions if isinstance(row, dict)
-                ][:50]
-            raw_voice_commands = script_text.get("voice_direction_commands")
-            if isinstance(raw_voice_commands, list):
-                voice_direction_commands_input = [
-                    str(row).strip() for row in raw_voice_commands if str(row).strip()
-                ][:20]
-            script_text = script_text.get("script_text", "")
+        breakdown_input = self._normalize_script_breakdown_input(script_text)
+        script_text = breakdown_input.script_text
+        active_cut_summary_input = breakdown_input.active_cut_summary
+        project_id_input = breakdown_input.project_id
+        staged_reference_analysis_input = breakdown_input.reference_analysis
+        ignored_agent_decisions_input = breakdown_input.ignored_agent_decisions
+        voice_direction_commands_input = breakdown_input.voice_direction_commands
 
         if not isinstance(script_text, str) or not script_text.strip():
             logger.debug("END: build_script_breakdown_bundle (empty input) %.4f", time.time() - _function_start)
@@ -3436,437 +5057,62 @@ class ScriptParser:
             },
         )
 
-        did_multi_shot_real_execution = False
-        should_execute_common = (
-            isinstance(execution_trigger, dict)
-            and execution_trigger.get("should_execute") is True
-            and isinstance(first_shot_id, str)
-            and bool(first_shot_id.strip())
-            and isinstance(prompt_value, dict)
+        execution_run_state = self._run_script_breakdown_execution_branch(
+            execution_trigger=execution_trigger,
+            first_shot_id=first_shot_id,
+            prompt_value=prompt_value,
+            selected_provider=selected_provider,
+            real_execution_trigger=real_execution_trigger,
+            real_multi_shot_request_envelope=real_multi_shot_request_envelope,
+            batch_execution_limit=batch_execution_limit,
+            shot_queue=shot_queue,
+            provider_config=provider_config,
+            provider_selection_state=provider_selection_state,
+            max_safe_iter=MAX_SAFE_ITER,
+            multi_shot_results=multi_shot_results,
+            real_multi_shot_results=real_multi_shot_results,
         )
-        should_execute_mock = should_execute_common and selected_provider == "mock"
-        should_execute_real = (
-            should_execute_common
-            and selected_provider == "real_stub"
-            and isinstance(real_execution_trigger, dict)
-            and real_execution_trigger.get("should_execute") is True
+        execution_request = execution_run_state.execution_request
+        provider_payload = execution_run_state.provider_payload
+        execution_status = execution_run_state.execution_status
+        execution_result_v2 = execution_run_state.execution_result_v2
+        execution_result = execution_run_state.execution_result
+        output_sync = execution_run_state.output_sync
+        execution_monitor = execution_run_state.execution_monitor
+        execution_log = execution_run_state.execution_log
+        selection_boundary_guard = execution_run_state.selection_boundary_guard
+        multi_shot_results = execution_run_state.multi_shot_results
+        real_multi_shot_results = execution_run_state.real_multi_shot_results
+        did_multi_shot_real_execution = execution_run_state.did_multi_shot_real_execution
+        should_execute_real = execution_run_state.should_execute_real
+        real_multi_shot_request_valid = execution_run_state.real_multi_shot_request_valid
+        execution_output_state = self._sync_script_breakdown_execution_outputs(
+            should_execute_real=should_execute_real,
+            real_multi_shot_request_valid=real_multi_shot_request_valid,
+            multi_shot_results=multi_shot_results,
+            shot_queue=shot_queue,
+            max_safe_iter=MAX_SAFE_ITER,
+            render_output=render_output,
+            execution_result_v2=execution_result_v2,
+            selected_provider=selected_provider,
+            first_shot_id=first_shot_id,
+            prompt_value=prompt_value,
+            shot_execution_ledger=shot_execution_ledger,
+            multi_shot_execution_ledger=multi_shot_execution_ledger,
+            multi_shot_take_artifacts=multi_shot_take_artifacts,
+            scene_generation_summary=scene_generation_summary,
+            scene_playback_preview=scene_playback_preview,
+            take_artifacts=take_artifacts,
+            take_comparison_v2=take_comparison_v2,
         )
-        should_execute = should_execute_mock or should_execute_real
-        if should_execute:
-            execution_provider = "real_stub" if should_execute_real else "mock"
-            execution_request = {
-                "enabled": True,
-                "shot_id": first_shot_id,
-                "prompt": copy.deepcopy(prompt_value),
-            }
-            provider_payload = {
-                "provider": execution_provider,
-                "shot_id": first_shot_id,
-                "prompt": copy.deepcopy(prompt_value),
-            }
-            if should_execute_real:
-                did_multi_shot_real_execution = False
-                real_multi_shot_request_valid = (
-                    isinstance(real_multi_shot_request_envelope, dict)
-                    and real_multi_shot_request_envelope.get("request_valid") is True
-                )
-                multi_shot_results: List[Dict[str, Any]] = []
-                if real_multi_shot_request_valid:
-                    did_multi_shot_real_execution = True
-                    allowed_shots = 0
-                    if isinstance(batch_execution_limit, dict):
-                        raw_allowed_shots = batch_execution_limit.get("allowed_shots")
-                        if isinstance(raw_allowed_shots, int) and raw_allowed_shots > 0:
-                            allowed_shots = raw_allowed_shots
-                    if isinstance(shot_queue, list) and isinstance(prompt_value, dict):
-                        for _shot_idx, shot in enumerate(shot_queue[:allowed_shots]):
-                            if _shot_idx >= MAX_SAFE_ITER:
-                                logger.warning("loop guard triggered in multi-shot execution")
-                                break
-                            if not isinstance(shot, dict):
-                                continue
-                            shot_id = shot.get("shot_id")
-                            if not isinstance(shot_id, str) or not shot_id.strip():
-                                continue
-                            payload = {
-                                "provider": "real_stub",
-                                "shot_id": shot_id.strip(),
-                                "prompt": copy.deepcopy(prompt_value),
-                            }
-                            result = execution_layer.execute_render(
-                                "real_stub",
-                                payload,
-                                provider_config,
-                            )
-                            multi_shot_results.append(
-                                normalize_provider_result(result, "real_stub")
-                            )
-                    real_multi_shot_results = multi_shot_results
-                    executor_result = (
-                        multi_shot_results[0] if multi_shot_results else None
-                    )
-                else:
-                    multi_shot_results = []
-                    executor_result = execution_layer.execute_render(
-                        "real_stub",
-                        provider_payload,
-                        provider_config,
-                    )
-            else:
-                executor_result = execute_render(
-                    provider_payload=provider_payload,
-                    provider_name="mock",
-                    config=provider_config,
-                )
-        else:
-            execution_request = {
-                "enabled": False,
-                "shot_id": None,
-                "prompt": None,
-            }
-            provider_payload = {
-                "provider": "mock",
-                "shot_id": None,
-                "prompt": None,
-            }
-            executor_result = None
-        execution_status = self.build_execution_status(execution_request).get(
-            "execution_status",
-            {
-                "state": "blocked",
-                "reason": "Execution not enabled",
-            },
-        )
-        execution_result_v2 = self.build_execution_result_v2(
-            execution_request,
-            provider_payload,
-            executor_result,
-        ).get(
-            "execution_result_v2",
-            {
-                "executed": False,
-                "render_id": None,
-                "status": "not_executed",
-            },
-        )
-        execution_result = {
-            "executed": execution_result_v2.get("executed") is True,
-            "render_id": execution_result_v2.get("render_id"),
-            "status": execution_result_v2.get("status")
-            if isinstance(execution_result_v2.get("status"), str)
-            else "not_executed",
-        }
-        output_sync = self.build_output_sync(execution_result_v2).get(
-            "output_sync",
-            {
-                "synced": False,
-                "render_id": None,
-            },
-        )
-        execution_monitor = self.build_execution_monitor(
-            execution_status,
-            execution_result_v2,
-        ).get(
-            "execution_monitor",
-            {
-                "state": "blocked",
-                "result": "not_executed",
-            },
-        )
-        execution_log = self.build_execution_log(
-            execution_result_v2.get("executed") is True,
-            selected_provider,
-            first_shot_id,
-        ).get(
-            "execution_log",
-            {
-                "executed": False,
-                "provider": "mock",
-                "provider_type": "mock",
-                "shot_id": None,
-                "timestamp": None,
-            },
-        )
-        selection_boundary_guard = self.build_selection_boundary_guard(
-            provider_selection_state,
-            execution_result,
-            execution_result_v2,
-        ).get(
-            "selection_boundary_guard",
-            {
-                "selection_applied": False,
-                "execution_triggered": False,
-                "reason": "No provider selection applied",
-            },
-        )
-        real_multi_shot_request_valid = (
-            isinstance(real_multi_shot_request_envelope, dict)
-            and real_multi_shot_request_envelope.get("request_valid") is True
-        )
-        if should_execute_real and real_multi_shot_request_valid and isinstance(multi_shot_results, list):
-            planned_shot_ids: List[str] = []
-            if isinstance(shot_queue, list):
-                for queue_index, item in enumerate(shot_queue):
-                    if queue_index >= MAX_SAFE_ITER:
-                        logger.warning("loop guard triggered in shot_queue")
-                        break
-                    if not isinstance(item, dict):
-                        continue
-                    shot_id = item.get("shot_id")
-                    if isinstance(shot_id, str) and shot_id.strip():
-                        planned_shot_ids.append(shot_id.strip())
-
-            multi_shot_execution_ledger = []
-            for index, shot_id in enumerate(planned_shot_ids):
-                if index >= MAX_SAFE_ITER:
-                    logger.warning("loop guard triggered in multi_shot_execution_ledger")
-                    break
-                if index < len(multi_shot_results):
-                    result_row = (
-                        multi_shot_results[index]
-                        if isinstance(multi_shot_results[index], dict)
-                        else {}
-                    )
-                    row_meta = (
-                        result_row.get("meta")
-                        if isinstance(result_row.get("meta"), dict)
-                        else {"file_path": None, "url": None}
-                    )
-                    multi_shot_execution_ledger.append(
-                        {
-                            "shot_id": shot_id,
-                            "status": (
-                                "complete"
-                                if result_row.get("status") == "success"
-                                else "failed"
-                            ),
-                            "render_id": (
-                                result_row.get("render_id")
-                                if isinstance(result_row.get("render_id"), str)
-                                else None
-                            ),
-                            "meta": {
-                                "file_path": row_meta.get("file_path"),
-                                "url": row_meta.get("url"),
-                            },
-                        }
-                    )
-                else:
-                    multi_shot_execution_ledger.append(
-                        {
-                            "shot_id": shot_id,
-                            "status": "not_executed",
-                            "render_id": None,
-                            "meta": {"file_path": None, "url": None},
-                        }
-                    )
-
-            multi_shot_take_artifacts = []
-            for index, result_row in enumerate(multi_shot_results):
-                if index >= MAX_SAFE_ITER:
-                    logger.warning("loop guard triggered in memory arrays")
-                    break
-                row_data = result_row if isinstance(result_row, dict) else {}
-                row_meta = (
-                    row_data.get("meta")
-                    if isinstance(row_data.get("meta"), dict)
-                    else {"file_path": None, "url": None}
-                )
-                multi_shot_take_artifacts.append(
-                    {
-                        "iteration": index + 1,
-                        "shot_id": planned_shot_ids[index] if index < len(planned_shot_ids) else None,
-                        "render_id": (
-                            row_data.get("render_id")
-                            if isinstance(row_data.get("render_id"), str)
-                            else None
-                        ),
-                        "status": row_data.get("status") if isinstance(row_data.get("status"), str) else "failed",
-                        "provider": "real_stub",
-                        "meta": {
-                            "file_path": row_meta.get("file_path"),
-                            "url": row_meta.get("url"),
-                        },
-                    }
-                )
-
-            planned_shots = len(planned_shot_ids)
-            completed_shots = 0
-            for row_index, row in enumerate(multi_shot_results):
-                if row_index >= MAX_SAFE_ITER:
-                    logger.warning("loop guard triggered in memory arrays")
-                    break
-                if isinstance(row, dict) and row.get("status") == "success":
-                    completed_shots += 1
-            scene_generation_summary = {
-                "planned_shots": planned_shots,
-                "completed_shots": completed_shots,
-                "provider": "real_stub",
-                "status": (
-                    "complete"
-                    if planned_shots > 0 and completed_shots == planned_shots
-                    else "partial"
-                    if completed_shots > 0 and completed_shots < planned_shots
-                    else "not_started"
-                ),
-            }
-
-            render_ids = []
-            has_success = False
-            for row_index, row in enumerate(multi_shot_results):
-                if row_index >= MAX_SAFE_ITER:
-                    logger.warning("loop guard triggered in memory arrays")
-                    break
-                if not isinstance(row, dict):
-                    continue
-                if row.get("status") == "success":
-                    has_success = True
-                    render_id = row.get("render_id")
-                    if isinstance(render_id, str):
-                        render_ids.append(render_id)
-            scene_playback_preview = {
-                "available": has_success,
-                "shot_count": len(render_ids),
-                "render_ids": render_ids,
-                "status": scene_generation_summary.get("status", "partial"),
-            }
-            if isinstance(render_output, dict):
-                representative_render_id = (
-                    render_ids[0] if render_ids else None
-                )
-                representative_status = (
-                    "success" if has_success else "not_executed"
-                )
-                representative_meta = (
-                    multi_shot_results[0].get("meta")
-                    if multi_shot_results and isinstance(multi_shot_results[0], dict) and isinstance(multi_shot_results[0].get("meta"), dict)
-                    else {"file_path": None, "url": None}
-                )
-                render_output = {
-                    **render_output,
-                    "render_id": representative_render_id,
-                    "status": representative_status,
-                    "provider": "real_stub",
-                    "has_output": has_success,
-                    "file_path": representative_meta.get("file_path"),
-                    "url": representative_meta.get("url"),
-                }
-            updated_shot_execution_ledger: List[Dict[str, Any]] = []
-            for index, shot_id in enumerate(planned_shot_ids):
-                if index >= MAX_SAFE_ITER:
-                    logger.warning("loop guard triggered in multi_shot_execution_ledger")
-                    break
-                if index < len(multi_shot_results):
-                    result_row = multi_shot_results[index] if isinstance(multi_shot_results[index], dict) else {}
-                    row_meta = result_row.get("meta") if isinstance(result_row.get("meta"), dict) else {"file_path": None, "url": None}
-                    updated_shot_execution_ledger.append(
-                        {
-                            "shot_id": shot_id,
-                            "status": "complete" if result_row.get("status") == "success" else "failed",
-                            "render_id": result_row.get("render_id") if isinstance(result_row.get("render_id"), str) else None,
-                            "meta": {"file_path": row_meta.get("file_path"), "url": row_meta.get("url")},
-                        }
-                    )
-                else:
-                    updated_shot_execution_ledger.append(
-                        {
-                            "shot_id": shot_id,
-                            "status": "not_executed",
-                            "render_id": None,
-                            "meta": {"file_path": None, "url": None},
-                        }
-                    )
-            shot_execution_ledger = updated_shot_execution_ledger
-
-            take_artifacts = list(multi_shot_take_artifacts)
-        elif execution_result_v2.get("executed") is True:
-            result_status = execution_result_v2.get("status")
-            result_render_id = execution_result_v2.get("render_id")
-            result_meta = (
-                execution_result_v2.get("meta")
-                if isinstance(execution_result_v2.get("meta"), dict)
-                else {"file_path": None, "url": None}
-            )
-            if isinstance(render_output, dict):
-                render_output = {
-                    **render_output,
-                    "render_id": result_render_id,
-                    "status": result_status if isinstance(result_status, str) else "failed",
-                    "provider": selected_provider if isinstance(selected_provider, str) else "mock",
-                    "has_output": result_status == "success",
-                    "file_path": result_meta.get("file_path"),
-                    "url": result_meta.get("url"),
-                }
-            elif isinstance(first_shot_id, str) and first_shot_id.strip():
-                render_output = {
-                    "render_id": result_render_id,
-                    "shot_id": first_shot_id,
-                    "status": result_status if isinstance(result_status, str) else "failed",
-                    "prompt_snapshot": copy.deepcopy(prompt_value) if isinstance(prompt_value, dict) else None,
-                    "provider": selected_provider if isinstance(selected_provider, str) else "mock",
-                    "has_output": result_status == "success",
-                    "file_path": result_meta.get("file_path"),
-                    "url": result_meta.get("url"),
-                }
-
-            updated_ledger: List[Dict[str, Any]] = []
-            for index, item in enumerate(shot_execution_ledger):
-                if index >= MAX_SAFE_ITER:
-                    logger.warning("loop guard triggered in shot_queue")
-                    break
-                if not isinstance(item, dict):
-                    continue
-                if index == 0:
-                    updated_ledger.append(
-                        {
-                            "shot_id": item.get("shot_id"),
-                            "status": "complete" if result_status == "success" else "not_executed",
-                            "render_id": result_render_id if isinstance(result_render_id, str) else None,
-                            "meta": {
-                                "file_path": result_meta.get("file_path"),
-                                "url": result_meta.get("url"),
-                            },
-                        }
-                    )
-                else:
-                    updated_ledger.append(
-                        {
-                            "shot_id": item.get("shot_id"),
-                            "status": item.get("status"),
-                            "render_id": None,
-                            "meta": {
-                                "file_path": None,
-                                "url": None,
-                            },
-                        }
-                    )
-            shot_execution_ledger = updated_ledger
-
-            base_take = {
-                "iteration": 1,
-                "render_id": result_render_id if isinstance(result_render_id, str) else None,
-                "status": result_status if isinstance(result_status, str) else "failed",
-                "meta": {
-                    "file_path": result_meta.get("file_path"),
-                    "url": result_meta.get("url"),
-                },
-            }
-            if isinstance(selected_provider, str) and selected_provider == "real_stub":
-                base_take = {
-                    **base_take,
-                    "shot_id": first_shot_id,
-                    "provider": "real_stub",
-                }
-            take_artifacts = [base_take]
-            take_comparison_v2 = self.build_take_comparison_v2(
-                {"take_artifacts": take_artifacts}
-            ).get(
-                "take_comparison_v2",
-                {
-                    "comparable": False,
-                    "differences": [],
-                },
-            )
+        multi_shot_execution_ledger = execution_output_state.multi_shot_execution_ledger
+        multi_shot_take_artifacts = execution_output_state.multi_shot_take_artifacts
+        scene_generation_summary = execution_output_state.scene_generation_summary
+        scene_playback_preview = execution_output_state.scene_playback_preview
+        render_output = execution_output_state.render_output
+        shot_execution_ledger = execution_output_state.shot_execution_ledger
+        take_artifacts = execution_output_state.take_artifacts
+        take_comparison_v2 = execution_output_state.take_comparison_v2
         _end_section("multi-shot execution", multi_shot_timer)
 
         active_cut_summary: Dict[str, Any] = {
@@ -6125,384 +7371,8 @@ class ScriptParser:
 
         _end_section("final bundle assembly", final_assembly_timer)
 
-        final_bundle = {
-            "scenes": scenes,
-            "scene_index": scene_index,
-            "character_presence": self.build_character_presence_index(scenes),
-            "location_presence": self.build_location_presence_index(scenes),
-            "time_of_day_presence": self.build_time_of_day_presence_index(scenes),
-            "summary": self.build_script_structure_summary(scenes),
-            "continuity": continuity,
-            "voice_direction_commands": voice_direction_result.get("voice_direction_commands", []),
-            "voice_direction_guidance": voice_direction_result.get(
-                "voice_direction_guidance",
-                {
-                    "advisory_only": True,
-                    "requires_creator_approval": True,
-                    "emotional_changes": [],
-                    "pacing_changes": [],
-                    "visual_style_updates": [],
-                    "guidance_lines": [],
-                },
-            ),
-            "character_profiles": [profile.model_dump() for profile in character_profiles],
-            "character_consistency": {
-                "reference_context": character_reference_context,
-                "scene_consistency_notes": character_consistency_notes,
-            },
-            "character_identity_memory": character_identity_memory,
-            "provider_identity_context": provider_identity_context,
-            "emotional_identity_continuity": emotional_identity_continuity,
-            "identity_drift_warnings": identity_drift_warnings,
-            "dialogue_lines": [line.model_dump() for line in dialogue_lines],
-            "dialogue_timing_metadata": dialogue_timing_metadata,
-            "voice_provider_plan": voice_provider_plan,
-            "audio_dialogue_timeline": audio_dialogue_timeline,
-            "ambient_audio_tracks": [track.model_dump() for track in ambient_tracks],
-            "ambient_audio_timeline": ambient_audio_timeline,
-            "final_film_audio_render_plan": final_film_audio_render_plan,
-            "emotional_arc_profiles": [profile.model_dump() for profile in emotional_arc_profiles],
-            "emotional_arc_movement": emotional_arc_movement,
-            "emotional_pacing_balance": emotional_pacing_balance,
-            "emotional_climax_buildup": emotional_climax_buildup,
-            "emotional_continuity_score": emotional_continuity,
-            "symbolism_nodes": symbolism_result.get("symbolism_nodes", []),
-            "recurring_imagery": symbolism_result.get("recurring_imagery", []),
-            "recurring_phrases": symbolism_result.get("recurring_phrases", []),
-            "emotional_callbacks": symbolism_result.get("emotional_callbacks", []),
-            "environmental_symbolism": symbolism_result.get("environmental_symbolism", []),
-            "symbolism_connections": symbolism_result.get("symbolism_connections", []),
-            "symbolism_graph_visualization": symbolism_result.get(
-                "symbolism_graph_visualization",
-                {"nodes": [], "edges": [], "layout": "force", "legend": ""},
-            ),
-            "memory_archivist_symbolism_context": {
-                "nodes": symbolism_result.get("symbolism_nodes", []),
-                "environmental_symbolism": symbolism_result.get("environmental_symbolism", []),
-            },
-            "emotional_arc_symbolism_context": {
-                "emotional_callbacks": symbolism_result.get("emotional_callbacks", []),
-                "recurring_phrases": symbolism_result.get("recurring_phrases", []),
-            },
-            "director_symbolism_context": {
-                "recurring_imagery": symbolism_result.get("recurring_imagery", []),
-                "symbolism_connections": symbolism_result.get("symbolism_connections", []),
-            },
-            "director_emotional_arc_context": {
-                "pacing_balance": emotional_pacing_balance,
-                "climax_buildup": emotional_climax_buildup,
-            },
-            "evaluator_emotional_arc_context": {
-                "movement": emotional_arc_movement,
-                "continuity_score": emotional_continuity,
-            },
-            "scene_generation_emotional_guidance": emotional_scene_generation_lines,
-            "scene_continuity": scene_continuity,
-            "director_continuity_context": {
-                "transition_context": transition_context,
-                "warnings": [
-                    *scene_continuity.get("warnings", []),
-                    *identity_drift_warnings,
-                ],
-            },
-            "memory_archivist_continuity_context": {
-                "scene_states": scene_continuity.get("scene_states", []),
-                "unresolved_tension": transition_context.get("unresolved_tension", ""),
-            },
-            "continuity_warnings": [
-                *scene_continuity.get("warnings", []),
-                *identity_drift_warnings,
-            ],
-            "film_visual_style_profile": film_visual_style_profile.model_dump(),
-            "style_consistency": {
-                "reference_context": style_reference_context,
-                "scene_consistency_notes": style_consistency_notes,
-                "visual_continuity_score": visual_continuity_score,
-            },
-            "relationships": relationships,
-            "patterns": patterns,
-            "pattern_observations": pattern_observations,
-            "top_pattern_observation": top_pattern_observation.get("top_pattern_observation"),
-            "memory_pattern_note": memory_pattern_note,
-            "memory_candidates": memory_candidates,
-            "memory_category_presence": memory_category_presence,
-            "memory_snapshot_summary": memory_snapshot_summary,
-            "memory_state_rollup": memory_state_rollup,
-            "memory_consistency": memory_consistency,
-            "memory_candidate_observations": memory_candidate_bundle["memory_candidate_observations"],
-            "top_memory_candidate_observation": memory_candidate_bundle["top_memory_candidate_observation"],
-            "memory_records": memory_records,
-            "memory_aggregate": memory_aggregate,
-            "director_reference_memory": {
-                "datasets": [],
-                "learned_patterns": {},
-                "reusable_rules": [],
-            },
-            "memory_influence_gate": memory_influence_gate,
-            "memory_output_influence_contract": memory_output_influence_contract,
-            "memory_advisory_projection": memory_advisory_projection,
-            "co_director_memory_visibility": co_director_memory_visibility,
-            "co_director_memory_advisory": co_director_memory_advisory,
-            "co_director_memory_bridge": co_director_memory_bridge,
-            "co_director_memory_contract": co_director_memory_contract,
-            "co_director_visual_contract": co_director_visual_contract,
-            "co_director_visual_feed": co_director_visual_feed,
-            "co_director_visual_observation": co_director_visual_observation,
-            "co_director_shot_observation": co_director_shot_observation,
-            "co_director_observation_summary": co_director_observation_summary,
-            "co_director_observation_contract": co_director_observation_contract,
-            "co_director_memory_authority_boundary": co_director_memory_authority_boundary,
-            "output_influence_guard_v2": output_influence_guard_v2,
-            "visual_decision_boundary": visual_decision_boundary,
-            "shot_execution_lock": shot_execution_lock,
-            "boundary_audit": boundary_audit,
-            "studio_safety_state": studio_safety_state,
-            "prompt_influence_gate_v1": prompt_influence_gate_v1,
-            "visual_prompt_tokens": visual_prompt_tokens,
-            "shot_prompt_tokens": shot_prompt_tokens,
-            "prompt_envelope": prompt_envelope,
-            "prompt_safety_contract": prompt_safety_contract,
-            "render_activation_gate_v1": render_activation_gate_v1,
-            "render_request": render_request,
-            "render_output": render_output,
-            "output_review": output_review,
-            "output_evaluation": output_evaluation,
-            "retry_gate": retry_gate,
-            "execution_snapshot": execution_snapshot,
-            "iteration_record": iteration_record,
-            "take_history": take_history,
-            "take_artifacts": take_artifacts,
-            "retry_snapshot": retry_snapshot,
-            "take_comparison": take_comparison,
-            "take_comparison_v2": take_comparison_v2,
-            "take_preference_contract": take_preference_contract,
-            "take_advisory_note": take_advisory_note,
-            "output_review_matrix": output_review_matrix,
-            "loop_readiness": loop_readiness,
-            "next_take_preview": next_take_preview,
-            "loop_constraint": loop_constraint,
-            "loop_advisory": loop_advisory,
-            "loop_contract": loop_contract,
-            "loop_execution_plan": loop_execution_plan,
-            "simulated_iteration": simulated_iteration,
-            "simulated_output": simulated_output,
-            "loop_result_snapshot": loop_result_snapshot,
-            "loop_execution_contract": loop_execution_contract,
-            "execution_permission": execution_permission,
-            "handoff_gate": handoff_gate,
-            "provider_payload_v2": provider_payload_v2,
-            "handoff_envelope": handoff_envelope,
-            "handoff_audit": handoff_audit,
-            "execution_unlock_state": execution_unlock_state,
-            "execution_intent": execution_intent,
-            "execution_eligibility": execution_eligibility,
-            "execution_request_envelope": execution_request_envelope,
-            "execution_trigger": execution_trigger,
-            "real_execution_trigger": real_execution_trigger,
-            "execution_control_contract": execution_control_contract,
-            "request_schema_validation": request_schema_validation,
-            "provider_validation": provider_validation,
-            "payload_sanitization": payload_sanitization,
-            "request_validation_summary": request_validation_summary,
-            "request_validation_contract": request_validation_contract,
-            "provider_adapter_identity": provider_adapter_identity,
-            "provider_adapter_status": provider_adapter_status,
-            "provider_adapter_requirements": provider_adapter_requirements,
-            "provider_adapter_readiness_gate": provider_adapter_readiness_gate,
-            "provider_adapter_contract": provider_adapter_contract,
-            "debug_control_state": {
-                "safe_mode": True,
-            },
-            "execution_request": execution_request,
-            "execution_status": execution_status,
-            "execution_result": execution_result,
-            "execution_contract": execution_contract,
-            "execution_log": execution_log,
-            "provider_payload": provider_payload,
-            "execution_result_v2": execution_result_v2,
-            "output_sync": output_sync,
-            "execution_monitor": execution_monitor,
-            "provider_config_snapshot": provider_config_snapshot,
-            "provider_credential_state": provider_credential_state,
-            "provider_selection_state": provider_selection_state,
-            "selection_boundary_guard": selection_boundary_guard,
-            "provider_readiness_summary": provider_readiness_summary,
-            "provider_capability": provider_capability,
-            "provider_control_contract": provider_control_contract,
-            "provider_safety_contract": provider_safety_contract,
-            "provider_registry_snapshot": provider_registry_snapshot,
-            "provider_activation_state": provider_activation_state,
-            "provider_config_validation": provider_config_validation,
-            "credential_validation_summary": credential_validation_summary,
-            "provider_enablement_gate": provider_enablement_gate,
-            "provider_intent_signal": provider_intent_signal,
-            "provider_activation_contract": provider_activation_contract,
-            "provider_safety_summary": provider_safety_summary,
-            "local_render_capability": local_render_capability,
-            "local_render_gate": local_render_gate,
-            "local_execution_trigger": local_execution_trigger,
-            "local_execution_result": local_execution_result,
-            "local_render_output": local_render_output,
-            "local_artifact_log": local_artifact_log,
-            "local_single_shot_guard": local_single_shot_guard,
-            "local_render_contract": local_render_contract,
-            "visual_references": visual_references,
-            "visual_reference_indexes": visual_reference_indexes,
-            "visual_reference_summary": visual_reference_summary,
-            "visual_pattern_summary": visual_pattern_summary,
-            "frame_metadata": frame_metadata,
-            "frame_stats": frame_stats,
-            "frame_analysis_snapshot": frame_analysis_snapshot,
-            "scene_visual_links": scene_visual_links,
-            "scene_visual_identity": scene_visual_identity,
-            "visual_consistency": visual_consistency,
-            "visual_tension": visual_tension,
-            "link_completeness": link_completeness,
-            "alignment_status": alignment_status,
-            "top_alignment_note": top_alignment_note,
-            "shot_candidates": shot_candidates,
-            "scene_render_jobs": scene_render_jobs,
-            "scene_render_job_summary": scene_render_job_summary,
-            "shot_coverage": shot_coverage,
-            "shot_plan_bundle": shot_plan_bundle,
-            "shot_queue": shot_queue,
-            "dispatch_pointer": dispatch_pointer,
-            "multi_shot_guard": multi_shot_guard,
-            "shot_execution_ledger": shot_execution_ledger,
-            "multi_shot_readiness": multi_shot_readiness,
-            "multi_shot_execution_unlock": multi_shot_execution_unlock,
-            "shot_batch_plan": shot_batch_plan,
-            "batch_execution_limit": batch_execution_limit,
-            "multi_shot_execution_trigger": multi_shot_execution_trigger,
-            "multi_shot_results": multi_shot_results,
-            "multi_shot_execution_ledger": multi_shot_execution_ledger,
-            "multi_shot_take_artifacts": multi_shot_take_artifacts,
-            "scene_generation_summary": scene_generation_summary,
-            "scene_playback_preview": scene_playback_preview,
-            "scene_visual_brief": scene_visual_brief_list,
-            "previs_accuracy": previs_accuracy,
-            "project_id": project_id_input,
-            "memory_reuse_context": memory_reuse_context,
-            "scene_coherence_report": scene_coherence_report,
-            "scene_emotional_flow": scene_emotional_flow,
-            "scene_quality_verdict": scene_quality_verdict,
-            "director_notes": director_notes,
-            "scene_intervention_plan": scene_intervention_plan,
-            "next_iteration_strategy": next_iteration_strategy,
-            "scene_iterations": scene_iterations,
-            "agent_disagreements": aggregate_agent_disagreements,
-            "ignored_agent_decisions": ignored_agent_decisions,
-            "creative_tension_score": creative_tension_score,
-            "studio_brain_orchestration": studio_brain_orchestration,
-            "studio_brain_timeline": studio_brain_orchestration.get("orchestration_timeline", []),
-            "studio_brain_reasoning_trace": studio_brain_orchestration.get("creative_reasoning_trace", []),
-            "selected_iteration": selected_iteration,
-            "iteration_history": iteration_history,
-            "active_cut_summary": active_cut_summary,
-            "iteration_comparison": iteration_comparison,
-            "iteration_impact": iteration_impact,
-            "story_direction": story_direction,
-            "score_map": score_map,
-            "audio_cues": audio_cues,
-            "audio_asset_plan": audio_asset_plan,
-            "audio_summary": audio_summary,
-            "screening_playlist": screening_playlist,
-            "screening_summary": screening_summary,
-            "production_summary": production_summary,
-            "cut_analysis": cut_analysis,
-            "visual_bible": visual_bible,
-            "image_render_assets": image_render_assets,
-            "render_asset_summary": render_asset_summary,
-            "video_render_assets": video_render_assets,
-            "video_render_summary": video_render_summary,
-            "prompt_warnings": prompt_warnings,
-            "render_quality_warnings": scene_render_quality_warnings,
-            "scene_variance_profile": scene_variance_profile,
-            "editing_intelligence": editing_intelligence_result.get(
-                "editing_intelligence",
-                {"advisory_only": True, "suggestions": [], "suggestion_count": 0},
-            ),
-            "editing_suggestions": editing_intelligence_result.get("editing_suggestions", []),
-            "film_assembly_editing_context": {
-                "advisory_only": True,
-                "suggestions": editing_intelligence_result.get("editing_suggestions", []),
-            },
-            "director_evaluator_editing_context": {
-                "advisory_only": True,
-                "suggestions": editing_intelligence_result.get("editing_suggestions", []),
-            },
-            "scene_transitions": scene_transitions,
-            "sequence_flow": sequence_flow,
-            "ending_impact": ending_impact,
-            "dread_curve": dread_curve,
-            "motif_state": motif_state,
-            "film_structure": film_structure,
-            "film_progress": film_progress,
-            "film_validation": film_validation,
-            "archive_snapshots": archive_snapshots,
-            "best_cut_summary": best_cut_summary,
-            "archive_summary": archive_summary,
-            "co_director_suggestions": co_director_suggestions,
-            "scene_continuity_report": scene_continuity_report,
-            "motif_evolution_report": motif_evolution_report,
-            "narrative_progression_score": narrative_progression_score,
-            "film_memory_snapshot": film_memory_snapshot,
-            "multi_shot_execution_contract": multi_shot_execution_contract,
-            "real_multi_shot_capability": real_multi_shot_capability,
-            "real_multi_shot_plan": real_multi_shot_plan,
-            "real_multi_shot_intent": real_multi_shot_intent,
-            "real_multi_shot_gate": real_multi_shot_gate,
-            "real_multi_shot_request_envelope": real_multi_shot_request_envelope,
-            "real_multi_shot_dry_run": real_multi_shot_dry_run,
-            "real_multi_shot_contract": real_multi_shot_contract,
-            "real_multi_shot_summary": real_multi_shot_summary,
-            "previs_scene_board": previs_scene_board,
-            "previs_beat_shot_map": previs_beat_shot_map,
-            "previs_continuity_map": previs_continuity_map,
-            "previs_asset_map": previs_asset_map,
-            "previs_contract": previs_contract,
-            "shot_intent": shot_intent,
-            "shot_variety": shot_variety,
-            "scene_coverage": scene_coverage,
-            "shot_planning_summary": shot_planning_summary,
-            "shot_advisory_note": shot_advisory_note,
-            "scene_sequence": scene_sequence,
-            "scene_assembly": scene_assembly,
-            "scene_assembly_v2": scene_assembly_result.get(
-                "scene_assembly_v2",
-                {"assembly_id": "asm_000_balanced", "ordered_shots": [], "runtime": 0.0, "transition_map": {}},
-            ),
-            "stitching_plan": scene_assembly_result.get(
-                "stitching_plan",
-                {"shot_ordering": [], "transition_timing": {}, "fade_cut_selection": {}, "pacing_aware_assembly": "balanced"},
-            ),
-            "stitched_export": scene_assembly_result.get(
-                "stitched_export",
-                {"format": "mp4", "path": "", "export_ready": False, "source_clips_preserved": True, "source_clips": []},
-            ),
-            "film_assembly_timeline": film_assembly_result.get(
-                "film_assembly_timeline",
-                {"timeline_id": "film_timeline_000", "ordered_scenes": [], "audio_tracks": [], "subtitles": [], "transitions": [], "title_cards": [], "credits": []},
-            ),
-            "film_export_pipeline": film_assembly_result.get(
-                "film_export_pipeline",
-                {
-                    "mp4_export": {"path": "output/renders/full_film_film_timeline_000.mp4", "ready": False},
-                    "archive_package": {"path": "output/archives/film_timeline_000.zip", "ready": False},
-                    "preview_render": {"path": "output/previews/film_timeline_000_preview.mp4", "ready": False},
-                },
-            ),
-            "film_runtime_metadata": film_assembly_result.get(
-                "film_runtime_metadata",
-                {"scene_count": 0, "ambient_track_count": 0, "dialogue_track_count": 0, "subtitle_count": 0, "transition_count": 0, "title_card_count": 0, "credits_count": 0},
-            ),
-            "sequence_status": sequence_status,
-            "scene_continuity_check": scene_continuity_check,
-            "scene_playback_status": scene_playback_status,
-            "render_envelope_stub": render_envelope_stub,
-            "orchestration_state_stub": orchestration_state_stub,
-            "render_orchestration_contract": render_orchestration_contract,
-        }
+        final_bundle_state = self._build_script_breakdown_final_bundle(locals())
+        final_bundle = final_bundle_state.final_bundle
 
         logger.debug("END: build_script_breakdown_bundle (total) %.4f", time.time() - _function_start)
         if dev_timeout_enabled:
@@ -8310,7 +9180,12 @@ class ScriptParser:
         base_prompt = str(prompt.get("base_prompt") or "").strip().lower()
         characters = [str(v).strip() for v in brief.get("characters", []) if isinstance(v, str) and str(v).strip()]
         if characters:
-            named_in_prompt = any(name.lower() in base_prompt for name in characters)
+            from app.services.character_name_matching import text_mentions_character
+
+            named_in_prompt = any(
+                text_mentions_character(base_prompt, name)
+                for name in characters
+            )
             if not named_in_prompt:
                 warnings.append("Character not named in prompt")
 
@@ -13516,11 +14391,20 @@ class ScriptParser:
             return cleaned_heading, "", ""
 
         remainder = heading_match.group(2).strip()
-        if " - " not in remainder:
-            return cleaned_heading, remainder.strip(), ""
 
-        location, time_of_day = remainder.split(" - ", 1)
-        return cleaned_heading, location.strip(), time_of_day.strip()
+        # Screenwriting software emits em dashes and en dashes as often as the
+        # ASCII hyphen, and Final Draft in particular defaults to the em dash.
+        # Splitting on " - " alone silently returns an empty time_of_day and
+        # folds "LOCATION \u2014 NIGHT" whole into the location. Downstream that
+        # empties lighting continuity and environment persistence for every
+        # scene in the script, which is invisible until a render comes back lit
+        # for the wrong hour.
+        for separator in (" \u2014 ", " \u2013 ", " - ", "\u2014", "\u2013"):
+            if separator in remainder:
+                location, time_of_day = remainder.split(separator, 1)
+                return cleaned_heading, location.strip(), time_of_day.strip()
+
+        return cleaned_heading, remainder.strip(), ""
 
     def _fallback_scene_parsing(self, script_text: str) -> List[Dict[str, Any]]:
         """

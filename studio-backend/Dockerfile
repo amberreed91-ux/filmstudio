@@ -11,8 +11,8 @@ FROM python:3.11-slim AS runtime
 # Security: non-root user
 RUN groupadd -r studio && useradd -r -g studio -d /app -s /sbin/nologin studio
 
-# Install curl for healthcheck
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Install healthcheck and film composition tools (includes ffprobe).
+RUN apt-get update && apt-get install -y --no-install-recommends curl ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Copy installed dependencies
 COPY --from=builder /install /usr/local

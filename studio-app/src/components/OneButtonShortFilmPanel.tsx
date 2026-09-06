@@ -38,7 +38,6 @@ export default function OneButtonShortFilmPanel() {
       const created = await createProject({ title: 'One Button Short Film' })
       const project = created.project
       if (!project?.project_id) throw new Error(created.error || 'Unable to create project')
-      if (import.meta.env.DEV) console.log('[OneButton] project created', project.project_id)
       setLastProjectId(project.project_id)
       localStorage.setItem('studio:activeProjectId', project.project_id)
       localStorage.setItem('studio:selected-project-id', project.project_id)
@@ -55,17 +54,7 @@ export default function OneButtonShortFilmPanel() {
       if (useMockSuccess || providerOverride.trim().toLowerCase() === 'mock_success') {
         manualOverrides.use_mock_success = true
       }
-      if (import.meta.env.DEV) {
-        console.log('[OneButtonDebug] generate-short-film request', {
-          project_id: project.project_id,
-          concept_preview: concept.slice(0, 120),
-          manual_overrides: manualOverrides,
-          submit_renders: requestOptions.submitRenders,
-          assemble_final: requestOptions.assembleFinal,
-        })
-      }
       const result = await generateShortFilmWorkflow(project.project_id, concept, manualOverrides, requestOptions)
-      if (import.meta.env.DEV) console.log('[OneButtonDebug] generate-short-film response', result)
       const unwrappedWorkflow = (result.workflow as Record<string, unknown> | undefined)?.short_film_workflow as ShortFilmWorkflow | undefined
       const resolvedWorkflow = unwrappedWorkflow || result.workflow || null
       if (!resolvedWorkflow) throw new Error(result.error || 'Workflow generation failed')
@@ -93,12 +82,6 @@ export default function OneButtonShortFilmPanel() {
           preview_url: previewUrl,
         }
       })
-      if (import.meta.env.DEV) {
-        console.log('[OneButtonDebug] parsed outputs', {
-          render_jobs_count: rows.length,
-          has_output_urls: rows.filter((row) => typeof row.output_url === 'string' && row.output_url.length > 0).length,
-        })
-      }
       setLatestJobs(rows)
       localStorage.setItem('studio:lastShortFilmWorkflow', JSON.stringify(resolvedWorkflow))
       setStatusMessage(`Generation complete. Jobs: ${rows.length}`)

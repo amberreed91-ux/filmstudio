@@ -1,0 +1,24 @@
+
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/components/CoDirectorDrawer.tsx
+  100:5  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/components/CoDirectorDrawer.tsx:100:5
+   98 |   // Input and replies belong to the selected film, scene, and specialist.
+   99 |   useEffect(() => {
+> 100 |     setInput('')
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  101 |   }, [specialist, activeProjectId, activeSceneId, context])
+  102 |
+  103 |   // Close on Escape  react-hooks/set-state-in-effect
+
+/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-app/src/pages/PrevisRoom.tsx
+  1182:6  warning  React Hook useEffect has a missing dependency: 'activeBlueprintShot'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+✖ 2 problems (0 errors, 2 warnings)
+

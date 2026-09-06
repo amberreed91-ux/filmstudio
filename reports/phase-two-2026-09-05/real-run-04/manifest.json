@@ -1,0 +1,496 @@
+{
+  "benchmark_id": "the-returned-key-v1",
+  "created_at": "2026-09-05T09:33:51.186843+00:00",
+  "status": "prepared",
+  "real_generation_executed": false,
+  "reference": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/reports/phase-two-2026-09-05/real-run-04/reference.png",
+  "reference_sha256": "a744b222d38ce57ecbc52a000f7187980859d4684a2dd3b792824f8be5d227a2",
+  "source_context": {
+    "benchmark_id": "the-returned-key-v1",
+    "title": "The Returned Key",
+    "purpose": "Baseline sequential cinema coherence; one generation per shot, no retries or selection.",
+    "characters": {
+      "Nina": "Adult Black woman, short natural locs, olive jacket, white bandage on left wrist.",
+      "Jules": "Adult light-brown-skinned man, short dark curls, blue work shirt."
+    },
+    "environment": "Green-tiled workshop, wooden table, door on left, window on right. Nina sits left and Jules right. Camera remains south of table.",
+    "continuity": "Brass key and red mug remain on table until Nina passes key to Jules. Warm amber desk lamp at dusk. Final shot is later at night with same lamp. No costume changes.",
+    "anchor_prompt": "Match both reference faces: Nina, locs, olive jacket, left wrist bandage, sits left; Jules, curls, blue shirt, sits right. Same green-tiled workshop, door left, window right, wooden table, red mug and brass key, amber lamp. Camera stays south of table.",
+    "provider": "openrouter",
+    "model": "alibaba/happyhorse-1.1",
+    "parameters": {
+      "duration": 4,
+      "resolution": "720P",
+      "ratio": "16:9",
+      "generate_audio": false
+    },
+    "shots": [
+      {
+        "shot_id": "scene_001_shot_001",
+        "direction": "Dusk. Wide static two-shot. Nina guards the key; Jules waits. Tense silence.",
+        "expectations": [
+          "Both reference identities recognizable",
+          "Correct clothes and left wrist bandage",
+          "Nina left, Jules right",
+          "Red mug and brass key on table",
+          "Dusk window and amber practical light"
+        ]
+      },
+      {
+        "shot_id": "scene_001_shot_002",
+        "direction": "Dusk. Medium close-up of Nina on left looking right at Jules. She hesitates; key stays beside red mug.",
+        "expectations": [
+          "Nina same face as shot 1 and reference",
+          "Olive jacket unchanged",
+          "Eyeline points right",
+          "Key and mug position maintained",
+          "Lighting matches prior shot"
+        ]
+      },
+      {
+        "shot_id": "scene_001_shot_003",
+        "direction": "Dusk. Reverse medium close-up of Jules on right, looking left toward Nina, quietly hopeful.",
+        "expectations": [
+          "Jules same face as shot 1 and reference",
+          "Blue shirt unchanged",
+          "Eyeline points left",
+          "Camera remains south of axis",
+          "Hope follows prior hesitation"
+        ]
+      },
+      {
+        "shot_id": "scene_001_shot_004",
+        "direction": "Dusk. Table insert. Nina slides the brass key left to right toward Jules. Bandaged left wrist visible; red mug stays still.",
+        "expectations": [
+          "Brass key has same shape",
+          "Left wrist bandage preserved",
+          "Key travels left to right",
+          "Red mug remains stationary",
+          "Hands and sleeves match cast"
+        ]
+      },
+      {
+        "shot_id": "scene_001_shot_005",
+        "direction": "Dusk. Static two-shot. Jules holds the returned brass key on right. Nina exhales on left; tension eases. Mug stays on table.",
+        "expectations": [
+          "Both identities remain stable",
+          "Key is now with Jules, not back beside Nina",
+          "Mug and room geography unchanged",
+          "Relief follows the handoff",
+          "No wardrobe change"
+        ]
+      },
+      {
+        "shot_id": "scene_002_shot_001",
+        "direction": "Later, night outside the right window. Same static two-shot and amber lamp. Jules holds key, Nina rests her bandaged wrist. Quiet trust.",
+        "expectations": [
+          "Both identities survive time progression",
+          "Window darkens but lamp remains warm",
+          "Same workshop architecture and screen positions",
+          "Key remains with Jules",
+          "Emotional progression settles into trust"
+        ]
+      }
+    ],
+    "review_questions": [
+      "Did the character remain the same person?",
+      "Did wardrobe remain correct?",
+      "Did the environment remain recognizable?",
+      "Did important props persist?",
+      "Did lighting remain logically continuous?",
+      "Did spatial relationships make sense?",
+      "Did the shot follow the screenplay?",
+      "Do adjacent shots belong to the same scene?",
+      "Do all shots belong to the same film?"
+    ],
+    "review_labels": [
+      "preserved",
+      "violated",
+      "unclear",
+      "not_visible",
+      "not_generated"
+    ]
+  },
+  "shots": [
+    {
+      "shot_id": "scene_001_shot_001",
+      "direction": "Dusk. Wide static two-shot. Nina guards the key; Jules waits. Tense silence.",
+      "expectations": [
+        "Both reference identities recognizable",
+        "Correct clothes and left wrist bandage",
+        "Nina left, Jules right",
+        "Red mug and brass key on table",
+        "Dusk window and amber practical light"
+      ],
+      "source_context": {
+        "characters": {
+          "Nina": "Adult Black woman, short natural locs, olive jacket, white bandage on left wrist.",
+          "Jules": "Adult light-brown-skinned man, short dark curls, blue work shirt."
+        },
+        "environment": "Green-tiled workshop, wooden table, door on left, window on right. Nina sits left and Jules right. Camera remains south of table.",
+        "continuity": "Brass key and red mug remain on table until Nina passes key to Jules. Warm amber desk lamp at dusk. Final shot is later at night with same lamp. No costume changes."
+      },
+      "requested_prompt": "Match both reference faces: Nina, locs, olive jacket, left wrist bandage, sits left; Jules, curls, blue shirt, sits right. Same green-tiled workshop, door left, window right, wooden table, red mug and brass key, amber lamp. Camera stays south of table. Dusk. Wide static two-shot. Nina guards the key; Jules waits. Tense silence.",
+      "provider": "openrouter",
+      "model": "alibaba/happyhorse-1.1",
+      "parameters": {
+        "duration": 4,
+        "resolution": "720P",
+        "ratio": "16:9",
+        "generate_audio": false,
+        "seed": 1400
+      },
+      "reference_assets": [
+        "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/reports/phase-two-2026-09-05/real-run-04/reference.png"
+      ],
+      "status": "not_generated",
+      "output_asset": null,
+      "review": [
+        {
+          "expectation": "Both reference identities recognizable",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Correct clothes and left wrist bandage",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Nina left, Jules right",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Red mug and brass key on table",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Dusk window and amber practical light",
+          "result": "not_generated",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "shot_id": "scene_001_shot_002",
+      "direction": "Dusk. Medium close-up of Nina on left looking right at Jules. She hesitates; key stays beside red mug.",
+      "expectations": [
+        "Nina same face as shot 1 and reference",
+        "Olive jacket unchanged",
+        "Eyeline points right",
+        "Key and mug position maintained",
+        "Lighting matches prior shot"
+      ],
+      "source_context": {
+        "characters": {
+          "Nina": "Adult Black woman, short natural locs, olive jacket, white bandage on left wrist.",
+          "Jules": "Adult light-brown-skinned man, short dark curls, blue work shirt."
+        },
+        "environment": "Green-tiled workshop, wooden table, door on left, window on right. Nina sits left and Jules right. Camera remains south of table.",
+        "continuity": "Brass key and red mug remain on table until Nina passes key to Jules. Warm amber desk lamp at dusk. Final shot is later at night with same lamp. No costume changes."
+      },
+      "requested_prompt": "Match both reference faces: Nina, locs, olive jacket, left wrist bandage, sits left; Jules, curls, blue shirt, sits right. Same green-tiled workshop, door left, window right, wooden table, red mug and brass key, amber lamp. Camera stays south of table. Dusk. Medium close-up of Nina on left looking right at Jules. She hesitates; key stays beside red mug.",
+      "provider": "openrouter",
+      "model": "alibaba/happyhorse-1.1",
+      "parameters": {
+        "duration": 4,
+        "resolution": "720P",
+        "ratio": "16:9",
+        "generate_audio": false,
+        "seed": 1401
+      },
+      "reference_assets": [
+        "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/reports/phase-two-2026-09-05/real-run-04/reference.png"
+      ],
+      "status": "not_generated",
+      "output_asset": null,
+      "review": [
+        {
+          "expectation": "Nina same face as shot 1 and reference",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Olive jacket unchanged",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Eyeline points right",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Key and mug position maintained",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Lighting matches prior shot",
+          "result": "not_generated",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "shot_id": "scene_001_shot_003",
+      "direction": "Dusk. Reverse medium close-up of Jules on right, looking left toward Nina, quietly hopeful.",
+      "expectations": [
+        "Jules same face as shot 1 and reference",
+        "Blue shirt unchanged",
+        "Eyeline points left",
+        "Camera remains south of axis",
+        "Hope follows prior hesitation"
+      ],
+      "source_context": {
+        "characters": {
+          "Nina": "Adult Black woman, short natural locs, olive jacket, white bandage on left wrist.",
+          "Jules": "Adult light-brown-skinned man, short dark curls, blue work shirt."
+        },
+        "environment": "Green-tiled workshop, wooden table, door on left, window on right. Nina sits left and Jules right. Camera remains south of table.",
+        "continuity": "Brass key and red mug remain on table until Nina passes key to Jules. Warm amber desk lamp at dusk. Final shot is later at night with same lamp. No costume changes."
+      },
+      "requested_prompt": "Match both reference faces: Nina, locs, olive jacket, left wrist bandage, sits left; Jules, curls, blue shirt, sits right. Same green-tiled workshop, door left, window right, wooden table, red mug and brass key, amber lamp. Camera stays south of table. Dusk. Reverse medium close-up of Jules on right, looking left toward Nina, quietly hopeful.",
+      "provider": "openrouter",
+      "model": "alibaba/happyhorse-1.1",
+      "parameters": {
+        "duration": 4,
+        "resolution": "720P",
+        "ratio": "16:9",
+        "generate_audio": false,
+        "seed": 1402
+      },
+      "reference_assets": [
+        "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/reports/phase-two-2026-09-05/real-run-04/reference.png"
+      ],
+      "status": "not_generated",
+      "output_asset": null,
+      "review": [
+        {
+          "expectation": "Jules same face as shot 1 and reference",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Blue shirt unchanged",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Eyeline points left",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Camera remains south of axis",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Hope follows prior hesitation",
+          "result": "not_generated",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "shot_id": "scene_001_shot_004",
+      "direction": "Dusk. Table insert. Nina slides the brass key left to right toward Jules. Bandaged left wrist visible; red mug stays still.",
+      "expectations": [
+        "Brass key has same shape",
+        "Left wrist bandage preserved",
+        "Key travels left to right",
+        "Red mug remains stationary",
+        "Hands and sleeves match cast"
+      ],
+      "source_context": {
+        "characters": {
+          "Nina": "Adult Black woman, short natural locs, olive jacket, white bandage on left wrist.",
+          "Jules": "Adult light-brown-skinned man, short dark curls, blue work shirt."
+        },
+        "environment": "Green-tiled workshop, wooden table, door on left, window on right. Nina sits left and Jules right. Camera remains south of table.",
+        "continuity": "Brass key and red mug remain on table until Nina passes key to Jules. Warm amber desk lamp at dusk. Final shot is later at night with same lamp. No costume changes."
+      },
+      "requested_prompt": "Match both reference faces: Nina, locs, olive jacket, left wrist bandage, sits left; Jules, curls, blue shirt, sits right. Same green-tiled workshop, door left, window right, wooden table, red mug and brass key, amber lamp. Camera stays south of table. Dusk. Table insert. Nina slides the brass key left to right toward Jules. Bandaged left wrist visible; red mug stays still.",
+      "provider": "openrouter",
+      "model": "alibaba/happyhorse-1.1",
+      "parameters": {
+        "duration": 4,
+        "resolution": "720P",
+        "ratio": "16:9",
+        "generate_audio": false,
+        "seed": 1403
+      },
+      "reference_assets": [
+        "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/reports/phase-two-2026-09-05/real-run-04/reference.png"
+      ],
+      "status": "not_generated",
+      "output_asset": null,
+      "review": [
+        {
+          "expectation": "Brass key has same shape",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Left wrist bandage preserved",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Key travels left to right",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Red mug remains stationary",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Hands and sleeves match cast",
+          "result": "not_generated",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "shot_id": "scene_001_shot_005",
+      "direction": "Dusk. Static two-shot. Jules holds the returned brass key on right. Nina exhales on left; tension eases. Mug stays on table.",
+      "expectations": [
+        "Both identities remain stable",
+        "Key is now with Jules, not back beside Nina",
+        "Mug and room geography unchanged",
+        "Relief follows the handoff",
+        "No wardrobe change"
+      ],
+      "source_context": {
+        "characters": {
+          "Nina": "Adult Black woman, short natural locs, olive jacket, white bandage on left wrist.",
+          "Jules": "Adult light-brown-skinned man, short dark curls, blue work shirt."
+        },
+        "environment": "Green-tiled workshop, wooden table, door on left, window on right. Nina sits left and Jules right. Camera remains south of table.",
+        "continuity": "Brass key and red mug remain on table until Nina passes key to Jules. Warm amber desk lamp at dusk. Final shot is later at night with same lamp. No costume changes."
+      },
+      "requested_prompt": "Match both reference faces: Nina, locs, olive jacket, left wrist bandage, sits left; Jules, curls, blue shirt, sits right. Same green-tiled workshop, door left, window right, wooden table, red mug and brass key, amber lamp. Camera stays south of table. Dusk. Static two-shot. Jules holds the returned brass key on right. Nina exhales on left; tension eases. Mug stays on table.",
+      "provider": "openrouter",
+      "model": "alibaba/happyhorse-1.1",
+      "parameters": {
+        "duration": 4,
+        "resolution": "720P",
+        "ratio": "16:9",
+        "generate_audio": false,
+        "seed": 1404
+      },
+      "reference_assets": [
+        "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/reports/phase-two-2026-09-05/real-run-04/reference.png"
+      ],
+      "status": "not_generated",
+      "output_asset": null,
+      "review": [
+        {
+          "expectation": "Both identities remain stable",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Key is now with Jules, not back beside Nina",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Mug and room geography unchanged",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Relief follows the handoff",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "No wardrobe change",
+          "result": "not_generated",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "shot_id": "scene_002_shot_001",
+      "direction": "Later, night outside the right window. Same static two-shot and amber lamp. Jules holds key, Nina rests her bandaged wrist. Quiet trust.",
+      "expectations": [
+        "Both identities survive time progression",
+        "Window darkens but lamp remains warm",
+        "Same workshop architecture and screen positions",
+        "Key remains with Jules",
+        "Emotional progression settles into trust"
+      ],
+      "source_context": {
+        "characters": {
+          "Nina": "Adult Black woman, short natural locs, olive jacket, white bandage on left wrist.",
+          "Jules": "Adult light-brown-skinned man, short dark curls, blue work shirt."
+        },
+        "environment": "Green-tiled workshop, wooden table, door on left, window on right. Nina sits left and Jules right. Camera remains south of table.",
+        "continuity": "Brass key and red mug remain on table until Nina passes key to Jules. Warm amber desk lamp at dusk. Final shot is later at night with same lamp. No costume changes."
+      },
+      "requested_prompt": "Match both reference faces: Nina, locs, olive jacket, left wrist bandage, sits left; Jules, curls, blue shirt, sits right. Same green-tiled workshop, door left, window right, wooden table, red mug and brass key, amber lamp. Camera stays south of table. Later, night outside the right window. Same static two-shot and amber lamp. Jules holds key, Nina rests her bandaged wrist. Quiet trust.",
+      "provider": "openrouter",
+      "model": "alibaba/happyhorse-1.1",
+      "parameters": {
+        "duration": 4,
+        "resolution": "720P",
+        "ratio": "16:9",
+        "generate_audio": false,
+        "seed": 1405
+      },
+      "reference_assets": [
+        "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/reports/phase-two-2026-09-05/real-run-04/reference.png"
+      ],
+      "status": "not_generated",
+      "output_asset": null,
+      "review": [
+        {
+          "expectation": "Both identities survive time progression",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Window darkens but lamp remains warm",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Same workshop architecture and screen positions",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Key remains with Jules",
+          "result": "not_generated",
+          "evidence": ""
+        },
+        {
+          "expectation": "Emotional progression settles into trust",
+          "result": "not_generated",
+          "evidence": ""
+        }
+      ]
+    }
+  ],
+  "review": {
+    "status": "unreviewed",
+    "questions": [
+      "Did the character remain the same person?",
+      "Did wardrobe remain correct?",
+      "Did the environment remain recognizable?",
+      "Did important props persist?",
+      "Did lighting remain logically continuous?",
+      "Did spatial relationships make sense?",
+      "Did the shot follow the screenplay?",
+      "Do adjacent shots belong to the same scene?",
+      "Do all shots belong to the same film?"
+    ]
+  }
+}

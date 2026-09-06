@@ -7,6 +7,8 @@ from typing import Any
 
 from app.data.storage import StorageInterface, get_storage
 from app.llm_client import call_llm
+from app.services.stability import PersistenceError, StateError, ValidationError, elapsed_ms, log_stage_event, start_timer
+from app.utils.character_appearance import APPEARANCE_FIELDS, appearance_approval
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +69,32 @@ class CharacterProfileService:
         character_id: str,
         updates: dict[str, Any],
     ) -> dict:
+        timer = start_timer()
         existing = self.get_character(project_id, character_id)
-        return self._require_storage().save_character(
-            project_id,
-            updates.get("name") or existing["name"],
-            updates,
-        )
+        editable = {"name", "age", "look", "energy", "core_wound", "core_desire", "relationship_notes", "visual_prompt_summary"}
+        if set(updates) - editable:
+            raise ValidationError("Only character profile fields can be changed here.", stage="character_profile_update")
+        if any(value is not None and not isinstance(value, str) for value in updates.values()):
+            raise ValidationError("Character profile fields must be text.", stage="character_profile_update")
+        if "name" in updates and not str(updates["name"] or "").strip():
+            raise ValidationError("A character name is required.", stage="character_profile_update")
+        if appearance_approval(existing).get("status") == "locked" and any(
+            field in updates and updates[field] != existing.get(field) for field in APPEARANCE_FIELDS
+        ):
+            raise StateError("This appearance is locked. Choose Revise look in The Page before changing it.", stage="character_profile_update")
+        if not updates:
+            return existing
+        try:
+            # Patch only provided columns, by ID. Omitted appearance fields stay intact,
+            # and the revision check prevents a concurrent approval being overwritten.
+            saved = self._require_storage().patch_character_revision(project_id, character_id, updates, existing["updated_at"])
+        except Exception as exc:
+            raise PersistenceError("The character profile could not be saved.", stage="character_profile_update") from exc
+        if not saved:
+            raise StateError("This profile changed. Refresh it before saving again.", stage="character_profile_update")
+        log_stage_event(project_id=project_id, job_id=None, provider=None, stage="character_profile_update",
+                        duration_ms=elapsed_ms(timer), extra={"character_id": character_id})
+        return saved
 
     def create_skeleton(self, project_id: str, name: str) -> dict:
         name_upper = (name or "").strip().upper()
@@ -105,6 +127,8 @@ class CharacterProfileService:
         text_content: str,
     ) -> dict:
         existing = self.get_character(project_id, character_id)
+        if appearance_approval(existing).get("status") == "locked":
+            raise StateError("Choose Revise look before importing a new character description.", stage="character_descriptor")
         try:
             raw_response = await self._llm_completion(
                 system_prompt=CHARACTER_DESCRIPTOR_SYSTEM_PROMPT,
@@ -120,8 +144,14 @@ class CharacterProfileService:
         for field in ("name", "age", "look", "energy", "core_wound", "visual_prompt_summary"):
             if extracted.get(field) and not merged.get(field):
                 merged[field] = extracted[field]
-        name = merged.get("name") or existing.get("name") or "Unknown"
-        return self._require_storage().save_character(project_id, name, merged)
+        updates = {field: merged[field] for field in ("name", "age", "look", "energy", "core_wound", "visual_prompt_summary") if merged.get(field) != existing.get(field)}
+        if not updates:
+            return self.get_character(project_id, character_id)
+        # An approval or edit may arrive while the provider is working.
+        saved = self._require_storage().patch_character_revision(project_id, character_id, updates, existing["updated_at"])
+        if not saved:
+            raise StateError("This profile changed while the description was being read. Refresh and try again.", stage="character_descriptor")
+        return saved
 
     @staticmethod
     def _voice_response(project_id: str, character_id: str, character: dict) -> dict:

@@ -75,6 +75,23 @@ def test_storyboard_blueprint_route_create_approve_and_render_contract() -> None
         f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
         json={"approved_by": "creator"},
     )
+    assert approve_response.status_code == 422, approve_response.text
+    assert "Continuity Review" in approve_response.text
+
+    review_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/continuity-review",
+        json={"reviewer": "route_test"},
+    )
+    assert review_response.status_code == 200, review_response.text
+    review = review_response.json()
+    assert review["status"] == "completed"
+    assert review["summary"]["shot_count"] == 2
+    assert review["comparison_modes"] == ["side_by_side", "overlay", "before_after"]
+
+    approve_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
+        json={"approved_by": "creator"},
+    )
     assert approve_response.status_code == 200, approve_response.text
     approved = approve_response.json()
     assert approved["blueprint"]["approved_version_id"] == version_id
@@ -119,6 +136,11 @@ def test_storyboard_render_rejects_stale_approved_version() -> None:
     version_id = detail["version"]["version_id"]
     storyboard_shot_id = detail["shots"][0]["storyboard_shot_id"]
 
+    review_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/continuity-review",
+        json={"reviewer": "route_test"},
+    )
+    assert review_response.status_code == 200, review_response.text
     approve_response = client.post(
         f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
         json={"approved_by": "creator"},

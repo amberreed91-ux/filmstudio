@@ -1,0 +1,3255 @@
+{
+  "label": "before",
+  "project_id": "project_5907c60cddbc",
+  "scene_filter": null,
+  "ceiling": 480,
+  "slot_budgets": {
+    "character_state": 210,
+    "action": 110,
+    "environment_persistence": 100,
+    "camera": 70,
+    "lighting": 60,
+    "reserve": 32
+  },
+  "shots_total": 60,
+  "shots_with_staging": 60,
+  "summary": {
+    "mean_delivery_rate": 2.7895,
+    "pct_shots_truncated": 0.0,
+    "pct_shots_ending_severed": 0.0,
+    "pct_lighting_deleted": 0.0,
+    "pct_camera_damaged": 0.0,
+    "total_staged_chars": 4571,
+    "total_delivered_chars": 7229
+  },
+  "shots": [
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "action",
+        "blocking",
+        "camera_angle",
+        "camera_movement",
+        "color_palette",
+        "composition",
+        "environment",
+        "framing",
+        "lens_language",
+        "lighting",
+        "props"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 181,
+          "slot_chars": 110,
+          "delivered_chars": 110,
+          "lost_to_slot_budget": 71,
+          "status": "delivered"
+        },
+        "environment_persistence": {
+          "raw_chars": 98,
+          "slot_chars": 98,
+          "delivered_chars": 98,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 143,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 73,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 85,
+          "slot_chars": 60,
+          "delivered_chars": 60,
+          "lost_to_slot_budget": 25,
+          "status": "delivered"
+        }
+      },
+      "prompt_chars_untruncated": 370,
+      "prompt_chars_final": 370,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 507,
+      "staged_chars_delivered": 338,
+      "delivery_rate": 0.6667,
+      "prompt": "Maya walks down a crowded sidewalk, slowing to watch a family laughing outside a restaurant Maya walks left.... DOWNTOWN CHICAGO \u2014 GOLDEN HOUR L train, elevated tracks, restaurant signs, stroller, Lake Michigan. wide high angle looking down the avenue wide, deep focus Skyline an.... Low western sun, warm backlight, long shadows on pavement.... Cinematic, film quality.",
+      "shot_id": "scene_001_shot_001",
+      "scene_id": "scene_001"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "action",
+        "blocking",
+        "camera_angle",
+        "camera_movement",
+        "color_palette",
+        "composition",
+        "environment",
+        "framing",
+        "lighting",
+        "props"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 184,
+          "slot_chars": 110,
+          "delivered_chars": 110,
+          "lost_to_slot_budget": 74,
+          "status": "delivered"
+        },
+        "environment_persistence": {
+          "raw_chars": 118,
+          "slot_chars": 100,
+          "delivered_chars": 100,
+          "lost_to_slot_budget": 18,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 111,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 41,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 90,
+          "slot_chars": 60,
+          "delivered_chars": 60,
+          "lost_to_slot_budget": 30,
+          "status": "delivered"
+        }
+      },
+      "prompt_chars_untruncated": 372,
+      "prompt_chars_final": 372,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 503,
+      "staged_chars_delivered": 340,
+      "delivery_rate": 0.6759,
+      "prompt": "Maya walks through the crowded sidewalk, slowing to watch a family laugh outside a restaurant. Maya center-.... DOWNTOWN CHICAGO \u2014 GOLDEN HOUR L train, elevated tracks, restaurant awnings, stroller, Lake Michi.... eye level, tracking alongside Maya Maya mid-frame; L train tracks c.... Low golden-hour sun, warm, long shadows across pavement. .... Cinematic, film quality.",
+      "shot_id": "scene_001_shot_002",
+      "scene_id": "scene_001"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "action",
+        "blocking",
+        "camera_angle",
+        "camera_movement",
+        "color_palette",
+        "composition",
+        "environment",
+        "framing",
+        "lens_language",
+        "lighting"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 164,
+          "slot_chars": 110,
+          "delivered_chars": 110,
+          "lost_to_slot_budget": 54,
+          "status": "delivered"
+        },
+        "environment_persistence": {
+          "raw_chars": 30,
+          "slot_chars": 30,
+          "delivered_chars": 30,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 142,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 72,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 87,
+          "slot_chars": 60,
+          "delivered_chars": 60,
+          "lost_to_slot_budget": 27,
+          "status": "delivered"
+        }
+      },
+      "prompt_chars_untruncated": 302,
+      "prompt_chars_final": 302,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 423,
+      "staged_chars_delivered": 270,
+      "delivery_rate": 0.6383,
+      "prompt": "Maya slows mid-step, eyes drifting across something off-frame; a faint smile forms and holds. Maya walks sl.... DOWNTOWN CHICAGO \u2014 GOLDEN HOUR. eye level, tight on her face telephoto, shallow depth of field Her .... Low golden sun from left, warm rim light, soft bounce amb.... Cinematic, film quality.",
+      "shot_id": "scene_001_shot_003",
+      "scene_id": "scene_001"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "action",
+        "blocking",
+        "camera_angle",
+        "camera_movement",
+        "color_palette",
+        "composition",
+        "environment",
+        "framing",
+        "lens_language",
+        "lighting",
+        "props"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 188,
+          "slot_chars": 110,
+          "delivered_chars": 110,
+          "lost_to_slot_budget": 78,
+          "status": "delivered"
+        },
+        "environment_persistence": {
+          "raw_chars": 93,
+          "slot_chars": 93,
+          "delivered_chars": 93,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 162,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 92,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 94,
+          "slot_chars": 60,
+          "delivered_chars": 60,
+          "lost_to_slot_budget": 34,
+          "status": "delivered"
+        }
+      },
+      "prompt_chars_untruncated": 365,
+      "prompt_chars_final": 365,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 537,
+      "staged_chars_delivered": 333,
+      "delivery_rate": 0.6201,
+      "prompt": "Maya walks with the crowd, then slows and turns her head to watch a family laughing at a caf\u00e9 table. Maya w.... DOWNTOWN CHICAGO \u2014 GOLDEN HOUR L train, elevated tracks, caf\u00e9 tables, string lights, stroller. eye level, tracking alongside Maya at pedestrian height wide, deep .... Low western sun, warm rim light on faces, long shadows ea.... Cinematic, film quality.",
+      "shot_id": "scene_001_shot_004",
+      "scene_id": "scene_001"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "action",
+        "blocking",
+        "camera_angle",
+        "camera_movement",
+        "color_palette",
+        "composition",
+        "environment",
+        "framing",
+        "lens_language",
+        "lighting",
+        "props"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 176,
+          "slot_chars": 110,
+          "delivered_chars": 110,
+          "lost_to_slot_budget": 66,
+          "status": "delivered"
+        },
+        "environment_persistence": {
+          "raw_chars": 88,
+          "slot_chars": 88,
+          "delivered_chars": 88,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 139,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 69,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 83,
+          "slot_chars": 60,
+          "delivered_chars": 60,
+          "lost_to_slot_budget": 23,
+          "status": "delivered"
+        }
+      },
+      "prompt_chars_untruncated": 360,
+      "prompt_chars_final": 360,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 486,
+      "staged_chars_delivered": 328,
+      "delivery_rate": 0.6749,
+      "prompt": "Maya stops walking, head turning slowly to follow a laughing family down the sidewalk. Maya mid-frame, walk.... DOWNTOWN CHICAGO \u2014 GOLDEN HOUR L train, elevated tracks, Lake Michigan, restaurant signs. eye level, tight profile on Maya's face long lens, shallow depth of.... Low golden sun, warm west side light, long shadows amber,.... Cinematic, film quality.",
+      "shot_id": "scene_001_shot_005",
+      "scene_id": "scene_001"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 39,
+          "delivered_chars": 39,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 137,
+      "prompt_chars_final": 137,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 109,
+      "delivery_rate": 2.7949,
+      "prompt": "DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_002_shot_001",
+      "scene_id": "scene_002"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 39,
+          "delivered_chars": 39,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 137,
+      "prompt_chars_final": 137,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 109,
+      "delivery_rate": 2.7949,
+      "prompt": "DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_002_shot_002",
+      "scene_id": "scene_002"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 39,
+          "delivered_chars": 39,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 137,
+      "prompt_chars_final": 137,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 109,
+      "delivery_rate": 2.7949,
+      "prompt": "DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_002_shot_003",
+      "scene_id": "scene_002"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 39,
+          "delivered_chars": 39,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 137,
+      "prompt_chars_final": 137,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 109,
+      "delivery_rate": 2.7949,
+      "prompt": "DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_002_shot_004",
+      "scene_id": "scene_002"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 39,
+          "delivered_chars": 39,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 137,
+      "prompt_chars_final": 137,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 109,
+      "delivery_rate": 2.7949,
+      "prompt": "DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_002_shot_005",
+      "scene_id": "scene_002"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 107,
+          "slot_chars": 100,
+          "delivered_chars": 100,
+          "lost_to_slot_budget": 7,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 198,
+      "prompt_chars_final": 198,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 107,
+      "staged_chars_delivered": 170,
+      "delivery_rate": 1.5888,
+      "prompt": "DRE'S APARTMENT \u2014 NIGHTMaya visits Dre. He doesn't know what she knows. To him, everything is sti.... Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_003_shot_001",
+      "scene_id": "scene_003"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 107,
+          "slot_chars": 100,
+          "delivered_chars": 100,
+          "lost_to_slot_budget": 7,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 198,
+      "prompt_chars_final": 198,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 107,
+      "staged_chars_delivered": 170,
+      "delivery_rate": 1.5888,
+      "prompt": "DRE'S APARTMENT \u2014 NIGHTMaya visits Dre. He doesn't know what she knows. To him, everything is sti.... Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_003_shot_002",
+      "scene_id": "scene_003"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 107,
+          "slot_chars": 100,
+          "delivered_chars": 100,
+          "lost_to_slot_budget": 7,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 198,
+      "prompt_chars_final": 198,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 107,
+      "staged_chars_delivered": 170,
+      "delivery_rate": 1.5888,
+      "prompt": "DRE'S APARTMENT \u2014 NIGHTMaya visits Dre. He doesn't know what she knows. To him, everything is sti.... Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_003_shot_003",
+      "scene_id": "scene_003"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 107,
+          "slot_chars": 100,
+          "delivered_chars": 100,
+          "lost_to_slot_budget": 7,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 198,
+      "prompt_chars_final": 198,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 107,
+      "staged_chars_delivered": 170,
+      "delivery_rate": 1.5888,
+      "prompt": "DRE'S APARTMENT \u2014 NIGHTMaya visits Dre. He doesn't know what she knows. To him, everything is sti.... Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_003_shot_004",
+      "scene_id": "scene_003"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 107,
+          "slot_chars": 100,
+          "delivered_chars": 100,
+          "lost_to_slot_budget": 7,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 198,
+      "prompt_chars_final": 198,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 107,
+      "staged_chars_delivered": 170,
+      "delivery_rate": 1.5888,
+      "prompt": "DRE'S APARTMENT \u2014 NIGHTMaya visits Dre. He doesn't know what she knows. To him, everything is sti.... Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_003_shot_005",
+      "scene_id": "scene_003"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 37,
+          "slot_chars": 29,
+          "delivered_chars": 29,
+          "lost_to_slot_budget": 8,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 127,
+      "prompt_chars_final": 127,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 37,
+      "staged_chars_delivered": 99,
+      "delivery_rate": 2.6757,
+      "prompt": "SOUTH SIDE WAREHOUSE DISTRICT. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_004_shot_001",
+      "scene_id": "scene_004"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 37,
+          "slot_chars": 29,
+          "delivered_chars": 29,
+          "lost_to_slot_budget": 8,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 127,
+      "prompt_chars_final": 127,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 37,
+      "staged_chars_delivered": 99,
+      "delivery_rate": 2.6757,
+      "prompt": "SOUTH SIDE WAREHOUSE DISTRICT. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_004_shot_002",
+      "scene_id": "scene_004"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 37,
+          "slot_chars": 29,
+          "delivered_chars": 29,
+          "lost_to_slot_budget": 8,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 127,
+      "prompt_chars_final": 127,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 37,
+      "staged_chars_delivered": 99,
+      "delivery_rate": 2.6757,
+      "prompt": "SOUTH SIDE WAREHOUSE DISTRICT. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_004_shot_003",
+      "scene_id": "scene_004"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 37,
+          "slot_chars": 29,
+          "delivered_chars": 29,
+          "lost_to_slot_budget": 8,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 127,
+      "prompt_chars_final": 127,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 37,
+      "staged_chars_delivered": 99,
+      "delivery_rate": 2.6757,
+      "prompt": "SOUTH SIDE WAREHOUSE DISTRICT. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_004_shot_004",
+      "scene_id": "scene_004"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 37,
+          "slot_chars": 29,
+          "delivered_chars": 29,
+          "lost_to_slot_budget": 8,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 127,
+      "prompt_chars_final": 127,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 37,
+      "staged_chars_delivered": 99,
+      "delivery_rate": 2.6757,
+      "prompt": "SOUTH SIDE WAREHOUSE DISTRICT. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_004_shot_005",
+      "scene_id": "scene_004"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 17,
+          "delivered_chars": 17,
+          "lost_to_slot_budget": 4,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 115,
+      "prompt_chars_final": 115,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 87,
+      "delivery_rate": 4.1429,
+      "prompt": "HOMESTEAD \u2014 LATER. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_005_shot_001",
+      "scene_id": "scene_005"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 17,
+          "delivered_chars": 17,
+          "lost_to_slot_budget": 4,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 115,
+      "prompt_chars_final": 115,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 87,
+      "delivery_rate": 4.1429,
+      "prompt": "HOMESTEAD \u2014 LATER. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_005_shot_002",
+      "scene_id": "scene_005"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 17,
+          "delivered_chars": 17,
+          "lost_to_slot_budget": 4,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 115,
+      "prompt_chars_final": 115,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 87,
+      "delivery_rate": 4.1429,
+      "prompt": "HOMESTEAD \u2014 LATER. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_005_shot_003",
+      "scene_id": "scene_005"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 17,
+          "delivered_chars": 17,
+          "lost_to_slot_budget": 4,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 115,
+      "prompt_chars_final": 115,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 87,
+      "delivery_rate": 4.1429,
+      "prompt": "HOMESTEAD \u2014 LATER. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_005_shot_004",
+      "scene_id": "scene_005"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 17,
+          "delivered_chars": 17,
+          "lost_to_slot_budget": 4,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 115,
+      "prompt_chars_final": 115,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 87,
+      "delivery_rate": 4.1429,
+      "prompt": "HOMESTEAD \u2014 LATER. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_005_shot_005",
+      "scene_id": "scene_005"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 33,
+          "delivered_chars": 33,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 131,
+      "prompt_chars_final": 131,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 103,
+      "delivery_rate": 2.641,
+      "prompt": "COOK COUNTY HOSPITAL \u2014 BREAK ROOM. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_006_shot_001",
+      "scene_id": "scene_006"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 33,
+          "delivered_chars": 33,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 131,
+      "prompt_chars_final": 131,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 103,
+      "delivery_rate": 2.641,
+      "prompt": "COOK COUNTY HOSPITAL \u2014 BREAK ROOM. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_006_shot_002",
+      "scene_id": "scene_006"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 33,
+          "delivered_chars": 33,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 131,
+      "prompt_chars_final": 131,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 103,
+      "delivery_rate": 2.641,
+      "prompt": "COOK COUNTY HOSPITAL \u2014 BREAK ROOM. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_006_shot_003",
+      "scene_id": "scene_006"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 33,
+          "delivered_chars": 33,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 131,
+      "prompt_chars_final": 131,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 103,
+      "delivery_rate": 2.641,
+      "prompt": "COOK COUNTY HOSPITAL \u2014 BREAK ROOM. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_006_shot_004",
+      "scene_id": "scene_006"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 39,
+          "slot_chars": 33,
+          "delivered_chars": 33,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 131,
+      "prompt_chars_final": 131,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 39,
+      "staged_chars_delivered": 103,
+      "delivery_rate": 2.641,
+      "prompt": "COOK COUNTY HOSPITAL \u2014 BREAK ROOM. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_006_shot_005",
+      "scene_id": "scene_006"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 23,
+          "delivered_chars": 23,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 121,
+      "prompt_chars_final": 121,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 93,
+      "delivery_rate": 3.2069,
+      "prompt": "SOUTH CHICAGO AUTO SHOP. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_007_shot_001",
+      "scene_id": "scene_007"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 23,
+          "delivered_chars": 23,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 121,
+      "prompt_chars_final": 121,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 93,
+      "delivery_rate": 3.2069,
+      "prompt": "SOUTH CHICAGO AUTO SHOP. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_007_shot_002",
+      "scene_id": "scene_007"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 23,
+          "delivered_chars": 23,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 121,
+      "prompt_chars_final": 121,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 93,
+      "delivery_rate": 3.2069,
+      "prompt": "SOUTH CHICAGO AUTO SHOP. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_007_shot_003",
+      "scene_id": "scene_007"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 23,
+          "delivered_chars": 23,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 121,
+      "prompt_chars_final": 121,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 93,
+      "delivery_rate": 3.2069,
+      "prompt": "SOUTH CHICAGO AUTO SHOP. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_007_shot_004",
+      "scene_id": "scene_007"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 23,
+          "delivered_chars": 23,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 121,
+      "prompt_chars_final": 121,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 93,
+      "delivery_rate": 3.2069,
+      "prompt": "SOUTH CHICAGO AUTO SHOP. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_007_shot_005",
+      "scene_id": "scene_007"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 30,
+          "slot_chars": 24,
+          "delivered_chars": 24,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 122,
+      "prompt_chars_final": 122,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 30,
+      "staged_chars_delivered": 94,
+      "delivery_rate": 3.1333,
+      "prompt": "COMMUNITY GARDEN, PILSEN. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_008_shot_001",
+      "scene_id": "scene_008"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 30,
+          "slot_chars": 24,
+          "delivered_chars": 24,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 122,
+      "prompt_chars_final": 122,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 30,
+      "staged_chars_delivered": 94,
+      "delivery_rate": 3.1333,
+      "prompt": "COMMUNITY GARDEN, PILSEN. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_008_shot_002",
+      "scene_id": "scene_008"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 30,
+          "slot_chars": 24,
+          "delivered_chars": 24,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 122,
+      "prompt_chars_final": 122,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 30,
+      "staged_chars_delivered": 94,
+      "delivery_rate": 3.1333,
+      "prompt": "COMMUNITY GARDEN, PILSEN. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_008_shot_003",
+      "scene_id": "scene_008"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 30,
+          "slot_chars": 24,
+          "delivered_chars": 24,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 122,
+      "prompt_chars_final": 122,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 30,
+      "staged_chars_delivered": 94,
+      "delivery_rate": 3.1333,
+      "prompt": "COMMUNITY GARDEN, PILSEN. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_008_shot_004",
+      "scene_id": "scene_008"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 30,
+          "slot_chars": 24,
+          "delivered_chars": 24,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 122,
+      "prompt_chars_final": 122,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 30,
+      "staged_chars_delivered": 94,
+      "delivery_rate": 3.1333,
+      "prompt": "COMMUNITY GARDEN, PILSEN. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_008_shot_005",
+      "scene_id": "scene_008"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 38,
+          "slot_chars": 28,
+          "delivered_chars": 28,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 126,
+      "prompt_chars_final": 126,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 38,
+      "staged_chars_delivered": 98,
+      "delivery_rate": 2.5789,
+      "prompt": "MOM'S APARTMENT, BRONZEVILLE. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_009_shot_001",
+      "scene_id": "scene_009"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 38,
+          "slot_chars": 28,
+          "delivered_chars": 28,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 126,
+      "prompt_chars_final": 126,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 38,
+      "staged_chars_delivered": 98,
+      "delivery_rate": 2.5789,
+      "prompt": "MOM'S APARTMENT, BRONZEVILLE. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_009_shot_002",
+      "scene_id": "scene_009"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 38,
+          "slot_chars": 28,
+          "delivered_chars": 28,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 126,
+      "prompt_chars_final": 126,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 38,
+      "staged_chars_delivered": 98,
+      "delivery_rate": 2.5789,
+      "prompt": "MOM'S APARTMENT, BRONZEVILLE. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_009_shot_003",
+      "scene_id": "scene_009"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 38,
+          "slot_chars": 28,
+          "delivered_chars": 28,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 126,
+      "prompt_chars_final": 126,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 38,
+      "staged_chars_delivered": 98,
+      "delivery_rate": 2.5789,
+      "prompt": "MOM'S APARTMENT, BRONZEVILLE. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_009_shot_004",
+      "scene_id": "scene_009"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 38,
+          "slot_chars": 28,
+          "delivered_chars": 28,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 126,
+      "prompt_chars_final": 126,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 38,
+      "staged_chars_delivered": 98,
+      "delivery_rate": 2.5789,
+      "prompt": "MOM'S APARTMENT, BRONZEVILLE. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_009_shot_005",
+      "scene_id": "scene_009"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 15,
+          "delivered_chars": 15,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 113,
+      "prompt_chars_final": 113,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 85,
+      "delivery_rate": 4.0476,
+      "prompt": "DRE'S APARTMENT. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_010_shot_001",
+      "scene_id": "scene_010"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 15,
+          "delivered_chars": 15,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 113,
+      "prompt_chars_final": 113,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 85,
+      "delivery_rate": 4.0476,
+      "prompt": "DRE'S APARTMENT. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_010_shot_002",
+      "scene_id": "scene_010"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 15,
+          "delivered_chars": 15,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 113,
+      "prompt_chars_final": 113,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 85,
+      "delivery_rate": 4.0476,
+      "prompt": "DRE'S APARTMENT. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_010_shot_003",
+      "scene_id": "scene_010"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 15,
+          "delivered_chars": 15,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 113,
+      "prompt_chars_final": 113,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 85,
+      "delivery_rate": 4.0476,
+      "prompt": "DRE'S APARTMENT. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_010_shot_004",
+      "scene_id": "scene_010"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 21,
+          "slot_chars": 15,
+          "delivered_chars": 15,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 113,
+      "prompt_chars_final": 113,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 21,
+      "staged_chars_delivered": 85,
+      "delivery_rate": 4.0476,
+      "prompt": "DRE'S APARTMENT. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_010_shot_005",
+      "scene_id": "scene_010"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 33,
+          "slot_chars": 27,
+          "delivered_chars": 27,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 125,
+      "prompt_chars_final": 125,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 33,
+      "staged_chars_delivered": 97,
+      "delivery_rate": 2.9394,
+      "prompt": "CHICAGO \u2014 VARIOUS LOCATIONS. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_011_shot_001",
+      "scene_id": "scene_011"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 33,
+          "slot_chars": 27,
+          "delivered_chars": 27,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 125,
+      "prompt_chars_final": 125,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 33,
+      "staged_chars_delivered": 97,
+      "delivery_rate": 2.9394,
+      "prompt": "CHICAGO \u2014 VARIOUS LOCATIONS. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_011_shot_002",
+      "scene_id": "scene_011"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 33,
+          "slot_chars": 27,
+          "delivered_chars": 27,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 125,
+      "prompt_chars_final": 125,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 33,
+      "staged_chars_delivered": 97,
+      "delivery_rate": 2.9394,
+      "prompt": "CHICAGO \u2014 VARIOUS LOCATIONS. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_011_shot_003",
+      "scene_id": "scene_011"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 33,
+          "slot_chars": 27,
+          "delivered_chars": 27,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 125,
+      "prompt_chars_final": 125,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 33,
+      "staged_chars_delivered": 97,
+      "delivery_rate": 2.9394,
+      "prompt": "CHICAGO \u2014 VARIOUS LOCATIONS. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_011_shot_004",
+      "scene_id": "scene_011"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 33,
+          "slot_chars": 27,
+          "delivered_chars": 27,
+          "lost_to_slot_budget": 6,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 125,
+      "prompt_chars_final": 125,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 33,
+      "staged_chars_delivered": 97,
+      "delivery_rate": 2.9394,
+      "prompt": "CHICAGO \u2014 VARIOUS LOCATIONS. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_011_shot_005",
+      "scene_id": "scene_011"
+    },
+    {
+      "shot_number": 1,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 19,
+          "delivered_chars": 19,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 117,
+      "prompt_chars_final": 117,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 89,
+      "delivery_rate": 3.069,
+      "prompt": "HOMESTEAD \u2014 VARIOUS. Wide establishing shot. Camera far back. Full environment visible. .... Cinematic, film quality.",
+      "shot_id": "scene_012_shot_001",
+      "scene_id": "scene_012"
+    },
+    {
+      "shot_number": 2,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 19,
+          "delivered_chars": 19,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 117,
+      "prompt_chars_final": 117,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 89,
+      "delivery_rate": 3.069,
+      "prompt": "HOMESTEAD \u2014 VARIOUS. Medium shot. Characters from waist up. Action and dialogue beginnin.... Cinematic, film quality.",
+      "shot_id": "scene_012_shot_002",
+      "scene_id": "scene_012"
+    },
+    {
+      "shot_number": 3,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 19,
+          "delivered_chars": 19,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 117,
+      "prompt_chars_final": 117,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 89,
+      "delivery_rate": 3.069,
+      "prompt": "HOMESTEAD \u2014 VARIOUS. Medium close-up. Character faces and upper body. Emotional beats. R.... Cinematic, film quality.",
+      "shot_id": "scene_012_shot_003",
+      "scene_id": "scene_012"
+    },
+    {
+      "shot_number": 4,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 19,
+          "delivered_chars": 19,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 117,
+      "prompt_chars_final": 117,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 89,
+      "delivery_rate": 3.069,
+      "prompt": "HOMESTEAD \u2014 VARIOUS. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_012_shot_004",
+      "scene_id": "scene_012"
+    },
+    {
+      "shot_number": 5,
+      "staged_dimensions": [
+        "camera_movement",
+        "environment",
+        "framing"
+      ],
+      "per_slot": {
+        "character_state": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "action": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        },
+        "environment_persistence": {
+          "raw_chars": 29,
+          "slot_chars": 19,
+          "delivered_chars": 19,
+          "lost_to_slot_budget": 10,
+          "status": "delivered"
+        },
+        "camera": {
+          "raw_chars": 0,
+          "slot_chars": 70,
+          "delivered_chars": 70,
+          "lost_to_slot_budget": 0,
+          "status": "delivered"
+        },
+        "lighting": {
+          "raw_chars": 0,
+          "slot_chars": 0,
+          "delivered_chars": 0,
+          "status": "empty"
+        }
+      },
+      "prompt_chars_untruncated": 117,
+      "prompt_chars_final": 117,
+      "ceiling": 480,
+      "lost_to_ceiling": 0,
+      "ends_severed": false,
+      "staged_chars": 29,
+      "staged_chars_delivered": 89,
+      "delivery_rate": 3.069,
+      "prompt": "HOMESTEAD \u2014 VARIOUS. Close-up or detail shot. Eyes, hands, specific objects. Intimate or.... Cinematic, film quality.",
+      "shot_id": "scene_012_shot_005",
+      "scene_id": "scene_012"
+    }
+  ]
+}

@@ -2382,6 +2382,8 @@ def update_character(project_id: str, character_id: str, payload: dict):
         return {"character": updated}
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except StabilityError as exc:
+        raise HTTPException(status_code={"state_error": 409, "validation_error": 400}.get(exc.error_type, 503), detail=exc.to_dict()) from exc
 
 
 class CharacterSkeletonPayload(BaseModel):
@@ -2431,6 +2433,8 @@ async def upload_character_descriptor(
         raise HTTPException(status_code=404, detail=str(exc))
     except CharacterDescriptorProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+    except StabilityError as exc:
+        raise HTTPException(status_code={"state_error": 409, "validation_error": 400}.get(exc.error_type, 503), detail=exc.to_dict()) from exc
 
     return {"character": updated}
 

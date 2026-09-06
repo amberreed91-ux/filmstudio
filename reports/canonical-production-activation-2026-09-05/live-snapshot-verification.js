@@ -1,0 +1,20 @@
+const { chromium }=require('playwright');
+const fs=require('fs');
+const TARGET_URL='http://localhost:5001';
+const WORK=fs.readFileSync('/tmp/studio-canonical-activation-path','utf8').trim();
+(async()=>{const browser=await chromium.launch({headless:false});try{
+ const context=await browser.newContext({viewport:{width:1600,height:1050}});
+ await context.addInitScript(()=>sessionStorage.setItem('studio:active-project-id','project_5907c60cddbc'));
+ const page=await context.newPage();
+ await page.goto(TARGET_URL+'/studio/project/project_5907c60cddbc/previs',{waitUntil:'domcontentloaded'});
+ await page.getByPlaceholder('Describe this shot...').waitFor({timeout:30000});
+ await page.locator('select').filter({has:page.locator('option[value="scene_001"]')}).selectOption('scene_001');
+ await page.getByRole('button',{name:'Start approved production thread',exact:true}).waitFor({timeout:30000});
+ await page.getByAltText('Storyboard still for shot 1').waitFor({timeout:30000});
+ await page.waitForFunction(()=>{const image=document.querySelector('img[alt="Storyboard still for shot 1"]');return image?.complete&&image.naturalWidth>0;});
+ await page.locator('select').filter({has:page.locator('option[value="openrouter-video"]')}).selectOption('openrouter-video');
+ await page.getByText('Loading durable production state…',{exact:false}).waitFor({state:'hidden'});
+ await page.getByText('No canonical shot contract loaded for this scene.',{exact:false}).waitFor({state:'hidden'});
+ await page.screenshot({path:WORK+'/live-previs.png',fullPage:true});
+ console.log('Saved storyboard and Canonical Production Thread fully loaded.');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

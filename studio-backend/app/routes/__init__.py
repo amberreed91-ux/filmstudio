@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Form, UploadFile, File
+from fastapi import APIRouter, HTTPException, Form, UploadFile, File, Body
 from fastapi.responses import JSONResponse
 from typing import Optional
 
@@ -228,6 +228,33 @@ def reorganize_reference_library(project_id: str = Form(...)):
         result["reorganized"],
         project_id,
     )
+    return result
+
+
+@overview_router.get("/studio-brain-library")
+def list_studio_brain_library():
+    return study_service.list_studio_brain_library(derive_category)
+
+
+@overview_router.post("/projects/{project_id}/studio-brain-library/attach")
+def attach_studio_brain_library_files(
+    project_id: str,
+    filenames: list[str] = Body(..., embed=True),
+):
+    try:
+        result = study_service.attach_studio_brain_references(
+            project_id,
+            filenames,
+            derive_category,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    project = result.pop("_project", None)
+    try:
+        if project is not None:
+            _sync_to_project_store(project)
+    except Exception:
+        pass
     return result
 
 

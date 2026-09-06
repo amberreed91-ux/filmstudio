@@ -150,6 +150,9 @@ class ProjectPersistenceService:
             ) from exc
         try:
             self._save_canonical(created, stage="project_creation")
+            from app.access_context import access_user_id
+            if access_user_id.get():
+                self._canonical_storage().access_claim_project(created["project_id"], access_user_id.get())
         except Exception:
             try:
                 self._state_store.delete_project(str(created.get("project_id") or ""))

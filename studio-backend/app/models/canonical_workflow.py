@@ -62,8 +62,12 @@ class ApprovalRequest(BaseModel):
     artifact_ids: list[str] = Field(default_factory=list)
 
 
-class RenderWorkflowRequest(BaseModel):
-    provider: str = "simulated"
+class WorkflowProviderRequest(BaseModel):
+    # Omission preserves the approved provider, or uses the server default for Previs.
+    provider: str | None = Field(default=None, min_length=1, pattern=r"^\S+$")
+
+
+class RenderWorkflowRequest(WorkflowProviderRequest):
     retry_confirmed: bool = False
 
 
@@ -89,8 +93,8 @@ class RevisionWorkflowRequest(BaseModel):
     confirmed: bool = False
 
 
-class RevisionRenderWorkflowRequest(BaseModel):
-    provider: str = "simulated"
+class RevisionRenderWorkflowRequest(WorkflowProviderRequest):
+    pass
 
 
 class MemoryWorkflowRequest(BaseModel):
@@ -104,6 +108,13 @@ class CanonicalWorkflowResponse(BaseModel):
     transitions: list[CanonicalWorkflowTransition] = Field(default_factory=list)
 
 
+class CanonicalWorkflowSceneContext(BaseModel):
+    script_id: str
+    sequence_id: str = ""
+    beat_ids: list[str] = Field(default_factory=list)
+
+
 class CanonicalWorkflowListResponse(BaseModel):
     runs: list[CanonicalWorkflowRun] = Field(default_factory=list)
     current_blueprint_version_id: str = ""
+    scene_context: CanonicalWorkflowSceneContext | None = None

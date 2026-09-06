@@ -1,0 +1,15 @@
+{
+  "slot_budgets": {
+    "character_state": 210,
+    "action": 110,
+    "environment_persistence": 100,
+    "camera": 70,
+    "lighting": 60,
+    "reserve": 32
+  },
+  "input_characters": 528,
+  "assembled_characters": 480,
+  "lighting_present_in_slots": true,
+  "lighting_present_in_provider_prompt": false,
+  "provider_prompt": "character_state character_state character_state character_state character_state character_state character_state character_state character_state character_state character_state character_state character_state ch. action action action action action action action action action action action action action action action actio. environment_persistence environment_persistence environment_persistence environment_persistence envi. camera camera camera camera camera camera camera ca..."
+}

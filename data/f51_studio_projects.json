@@ -1,23 +1,3 @@
 {
-  "projects": [
-    {
-      "project_id": "proj-explicit",
-      "title": "Explicit Summary Project",
-      "updated_at": "2026-04-25T00:00:00Z",
-      "execution_summary": {
-        "provider_name": "manual",
-        "lifecycle_state": "submitted",
-        "provider_status": "queued",
-        "source": "explicit"
-      },
-      "render_queue": [
-        {
-          "render_id": "r1",
-          "shot_id": "s1",
-          "status": "rendering",
-          "provider": "aws"
-        }
-      ]
-    }
-  ]
+  "projects": []
 }

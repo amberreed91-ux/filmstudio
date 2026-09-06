@@ -8,7 +8,7 @@ import {
   type CanonicalWorkflowRun,
   type CanonicalWorkflowTransition,
 } from '../lib/canonicalWorkflowApi'
-import { isCanonicalPollingStatus, isRevisionSubmitted } from '../lib/canonicalWorkflowContext'
+import { isCanonicalPollingStatus, isRevisionSubmitted, type CanonicalSceneContext } from '../lib/canonicalWorkflowContext'
 
 const POLL_INTERVAL_MS = 2500
 const POLL_TIMEOUT_MS = 10 * 60 * 1000
@@ -17,6 +17,7 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
   const [run, setRun] = useState<CanonicalWorkflowRun | null>(null)
   const [availableRuns, setAvailableRuns] = useState<CanonicalWorkflowRun[]>([])
   const [currentBlueprintVersionId, setCurrentBlueprintVersionId] = useState('')
+  const [sceneContext, setSceneContext] = useState<CanonicalSceneContext | null>(null)
   const [transitions, setTransitions] = useState<CanonicalWorkflowTransition[]>([])
   const [loading, setLoading] = useState(false)
   const [polling, setPolling] = useState(false)
@@ -32,6 +33,7 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
     setRun(null)
     setAvailableRuns([])
     setCurrentBlueprintVersionId('')
+    setSceneContext(null)
     setTransitions([])
     setError('')
     setAction('')
@@ -44,13 +46,18 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
     const requestKey = contextKey
     setLoading(true)
     void listCanonicalWorkflows(projectId, sceneId, { signal: controller.signal })
-      .then(async ({ runs, current_blueprint_version_id }) => {
+      .then(async ({ runs, current_blueprint_version_id, scene_context }) => {
         if (controller.signal.aborted || contextKeyRef.current !== requestKey) return
         const exactRuns = runs.filter((candidate) => (
           candidate.project_id === projectId && candidate.scene_id === sceneId
         ))
         setAvailableRuns(exactRuns)
         setCurrentBlueprintVersionId(current_blueprint_version_id || '')
+        setSceneContext(scene_context ? {
+          scriptId: scene_context.script_id,
+          sequenceId: scene_context.sequence_id,
+          beatIds: scene_context.beat_ids,
+        } : null)
         const exact = current_blueprint_version_id
           ? exactRuns.find((candidate) => candidate.blueprint_version_id === current_blueprint_version_id)
           : [...exactRuns].sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0]
@@ -167,6 +174,7 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
     run,
     availableRuns,
     currentBlueprintVersionId,
+    sceneContext,
     transitions,
     loading,
     polling,

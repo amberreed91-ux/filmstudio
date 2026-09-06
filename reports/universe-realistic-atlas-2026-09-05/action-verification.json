@@ -1,0 +1,58 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "label": "CREATE dialog",
+      "viewport": 390,
+      "width": 382
+    },
+    {
+      "label": "CREATE dialog",
+      "viewport": 390,
+      "width": 382
+    },
+    {
+      "label": "SAVE CHANGES dialog",
+      "viewport": 390,
+      "width": 382
+    },
+    {
+      "label": "DELETE dialog",
+      "viewport": 390,
+      "width": 382
+    },
+    {
+      "label": "SAVE CHANGES dialog",
+      "viewport": 390,
+      "width": 382
+    }
+  ],
+  "interceptedMutations": [
+    {
+      "method": "POST",
+      "url": "http://localhost:5001/projects/project_5907c60cddbc/universe-graph/nodes",
+      "body": "{\"node_id\":\"char_1788633590354\",\"project_id\":\"project_5907c60cddbc\",\"node_type\":\"character\",\"name\":\"UI verification character\",\"description\":\"A temporary form value; this is never sent to the server.\",\"universe_tags\":[\"protagonist\"],\"connected_nodes\":[]}"
+    },
+    {
+      "method": "POST",
+      "url": "http://localhost:5001/projects/project_5907c60cddbc/universe-graph/relationships",
+      "body": "{\"relationship_id\":\"rel_1788633590637\",\"project_id\":\"project_5907c60cddbc\",\"from_node\":\"char-f39415a5\",\"to_node\":\"char-66e0aa38\",\"relationship_type\":\"family\",\"description\":\"Family\"}"
+    },
+    {
+      "method": "POST",
+      "url": "http://localhost:5001/projects/project_5907c60cddbc/universe-graph/nodes",
+      "body": "{\"node_id\":\"char-f39415a5\",\"project_id\":\"project_5907c60cddbc\",\"node_type\":\"character\",\"name\":\"Maya\",\"description\":\"Edited text in verification only.\",\"first_scene\":\"scene_002\",\"last_scene\":\"scene_013\",\"universe_tags\":[\"supporting\"],\"created_at\":\"2026-07-24T01:06:37.985124\",\"updated_at\":\"2026-07-24T01:06:37.985124\",\"connected_nodes\":[\"loc-8c920dc3\",\"loc-854fe12e\",\"char-6d3746b2\",\"loc-76250ce6\",\"loc-813ac5a5\",\"loc-f2b1150d\",\"char-04dad2bd\",\"loc-989e5ad1\",\"loc-a68bfcf3\",\"char-9e3dd7a9\",\"loc-eac8608f\",\"char-66e0aa38\",\"char-a1bb8e15\",\"loc-2e41f02f\"]}"
+    },
+    {
+      "method": "DELETE",
+      "url": "http://localhost:5001/projects/project_5907c60cddbc/universe-graph/nodes/char-f39415a5",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "url": "http://localhost:5001/projects/project_5907c60cddbc/universe-graph/nodes",
+      "body": "{\"node_id\":\"loc-0a627fae\",\"project_id\":\"project_5907c60cddbc\",\"node_type\":\"location\",\"name\":\"Downtown Chicago — Golden Hour\",\"description\":\"Location details changed only in an intercepted request.\",\"first_scene\":\"scene_001\",\"last_scene\":\"scene_001\",\"universe_tags\":[],\"created_at\":\"2026-07-24T01:06:38.013133\",\"updated_at\":\"2026-07-24T01:06:38.013133\",\"connected_nodes\":[]}"
+    }
+  ],
+  "errors": []
+}

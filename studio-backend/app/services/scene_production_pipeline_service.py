@@ -101,7 +101,8 @@ class SceneProductionPipelineService:
                     metadata={"provider": getattr(completed_job, "provider", None), "shot_id": shot_id},
                 )
 
-            dialogue_lines = self._dialogue_lines_for_shot(working_project, scene_id, shot_id)
+            parameters = shot.get("parameters") or {}
+            dialogue_lines = parameters["dialogue_lines"] if "dialogue_lines" in parameters else self._dialogue_lines_for_shot(working_project, scene_id, shot_id, allow_scene_fallback=len(shots) == 1)
             audio_result = await self.audio_service.generate_full_pipeline(
                 scene_id=shot_id,
                 project_id=project_id,
@@ -213,55 +214,10 @@ class SceneProductionPipelineService:
         scene_id = str(scene.get("scene_id") or "").strip()
         project_id = str(project.get("project_id") or "").strip()
         if project_id and scene_id:
-            try:
-                from app.services.storyboard_blueprint_service import storyboard_blueprint_service
-
-                blueprint = storyboard_blueprint_service.storage.get_storyboard_blueprint(project_id, scene_id)
-                if blueprint and (blueprint.approved_version_id or blueprint.current_version_id):
-                    version_id = blueprint.approved_version_id or blueprint.current_version_id
-                    blueprint_shots = storyboard_blueprint_service.storage.list_storyboard_shots(
-                        blueprint.blueprint_id,
-                        version_id,
-                    )
-                    shots = []
-                    for shot in blueprint_shots:
-                        shots.append(
-                            {
-                                "scene_id": shot.scene_id,
-                                "shot_id": shot.shot_id,
-                                "description": shot.render_contract.provider_neutral_prompt,
-                                "prompt": shot.render_contract.provider_neutral_prompt,
-                                "reference_assets": shot.render_contract.reference_assets,
-                                "parameters": {
-                                    **(shot.render_contract.structured_parameters or {}),
-                                    "storyboard": {
-                                        "blueprint_id": shot.blueprint_id,
-                                        "version_id": shot.version_id,
-                                        "storyboard_shot_id": shot.storyboard_shot_id,
-                                        "project_id": shot.project_id,
-                                        "scene_id": shot.scene_id,
-                                        "shot_id": shot.shot_id,
-                                        "shot_number": shot.shot_number,
-                                        "link_type": "scene_pipeline_render",
-                                    },
-                                },
-                                "duration_seconds": shot.render_contract.duration_seconds,
-                                "shot_number": shot.shot_number,
-                                "storyboard_blueprint_id": shot.blueprint_id,
-                                "storyboard_version_id": shot.version_id,
-                                "storyboard_shot_id": shot.storyboard_shot_id,
-                            }
-                        )
-                    if shots:
-                        return sorted(
-                            shots,
-                            key=lambda item: (
-                                int(item.get("shot_number") or 999999),
-                                str(item.get("shot_id") or ""),
-                            ),
-                        )
-            except Exception as exc:
-                logger.debug("Storyboard blueprint shot resolution skipped for %s/%s: %s", project_id, scene_id, exc)
+            from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+            blueprint_shots = storyboard_blueprint_service.scene_render_inputs(project_id, scene_id)
+            if blueprint_shots is not None:
+                return blueprint_shots
         scene_shots = scene.get("shots")
         shots = [shot for shot in scene_shots if isinstance(shot, dict)] if isinstance(scene_shots, list) else []
         if not shots:
@@ -332,6 +288,7 @@ class SceneProductionPipelineService:
         return str(
             scene.get("scene_text")
             or scene.get("script_text")
+            or scene.get("text")
             or scene.get("description")
             or scene.get("summary")
             or ""
@@ -354,28 +311,32 @@ class SceneProductionPipelineService:
         project: dict[str, Any],
         scene_id: str,
         shot_id: str,
+        *,
+        allow_scene_fallback: bool = False,
     ) -> list[dict[str, str]] | None:
         summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
         raw_lines = summary.get("dialogue_lines")
         if not isinstance(raw_lines, list):
-            return None
+            return None if allow_scene_fallback else []
         lines: list[dict[str, str]] = []
         for line in raw_lines:
             if not isinstance(line, dict) or str(line.get("scene_id") or "") != scene_id:
                 continue
             line_shot_id = str(line.get("shot_id") or "").strip()
-            if line_shot_id and line_shot_id != shot_id:
+            if line_shot_id != shot_id and not (allow_scene_fallback and not line_shot_id):
                 continue
             lines.append({str(key): str(value) for key, value in line.items() if value is not None})
-        return lines or None
+        return lines if lines or not allow_scene_fallback else None
 
     async def _submit_and_wait(self, job_id: str, max_attempts: int = 90) -> Any:
         job = await self.render_service.submit_job(job_id)
         attempts = 0
-        while not getattr(job, "is_terminal", lambda: True)() and attempts < max_attempts:
+        while getattr(job, "status", "") != "needs_review" and not getattr(job, "is_terminal", lambda: True)() and attempts < max_attempts:
             await asyncio.sleep(1)
             job = await self.render_service.get_job_status(job_id)
             attempts += 1
+        if getattr(job, "status", "") == "needs_review":
+            raise StateError(getattr(job, "error_message", None) or "Review required shot facts before rendering", stage="scene_pipeline_render")
         if getattr(job, "status", "") != "complete":
             raise ProviderError(
                 f"Render job {job_id} did not complete",

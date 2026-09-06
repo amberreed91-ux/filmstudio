@@ -8,6 +8,7 @@ import ProductionScanModal from './ProductionScanModal'
 
 type ProjectContextBarProps = {
   roomName: string
+  compact?: boolean
 }
 
 type ShareModalProps = {
@@ -499,55 +500,17 @@ function ShareButton({ project }: { project: StudioProject }) {
   )
 }
 
-export default function ProjectContextBar({ roomName }: ProjectContextBarProps) {
+export default function ProjectContextBar({ roomName, compact = false }: ProjectContextBarProps) {
   const navigate = useNavigate()
   const { activeProject } = useStudio()
   const [isScanModalOpen, setIsScanModalOpen] = useState(false)
 
   if (!activeProject) return null
 
-  return (
+  const projectActions = (
     <>
-      <div
-        style={{
-          height: '32px',
-          background: '#040810',
-          borderBottom: '1px solid #1a2744',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingLeft: '16px',
-          paddingRight: '16px',
-        }}
-      >
-        {/* Left side - Film title and room name */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <div
-            style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#e8edf5',
-              lineHeight: '1',
-            }}
-          >
-            {activeProject.title || 'Untitled Film'}
-          </div>
-          <div
-            style={{
-              fontSize: '9px',
-              fontFamily: 'monospace',
-              color: '#4a5568',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              lineHeight: '1',
-            }}
-          >
-            {roomName}
-          </div>
-        </div>
-
         {/* Right side - Switch film link and Share button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => setIsScanModalOpen(true)}
@@ -614,6 +577,56 @@ export default function ProjectContextBar({ roomName }: ProjectContextBarProps) 
             Switch film
           </button>
         </div>
+    </>
+  )
+
+  return (
+    <>
+      <div
+        style={{
+          minHeight: '32px',
+          flexWrap: 'wrap',
+          gap: '8px',
+          paddingTop: '6px',
+          paddingBottom: '6px',
+          background: '#040810',
+          borderBottom: '1px solid #1a2744',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+        }}
+      >
+        {/* Left side - Film title and room name */}
+        <div className="min-w-0 flex-1" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+
+          <div
+            style={{
+              fontSize: '13px',
+              fontWeight: 600,
+              color: '#e8edf5',
+              lineHeight: '1.3',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {activeProject.title || 'Untitled Film'}
+          </div>
+          <div
+            style={{
+              fontSize: '9px',
+              fontFamily: 'monospace',
+              color: '#94a3b8',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              lineHeight: '1',
+            }}
+          >
+            {roomName}
+          </div>
+        </div>
+
+        {compact ? <details className="min-w-0 max-w-full text-xs text-zinc-300 open:basis-full"><summary className="cursor-pointer rounded px-2 py-1.5">Film actions</summary><div className="pt-3">{projectActions}</div></details> : projectActions}
       </div>
 
       <ProductionScanModal 

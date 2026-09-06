@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -129,6 +131,60 @@ class _FakeStatusRenderService:
         }
 
 
+class _FakeAdherenceRetryRenderService:
+    def get_job(self, _job_id: str):
+        return SimpleNamespace(
+            id="job-adherence",
+            project_id="project_1",
+            shot_id="scene_001_shot_001",
+            status="complete",
+            input_payload=SimpleNamespace(
+                parameters={
+                    "prompt_slots": {
+                        "character_state": "Maya carries the prior tension.",
+                        "action": "Maya watches the train pass.",
+                    }
+                }
+            ),
+        )
+
+
+class _FakeAdherenceRetryService:
+    async def evaluate_and_select_best(self, **kwargs):
+        from app.services.adherence_service import FullCorrectedPrompt
+
+        return {
+            "strategy": kwargs["submission_strategy"],
+            "corrected_prompt": FullCorrectedPrompt(
+                base_attempt=0,
+                seed_locked=False,
+                slots=kwargs["original_slots"],
+                provenance={"character_state": "original", "action": "original"},
+                prompt="Maya watches the train pass.",
+                chars_remaining=480,
+                compressed_slots=[],
+            ),
+            "seeds_used": [123],
+            "jobs_submitted": [{"job_id": "job-retry", "seed": 123, "status": "submitted"}],
+            "submission_errors": [],
+            "all_scored_attempts": [],
+            "best_attempt": None,
+            "source_job_id": kwargs["source_job_id"],
+        }
+
+
+class _FakeFailedAdherenceRetryService:
+    async def evaluate_and_select_best(self, **_kwargs):
+        return {
+            "strategy": "combined_reorder_and_fresh_seeds",
+            "seeds_used": [123],
+            "jobs_submitted": [],
+            "submission_errors": [{"attempt": 1, "seed": 123, "error": "Provider rejected retry payload"}],
+            "all_scored_attempts": [],
+            "best_attempt": None,
+        }
+
+
 class _FakeRenderJob:
     def __init__(self, job_id: str, created_at: str, status: str = "pending") -> None:
         self.id = job_id
@@ -245,6 +301,43 @@ def test_render_job_response_includes_zero_touch_status_summary(monkeypatch) -> 
     assert summary["environment_continuity"]["recognizability"]["status"] == "needs_review"
     assert summary["environment_continuity"]["reference_explanations"][0]["role"] == "establishing"
     assert summary["human_review_required"] is True
+
+
+def test_adherence_retry_returns_json_safe_payload(monkeypatch) -> None:
+    monkeypatch.setattr(render_routes, "render_service", _FakeAdherenceRetryRenderService())
+    import app.services.render_retry_service as retry_module
+
+    monkeypatch.setattr(retry_module, "render_retry_service", _FakeAdherenceRetryService())
+    api = FastAPI()
+    api.include_router(render_routes.router, prefix="/api/f51/studio/render")
+
+    response = TestClient(api).post(
+        "/api/f51/studio/render/jobs/job-adherence/adherence-retry",
+        json={"max_attempts": 1},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["corrected_prompt"]["prompt"] == "Maya watches the train pass."
+    assert data["jobs_submitted"] == [{"job_id": "job-retry", "seed": 123, "status": "submitted"}]
+    assert data["source_job_id"] == "job-adherence"
+
+
+def test_adherence_retry_reports_provider_queue_failure(monkeypatch) -> None:
+    monkeypatch.setattr(render_routes, "render_service", _FakeAdherenceRetryRenderService())
+    import app.services.render_retry_service as retry_module
+
+    monkeypatch.setattr(retry_module, "render_retry_service", _FakeFailedAdherenceRetryService())
+    api = FastAPI()
+    api.include_router(render_routes.router, prefix="/api/f51/studio/render")
+
+    response = TestClient(api).post(
+        "/api/f51/studio/render/jobs/job-adherence/adherence-retry",
+        json={"max_attempts": 1},
+    )
+
+    assert response.status_code == 502
+    assert "Provider rejected retry payload" in response.json()["detail"]
 
 
 def test_list_render_jobs_can_return_paginated_contract(monkeypatch) -> None:

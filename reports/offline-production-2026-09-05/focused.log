@@ -1,0 +1,187 @@
+...Fatal Python error: Aborted
+
+Thread 0x000000016cccb000 (most recent call first):
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/concurrent/futures/thread.py", line 81 in _worker
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/threading.py", line 982 in run
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/threading.py", line 1045 in _bootstrap_inner
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/threading.py", line 1002 in _bootstrap
+
+Current thread 0x00000001f698de80 (most recent call first):
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/subprocess.py", line 1885 in _execute_child
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/subprocess.py", line 1026 in __init__
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/subprocess.py", line 548 in run
+  File "/private/tmp/studio-offline-verification/app/services/scene_assembly_service.py", line 447 in _run_ffmpeg
+  File "/private/tmp/studio-offline-verification/app/services/scene_assembly_service.py", line 337 in _normalize_clip
+  File "/private/tmp/studio-offline-verification/app/services/scene_assembly_service.py", line 168 in assemble_completed_scene
+  File "/private/tmp/studio-offline-verification/app/services/film_delivery_service.py", line 97 in assemble
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/asyncio/events.py", line 84 in _run
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py", line 1936 in _run_once
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py", line 608 in run_forever
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py", line 641 in run_until_complete
+  File "/private/tmp/studio-offline-verification/conftest.py", line 226 in run_async
+  File "/private/tmp/studio-offline-verification/tests/test_offline_production_delivery.py", line 81 in test_local_audio_mixed_shot_sizes_export_approval_and_reopen
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/python.py", line 167 in pytest_pyfunc_call
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/python.py", line 1707 in runtest
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 184 in pytest_runtest_call
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 250 in <lambda>
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 361 in from_call
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 249 in call_and_report
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 139 in runtestprotocol
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 118 in pytest_runtest_protocol
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/main.py", line 408 in pytest_runtestloop
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/main.py", line 384 in _main
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/main.py", line 330 in wrap_session
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/main.py", line 377 in pytest_cmdline_main
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/config/__init__.py", line 229 in _main
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/config/__init__.py", line 253 in _console_main
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pytest/__main__.py", line 9 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 198 in _run_module_as_main
+
+Extension modules: multidict._multidict, yarl._quoting_c, propcache._helpers_c, _brotli, aiohttp._http_writer, aiohttp._http_parser, aiohttp._websocket.mask, aiohttp._websocket.reader_c, frozenlist._frozenlist, numpy.core._multiarray_umath, numpy.core._multiarray_tests, numpy.linalg._umath_linalg, numpy.fft._pocketfft_internal, numpy.random._common, numpy.random.bit_generator, numpy.random._bounded_integers, numpy.random._mt19937, numpy.random.mtrand, numpy.random._philox, numpy.random._pcg64, numpy.random._sfc64, numpy.random._generator, regex._regex, yaml._yaml, torch._C, torch._C._dynamo.autograd_compiler, torch._C._dynamo.eval_frame, torch._C._dynamo.guards, torch._C._dynamo.utils, torch._C._fft, torch._C._linalg, torch._C._nested, torch._C._nn, torch._C._sparse, torch._C._special, markupsafe._speedups, PIL._imaging, _cffi_backend, psutil._psutil_osx, cython.cimports.libc.math, _cyutility, scipy._cyutility, scipy._lib._ccallback_c, scipy.linalg._fblas, scipy.linalg._flapack, scipy.linalg.cython_lapack, scipy.linalg._cythonized_array_utils, scipy.linalg._solve_toeplitz, scipy.linalg._batched_linalg, scipy.linalg._decomp_lu_cython, scipy.linalg._matfuncs_schur_sqrtm, scipy.linalg._matfuncs_expm, scipy.linalg._linalg_pythran, scipy.linalg.cython_blas, scipy.linalg._decomp_update, scipy.sparse._sparsetools, _csparsetools, scipy.sparse._csparsetools, scipy.sparse.linalg._dsolve._superlu, scipy.sparse.linalg._eigen.arpack._arpacklib, scipy.sparse.linalg._propack, scipy.optimize._group_columns, scipy._lib.messagestream, scipy.optimize._trlib._trlib, scipy.optimize._lbfgsb, _moduleTNC, scipy.optimize._moduleTNC, scipy.optimize._slsqplib, scipy.optimize._minpack, scipy.optimize._lsq.givens_elimination, scipy.optimize._zeros, scipy._lib._uarray._uarray, scipy.special._ufuncs_cxx, scipy.special._ellip_harm_2, scipy.special._special_ufuncs, scipy.special._gufuncs, scipy.special._ufuncs, scipy.special._specfun, scipy.special._comb, scipy.linalg._decomp_interpolative, scipy.optimize._bglu_dense, scipy.optimize._lsap, scipy.spatial._ckdtree, scipy.spatial._qhull, scipy.spatial._voronoi, scipy.spatial._hausdorff, scipy.spatial._distance_wrap, scipy.spatial.transform._rotation_cy, scipy.spatial.transform._rigid_transform_cy, scipy.optimize._direct, sklearn.__check_build._check_build, scipy.integrate._odepack, scipy.integrate._quadpack, scipy.integrate._vode, scipy.integrate._dop, scipy.interpolate._fitpack, scipy.interpolate._dfitpack, scipy.interpolate._dierckx, scipy.interpolate._ppoly, scipy.interpolate._interpnd, scipy.interpolate._rbfinterp_pythran, scipy.interpolate._rgi_cython, scipy.special.cython_special, scipy.stats._stats, scipy.stats._biasedurn, scipy.stats._stats_pythran, scipy.stats._levy_stable.levyst, scipy.stats._ansari_swilk_statistics, scipy.sparse.csgraph._tools, scipy.sparse.csgraph._shortest_path, scipy.sparse.csgraph._traversal, scipy.sparse.csgraph._min_spanning_tree, scipy.sparse.csgraph._flow, scipy.sparse.csgraph._matching, scipy.sparse.csgraph._reordering, scipy.stats._sobol, scipy.stats._qmc_cy, scipy.stats._rcont.rcont, scipy.stats._qmvnt_cy, scipy.ndimage._nd_image, scipy.ndimage._rank_filter_1d, _ni_label, scipy.ndimage._ni_label, pandas._libs.tslibs.np_datetime, pandas._libs.tslibs.dtypes, pandas._libs.tslibs.base, pandas._libs.tslibs.nattype, pandas._libs.tslibs.timezones, pandas._libs.tslibs.tzconversion, pandas._libs.tslibs.ccalendar, pandas._libs.tslibs.fields, pandas._libs.tslibs.timedeltas, pandas._libs.tslibs.timestamps, pandas._libs.properties, pandas._libs.tslibs.offsets, pandas._libs.tslibs.parsing, pandas._libs.tslibs.conversion, pandas._libs.tslibs.period, pandas._libs.tslibs.vectorized, pandas._libs.ops_dispatch, pandas._libs.missing, pandas._libs.hashtable, pandas._libs.algos, pandas._libs.interval, pandas._libs.tslib, pandas._libs.lib, pandas._libs.hashing, pandas._libs.ops, pandas._libs.arrays, pandas._libs.index, pandas._libs.join, pandas._libs.sparse, pandas._libs.reduction, pandas._libs.indexing, pandas._libs.internals, pandas._libs.writers, pandas._libs.window.aggregations, pandas._libs.window.indexers, pandas._libs.reshape, pandas._libs.tslibs.strptime, pandas._libs.groupby, pandas._libs.testing, pandas._libs.parsers, pandas._libs.json, sklearn._cyutility, sklearn.utils._isfinite, sklearn.utils.sparsefuncs_fast, sklearn.utils.murmurhash, sklearn.utils._openmp_helpers, sklearn.metrics.cluster._expected_mutual_info_fast, sklearn.metrics._dist_metrics, sklearn.metrics._pairwise_distances_reduction._datasets_pair, sklearn.utils._cython_blas, sklearn.metrics._pairwise_distances_reduction._base, sklearn.metrics._pairwise_distances_reduction._middle_term_computer, sklearn.utils._heap, sklearn.utils._sorting, sklearn.metrics._pairwise_distances_reduction._argkmin, sklearn.metrics._pairwise_distances_reduction._argkmin_classmode, sklearn.utils._vector_sentinel, sklearn.metrics._pairwise_distances_reduction._radius_neighbors, sklearn.metrics._pairwise_distances_reduction._radius_neighbors_classmode, sklearn.metrics._pairwise_fast, sklearn.preprocessing._csr_polynomial_expansion, sklearn.preprocessing._target_encoder_fast (total: 185)
+F.........Fatal Python error: Aborted
+
+Current thread 0x00000001f698de80 (most recent call first):
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/subprocess.py", line 1885 in _execute_child
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/subprocess.py", line 1026 in __init__
+  File "/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/subprocess.py", line 548 in run
+  File "/private/tmp/studio-offline-verification/tests/test_take_selection_delivery.py", line 138 in test_real_media_delivery_preserves_scene_order_sound_and_reopens
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/python.py", line 167 in pytest_pyfunc_call
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/python.py", line 1707 in runtest
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 184 in pytest_runtest_call
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 250 in <lambda>
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 361 in from_call
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 249 in call_and_report
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 139 in runtestprotocol
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 118 in pytest_runtest_protocol
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/main.py", line 408 in pytest_runtestloop
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/main.py", line 384 in _main
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/main.py", line 330 in wrap_session
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/main.py", line 377 in pytest_cmdline_main
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/config/__init__.py", line 229 in _main
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/_pytest/config/__init__.py", line 253 in _console_main
+  File "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/.venv/lib/python3.11/site-packages/pytest/__main__.py", line 9 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 198 in _run_module_as_main
+
+Extension modules: multidict._multidict, yarl._quoting_c, propcache._helpers_c, _brotli, aiohttp._http_writer, aiohttp._http_parser, aiohttp._websocket.mask, aiohttp._websocket.reader_c, frozenlist._frozenlist, numpy.core._multiarray_umath, numpy.core._multiarray_tests, numpy.linalg._umath_linalg, numpy.fft._pocketfft_internal, numpy.random._common, numpy.random.bit_generator, numpy.random._bounded_integers, numpy.random._mt19937, numpy.random.mtrand, numpy.random._philox, numpy.random._pcg64, numpy.random._sfc64, numpy.random._generator, regex._regex, yaml._yaml, torch._C, torch._C._dynamo.autograd_compiler, torch._C._dynamo.eval_frame, torch._C._dynamo.guards, torch._C._dynamo.utils, torch._C._fft, torch._C._linalg, torch._C._nested, torch._C._nn, torch._C._sparse, torch._C._special, markupsafe._speedups, PIL._imaging, _cffi_backend, psutil._psutil_osx, cython.cimports.libc.math, _cyutility, scipy._cyutility, scipy._lib._ccallback_c, scipy.linalg._fblas, scipy.linalg._flapack, scipy.linalg.cython_lapack, scipy.linalg._cythonized_array_utils, scipy.linalg._solve_toeplitz, scipy.linalg._batched_linalg, scipy.linalg._decomp_lu_cython, scipy.linalg._matfuncs_schur_sqrtm, scipy.linalg._matfuncs_expm, scipy.linalg._linalg_pythran, scipy.linalg.cython_blas, scipy.linalg._decomp_update, scipy.sparse._sparsetools, _csparsetools, scipy.sparse._csparsetools, scipy.sparse.linalg._dsolve._superlu, scipy.sparse.linalg._eigen.arpack._arpacklib, scipy.sparse.linalg._propack, scipy.optimize._group_columns, scipy._lib.messagestream, scipy.optimize._trlib._trlib, scipy.optimize._lbfgsb, _moduleTNC, scipy.optimize._moduleTNC, scipy.optimize._slsqplib, scipy.optimize._minpack, scipy.optimize._lsq.givens_elimination, scipy.optimize._zeros, scipy._lib._uarray._uarray, scipy.special._ufuncs_cxx, scipy.special._ellip_harm_2, scipy.special._special_ufuncs, scipy.special._gufuncs, scipy.special._ufuncs, scipy.special._specfun, scipy.special._comb, scipy.linalg._decomp_interpolative, scipy.optimize._bglu_dense, scipy.optimize._lsap, scipy.spatial._ckdtree, scipy.spatial._qhull, scipy.spatial._voronoi, scipy.spatial._hausdorff, scipy.spatial._distance_wrap, scipy.spatial.transform._rotation_cy, scipy.spatial.transform._rigid_transform_cy, scipy.optimize._direct, sklearn.__check_build._check_build, scipy.integrate._odepack, scipy.integrate._quadpack, scipy.integrate._vode, scipy.integrate._dop, scipy.interpolate._fitpack, scipy.interpolate._dfitpack, scipy.interpolate._dierckx, scipy.interpolate._ppoly, scipy.interpolate._interpnd, scipy.interpolate._rbfinterp_pythran, scipy.interpolate._rgi_cython, scipy.special.cython_special, scipy.stats._stats, scipy.stats._biasedurn, scipy.stats._stats_pythran, scipy.stats._levy_stable.levyst, scipy.stats._ansari_swilk_statistics, scipy.sparse.csgraph._tools, scipy.sparse.csgraph._shortest_path, scipy.sparse.csgraph._traversal, scipy.sparse.csgraph._min_spanning_tree, scipy.sparse.csgraph._flow, scipy.sparse.csgraph._matching, scipy.sparse.csgraph._reordering, scipy.stats._sobol, scipy.stats._qmc_cy, scipy.stats._rcont.rcont, scipy.stats._qmvnt_cy, scipy.ndimage._nd_image, scipy.ndimage._rank_filter_1d, _ni_label, scipy.ndimage._ni_label, pandas._libs.tslibs.np_datetime, pandas._libs.tslibs.dtypes, pandas._libs.tslibs.base, pandas._libs.tslibs.nattype, pandas._libs.tslibs.timezones, pandas._libs.tslibs.tzconversion, pandas._libs.tslibs.ccalendar, pandas._libs.tslibs.fields, pandas._libs.tslibs.timedeltas, pandas._libs.tslibs.timestamps, pandas._libs.properties, pandas._libs.tslibs.offsets, pandas._libs.tslibs.parsing, pandas._libs.tslibs.conversion, pandas._libs.tslibs.period, pandas._libs.tslibs.vectorized, pandas._libs.ops_dispatch, pandas._libs.missing, pandas._libs.hashtable, pandas._libs.algos, pandas._libs.interval, pandas._libs.tslib, pandas._libs.lib, pandas._libs.hashing, pandas._libs.ops, pandas._libs.arrays, pandas._libs.index, pandas._libs.join, pandas._libs.sparse, pandas._libs.reduction, pandas._libs.indexing, pandas._libs.internals, pandas._libs.writers, pandas._libs.window.aggregations, pandas._libs.window.indexers, pandas._libs.reshape, pandas._libs.tslibs.strptime, pandas._libs.groupby, pandas._libs.testing, pandas._libs.parsers, pandas._libs.json, sklearn._cyutility, sklearn.utils._isfinite, sklearn.utils.sparsefuncs_fast, sklearn.utils.murmurhash, sklearn.utils._openmp_helpers, sklearn.metrics.cluster._expected_mutual_info_fast, sklearn.metrics._dist_metrics, sklearn.metrics._pairwise_distances_reduction._datasets_pair, sklearn.utils._cython_blas, sklearn.metrics._pairwise_distances_reduction._base, sklearn.metrics._pairwise_distances_reduction._middle_term_computer, sklearn.utils._heap, sklearn.utils._sorting, sklearn.metrics._pairwise_distances_reduction._argkmin, sklearn.metrics._pairwise_distances_reduction._argkmin_classmode, sklearn.utils._vector_sentinel, sklearn.metrics._pairwise_distances_reduction._radius_neighbors, sklearn.metrics._pairwise_distances_reduction._radius_neighbors_classmode, sklearn.metrics._pairwise_fast, sklearn.preprocessing._csr_polynomial_expansion, sklearn.preprocessing._target_encoder_fast (total: 185)
+F.................                                          [100%]
+=================================== FAILURES ===================================
+_________ test_local_audio_mixed_shot_sizes_export_approval_and_reopen _________
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-145/test_local_audio_mixed_shot_si0')
+
+    def test_local_audio_mixed_shot_sizes_export_approval_and_reopen(tmp_path):
+        store = DatabaseStorage(str(tmp_path / 'db'))
+        project_id = 'offline_film'
+        project = {'project_id':project_id,'title':'Offline delivery fixture','execution_summary':{'scenes':[{'scene_id':'scene_001'}]}}
+        store.save_project(StudioProject(**project))
+        audio = _audio(tmp_path)
+        supplied = audio.output_base / project_id / 'scene_001' / 'pre_supplied'
+        supplied.mkdir(parents=True)
+        _run(['ffmpeg','-y','-f','lavfi','-i','sine=frequency=440:duration=0.7:sample_rate=48000',str(supplied/'scene_001_shot_001.wav')])
+        output_root = tmp_path / 'outputs';output_root.mkdir()
+        for number,color,size,fps in [(1,'red','320x180',24),(2,'blue','180x320',30)]:
+            path = output_root / f'shot_{number}.mp4'
+            command=['ffmpeg','-y','-f','lavfi','-i',f'color=c={color}:s={size}:d=1:r={fps}']
+            if number==2:command+=['-f','lavfi','-i','sine=frequency=880:duration=1:sample_rate=48000']
+            command+=['-c:v','libx264','-pix_fmt','yuv420p']
+            command+=['-c:a','aac','-shortest'] if number==2 else ['-an']
+            _run(command+[str(path)])
+            shot=f'scene_001_shot_{number:03d}'
+            store.save_job(RenderJobModel(id=f'job-{number}',project_id=project_id,shot_id=shot,provider='simulated',status='complete',created_at=f'2026-01-01T00:00:0{number}',input_payload=RenderJobInput(shot_id=shot,prompt='Local verification fixture',parameters={'dialogue_lines':[{'character':'Maya','text':'Must never invoke a voice provider'}]}),output_payload=RenderJobOutput(asset_url=str(path))))
+        assembly = SceneAssemblyService(storage=store,audio_service=audio,backend_root=tmp_path)
+        service = FilmDeliveryService(storage=store,projects=SimpleNamespace(load=lambda _:project),scenes=assembly,backend_root=tmp_path)
+>       result=run_async(service.assemble(project_id))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_offline_production_delivery.py:81: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+conftest.py:226: in run_async
+    return loop.run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+app/services/film_delivery_service.py:97: in assemble
+    await self.scenes.assemble_completed_scene(project_id=project_id, scene_id=sid, allow_audio_generation=False)
+app/services/scene_assembly_service.py:168: in assemble_completed_scene
+    self._normalize_clip(clip_path, canonical, canvas=canvas)
+app/services/scene_assembly_service.py:337: in _normalize_clip
+    self._run_ffmpeg(command, "scene_assembly_normalize")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+command = ['ffmpeg', '-y', '-i', '/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/scene_assembly_scene_001_cd21xfwj/shot_002_raw.mp4', '-filter:a', 'apad', ...]
+stage = 'scene_assembly_normalize'
+
+    @staticmethod
+    def _run_ffmpeg(command: list[str], stage: str) -> None:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=300)
+        if result.returncode != 0:
+>           raise PlaybackError(
+                (result.stderr or result.stdout or "ffmpeg failed")[-1000:],
+                stage=stage,
+            )
+E           app.services.stability.PlaybackError: ffmpeg failed
+
+app/services/scene_assembly_service.py:449: PlaybackError
+----------------------------- Captured stderr call -----------------------------
+OMP: Error #179: Function Can't open SHM failed:
+OMP: System error #0: Undefined error: 0
+_______ test_real_media_delivery_preserves_scene_order_sound_and_reopens _______
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-145/test_real_media_delivery_prese0')
+
+    def test_real_media_delivery_preserves_scene_order_sound_and_reopens(tmp_path):
+        import subprocess
+        import numpy as np
+        from app.services.scene_assembly_service import SceneAssemblyService
+    
+        store = DatabaseStorage(str(tmp_path / 'media.db'))
+        source_dir = tmp_path / 'outputs'; source_dir.mkdir()
+        # Known tones verify that both scenes' sound survives, in screenplay order.
+        for sid, color, tone in [('scene_010', 'red', 440), ('scene_002', 'blue', 880)]:
+            source = source_dir / f'{sid}.mp4'
+            result = subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', f'color=c={color}:s=320x180:d=1:r=24', '-f', 'lavfi', '-i', f'sine=frequency={tone}:duration=1:sample_rate=48000', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', str(source)], capture_output=True)
+>           assert result.returncode == 0
+E           AssertionError: assert -6 == 0
+E            +  where -6 = CompletedProcess(args=['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=red:s=320x180:d=1:r=24', '-f', 'lavfi', '-i', 'si...of-amberreed/pytest-145/test_real_media_delivery_prese0/outputs/scene_010.mp4'], returncode=-6, stdout=b'', stderr=b'').returncode
+
+tests/test_take_selection_delivery.py:139: AssertionError
+----------------------------- Captured stderr call -----------------------------
+OMP: Error #179: Function Can't open SHM failed:
+OMP: System error #0: Undefined error: 0
+=========================== short test summary info ============================
+FAILED tests/test_offline_production_delivery.py::test_local_audio_mixed_shot_sizes_export_approval_and_reopen
+FAILED tests/test_take_selection_delivery.py::test_real_media_delivery_preserves_scene_order_sound_and_reopens
+2 failed, 29 passed in 10.31s

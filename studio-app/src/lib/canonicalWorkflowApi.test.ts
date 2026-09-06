@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   beginCanonicalWorkflow,
+  generateCanonicalPrevis,
+  renderCanonicalRevision,
   listCanonicalWorkflows,
   renderCanonicalProductionPackage,
 } from './canonicalWorkflowApi'
@@ -68,6 +70,28 @@ describe('canonical workflow API', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(String(url)).toContain('/api/f51/studio/production-threads/run-1/renders')
     expect(init?.method).toBe('POST')
-    expect(JSON.parse(String(init?.body))).toEqual({ provider: 'simulated', retry_confirmed: true })
+    expect(JSON.parse(String(init?.body))).toEqual({ retry_confirmed: true })
+  })
+})
+
+
+describe('canonical provider selection', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it.each(['openrouter-video', 'runway', 'simulated'])('sends explicit %s for new Previs, package and revision jobs', async (provider) => {
+    const request = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ run: {}, transitions: [] }), { status: 200 }))
+    await generateCanonicalPrevis('run-1', provider)
+    await renderCanonicalProductionPackage('run-1', false, provider)
+    await renderCanonicalRevision('run-1', provider)
+    expect(request.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).provider)).toEqual([provider, provider, provider])
+    for (const [, init] of request.mock.calls) expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json')
+  })
+
+  it('omits provider overrides when polling or retaining approved settings', async () => {
+    const request = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ run: {}, transitions: [] }), { status: 200 }))
+    await generateCanonicalPrevis('run-1')
+    await renderCanonicalProductionPackage('run-1')
+    await renderCanonicalRevision('run-1')
+    for (const [, init] of request.mock.calls) expect(JSON.parse(String(init?.body))).not.toHaveProperty('provider')
   })
 })

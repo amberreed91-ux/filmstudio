@@ -268,11 +268,11 @@ def test_relock_replaces_the_locked_reference_and_supersedes_the_old_one(tmp_pat
     assert [row["image_url"] for row in superseded] == ["https://cdn.example.test/bad.jpg"]
 
 
-def test_relock_to_the_same_image_is_a_no_op(tmp_path):
+def test_relock_to_the_same_director_approved_image_is_a_no_op(tmp_path):
     storage = _storage(tmp_path)
     character = storage.save_character("proj-multi", "Maya", {})
     storage.save_character_reference_lock(
-        _lock("proj-multi", character["id"], "general", "https://cdn.example.test/same.jpg")
+        _lock("proj-multi", character["id"], "general", "https://cdn.example.test/same.jpg", capture_method="director_override")
     )
 
     CharacterVisualReferenceService().relock_character_reference(

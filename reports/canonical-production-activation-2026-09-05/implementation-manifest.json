@@ -1,0 +1,73 @@
+{
+  "files": [
+    {
+      "path": "studio-app/src/components/CanonicalWorkflowPanel.tsx",
+      "sha256": "ea5004b9c8fcc0faa8bfcab8da3ec25b88f48252fe5b375761a4d907fe15ba17"
+    },
+    {
+      "path": "studio-app/src/components/CanonicalWorkflowPanel.test.tsx",
+      "sha256": "9faac913de3b01254fc9efd6de4d40da8fdce0966014c2d67de9697c350655ec"
+    },
+    {
+      "path": "studio-app/src/hooks/useCanonicalWorkflow.ts",
+      "sha256": "275f930e0426ef769b8b06bab39bafd0217d431c89fd19ecff85fa6ea5d4f141"
+    },
+    {
+      "path": "studio-app/src/lib/canonicalWorkflowApi.ts",
+      "sha256": "f2c7850bb42100766ec75ae0cdc9c12e62ff7920f7e5c14772244ae835b6b894"
+    },
+    {
+      "path": "studio-app/src/lib/canonicalWorkflowApi.test.ts",
+      "sha256": "7da290becc0b283e342a1ad57b531699f92e4928d71b34ca8b28391e378219c2"
+    },
+    {
+      "path": "studio-app/src/pages/PrevisRoom.tsx",
+      "sha256": "c183afe2deb87ad12b5b64ab21413cfdc2fe664024ece120c1c755798303d441"
+    },
+    {
+      "path": "studio-app/backendSupervisor.ts",
+      "sha256": "08d3ac368f26d2c7ac594521154a095888f5fc97c915618b1b442fd7909be150"
+    },
+    {
+      "path": "scripts/launch_ai_film_studio.sh",
+      "sha256": "f0d9ece4dba7f1d9adeae9bb9fd6c00d61f5376d965b205f63a104a80faa9be6"
+    },
+    {
+      "path": "studio-backend/app/models/canonical_workflow.py",
+      "sha256": "b38dbc5ffde45e9caabba479af43e0507b46d4203f568b4c3047dc3ed4ee615d"
+    },
+    {
+      "path": "studio-backend/app/models/storyboard_blueprint.py",
+      "sha256": "d839a3ba7efd2e5db14bf6be7c6cfc7cc7508009f79e00ed4195d384f8dc74ec"
+    },
+    {
+      "path": "studio-backend/app/routes/canonical_workflow.py",
+      "sha256": "e83a8563039d4c0b7c5bcde2070c33e01fd3a26e6303370df2d864312f561641"
+    },
+    {
+      "path": "studio-backend/app/services/canonical_production_workflow_service.py",
+      "sha256": "d730fae394d059cf7dc09b665b107dc2343d0d0f4b7ad7b0b2258599e768c58a"
+    },
+    {
+      "path": "studio-backend/app/services/editorial_intelligence_service.py",
+      "sha256": "f69e35c2f1b5e6a88063c1b709bcd2c57e606d867dde4550c492c4fbd776a8a3"
+    },
+    {
+      "path": "studio-backend/app/data/storage.py",
+      "sha256": "3b204d9604c9ac356bb3859e89d55924a5607a7db0db49fb128a8bf1fcfb84e0"
+    },
+    {
+      "path": "studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py",
+      "sha256": "bfbca91eca59f93d5c3f860f52463a26ebe4010a8c892007e46c05d8911237dc"
+    },
+    {
+      "path": "studio-backend/tests/test_checkpoint_5_canonical_workflow_routes.py",
+      "sha256": "13da1aa3d9d3f2708048c8b3e9b33d225086972632e1e8254a5fd876b0b957c9"
+    },
+    {
+      "path": "studio-backend/tests/test_canonical_activation_compatibility.py",
+      "sha256": "ae8b3d0fe18d8fe91384abe48d93cb96ae61fb82a89d37aa9b7c72f78ee5201d"
+    }
+  ],
+  "backend_source_mismatches": []
+}

@@ -1,0 +1,25 @@
+{
+  "benchmark_id": "the-returned-key-v1",
+  "title": "The Returned Key",
+  "purpose": "Baseline sequential cinema coherence; one generation per shot, no retries or selection.",
+  "characters": {
+    "Nina": "Adult Black woman, short natural locs, olive jacket, white bandage on left wrist.",
+    "Jules": "Adult light-brown-skinned man, short dark curls, blue work shirt."
+  },
+  "environment": "Green-tiled workshop, wooden table, door on left, window on right. Nina sits left and Jules right. Camera remains south of table.",
+  "continuity": "Brass key and red mug remain on table until Nina passes key to Jules. Warm amber desk lamp at dusk. Final shot is later at night with same lamp. No costume changes.",
+  "anchor_prompt": "Match both reference faces: Nina, locs, olive jacket, left wrist bandage, sits left; Jules, curls, blue shirt, sits right. Same green-tiled workshop, door left, window right, wooden table, red mug and brass key, amber lamp. Camera stays south of table.",
+  "provider": "openrouter",
+  "model": "alibaba/happyhorse-1.1",
+  "parameters": {"duration": 4, "resolution": "720P", "ratio": "16:9", "generate_audio": false},
+  "shots": [
+    {"shot_id": "scene_001_shot_001", "direction": "Dusk. Wide static two-shot. Nina guards the key; Jules waits. Tense silence.", "expectations": ["Both reference identities recognizable", "Correct clothes and left wrist bandage", "Nina left, Jules right", "Red mug and brass key on table", "Dusk window and amber practical light"]},
+    {"shot_id": "scene_001_shot_002", "direction": "Dusk. Medium close-up of Nina on left looking right at Jules. She hesitates; key stays beside red mug.", "expectations": ["Nina same face as shot 1 and reference", "Olive jacket unchanged", "Eyeline points right", "Key and mug position maintained", "Lighting matches prior shot"]},
+    {"shot_id": "scene_001_shot_003", "direction": "Dusk. Reverse medium close-up of Jules on right, looking left toward Nina, quietly hopeful.", "expectations": ["Jules same face as shot 1 and reference", "Blue shirt unchanged", "Eyeline points left", "Camera remains south of axis", "Hope follows prior hesitation"]},
+    {"shot_id": "scene_001_shot_004", "direction": "Dusk. Table insert. Nina slides the brass key left to right toward Jules. Bandaged left wrist visible; red mug stays still.", "expectations": ["Brass key has same shape", "Left wrist bandage preserved", "Key travels left to right", "Red mug remains stationary", "Hands and sleeves match cast"]},
+    {"shot_id": "scene_001_shot_005", "direction": "Dusk. Static two-shot. Jules holds the returned brass key on right. Nina exhales on left; tension eases. Mug stays on table.", "expectations": ["Both identities remain stable", "Key is now with Jules, not back beside Nina", "Mug and room geography unchanged", "Relief follows the handoff", "No wardrobe change"]},
+    {"shot_id": "scene_002_shot_001", "direction": "Later, night outside the right window. Same static two-shot and amber lamp. Jules holds key, Nina rests her bandaged wrist. Quiet trust.", "expectations": ["Both identities survive time progression", "Window darkens but lamp remains warm", "Same workshop architecture and screen positions", "Key remains with Jules", "Emotional progression settles into trust"]}
+  ],
+  "review_questions": ["Did the character remain the same person?", "Did wardrobe remain correct?", "Did the environment remain recognizable?", "Did important props persist?", "Did lighting remain logically continuous?", "Did spatial relationships make sense?", "Did the shot follow the screenplay?", "Do adjacent shots belong to the same scene?", "Do all shots belong to the same film?"],
+  "review_labels": ["preserved", "violated", "unclear", "not_visible", "not_generated"]
+}

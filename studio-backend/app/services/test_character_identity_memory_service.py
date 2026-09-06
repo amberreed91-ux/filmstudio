@@ -465,3 +465,12 @@ We have to move now.
     assert isinstance(bundle.get("emotional_identity_continuity"), list)
     assert isinstance(bundle.get("identity_drift_warnings"), list)
     assert isinstance(bundle.get("continuity_warnings"), list)
+
+
+def test_provider_text_omits_internal_review_status_but_keeps_review_metadata():
+    record = {'character_id': 'nina', 'name': 'Nina', 'needs_human_review': True, 'default_appearance': {'wardrobe': ['olive jacket']}}
+    context = character_identity_memory_service.build_provider_context_from_records([record])
+    text = ' '.join(context['identity_lines'])
+    assert 'not yet verified' not in text
+    assert 'human review needed' not in text
+    assert context['human_review_required'] is True

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import StudioShell, { AGENTS, CollapsibleSection, EmptyStateCard, MetricCard, TabGroup } from '../components/StudioShell'
 import StudioBrainExecutivePanel from '../components/StudioBrainExecutivePanel'
 import StudioBrainOrchestrationPanel from '../components/StudioBrainOrchestrationPanel'
@@ -13,6 +13,7 @@ import {
   listProjects,
   retrieveReferenceMemory,
 } from '../lib/studioApi'
+import { withProjectQuery } from '../lib/projectContext'
 
 const FALLBACK_AGENTS = {
   director: { name: 'Director', icon: '🎬' },
@@ -54,8 +55,11 @@ function clampPercent(value: number): number {
 
 export default function StudioOverview() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { overview, project, loadProject } = useStudio()
-  const activeProjectId = project?.project_id || overview?.latest_project?.project_id || ''
+  const queryProjectId = (searchParams.get('project_id') || '').trim()
+  const activeProjectId = queryProjectId || project?.project_id || overview?.latest_project?.project_id || ''
+  const requestedProjectLoadRef = useRef('')
   const [exportMessage, setExportMessage] = useState('')
   const [projectSaveMessage, setProjectSaveMessage] = useState('')
   const [overviewTab, setOverviewTab] = useState<'activity' | 'issues' | 'rooms' | 'memory'>('activity')
@@ -97,7 +101,8 @@ export default function StudioOverview() {
       : !hasApproved
         ? 'Review Scenes'
         : 'Watch Cut'
-  const nextDirectiveLink = !hasScript ? '/studio/writers-room' : !hasScenes ? '/studio/writers-room' : !hasApproved ? '/studio/previs' : '/studio/screening-room'
+  const nextDirectiveBaseLink = !hasScript ? '/studio/writers-room' : !hasScenes ? '/studio/writers-room' : !hasApproved ? '/studio/previs' : '/studio/screening-room'
+  const nextDirectiveLink = withProjectQuery(nextDirectiveBaseLink, activeProjectId)
   const creativeTension = useMemo(() => {
     try {
       const raw = localStorage.getItem('studio:lastBundle')
@@ -185,15 +190,15 @@ export default function StudioOverview() {
     const playable = asNumber(screeningSummary.playable_scene_count) ?? approvedScenesCount
     const snapshots = asNumber(archiveSummary.total_snapshots) ?? archiveSnapshots.length
     return [
-      { title: 'Development Room', status: totalScenes > 0 ? 'Story map active' : 'No project loaded', to: '/studio/lobby', preview: totalScenes > 0 ? `${totalScenes} scene${totalScenes === 1 ? '' : 's'}` : 'Generate scenes to populate this panel' },
-      { title: "Writer's Room", status: hasScript ? 'Script loaded' : 'No script loaded', to: '/studio/writers-room', preview: hasScript ? 'Ready for scene generation' : 'Load a script to begin' },
-      { title: 'Previs Room', status: totalScenes > 0 ? 'Scene board available' : 'No scenes generated', to: '/studio/previs', preview: totalScenes > 0 ? `${totalScenes} scenes • ${renderCount} render assets` : 'Generate scenes to populate this panel' },
-      { title: 'Production Board', status: totalScenes > 0 ? 'Tracking review state' : 'No production data', to: '/studio/production-board', preview: totalScenes > 0 ? `locked ${locked} • blocked ${blocked}` : 'Generate scenes to populate this panel' },
-      { title: 'Screening Room', status: playable > 0 ? 'Cut playable' : 'No cut available yet', to: '/studio/screening-room', preview: playable > 0 ? `${playable} playable scene${playable === 1 ? '' : 's'}` : 'Approve scenes in Previs first' },
-      { title: 'Archive', status: snapshots > 0 ? 'Snapshots available' : 'No archive snapshots yet', to: '/studio/archive', preview: snapshots > 0 ? `${snapshots} snapshot${snapshots === 1 ? '' : 's'}` : 'No archive snapshots yet' },
-      { title: 'Study Room', status: studiedReferenceCount > 0 ? 'Reference memory active' : 'No studied datasets', to: '/studio/study-room', preview: studiedReferenceCount > 0 ? `${studiedReferenceCount} studied dataset${studiedReferenceCount === 1 ? '' : 's'}` : 'Study references to train style memory' },
+      { title: 'Development Room', status: totalScenes > 0 ? 'Story map active' : 'No project loaded', to: withProjectQuery('/studio/lobby', activeProjectId), preview: totalScenes > 0 ? `${totalScenes} scene${totalScenes === 1 ? '' : 's'}` : 'Generate scenes to populate this panel' },
+      { title: "Writer's Room", status: hasScript ? 'Script loaded' : 'No script loaded', to: withProjectQuery('/studio/writers-room', activeProjectId), preview: hasScript ? 'Ready for scene generation' : 'Load a script to begin' },
+      { title: 'Previs Room', status: totalScenes > 0 ? 'Scene board available' : 'No scenes generated', to: withProjectQuery('/studio/previs', activeProjectId), preview: totalScenes > 0 ? `${totalScenes} scenes • ${renderCount} render assets` : 'Generate scenes to populate this panel' },
+      { title: 'Production Board', status: totalScenes > 0 ? 'Tracking review state' : 'No production data', to: withProjectQuery('/studio/production-board', activeProjectId), preview: totalScenes > 0 ? `locked ${locked} • blocked ${blocked}` : 'Generate scenes to populate this panel' },
+      { title: 'Screening Room', status: playable > 0 ? 'Cut playable' : 'No cut available yet', to: withProjectQuery('/studio/screening-room', activeProjectId), preview: playable > 0 ? `${playable} playable scene${playable === 1 ? '' : 's'}` : 'Approve scenes in Previs first' },
+      { title: 'Archive', status: snapshots > 0 ? 'Snapshots available' : 'No archive snapshots yet', to: withProjectQuery('/studio/archive', activeProjectId), preview: snapshots > 0 ? `${snapshots} snapshot${snapshots === 1 ? '' : 's'}` : 'No archive snapshots yet' },
+      { title: 'Study Room', status: studiedReferenceCount > 0 ? 'Reference memory active' : 'No studied datasets', to: withProjectQuery('/studio/study-room', activeProjectId), preview: studiedReferenceCount > 0 ? `${studiedReferenceCount} studied dataset${studiedReferenceCount === 1 ? '' : 's'}` : 'Study references to train style memory' },
     ]
-  }, [filmStructure.total_scenes, scenes.length, renderAssetSummary.total_assets, executionSummary.image_render_assets, productionSummary.blocked_scenes, productionSummary.locked_scenes, screeningSummary.playable_scene_count, archiveSummary.total_snapshots, archiveSnapshots.length, hasScript, approvedScenesCount, studiedReferenceCount])
+  }, [activeProjectId, filmStructure.total_scenes, scenes.length, renderAssetSummary.total_assets, executionSummary.image_render_assets, productionSummary.blocked_scenes, productionSummary.locked_scenes, screeningSummary.playable_scene_count, archiveSummary.total_snapshots, archiveSnapshots.length, hasScript, approvedScenesCount, studiedReferenceCount])
   const dominantStyleSummary = useMemo(() => {
     const topVisual = (studioIntelligence.visual || [])[0]
     const topPacing = (studioIntelligence.pacing || [])[0]
@@ -257,6 +262,22 @@ export default function StudioOverview() {
       setPersistedProjects((response.projects || []).map((p) => ({ project_id: p.project_id, title: p.title || p.project_id })))
     })()
   }, [])
+
+  useEffect(() => {
+    if (!queryProjectId) {
+      requestedProjectLoadRef.current = ''
+      return
+    }
+    if (project?.project_id === queryProjectId) {
+      requestedProjectLoadRef.current = ''
+      return
+    }
+    if (requestedProjectLoadRef.current === queryProjectId) return
+    requestedProjectLoadRef.current = queryProjectId
+    void loadProject(queryProjectId).catch(() => {
+      requestedProjectLoadRef.current = ''
+    })
+  }, [loadProject, project?.project_id, queryProjectId])
 
   useEffect(() => {
     let cancelled = false
@@ -413,12 +434,13 @@ export default function StudioOverview() {
             >
               {project?.title || 'No project loaded'}
             </button>
-            {projectOptions.length > 0 ? (
+            {mergedProjectOptions.length > 0 ? (
               <select
                 value={activeProjectId}
                 onChange={(event) => {
                   if (event.target.value) {
                     localStorage.setItem('studio:activeProjectId', event.target.value)
+                    navigate(`/studio/overview?project_id=${encodeURIComponent(event.target.value)}`, { replace: true })
                     void loadProject(event.target.value)
                   }
                 }}

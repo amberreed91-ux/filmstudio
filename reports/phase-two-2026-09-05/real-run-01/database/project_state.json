@@ -1,0 +1,36 @@
+{
+  "projects": {
+    "benchmark-real-run-01": {
+      "project_id": "benchmark-real-run-01",
+      "title": "The Returned Key",
+      "created_at": "2026-09-05T09:24:57.183061+00:00",
+      "updated_at": "2026-09-05T09:24:57.183081+00:00",
+      "script_text": "Dusk. Wide static two-shot. Nina guards the key; Jules waits. Tense silence.\nDusk. Medium close-up of Nina on left looking right at Jules. She hesitates; key stays beside red mug.\nDusk. Reverse medium close-up of Jules on right, looking left toward Nina, quietly hopeful.\nDusk. Table insert. Nina slides the brass key left to right toward Jules. Bandaged left wrist visible; red mug stays still.\nDusk. Static two-shot. Jules holds the returned brass key on right. Nina exhales on left; tension eases. Mug stays on table.\nLater, night outside the right window. Same static two-shot and amber lamp. Jules holds key, Nina rests her bandaged wrist. Quiet trust.",
+      "execution_summary": {},
+      "approved_scenes": [],
+      "reviewed_scenes": [],
+      "scene_review_status": {},
+      "film_cut": {
+        "cut_id": "default",
+        "scene_order": [],
+        "included_scenes": [],
+        "excluded_scenes": [],
+        "created_at": "2026-09-05T09:24:57.183061+00:00"
+      },
+      "archive_snapshots": [],
+      "memory_context": {},
+      "collaboration": {
+        "owner_user_id": "owner",
+        "session_id": "",
+        "shared_room": "lobby",
+        "shared_screening_scene_id": "",
+        "members": [],
+        "presence": [],
+        "live_comments": [],
+        "approval_votes": [],
+        "co_direction_notes": [],
+        "updated_at": "2026-09-05T09:24:57.183061+00:00"
+      }
+    }
+  }
+}

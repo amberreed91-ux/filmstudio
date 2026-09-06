@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 import app.routes.canonical_workflow as workflow_routes
@@ -53,6 +54,9 @@ class RouteWorkflowService:
             return []
         return [self.run]
 
+    def scene_context(self, project_id: str, scene_id: str):
+        return {"script_id": "script-route", "sequence_id": "sequence-route", "beat_ids": ["beat-route"]}
+
     def current_blueprint_version_id(self, project_id: str, scene_id: str):
         if project_id != self.run["project_id"] or scene_id != self.run["scene_id"]:
             return ""
@@ -93,6 +97,7 @@ def test_canonical_workflow_routes_are_mounted_once_and_reachable(monkeypatch) -
     assert listed.status_code == 200, listed.text
     assert [row["run_id"] for row in listed.json()["runs"]] == ["workflow-route-001"]
     assert listed.json()["current_blueprint_version_id"] == "version-route"
+    assert listed.json()["scene_context"] == fake.scene_context("project-route", "scene-route")
 
 
 def test_canonical_workflow_route_formats_ownership_errors(monkeypatch) -> None:
@@ -105,3 +110,26 @@ def test_canonical_workflow_route_formats_ownership_errors(monkeypatch) -> None:
     assert response.status_code == 409
     assert response.json()["detail"]["error_type"] == "state_error"
     assert response.json()["detail"]["stage"] == "workflow_ownership"
+
+
+@pytest.mark.parametrize("suffix,method", [("previs/generate", "generate_previs"), ("renders", "render_production_package"), ("revision/render", "render_revision")])
+@pytest.mark.parametrize("provider", [None, "openrouter-video", "simulated"])
+def test_provider_selection_reaches_service(monkeypatch, suffix, method, provider):
+    fake = RouteWorkflowService()
+    calls = []
+    async def operation(run_id, **kwargs):
+        calls.append((run_id, kwargs))
+        return fake.run
+    setattr(fake, method, operation)
+    monkeypatch.setattr(workflow_routes, "canonical_production_workflow_service", fake)
+    body = {} if provider is None else {"provider": provider}
+    response = TestClient(app).post(f"/api/f51/studio/production-threads/workflow-route-001/{suffix}", json=body)
+    assert response.status_code == 200, response.text
+    assert len(calls) == 1
+    assert calls[0][1]["provider"] == provider
+
+
+@pytest.mark.parametrize("provider", ["", "   ", "runway video"])
+def test_invalid_provider_rejected_before_workflow_action(provider):
+    response = TestClient(app).post("/api/f51/studio/production-threads/workflow-route-001/renders", json={"provider": provider})
+    assert response.status_code == 422

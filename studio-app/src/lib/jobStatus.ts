@@ -5,6 +5,7 @@
 export type NormalizedJobStatus = 
   | 'complete'
   | 'failed'
+  | 'needs_review'
   | 'rendering'
   | 'pending'
   | 'unknown'
@@ -23,6 +24,8 @@ export function normalizeJobStatus(status: string | undefined | null): Normalize
     return 'complete'
   }
   
+  if (normalized === 'needs_review') return 'needs_review'
+
   // Failed states
   if (normalized === 'failed' || normalized === 'error' || normalized === 'cancelled') {
     return 'failed'
@@ -50,6 +53,8 @@ export function getStatusLabel(status: NormalizedJobStatus): string {
       return 'Ready'
     case 'failed':
       return 'Failed'
+    case 'needs_review':
+      return 'Needs review'
     case 'rendering':
       return 'Rendering'
     case 'pending':
@@ -70,6 +75,7 @@ export function getStatusClassName(status: NormalizedJobStatus): string {
       return 'border-rose-400/40 bg-rose-500/10 text-rose-200'
     case 'rendering':
       return 'border-cyan-400/40 bg-cyan-500/10 text-cyan-200'
+    case 'needs_review':
     case 'pending':
       return 'border-amber-400/40 bg-amber-500/10 text-amber-200'
     default:
@@ -81,7 +87,7 @@ export function getStatusClassName(status: NormalizedJobStatus): string {
  * Checks if status is terminal (no further updates expected)
  */
 export function isTerminalStatus(status: NormalizedJobStatus): boolean {
-  return status === 'complete' || status === 'failed'
+  return status === 'complete' || status === 'failed' || status === 'needs_review'
 }
 
 /**

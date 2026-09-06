@@ -28,6 +28,10 @@ export function backendSupervisorMiddleware(): Connect.NextHandleFunction {
       next()
       return
     }
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress ?? '')) {
+      sendJson(response, 403, { detail: 'Backend startup requires a local connection' })
+      return
+    }
     if (request.method !== 'POST') {
       sendJson(response, 405, { detail: 'Method not allowed' })
       return
@@ -46,9 +50,10 @@ export function backendSupervisorMiddleware(): Connect.NextHandleFunction {
     try {
       const child = spawn(
         python,
-        ['-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8010', '--log-level', 'info'],
+        ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '8010', '--log-level', 'info'],
         {
           cwd: BACKEND_DIR,
+          env: { ...process.env, STUDIO_ACCESS_MODE: 'local', RATE_LIMIT_PER_MINUTE: process.env.RATE_LIMIT_PER_MINUTE || '600' },
           detached: true,
           stdio: 'ignore',
         },

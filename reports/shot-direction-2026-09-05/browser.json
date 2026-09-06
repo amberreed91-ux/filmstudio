@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "checks": [
+    "read and typing do not save",
+    "explicit assignment retains unassigned line",
+    "opening/action/ending saved together",
+    "new draft and reload persistence",
+    "stale save retains editable draft",
+    "discard reloads saved values",
+    "mobile no overflow",
+    "no page errors"
+  ],
+  "interceptedWrites": 2,
+  "liveWrites": 0,
+  "errors": []
+}

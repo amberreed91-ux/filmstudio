@@ -1,0 +1,5 @@
+{
+  "status": "REAL GENERATION BLOCKED",
+  "real_generation_executed": false,
+  "reason": "Harness ConsistencyPayload serialization failed before submission. Fixed with model_dump; no paid POST occurred."
+}

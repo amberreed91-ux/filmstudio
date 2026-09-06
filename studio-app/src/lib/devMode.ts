@@ -9,12 +9,9 @@ export function isStudioDevMode(): boolean {
 export function enableStudioDevMode(): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem('devMode', 'true')
-  console.log('[Studio DevMode] enabled')
 }
 
 export function disableStudioDevMode(): void {
   if (typeof window === 'undefined') return
   window.localStorage.removeItem('devMode')
-  console.log('[Studio DevMode] disabled')
 }
-

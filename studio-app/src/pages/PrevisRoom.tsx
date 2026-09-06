@@ -1,6 +1,8 @@
+import { SceneDirectionPanel } from '../components/SceneDirectionPanel'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
+  AlertTriangle,
   Sparkles,
   Camera,
   CheckCircle2,
@@ -8,14 +10,17 @@ import {
   ChevronRight,
   Clock,
   History,
+  Layers,
   Loader2,
   Lock,
   LockOpen,
   Play,
   RotateCcw,
+  Search,
   X,
 } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
+import StageScenePanel from '../components/StageScenePanel'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
 import CinematographerIntelligencePanel from '../components/CinematographerIntelligencePanel'
@@ -43,10 +48,14 @@ import {
   recommendGenerationSettings,
   recommendShotCount,
   retryRenderJobForAdherence,
+  runStoryboardContinuityReview,
   togglePrevisSeedLock,
+  updateStoryboardShot,
   type RenderJob,
   type Scene,
   type StoryboardBlueprintDetail,
+  type StoryboardContinuityIssue,
+  type StoryboardContinuityReview,
   type StoryboardImageProvider,
   type StoryboardShot,
   type ScenePipelineGenerateResult,
@@ -69,9 +78,17 @@ import {
   chooseDurationForProvider,
   initialStoryboardImageState,
   promptChangedAfterEnhancement,
+  shotNumberFromContinuityLabel,
   type PrevisRenderEngine,
   type StoryboardImageStatus,
 } from '../lib/previsStoryboard'
+
+const PREVIS_STEPS = [
+  { id: 'plan', title: 'Plan the shot', guidance: 'Choose a scene and shape the shots that tell its story.' },
+  { id: 'storyboard', title: 'Approve the storyboard', guidance: 'Set the look, review continuity, then approve the scene blueprint.' },
+  { id: 'render', title: 'Render a take', guidance: 'Direct the action, choose its length, and create a new take.' },
+  { id: 'review', title: 'Review and assemble', guidance: 'Review your takes, assemble the scene, then watch it in Screening.' },
+] as const
 
 // ── Prompt Derivation ──────────────────────────────────────────────────────
 
@@ -218,7 +235,7 @@ function derivePromptFromScene(scene: Scene, shotNumber: number = 1, takeNumber:
         const tag = classifyScriptLineTag(line)
         return tag === 'ACT' || tag === 'DLG' || tag === null
       })
-    const actionText = actionLines.slice(0, 2).join(' ')
+    const actionText = actionLines.join(' ')
     if (actionText) parts.push(actionText)
   }
 
@@ -237,11 +254,6 @@ function derivePromptFromScene(scene: Scene, shotNumber: number = 1, takeNumber:
   const takeVariation = TAKE_VARIATIONS[takeNumber] || ''
   if (takeVariation) {
     prompt += ` ${takeVariation}`
-  }
-
-  // Truncate if needed (Runway limit ~512 chars)
-  if (prompt.length > 512) {
-    prompt = prompt.slice(0, 509) + '...'
   }
 
   return prompt
@@ -337,9 +349,18 @@ type ShotPlanningDetails = {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const DURATIONS: DurationOption[] = [4, 8, 12, 16, 20]
-const FPS_OPTIONS: FpsOption[] = [8, 12, 16, 24]
 const RESOLUTIONS: ResolutionOption[] = ['480p', '720p', '1080p']
-const ENGINES: RenderEngine[] = ['Wan 2.2', 'LTX-Video', 'Auto (Best Available)']
+
+// Real render providers the RENDER ENGINE dropdown can force for a render.
+// value '' = use the server's configured default (RENDER_VIDEO_PROVIDER); every
+// other value is a provider id the backend registers in its adapter registry.
+const RENDER_PROVIDERS: { label: string; value: string }[] = [
+  { label: 'Auto (Server Default)', value: '' },
+  { label: 'OpenRouter · HappyHorse', value: 'openrouter-video' },
+  { label: 'Runway', value: 'runway' },
+  { label: 'Wan 2.2', value: 'wan' },
+  { label: 'HappyHorse · DashScope', value: 'happyhorse-r2v' },
+]
 
 function generateSeed(): number {
   return Math.floor(Math.random() * 10_000_000)
@@ -419,6 +440,12 @@ export default function PrevisRoom() {
   const routeLoadKey = useRef('')
 
   // ── Core state ────────────────────────────────────────────────────────────
+  const [activeStep, setActiveStep] = useState<'plan' | 'storyboard' | 'render' | 'review'>(() => {
+    const step = searchParams.get('step')
+    return step === 'storyboard' || step === 'render' || step === 'review' ? step : 'plan'
+  })
+  const [storyboardStage, setStoryboardStage] = useState<'frame' | 'blueprint' | 'continuity' | 'approve' | null>(null)
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
   const [scenes, setScenes] = useState<Scene[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -432,6 +459,11 @@ export default function PrevisRoom() {
     resolution: '720p',
     seed: null,
   })
+  // Render-provider override for the RENDER ENGINE dropdown. '' = let the server
+  // choose (its RENDER_VIDEO_PROVIDER default); a concrete id forces that
+  // provider for the next render. Kept separate from genConfig.model, which the
+  // generation-settings recommendation owns.
+  const [renderProvider, setRenderProvider] = useState<string>('')
   const [audioConfig, setAudioConfig] = useState<AudioConfig>({
     voiceEnabled: false,
     voiceLine: '',
@@ -446,6 +478,9 @@ export default function PrevisRoom() {
   const [promptText, setPromptText] = useState('')
   const [originalPrompt, setOriginalPrompt] = useState('')
   const [selectedSceneId, setSelectedSceneId] = useState('')
+  const directionScope = `${effectiveProjectId}/${selectedSceneId}`
+  const directionScopeRef = useRef(directionScope)
+  directionScopeRef.current = directionScope
 
   useEffect(() => {
     if (!effectiveProjectId || activeProject?.project_id === effectiveProjectId) return
@@ -513,6 +548,9 @@ export default function PrevisRoom() {
   const [storyboardBlueprint, setStoryboardBlueprint] = useState<StoryboardBlueprintDetail | null>(null)
   const [blueprintLoading, setBlueprintLoading] = useState(false)
   const [blueprintApproving, setBlueprintApproving] = useState(false)
+  const [continuityReviewRunning, setContinuityReviewRunning] = useState(false)
+  const [continuityActionRunning, setContinuityActionRunning] = useState<string | null>(null)
+  const [comparisonMode, setComparisonMode] = useState<'side_by_side' | 'overlay' | 'before_after'>('side_by_side')
   const [settingsRecommendation, setSettingsRecommendation] = useState<GenerationSettingsResponse | null>(null)
   const [durationDraft, setDurationDraft] = useState('4')
   const [shotPlanningOverrides, setShotPlanningOverrides] = useState<Record<number, Partial<ShotPlanningDetails>>>({})
@@ -712,6 +750,19 @@ export default function PrevisRoom() {
   const activeBlueprintShot = useMemo<StoryboardShot | null>(() => {
     return storyboardBlueprint?.shots.find((shot) => shot.shot_number === activeShotNumber) || null
   }, [activeShotNumber, storyboardBlueprint?.shots])
+
+  const continuityReview = useMemo<StoryboardContinuityReview | null>(() => {
+    const review = storyboardBlueprint?.blueprint.metadata?.continuity_review
+    if (!review || typeof review !== 'object') return null
+    const typedReview = review as StoryboardContinuityReview
+    return typedReview.version_id === storyboardBlueprint?.version?.version_id ? typedReview : null
+  }, [storyboardBlueprint?.blueprint.metadata, storyboardBlueprint?.version?.version_id])
+
+  const continuityReviewComplete = continuityReview?.status === 'completed'
+  const storyboardApproved = storyboardBlueprint?.blueprint.approved_version_id === storyboardBlueprint?.version?.version_id && Boolean(storyboardBlueprint?.version) && ['approved', 'locked'].includes(storyboardBlueprint?.blueprint.status || '')
+  const currentStoryboardStage = storyboardStage || (!currentStoryboardImageUrl ? 'frame' : !storyboardBlueprint?.version ? 'blueprint' : !continuityReviewComplete ? 'continuity' : 'approve')
+
+  useEffect(() => { setStoryboardStage(null) }, [selectedSceneId, activeShotNumber])
 
   const activeStoryboardState = storyboardImageStates[activeShotNumber]
     || initialStoryboardImageState(currentStoryboardImageUrl, loading)
@@ -944,7 +995,11 @@ export default function PrevisRoom() {
           timer = setTimeout(loadJobs, 10000)
         }
       } catch (caught) {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Render jobs could not be refreshed.')
+        // Background poll: don't hijack the room-wide error banner. A transient
+        // render-jobs fetch failure (or a 500 from that endpoint) should not
+        // paint a persistent "Internal Server Error" over the whole Previs Room
+        // — it just means the render-history list couldn't refresh this tick.
+        if (!cancelled) console.warn('[PrevisRoom] render jobs refresh failed:', caught)
       }
     }
     void loadJobs()
@@ -1005,7 +1060,6 @@ export default function PrevisRoom() {
           setProgress(100)
           // Add to render history
           const videoUrl = job.output_payload?.asset_url || job.output_url || undefined
-          console.log('Video URL:', videoUrl)
           const completedShotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
           const completedShotNumber = completedShotNumMatch ? parseInt(completedShotNumMatch[1], 10) : activeShotNumber
           const shotLabel = getShotTypeLabel(completedShotNumber)
@@ -1054,7 +1108,7 @@ export default function PrevisRoom() {
           setCurrentJobId(null)
           setSuccess(`Shot ${completedShotNumber} Take ${takeNumber} complete (${shotLabel})!`)
           if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
-        } else if (status === 'failed') {
+        } else if (status === 'failed' || status === 'needs_review') {
           setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'failed' })
           setProgress(0)
           setRendering(false)
@@ -1120,6 +1174,16 @@ export default function PrevisRoom() {
     const newPrompt = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
     setPromptText(newPrompt)
   }, [activeShotNumber, selectedSceneId, scenes, totalShots])
+
+  useEffect(() => {
+    if (!activeBlueprintShot) return
+    setPromptText(activeBlueprintShot.render_contract.provider_neutral_prompt)
+    setGenConfig((previous) => ({
+      ...previous,
+      duration: activeBlueprintShot.render_contract.duration_seconds,
+      seed: activeBlueprintShot.render_contract.seed ?? null,
+    }))
+  }, [activeBlueprintShot?.storyboard_shot_id])
 
   // ── Load history from render jobs ─────────────────────────────────────────
   useEffect(() => {
@@ -1214,7 +1278,7 @@ export default function PrevisRoom() {
       return
     }
     const storyboardPrompt = activeBlueprintShot?.render_contract.provider_neutral_prompt?.trim() || ''
-    const renderPrompt = storyboardPrompt || promptText.trim()
+    const renderPrompt = promptText.trim() || storyboardPrompt
     if (!renderPrompt) {
       setError('Enter a prompt before rendering')
       return
@@ -1240,10 +1304,25 @@ export default function PrevisRoom() {
         takeNumber,
         storyboardShotId,
         allowApprovedRevision: true,
+        provider: renderProvider || undefined,
+        renderSettings: {
+          prompt: renderPrompt,
+          duration_seconds: genConfig.duration,
+          resolution: genConfig.resolution,
+          seed: genConfig.seed,
+          shot_planning: shotPlanningOverrides[activeShotNumber],
+        },
       })
+      if (generated.status === 'needs_review') {
+        setRendering(false)
+        setCurrentJobId(null)
+        setError(generated.message || 'Review required shot facts before rendering.')
+        setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
+        return
+      }
       setCurrentJobId(generated.job_id)
       setSuccess(generated.duplicate
-        ? `Render already active — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})`
+        ? generated.message || 'A render is already active for this shot.'
         : `Render queued — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})`)
 
       if (generated.status === 'complete') {
@@ -1281,7 +1360,7 @@ export default function PrevisRoom() {
       setRendering(false)
       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
     }
-  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, selectedSceneId, activeShotNumber, visibleRenderHistory])
+  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, renderProvider, selectedSceneId, activeShotNumber, visibleRenderHistory, shotPlanningOverrides])
 
   // ── Delete render job ────────────────────────────────────────────────────
   const handleDeleteRender = useCallback(async (jobId: string) => {
@@ -1410,15 +1489,6 @@ export default function PrevisRoom() {
     setGenConfig((prev) => ({
       ...prev,
       duration: nextDuration,
-      fps: (FPS_OPTIONS.includes(rec.fps as FpsOption)
-        ? rec.fps
-        : prev.fps) as FpsOption,
-      resolution: (RESOLUTIONS.includes(rec.resolution as ResolutionOption)
-        ? rec.resolution
-        : prev.resolution) as ResolutionOption,
-      model: rec.model && ENGINES.includes(rec.model as RenderEngine)
-        ? (rec.model as RenderEngine)
-        : prev.model,
     }))
     setDurationDraft(String(nextDuration))
     setSuccess(`Duration set to ${nextDuration}s for Shot ${activeShotNumber}`)
@@ -1455,35 +1525,15 @@ export default function PrevisRoom() {
     }
   }, [effectiveProjectId, selectedSceneId, totalShots])
 
-  const handleApproveStoryboardBlueprint = useCallback(async () => {
-    const blueprint = storyboardBlueprint?.blueprint
-    const version = storyboardBlueprint?.version
-    if (!blueprint || !version) {
-      setError('Create a storyboard blueprint before approval')
-      return
-    }
-    setBlueprintApproving(true)
-    setError('')
-    try {
-      const result = await approveStoryboardVersion(blueprint.blueprint_id, version.version_id)
-      setStoryboardBlueprint(result)
-      setSuccess('Storyboard approved for production')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Storyboard approval failed')
-    } finally {
-      setBlueprintApproving(false)
-    }
-  }, [storyboardBlueprint])
-
   // ── Handle Generate Storyboard ─────────────────────────────────────────────
-  const handleGenerateStoryboard = useCallback(async () => {
+  const handleGenerateStoryboardForShot = useCallback(async (shotNumber: number) => {
     if (!selectedSceneId || !effectiveProjectId) {
       setError('Select a scene first')
       return
     }
     setLoading(true)
     setError('')
-    const requestedShotNumber = activeShotNumber
+    const requestedShotNumber = Math.max(1, shotNumber)
     setStoryboardImageStates((prev) => ({ ...prev, [requestedShotNumber]: 'generating' }))
     try {
       const result = await generateSceneStoryboard(effectiveProjectId, selectedSceneId, storyboardProvider, requestedShotNumber)
@@ -1511,7 +1561,197 @@ export default function PrevisRoom() {
     } finally {
       setLoading(false)
     }
-  }, [selectedSceneId, effectiveProjectId, storyboardProvider, loadScenes, activeShotNumber])
+  }, [selectedSceneId, effectiveProjectId, storyboardProvider, loadScenes])
+
+  const handleGenerateStoryboard = useCallback(async () => {
+    await handleGenerateStoryboardForShot(activeShotNumber)
+  }, [activeShotNumber, handleGenerateStoryboardForShot])
+
+  const handleRunContinuityReview = useCallback(async () => {
+    const blueprint = storyboardBlueprint?.blueprint
+    const version = storyboardBlueprint?.version
+    if (!blueprint || !version) {
+      setError('Build a storyboard blueprint before continuity review')
+      return
+    }
+    setContinuityReviewRunning(true)
+    setError('')
+    try {
+      const report = await runStoryboardContinuityReview(blueprint.blueprint_id, version.version_id)
+      setStoryboardBlueprint((prev) => prev
+        ? {
+            ...prev,
+            blueprint: {
+              ...prev.blueprint,
+              status: report.summary.high_count > 0 ? 'needs_review' : prev.blueprint.status,
+              metadata: { ...prev.blueprint.metadata, continuity_review: report },
+            },
+            version: prev.version
+              ? { ...prev.version, metadata: { ...prev.version.metadata, continuity_review: report } }
+              : prev.version,
+          }
+        : prev)
+      setSuccess('Continuity review complete')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Continuity review failed')
+    } finally {
+      setContinuityReviewRunning(false)
+    }
+  }, [storyboardBlueprint])
+
+  const handleContinuityIssueAction = useCallback(async (
+    issue: StoryboardContinuityIssue,
+    action: string,
+  ) => {
+    const blueprint = storyboardBlueprint?.blueprint
+    const version = storyboardBlueprint?.version
+    if (!blueprint || !version) {
+      setError('Build a storyboard blueprint before reviewing continuity actions')
+      return
+    }
+    const shotNumber = shotNumberFromContinuityLabel(issue.affected_shot)
+    const affectedShot = shotNumber
+      ? storyboardBlueprint?.shots.find((shot) => shot.shot_number === shotNumber)
+      : null
+    if (!shotNumber || !affectedShot) {
+      setError('Could not find the affected storyboard shot')
+      return
+    }
+
+    const actionKey = `${issue.issue_id}-${action}`
+    setContinuityActionRunning(actionKey)
+    setError('')
+    setActiveShotNumber(shotNumber)
+
+    try {
+      if (action === 'show_differences') {
+        setComparisonMode(issue.previous_shot ? 'before_after' : 'side_by_side')
+        setSuccess(`Showing continuity context for Shot ${issue.affected_shot}`)
+        return
+      }
+
+      if (action === 'regenerate_selected_shot') {
+        await handleGenerateStoryboardForShot(shotNumber)
+        setSuccess(`Regenerated storyboard for Shot ${issue.affected_shot}`)
+        return
+      }
+
+      const continuityPlan = { ...(affectedShot.continuity_plan || {}) }
+      const visualPlan = { ...(affectedShot.visual_plan || {}) }
+      const intent = { ...(affectedShot.intent || {}) }
+      const renderContract = { ...(affectedShot.render_contract || {}) }
+      const warnings = Array.isArray(continuityPlan.continuity_warnings)
+        ? continuityPlan.continuity_warnings.filter((warning) => String(warning) !== issue.detected_state)
+        : []
+      const note = action === 'ignore'
+        ? `Creator reviewed ${issue.category.toLowerCase()} on Shot ${issue.affected_shot} and kept the current choice.`
+        : issue.recommended_fix
+
+      if (action === 'ignore') {
+        continuityPlan.motif_continuity = Array.from(new Set([
+          ...(Array.isArray(continuityPlan.motif_continuity) ? continuityPlan.motif_continuity : []),
+          note,
+        ]))
+        continuityPlan.continuity_warnings = warnings
+      } else if (issue.category.toLowerCase().includes('environment')) {
+        continuityPlan.location_continuity = String(
+          continuityPlan.location_continuity
+          || selectedScene?.location
+          || selectedScene?.heading
+          || issue.expected_state
+          || issue.recommended_fix,
+        )
+        visualPlan.environment = String(visualPlan.environment || continuityPlan.location_continuity)
+        continuityPlan.continuity_warnings = warnings
+      } else if (issue.category.toLowerCase().includes('story')) {
+        intent.emotional_target = String(
+          intent.emotional_target
+          || selectedScene?.emotional_tone
+          || issue.recommended_fix,
+        )
+        continuityPlan.emotional_continuity = String(
+          continuityPlan.emotional_continuity
+          || intent.emotional_target
+          || issue.recommended_fix,
+        )
+        continuityPlan.continuity_warnings = warnings
+      } else if (issue.category.toLowerCase().includes('camera')) {
+        visualPlan.framing = String(visualPlan.framing || issue.recommended_fix)
+        continuityPlan.continuity_warnings = warnings
+      } else if (issue.category.toLowerCase().includes('blueprint')) {
+        const promptFallback = [
+          selectedScene?.heading,
+          selectedScene?.description,
+          visualPlan.framing,
+          visualPlan.environment,
+          issue.recommended_fix,
+        ].filter(Boolean).join('. ')
+        renderContract.provider_neutral_prompt = String(renderContract.provider_neutral_prompt || promptFallback)
+        continuityPlan.continuity_warnings = warnings
+      } else {
+        continuityPlan.motif_continuity = Array.from(new Set([
+          ...(Array.isArray(continuityPlan.motif_continuity) ? continuityPlan.motif_continuity : []),
+          note,
+        ]))
+        continuityPlan.continuity_warnings = warnings
+      }
+
+      const updatedShot = await updateStoryboardShot(blueprint.blueprint_id, affectedShot.storyboard_shot_id, {
+        intent,
+        visual_plan: visualPlan,
+        continuity_plan: continuityPlan,
+        render_contract: renderContract,
+        change_reason: action === 'ignore' ? 'continuity_issue_acknowledged' : 'continuity_issue_action_applied',
+      })
+      setStoryboardBlueprint((prev) => prev
+        ? { ...prev, shots: prev.shots.map((shot) => shot.storyboard_shot_id === updatedShot.storyboard_shot_id ? updatedShot : shot) }
+        : prev)
+
+      const report = await runStoryboardContinuityReview(blueprint.blueprint_id, version.version_id)
+      setStoryboardBlueprint((prev) => prev
+        ? {
+            ...prev,
+            blueprint: {
+              ...prev.blueprint,
+              status: report.summary.high_count > 0 ? 'needs_review' : 'draft',
+              metadata: { ...prev.blueprint.metadata, continuity_review: report },
+            },
+            version: prev.version
+              ? { ...prev.version, metadata: { ...prev.version.metadata, continuity_review: report } }
+              : prev.version,
+          }
+        : prev)
+      setSuccess(action === 'ignore' ? `Continuity choice kept for Shot ${issue.affected_shot}` : `Continuity action applied to Shot ${issue.affected_shot}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Continuity action failed')
+    } finally {
+      setContinuityActionRunning(null)
+    }
+  }, [handleGenerateStoryboardForShot, selectedScene, storyboardBlueprint])
+
+  const handleApproveStoryboardBlueprint = useCallback(async () => {
+    const blueprint = storyboardBlueprint?.blueprint
+    const version = storyboardBlueprint?.version
+    if (!blueprint || !version) {
+      setError('Create a storyboard blueprint before approval')
+      return
+    }
+    if (!continuityReviewComplete) {
+      setError('Run Continuity Review before approving this storyboard blueprint')
+      return
+    }
+    setBlueprintApproving(true)
+    setError('')
+    try {
+      const result = await approveStoryboardVersion(blueprint.blueprint_id, version.version_id)
+      setStoryboardBlueprint(result)
+      setSuccess('Storyboard approved for production')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Storyboard approval failed')
+    } finally {
+      setBlueprintApproving(false)
+    }
+  }, [continuityReviewComplete, storyboardBlueprint])
 
   // ── Handle Toggle Seed Lock ────────────────────────────────────────────────
   const handleToggleSeedLock = useCallback(async () => {
@@ -1528,75 +1768,441 @@ export default function PrevisRoom() {
     }
   }, [selectedSceneId, effectiveProjectId, seedLocked])
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Navigation changes presentation only; production state and panels remain mounted.
+  const currentStep = PREVIS_STEPS.find((step) => step.id === activeStep) || PREVIS_STEPS[0]
+  const selectedProviderLabel = RENDER_PROVIDERS.find((option) => option.value === renderProvider)?.label || 'Auto (server default)'
+  const nextStep = PREVIS_STEPS[PREVIS_STEPS.findIndex((step) => step.id === activeStep) + 1]
+  const advanceToStep = (step: typeof PREVIS_STEPS[number]['id']) => {
+    setActiveStep(step)
+    window.requestAnimationFrame(() => {
+      stepHeadingRef.current?.focus({ preventScroll: true })
+      stepHeadingRef.current?.scrollIntoView({ block: 'start' })
+    })
+  }
+
   return (
-    <>
-      <StudioShell title="Previs Room" subtitle="The Previs Bay — Generation Studio">
+    <StudioShell title="Previs Room" subtitle="From the page to the frame">
       <ProjectGuard>
-        <ProjectContextBar roomName="previs room" />
-
-        {/* Status messages */}
-        <div className="px-4 pt-2">
-          {error && (
-            <div className="mb-2 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
-              {error}
+        <ProjectContextBar roomName="previs room" compact />
+        <div className="mx-auto w-full max-w-[1600px] space-y-5 px-4 pb-24 pt-4 sm:px-6 lg:px-8">
+          <header className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/80">The previs bay</p>
+              <h1 className="text-2xl font-medium tracking-tight text-zinc-100 sm:text-3xl">Your story, one shot at a time.</h1>
             </div>
-          )}
-          {success && (
-            <div className="mb-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
-              {success}
+            <p className="max-w-xs text-xs leading-relaxed text-zinc-400">Follow the steps or return to any stage. Your choices stay with you.</p>
+          </header>
+
+          <nav aria-label="Previs production steps" data-testid="previs-step-nav">
+            <ol className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-black/20 lg:grid-cols-4">
+              {PREVIS_STEPS.map((step, index) => (
+                <li key={step.id} className="min-w-0">
+                  <button
+                    type="button"
+                    aria-current={activeStep === step.id ? 'step' : undefined}
+                    aria-controls={`previs-step-${step.id}`}
+                    onClick={() => setActiveStep(step.id)}
+                    className={`flex h-full w-full items-center gap-3 border-b-2 px-3 py-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-amber-200 sm:px-4 ${activeStep === step.id ? 'border-amber-300 bg-amber-300/8 text-amber-100' : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}
+                  >
+                    <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded border text-xs font-medium ${activeStep === step.id ? 'border-amber-300/50 text-amber-200' : 'border-white/15 text-zinc-500'}`}>{index + 1}</span>
+                    <span className="text-xs font-medium leading-snug sm:text-sm">{step.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </nav>
+
+          <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label htmlFor="previs-scene-selector" className="text-xs font-medium text-zinc-300">Scene</label>
+              <div className="min-w-0 flex-1 basis-56">
+                                  <select
+                    id="previs-scene-selector"
+                    aria-label="Choose scene"
+                    value={selectedSceneId}
+                    onChange={(e) => {
+                      const sceneId = e.target.value
+                      if (sceneId) {
+                        const scene = scenes.find((s) => s.scene_id === sceneId)
+                        if (scene) {
+                          setOriginalPrompt('')
+                          const derived = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
+                          setPromptText(derived)
+                        }
+                      }
+                      setSelectedSceneId(sceneId)
+                      // Fresh scene, fresh slate — clear any stale error banner
+                      // left over from a previous scene's action.
+                      setError('')
+                    }}
+                    className="min-w-0 w-full rounded-lg border border-white/15 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-amber-300"
+                    style={{ color: 'var(--color-on-surface-variant)' }}
+                  >
+                    <option value="" className="bg-zinc-900">Choose a scene...</option>
+                    {scenes.map((scene) => (
+                      <option key={scene.scene_id} value={scene.scene_id} className="bg-zinc-900">
+                        {scene.heading || scene.scene_id}
+                      </option>
+                    ))}
+                  </select>
+
+              </div>
+              <span className="text-xs text-zinc-400">{shotNumbers.length} {shotNumbers.length === 1 ? 'shot' : 'shots'} · Shot {activeShotNumber} selected</span>
             </div>
-          )}
-        </div>
+            <div role="group" aria-label="Scene shots" className="flex flex-wrap items-center gap-2">
+              {shotNumbers.map((n) => (
+                <button type="button" key={n} onClick={() => handleSelectShot(n)} aria-pressed={activeShotNumber === n}
+                  className={`rounded-md border px-3 py-2 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-amber-200 ${activeShotNumber === n ? 'border-amber-300/50 bg-amber-300/10 text-amber-100' : 'border-white/10 text-zinc-400 hover:border-white/30 hover:text-zinc-200'}`}>
+                  <span className="font-medium">Shot {n}</span><span className="ml-2 hidden text-[10px] opacity-70 sm:inline">{getShotTypeLabel(n)}</span>
+                </button>
+              ))}
+              <button type="button" onClick={handleAddShot} disabled={!selectedSceneId} className="rounded-md border border-dashed border-white/20 px-3 py-2 text-xs text-zinc-300 hover:border-white/40 disabled:opacity-40">+ Add shot</button>
+            </div>
+          </div>
 
-        {effectiveProjectId && selectedSceneId ? (
-          <CanonicalWorkflowPanel
-            projectId={effectiveProjectId}
-            sceneId={selectedSceneId}
-            sceneContext={canonicalSceneContext}
-            surface="previs"
-          />
-        ) : null}
+          <div aria-live="polite" className="empty:hidden">
+            {error && <div role="alert" className="mb-2 flex items-start justify-between gap-3 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"><span className="min-w-0 break-words">{error}</span><button type="button" onClick={() => setError('')} aria-label="Dismiss error" className="shrink-0 rounded p-1 hover:bg-white/10"><X size={14} /></button></div>}
+            {success && <div className="mb-2 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div>}
+            {(rendering || composing || scenePipelineRunning || loading || continuityReviewRunning || blueprintApproving || blueprintLoading) && (
+              <div role="status" className="flex items-center gap-3 rounded-lg border border-amber-200/20 bg-amber-200/5 px-4 py-3 text-xs text-amber-100">
+                <Loader2 size={16} className="shrink-0 animate-spin" />
+                <span>{rendering ? 'Rendering your take. You can move between steps while it runs.' : composing ? 'Assembling the latest completed takes…' : scenePipelineRunning ? 'Generating new footage for the whole scene…' : continuityReviewRunning ? 'Reviewing storyboard continuity…' : blueprintApproving ? 'Saving storyboard approval…' : blueprintLoading ? 'Loading the storyboard blueprint…' : 'Preparing your storyboard…'}</span>
+              </div>
+            )}
+          </div>
 
-        {/* ── THREE-PANEL LAYOUT ────────────────────────────────────────── */}
-        <div className="flex h-[calc(100vh-180px)] w-full gap-4 px-4 pb-4">
-          {/* ── LEFT: SETTINGS SIDEBAR (280px) ──────────────────────────── */}
-          <div className="flex w-[280px] shrink-0 flex-col gap-4 overflow-y-auto">
-            <div className="glass-panel rounded-xl p-4 space-y-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--color-secondary)' }}>
-                GENERATION SETTINGS
+          <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,1fr)]">
+            <aside className="min-w-0 space-y-3 xl:sticky xl:top-5" aria-label="Current shot preview">
+              <div className="flex items-center justify-between gap-3 text-xs text-zinc-400">
+                <span>Shot {activeShotNumber} <span className="mx-1 text-zinc-600">/</span> {activeStep === 'storyboard' || !currentVideoUrl ? 'Storyboard frame' : activeTakeNumber ? `Take ${activeTakeNumber}` : 'Scene preview'}</span>
+                <span>{activeBlueprintShot?.render_contract.aspect_ratio || '16:9'}</span>
+              </div>
+                            {/* ── PREVIEW PANEL ─────────────────────────────────────────── */}
+              <div className="glass-panel relative aspect-video w-full overflow-hidden rounded-xl" style={{ background: 'var(--color-surface-container-lowest)' }}>
+                <div className="relative w-full h-full bg-black">
+                  {currentVideoUrl && activeStep !== 'storyboard' ? (
+                    <video
+                      key={currentVideoUrl}
+                      src={currentVideoUrl}
+                      className="absolute inset-0 w-full h-full object-contain"
+                      controls
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      onError={(e) => console.error('Video error:', e.currentTarget.src)}
+                    />
+                  ) : currentStoryboardImageUrl ? (
+                    <>
+                      <img
+                        key={`${currentStoryboardImageUrl}-${storyboardRetryNonce[activeShotNumber] || 0}`}
+                        src={currentStoryboardImageUrl}
+                        alt={`Storyboard still for shot ${activeShotNumber}`}
+                        className={`absolute inset-0 h-full w-full object-contain transition-opacity ${activeStoryboardState === 'ready' ? 'opacity-100' : 'opacity-35'}`}
+                        onLoad={() => setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'ready' }))}
+                        onError={() => {
+                          console.warn('Storyboard image failed to load', {
+                            projectId: effectiveProjectId,
+                            sceneId: selectedSceneId,
+                            shotId: activeStoryboardShotId,
+                            url: currentStoryboardImageUrl,
+                          })
+                          setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'failed' }))
+                        }}
+                      />
+                      {activeStoryboardState !== 'ready' && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 px-6 text-center">
+                          {activeStoryboardState === 'loading' || activeStoryboardState === 'generating' ? (
+                            <Loader2 size={18} className="animate-spin text-amber-300" />
+                          ) : (
+                            <Camera size={18} className="text-white/35" />
+                          )}
+                          <div className="text-xs text-white/70">
+                            {activeStoryboardState === 'generating'
+                              ? 'Storyboard generation in progress'
+                              : activeStoryboardState === 'failed'
+                                ? 'Storyboard image temporarily unavailable'
+                                : 'Loading storyboard still'}
+                          </div>
+                          {activeStoryboardState === 'failed' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'loading' }))
+                                setStoryboardRetryNonce((prev) => ({ ...prev, [activeShotNumber]: (prev[activeShotNumber] || 0) + 1 }))
+                              }}
+                              className="rounded border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200"
+                              style={{ borderColor: 'rgba(255,209,101,0.28)', background: 'rgba(255,209,101,0.08)' }}
+                            >
+                              Retry Image
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/35 text-sm">
+                      <Camera size={20} />
+                      <span>{activeStep === 'storyboard' ? 'Your storyboard frame will appear here' : 'Your shot starts here'}</span>
+                      <span className="max-w-xs px-4 text-center text-xs leading-relaxed text-zinc-400">{selectedSceneId ? 'Plan the shot, then create a storyboard before rendering a take.' : 'Choose a scene from your script to begin.'}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* 1. Render Engine */}
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                  RENDER ENGINE
-                </label>
-                <select
-                  value={genConfig.model}
-                  onChange={(e) => setGenConfig((p) => ({ ...p, model: e.target.value as RenderEngine }))}
-                  className="glass-panel w-full rounded-lg px-3 py-2 text-xs outline-none"
-                  style={{ color: 'var(--color-on-surface)' }}
-                >
-                  {ENGINES.map((eng) => (
-                    <option key={eng} value={eng} className="bg-zinc-900">
-                      {eng}
-                    </option>
-                  ))}
-                </select>
+
+              <p className="text-xs leading-relaxed text-zinc-400">{activeStep === 'storyboard' ? 'Check the framing, characters, and light before you approve.' : currentVideoUrl ? 'Review the saved footage. Choose another shot or take to compare.' : 'The storyboard establishes the look. Your render direction adds the movement.'}</p>
+              {shotRationale && !loadingRationale && (
+                <div className="border-l-2 border-amber-200/40 py-1 pl-4">
+                  <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-amber-200/80">Why this shot matters</p>
+                  <p className="text-sm leading-relaxed text-zinc-300">{shotRationale.rationale}</p>
+                </div>
+              )}
+            </aside>
+
+            <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.025] p-4 sm:p-6">
+              <div className="mb-5 border-b border-white/10 pb-4">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200/80">Step {PREVIS_STEPS.findIndex((step) => step.id === activeStep) + 1} of 4</p>
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-6 text-xl font-medium text-zinc-100 focus-visible:rounded focus-visible:outline-2 focus-visible:outline-amber-200">{currentStep.title}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">{currentStep.guidance}</p>
               </div>
 
-              {/* 2. Duration */}
+              <section id="previs-step-plan" aria-label="Plan the shot" hidden={activeStep !== 'plan'} className="space-y-4">
+                <p className="text-xs leading-relaxed text-zinc-400">Before storyboarding, <Link to={withProductionContext('/studio/writers-room?step=looks', { projectId: effectiveProjectId, sceneId: selectedSceneId, shotNumber: activeShotNumber })} className="text-zinc-200 underline decoration-white/25 underline-offset-4 hover:text-amber-100">review and lock character looks in The Page</Link>.</p>
+                {selectedSceneId ? (
+                  <div className="space-y-4">
+                    <div><h3 className="text-xs font-medium text-zinc-400">Story intention</h3><p className="mt-1 text-sm leading-relaxed text-zinc-200">{activeShotPlanningDetails.purpose}</p></div>
+                    <div><h3 className="text-xs font-medium text-zinc-400">Framing and action</h3><p className="mt-1 text-sm leading-relaxed text-zinc-200">{activeShotPlanningDetails.framing}</p><p className="mt-2 text-sm leading-relaxed text-zinc-400">{activeShotPlanningDetails.blocking}</p></div>
+                  </div>
+                ) : <p className="rounded-md border border-dashed border-white/15 px-4 py-5 text-sm leading-relaxed text-zinc-400">Choose a scene above to see its story intention and plan the first shot.</p>}
+                            {selectedSceneId && (
+              <div className="pt-2">
+                <details className="rounded-xl border bg-black/20 p-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                  <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-secondary)' }}>
+                    Detailed shot planning
+                  </summary>
+                  <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                    {([
+                      ['title', 'Shot number and title'],
+                      ['purpose', 'Story or emotional purpose'],
+                      ['framing', 'Shot type and framing'],
+                      ['camera', 'Camera angle, movement, and lens'],
+                      ['blocking', 'Subject blocking and action'],
+                      ['composition', 'Composition and focal point'],
+                      ['atmosphere', 'Lighting, color, and atmosphere'],
+                      ['production', 'Location and production notes'],
+                      ['continuity', 'Continuity or motif notes'],
+                      ['sound', 'Dialogue, sound, or music cues'],
+                      ['transition', 'Transition in and out'],
+                      ['plannedDuration', 'Editable planned duration'],
+                      ['rationale', 'Why this shot matters'],
+                    ] as Array<[keyof ShotPlanningDetails, string]>).map(([field, label]) => (
+                      <label key={field} className={field === 'rationale' ? 'xl:col-span-2' : ''}>
+                        <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          {label}
+                        </span>
+                        <textarea
+                          value={activeShotPlanningDetails[field]}
+                          onChange={(event) => updateShotPlanningDetail(field, event.target.value)}
+                          rows={field === 'rationale' ? 2 : 3}
+                          className="cyber-input w-full resize-y rounded px-2 py-1.5 text-[11px] leading-relaxed outline-none"
+                          style={{ color: 'var(--color-on-surface)' }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
+
+
+                <details className="rounded-lg border border-white/10 p-3">
+                  <summary className="cursor-pointer text-xs font-medium text-zinc-300">Planning assistance <span className="ml-1 text-zinc-500">· optional</span></summary>
+                  <div className="mt-3 space-y-4">
+                    <p className="text-xs leading-relaxed text-zinc-400">Get a suggested shot count or stage the scene, then decide which suggestions to use.</p>
+                    <button type="button" onClick={handleRecommendShotCount} disabled={!selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Camera size={14} /> Recommend shot count</button>
+                    {shotRecommendation && <p className="rounded-md bg-white/5 p-3 text-xs leading-relaxed text-zinc-300">{shotRecommendation}</p>}
+                    {selectedSceneId && effectiveProjectId && <StageScenePanel projectId={effectiveProjectId} sceneId={selectedSceneId} />}
+                  </div>
+                </details>
+                <button type="button" onClick={() => advanceToStep('storyboard')} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200">Continue to storyboard <ChevronRight size={16} /></button>
+              </section>
+
+              <section id="previs-step-storyboard" aria-label="Approve the storyboard" hidden={activeStep !== 'storyboard'} className="space-y-4">
+                <div><p className="text-sm font-medium text-zinc-100">From frame to approved scene</p><p className="mt-1 text-xs leading-relaxed text-zinc-400">Work through one decision at a time. Revisit any step before you render.</p></div>
+                <nav aria-label="Storyboard preparation" className="grid grid-cols-2 gap-2">
+                  {([{ id: 'frame', label: 'Create frame', complete: Boolean(currentStoryboardImageUrl) }, { id: 'blueprint', label: 'Build blueprint', complete: Boolean(storyboardBlueprint?.version) }, { id: 'continuity', label: 'Check continuity', complete: continuityReviewComplete }, { id: 'approve', label: 'Approve scene', complete: storyboardApproved }] as const).map((stage, index) => <button key={stage.id} type="button" onClick={() => setStoryboardStage(stage.id)} aria-pressed={currentStoryboardStage === stage.id} className={`flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-left text-xs transition-colors ${currentStoryboardStage === stage.id ? 'border-amber-200/35 bg-amber-200/10 text-amber-100' : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}><span className="flex size-5 shrink-0 items-center justify-center text-[11px]">{stage.complete ? <CheckCircle2 size={14} /> : index + 1}</span>{stage.label}</button>)}
+                </nav>
+                <ol className="border-t border-white/10 pt-5">
+                  <li hidden={currentStoryboardStage !== 'frame'} className="space-y-3">
+                    <div><h3 className="text-sm font-medium text-zinc-100">1. Create the frame</h3><p className="mt-1 text-xs leading-relaxed text-zinc-400">Start with the composition you want this shot to follow.</p></div>
+                    <button type="button" onClick={() => { setStoryboardStage(null); void handleGenerateStoryboard() }} disabled={loading || !selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-200/35 bg-amber-200/10 px-4 py-2.5 text-xs font-medium text-amber-100 hover:bg-amber-200/15 disabled:opacity-40">{loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}{currentStoryboardImageUrl ? 'Generate a new storyboard frame' : 'Generate storyboard frame'}</button>
+                    <details className="border-b border-white/10 pb-3">
+                      <summary className="cursor-pointer text-xs text-zinc-400">Image settings <span className="ml-1 text-zinc-500">· {storyboardProvider === 'qwen-image-max' ? 'Qwen Max' : 'Legacy'}{seedLocked ? ' · seed locked' : ''}</span></summary>
+                      <div className="mt-3 space-y-3">
+                        <label className="block text-xs text-zinc-300">Image model<select aria-label="Storyboard image model" value={storyboardProvider} onChange={(event) => setStoryboardProvider(event.target.value as StoryboardImageProvider)} className="mt-2 w-full rounded-md border border-white/15 bg-zinc-950 px-3 py-2 text-sm"><option value="qwen-image-max">Qwen Max</option><option value="pollinations">Legacy</option></select></label>
+                        {storyboardSeed !== null ? <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-xs text-zinc-400">Image seed: {storyboardSeed}</span><button type="button" onClick={handleToggleSeedLock} aria-pressed={seedLocked} className="flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-xs text-zinc-200" title={seedLocked ? 'Unlock storyboard image seed' : 'Lock storyboard image seed; video takes use a separate render seed'}>{seedLocked ? <Lock size={13} /> : <LockOpen size={13} />}{seedLocked ? 'Seed locked' : 'Lock image seed'}</button></div> : <p className="text-xs text-zinc-500">The image seed appears after a storyboard is generated.</p>}
+                      </div>
+                    </details>
+                    {currentStoryboardImageUrl && <button type="button" onClick={() => setStoryboardStage(storyboardBlueprint?.version ? 'continuity' : 'blueprint')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-3 py-2 text-sm font-medium text-zinc-950">Use this frame <ChevronRight size={15} /></button>}
+                  </li>
+                  <li hidden={currentStoryboardStage !== 'blueprint'} className="space-y-3">
+                    <div><h3 className="text-sm font-medium text-zinc-100">2. Build the scene blueprint</h3><p className="mt-1 text-xs leading-relaxed text-zinc-400">Collect the scene’s shots into the plan you will review and approve.</p></div>
+                    <button type="button" onClick={() => { setStoryboardStage(null); void handleCreateStoryboardBlueprint() }} disabled={!selectedSceneId || blueprintLoading} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-4 py-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40">{blueprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}Build storyboard blueprint</button>
+                    <p className="text-xs text-zinc-400">Blueprint: <span className="text-zinc-200">{blueprintLoading ? 'loading' : storyboardBlueprint?.blueprint.status || 'not built'}</span></p>
+                    {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}</div></details>}
+                    {storyboardBlueprint?.version && <button type="button" onClick={() => setStoryboardStage('continuity')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-3 py-2 text-sm font-medium text-zinc-950">Continue to continuity <ChevronRight size={15} /></button>}
+                  </li>
+                  <li hidden={currentStoryboardStage !== 'continuity'}><h3 className="mb-3 text-sm font-medium text-zinc-100">3. Review continuity</h3>                <div className="rounded-lg border p-2.5 space-y-2" style={{ borderColor: continuityReviewComplete ? 'rgba(52,211,153,0.18)' : 'rgba(255,209,101,0.18)', background: 'rgba(255,255,255,0.025)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
+                      {continuityReviewComplete ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                      Continuity Review
+                    </div>
+                    <span className="rounded border px-2 py-0.5 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}>
+                      {continuityReviewRunning ? 'running' : continuityReviewComplete ? 'complete' : 'required'}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                    {continuityReview?.summary.advisory || 'Review the scene for continuity before approving this storyboard.'}
+                  </p>
+                  {continuityReview && <p className="text-xs leading-relaxed text-zinc-400">{continuityReview.summary.shot_count} shots reviewed · {continuityReview.issues.length} notes{continuityReview.summary.high_count > 0 ? ` · ${continuityReview.summary.high_count} need closer attention` : ''}</p>}
+                  <button
+                    type="button"
+                    onClick={() => { setStoryboardStage(null); void handleRunContinuityReview() }}
+                    disabled={!storyboardBlueprint?.version || continuityReviewRunning}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border px-2 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ borderColor: 'rgba(125,211,252,0.28)', color: 'rgb(186,230,253)', background: 'rgba(14,165,233,0.08)' }}
+                  >
+                    {continuityReviewRunning ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+                    Review continuity
+                  </button>
+                  {continuityReview?.issues.length ? (
+                    <details className="space-y-2">
+                      <summary className="cursor-pointer text-xs text-amber-200">Inspect continuity issues and comparisons ({continuityReview.issues.length})</summary>
+                      <div className="flex gap-1">
+                        {(['side_by_side', 'overlay', 'before_after'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setComparisonMode(mode)}
+                            className="flex-1 rounded border px-1.5 py-1 text-[11px] uppercase tracking-[0.08em]"
+                            style={{
+                              borderColor: comparisonMode === mode ? 'rgba(125,211,252,0.42)' : 'rgba(255,255,255,0.08)',
+                              color: comparisonMode === mode ? 'rgb(186,230,253)' : 'var(--color-on-surface-variant)',
+                              background: comparisonMode === mode ? 'rgba(14,165,233,0.1)' : 'transparent',
+                            }}
+                          >
+                            {mode.replaceAll('_', ' ')}
+                          </button>
+                        ))}
+                      </div>
+                      {continuityReview.issues.map((issue) => (
+                        <div key={issue.issue_id} className="rounded border p-2" style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.16)' }}>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold" style={{ color: 'var(--color-on-surface)' }}>{issue.category}</span>
+                            <span className="uppercase" style={{ color: issue.severity === 'high' ? 'rgb(253,164,175)' : 'var(--color-on-surface-variant)' }}>{issue.severity}</span>
+                          </div>
+                          <div className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            Shot {issue.affected_shot}: {issue.ai_explanation}
+                          </div>
+                          <div className="mt-1 text-xs" style={{ color: 'rgb(186,230,253)' }}>{issue.recommended_fix}</div>
+                          <div className="mt-2 grid grid-cols-2 gap-1">
+                            {issue.actions.map((action) => (
+                              <button
+                                key={`${issue.issue_id}-${action}`}
+                                type="button"
+                                onClick={() => void handleContinuityIssueAction(issue, action)}
+                                disabled={continuityActionRunning !== null || loading}
+                                className="flex min-h-11 items-center justify-center gap-1 rounded border px-1 py-1 text-[11px] uppercase tracking-[0.06em] disabled:cursor-not-allowed disabled:opacity-50"
+                                style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}
+                              >
+                                {continuityActionRunning === `${issue.issue_id}-${action}` ? <Loader2 size={10} className="animate-spin" /> : null}
+                                {action === 'show_differences' && continuityActionRunning !== `${issue.issue_id}-${action}` ? <Layers size={10} /> : null}
+                                {action.replaceAll('_', ' ')}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </details>
+                  ) : continuityReviewComplete ? (
+                    <div className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: 'rgba(52,211,153,0.2)', color: 'rgb(167,243,208)' }}>
+                      No continuity issues surfaced in this pass.
+                    </div>
+                  ) : null}
+                </div>
+                  {continuityReviewComplete && <button type="button" onClick={() => setStoryboardStage('approve')} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-3 py-2 text-sm font-medium text-zinc-950">Continue to approval <ChevronRight size={15} /></button>}
+</li>
+                  <li hidden={currentStoryboardStage !== 'approve'} className="space-y-3">
+                    <h3 className="text-sm font-medium text-zinc-100">4. Approve the blueprint</h3>
+                    <p className="text-xs leading-relaxed text-zinc-400">{storyboardApproved ? 'This storyboard is approved for production.' : !storyboardBlueprint?.version ? 'Build the blueprint first, then run its continuity review.' : !continuityReviewComplete ? 'Run the continuity review before approving this blueprint.' : 'Review the frame and any continuity notes, then approve when it matches your intention.'}</p>
+                    <button type="button" onClick={() => void handleApproveStoryboardBlueprint()} disabled={!storyboardBlueprint?.version || !continuityReviewComplete || blueprintApproving || storyboardApproved} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">{blueprintApproving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}{storyboardApproved ? 'Storyboard approved' : 'Approve storyboard'}</button>
+                    {storyboardApproved && <button type="button" onClick={() => advanceToStep('render')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100">Continue to rendering <ChevronRight size={15} /></button>}
+                  </li>
+                </ol>
+                {storyboardBlueprint?.version && effectiveProjectId && selectedSceneId && <SceneDirectionPanel key={`${effectiveProjectId}/${selectedSceneId}/${storyboardBlueprint.version.version_id}`} projectId={effectiveProjectId} sceneId={selectedSceneId} versionId={storyboardBlueprint.version.version_id} activeShotNumber={activeShotNumber} onSaved={() => {
+                  setStoryboardBlueprint(null)
+                  setStoryboardStage('continuity')
+                  setSuccess('Scene direction saved as a new draft. Review continuity and approve it before rendering.')
+                  void getStoryboardBlueprint(effectiveProjectId, selectedSceneId).then(result => { if (directionScopeRef.current === directionScope) setStoryboardBlueprint(result) }).catch(error => { if (directionScopeRef.current === directionScope) setError(error instanceof Error ? error.message : 'Could not refresh the storyboard') })
+                }} />}
+                <p className="text-xs leading-relaxed text-zinc-400">{activeBlueprintShot?.storyboard_image_url ? 'The blueprint image will guide the first frame when this version is approved.' : 'This shot has no image attached to its blueprint yet. Check the frame before rendering.'}</p>
+              </section>
+
+              <section id="previs-step-render" aria-label="Render a take" hidden={activeStep !== 'render'} className="space-y-5">
+                            {/* PROMPT TEXTAREA */}
+            <div>
+              <label htmlFor="previs-render-prompt" className="mb-2 block text-sm font-medium text-zinc-100">Direct the action</label>
+              <p className="mb-3 text-xs leading-relaxed text-zinc-400">Describe what moves, what happens, and how the camera follows. Your current direction is sent with this take.</p>
+              {coDirectorNoteApplied && (
+                <div className="mb-2 rounded border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-300">
+                  Co-Director note applied to prompt
+                </div>
+              )}
+              {enhancedPrompt && (
+                <p className="text-xs text-amber-400 uppercase tracking-wider mb-1">
+                  Enhanced Prompt
+                </p>
+              )}
+              <textarea
+                id="previs-render-prompt"
+                rows={7}
+                className="w-full bg-black/30 border border-white/10 rounded
+                           text-white/80 text-sm p-2 min-h-[80px] resize-y"
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="Describe this shot..."
+              />
+              {originalPrompt && (
+                <div className="mt-2 p-2 bg-white/5 rounded border border-white/10">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-white/40 uppercase">Original</span>
+                    <button
+                      onClick={() => { setPromptText(originalPrompt); setOriginalPrompt(''); }}
+                      className="text-xs text-amber-400 hover:text-amber-300"
+                    >
+                      Revert
+                    </button>
+                  </div>
+                  <p className="text-xs text-white/40">{originalPrompt}</p>
+                </div>
+              )}
+            </div>
+
+
+                              {/* 2. Duration */}
               <div>
                 <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                  DURATION
+                  Duration · {genConfig.duration} seconds
                 </label>
-                <div className="flex gap-1">
+                <div role="group" aria-label="Take duration" className="flex gap-1">
                   {DURATIONS.map((dur) => (
                     <button
                       key={dur}
                       type="button"
                       onClick={() => setGenConfig((p) => ({ ...p, duration: dur }))}
+                      aria-pressed={genConfig.duration === dur}
                       className={`status-chip flex-1 rounded border px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all ${
                         genConfig.duration === dur
                           ? 'border-primary/50 bg-primary/15 text-primary'
@@ -1612,8 +2218,10 @@ export default function PrevisRoom() {
                   ))}
                 </div>
                 {genConfig.duration >= 12 && (
-                  <div className="mt-1 text-[10px] text-warning">⚠ Long generations may take 10+ minutes on CPU</div>
+                  <div className="mt-1 text-[10px] text-warning">Longer takes can take more time to render.</div>
                 )}
+                <details className="mt-3 border-t border-white/10 pt-3">
+                  <summary className="cursor-pointer text-xs text-zinc-300">Help choosing a duration</summary>
                 <button
                   type="button"
                   onClick={handleRecommendSettings}
@@ -1679,33 +2287,40 @@ export default function PrevisRoom() {
                     </button>
                   </div>
                 )}
+                </details>
               </div>
 
-              {/* 3. Frame Rate */}
+
+                <details className="rounded-lg border border-white/10 p-3">
+                  <summary className="cursor-pointer text-xs font-medium text-zinc-200">Advanced render settings<span className="mt-1 block pl-4 text-xs font-normal leading-relaxed text-zinc-400">{selectedProviderLabel} · {genConfig.resolution}{genConfig.seed !== null ? ` · seed ${genConfig.seed}` : ' · auto seed'}</span></summary>
+                  <div className="mt-4 space-y-4">
+                                  {/* 1. Render Engine */}
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  RENDER ENGINE
+                </label>
+                <select
+                  aria-label="Render engine"
+                  value={renderProvider}
+                  onChange={(e) => setRenderProvider(e.target.value)}
+                  className="glass-panel w-full rounded-lg px-3 py-2 text-xs outline-none"
+                  style={{ color: 'var(--color-on-surface)' }}
+                >
+                  {RENDER_PROVIDERS.map((opt) => (
+                    <option key={opt.value || 'auto'} value={opt.value} className="bg-zinc-900">
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+
+                                  {/* 3. Frame Rate */}
               <div>
                 <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
                   FRAME RATE
                 </label>
-                <div className="flex gap-1">
-                  {FPS_OPTIONS.map((fps) => (
-                    <button
-                      key={fps}
-                      type="button"
-                      onClick={() => setGenConfig((p) => ({ ...p, fps }))}
-                      className={`status-chip flex-1 rounded border px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all ${
-                        genConfig.fps === fps
-                          ? 'border-primary/50 bg-primary/15 text-primary'
-                          : 'hover:bg-white/8'
-                      }`}
-                      style={{
-                        borderColor: genConfig.fps === fps ? undefined : 'rgba(255,255,255,0.08)',
-                        color: genConfig.fps === fps ? undefined : 'var(--color-on-surface-variant)',
-                      }}
-                    >
-                      {fps}fps
-                    </button>
-                  ))}
-                </div>
+                <p className="text-xs text-zinc-400">Set by the video model. Shot duration controls the length of this take.</p>
               </div>
 
               {/* 4. Resolution */}
@@ -1713,12 +2328,13 @@ export default function PrevisRoom() {
                 <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
                   RESOLUTION
                 </label>
-                <div className="flex gap-1">
+                <div role="group" aria-label="Render resolution" className="flex gap-1">
                   {RESOLUTIONS.map((res) => (
                     <button
                       key={res}
                       type="button"
                       onClick={() => setGenConfig((p) => ({ ...p, resolution: res }))}
+                      aria-pressed={genConfig.resolution === res}
                       className={`status-chip flex-1 rounded border px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all ${
                         genConfig.resolution === res
                           ? 'border-primary/50 bg-primary/15 text-primary'
@@ -1743,10 +2359,11 @@ export default function PrevisRoom() {
                 <div className="flex gap-2">
                   <input
                     type="number"
+                    aria-label="Video render seed"
                     value={genConfig.seed ?? ''}
                     onChange={(e) => setGenConfig((p) => ({ ...p, seed: e.target.value ? parseInt(e.target.value, 10) : null }))}
-                    placeholder="Random"
-                    className="cyber-input flex-1 rounded px-3 py-1.5 text-xs outline-none"
+                    placeholder="Auto / saved seed"
+                    className="cyber-input min-w-0 flex-1 rounded px-3 py-1.5 text-xs outline-none"
                     style={{ color: 'var(--color-on-surface)' }}
                   />
                   <button
@@ -1761,11 +2378,14 @@ export default function PrevisRoom() {
                 </div>
               </div>
 
-              {/* 6. Audio Generation (collapsible) */}
+
+                                  {/* 6. Audio Generation (collapsible) */}
               <div>
                 <button
                   type="button"
                   onClick={() => setAudioExpanded((p) => !p)}
+                  aria-expanded={audioExpanded}
+                  aria-controls="previs-audio-options"
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-all hover:bg-white/5"
                   style={{ color: 'var(--color-on-surface-variant)' }}
                 >
@@ -1774,13 +2394,14 @@ export default function PrevisRoom() {
                 </button>
 
                 {audioExpanded && (
-                  <div className="mt-2 space-y-3 rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                  <div id="previs-audio-options" className="mt-2 space-y-3 rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                     {/* Voice (Piper TTS) */}
                     <div>
                       <div className="mb-1 flex items-center gap-2">
                         <label className="relative inline-flex cursor-pointer items-center">
                           <input
                             type="checkbox"
+                            aria-label="Enable voice"
                             checked={audioConfig.voiceEnabled}
                             onChange={(e) => setAudioConfig((p) => ({ ...p, voiceEnabled: e.target.checked }))}
                             className="peer sr-only"
@@ -1807,6 +2428,7 @@ export default function PrevisRoom() {
                         <label className="relative inline-flex cursor-pointer items-center">
                           <input
                             type="checkbox"
+                            aria-label="Enable music"
                             checked={audioConfig.musicEnabled}
                             onChange={(e) => setAudioConfig((p) => ({ ...p, musicEnabled: e.target.checked }))}
                             className="peer sr-only"
@@ -1833,6 +2455,7 @@ export default function PrevisRoom() {
                         <label className="relative inline-flex cursor-pointer items-center">
                           <input
                             type="checkbox"
+                            aria-label="Enable sound effects"
                             checked={audioConfig.sfxEnabled}
                             onChange={(e) => setAudioConfig((p) => ({ ...p, sfxEnabled: e.target.checked }))}
                             className="peer sr-only"
@@ -1856,54 +2479,135 @@ export default function PrevisRoom() {
                 )}
               </div>
 
-              <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
-                    STORYBOARD BLUEPRINT
+
+                    <div className="border-t border-white/10 pt-4"><p className="mb-2 text-xs leading-relaxed text-zinc-400">Prompt assistance can rewrite your direction. Review the result before rendering.</p><button type="button" onClick={handleEnhancePrompt} disabled={!selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Sparkles size={13} /> AI enhance prompt</button></div>
                   </div>
-                  <span className="rounded border px-2 py-0.5 text-[9px] uppercase tracking-[0.1em]" style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}>
-                    {blueprintLoading ? 'loading' : storyboardBlueprint?.blueprint.status || 'not built'}
-                  </span>
+                </details>
+                <div className="border-t border-white/10 pt-4">
+                  <div className="mb-3 flex flex-wrap justify-between gap-2 text-xs text-zinc-400"><span>Shot {activeShotNumber} · {genConfig.duration} seconds</span><span>Creates a new take</span></div>
+                  <button type="button" onClick={handleInitializeRender} disabled={rendering || !selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">{rendering ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}{rendering ? 'Rendering take…' : 'Render take'}</button>
+                  {storyboardBlueprint && storyboardBlueprint.blueprint.status !== 'approved' && <p className="mt-2 text-xs text-amber-200/80">Your storyboard is still a draft. Return to step 2 to review and approve it.</p>}
                 </div>
-                <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                  {activeBlueprintShot
-                    ? `Shot ${activeBlueprintShot.shot_number}: ${activeBlueprintShot.render_contract.render_readiness}`
-                    : 'No canonical shot contract loaded for this scene.'}
+              </section>
+
+              <section id="previs-step-review" aria-label="Review and assemble" hidden={activeStep !== 'review'} className="space-y-5">
+                <div>
+                  <h3 className="text-sm font-medium text-zinc-100">Takes for shot {activeShotNumber}</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">Choose a take to preview. Use the shot row above to review the rest of the scene.</p>
+                  {takes.length ? <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {takes.map((take) => <div key={take.take_number} className="min-w-0 space-y-2">
+                      <button type="button" disabled={!take.videoUrl} aria-pressed={activeTakeNumber === take.take_number} onClick={() => take.videoUrl && setSelectedTakeByShot((prev) => ({ ...prev, [activeShotNumber]: take.take_number }))} className={`w-full overflow-hidden rounded-md border text-left disabled:opacity-40 ${activeTakeNumber === take.take_number ? 'border-amber-200/60 bg-amber-200/5' : 'border-white/15 hover:border-white/35'}`}>
+                        <div className="aspect-video bg-black/30">{take.videoUrl ? <video src={take.videoUrl} className="h-full w-full object-contain" muted playsInline /> : <div className="flex h-full items-center justify-center"><Camera size={16} className="text-zinc-600" /></div>}</div>
+                        <span className="flex flex-wrap items-center justify-between gap-1 px-2 py-2 text-xs text-zinc-200">Take {take.take_number}{activeTakeNumber === take.take_number && <span className="text-[10px] text-amber-200">Previewing</span>}</span>
+                      </button>
+                      {take.jobId && <button type="button" onClick={() => handleDeleteRender(take.jobId!)} className="text-[11px] text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${take.take_number}`}>Delete take</button>}
+                    </div>)}
+                  </div> : <div className="mt-3 rounded-md border border-dashed border-white/15 p-4 text-xs leading-relaxed text-zinc-400">No takes for this shot yet. Render a take in step 3, then return here to review it.</div>}
                 </div>
-                {activeBlueprintShot?.rationale ? (
-                  <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                    {activeBlueprintShot.rationale}
-                  </div>
-                ) : null}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleCreateStoryboardBlueprint()}
-                    disabled={!selectedSceneId || blueprintLoading}
-                    className="flex items-center justify-center gap-2 rounded-lg border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-on-surface)', background: 'rgba(255,255,255,0.03)' }}
-                  >
-                    {blueprintLoading ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
-                    Build
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleApproveStoryboardBlueprint()}
-                    disabled={!storyboardBlueprint?.version || blueprintApproving || storyboardBlueprint?.blueprint.status === 'approved'}
-                    className="flex items-center justify-center gap-2 rounded-lg border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{ borderColor: 'rgba(16,185,129,0.35)', color: 'rgb(110,231,183)', background: 'rgba(16,185,129,0.08)' }}
-                  >
-                    {blueprintApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-                    Approve
-                  </button>
+                <div className="border-t border-white/10 pt-4">
+                  <h3 className="text-sm font-medium text-zinc-100">Assemble your scene</h3>
+                  <p className="mb-3 mt-1 text-xs leading-relaxed text-zinc-400">Uses the latest completed take for each shot. Previewing an older take does not change the assembly.</p>
+                  {canCompose && !composedUrl ? <button type="button" onClick={handleCompose} disabled={composing} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:opacity-50">{composing ? <Loader2 size={15} className="animate-spin" /> : <Layers size={15} />}{composing ? 'Assembling scene…' : 'Assemble scene'}</button> : composedUrl ? <div className="space-y-3"><p className="flex items-center gap-2 text-xs text-emerald-300"><CheckCircle2 size={14} /> Scene assembled</p><button type="button" onClick={() => navigate(withProductionContext('/studio/screening-room', { projectId: effectiveProjectId, sceneId: selectedSceneId, shotNumber: activeShotNumber }))} className="w-full rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100">Open Screening</button></div> : <p className="rounded-md bg-white/5 px-3 py-3 text-xs leading-relaxed text-zinc-400">{shotNumbers.length < 2 ? 'Add another shot, then render its take to assemble a scene.' : 'Assembly becomes available when at least two shots have completed videos.'}</p>}
                 </div>
+                <details className="rounded-lg border border-white/10 p-3"><summary className="cursor-pointer text-xs font-medium text-zinc-300">Render history and retries</summary><div className="mt-3">            {/* Render History */}
+            <div className="glass-panel rounded-xl p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <History size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
+                <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>
+                  RENDER HISTORY
+                </span>
               </div>
 
-              <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+              {visibleRenderHistory.length === 0 ? (
+                <div className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  No previous renders.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {visibleRenderHistory.map((entry) => (
+                    <div
+                      key={entry.jobId}
+                      className="relative"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => { handleLoadHistoryPrompt(entry); advanceToStep('render') }}
+                        className="flex w-full items-start gap-2 rounded-lg border p-2.5 pr-8 text-left transition-all hover:bg-white/5"
+                        style={{ borderColor: 'rgba(255,255,255,0.06)' }}
+                      >
+                        {/* Thumbnail placeholder */}
+                        <div
+                          className="flex h-10 w-14 shrink-0 items-center justify-center rounded"
+                          style={{ background: 'var(--color-surface-container-low)' }}
+                        >
+                          {entry.thumbnailUrl ? (
+                            <img src={entry.thumbnailUrl} alt="" className="h-full w-full rounded object-cover" />
+                          ) : (
+                            <Camera size={14} className="opacity-30" style={{ color: 'var(--color-on-surface-variant)' }} />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[11px] font-medium" style={{ color: 'var(--color-on-surface)' }}>
+                            {entry.sceneName}
+                          </div>
+                          <div className="flex items-center gap-2 text-[9px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            <Clock size={10} />
+                            {entry.duration}s
+                            <span
+                              className="status-chip rounded px-1 py-0.5 text-[8px] font-bold"
+                              style={{
+                                background: 'rgba(76,215,246,0.1)',
+                                color: 'var(--color-secondary)',
+                              }}
+                            >
+                              {entry.status}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRender(entry.jobId)}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-rose-400 hover:bg-white/5 transition-all"
+                        aria-label={`Delete render ${entry.sceneName}`}
+                        title="Delete this render"
+                      >
+                        <X size={12} />
+                      </button>
+                      {entry.status === 'complete' && entry.hasPromptSlots && (
+                        <button
+                          type="button"
+                          onClick={() => void handleAdherenceRetry(entry.jobId)}
+                          disabled={adherenceRetryingJobId === entry.jobId}
+                          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-wait disabled:opacity-60"
+                          style={{
+                            borderColor: 'rgba(34,211,238,0.28)',
+                            color: 'var(--color-secondary)',
+                            background: 'rgba(34,211,238,0.07)',
+                          }}
+                          title="Queue fresh prompt-adherence retries with failed slots moved earlier"
+                        >
+                          {adherenceRetryingJobId === entry.jobId ? (
+                            <Loader2 size={10} className="animate-spin" />
+                          ) : (
+                            <RotateCcw size={10} />
+                          )}
+                          {adherenceRetryingJobId === entry.jobId ? 'Queueing' : 'Adherence Retry'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+</div></details>
+                <details className="rounded-lg border border-white/10 p-3"><summary className="cursor-pointer text-xs font-medium text-zinc-300">Generate a whole scene <span className="ml-1 font-normal text-zinc-500">· optional</span></summary><p className="mt-3 text-xs leading-relaxed text-zinc-400">This starts new renders for the scene and combines them with dialogue. It creates new footage and may incur generation costs.</p><div className="mt-3">              <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                 <div className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
-                  SCENE PIPELINE
+                  Generate a whole scene
                 </div>
                 <select
+                  aria-label="Whole-scene audio mode"
                   value={sceneScoreMode}
                   onChange={(e) => setSceneScoreMode(e.target.value as PrevisSceneScoreMode)}
                   className="cyber-input w-full rounded px-2 py-1 text-xs outline-none"
@@ -1939,7 +2643,7 @@ export default function PrevisRoom() {
                   }}
                 >
                   {scenePipelineRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                  {scenePipelineRunning ? 'Generating' : 'Generate Scene'}
+                  {scenePipelineRunning ? 'Generating' : 'Generate new scene footage'}
                 </button>
                 {scenePipelineResult || latestScenePipelineAssembly ? (
                   <div className="space-y-1 text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
@@ -1960,304 +2664,35 @@ export default function PrevisRoom() {
                   </div>
                 ) : null}
               </div>
+</div></details>
+              </section>
+
+              {nextStep && activeStep !== 'plan' && <div className="mt-5 border-t border-white/10 pt-4"><button type="button" onClick={() => advanceToStep(nextStep.id)} className="flex w-full items-center justify-end gap-2 rounded px-1 py-2 text-xs font-medium text-zinc-300 hover:text-amber-100">Next: {nextStep.title}<ChevronRight size={15} /></button></div>}
             </div>
           </div>
 
-          {/* ── CENTER: PREVIEW + HISTORY + PROMPT ─────────────────────────── */}
-          <div className="flex flex-1 flex-col overflow-y-auto min-h-0">
-            {/* ── TOP SECTION (fixed, always visible) ───────────────────── */}
-            <div className="shrink-0 space-y-2">
-              {/* ── PREVIEW PANEL ─────────────────────────────────────────── */}
-              <div className="glass-panel relative aspect-video w-full overflow-hidden rounded-xl" style={{ background: 'var(--color-surface-container-lowest)' }}>
-                <div className="relative w-full h-full bg-black">
-                  {currentVideoUrl ? (
-                    <video
-                      key={currentVideoUrl}
-                      src={currentVideoUrl}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      onError={(e) => console.error('Video error:', e.currentTarget.src)}
-                    />
-                  ) : currentStoryboardImageUrl ? (
-                    <>
-                      <img
-                        key={`${currentStoryboardImageUrl}-${storyboardRetryNonce[activeShotNumber] || 0}`}
-                        src={currentStoryboardImageUrl}
-                        alt={`Storyboard still for shot ${activeShotNumber}`}
-                        className={`absolute inset-0 h-full w-full object-cover transition-opacity ${activeStoryboardState === 'ready' ? 'opacity-100' : 'opacity-35'}`}
-                        onLoad={() => setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'ready' }))}
-                        onError={() => {
-                          console.warn('Storyboard image failed to load', {
-                            projectId: effectiveProjectId,
-                            sceneId: selectedSceneId,
-                            shotId: activeStoryboardShotId,
-                            url: currentStoryboardImageUrl,
-                          })
-                          setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'failed' }))
-                        }}
-                      />
-                      {activeStoryboardState !== 'ready' && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 px-6 text-center">
-                          {activeStoryboardState === 'loading' || activeStoryboardState === 'generating' ? (
-                            <Loader2 size={18} className="animate-spin text-amber-300" />
-                          ) : (
-                            <Camera size={18} className="text-white/35" />
-                          )}
-                          <div className="text-xs text-white/70">
-                            {activeStoryboardState === 'generating'
-                              ? 'Storyboard generation in progress'
-                              : activeStoryboardState === 'failed'
-                                ? 'Storyboard image temporarily unavailable'
-                                : 'Loading storyboard still'}
-                          </div>
-                          {activeStoryboardState === 'failed' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setStoryboardImageStates((prev) => ({ ...prev, [activeShotNumber]: 'loading' }))
-                                setStoryboardRetryNonce((prev) => ({ ...prev, [activeShotNumber]: (prev[activeShotNumber] || 0) + 1 }))
-                              }}
-                              className="rounded border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200"
-                              style={{ borderColor: 'rgba(255,209,101,0.28)', background: 'rgba(255,209,101,0.08)' }}
-                            >
-                              Retry Image
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/35 text-sm">
-                      <Camera size={20} />
-                      <span>No storyboard still or render yet</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+          <div hidden={activeStep !== 'review'}>
+            <details className="rounded-lg border border-white/10 bg-black/15 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-zinc-300">Production handoff <span className="ml-1 text-xs font-normal text-zinc-500">· Canonical Production Thread</span></summary>
+              <p className="mt-3 max-w-3xl text-xs leading-relaxed text-zinc-400">For the full approval workflow: freeze an approved Previs package, render that exact package, then review, revise, and assemble it. Each action remains yours to confirm.</p>
+              <div className="mt-4 min-w-0">        {effectiveProjectId && selectedSceneId ? (
+          <CanonicalWorkflowPanel
+            projectId={effectiveProjectId}
+            sceneId={selectedSceneId}
+            sceneContext={canonicalSceneContext}
+            surface="previs"
+            renderProvider={renderProvider || undefined}
+            renderProviderLabel={RENDER_PROVIDERS.find((option) => option.value === renderProvider)?.label}
+          />
+        ) : null}
 
-              {/* ── Director's Vision (compact single line) ────────────────── */}
-              <div className="glass-panel flex items-center justify-between rounded-xl px-4 py-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--color-secondary)' }}>
-                  DIRECTOR'S VISION
-                </span>
-                {scenes.length > 0 && (
-                  <select
-                    value={selectedSceneId}
-                    onChange={(e) => {
-                      const sceneId = e.target.value
-                      if (sceneId) {
-                        const scene = scenes.find((s) => s.scene_id === sceneId)
-                        if (scene) {
-                          setOriginalPrompt('')
-                          const derived = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
-                          setPromptText(derived)
-                        }
-                      }
-                      setSelectedSceneId(sceneId)
-                    }}
-                    className="glass-panel rounded-lg px-3 py-1 text-[10px] outline-none"
-                    style={{ color: 'var(--color-on-surface-variant)' }}
-                  >
-                    <option value="" className="bg-zinc-900">Load scene prompt...</option>
-                    {scenes.map((scene) => (
-                      <option key={scene.scene_id} value={scene.scene_id} className="bg-zinc-900">
-                        {scene.heading || scene.scene_id}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* ── Storyboard Generation + Seed Lock ─────────────────────────── */}
-              {selectedSceneId && (
-                <div className="glass-panel rounded-xl px-4 py-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      STORYBOARD
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={storyboardProvider}
-                        onChange={(event) => setStoryboardProvider(event.target.value as StoryboardImageProvider)}
-                        className="cyber-input rounded px-2 py-1 text-[10px] outline-none"
-                        style={{ color: 'var(--color-on-surface)' }}
-                      >
-                        <option value="qwen-image-max">Qwen Max</option>
-                        <option value="pollinations">Legacy</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={handleGenerateStoryboard}
-                        disabled={loading}
-                        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
-                        style={{
-                          background: 'rgba(255,209,101,0.15)',
-                          color: 'var(--color-primary)',
-                          border: '1px solid rgba(255,209,101,0.3)',
-                        }}
-                      >
-                        {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                        GENERATE
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {storyboardSeed !== null && (
-                    <div className="flex items-center justify-between gap-3 pt-1">
-                      <span
-                        className="text-[10px] font-mono"
-                        style={{ color: 'var(--color-on-surface-variant)' }}
-                      >
-                        Seed: {storyboardSeed}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleToggleSeedLock}
-                        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
-                        style={{
-                          background: seedLocked ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.05)',
-                          color: seedLocked ? 'var(--color-tertiary)' : 'var(--color-on-surface-variant)',
-                          border: seedLocked ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(255,255,255,0.1)',
-                        }}
-                        title={seedLocked ? 'Unlock seed for random generation' : 'Lock seed for consistent regeneration'}
-                      >
-                        {seedLocked ? (
-                          <>
-                            <Lock size={10} />
-                            LOCKED
-                          </>
-                        ) : (
-                          <>
-                            <LockOpen size={10} />
-                            UNLOCKED
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Why This Shot Matters (rationale) ──────────────────────── */}
-              {shotRationale && !loadingRationale && (
-                <div className="glass-panel rounded-xl border-l-2 px-4 py-2" style={{ borderLeftColor: 'var(--color-secondary)' }}>
-                  <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--color-secondary)' }}>
-                    WHY THIS SHOT MATTERS
-                  </div>
-                  <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
-                    {shotRationale.rationale}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* PROMPT TEXTAREA */}
-            <div className="px-4 pt-2">
-              {coDirectorNoteApplied && (
-                <div className="mb-2 rounded border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-300">
-                  Co-Director note applied to prompt
-                </div>
-              )}
-              {enhancedPrompt && (
-                <p className="text-xs text-amber-400 uppercase tracking-wider mb-1">
-                  Enhanced Prompt
-                </p>
-              )}
-              <textarea
-                className="w-full bg-black/30 border border-white/10 rounded 
-                           text-white/80 text-sm p-2 min-h-[80px] resize-y"
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Describe this shot..."
-              />
-              {originalPrompt && (
-                <div className="mt-2 p-2 bg-white/5 rounded border border-white/10">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs text-white/40 uppercase">Original</span>
-                    <button
-                      onClick={() => { setPromptText(originalPrompt); setOriginalPrompt(''); }}
-                      className="text-xs text-amber-400 hover:text-amber-300"
-                    >
-                      Revert
-                    </button>
-                  </div>
-                  <p className="text-xs text-white/40">{originalPrompt}</p>
-                </div>
-              )}
-            </div>
-
-            {/* SHOTS ROW */}
-            <div className="px-4 pt-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                {shotNumbers.map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => handleSelectShot(n)}
-                    className={`px-3 py-1.5 text-xs rounded border flex flex-col items-center ${
-                      activeShotNumber === n
-                        ? 'border-amber-400 text-amber-400 bg-amber-400/10'
-                        : 'border-white/20 text-white/50 hover:border-white/40'
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase tracking-wider opacity-60">
-                      {getShotTypeLabel(n)}
-                    </span>
-                    <span className="font-semibold">Shot {n}</span>
-                  </button>
-                ))}
-                <button
-                  onClick={handleAddShot}
-                  className="px-3 py-1 text-xs rounded border border-dashed border-white/20 text-white/40 hover:border-white/40"
-                >
-                  + Add Shot
-                </button>
-              </div>
-            </div>
-
-            {selectedSceneId && (
-              <div className="px-4 pt-3">
-                <details className="rounded-xl border bg-black/20 p-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                  <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-secondary)' }}>
-                    Shot Planning Details
-                  </summary>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    {([
-                      ['title', 'Shot number and title'],
-                      ['purpose', 'Story or emotional purpose'],
-                      ['framing', 'Shot type and framing'],
-                      ['camera', 'Camera angle, movement, and lens'],
-                      ['blocking', 'Subject blocking and action'],
-                      ['composition', 'Composition and focal point'],
-                      ['atmosphere', 'Lighting, color, and atmosphere'],
-                      ['production', 'Location and production notes'],
-                      ['continuity', 'Continuity or motif notes'],
-                      ['sound', 'Dialogue, sound, or music cues'],
-                      ['transition', 'Transition in and out'],
-                      ['plannedDuration', 'Editable planned duration'],
-                      ['rationale', 'Why this shot matters'],
-                    ] as Array<[keyof ShotPlanningDetails, string]>).map(([field, label]) => (
-                      <label key={field} className={field === 'rationale' ? 'md:col-span-2' : ''}>
-                        <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                          {label}
-                        </span>
-                        <textarea
-                          value={activeShotPlanningDetails[field]}
-                          onChange={(event) => updateShotPlanningDetail(field, event.target.value)}
-                          rows={field === 'rationale' ? 2 : 3}
-                          className="cyber-input w-full resize-y rounded px-2 py-1.5 text-[11px] leading-relaxed outline-none"
-                          style={{ color: 'var(--color-on-surface)' }}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </details>
-              </div>
-            )}
-
-            {selectedSceneId && effectiveProjectId && (
+</div>
+            </details>
+          </div>
+          <details className="rounded-lg border border-white/10 bg-black/15 p-4">
+            <summary className="cursor-pointer text-sm font-medium text-zinc-300">Creative departments and notes <span className="ml-1 text-xs font-normal text-zinc-500">· optional advice</span></summary>
+            <p className="mt-3 text-xs leading-relaxed text-zinc-400">Open a department when you want another perspective on this shot.</p>
+            <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-2"><div className="min-w-0">            {selectedSceneId && effectiveProjectId && (
               <div className="space-y-3 px-4 pt-3">
                 <CinematographerIntelligencePanel
                   projectId={effectiveProjectId}
@@ -2311,150 +2746,7 @@ export default function PrevisRoom() {
               </div>
             )}
 
-            {/* RENDER HISTORY FILMSTRIP */}
-            <div className="px-4 pt-3">
-              <div className="flex items-center gap-2 text-xs text-white/40 mb-2">
-                <span>↺</span>
-                <span className="uppercase tracking-wider">Render History</span>
-              </div>
-              <div className="flex gap-3">
-                {[1, 2, 3].map((takeNum) => {
-                  const take = takes.find(t => t.take_number === takeNum);
-                  return (
-                  <div
-                      key={takeNum}
-                      className={`flex flex-col items-center gap-1 cursor-pointer relative`}
-                      onClick={() => take?.videoUrl && setSelectedTakeByShot(prev => ({ ...prev, [activeShotNumber]: take.take_number }))}
-                    >
-                      <div className={`w-20 h-12 rounded border flex items-center 
-                                      justify-center bg-black/30 ${
-                        activeTakeNumber === takeNum 
-                          ? 'border-amber-400' 
-                          : 'border-white/20'
-                      }`}>
-                        {take?.videoUrl ? (
-                          <video
-                            src={take.videoUrl}
-                            className="w-full h-full object-cover rounded"
-                            muted
-                            onError={(e) => console.error('Video load error:', e)}
-                            onLoadedData={() => console.log('Video loaded successfully')}
-                          />
-                        ) : (
-                          <span className="text-white/20 text-lg">📷</span>
-                        )}
-                      </div>
-                      <span className="text-xs text-white/40">Take {takeNum}</span>
-                      {take?.jobId && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteRender(take.jobId!) }}
-                          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] text-white hover:bg-rose-500"
-                        >
-                          <X size={10} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* RECOMMEND SHOT COUNT */}
-            <div className="px-4 pt-3">
-              <button
-                onClick={handleRecommendShotCount}
-                className="w-full py-2 text-xs border border-white/20 rounded 
-                           text-white/60 hover:text-white/80 flex items-center 
-                           justify-center gap-2"
-              >
-                <span>📷</span> Recommend Shot Count
-              </button>
-              {shotRecommendation && (
-                <div className="mt-2 p-2 bg-white/5 rounded text-xs text-white/60">
-                  {shotRecommendation}
-                </div>
-              )}
-            </div>
-
-            {/* AI ENHANCE + INITIALIZE - PINNED BOTTOM */}
-            <div className="px-4 py-3 border-t border-white/10 flex flex-col gap-2 shrink-0">
-              <button
-                onClick={handleEnhancePrompt}
-                className="w-full py-2 text-xs border border-white/20 rounded 
-                           text-white/60 hover:text-white/80 flex items-center 
-                           justify-center gap-2"
-              >
-                ✦ AI Enhance Prompt
-              </button>
-              <button
-                onClick={handleInitializeRender}
-                className="w-full py-3 text-sm font-medium rounded 
-                           bg-amber-900/60 border border-amber-600/40 
-                           text-amber-200 hover:bg-amber-800/60"
-              >
-                ▷ Initialize Render
-              </button>
-               {/* Pipeline status */}
-              <div className="flex items-center justify-between text-xs text-white/30 pt-1">
-                {['Loop 1','Loop 2','Compose','MP4'].map((step, i) => (
-                  <span key={i} className="flex items-center gap-1">
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      pipelineStep > i ? 'bg-amber-400' : 'bg-white/20'
-                    }`}/>
-                    {step}
-                  </span>
-                ))}
-              </div>
-              {selectedSceneId && (
-                <div className="pt-2">
-                  {canCompose && !composedUrl ? (
-                    <button
-                      onClick={handleCompose}
-                      disabled={composing}
-                      className={`w-full py-2 text-xs font-medium rounded flex items-center justify-center gap-2 ${
-                        composing
-                          ? 'bg-amber-900/40 text-amber-400/60 cursor-wait'
-                          : 'bg-amber-900/60 border border-amber-600/40 text-amber-200 hover:bg-amber-800/60'
-                      }`}
-                    >
-                      {composing ? (
-                        <><Loader2 size={12} className="animate-spin" /> Composing scene...</>
-                      ) : (
-                        <>COMPOSE SCENE</>
-                      )}
-                    </button>
-                  ) : composedUrl ? (
-                    <div className="flex flex-col gap-2">
-                      <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 size={10} /> Scene composed
-                      </span>
-                      <button
-                        onClick={() => navigate(withProductionContext('/studio/screening-room', {
-                          projectId: effectiveProjectId,
-                          sceneId: selectedSceneId,
-                          shotNumber: activeShotNumber,
-                        }))}
-                        className="w-full py-2 text-xs font-medium rounded bg-emerald-900/60 border border-emerald-600/40 text-emerald-200 hover:bg-emerald-800/60"
-                      >
-                        VIEW IN THEATER
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-[10px] text-white/30 block text-center">
-                      {shotNumbers.length < 2
-                        ? 'Add more shots to compose a full scene'
-                        : 'Complete renders with video URLs to enable compose'}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── RIGHT: HISTORY + STATUS (260px) ─────────────────────────── */}
-          <div className="flex w-[260px] shrink-0 flex-col gap-4 overflow-y-auto">
-            {/* AI Director Notes */}
+</div><div className="min-w-0 space-y-3">            {/* AI Director Notes */}
             <div className="glass-panel rounded-xl border-l-2 p-4" style={{ borderLeftColor: 'var(--color-secondary)' }}>
               <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>
                 AI DIRECTOR NOTES
@@ -2482,114 +2774,27 @@ export default function PrevisRoom() {
             {/* Shot Signals */}
             <ShotSignalsPanel envelope={shotSignals} />
 
-            {/* Render History */}
-            <div className="glass-panel rounded-xl p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <History size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
-                <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>
-                  RENDER HISTORY
-                </span>
-              </div>
-
-              {visibleRenderHistory.length === 0 ? (
-                <div className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                  No previous renders.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {visibleRenderHistory.map((entry) => (
-                    <div
-                      key={entry.jobId}
-                      className="relative"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleLoadHistoryPrompt(entry)}
-                        className="flex w-full items-start gap-2 rounded-lg border p-2.5 pr-8 text-left transition-all hover:bg-white/5"
-                        style={{ borderColor: 'rgba(255,255,255,0.06)' }}
-                      >
-                        {/* Thumbnail placeholder */}
-                        <div
-                          className="flex h-10 w-14 shrink-0 items-center justify-center rounded"
-                          style={{ background: 'var(--color-surface-container-low)' }}
-                        >
-                          {entry.thumbnailUrl ? (
-                            <img src={entry.thumbnailUrl} alt="" className="h-full w-full rounded object-cover" />
-                          ) : (
-                            <Camera size={14} className="opacity-30" style={{ color: 'var(--color-on-surface-variant)' }} />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[11px] font-medium" style={{ color: 'var(--color-on-surface)' }}>
-                            {entry.sceneName}
-                          </div>
-                          <div className="flex items-center gap-2 text-[9px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                            <Clock size={10} />
-                            {entry.duration}s
-                            <span
-                              className="status-chip rounded px-1 py-0.5 text-[8px] font-bold"
-                              style={{
-                                background: 'rgba(76,215,246,0.1)',
-                                color: 'var(--color-secondary)',
-                              }}
-                            >
-                              {entry.status}
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteRender(entry.jobId)}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-rose-400 hover:bg-white/5 transition-all"
-                        title="Delete this render"
-                      >
-                        <X size={12} />
-                      </button>
-                      {entry.status === 'complete' && entry.hasPromptSlots && (
-                        <button
-                          type="button"
-                          onClick={() => void handleAdherenceRetry(entry.jobId)}
-                          disabled={adherenceRetryingJobId === entry.jobId}
-                          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-wait disabled:opacity-60"
-                          style={{
-                            borderColor: 'rgba(34,211,238,0.28)',
-                            color: 'var(--color-secondary)',
-                            background: 'rgba(34,211,238,0.07)',
-                          }}
-                          title="Queue fresh prompt-adherence retries with failed slots moved earlier"
-                        >
-                          {adherenceRetryingJobId === entry.jobId ? (
-                            <Loader2 size={10} className="animate-spin" />
-                          ) : (
-                            <RotateCcw size={10} />
-                          )}
-                          {adherenceRetryingJobId === entry.jobId ? 'Queueing' : 'Adherence Retry'}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Backend Health */}
+</div></div>
+          </details>
+          <details className="rounded-lg border border-white/10 bg-black/15 p-4">
+            <summary className="cursor-pointer text-xs text-zinc-400">Studio status <span className={!lastHealthCheck ? 'ml-2 text-zinc-400' : backendOnline ? 'ml-2 text-emerald-300' : 'ml-2 text-rose-300'}>{!lastHealthCheck ? 'Checking connection…' : backendOnline ? 'Connected' : 'Unavailable'}</span></summary>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">            {/* Backend Health */}
             <div className="glass-panel rounded-xl px-4 py-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                  GPU BACKEND
+                  Studio connection
                 </span>
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2 w-2 rounded-full ${
-                      backendOnline ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]' : 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]'
+                      !lastHealthCheck ? 'bg-zinc-500' : backendOnline ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]' : 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]'
                     }`}
                   />
                   <span
                     className="text-[10px] font-bold uppercase tracking-[0.1em]"
-                    style={{ color: backendOnline ? 'var(--color-secondary)' : 'var(--color-error)' }}
+                    style={{ color: !lastHealthCheck ? 'var(--color-on-surface-variant)' : backendOnline ? 'var(--color-secondary)' : 'var(--color-error)' }}
                   >
-                    {backendOnline ? 'ONLINE' : 'OFFLINE'}
+                    {!lastHealthCheck ? 'Checking…' : backendOnline ? 'ONLINE' : 'OFFLINE'}
                   </span>
                 </div>
               </div>
@@ -2599,10 +2804,10 @@ export default function PrevisRoom() {
                 </div>
               )}
             </div>
-          </div>
+<div className="rounded-lg border border-white/10 p-4"><p className="mb-3 text-xs text-zinc-300">Render stages</p><div className="flex flex-wrap gap-4 text-xs text-zinc-400">{['Prepare', 'Generate', 'Compose', 'Video ready'].map((stage, index) => <span key={stage} className="flex items-center gap-2"><span className={`h-1.5 w-1.5 rounded-full ${pipelineStep > index ? 'bg-amber-200' : 'bg-white/20'}`} />{stage}</span>)}</div></div></div>
+          </details>
         </div>
       </ProjectGuard>
     </StudioShell>
-    </>
   )
 }

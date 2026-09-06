@@ -1,0 +1,447 @@
+{
+ "ts_files": 264,
+ "test_files": 76,
+ "app_loc": 62072,
+ "marker_count": 128,
+ "markers_sample": [
+  [
+   "components/SaveDecisionMemoryModal.tsx",
+   122,
+   "placeholder=\"Describe this creative decision...\""
+  ],
+  [
+   "components/KnowledgeLibraryPanel.tsx",
+   198,
+   "placeholder=\"Bible title\""
+  ],
+  [
+   "components/KnowledgeLibraryPanel.tsx",
+   219,
+   "placeholder=\"Paste a filmmaking Bible, style guide, character Bible, or production rulebook...\""
+  ],
+  [
+   "components/WorkflowLauncher.tsx",
+   304,
+   "placeholder={description}"
+  ],
+  [
+   "components/WorkflowLauncher.tsx",
+   320,
+   "placeholder={description}"
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   205,
+   "placeholder=\"e.g., Neo-noir thriller, Sci-fi drama\""
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   206,
+   "className=\"w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 "
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   226,
+   "placeholder=\"e.g., Arrival, Blade Runner 2049\""
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   227,
+   "className=\"flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 "
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   265,
+   "placeholder=\"What should the film make audiences feel?\""
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   267,
+   "className=\"w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 "
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   287,
+   "placeholder=\"e.g., Deakins lighting, handheld intimacy\""
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   288,
+   "className=\"flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 "
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   326,
+   "placeholder=\"Describe what a successful film would achieve\""
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   328,
+   "className=\"w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 "
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   348,
+   "placeholder=\"e.g., Heavy exposition, melodrama\""
+  ],
+  [
+   "components/DirectorIntentPanel.tsx",
+   349,
+   "className=\"flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 "
+  ],
+  [
+   "components/CanonicalWorkflowPanel.tsx",
+   374,
+   "<textarea value={revisionPrompt} onChange={(event) => setRevisionPrompt(event.target.value)} placeholder=\"Desc"
+  ],
+  [
+   "components/CanonicalWorkflowPanel.tsx",
+   375,
+   "<textarea value={revisionReason} onChange={(event) => setRevisionReason(event.target.value)} placeholder=\"Why "
+  ],
+  [
+   "components/CanonicalWorkflowPanel.tsx",
+   404,
+   "<input value={memorySummary} onChange={(event) => setMemorySummary(event.target.value)} placeholder=\"Optional "
+  ],
+  [
+   "components/ScriptIntelligencePanel.tsx",
+   24,
+   "* Phase 3: Tone Consistency (TODO)"
+  ],
+  [
+   "components/CastingIntelligencePanel.tsx",
+   75,
+   "const [modality, setModality] = useState<CastingModality>('placeholder')"
+  ],
+  [
+   "components/CastingIntelligencePanel.tsx",
+   95,
+   "<option value=\"placeholder\">Placeholder</option>"
+  ],
+  [
+   "components/CastingIntelligencePanel.tsx",
+   156,
+   "provider_bindings: modality === 'placeholder' ? [{ provider: 'local_tts', voice_id: `${name.toLowerCase().repl"
+  ],
+  [
+   "components/StudioShell.tsx",
+   493,
+   "placeholder=\"Search archive...\""
+  ],
+  [
+   "components/ExportPanel.tsx",
+   326,
+   "placeholder=\"Appears on title card and in metadata\""
+  ],
+  [
+   "components/ExportPanel.tsx",
+   327,
+   "className=\"w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-100 placeholder-zin"
+  ],
+  [
+   "components/CommentSection.tsx",
+   137,
+   "placeholder=\"Add a comment...\""
+  ],
+  [
+   "components/CommentSection.tsx",
+   138,
+   "className=\"flex-1 bg-zinc-800/50 border border-white/10 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder"
+  ],
+  [
+   "components/ScreeningCinematicShowcase.tsx",
+   666,
+   "<p className=\"mt-1 text-[11px] text-zinc-500\">The Studio is treating this as a temporary creative read, not a "
+  ],
+  [
+   "components/ScreeningCinematicShowcase.tsx",
+   674,
+   "<p className=\"mt-1 text-[11px] text-zinc-500\">The Studio is treating this as a temporary creative read, not a "
+  ],
+  [
+   "components/ScreeningCinematicShowcase.tsx",
+   700,
+   "placeholder=\"Add session note...\""
+  ],
+  [
+   "components/ProjectContextBar.tsx",
+   189,
+   "placeholder=\"collaborator@example.com\""
+  ],
+  [
+   "components/ProjectContextBar.tsx",
+   200,
+   "className=\"focus:outline-none focus:border-cyan-400/60 placeholder:text-slate-500\""
+  ],
+  [
+   "components/DirectorMemoryPanel.tsx",
+   316,
+   "{fields.map(({ field, label, placeholder, multiline }) =>"
+  ],
+  [
+   "components/DirectorMemoryPanel.tsx",
+   321,
+   "placeholder={placeholder ?? label}"
+  ],
+  [
+   "components/DirectorMemoryPanel.tsx",
+   323,
+   "className=\"col-span-full rounded border border-white/10 bg-black/40 px-2 py-1 text-[12px] text-zinc-100 placeh"
+  ],
+  [
+   "components/DirectorMemoryPanel.tsx",
+   331,
+   "placeholder={placeholder ?? label}"
+  ],
+  [
+   "components/DirectorMemoryPanel.tsx",
+   333,
+   "className=\"rounded border border-white/10 bg-black/40 px-2 py-1 text-[12px] text-zinc-100 placeholder:text-zin"
+  ],
+  [
+   "components/DirectorMemoryPanel.tsx",
+   354,
+   "placeholder?: string"
+  ]
+ ],
+ "console_logs": 28,
+ "console_sample": [
+  [
+   "context/RenderActivityContext.tsx",
+   147
+  ],
+  [
+   "components/StudioShell.tsx",
+   311
+  ],
+  [
+   "components/OneButtonShortFilmPanel.tsx",
+   41
+  ],
+  [
+   "components/OneButtonShortFilmPanel.tsx",
+   59
+  ],
+  [
+   "components/OneButtonShortFilmPanel.tsx",
+   68
+  ],
+  [
+   "components/OneButtonShortFilmPanel.tsx",
+   97
+  ],
+  [
+   "components/LazyVideo.tsx",
+   145
+  ],
+  [
+   "components/PromptGenerationPanel.tsx",
+   51
+  ],
+  [
+   "lib/studioApi.ts",
+   3252
+  ],
+  [
+   "lib/studioApi.ts",
+   3259
+  ],
+  [
+   "lib/studioApi.ts",
+   3260
+  ],
+  [
+   "lib/studioApi.ts",
+   4325
+  ],
+  [
+   "lib/studioApi.ts",
+   5482
+  ],
+  [
+   "lib/devMode.ts",
+   12
+  ],
+  [
+   "lib/devMode.ts",
+   18
+  ]
+ ],
+ "any_total": 2,
+ "any_top": [
+  [
+   "components/WorkflowLauncher.tsx",
+   1
+  ],
+  [
+   "components/LazyLoad.tsx",
+   1
+  ],
+  [
+   "App.tsx",
+   0
+  ],
+  [
+   "main.tsx",
+   0
+  ],
+  [
+   "routes.tsx",
+   0
+  ],
+  [
+   "mocks/browser.ts",
+   0
+  ],
+  [
+   "mocks/handlers.ts",
+   0
+  ],
+  [
+   "types/directorMemory.ts",
+   0
+  ],
+  [
+   "types/creativeMemory.ts",
+   0
+  ],
+  [
+   "types/universe.ts",
+   0
+  ],
+  [
+   "types/audienceSimulator.ts",
+   0
+  ],
+  [
+   "context/RenderActivityContext.tsx",
+   0
+  ]
+ ],
+ "big_files": [
+  [
+   "lib/studioApi.ts",
+   7351
+  ],
+  [
+   "lib/executionSummaryInspection.ts",
+   3880
+  ],
+  [
+   "pages/PrevisRoom.tsx",
+   2929
+  ],
+  [
+   "pages/ScreeningRoom.tsx",
+   2407
+  ],
+  [
+   "components/ExecutionSummaryInspectionPanel.tsx",
+   1655
+  ],
+  [
+   "pages/WritersRoom.tsx",
+   1551
+  ],
+  [
+   "components/SandboxShortFilmPanel.tsx",
+   1206
+  ],
+  [
+   "pages/StudyRoom.tsx",
+   1172
+  ],
+  [
+   "pages/ProductionBoard.tsx",
+   1109
+  ],
+  [
+   "pages/UniverseGraphPage.tsx",
+   1053
+  ],
+  [
+   "pages/StudioDevTools.tsx",
+   967
+  ],
+  [
+   "components/ScreeningCinematicShowcase.tsx",
+   867
+  ],
+  [
+   "pages/ArchiveRoom.tsx",
+   862
+  ],
+  [
+   "lib/studioSystem.ts",
+   795
+  ],
+  [
+   "pages/ProjectWorkspace.tsx",
+   774
+  ]
+ ],
+ "dup_block_groups": 266,
+ "dup_top": [
+  [
+   "pages/WritersRoom.tsx:579",
+   "pages/ScreeningRoom.tsx:1161",
+   "pages/ProductionBoard.tsx:604",
+   "pages/UniverseGraphPage.tsx:350"
+  ],
+  [
+   "pages/WritersRoom.tsx:578",
+   "pages/ScreeningRoom.tsx:1160",
+   "pages/ProductionBoard.tsx:603",
+   "pages/UniverseGraphPage.tsx:349"
+  ],
+  [
+   "pages/WritersRoom.tsx:577",
+   "pages/ScreeningRoom.tsx:1159",
+   "pages/ProductionBoard.tsx:602",
+   "pages/UniverseGraphPage.tsx:348"
+  ],
+  [
+   "pages/WritersRoom.tsx:576",
+   "pages/ScreeningRoom.tsx:1158",
+   "pages/ProductionBoard.tsx:601",
+   "pages/UniverseGraphPage.tsx:347"
+  ],
+  [
+   "pages/ScreeningRoom.tsx:1162",
+   "pages/ProductionBoard.tsx:605",
+   "pages/PrevisRoom.tsx:1523",
+   "pages/UniverseGraphPage.tsx:351"
+  ],
+  [
+   "pages/ScreeningRoom.tsx:1157",
+   "pages/ProductionBoard.tsx:600",
+   "pages/UniverseGraphPage.tsx:346",
+   "pages/StudyRoom.tsx:665"
+  ],
+  [
+   "pages/ScreeningRoom.tsx:2103",
+   "pages/ScreeningRoom.tsx:2120",
+   "pages/ScreeningRoom.tsx:2138",
+   "pages/ScreeningRoom.tsx:2155"
+  ],
+  [
+   "pages/ScreeningRoom.tsx:2102",
+   "pages/ScreeningRoom.tsx:2119",
+   "pages/ScreeningRoom.tsx:2137",
+   "pages/ScreeningRoom.tsx:2154"
+  ],
+  [
+   "pages/ScreeningRoom.tsx:2101",
+   "pages/ScreeningRoom.tsx:2118",
+   "pages/ScreeningRoom.tsx:2136",
+   "pages/ScreeningRoom.tsx:2153"
+  ],
+  [
+   "pages/ScreeningRoom.tsx:2100",
+   "pages/ScreeningRoom.tsx:2117",
+   "pages/ScreeningRoom.tsx:2135",
+   "pages/ScreeningRoom.tsx:2152"
+  ]
+ ]
+}

@@ -37,6 +37,9 @@ async def register(request: RegisterRequest, response: Response):
     if error:
         raise HTTPException(status_code=400, detail=error)
     
+    result, error = auth_service.authenticate(request.username, request.password)
+    if error:
+        raise HTTPException(status_code=401, detail=error)
     # Set session cookie
     response.set_cookie(
         key="session_id",
@@ -54,9 +57,9 @@ async def register(request: RegisterRequest, response: Response):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, response: Response):
+async def login(request: LoginRequest, response: Response, http_request: Request):
     """Login endpoint"""
-    if settings.demo_mode:
+    if settings.demo_mode and bool(getattr(http_request.state, "local_access", False)):
         # Demo mode - allow any username, no password required
         result, error = demo_login(request.username)
     else:
@@ -83,8 +86,14 @@ async def login(request: LoginRequest, response: Response):
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
     """Logout endpoint"""
+    token = request.cookies.get("session_id") or request.headers.get("X-Session-Token")
+    authorization = request.headers.get("Authorization", "")
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+    if token:
+        auth_service.delete_session(token)
     response.delete_cookie("session_id")
     return {"status": "logged_out"}
 
@@ -118,3 +127,7 @@ async def delete_session(request: Request, response: Response):
     
     response.delete_cookie("session_id")
     return {"status": "session_deleted"}
+
+@router.get("/access-mode")
+async def access_mode(request: Request):
+    return {"local_access": bool(getattr(request.state, "local_access", False))}

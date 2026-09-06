@@ -1,0 +1,229 @@
+{
+  "fixture": {
+    "scene_data": {},
+    "shot_number": 1,
+    "character_visual_canon": "MAYA wears a red coat. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. ",
+    "action_text": "Maya holds the brass key. Maya holds the brass key. Maya holds the brass key. Maya holds the brass key. ",
+    "environment_motifs": "The workshop has green tile walls. The workshop has green tile walls. The workshop has green tile walls. ",
+    "camera_direction": "A 50mm lens remains south of the table. A 50mm lens remains south of the table. ",
+    "lighting_direction": "LIGHTING_SENTINEL: amber desk lamp, no daylight."
+  },
+  "before": {
+    "prompt": "MAYA wears a red coat. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles.. Maya holds the brass key. Maya holds the brass key. Maya holds the brass key. Maya holds the brass key.. workshop has green tile walls. The workshop has green tile walls. The workshop has green tile walls.. 50mm lens remains south of the table. A 50mm lens remains sout...",
+    "slots": {
+      "character_state": "MAYA wears a red coat. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles.",
+      "action": "Maya holds the brass key. Maya holds the brass key. Maya holds the brass key. Maya holds the brass key.",
+      "environment_persistence": "workshop has green tile walls. The workshop has green tile walls. The workshop has green tile walls.",
+      "camera": "50mm lens remains south of the table. A 50mm lens remains south of ...",
+      "lighting": "LIGHTING_SENTINEL: amber desk lamp, no daylight.",
+      "reserve": ""
+    },
+    "source_slots": {
+      "character_state": "MAYA wears a red coat. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles.",
+      "action": "Maya holds the brass key. Maya holds the brass key. Maya holds the brass key. Maya holds the brass key.",
+      "environment_persistence": "workshop has green tile walls. The workshop has green tile walls. The workshop has green tile walls.",
+      "camera": "50mm lens remains south of the table. A 50mm lens remains south of the table.",
+      "lighting": "LIGHTING_SENTINEL: amber desk lamp, no daylight.",
+      "reserve": ""
+    },
+    "defaulted_slots": [],
+    "budget_used": 480,
+    "budget_remaining": 32
+  },
+  "after": {
+    "policy_version": "whole-facts-v1",
+    "provider": "happyhorse",
+    "model": "happyhorse-1.1-t2v",
+    "limit": 5000,
+    "unit": "weighted_characters",
+    "limit_source": "Alibaba HappyHorse API: 5000 non-Chinese / 2500 Chinese characters",
+    "prompt": "MAYA wears a red coat. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles. Her face has freckles.. Maya holds the brass key. Maya holds the brass key. Maya holds the brass key. Maya holds the brass key.. workshop has green tile walls. The workshop has green tile walls. The workshop has green tile walls.. 50mm lens remains south of the table. A 50mm lens remains south of the table.. LIGHTING_SENTINEL: amber desk lamp, no daylight.. Cinematic, film quality.",
+    "included_ids": [
+      "character_state:4f4d1541fc765ddf",
+      "character_state:869809ff4e0879b9",
+      "environment_persistence:273a91f498707204",
+      "environment_persistence:d0661432860818b5",
+      "lighting:eb3d75d025f852d1",
+      "action:83db9ab0562f817a",
+      "camera:4c482c6f3cda2168",
+      "camera:74a5f9583c376651"
+    ],
+    "omitted_ids": [],
+    "required_overflow_ids": [],
+    "source_facts": [
+      {
+        "fact_id": "character_state:4f4d1541fc765ddf",
+        "text": "MAYA wears a red coat.",
+        "priority": "identity",
+        "source": "character_state"
+      },
+      {
+        "fact_id": "character_state:869809ff4e0879b9",
+        "text": "Her face has freckles.",
+        "priority": "identity",
+        "source": "character_state"
+      },
+      {
+        "fact_id": "environment_persistence:273a91f498707204",
+        "text": "workshop has green tile walls.",
+        "priority": "continuity",
+        "source": "environment_persistence"
+      },
+      {
+        "fact_id": "environment_persistence:d0661432860818b5",
+        "text": "The workshop has green tile walls.",
+        "priority": "continuity",
+        "source": "environment_persistence"
+      },
+      {
+        "fact_id": "lighting:eb3d75d025f852d1",
+        "text": "LIGHTING_SENTINEL: amber desk lamp, no daylight.",
+        "priority": "continuity",
+        "source": "lighting"
+      },
+      {
+        "fact_id": "action:83db9ab0562f817a",
+        "text": "Maya holds the brass key.",
+        "priority": "shot_intent",
+        "source": "action"
+      },
+      {
+        "fact_id": "camera:4c482c6f3cda2168",
+        "text": "50mm lens remains south of the table.",
+        "priority": "cinematography",
+        "source": "camera"
+      },
+      {
+        "fact_id": "camera:74a5f9583c376651",
+        "text": "A 50mm lens remains south of the table.",
+        "priority": "cinematography",
+        "source": "camera"
+      }
+    ],
+    "ready": true
+  },
+  "markers": {
+    "red coat": {
+      "before": true,
+      "after": true
+    },
+    "brass key": {
+      "before": true,
+      "after": true
+    },
+    "green tile": {
+      "before": true,
+      "after": true
+    },
+    "50mm": {
+      "before": true,
+      "after": true
+    },
+    "LIGHTING_SENTINEL": {
+      "before": false,
+      "after": true
+    }
+  },
+  "adversarial_fields": {
+    "identity": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "physical_appearance": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "wardrobe": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "injuries": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "props": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "location": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "time_of_day": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "weather": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "lighting": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "blocking": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "screen_direction": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "continuity": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "negative_constraints": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "story_facts": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "emotional_state": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "purpose": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "rationale": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "camera": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "lens": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "composition": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "movement": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "environment": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "enrichment": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "optional_detail": {
+      "preserved": true,
+      "optional_removed": true
+    },
+    "provider_instructions": {
+      "preserved": true,
+      "optional_removed": true
+    }
+  }
+}

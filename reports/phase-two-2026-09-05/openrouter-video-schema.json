@@ -1,0 +1,134 @@
+{
+  "source": "https://openrouter.ai/openapi.json",
+  "schema": {
+    "example": {
+      "aspect_ratio": "16:9",
+      "duration": 8,
+      "model": "google/veo-3.1",
+      "prompt": "A serene mountain landscape at sunset",
+      "resolution": "720p"
+    },
+    "properties": {
+      "aspect_ratio": {
+        "description": "Aspect ratio of the generated video",
+        "enum": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9",
+          "9:21"
+        ],
+        "example": "16:9",
+        "type": "string",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "callback_url": {
+        "description": "URL to receive a webhook notification when the video generation job completes. Overrides the workspace-level default callback URL if set. Must be HTTPS.",
+        "example": "https://example.com/webhook",
+        "format": "uri",
+        "type": "string"
+      },
+      "creativity": {
+        "description": "Creativity level for video upscaling models only. This parameter is not supported by video generation models.",
+        "example": 1,
+        "type": "integer"
+      },
+      "duration": {
+        "description": "Duration of the generated video in seconds",
+        "example": 8,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "frame_images": {
+        "description": "Images to use as the first and/or last frame of the generated video. Each image must specify a frame_type of first_frame or last_frame.",
+        "items": {
+          "$ref": "#/components/schemas/FrameImage"
+        },
+        "type": "array"
+      },
+      "generate_audio": {
+        "description": "Whether to generate audio alongside the video. Defaults to the endpoint's generate_audio capability flag, false if not set.",
+        "example": true,
+        "type": "boolean"
+      },
+      "input_references": {
+        "description": "Reference assets to guide video generation. Accepts image, audio, and video references. Audio and video references are only honored by providers that support them (including BytePlus Seedance generation 2 and newer); other providers use image references and ignore the rest.",
+        "items": {
+          "$ref": "#/components/schemas/InputReference"
+        },
+        "type": "array"
+      },
+      "model": {
+        "type": "string"
+      },
+      "prompt": {
+        "description": "Text prompt describing the video to generate. Optional for models that support generating a video from image input alone; required by all other models.",
+        "example": "A serene mountain landscape at sunset",
+        "type": "string"
+      },
+      "provider": {
+        "description": "Provider-specific passthrough configuration",
+        "properties": {
+          "options": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProviderOptions"
+              },
+              {
+                "example": {
+                  "google-vertex": {
+                    "output_config": {
+                      "effort": "low"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "resolution": {
+        "description": "Resolution of the generated video",
+        "enum": [
+          "480p",
+          "720p",
+          "768p",
+          "1080p",
+          "1K",
+          "2K",
+          "4K"
+        ],
+        "example": "720p",
+        "type": "string",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "seed": {
+        "description": "If specified, the generation will sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed for all providers.",
+        "type": "integer"
+      },
+      "size": {
+        "description": "Exact pixel dimensions of the generated video in \"WIDTHxHEIGHT\" format (e.g. \"1280x720\"). Interchangeable with resolution + aspect_ratio.",
+        "example": "1280x720",
+        "type": "string"
+      },
+      "upscale_factor": {
+        "description": "Upscale factor for video upscaling models only. This parameter is not supported by video generation models.",
+        "example": 2,
+        "exclusiveMinimum": true,
+        "minimum": 0,
+        "type": "number"
+      }
+    },
+    "required": [
+      "model"
+    ],
+    "type": "object"
+  },
+  "retrieved_date": "2026-09-05",
+  "interpretation": "No additional prompt maxLength declared. Alibaba HappyHorse model limit is used only for its explicit model identifier; transport acceptance requires live validation."
+}

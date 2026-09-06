@@ -1,0 +1,137 @@
+{
+  "generated_at": "2026-08-17T06:19:01.118226+00:00",
+  "phases": {
+    "offline": [
+      {
+        "check": "negative_prompt_in_submit_payload",
+        "question": "Does the negative prompt survive into both t2v and r2v provider request bodies?",
+        "result": "pass",
+        "detail": {
+          "t2v_input_keys": [
+            "negative_prompt",
+            "prompt"
+          ],
+          "r2v_input_keys": [
+            "media",
+            "negative_prompt",
+            "prompt"
+          ],
+          "t2v_negative_prompt": "extra people, watermark, deformed hands",
+          "r2v_negative_prompt": "extra people, watermark, deformed hands"
+        }
+      },
+      {
+        "check": "intent_fidelity_detects_compression",
+        "question": "Does a real over-budget description get reported as lost intent?",
+        "result": "pass",
+        "detail": {
+          "status": "reduced",
+          "reduced_slots": [
+            "character_state"
+          ],
+          "advisory_note": "The prompt no longer carries \"boots caked in dry mud\" in who is on screen and how they look. The shot will render as written, so this will not show up as a mismatch later \u2014 worth deciding now whether it belongs in the shot.",
+          "prompt_length": 334
+        }
+      },
+      {
+        "check": "shot_leads_prompt_not_intent",
+        "question": "Is the shot in the highest-weighted position, with avoid-terms out of the positive prompt?",
+        "result": "pass",
+        "detail": {
+          "guidance": "contemplative unease; Deakins lighting",
+          "guidance_chars": 38,
+          "old_prefix_chars": 189,
+          "avoid_terms_routed_to_negative": [
+            "melodrama"
+          ],
+          "prompt_head": "Only MAYA visible; no extras.; MAYA: lean, late 20s. She sets the kettle down. T"
+        }
+      },
+      {
+        "check": "unavailable_embedder_is_not_reported_as_drift",
+        "question": "Does an unconfigured embedder stay silent instead of crying drift?",
+        "result": "pass",
+        "detail": {
+          "status": "unavailable",
+          "reason": "output_frame_not_local"
+        }
+      },
+      {
+        "check": "selected_embedding_adapter",
+        "question": "Is a real face embedder selected, or only a general-visual one?",
+        "result": "pass",
+        "detail": {
+          "adapter": "LocalFaceEmbeddingAdapter",
+          "kind": "face_identity",
+          "insightface_available": true,
+          "note": "face_identity is the only kind that measures likeness. general_visual is continuity evidence only. Install insightface + onnxruntime for real identity measurement."
+        }
+      }
+    ],
+    "probe": [
+      {
+        "check": "selected_adapter_returns_a_vector",
+        "question": "Does the adapter production would actually use return a usable vector from a real image?",
+        "result": "pass",
+        "detail": {
+          "adapter": "LocalFaceEmbeddingAdapter",
+          "kind": "face_identity",
+          "status": "complete",
+          "dimension": 512,
+          "image": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/previs/project_5907c60cddbc/scene_008_shot_001_storyboard_qwen.png",
+          "metadata": {
+            "external_call": false,
+            "measures_identity": true,
+            "faces_detected": 2,
+            "context": {}
+          },
+          "thresholds_for_kind": [
+            0.55,
+            0.38
+          ]
+        }
+      },
+      {
+        "check": "embedder_matches_an_image_to_itself",
+        "question": "Does the embedder score an image against itself above its own match threshold?",
+        "result": "pass",
+        "detail": {
+          "adapter": "LocalFaceEmbeddingAdapter",
+          "kind": "face_identity",
+          "self_similarity": 1.0,
+          "match_threshold": 0.55,
+          "image": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/previs/project_5907c60cddbc/scene_008_shot_001_storyboard_qwen.png"
+        }
+      },
+      {
+        "check": "dashscope_fallback_response_shape",
+        "question": "Does the hosted fallback parse into a usable vector? (Not the production path when insightface is present.)",
+        "result": "FAIL",
+        "detail": {
+          "model": "multimodal-embedding-v1",
+          "endpoint_path": "/services/embeddings/multimodal-embedding/multimodal-embedding",
+          "status": "unavailable",
+          "dimension": 0,
+          "metadata": {
+            "message": "dashscope embedding HTTP 400",
+            "body": "{\"code\":\"InvalidParameter\",\"message\":\"Model not exist.\",\"request_id\":\"20b6a403-fde5-9e72-a237-92385d3ef88b\"}"
+          }
+        }
+      }
+    ],
+    "render": [
+      {
+        "check": "skipped",
+        "result": "info",
+        "detail": "pass --real-render --confirm-spend to create one paid job"
+      }
+    ]
+  },
+  "summary": {
+    "checks_run": 8,
+    "failures": 1,
+    "failed_checks": [
+      "dashscope_fallback_response_shape"
+    ]
+  }
+}

@@ -313,6 +313,36 @@ def test_runway_image_request_uses_image_to_video_and_includes_prompt_image(monk
     assert calls == [("GET", "/v1/organization"), ("POST", "/v1/image_to_video"), ("GET", "/v1/tasks/rw-123")]
 
 
+def test_runway_local_reference_asset_degrades_to_text_to_video(monkeypatch):
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.referenceAssets = ["/previs-assets/proj-1/scene_001_storyboard.png"]
+    captured_payload: dict = {}
+
+    async def _fake_request(method, path, payload=None, params=None):
+        if method == "GET" and path == "/v1/organization":
+            return {"id": "org_123"}
+        if method == "POST":
+            assert path == "/v1/text_to_video"
+            captured_payload.update(payload or {})
+            return {"id": "rw-123", "status": "queued"}
+        return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
+
+    monkeypatch.setattr(adapter, "_runway_request", _fake_request)
+    result = asyncio.run(adapter.submit_job(job))
+
+    assert result.status == "complete"
+    assert "promptImage" not in captured_payload
+    assert result.metadata["runway_prompt_image_degraded"] == {
+        "reason": "promptImage must be an https URL fetchable by Runway",
+        "source": "referenceAssets",
+        "original_url_type": "local_path",
+        "fallback_text_applied": False,
+    }
+    assert result.metadata["provider_payload_metadata"]["endpoint"] == "/v1/text_to_video"
+    assert result.metadata["provider_payload_metadata"]["references_injected"] is False
+
+
 def test_runway_text_request_keeps_text_to_video_ratio(monkeypatch):
     adapter = RunwayAdapter(_cfg())
     job = _job()
@@ -518,6 +548,54 @@ def test_runway_submit_job_without_consistency_payload_unchanged(monkeypatch):
     assert payload["promptText"] == "A cinematic dolly shot"
 
 
+def test_runway_local_consistency_prompt_image_degrades_selected_ref_to_prompt(monkeypatch):
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.consistency_payload = ConsistencyPayload(
+        project_id="proj-1",
+        refs=[
+            ReferenceAsset(
+                ref_id="full",
+                kind="character_full",
+                image_url="/previs-assets/proj-1/maya-storyboard.png",
+                project_id="proj-1",
+            ),
+            ReferenceAsset(
+                ref_id="face",
+                kind="character_face",
+                image_url="https://example.com/face.jpg",
+                project_id="proj-1",
+            ),
+        ],
+        mode="identity_lock",
+        weights={"full": 1.0, "face": 0.5},
+        fallback_text={
+            "full": "Maya's compact silhouette and blue jacket remain consistent",
+            "face": "heart-shaped face and tight black coils",
+        },
+    )
+    captured_payload: dict = {}
+
+    async def _fake_request(method, path, payload=None, params=None):
+        if method == "GET" and path == "/v1/organization":
+            return {"id": "org_123"}
+        if method == "POST":
+            assert path == "/v1/text_to_video"
+            captured_payload.update(payload or {})
+            return {"id": "rw-local-cp", "status": "queued"}
+        return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
+
+    monkeypatch.setattr(adapter, "_runway_request", _fake_request)
+    result = asyncio.run(adapter.submit_job(job))
+
+    assert result.status == "complete"
+    assert "promptImage" not in captured_payload
+    assert "Maya's compact silhouette" in captured_payload["promptText"]
+    assert "heart-shaped face" in captured_payload["promptText"]
+    assert result.metadata["runway_prompt_image_degraded"]["source"] == "consistency_payload"
+    assert result.metadata["runway_prompt_image_degraded"]["fallback_text_applied"] is True
+
+
 def test_runway_model_per_request_override_via_parameters(monkeypatch):
     monkeypatch.delenv("RUNWAY_MODEL", raising=False)
     adapter = RunwayAdapter(_cfg())
@@ -628,3 +706,31 @@ def test_runway_model_invalid_override_fails_submit_without_provider_call(monkey
     assert provider_was_called["hit"] is False
     assert "bogus-model" in (result.error_message or "")
     assert "Allowed models" in (result.error_message or "")
+
+
+def test_approved_local_board_overrides_identity_sheet_and_uses_portrait_ratio(monkeypatch, tmp_path):
+    from app.adapters import HappyHorseR2VAdapter
+    monkeypatch.delenv("RUNWAY_MODEL", raising=False)
+    monkeypatch.setattr(HappyHorseR2VAdapter, "_previs_assets_root", staticmethod(lambda: tmp_path))
+    (tmp_path / "board.png").write_bytes(b"image-fixture")
+    adapter = RunwayAdapter(_cfg())
+    job = _job()
+    job.input_payload.parameters.update(storyboard_frame_url="/previs-assets/board.png", ratio="9:16", duration=8, seed=0)
+    job.input_payload.consistency_payload = ConsistencyPayload(project_id="proj-1", mode="identity_lock", refs=[ReferenceAsset(ref_id="identity", project_id="proj-1", kind="character_full", image_url="https://media.test/wide-character.png")], weights={"identity": 1.0})
+    payloads = []
+    async def request(method, path, payload=None, params=None):
+        if method == "POST":
+            assert path == "/v1/image_to_video"
+            payloads.append(payload)
+            return {"id": "frame-task", "status": "queued"}
+        if path == "/v1/organization":
+            return {"id": "org"}
+        return {"status": "completed", "output": [{"url": "https://media.test/take.mp4"}]}
+    monkeypatch.setattr(adapter, "_runway_request", request)
+    result = asyncio.run(adapter.submit_job(job))
+    assert result.status == "complete"
+    assert payloads[0]["promptImage"].startswith("data:image/png;base64,")
+    assert payloads[0]["ratio"] == "720:1280"
+    assert payloads[0]["duration"] == 8
+    assert payloads[0]["seed"] == 0
+    assert result.metadata["provider_payload_metadata"]["conditioning_mode"] == "first_frame"

@@ -142,7 +142,6 @@ export function RenderVideo({
         src={videoSrc}
         className="w-full h-full"
         preload="metadata"
-        onLoad={() => console.log('Video loaded')}
         onError={(error) => console.error('Video load error:', error)}
       />
       

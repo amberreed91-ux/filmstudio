@@ -235,3 +235,19 @@ def test_media_route_supports_ranges_and_returns_useful_missing_error(tmp_path: 
     )
     assert missing.status_code == 404
     assert missing.json()["detail"]["error_type"] == "state_error"
+
+
+def test_delivered_film_can_be_reviewed_and_explicitly_approved(tmp_path: Path):
+    service, storage, outputs = _service(tmp_path, [])
+    final = service.static_root / 'films' / 'project_screening' / 'film_unique.mp4'
+    final.parent.mkdir(parents=True)
+    final.write_bytes(b'fixture-film')
+    url = 'http://localhost:8010/static/films/project_screening/film_unique.mp4'
+    storage.save_film('project_screening', url, 2, 8.0, True)
+    manifest = service.sync_manifest('project_screening')
+    film = next(row for row in manifest['outputs'] if row['source_type'] == 'film_delivery')
+    assert film['media_status'] == 'available' and not film['approved']
+    assert film['metadata']['film_url'] == url
+    approved = service.approve_output('project_screening', film['screening_output_id'], confirmed=True)
+    assert approved['approved']
+    assert service.get_manifest('project_screening')['current_final_output']['screening_output_id'] == film['screening_output_id']

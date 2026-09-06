@@ -1,0 +1,431 @@
+--- before/studio-backend/conftest.py
++++ after/studio-backend/conftest.py
+@@ -8,6 +8,17 @@
+ """
+ 
+ import asyncio
++import os
++import tempfile
++from pathlib import Path
++
++# Set paths BEFORE application imports construct storage singletons. The autouse
++# grounding fixture deletes a fixed project ID, so inheriting developer paths
++# here can destroy real project state. Each pytest process gets its own stores.
++_test_storage = tempfile.TemporaryDirectory(prefix="studio-pytest-")
++os.environ["STUDIO_STORAGE_PATH"] = _test_storage.name
++os.environ["STUDIO_PROJECT_STORE_PATH"] = str(Path(_test_storage.name) / "project_state_store.json")
++
+ import pytest
+ from typing import Generator
+ 
+--- before/studio-backend/app/services/render.py
++++ after/studio-backend/app/services/render.py
+@@ -15,6 +15,7 @@
+ from app.adapters import RenderProviderAdapter, get_adapter, ADAPTER_REGISTRY
+ from app.config import get_settings
+ from app.services.project_store import project_store
++from app.services.stability import ProviderError, log_stage_event
+ from app.services.character_name_matching import character_name_match_position
+ from app.services.shared.dashscope_client import DashScopeConfigError, get_dashscope_config
+ from app.utils.helpers import derive_scene_id_from_shot_id
+@@ -1215,12 +1216,9 @@
+             else ("RUNWAY_API_KEY" if os.getenv("RUNWAY_API_KEY", "").strip() else ("VIDEO_PROVIDER_API_KEY" if os.getenv("VIDEO_PROVIDER_API_KEY", "").strip() else "none"))
+         )
+         logger.info(
+-            "Runway key source=%s exists=%s length=%s first4=%s last4=%s",
++            "Runway key source=%s configured=%s",
+             runway_key_source,
+             bool(runway_api_key),
+-            len(runway_api_key),
+-            runway_api_key[:4] if runway_api_key else "",
+-            runway_api_key[-4:] if runway_api_key else "",
+         )
+ 
+         # Runway primary path for active video requests.
+@@ -2931,13 +2929,16 @@
+             raise ValueError(f"Job {job_id} exceeded max retries")
+         self._submit_locks.add(job_id)
+         adapter: RenderProviderAdapter | None = None
++        submission_started = time.perf_counter()
+ 
+         try:
+             config = self._provider_configs.get(job.provider)
+             if not config:
+-                config = self._provider_configs["simulated"]
+-                job.provider = "simulated"
+-                logger.warning(f"Provider {job.provider} not found, falling back to simulated")
++                raise ProviderError(
++                    f"Provider configuration unavailable for {job.provider!r}",
++                    stage="provider_resolution",
++                    metadata={"provider": job.provider},
++                )
+ 
+             params = job.input_payload.parameters if job.input_payload and isinstance(job.input_payload.parameters, dict) else {}
+             _validate_model_override(job.provider, params)
+@@ -3050,6 +3051,14 @@
+                 if isinstance(e, TimeoutError)
+                 else str(e)
+             )
++            if isinstance(e, ProviderError):
++                error_message = e.message
++            log_stage_event(
++                project_id=job.project_id, job_id=job.id, provider=job.provider,
++                stage="provider_resolution" if isinstance(e, ProviderError) else "provider_submission",
++                duration_ms=int((time.perf_counter() - submission_started) * 1000),
++                extra={"error_type": "provider_error"},
++            )
+             logger.error(f"Failed to submit job {job_id}: {error_message}")
+             job.status = "failed"
+             job.error_message = error_message
+@@ -3082,7 +3091,14 @@
+         if not job.is_terminal():
+             try:
+                 config = self._provider_configs.get(job.provider)
++                if not config:
++                    raise ProviderError(
++                        f"Provider configuration unavailable for {job.provider!r}",
++                        stage="provider_resolution",
++                        metadata={"provider": job.provider},
++                    )
+                 if config:
++                    previous_status = job.status
+                     adapter = get_adapter(job.provider, config)
+                     try:
+                         updated = await asyncio.wait_for(
+@@ -3119,7 +3135,7 @@
+                     
+                     # Detect transition to complete status
+                     transitioned_to_complete = (
+-                        job.status != "complete" and updated.status == "complete"
++                        previous_status != "complete" and updated.status == "complete"
+                     )
+                     
+                     self._jobs[job_id] = updated
+@@ -3133,14 +3149,14 @@
+                         await _run_render_quality_check(updated)
+                         await _run_character_reference_lock(updated)
+                     
+-                    if updated.status != job.status:
++                    if updated.status != previous_status:
+                         await _notify_update(job_id, updated.model_dump())
+                     return updated
+             except Exception as _exc:
+                 poll_error = (
+                     f"Provider status poll timed out after {PROVIDER_CALL_TIMEOUT_SECONDS}s"
+                     if isinstance(_exc, TimeoutError)
+-                    else str(_exc)
++                    else (_exc.message if isinstance(_exc, ProviderError) else str(_exc))
+                 )
+                 job.status = "failed"
+                 job.error_message = f"Provider status poll failed: {poll_error}"
+--- before/studio-backend/app/adapters/__init__.py
++++ after/studio-backend/app/adapters/__init__.py
+@@ -2322,5 +2322,5 @@
+     """Factory function to get provider adapter"""
+     adapter_class = ADAPTER_REGISTRY.get(provider_id)
+     if not adapter_class:
+-        adapter_class = ADAPTER_REGISTRY["simulated"]
++        raise ValueError(f"Unknown provider adapter {provider_id!r}")
+     return adapter_class(config)
+--- before/studio-backend/app/routes/render.py
++++ after/studio-backend/app/routes/render.py
+@@ -9,6 +9,7 @@
+ logger = logging.getLogger(__name__)
+ 
+ from app.services import render_service
++from app.services.stability import ProviderError
+ from app.services.render_maintenance_service import render_maintenance_service
+ from app.services.project_store import project_store
+ from app.models import ProviderConfig, RenderJobModel
+@@ -321,7 +322,10 @@
+ @router.post("/jobs/{job_id}/submit")
+ async def submit_render_job(job_id: str):
+     """Submit a render job to the provider"""
+-    job = await render_service.submit_job(job_id)
++    try:
++        job = await render_service.submit_job(job_id)
++    except ProviderError as exc:
++        raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
+     return _job_payload(job)
+ 
+ 
+--- before/studio-backend/app/services/video_asset_service.py
++++ after/studio-backend/app/services/video_asset_service.py
+@@ -57,7 +57,10 @@
+             if parsed.scheme in {"http", "https"} and parsed.netloc:
+                 return True, {"kind": "url", "is_remote": True}
+             if source_url.startswith("/outputs/"):
+-                output_path = self._outputs_root / source_url.removeprefix("/outputs/")
++                outputs_root = self._outputs_root.resolve()
++                output_path = (outputs_root / source_url.removeprefix("/outputs/")).resolve()
++                if not output_path.is_relative_to(outputs_root):
++                    return False, {"reason": "Generated output must stay within the outputs directory"}
+                 if output_path.exists() and output_path.is_file():
+                     return True, {"kind": "url", "is_remote": False, "file_size_bytes": output_path.stat().st_size}
+                 return False, {"reason": f"Generated output not found: {source_url}"}
+--- before/studio-backend/app/services/test_video_assets_routes.py
++++ after/studio-backend/app/services/test_video_assets_routes.py
+@@ -59,7 +59,14 @@
+     assert "Local file not found" in response.json()["detail"]
+ 
+ 
+-def test_video_asset_status_update():
++def test_video_asset_status_update(tmp_path, monkeypatch):
++    from app.services.video_asset_service import video_asset_service
++
++    # Status updates should not depend on a developer's generated sample file.
++    sample = tmp_path / "mock-video" / "sample.mp4"
++    sample.parent.mkdir()
++    sample.write_bytes(b"test generated asset")
++    monkeypatch.setattr(video_asset_service, "_outputs_root", tmp_path)
+     client = _client()
+     created = client.post("/api/f51/studio/projects", json={"title": "Video Asset Film 3"})
+     assert created.status_code == 200
+@@ -188,3 +195,22 @@
+ 
+     unmatched = client.get("/api/f51/studio/video-assets/unmatched")
+     assert unmatched.status_code == 200
++
++
++def test_generated_asset_route_rejects_path_escape(tmp_path, monkeypatch):
++    from app.services.video_asset_service import video_asset_service
++
++    outputs = tmp_path / "outputs"
++    outputs.mkdir()
++    (tmp_path / "private.txt").write_text("synthetic sentinel")
++    monkeypatch.setattr(video_asset_service, "_outputs_root", outputs)
++    client = _client()
++    created = client.post("/api/f51/studio/projects", json={"title": "Asset Boundary"})
++    project_id = created.json()["project_id"]
++    response = client.post(
++        f"/api/f51/studio/projects/{project_id}/video-assets",
++        json={"source_type": "generated_output", "source_url": "/outputs/../private.txt", "title": "Invalid asset"},
++    )
++    assert response.status_code == 400
++    assert "outputs directory" in response.json()["detail"]
++    assert not client.get(f"/api/f51/studio/projects/{project_id}/video-assets").json()["assets"]
+--- /dev/null
++++ after/studio-backend/app/services/test_render_provider_safety.py
+@@ -0,0 +1,101 @@
++"""Provider truth and completion transitions must survive adapter mutation."""
++from unittest.mock import AsyncMock, Mock
++
++import pytest
++from fastapi import FastAPI
++from fastapi.testclient import TestClient
++
++from app.adapters import get_adapter, SimulatedProviderAdapter
++from app.models import ProviderConfig, RenderJobModel, RenderJobOutput
++from app.services import render as render_module
++from app.services.stability import ProviderError
++
++
++@pytest.fixture
++def isolated_render(monkeypatch):
++    service = render_module.RenderService()
++    saved = {}
++    monkeypatch.setattr(render_module, '_storage', None)
++    monkeypatch.setattr(render_module, '_persist_job', lambda job: saved.update({job.id: job.model_copy(deep=True)}))
++    for name in ('_run_continuity_review', '_run_render_quality_check', '_run_character_reference_lock', '_notify_update'):
++        monkeypatch.setattr(render_module, name, AsyncMock())
++    job = RenderJobModel(id='provider-safety-job', project_id='safety-project', shot_id='scene_001_shot_001', provider='runway')
++    service._jobs[job.id] = job
++    return service, job, saved
++
++
++def test_unknown_adapter_never_becomes_simulated():
++    with pytest.raises(ValueError, match='Unknown provider'):
++        get_adapter('removed-provider', ProviderConfig(provider_id='removed-provider', name='Removed'))
++
++
++def test_explicit_simulated_adapter_remains_available():
++    assert isinstance(get_adapter('simulated', ProviderConfig(provider_id='simulated', name='Simulated')), SimulatedProviderAdapter)
++
++
++@pytest.mark.asyncio
++async def test_missing_provider_configuration_preserves_job_and_fails(isolated_render, monkeypatch):
++    service, job, saved = isolated_render
++    del service._provider_configs['runway']
++    adapter_factory = Mock()
++    monkeypatch.setattr(render_module, 'get_adapter', adapter_factory)
++    with pytest.raises(ProviderError):
++        await service.submit_job(job.id)
++    adapter_factory.assert_not_called()
++    assert job.provider == 'runway'
++    assert saved[job.id].status == 'failed'
++    assert saved[job.id].provider_job_id is None
++    assert job.id not in service._submit_locks
++
++
++@pytest.mark.asyncio
++async def test_poll_missing_provider_configuration_fails_recoverably(isolated_render):
++    service, job, saved = isolated_render
++    job.status = 'rendering'
++    job.provider_job_id = 'original-hosted-task'
++    del service._provider_configs['runway']
++    result = await service.get_job_status(job.id)
++    assert result.status == 'failed'
++    assert saved[job.id].provider == 'runway'
++    assert saved[job.id].provider_job_id == 'original-hosted-task'
++    assert 'configuration' in result.error_message.lower()
++
++
++@pytest.mark.asyncio
++async def test_mutating_adapter_runs_completion_hooks_and_notifies_once(isolated_render, monkeypatch):
++    service, job, saved = isolated_render
++    job.status = 'rendering'
++    class Adapter:
++        async def get_job_status(self, current):
++            current.status = 'complete'
++            current.output_payload = RenderJobOutput(asset_url='https://example.test/film.mp4')
++            return current
++    monkeypatch.setattr(render_module, 'get_adapter', lambda *args: Adapter())
++    assert (await service.get_job_status(job.id)).status == 'complete'
++    await service.get_job_status(job.id)
++    for name in ('_run_continuity_review', '_run_render_quality_check', '_run_character_reference_lock', '_notify_update'):
++        getattr(render_module, name).assert_awaited_once()
++    assert saved[job.id].output_payload.asset_url == 'https://example.test/film.mp4'
++
++
++def test_submit_route_formats_provider_error(isolated_render, monkeypatch):
++    from app.routes import render as routes
++    service, job, _ = isolated_render
++    del service._provider_configs['runway']
++    monkeypatch.setattr(routes, 'render_service', service)
++    app = FastAPI()
++    app.include_router(routes.router)
++    response = TestClient(app, raise_server_exceptions=False).post(f'/jobs/{job.id}/submit')
++    assert response.status_code == 502
++    assert response.json()['detail']['error_type'] == 'provider_error'
++
++
++def test_provider_initialization_never_logs_key_fragments(monkeypatch, caplog):
++    key = "SENSITIVE-prefix-private-middle-SUFFIX"
++    monkeypatch.setenv("RUNWAYML_API_SECRET", key)
++    with caplog.at_level("INFO", logger="studio-render"):
++        render_module.RenderService()
++    assert key not in caplog.text
++    assert key[:4] not in caplog.text
++    assert key[-4:] not in caplog.text
++    assert "configured=True" in caplog.text
+--- /dev/null
++++ after/studio-backend/app/services/test_screenplay_provider_trace.py
+@@ -0,0 +1,56 @@
++"""Repeatable screenplay-to-provider-to-storage trace; no paid calls or downloads."""
++from copy import deepcopy
++from unittest.mock import AsyncMock
++
++import pytest
++
++from app.adapters import HappyHorseAdapter
++from app.data.storage import DatabaseStorage
++from app.models import StudioProject
++from app.services import render as render_module
++from app.services.script_parser import ScriptParser
++
++
++@pytest.mark.asyncio
++async def test_screenplay_facts_reach_provider_and_completed_job_is_persisted(tmp_path, monkeypatch):
++    script = 'INT. WORKSHOP - NIGHT\n\nMAYA\nKeep the door closed.\n\nMaya holds a brass key.'
++    summary = ScriptParser().build_script_breakdown_bundle(script)
++    assert summary['scenes']
++    project_id = 'audit-screenplay-trace'
++    project = {'project_id': project_id, 'title': 'The Key', 'script_text': script, 'execution_summary': summary}
++    render_module.project_store.save_project(project)
++    storage = DatabaseStorage(str(tmp_path / 'db'))
++    storage.save_project(StudioProject(**project))
++    storage.save_character(project_id, 'MAYA', {'visual_prompt_summary': 'Black woman with natural locs and a red coat.'})
++    monkeypatch.setattr(render_module, '_storage', storage)
++    monkeypatch.setattr('app.data.storage.get_storage', lambda *args, **kwargs: storage)
++    for name in ('_run_continuity_review', '_run_render_quality_check', '_run_character_reference_lock', '_notify_update'):
++        monkeypatch.setattr(render_module, name, AsyncMock())
++    captured = []
++    async def request(self, method, path, payload=None):
++        if method == 'POST':
++            captured.append(deepcopy(payload))
++            return {'output': {'task_id': 'test-hosted-task'}}
++        return {'output': {'task_status': 'SUCCEEDED', 'video_url': 'https://example.test/generated.mp4'}}
++    async def download(self, **kwargs):
++        return '/outputs/test-generated.mp4', {'test_double': True}
++    monkeypatch.setattr(HappyHorseAdapter, '_happyhorse_request', request)
++    monkeypatch.setattr(HappyHorseAdapter, '_download_and_strip_audio', download)
++    service = render_module.RenderService()
++    service._provider_configs['happyhorse'].api_key = 'test-only-credential'
++    scene_id = summary['scenes'][0]['scene_id']
++    job = service.create_job(project_id=project_id, shot_id=f'{scene_id}_shot_001', provider='happyhorse', prompt='')
++    assert job.input_payload.prompt.strip()
++    result = await service.submit_job(job.id)
++    assert len(captured) == 1
++    prompt = captured[0]['input']['prompt']
++    assert 'MAYA' in prompt.upper()
++    assert 'key' in prompt.lower()
++    assert 'Black woman' in prompt
++    assert captured[0]['parameters']['seed'] is not None
++    persisted = storage.get_job(job.id)
++    assert persisted.status == result.status == 'complete'
++    assert persisted.provider_job_id == 'test-hosted-task'
++    assert persisted.output_payload.asset_url == '/outputs/test-generated.mp4'
++    assert persisted.input_payload.prompt == result.input_payload.prompt
++    storage.close()
+--- /dev/null
++++ after/studio-backend/app/services/test_generated_asset_boundary.py
+@@ -0,0 +1,30 @@
++from app.services.video_asset_service import VideoAssetService
++
++
++def test_generated_output_cannot_escape_outputs_with_parent_segments(tmp_path):
++    service = VideoAssetService()
++    service._outputs_root = tmp_path / 'outputs'
++    service._outputs_root.mkdir()
++    (tmp_path / 'private.txt').write_text('synthetic sentinel')
++    ok, _ = service.validate_asset_accessible(source_type='generated_output', source_url='/outputs/../private.txt')
++    assert not ok
++
++
++def test_generated_output_cannot_escape_outputs_with_symlink(tmp_path):
++    service = VideoAssetService()
++    service._outputs_root = tmp_path / 'outputs'
++    service._outputs_root.mkdir()
++    private = tmp_path / 'private.txt'
++    private.write_text('synthetic sentinel')
++    (service._outputs_root / 'linked.mp4').symlink_to(private)
++    ok, _ = service.validate_asset_accessible(source_type='generated_output', source_url='/outputs/linked.mp4')
++    assert not ok
++
++
++def test_generated_output_inside_outputs_remains_accessible(tmp_path):
++    service = VideoAssetService()
++    service._outputs_root = tmp_path
++    (tmp_path / 'clip.mp4').write_bytes(b'asset fixture')
++    ok, details = service.validate_asset_accessible(source_type='generated_output', source_url='/outputs/clip.mp4')
++    assert ok
++    assert details['is_remote'] is False
+--- /dev/null
++++ after/studio-backend/tests/test_test_store_isolation.py
+@@ -0,0 +1,26 @@
++"""Collection must not inherit paths to creator project data."""
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++
++
++def test_conftest_overrides_inherited_developer_store_paths(tmp_path):
++    sentinel = tmp_path / 'project_state_store.json'
++    original = '{"projects":{"project_3dba9330f43a":{"title":"Do not delete"}}}'
++    sentinel.write_text(original)
++    env = dict(os.environ, STUDIO_STORAGE_PATH=str(tmp_path), STUDIO_PROJECT_STORE_PATH=str(sentinel))
++    code = '''
++import conftest, json, os
++print('ISOLATION=' + json.dumps({
++ 'sqlite': os.environ['STUDIO_STORAGE_PATH'],
++ 'project': str(conftest.project_store._path),
++}))
++'''
++    result = subprocess.run([sys.executable, '-c', code], cwd=Path(__file__).resolve().parents[1], env=env, capture_output=True, text=True, timeout=60, check=True)
++    payload = json.loads(next(line.removeprefix('ISOLATION=') for line in result.stdout.splitlines() if line.startswith('ISOLATION=')))
++    assert Path(payload['sqlite']) != tmp_path
++    assert Path(payload['project']) != sentinel
++    assert sentinel.read_text() == original
++    assert not (tmp_path / 'studio.db').exists()

@@ -21,7 +21,7 @@ export function resolveSceneForContext(
   scenes: CoDirectorSceneSummary[] | undefined,
   activeSceneId?: string,
 ): CoDirectorSceneSummary | undefined {
-  return scenes?.find((scene) => scene.scene_id === activeSceneId) || scenes?.[0]
+  return activeSceneId ? scenes?.find((scene) => scene.scene_id === activeSceneId) : scenes?.[0]
 }
 
 export function buildCoDirectorChatPayload(args: {
@@ -41,8 +41,8 @@ export function buildCoDirectorChatPayload(args: {
     system_prompt: args.systemPrompt,
   }
   const scene = resolveSceneForContext(args.scenes, args.activeSceneId)
-  if (args.context === 'current_scene' && scene?.scene_id) {
-    payload.scene_id = scene.scene_id
+  if (args.context === 'current_scene' && (args.activeSceneId || scene?.scene_id)) {
+    payload.scene_id = args.activeSceneId || scene?.scene_id
   }
   return payload
 }

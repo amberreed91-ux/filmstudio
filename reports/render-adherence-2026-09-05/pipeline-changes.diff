@@ -1,0 +1,805 @@
+--- studio-backend/app/adapters/__init__.py before this review
++++ studio-backend/app/adapters/__init__.py
+@@ -14,6 +14,24 @@
+ import certifi
+ 
+ logger = logging.getLogger("studio-render")
++
++
++def _validate_requested_video_settings(params: dict, *, duration: int, resolution: str, ratio: str) -> None:
++    """Do not silently round creator timing or replace the approved output shape."""
++    if not (params.get("strict_render_settings") or params.get("storyboard_frame_url")):
++        return
++    from fractions import Fraction
++    requested_duration = params.get("duration", params.get("duration_seconds"))
++    if requested_duration is not None and float(requested_duration) != duration:
++        raise ValueError(f"Requested duration {requested_duration}s is unsupported by this integration; it would become {duration}s. Choose a supported duration.")
++    if params.get("resolution") and str(params["resolution"]).lower() != resolution.lower():
++        raise ValueError(f"Requested resolution {params['resolution']} is unsupported by this integration; supported output is {resolution}.")
++    if params.get("ratio"):
++        def aspect(value):
++            width, height = str(value).split(":")
++            return Fraction(int(width), int(height))
++        if aspect(params["ratio"]) != aspect(ratio):
++            raise ValueError(f"Requested aspect ratio {params['ratio']} is unsupported by this integration; choose a supported ratio.")
+ 
+ 
+ class RunwayAPIError(Exception):
+@@ -869,7 +887,18 @@
+                         len(_additions["promptTextExtra"]),
+                     )
+ 
+-            runway_prompt_image = self._runway_prompt_image_url(prompt_image)
++            params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
++            storyboard_frame = params.get("storyboard_frame_url")
++            if storyboard_frame:
++                # An approved composition takes precedence over a character sheet.
++                prompt_image = HappyHorseR2VAdapter._provider_reference_url(storyboard_frame)
++                if not prompt_image.startswith(("https://", "data:image/")):
++                    raise ValueError("Storyboard frame must be an HTTPS image or supported image data URL")
++                if prompt_image.startswith("data:") and len(prompt_image.encode()) > 5 * 1024 * 1024:
++                    raise ValueError("Storyboard image exceeds Runway's 5 MB data URL limit")
++                runway_prompt_image = prompt_image
++            else:
++                runway_prompt_image = self._runway_prompt_image_url(prompt_image)
+             if prompt_image and not runway_prompt_image:
+                 job.input_payload.prompt = self._append_prompt_context(
+                     job.input_payload.prompt,
+@@ -893,6 +922,18 @@
+             params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
+             ratio = self._normalize_ratio(params.get("ratio"), image_to_video=bool(prompt_image))
+             duration = int(params.get("duration") or params.get("duration_seconds") or 5)
++            if params.get("strict_render_settings") or storyboard_frame:
++                # Gen-4.5 uses modern pixel ratios for image-to-video as well.
++                if model == "gen4.5":
++                    ratios = {"16:9": "1280:720", "9:16": "720:1280", "1:1": "960:960", "4:3": "1104:832", "3:4": "832:1104", "21:9": "1584:672", "9:21": "672:1584"}
++                    ratio = ratios.get(str(params.get("ratio")), str(params.get("ratio") or "1280:720"))
++                    supported = set(ratios.values()) if prompt_image else {"1280:720", "720:1280"}
++                    if ratio not in supported:
++                        raise ValueError("Unsupported Gen-4.5 output ratio")
++                # These are the vendor's named aspect mappings; some dimensions
++                # are slightly cropped to the model's supported pixel grid.
++                validation_ratio = str(params.get("ratio") or ratio) if model == "gen4.5" else ratio
++                _validate_requested_video_settings(params, duration=duration, resolution="720p", ratio=validation_ratio)
+ 
+             # Extract seed from parameters if present
+             raw_seed = params.get("seed")
+@@ -933,15 +974,16 @@
+                 "prompt_length": len(str(job.input_payload.prompt or "")),
+                 "reference_count": 1 if prompt_image else 0,
+                 "references_injected": bool(prompt_image),
++                "conditioning_mode": "first_frame" if storyboard_frame else "reference" if prompt_image else "text",
+                 "duration": duration,
+                 "ratio": ratio,
+                 "seed_present": seed_val is not None,
+             }
+             logger.info(
+-                "TEMP_RUNWAY_DEBUG request endpoint=%s model=%s payload=%s payload_schema=%s",
++                "RUNWAY_REQUEST endpoint=%s model=%s prompt_length=%d payload_schema=%s",
+                 endpoint,
+                 model,
+-                payload,
++                len(payload.get("promptText", "")),
+                 {k: type(v).__name__ for k, v in payload.items()},
+             )
+             auth_probe = await self._runway_request("GET", "/v1/organization")
+@@ -1592,6 +1634,7 @@
+             duration = self._normalize_duration(params.get("duration") or params.get("duration_seconds") or 5)
+             ratio = self._normalize_ratio(params.get("ratio"))
+             seed = params.get("seed")
++            _validate_requested_video_settings(params, duration=duration, resolution=resolution, ratio=ratio)
+             _consistency_data = getattr(job.input_payload, 'consistency_payload', None)
+             if _consistency_data is not None:
+                 from app.models.consistency import (
+@@ -2087,8 +2130,6 @@
+ 
+     def _build_input_references(self, job: RenderJobModel) -> list[dict]:
+         consistency_data = getattr(job.input_payload, "consistency_payload", None)
+-        if consistency_data is None:
+-            return []
+         from app.models.consistency import ConsistencyPayload
+ 
+         cp = (
+@@ -2096,24 +2137,28 @@
+             if isinstance(consistency_data, dict) else consistency_data
+         )
+         refs = [
+-            ref for ref in cp.refs
++            ref.image_url for ref in (cp.refs if cp else [])
+             if ref.kind in {"character_face", "character_full"} and ref.image_url
+-        ][:9]
++        ]
++        frame = (job.input_payload.parameters or {}).get("storyboard_frame_url")
+         references: list[dict] = []
+-        seen: set[str] = set()
+-        for ref in refs:
+-            if ref.image_url in seen:
++        seen: set[str] = {frame} if frame else set()
++        for url in [*job.input_payload.referenceAssets, *refs]:
++            if not url or url in seen:
+                 continue
+-            seen.add(ref.image_url)
++            seen.add(url)
+             references.append({
+                 "type": "image_url",
+-                "image_url": {"url": self._provider_reference_url(ref.image_url)},
++                "image_url": {"url": self._provider_reference_url(url)},
+             })
++        if len(references) > 9:
++            raise ValueError("OpenRouter supports at most nine reference images; choose the required references")
+         return references
+ 
+     def _build_openrouter_body(
+         self, job: RenderJobModel, *, resolution, duration, ratio, seed
+     ) -> dict:
++        _validate_requested_video_settings(job.input_payload.parameters or {}, duration=int(duration), resolution=self._openrouter_resolution(resolution), ratio=str(ratio))
+         body: dict = {
+             "model": self._openrouter_model(),
+             "prompt": str(job.input_payload.prompt or "").strip(),
+@@ -2127,6 +2172,12 @@
+         references = self._build_input_references(job)
+         if references:
+             body["input_references"] = references
++        frame = (job.input_payload.parameters or {}).get("storyboard_frame_url")
++        if frame:
++            body["frame_images"] = [{
++                "type": "image_url", "image_url": {"url": self._provider_reference_url(frame)},
++                "frame_type": "first_frame",
++            }]
+         if seed is not None:
+             try:
+                 body["seed"] = int(seed)
+@@ -2160,7 +2211,9 @@
+                 "model": body["model"],
+                 "prompt_length": len(body["prompt"]),
+                 "reference_count": len(body.get("input_references") or []),
+-                "references_injected": bool(body.get("input_references")),
++                "references_injected": bool(body.get("input_references") or body.get("frame_images")),
++                "frame_count": len(body.get("frame_images") or []),
++                "conditioning_mode": "first_frame" if body.get("frame_images") else "reference" if body.get("input_references") else "text",
+                 "negative_prompt_supported": False,
+                 "duration": duration,
+                 "aspect_ratio": body["aspect_ratio"],
+--- studio-backend/app/routes/previs_routes.py before this review
++++ studio-backend/app/routes/previs_routes.py
+@@ -15,6 +15,7 @@
+ import os
+ 
+ from app.services.previs_service import previs_service
++from app.models.previs_render import PrevisRenderSettings
+ from app.services.stability import PersistenceError, ProviderError, StabilityError, StateError, ValidationError
+ 
+ logger = logging.getLogger(__name__)
+@@ -94,6 +95,7 @@
+     storyboard_shot_id: Optional[str] = None,
+     allow_approved_revision: bool = False,
+     provider: Optional[str] = None,
++    body: PrevisRenderSettings | None = None,
+ ) -> PrevisGenerateResponse:
+     """
+     Generate a preview image for a scene shot.
+@@ -101,9 +103,9 @@
+     This endpoint:
+     1. Fetches the scene from the database
+     2. Builds a shot-aware cinematic prompt using shot/take context
+-    3. Submits a render job to Runway
+-    4. Stores the job in previs_images table
+-    5. Returns immediately with pending status
++    3. Persists the requested take and settings before submission
++    4. Submits through the render service to the selected provider
++    5. Returns the actual submission status (some adapters await completion)
+     
+     The image will be extracted from the video when the render completes.
+     
+@@ -120,6 +122,8 @@
+         }
+         if provider is not None:
+             generation_kwargs["provider"] = provider
++        if body is not None:
++            generation_kwargs["render_settings"] = body
+         result = await previs_service.generate_scene(
+             project_id,
+             scene_id,
+--- studio-backend/app/services/render.py before this review
++++ studio-backend/app/services/render.py
+@@ -759,7 +759,7 @@
+     requested = str(parameters.get("model") or "").strip()
+     if requested:
+         return requested
+-    if provider == "openrouter":
++    if provider in {"openrouter", "openrouter-video"}:
+         return os.getenv("OPENROUTER_VIDEO_MODEL", "alibaba/happyhorse-1.1").strip() or "alibaba/happyhorse-1.1"
+     if provider == "runway":
+         return os.getenv("RUNWAY_MODEL", "gen4.5").strip() or "gen4.5"
+@@ -1570,6 +1570,12 @@
+             provider = self.get_default_provider()
+ 
+         _initial_parameters = dict(parameters or {})
++        if _initial_parameters.get("storyboard_frame_url") and provider not in {"openrouter", "openrouter-video", "runway"}:
++            from app.services.stability import ValidationError
++            raise ValidationError(
++                "This provider integration cannot use the approved storyboard as a first frame. Choose OpenRouter or Runway for storyboard rendering.",
++                stage="storyboard_conditioning", metadata={"provider": provider},
++            )
+         _validate_model_override(provider, _initial_parameters)
+         _idempotency_key, _explicit_idempotency_key = _request_idempotency_key(
+             project_id=project_id,
+@@ -1603,7 +1609,7 @@
+         # If prompt is generic or too short, fetch the actual scene description
+         _scene_id = derive_scene_id_from_shot_id(shot_id)
+         job_id = f"job-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}-{shot_id}"
+-        _is_generic = (
++        _is_generic = not _initial_parameters.get("preserve_shot_prompt") and (
+             not prompt.strip()
+             or len(prompt.strip()) < 50
+             or "Generate scene" in prompt
+@@ -2169,6 +2175,7 @@
+             and "_slotted" in locals()
+             and isinstance(parameters, dict)
+             and parameters.get("structured_prompt")
++            and not parameters.get("preserve_shot_prompt")
+         ):
+             try:
+                 from app.services.department_render_context_service import (
+@@ -2535,6 +2542,7 @@
+             isinstance(parameters, dict)
+             and parameters.get("structured_prompt")
+             and not job.input_payload.parameters.get("prompt_slots")
++            and not parameters.get("preserve_shot_prompt")
+         ):
+             try:
+                 from app.services.shot_prompt_builder import build_slotted_prompt
+@@ -2987,7 +2995,7 @@
+ 
+             # ── Seed locking: generate on first render, reuse on subsequent ──
+             try:
+-                if _storage:
++                if _storage and (job.input_payload.parameters or {}).get("seed") is None:
+                     shot_seed = _storage.get_shot_seed(job.project_id, job.shot_id)
+                     if shot_seed and shot_seed.get("seed") is not None:
+                         seed_val = int(shot_seed["seed"])
+--- studio-backend/app/services/previs_service.py before this review
++++ studio-backend/app/services/previs_service.py
+@@ -7,6 +7,9 @@
+ 
+ from app.data.storage import StorageInterface, get_storage
+ from app.models.storyboard_blueprint import StoryboardBlueprintStatus
++from app.models.previs_render import PrevisRenderSettings
++from app.prompt_assembly_context import preserve_generation_facts
++from app.services.storyboard_render_inputs import storyboard_render_inputs
+ from app.services.render import RenderService, render_service
+ from app.services.shot_prompt_builder import build_shot_aware_prompt, get_shot_type_label
+ from app.services.stability import PersistenceError, ProviderError, StateError, ValidationError
+@@ -14,7 +17,9 @@
+ logger = logging.getLogger(__name__)
+ 
+ ACTIVE_STATUSES = {"queued", "pending", "submitted", "generating", "processing", "rendering", "retrying"}
+-TERMINAL_STATUSES = {"complete", "approved", "failed", "cancelled", "superseded", "rejected"}
++TERMINAL_STATUSES = {"complete", "approved", "failed", "cancelled", "superseded", "rejected", "needs_review"}
++
++_build_generation_prompt = preserve_generation_facts(build_shot_aware_prompt)
+ 
+ 
+ class PrevisService:
+@@ -81,22 +86,21 @@
+             raise StateError("Storyboard provenance is invalid", stage="previs_storyboard_reference")
+         if (
+             blueprint.approved_version_id != version.version_id
++            or blueprint.current_version_id != version.version_id
+             or version.status != StoryboardBlueprintStatus.APPROVED
+         ):
+             raise StateError("Previs requires an approved storyboard version", stage="previs_storyboard_reference")
+         prompt = str(shot.render_contract.provider_neutral_prompt or "").strip()
+         if not prompt:
+             raise ValidationError("Storyboard shot has no render prompt", stage="previs_storyboard_reference")
+-        references = list(dict.fromkeys([
+-            *[str(item).strip() for item in shot.render_contract.reference_assets if str(item).strip()],
+-            *([shot.storyboard_image_url] if shot.storyboard_image_url else []),
+-        ]))
++        inputs = storyboard_render_inputs(shot)
+         return {
+             "shot": shot,
+             "blueprint": blueprint,
+             "version": version,
+             "prompt": prompt,
+-            "reference_assets": references,
++            "reference_assets": inputs["reference_assets"],
++            "parameters": inputs["parameters"],
+         }
+ 
+     async def generate_scene(
+@@ -111,12 +115,21 @@
+         source_previs_image_id: str | None = None,
+         attempt_number: int = 1,
+         provider: str | None = None,
++        render_settings: PrevisRenderSettings | None = None,
+     ) -> dict:
+         started = perf_counter()
+         if shot_number < 1 or take_number < 1:
+             raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+         storage = self._require_storage()
+         scene = self._scene(project_id, scene_id)
++        if not storyboard_shot_id:
++            blueprint = storage.get_storyboard_blueprint(project_id, scene_id)
++            if blueprint is not None:
++                shots = storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.current_version_id)
++                selected = next((shot for shot in shots if shot.shot_number == shot_number), None)
++                if selected is None:
++                    raise StateError("Requested shot is missing from the current storyboard", stage="previs_storyboard_reference")
++                storyboard_shot_id = selected.storyboard_shot_id
+         storyboard = (
+             self._storyboard_context(project_id, scene_id, storyboard_shot_id)
+             if storyboard_shot_id
+@@ -142,7 +155,7 @@
+             # total_shots is left to resolve_total_shots, which reads shot_count /
+             # shots off the execution_summary scene dict. Previs has no separate
+             # shot list of its own, and the scene dict is the authoritative count.
+-            prompt = build_shot_aware_prompt(
++            prompt = _build_generation_prompt(
+                 scene_data=scene,
+                 shot_number=shot_number,
+                 take_number=take_number,
+@@ -155,6 +168,25 @@
+             blueprint_id = None
+             blueprint_version_id = None
+ 
++        parameters = dict(storyboard["parameters"] if storyboard else {"duration": 3, "ratio": "1280:720"})
++        if render_settings is not None:
++            if render_settings.prompt is not None:
++                prompt = render_settings.prompt
++            explicit_planning = {key: value.strip() for key, value in render_settings.shot_planning.items() if value.strip()}
++            if explicit_planning:
++                prompt += "\n\n[CREATOR SHOT DIRECTIONS]\n" + "\n".join(f"{key}: {value}" for key, value in explicit_planning.items())
++                parameters["creator_shot_planning"] = explicit_planning
++            for field, key in (("duration_seconds", "duration"), ("resolution", "resolution"), ("seed", "seed")):
++                value = getattr(render_settings, field)
++                if value is not None:
++                    parameters[key] = value
++            parameters["strict_render_settings"] = True
++            if render_settings.prompt is not None or explicit_planning:
++                parameters["preserve_shot_prompt"] = True
++        parameters.update(previs=True, blueprint_id=blueprint_id,
++                          blueprint_version_id=blueprint_version_id, storyboard_shot_id=storyboard_shot_id)
++        parameters.update(shot_number=shot_number, take_number=take_number)
++
+         existing = storage.load_previs_images(project_id, scene_id)
+         target_key = storyboard_shot_id or shot_id
+         matching = [
+@@ -163,7 +195,8 @@
+         ]
+         active = next((image for image in matching if image.get("status") in ACTIVE_STATUSES), None)
+         if active:
+-            return self._generation_response(active, shot_number, take_number, duplicate=True)
++            active_take = int((active.get("metadata") or {}).get("take_number") or take_number)
++            return self._generation_response(active, shot_number, active_take, duplicate=True)
+         approved = next((image for image in matching if image.get("approved")), None)
+         if approved and not allow_approved_revision:
+             raise StateError(
+@@ -180,8 +213,10 @@
+         # everywhere else. This path used to hardcode "runway", which is why the
+         # front-end render ignored the OpenRouter migration.
+         requested = str(provider or "").strip().lower()
+-        provider_configs = getattr(self._renderer, "_provider_configs", {})
+-        if requested and isinstance(provider_configs, dict) and requested in provider_configs:
++        provider_configs = getattr(self._renderer, "_provider_configs", None)
++        if requested:
++            if isinstance(provider_configs, dict) and requested not in provider_configs:
++                raise ValidationError("Unknown render provider", stage="previs_generate")
+             render_provider = requested
+         elif hasattr(self._renderer, "get_default_provider"):
+             render_provider = self._renderer.get_default_provider()
+@@ -195,15 +230,10 @@
+                 provider=render_provider,
+                 prompt=prompt,
+                 reference_assets=reference_assets,
+-                parameters={
+-                    "duration": 3,
+-                    "ratio": "1280:720",
+-                    "previs": True,
+-                    "blueprint_id": blueprint_id,
+-                    "blueprint_version_id": blueprint_version_id,
+-                    "storyboard_shot_id": storyboard_shot_id,
+-                },
++                parameters=parameters,
+             )
++        except (ValidationError, StateError):
++            raise
+         except Exception as exc:
+             raise ProviderError(
+                 "Unable to create Previs render job",
+@@ -233,6 +263,9 @@
+                     "take_number": take_number,
+                     "reference_assets": reference_assets,
+                     "scene_context": scene,
++                    "render_provider": render_provider,
++                    "render_settings": render_settings.model_dump(exclude_none=True) if render_settings else None,
++                    "render_parameters": parameters,
+                 },
+             )
+         except Exception as exc:
+@@ -261,6 +294,9 @@
+                     )
+                 persisted_status = "complete"
+                 storage.update_previs_image_status(job.id, persisted_status, image_path=asset_url)
++            elif submitted_status == "needs_review":
++                persisted_status = "needs_review"
++                storage.update_previs_image_status(job.id, persisted_status, failure_reason=str(getattr(submitted, "error_message", "") or "Review required shot facts before rendering"))
+             elif submitted_status in {"failed", "cancelled"}:
+                 reason = str(getattr(submitted, "error_message", "") or f"Provider job {submitted_status}")
+                 storage.update_previs_image_status(job.id, submitted_status, failure_reason=reason)
+@@ -341,7 +377,7 @@
+                             job.id,
+                             getattr(job, "provider", ""),
+                         )
+-            elif status in {"failed", "cancelled"}:
++            elif status in {"failed", "cancelled", "needs_review"}:
+                 reason = str(getattr(job, "error_message", "") or f"Provider job {status}")
+                 storage.update_previs_image_status(image["job_id"], status, failure_reason=reason)
+                 image["status"] = status
+@@ -401,6 +437,8 @@
+             allow_approved_revision=False,
+             source_previs_image_id=image["id"],
+             attempt_number=int(image.get("attempt_number") or 1) + 1,
++            provider=metadata.get("render_provider"),
++            render_settings=PrevisRenderSettings.model_validate(metadata["render_settings"]) if metadata.get("render_settings") else None,
+         )
+ 
+     def create_production_package(self, project_id: str, scene_id: str) -> dict[str, Any]:
+@@ -488,7 +526,7 @@
+             "storyboard_shot_id": record.get("storyboard_shot_id"),
+             "duplicate": duplicate,
+             "message": (
+-                f"Preview generation {'already active' if duplicate else 'started'} for Shot "
++                record.get("failure_reason") or f"Preview generation {'already active' if duplicate else 'started'} for Shot "
+                 f"{shot_number}, Take {take_number} ({get_shot_type_label(shot_number)})"
+             ),
+         }
+--- studio-backend/app/services/scene_production_pipeline_service.py before this review
++++ studio-backend/app/services/scene_production_pipeline_service.py
+@@ -213,55 +213,10 @@
+         scene_id = str(scene.get("scene_id") or "").strip()
+         project_id = str(project.get("project_id") or "").strip()
+         if project_id and scene_id:
+-            try:
+-                from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+-
+-                blueprint = storyboard_blueprint_service.storage.get_storyboard_blueprint(project_id, scene_id)
+-                if blueprint and (blueprint.approved_version_id or blueprint.current_version_id):
+-                    version_id = blueprint.approved_version_id or blueprint.current_version_id
+-                    blueprint_shots = storyboard_blueprint_service.storage.list_storyboard_shots(
+-                        blueprint.blueprint_id,
+-                        version_id,
+-                    )
+-                    shots = []
+-                    for shot in blueprint_shots:
+-                        shots.append(
+-                            {
+-                                "scene_id": shot.scene_id,
+-                                "shot_id": shot.shot_id,
+-                                "description": shot.render_contract.provider_neutral_prompt,
+-                                "prompt": shot.render_contract.provider_neutral_prompt,
+-                                "reference_assets": shot.render_contract.reference_assets,
+-                                "parameters": {
+-                                    **(shot.render_contract.structured_parameters or {}),
+-                                    "storyboard": {
+-                                        "blueprint_id": shot.blueprint_id,
+-                                        "version_id": shot.version_id,
+-                                        "storyboard_shot_id": shot.storyboard_shot_id,
+-                                        "project_id": shot.project_id,
+-                                        "scene_id": shot.scene_id,
+-                                        "shot_id": shot.shot_id,
+-                                        "shot_number": shot.shot_number,
+-                                        "link_type": "scene_pipeline_render",
+-                                    },
+-                                },
+-                                "duration_seconds": shot.render_contract.duration_seconds,
+-                                "shot_number": shot.shot_number,
+-                                "storyboard_blueprint_id": shot.blueprint_id,
+-                                "storyboard_version_id": shot.version_id,
+-                                "storyboard_shot_id": shot.storyboard_shot_id,
+-                            }
+-                        )
+-                    if shots:
+-                        return sorted(
+-                            shots,
+-                            key=lambda item: (
+-                                int(item.get("shot_number") or 999999),
+-                                str(item.get("shot_id") or ""),
+-                            ),
+-                        )
+-            except Exception as exc:
+-                logger.debug("Storyboard blueprint shot resolution skipped for %s/%s: %s", project_id, scene_id, exc)
++            from app.services.storyboard_blueprint_service import storyboard_blueprint_service
++            blueprint_shots = storyboard_blueprint_service.scene_render_inputs(project_id, scene_id)
++            if blueprint_shots is not None:
++                return blueprint_shots
+         scene_shots = scene.get("shots")
+         shots = [shot for shot in scene_shots if isinstance(shot, dict)] if isinstance(scene_shots, list) else []
+         if not shots:
+@@ -332,6 +287,7 @@
+         return str(
+             scene.get("scene_text")
+             or scene.get("script_text")
++            or scene.get("text")
+             or scene.get("description")
+             or scene.get("summary")
+             or ""
+@@ -372,10 +328,12 @@
+     async def _submit_and_wait(self, job_id: str, max_attempts: int = 90) -> Any:
+         job = await self.render_service.submit_job(job_id)
+         attempts = 0
+-        while not getattr(job, "is_terminal", lambda: True)() and attempts < max_attempts:
++        while getattr(job, "status", "") != "needs_review" and not getattr(job, "is_terminal", lambda: True)() and attempts < max_attempts:
+             await asyncio.sleep(1)
+             job = await self.render_service.get_job_status(job_id)
+             attempts += 1
++        if getattr(job, "status", "") == "needs_review":
++            raise StateError(getattr(job, "error_message", None) or "Review required shot facts before rendering", stage="scene_pipeline_render")
+         if getattr(job, "status", "") != "complete":
+             raise ProviderError(
+                 f"Render job {job_id} did not complete",
+--- studio-backend/app/services/storyboard_blueprint_service.py before this review
++++ studio-backend/app/services/storyboard_blueprint_service.py
+@@ -9,6 +9,7 @@
+ from uuid import uuid4
+ 
+ from app.data.storage import get_storage
++from app.prompt_assembly_context import preserve_generation_facts
+ from app.models.storyboard_blueprint import (
+     StoryboardBlueprint,
+     StoryboardBlueprintInspection,
+@@ -753,7 +754,9 @@
+             stage="storyboard_shot_render",
+         )
+         svc = render_service or default_render_service
+-        parameters = dict(shot.render_contract.structured_parameters or {})
++        from app.services.storyboard_render_inputs import storyboard_render_inputs
++        inputs = storyboard_render_inputs(shot)
++        parameters = inputs["parameters"]
+         parameters["storyboard"] = self._storyboard_metadata_for_shot(shot)
+         if shot.render_contract.seed is not None:
+             parameters.setdefault("seed", shot.render_contract.seed)
+@@ -762,11 +765,33 @@
+             shot_id=shot.shot_id,
+             provider=provider,
+             prompt=shot.render_contract.provider_neutral_prompt,
+-            reference_assets=shot.render_contract.reference_assets,
++            reference_assets=inputs["reference_assets"],
+             parameters=parameters,
+         )
+         self.link_render_job(shot=shot, render_job_id=job.id, link_type=link_type)
+         return job
++
++    def scene_render_inputs(self, project_id: str, scene_id: str) -> list[dict] | None:
++        """Use the current approved version, or signal that no blueprint exists."""
++        from app.services.storyboard_render_inputs import storyboard_render_inputs
++
++        blueprint = self.storage.get_storyboard_blueprint(project_id, scene_id)
++        if blueprint is None:
++            return None
++        if not blueprint.approved_version_id or blueprint.current_version_id != blueprint.approved_version_id:
++            raise StateError("Approve the current storyboard version before rendering this scene", stage="scene_pipeline_storyboard")
++        shots = self.storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.approved_version_id)
++        if not shots:
++            raise StateError("Approved storyboard has no shots", stage="scene_pipeline_storyboard")
++        result = []
++        for shot in sorted(shots, key=lambda item: item.shot_number):
++            self._validate_shot_renderable(shot=shot, blueprint_id=blueprint.blueprint_id, stage="scene_pipeline_storyboard")
++            inputs = storyboard_render_inputs(shot)
++            inputs["parameters"]["storyboard"] = {**self._storyboard_metadata_for_shot(shot), "link_type": "scene_pipeline_render"}
++            result.append({**inputs, "scene_id": shot.scene_id, "shot_id": shot.shot_id,
++                           "duration_seconds": shot.render_contract.duration_seconds,
++                           "shot_number": shot.shot_number, "storyboard_shot_id": shot.storyboard_shot_id})
++        return result
+ 
+     def _validate_shot_renderable(
+         self,
+@@ -1003,6 +1028,7 @@
+             )
+         return shots
+ 
++    @preserve_generation_facts
+     def _build_provider_neutral_prompt(
+         self,
+         project_id: str,
+@@ -1037,7 +1063,7 @@
+             rationale,
+         ]
+         text = ". ".join(part.strip().strip(".") for part in parts if str(part or "").strip())
+-        return text[:512] if len(text) > 512 else text
++        return text
+ 
+     def _build_provenance(self, project_id: str, scene_id: str, scene: dict[str, Any]) -> StoryboardBlueprintProvenance:
+         provenance = StoryboardBlueprintProvenance()
+--- studio-app/src/lib/studioApi.ts before this review
++++ studio-app/src/lib/studioApi.ts
+@@ -6,6 +6,7 @@
+   Absence,
+   AbsenceReport,
+ } from '../types/universe'
++import type { PrevisShotPlanningPayload } from './previsStoryboard'
+ 
+ export type StudioOverview = {
+   build?: string
+@@ -3520,6 +3521,13 @@
+     // configured default (RENDER_VIDEO_PROVIDER). A concrete id (e.g.
+     // "openrouter-video", "runway", "wan") forces that provider for this render.
+     provider?: string
++    renderSettings?: {
++      prompt?: string
++      duration_seconds?: number
++      resolution?: '480p' | '720p' | '1080p'
++      seed?: number | null
++      shot_planning?: PrevisShotPlanningPayload
++    }
+   } = {},
+ ) {
+   const params = new URLSearchParams({
+@@ -3531,7 +3539,7 @@
+   if (options.provider) params.set('provider', options.provider)
+   return fetchJson<PrevisGenerateResult>(
+     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/generate-scene/${encodeURIComponent(sceneId)}?${params.toString()}`,
+-    { method: 'POST', timeoutMs: 30000 },
++    { method: 'POST', timeoutMs: 600000, ...(options.renderSettings ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(options.renderSettings) } : {}) },
+   )
+ }
+ 
+--- studio-app/src/pages/PrevisRoom.tsx before this review
++++ studio-app/src/pages/PrevisRoom.tsx
+@@ -227,7 +227,7 @@
+         const tag = classifyScriptLineTag(line)
+         return tag === 'ACT' || tag === 'DLG' || tag === null
+       })
+-    const actionText = actionLines.slice(0, 2).join(' ')
++    const actionText = actionLines.join(' ')
+     if (actionText) parts.push(actionText)
+   }
+ 
+@@ -246,11 +246,6 @@
+   const takeVariation = TAKE_VARIATIONS[takeNumber] || ''
+   if (takeVariation) {
+     prompt += ` ${takeVariation}`
+-  }
+-
+-  // Truncate if needed (Runway limit ~512 chars)
+-  if (prompt.length > 512) {
+-    prompt = prompt.slice(0, 509) + '...'
+   }
+ 
+   return prompt
+@@ -1094,7 +1089,7 @@
+           setCurrentJobId(null)
+           setSuccess(`Shot ${completedShotNumber} Take ${takeNumber} complete (${shotLabel})!`)
+           if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+-        } else if (status === 'failed') {
++        } else if (status === 'failed' || status === 'needs_review') {
+           setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'failed' })
+           setProgress(0)
+           setRendering(false)
+@@ -1160,6 +1155,16 @@
+     const newPrompt = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
+     setPromptText(newPrompt)
+   }, [activeShotNumber, selectedSceneId, scenes, totalShots])
++
++  useEffect(() => {
++    if (!activeBlueprintShot) return
++    setPromptText(activeBlueprintShot.render_contract.provider_neutral_prompt)
++    setGenConfig((previous) => ({
++      ...previous,
++      duration: activeBlueprintShot.render_contract.duration_seconds,
++      seed: activeBlueprintShot.render_contract.seed ?? null,
++    }))
++  }, [activeBlueprintShot?.storyboard_shot_id])
+ 
+   // ── Load history from render jobs ─────────────────────────────────────────
+   useEffect(() => {
+@@ -1254,7 +1259,7 @@
+       return
+     }
+     const storyboardPrompt = activeBlueprintShot?.render_contract.provider_neutral_prompt?.trim() || ''
+-    const renderPrompt = storyboardPrompt || promptText.trim()
++    const renderPrompt = promptText.trim() || storyboardPrompt
+     if (!renderPrompt) {
+       setError('Enter a prompt before rendering')
+       return
+@@ -1281,10 +1286,24 @@
+         storyboardShotId,
+         allowApprovedRevision: true,
+         provider: renderProvider || undefined,
++        renderSettings: {
++          prompt: renderPrompt,
++          duration_seconds: genConfig.duration,
++          resolution: genConfig.resolution,
++          seed: genConfig.seed,
++          shot_planning: shotPlanningOverrides[activeShotNumber],
++        },
+       })
++      if (generated.status === 'needs_review') {
++        setRendering(false)
++        setCurrentJobId(null)
++        setError(generated.message || 'Review required shot facts before rendering.')
++        setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
++        return
++      }
+       setCurrentJobId(generated.job_id)
+       setSuccess(generated.duplicate
+-        ? `Render already active — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})`
++        ? generated.message || 'A render is already active for this shot.'
+         : `Render queued — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})`)
+ 
+       if (generated.status === 'complete') {
+@@ -1322,7 +1341,7 @@
+       setRendering(false)
+       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
+     }
+-  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, renderProvider, selectedSceneId, activeShotNumber, visibleRenderHistory])
++  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, renderProvider, selectedSceneId, activeShotNumber, visibleRenderHistory, shotPlanningOverrides])
+ 
+   // ── Delete render job ────────────────────────────────────────────────────
+   const handleDeleteRender = useCallback(async (jobId: string) => {
+@@ -1905,26 +1924,7 @@
+                 <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                   FRAME RATE
+                 </label>
+-                <div className="flex gap-1">
+-                  {FPS_OPTIONS.map((fps) => (
+-                    <button
+-                      key={fps}
+-                      type="button"
+-                      onClick={() => setGenConfig((p) => ({ ...p, fps }))}
+-                      className={`status-chip flex-1 rounded border px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all ${
+-                        genConfig.fps === fps
+-                          ? 'border-primary/50 bg-primary/15 text-primary'
+-                          : 'hover:bg-white/8'
+-                      }`}
+-                      style={{
+-                        borderColor: genConfig.fps === fps ? undefined : 'rgba(255,255,255,0.08)',
+-                        color: genConfig.fps === fps ? undefined : 'var(--color-on-surface-variant)',
+-                      }}
+-                    >
+-                      {fps}fps
+-                    </button>
+-                  ))}
+-                </div>
++                <p className="text-xs text-zinc-400">Set by the video model. Shot duration controls the length of this take.</p>
+               </div>
+ 
+               {/* 4. Resolution */}
+@@ -1964,7 +1964,7 @@
+                     type="number"
+                     value={genConfig.seed ?? ''}
+                     onChange={(e) => setGenConfig((p) => ({ ...p, seed: e.target.value ? parseInt(e.target.value, 10) : null }))}
+-                    placeholder="Random"
++                    placeholder="Auto / saved seed"
+                     className="cyber-input flex-1 rounded px-3 py-1.5 text-xs outline-none"
+                     style={{ color: 'var(--color-on-surface)' }}
+                   />
+@@ -2089,6 +2089,11 @@
+                     ? `Shot ${activeBlueprintShot.shot_number}: ${activeBlueprintShot.render_contract.render_readiness}`
+                     : 'No canonical shot contract loaded for this scene.'}
+                 </div>
++                <p className="text-[10px] text-zinc-400">
++                  {activeBlueprintShot?.storyboard_image_url
++                    ? 'The approved storyboard image anchors the first frame. Prompt edits and settings apply to this take.'
++                    : 'No storyboard frame is attached to this shot. Create and approve its image to anchor the composition.'}
++                </p>
+                 {activeBlueprintShot?.rationale ? (
+                   <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                     {activeBlueprintShot.rationale}
+@@ -2429,7 +2434,7 @@
+                           color: seedLocked ? 'var(--color-tertiary)' : 'var(--color-on-surface-variant)',
+                           border: seedLocked ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                         }}
+-                        title={seedLocked ? 'Unlock seed for random generation' : 'Lock seed for consistent regeneration'}
++                        title={seedLocked ? 'Unlock storyboard image seed' : 'Lock storyboard image seed; video takes use the render seed above'}
+                       >
+                         {seedLocked ? (
+                           <>
+@@ -2707,6 +2712,7 @@
+               </button>
+               <button
+                 onClick={handleInitializeRender}
++                disabled={rendering}
+                 className="w-full py-3 text-sm font-medium rounded 
+                            bg-amber-900/60 border border-amber-600/40 
+                            text-amber-200 hover:bg-amber-800/60"

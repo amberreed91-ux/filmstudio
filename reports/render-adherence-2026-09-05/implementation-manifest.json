@@ -1,0 +1,58 @@
+[
+  {
+    "path": "studio-backend/app/models/previs_render.py",
+    "sha256": "0a56e8caef9aa8158bd198e589596fd4fc0427f68384c8b749240e909ae6d7d6"
+  },
+  {
+    "path": "studio-backend/app/services/storyboard_render_inputs.py",
+    "sha256": "4649687474155f04ac7c3cbfc76439ed1b205dd6ffbbb58046b748775468469a"
+  },
+  {
+    "path": "studio-backend/app/services/previs_service.py",
+    "sha256": "f085abe53408a12f9ae6c6e45bad7715c6805ebff7573e7a6344bc7e7212aaee"
+  },
+  {
+    "path": "studio-backend/app/services/storyboard_blueprint_service.py",
+    "sha256": "d4335aa585ba1f3de03694a940b5ab68ab64d0cd24e9756287381a80509d0222"
+  },
+  {
+    "path": "studio-backend/app/services/scene_production_pipeline_service.py",
+    "sha256": "6b7cf3ffbb6a4c781343988eb9aa79c9d49fa904437eca358dc67e60e87334df"
+  },
+  {
+    "path": "studio-backend/app/services/canonical_production_workflow_service.py",
+    "sha256": "5cf4b3e128e3052004a26136232e971b4d61e9a04e5320422ac3c92cf5659f33"
+  },
+  {
+    "path": "studio-backend/app/services/render.py",
+    "sha256": "4ea6fcb43f7dbd5bd26642950ddb76b80fd36211425fde3584dd593ecb8db0d0"
+  },
+  {
+    "path": "studio-backend/app/services/prompt_budget_service.py",
+    "sha256": "bb34c74ddc082f83869dcae092aae83bd8ed950479c599506716db5c8acc6289"
+  },
+  {
+    "path": "studio-backend/app/adapters/__init__.py",
+    "sha256": "e900f6a061783cf45da5fba2b4b0ae28899adce349381d019f131ce00231604d"
+  },
+  {
+    "path": "studio-backend/app/data/storage.py",
+    "sha256": "2b05c540d2f29cd36f359ee735f11c16299eb0474dca5c578a94954eb8cd6434"
+  },
+  {
+    "path": "studio-backend/app/routes/previs_routes.py",
+    "sha256": "49c85d73b95fc3cd5a05f9b0400d92fb2053ec7473de6fdc37e07d83f80a22a9"
+  },
+  {
+    "path": "studio-app/src/lib/studioApi.ts",
+    "sha256": "c0ef579143d207a91a98d62772dae4566bfec894df2653b3435ca74fba2f6ba4"
+  },
+  {
+    "path": "studio-app/src/lib/jobStatus.ts",
+    "sha256": "6276a4096eeb67f0d82fee3644aaa8305e41985d4385324ca7a76523322499dd"
+  },
+  {
+    "path": "studio-app/src/pages/PrevisRoom.tsx",
+    "sha256": "fb47d1e641d030271135dc45b91a65b60314a1a89e7cc0bbf659ebb6804a3f90"
+  }
+]

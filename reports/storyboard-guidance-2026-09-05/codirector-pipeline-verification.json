@@ -1,0 +1,124 @@
+{
+  "passed": true,
+  "checks": [
+    "study-room: visible mobile launcher, fitting drawer, correct film/scene, explicit chat only",
+    "writers-room: visible mobile launcher, fitting drawer, correct film/scene, explicit chat only",
+    "production-board: visible mobile launcher, fitting drawer, correct film/scene, explicit chat only",
+    "previs: visible mobile launcher, fitting drawer, correct film/scene, explicit chat only",
+    "screening-room: visible mobile launcher, fitting drawer, correct film/scene, explicit chat only",
+    "universe-graph: visible mobile launcher, fitting drawer, correct film/scene, explicit chat only",
+    "Late director reply cannot appear after switching specialist; new specialist is immediately usable",
+    "Second film opens a clean conversation and sends its own project ID"
+  ],
+  "writes": [
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "director",
+        "message": "How should the lantern carry tension into the next scene?",
+        "context": "current_scene",
+        "project_id": "project_5907c60cddbc",
+        "system_prompt": "You are the Director. Guide creative vision and scene approval.",
+        "scene_id": "scene_003"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "director",
+        "message": "How should the lantern carry tension into the next scene?",
+        "context": "current_scene",
+        "project_id": "project_5907c60cddbc",
+        "system_prompt": "You are the Director. Guide creative vision and scene approval.",
+        "scene_id": "scene_003"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "director",
+        "message": "How should the lantern carry tension into the next scene?",
+        "context": "current_scene",
+        "project_id": "project_5907c60cddbc",
+        "system_prompt": "You are the Director. Guide creative vision and scene approval.",
+        "scene_id": "scene_003"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "director",
+        "message": "How should the lantern carry tension into the next scene?",
+        "context": "current_scene",
+        "project_id": "project_5907c60cddbc",
+        "system_prompt": "You are the Director. Guide creative vision and scene approval.",
+        "scene_id": "scene_003"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "director",
+        "message": "How should the lantern carry tension into the next scene?",
+        "context": "current_scene",
+        "project_id": "project_5907c60cddbc",
+        "system_prompt": "You are the Director. Guide creative vision and scene approval.",
+        "scene_id": "scene_003"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "director",
+        "message": "How should the lantern carry tension into the next scene?",
+        "context": "current_scene",
+        "project_id": "project_5907c60cddbc",
+        "system_prompt": "You are the Director. Guide creative vision and scene approval.",
+        "scene_id": "scene_003"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "director",
+        "message": "Held request for the director.",
+        "context": "current_scene",
+        "project_id": "project_5907c60cddbc",
+        "system_prompt": "You are the Director. Guide creative vision and scene approval.",
+        "scene_id": "scene_003"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "writer",
+        "message": "How should this dialogue hold tension?",
+        "context": "current_scene",
+        "project_id": "project_5907c60cddbc",
+        "system_prompt": "You are the Writer. Advise on dialogue, structure, and narrative beats.",
+        "scene_id": "scene_003"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_ca31687b1ca7/co-director/chat",
+      "method": "POST",
+      "payload": {
+        "specialist": "director",
+        "message": "What should this film establish here?",
+        "context": "current_scene",
+        "project_id": "project_ca31687b1ca7",
+        "system_prompt": "You are the Director. Guide creative vision and scene approval.",
+        "scene_id": "scene_003"
+      }
+    }
+  ],
+  "errors": []
+}

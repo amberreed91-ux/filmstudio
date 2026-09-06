@@ -1,0 +1,23 @@
+...............................................................F.......F [ 98%]
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__ test_approved_local_board_overrides_identity_sheet_and_uses_portrait_ratio __
+app/services/test_runway_provider_hardening.py:736: in test_approved_local_board_overrides_identity_sheet_and_uses_portrait_ratio
+    assert "Allowed models" in (result.error_message or "")
+E   AssertionError: assert 'Allowed models' in ((None or ''))
+E    +  where None = RenderJobModel(id='job-1', project_id='proj-1', shot_id='shot-1', provider='runway', provider_job_id='frame-task', sta... created_at='2026-01-01T00:00:00Z', updated_at='2026-09-05T11:04:09.258508', completed_at='2026-09-05T11:04:09.258526').error_message
+__________ test_explicit_take_seed_survives_stored_seed_injection[0] ___________
+app/services/test_render_provider_safety.py:122: in test_explicit_take_seed_survives_stored_seed_injection
+    assert "configured=True" in caplog.text
+                                ^^^^^^
+E   NameError: name 'caplog' is not defined
+_________ test_explicit_take_seed_survives_stored_seed_injection[1234] _________
+app/services/test_render_provider_safety.py:122: in test_explicit_take_seed_survives_stored_seed_injection
+    assert "configured=True" in caplog.text
+                                ^^^^^^
+E   NameError: name 'caplog' is not defined
+=========================== short test summary info ============================
+FAILED app/services/test_runway_provider_hardening.py::test_approved_local_board_overrides_identity_sheet_and_uses_portrait_ratio
+FAILED app/services/test_render_provider_safety.py::test_explicit_take_seed_survives_stored_seed_injection[0]
+FAILED app/services/test_render_provider_safety.py::test_explicit_take_seed_survives_stored_seed_injection[1234]
+3 failed, 70 passed in 9.97s

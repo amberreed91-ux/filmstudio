@@ -16,6 +16,24 @@ import certifi
 logger = logging.getLogger("studio-render")
 
 
+def _validate_requested_video_settings(params: dict, *, duration: int, resolution: str, ratio: str) -> None:
+    """Do not silently round creator timing or replace the approved output shape."""
+    if not (params.get("strict_render_settings") or params.get("storyboard_frame_url")):
+        return
+    from fractions import Fraction
+    requested_duration = params.get("duration", params.get("duration_seconds"))
+    if requested_duration is not None and float(requested_duration) != duration:
+        raise ValueError(f"Requested duration {requested_duration}s is unsupported by this integration; it would become {duration}s. Choose a supported duration.")
+    if params.get("resolution") and str(params["resolution"]).lower() != resolution.lower():
+        raise ValueError(f"Requested resolution {params['resolution']} is unsupported by this integration; supported output is {resolution}.")
+    if params.get("ratio"):
+        def aspect(value):
+            width, height = str(value).split(":")
+            return Fraction(int(width), int(height))
+        if aspect(params["ratio"]) != aspect(ratio):
+            raise ValueError(f"Requested aspect ratio {params['ratio']} is unsupported by this integration; choose a supported ratio.")
+
+
 class RunwayAPIError(Exception):
     """Runway HTTP error with response context for diagnostics and classification."""
 
@@ -639,6 +657,26 @@ class RunwayAdapter(RenderProviderAdapter):
         return ratio if ratio in supported else fallback
 
     @staticmethod
+    def _runway_prompt_image_url(raw_url: object) -> str | None:
+        url = str(raw_url or "").strip()
+        if not url:
+            return None
+        # Runway's image_to_video schema requires a provider-fetchable HTTPS URL.
+        if url.lower().startswith("https://"):
+            return url
+        return None
+
+    @staticmethod
+    def _append_prompt_context(prompt: object, extra: object) -> str:
+        base = str(prompt or "").strip()
+        addition = str(extra or "").strip()
+        if not addition:
+            return base
+        if addition in base:
+            return base
+        return f"{base}; {addition}" if base else addition
+
+    @staticmethod
     def _runway_error_message(status_code: int, body: str) -> str:
         fallback = "Runway API unauthorized" if status_code == 401 else f"Runway API error {status_code}"
         text = str(body or "").strip()
@@ -818,6 +856,7 @@ class RunwayAdapter(RenderProviderAdapter):
             timeout_seconds = self._runway_timeout_seconds()
             started = asyncio.get_running_loop().time()
             prompt_image = job.input_payload.referenceAssets[0] if job.input_payload.referenceAssets else None
+            prompt_image_fallback_text = ""
 
             # ── Loop 2: ConsistencyPayload override ─────────────────────────
             # When a job carries a ConsistencyPayload, to_runway() selects the
@@ -831,9 +870,16 @@ class RunwayAdapter(RenderProviderAdapter):
                 _additions = _to_runway(_cp_obj)
                 if "promptImage" in _additions:
                     prompt_image = _additions["promptImage"]
+                    if not self._runway_prompt_image_url(prompt_image):
+                        for _ref in _cp_obj.refs:
+                            if _ref.image_url == prompt_image:
+                                prompt_image_fallback_text = _cp_obj.fallback_text.get(_ref.ref_id, "")
+                                break
                 if "promptTextExtra" in _additions:
-                    _existing = str(job.input_payload.prompt)
-                    job.input_payload.prompt = _existing + "; " + _additions["promptTextExtra"]
+                    job.input_payload.prompt = self._append_prompt_context(
+                        job.input_payload.prompt,
+                        _additions["promptTextExtra"],
+                    )
                     logger.info(
                         "CONSISTENCY_PAYLOAD_MERGED | job=%s | promptImage=%s | promptTextExtra_len=%d",
                         job.id,
@@ -842,8 +888,52 @@ class RunwayAdapter(RenderProviderAdapter):
                     )
 
             params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
+            storyboard_frame = params.get("storyboard_frame_url")
+            if storyboard_frame:
+                # An approved composition takes precedence over a character sheet.
+                prompt_image = HappyHorseR2VAdapter._provider_reference_url(storyboard_frame)
+                if not prompt_image.startswith(("https://", "data:image/")):
+                    raise ValueError("Storyboard frame must be an HTTPS image or supported image data URL")
+                if prompt_image.startswith("data:") and len(prompt_image.encode()) > 5 * 1024 * 1024:
+                    raise ValueError("Storyboard image exceeds Runway's 5 MB data URL limit")
+                runway_prompt_image = prompt_image
+            else:
+                runway_prompt_image = self._runway_prompt_image_url(prompt_image)
+            if prompt_image and not runway_prompt_image:
+                job.input_payload.prompt = self._append_prompt_context(
+                    job.input_payload.prompt,
+                    prompt_image_fallback_text,
+                )
+                job.metadata = dict(job.metadata or {})
+                job.metadata["runway_prompt_image_degraded"] = {
+                    "reason": "promptImage must be an https URL fetchable by Runway",
+                    "source": "consistency_payload" if _consistency_data is not None else "referenceAssets",
+                    "original_url_type": "local_path" if str(prompt_image).strip().startswith("/") else "non_https_url",
+                    "fallback_text_applied": bool(str(prompt_image_fallback_text or "").strip()),
+                }
+                logger.info(
+                    "RUNWAY_PROMPT_IMAGE_DEGRADED | job=%s | source=%s | fallback_text=%s",
+                    job.id,
+                    job.metadata["runway_prompt_image_degraded"]["source"],
+                    bool(str(prompt_image_fallback_text or "").strip()),
+                )
+            prompt_image = runway_prompt_image
+
+            params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
             ratio = self._normalize_ratio(params.get("ratio"), image_to_video=bool(prompt_image))
             duration = int(params.get("duration") or params.get("duration_seconds") or 5)
+            if params.get("strict_render_settings") or storyboard_frame:
+                # Gen-4.5 uses modern pixel ratios for image-to-video as well.
+                if model == "gen4.5":
+                    ratios = {"16:9": "1280:720", "9:16": "720:1280", "1:1": "960:960", "4:3": "1104:832", "3:4": "832:1104", "21:9": "1584:672", "9:21": "672:1584"}
+                    ratio = ratios.get(str(params.get("ratio")), str(params.get("ratio") or "1280:720"))
+                    supported = set(ratios.values()) if prompt_image else {"1280:720", "720:1280"}
+                    if ratio not in supported:
+                        raise ValueError("Unsupported Gen-4.5 output ratio")
+                # These are the vendor's named aspect mappings; some dimensions
+                # are slightly cropped to the model's supported pixel grid.
+                validation_ratio = str(params.get("ratio") or ratio) if model == "gen4.5" else ratio
+                _validate_requested_video_settings(params, duration=duration, resolution="720p", ratio=validation_ratio)
 
             # Extract seed from parameters if present
             raw_seed = params.get("seed")
@@ -884,19 +974,22 @@ class RunwayAdapter(RenderProviderAdapter):
                 "prompt_length": len(str(job.input_payload.prompt or "")),
                 "reference_count": 1 if prompt_image else 0,
                 "references_injected": bool(prompt_image),
+                "conditioning_mode": "first_frame" if storyboard_frame else "reference" if prompt_image else "text",
                 "duration": duration,
                 "ratio": ratio,
                 "seed_present": seed_val is not None,
             }
             logger.info(
-                "TEMP_RUNWAY_DEBUG request endpoint=%s model=%s payload=%s payload_schema=%s",
+                "RUNWAY_REQUEST endpoint=%s model=%s prompt_length=%d payload_schema=%s",
                 endpoint,
                 model,
-                payload,
+                len(payload.get("promptText", "")),
                 {k: type(v).__name__ for k, v in payload.items()},
             )
             auth_probe = await self._runway_request("GET", "/v1/organization")
             logger.info("TEMP_RUNWAY_DEBUG auth_probe endpoint=/v1/organization body=%s", auth_probe)
+            from app.services.prompt_budget_service import validate_provider_text
+            validate_provider_text(job, payload["promptText"], model)
             submit_response = await self._runway_request("POST", endpoint, payload=payload)
             task_id = self._extract_task_id(submit_response)
             if not task_id:
@@ -1541,6 +1634,7 @@ class HappyHorseAdapter(RenderProviderAdapter):
             duration = self._normalize_duration(params.get("duration") or params.get("duration_seconds") or 5)
             ratio = self._normalize_ratio(params.get("ratio"))
             seed = params.get("seed")
+            _validate_requested_video_settings(params, duration=duration, resolution=resolution, ratio=ratio)
             _consistency_data = getattr(job.input_payload, 'consistency_payload', None)
             if _consistency_data is not None:
                 from app.models.consistency import (
@@ -1586,6 +1680,8 @@ class HappyHorseAdapter(RenderProviderAdapter):
                 "seed_present": seed is not None,
             }
 
+            from app.services.prompt_budget_service import validate_provider_text
+            validate_provider_text(job, payload["input"]["prompt"], self.MODEL_NAME)
             submit_response = await self._happyhorse_request("POST", self.SUBMIT_PATH, payload=payload)
             task_id = self._extract_task_id(submit_response)
             if not task_id:
@@ -1929,6 +2025,11 @@ class WanTextToVideoAdapter(HappyHorseAdapter):
         }
         return sizes.get((resolution, ratio), "1280*720")
 
+    @staticmethod
+    def _normalize_wan_shot_type(value: object) -> str:
+        shot_type = str(value or "").strip().lower()
+        return shot_type if shot_type in {"single", "multi"} else "multi"
+
     def _build_submit_payload(
         self,
         *,
@@ -1946,7 +2047,7 @@ class WanTextToVideoAdapter(HappyHorseAdapter):
                 "size": self._wan_size(resolution, ratio),
                 "duration": duration,
                 "prompt_extend": bool(params.get("prompt_extend", True)),
-                "shot_type": str(params.get("shot_type") or "multi"),
+                "shot_type": self._normalize_wan_shot_type(params.get("shot_type")),
                 "watermark": bool(params.get("watermark", False)),
             },
         }
@@ -1979,6 +2080,288 @@ class WanTextToVideoAdapter(HappyHorseAdapter):
         }
 
 
+class OpenRouterVideoAdapter(HappyHorseR2VAdapter):
+    """Video render via OpenRouter's unified /videos API.
+
+    Purpose: route renders off DashScope (in billing arrears) onto OpenRouter's
+    prepaid credits WITHOUT changing the model. `alibaba/happyhorse-1.1` is
+    available on OpenRouter, so the reference-to-video behaviour this project is
+    tuned for is preserved. Reference frames are sent as data: URLs — confirmed
+    accepted by a live probe on 2026-08-25 (job 0sJdBrWaDxvp24eRVgFP, cost
+    $0.494), which is why this reuses HappyHorseR2VAdapter._provider_reference_url
+    (local path -> base64 data URL) unchanged.
+
+    OpenRouter's video API has NO negative_prompt field. The negative-prompt
+    channel built for HappyHorse is dropped here rather than folded into the
+    positive prompt (which would reintroduce the summon-by-naming failure it was
+    built to avoid). The drop is recorded in job metadata so it is visible.
+
+    Contract (verified live, not from docs):
+      POST {BASE}/videos  -> {"id","polling_url","status":"pending"}  (HTTP 202)
+      GET  polling_url     -> {"status": ...}; terminal: completed|failed|
+                              cancelled|expired (also accepts succeeded/canceled)
+      completed carries unsigned_urls[0] and usage.cost; the bytes are fetched
+      from GET {BASE}/videos/{id}/content?index=0 with the bearer key.
+    """
+
+    OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+    MODEL_NAME = "alibaba/happyhorse-1.1"
+    PROVIDER_LABEL = "OpenRouter"
+    ASSET_ID_PREFIX = "openrouter"
+    POLL_INTERVAL_SECONDS = 15.0
+    TIMEOUT_SECONDS = 1200
+
+    def _openrouter_key(self) -> str:
+        key = str(getattr(self.config, "api_key", "") or "").strip()
+        if key:
+            return key
+        try:
+            from app.config import get_settings
+            return str(getattr(get_settings(), "openrouter_api_key", "") or "").strip()
+        except Exception:
+            return ""
+
+    def _openrouter_model(self) -> str:
+        return (os.getenv("OPENROUTER_VIDEO_MODEL", "") or self.MODEL_NAME).strip()
+
+    @staticmethod
+    def _openrouter_resolution(resolution: object) -> str:
+        return "1080p" if str(resolution or "").upper().startswith("1080") else "720p"
+
+    def _build_input_references(self, job: RenderJobModel) -> list[dict]:
+        consistency_data = getattr(job.input_payload, "consistency_payload", None)
+        from app.models.consistency import ConsistencyPayload
+
+        cp = (
+            ConsistencyPayload(**consistency_data)
+            if isinstance(consistency_data, dict) else consistency_data
+        )
+        refs = [
+            ref.image_url for ref in (cp.refs if cp else [])
+            if ref.kind in {"character_face", "character_full"} and ref.image_url
+        ]
+        frame = (job.input_payload.parameters or {}).get("storyboard_frame_url")
+        references: list[dict] = []
+        seen: set[str] = {frame} if frame else set()
+        for url in [*job.input_payload.referenceAssets, *refs]:
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            references.append({
+                "type": "image_url",
+                "image_url": {"url": self._provider_reference_url(url)},
+            })
+        if len(references) > 9:
+            raise ValueError("OpenRouter supports at most nine reference images; choose the required references")
+        return references
+
+    def _build_openrouter_body(
+        self, job: RenderJobModel, *, resolution, duration, ratio, seed
+    ) -> dict:
+        _validate_requested_video_settings(job.input_payload.parameters or {}, duration=int(duration), resolution=self._openrouter_resolution(resolution), ratio=str(ratio))
+        body: dict = {
+            "model": self._openrouter_model(),
+            "prompt": str(job.input_payload.prompt or "").strip(),
+            "duration": int(duration),
+            "resolution": self._openrouter_resolution(resolution),
+            "aspect_ratio": str(ratio) if ":" in str(ratio) else "16:9",
+            "generate_audio": bool(
+                (job.input_payload.parameters or {}).get("generate_audio", False)
+            ),
+        }
+        references = self._build_input_references(job)
+        if references:
+            body["input_references"] = references
+        frame = (job.input_payload.parameters or {}).get("storyboard_frame_url")
+        if frame:
+            body["frame_images"] = [{
+                "type": "image_url", "image_url": {"url": self._provider_reference_url(frame)},
+                "frame_type": "first_frame",
+            }]
+        if seed is not None:
+            try:
+                body["seed"] = int(seed)
+            except (TypeError, ValueError):
+                pass
+        from app.services.prompt_budget_service import validate_provider_text
+        validate_provider_text(job, body["prompt"], body["model"])
+        return body
+
+    async def submit_job(self, job: RenderJobModel) -> RenderJobModel:
+        try:
+            key = self._openrouter_key()
+            if not key:
+                return self._failure_output(job, "Missing OpenRouter API key", "missing_api_key")
+
+            params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
+            resolution = self._normalize_resolution(params.get("resolution"))
+            duration = self._normalize_duration(
+                params.get("duration") or params.get("duration_seconds") or 4
+            )
+            ratio = self._normalize_ratio(params.get("ratio"))
+            seed = params.get("seed")
+            body = self._build_openrouter_body(
+                job, resolution=resolution, duration=duration, ratio=ratio, seed=seed
+            )
+
+            job.metadata = dict(job.metadata or {})
+            job.metadata["provider_payload_metadata"] = {
+                "provider": self.provider_id,
+                "endpoint": "/videos",
+                "model": body["model"],
+                "prompt_length": len(body["prompt"]),
+                "reference_count": len(body.get("input_references") or []),
+                "references_injected": bool(body.get("input_references") or body.get("frame_images")),
+                "frame_count": len(body.get("frame_images") or []),
+                "conditioning_mode": "first_frame" if body.get("frame_images") else "reference" if body.get("input_references") else "text",
+                "negative_prompt_supported": False,
+                "duration": duration,
+                "aspect_ratio": body["aspect_ratio"],
+                "resolution": body["resolution"],
+                "seed_present": seed is not None,
+            }
+
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            timeout = aiohttp.ClientTimeout(total=self.TIMEOUT_SECONDS)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    f"{self.OPENROUTER_BASE}/videos", headers=headers, json=body
+                ) as resp:
+                    if resp.status >= 400:
+                        detail = (await resp.text())[:400]
+                        return self._failure_output(
+                            job, f"OpenRouter submit HTTP {resp.status}: {detail}", "submit_failed"
+                        )
+                    submit = await resp.json(content_type=None)
+
+                job_id = submit.get("id")
+                if not job_id:
+                    return self._failure_output(
+                        job, "OpenRouter submit missing job id", "missing_task_id", submit
+                    )
+                poll_url = submit.get("polling_url") or f"{self.OPENROUTER_BASE}/videos/{job_id}"
+                job.provider_job_id = str(job_id)
+                job.status = "rendering"
+                job.progress = 10
+                job.updated_at = datetime.now().isoformat()
+
+                started = asyncio.get_running_loop().time()
+                final: dict = {}
+                status = "pending"
+                while True:
+                    await asyncio.sleep(self.POLL_INTERVAL_SECONDS)
+                    async with session.get(poll_url, headers=headers) as poll:
+                        if poll.status >= 400:
+                            if asyncio.get_running_loop().time() - started >= self.TIMEOUT_SECONDS:
+                                return self._failure_output(
+                                    job, f"OpenRouter poll HTTP {poll.status}", "timeout"
+                                )
+                            continue
+                        final = await poll.json(content_type=None)
+                    status = str(final.get("status", "")).strip().lower()
+                    logger.info(
+                        "OPENROUTER_VIDEO_POLL | job=%s | provider_job=%s | status=%s",
+                        job.id, job_id, status,
+                    )
+                    if status in {"completed", "succeeded", "failed", "cancelled", "canceled", "expired"}:
+                        break
+                    if asyncio.get_running_loop().time() - started >= self.TIMEOUT_SECONDS:
+                        return self._failure_output(
+                            job, f"OpenRouter render timed out after {self.TIMEOUT_SECONDS}s", "timeout", final
+                        )
+
+                if status not in {"completed", "succeeded"}:
+                    return self._failure_output(
+                        job, f"OpenRouter render {status or 'failed'}", "task_failed", final
+                    )
+
+                unsigned = final.get("unsigned_urls") or []
+                content_url = (
+                    unsigned[0] if unsigned
+                    else f"{self.OPENROUTER_BASE}/videos/{job_id}/content?index=0"
+                )
+                local_url = await self._download_openrouter_output(session, headers, content_url, job)
+                cost = (final.get("usage") or {}).get("cost")
+
+                job.status = "complete"
+                job.progress = 100
+                job.error_message = None
+                job.updated_at = datetime.now().isoformat()
+                job.completed_at = datetime.now().isoformat()
+                job.output_payload = RenderJobOutput(
+                    asset_url=local_url or content_url,
+                    thumbnail_url=None,
+                    metadata={
+                        "provider_response_normalized": {
+                            "provider": self.provider_id,
+                            "task": "video_generation",
+                            "status": "completed",
+                            "output": {"video_url": local_url or content_url, "status": "completed"},
+                            "metadata": {
+                                "model": body["model"],
+                                "generation_id": final.get("generation_id"),
+                                "cost": cost,
+                                "content_url": content_url,
+                            },
+                        }
+                    },
+                )
+                job.metadata["openrouter_cost"] = cost
+                job.metadata["openrouter_generation_id"] = final.get("generation_id")
+                return job
+        except Exception as exc:
+            return self._failure_output(job, f"OpenRouter API error: {exc}", "request_error")
+
+    async def _download_openrouter_output(self, session, headers, content_url, job) -> Optional[str]:
+        try:
+            root = self._outputs_root() / "renders" / str(job.project_id)
+            root.mkdir(parents=True, exist_ok=True)
+            dest = root / f"{job.id}_openrouter.mp4"
+            async with session.get(content_url, headers=headers) as resp:
+                if resp.status >= 400:
+                    logger.warning("OPENROUTER_VIDEO_DOWNLOAD_FAILED | job=%s | http=%s", job.id, resp.status)
+                    return None
+                data = await resp.read()
+            dest.write_bytes(data)
+            return f"/outputs/renders/{job.project_id}/{dest.name}"
+        except Exception as exc:
+            logger.warning("OPENROUTER_VIDEO_DOWNLOAD_ERROR | job=%s | %s", job.id, exc)
+            return None
+
+    async def get_job_status(self, job: RenderJobModel) -> RenderJobModel:
+        # submit_job blocks through completion (same shape as HappyHorse), so the
+        # job is already terminal by the time anything asks for status.
+        return job
+
+    async def cancel_job(self, job: RenderJobModel) -> bool:
+        return False
+
+    async def fetch_outputs(self, job: RenderJobModel) -> list[RenderAsset]:
+        assets: list[RenderAsset] = []
+        if job.output_payload and job.output_payload.asset_url:
+            assets.append(RenderAsset(
+                id=f"{self.ASSET_ID_PREFIX}-{job.id}",
+                job_id=job.id,
+                project_id=str(job.project_id),
+                shot_id=str(job.shot_id),
+                provider=self.provider_id,
+                asset_type="video",
+                url=job.output_payload.asset_url,
+            ))
+        return assets
+
+    async def get_status(self) -> ProviderStatus:
+        return ProviderStatus(
+            provider_id=self.provider_id,
+            name=self.config.name or self.PROVIDER_LABEL,
+            status="available" if self._openrouter_key() else "unavailable",
+            is_simulated=False,
+            capabilities=self.config.capabilities or ["video_generation", "reference_to_video"],
+            active_jobs=0,
+            queued_jobs=0,
+        )
+
+
 # Provider registry
 ADAPTER_REGISTRY: dict[str, type[RenderProviderAdapter]] = {
     "simulated": SimulatedProviderAdapter,
@@ -1988,6 +2371,8 @@ ADAPTER_REGISTRY: dict[str, type[RenderProviderAdapter]] = {
     "happyhorse": HappyHorseAdapter,
     "happyhorse-r2v": HappyHorseR2VAdapter,
     "wan": WanTextToVideoAdapter,
+    "openrouter": OpenRouterVideoAdapter,
+    "openrouter-video": OpenRouterVideoAdapter,
     "generic": GenericVideoProviderAdapter,
 }
 
@@ -1996,5 +2381,5 @@ def get_adapter(provider_id: str, config: ProviderConfig) -> RenderProviderAdapt
     """Factory function to get provider adapter"""
     adapter_class = ADAPTER_REGISTRY.get(provider_id)
     if not adapter_class:
-        adapter_class = ADAPTER_REGISTRY["simulated"]
+        raise ValueError(f"Unknown provider adapter {provider_id!r}")
     return adapter_class(config)

@@ -18,7 +18,7 @@ describe('Production Board navigation contract', () => {
 
   it('production board keeps empty state render and has no writers-room redirect', () => {
     const file = readFileSync(resolve(__dirname, 'pages/ProductionBoard.tsx'), 'utf8')
-    expect(file).toContain('No scenes yet. Generate your script in Writer&apos;s Room to begin.')
+    expect(file).toContain('Your scene wall starts with a script')
     expect(file).not.toContain("navigate('/studio/writers-room'")
   })
 

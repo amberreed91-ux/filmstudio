@@ -22,6 +22,7 @@ import asyncio
 from app.routes import overview_router, projects_router, exports_router
 from app.routes import auth_router
 from app.routes.render import router as render_router
+from app.routes.character_looks import router as character_looks_router
 from app.routes.agents import router as agents_router
 from app.routes.crew import router as crew_router
 from app.routes.memory import router as memory_router
@@ -71,7 +72,7 @@ from app.routes.screening_room import router as screening_room_router
 from app.routes.canonical_workflow import router as canonical_workflow_router
 from app.services.render import set_job_update_callback, set_storage
 from app.data.storage import get_storage
-from app.auth import AuthService, demo_login
+from app.auth import AuthService, demo_login, auth_service
 from app.config import settings, get_settings
 from app.middleware.request_id import RequestIDMiddleware, request_id_var
 from app.middleware.structured_logging import StructuredLoggingMiddleware
@@ -114,7 +115,7 @@ _start_time = time.time()
 storage = get_storage("sqlite")
 
 # Auth service instance
-auth_service = AuthService(storage)
+auth_service.storage = storage
 
 # Background task registry
 task_registry = BackgroundTaskRegistry()
@@ -306,6 +307,9 @@ if settings.log_format == "json":
 # 3. Rate limiting
 app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.rate_limit_per_minute)
 
+from app.middleware.project_access import ProjectAccessMiddleware
+app.add_middleware(ProjectAccessMiddleware, storage=storage, schema=app.openapi)
+
 # 4. CORS — configurable origins
 if settings.cors_origins:
     _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
@@ -317,7 +321,7 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_credentials=bool(_cors_origins),
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Admin-Token"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Admin-Token", "X-Session-Token"],
 )
 
 # 5. Security headers
@@ -365,6 +369,10 @@ app.include_router(stitching_router)
 app.include_router(proactive_router)
 app.include_router(compose_router)
 app.include_router(assembly_router)
+from app.routes.take_selection import router as take_selection_router
+app.include_router(take_selection_router)
+from app.routes.scene_direction import router as scene_direction_router
+app.include_router(scene_direction_router)
 app.include_router(emotion_analysis_router)
 app.include_router(writers_intelligence_router)
 app.include_router(admin_router)
@@ -385,6 +393,7 @@ app.include_router(studio_brain_router)
 app.include_router(reference_assets_router)
 app.include_router(screening_room_router)
 app.include_router(canonical_workflow_router)
+app.include_router(character_looks_router)
 
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)

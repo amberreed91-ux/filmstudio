@@ -1,0 +1,68 @@
+{
+  "passed": true,
+  "checks": [
+    "Deep link opens third step; no automatic writes or approval",
+    "Image upload remains unapproved and reloads profile revision",
+    "Stale approval failure visible; no false lock",
+    "Explicit approval locks saved text and portrait using fresh revision",
+    "Approval survives page reload via backend state",
+    "Locked physical fields protected; energy remains editable",
+    "Cancel revision leaves approval untouched",
+    "Unsaved profile drafts cannot be approved",
+    "Explicit save refreshes saved physical description before approval",
+    "Reapproval advances look version",
+    "390px mobile layout has no horizontal overflow",
+    "Provider limitations available in disclosure",
+    "Previs handoff and return preserve film, scene, shot, and look step",
+    "Read failure displayed without claiming completion"
+  ],
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/reference",
+      "payload": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/approve",
+      "payload": {
+        "expected_profile_revision": "revision-2",
+        "face_image_url": "/outputs/references/project_5907c60cddbc/job-20260905135241-4ee841a8-scene_001_shot_002_scene_001_shot_002_reference_3.jpg",
+        "body_image_url": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/approve",
+      "payload": {
+        "expected_profile_revision": "revision-2",
+        "face_image_url": "/outputs/references/project_5907c60cddbc/job-20260905135241-4ee841a8-scene_001_shot_002_scene_001_shot_002_reference_3.jpg",
+        "body_image_url": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/revise",
+      "payload": {
+        "expected_profile_revision": "revision-3"
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia",
+      "payload": {
+        "look": "Dark brown skin, oval face, wide-set brown eyes, and a small scar through the left eyebrow. Slender build, shoulder-length locs. A freckle on her right cheek."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_nia/look/approve",
+      "payload": {
+        "expected_profile_revision": "revision-5",
+        "face_image_url": "/outputs/references/project_5907c60cddbc/job-20260905135241-4ee841a8-scene_001_shot_002_scene_001_shot_002_reference_3.jpg",
+        "body_image_url": null
+      }
+    }
+  ],
+  "errors": []
+}

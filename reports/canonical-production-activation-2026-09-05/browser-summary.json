@@ -1,0 +1,63 @@
+{
+  "live": {
+    "projects": [
+      {
+        "projectId": "project_ca31687b1ca7",
+        "title": "THE LAST TIDE"
+      },
+      {
+        "projectId": "project_5907c60cddbc",
+        "title": "I was reborn"
+      }
+    ],
+    "scriptContexts": [
+      {
+        "projectId": "project_ca31687b1ca7",
+        "script_id": "script_246e4238c7ec9ed91223e0a5",
+        "sequence_id": "",
+        "beat_ids": []
+      },
+      {
+        "projectId": "project_5907c60cddbc",
+        "script_id": "script_59e3dd620f93ecfd7325097c",
+        "sequence_id": "",
+        "beat_ids": []
+      }
+    ],
+    "sceneCount": 14,
+    "panelVisible": true,
+    "legacyStartEnabled": true,
+    "engineLabel": "New renders: OpenRouter · HappyHorse. Retries and revisions retain their original render provider."
+  },
+  "fixtureRequests": [
+    {
+      "path": "/api/f51/studio/production-threads/ui-provider-verification/renders",
+      "body": {
+        "provider": "openrouter-video",
+        "retry_confirmed": false
+      },
+      "sentToBackend": false
+    },
+    {
+      "path": "/api/f51/studio/production-threads/ui-provider-verification/previs/generate",
+      "body": {
+        "provider": "openrouter-video"
+      },
+      "sentToBackend": false
+    },
+    {
+      "path": "/api/f51/studio/production-threads/ui-provider-verification/renders",
+      "body": {
+        "retry_confirmed": true
+      },
+      "sentToBackend": false
+    },
+    {
+      "path": "/api/f51/studio/production-threads/ui-provider-verification/revision/render",
+      "body": {},
+      "sentToBackend": false
+    }
+  ],
+  "pageErrors": [],
+  "httpErrors": []
+}

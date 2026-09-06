@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "before": {
+    "prompt": "A steady wide shot. Keep the same framing.",
+    "duration_seconds": 8,
+    "resolution": "1080p",
+    "seed": 0
+  },
+  "after": {
+    "prompt": "A steady wide shot. Keep the same framing.",
+    "duration_seconds": 12,
+    "resolution": "1080p",
+    "seed": 0
+  },
+  "interceptedRequests": 3
+}

@@ -167,6 +167,25 @@ export async function registerKnowledgeBible(
   })
 }
 
+export async function uploadKnowledgeBible(
+  projectId: string,
+  file: File,
+  payload?: {
+    title?: string
+    bible_type?: string
+  },
+): Promise<KnowledgeBibleResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('title', payload?.title || '')
+  form.append('bible_type', payload?.bible_type || 'general')
+
+  return fetchJson<KnowledgeBibleResponse>(`/api/projects/${projectId}/knowledge/bibles/upload`, {
+    method: 'POST',
+    body: form,
+  })
+}
+
 export async function listKnowledgeBibles(projectId: string): Promise<{ bibles: KnowledgeBible[] }> {
   return fetchJson<{ bibles: KnowledgeBible[] }>(`/api/projects/${projectId}/knowledge/bibles`)
 }
@@ -208,4 +227,3 @@ export async function listKnowledgeConflicts(projectId: string): Promise<{ confl
 export async function getKnowledgeTrace(projectId: string, traceId: string): Promise<{ trace: KnowledgeReasoningTrace }> {
   return fetchJson<{ trace: KnowledgeReasoningTrace }>(`/api/projects/${projectId}/knowledge/traces/${traceId}`)
 }
-

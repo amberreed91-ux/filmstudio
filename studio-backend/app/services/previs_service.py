@@ -7,6 +7,9 @@ from typing import Any
 
 from app.data.storage import StorageInterface, get_storage
 from app.models.storyboard_blueprint import StoryboardBlueprintStatus
+from app.models.previs_render import PrevisRenderSettings
+from app.prompt_assembly_context import preserve_generation_facts
+from app.services.storyboard_render_inputs import storyboard_render_inputs, append_shot_handoff
 from app.services.render import RenderService, render_service
 from app.services.shot_prompt_builder import build_shot_aware_prompt, get_shot_type_label
 from app.services.stability import PersistenceError, ProviderError, StateError, ValidationError
@@ -14,7 +17,9 @@ from app.services.stability import PersistenceError, ProviderError, StateError, 
 logger = logging.getLogger(__name__)
 
 ACTIVE_STATUSES = {"queued", "pending", "submitted", "generating", "processing", "rendering", "retrying"}
-TERMINAL_STATUSES = {"complete", "approved", "failed", "cancelled", "superseded", "rejected"}
+TERMINAL_STATUSES = {"complete", "approved", "failed", "cancelled", "superseded", "rejected", "needs_review"}
+
+_build_generation_prompt = preserve_generation_facts(build_shot_aware_prompt)
 
 
 class PrevisService:
@@ -81,22 +86,21 @@ class PrevisService:
             raise StateError("Storyboard provenance is invalid", stage="previs_storyboard_reference")
         if (
             blueprint.approved_version_id != version.version_id
+            or blueprint.current_version_id != version.version_id
             or version.status != StoryboardBlueprintStatus.APPROVED
         ):
             raise StateError("Previs requires an approved storyboard version", stage="previs_storyboard_reference")
         prompt = str(shot.render_contract.provider_neutral_prompt or "").strip()
         if not prompt:
             raise ValidationError("Storyboard shot has no render prompt", stage="previs_storyboard_reference")
-        references = list(dict.fromkeys([
-            *[str(item).strip() for item in shot.render_contract.reference_assets if str(item).strip()],
-            *([shot.storyboard_image_url] if shot.storyboard_image_url else []),
-        ]))
+        inputs = storyboard_render_inputs(shot)
         return {
             "shot": shot,
             "blueprint": blueprint,
             "version": version,
-            "prompt": prompt,
-            "reference_assets": references,
+            "prompt": inputs["prompt"],
+            "reference_assets": inputs["reference_assets"],
+            "parameters": inputs["parameters"],
         }
 
     async def generate_scene(
@@ -110,12 +114,22 @@ class PrevisService:
         allow_approved_revision: bool = False,
         source_previs_image_id: str | None = None,
         attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
     ) -> dict:
         started = perf_counter()
         if shot_number < 1 or take_number < 1:
             raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
         storage = self._require_storage()
         scene = self._scene(project_id, scene_id)
+        if not storyboard_shot_id:
+            blueprint = storage.get_storyboard_blueprint(project_id, scene_id)
+            if blueprint is not None:
+                shots = storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.current_version_id)
+                selected = next((shot for shot in shots if shot.shot_number == shot_number), None)
+                if selected is None:
+                    raise StateError("Requested shot is missing from the current storyboard", stage="previs_storyboard_reference")
+                storyboard_shot_id = selected.storyboard_shot_id
         storyboard = (
             self._storyboard_context(project_id, scene_id, storyboard_shot_id)
             if storyboard_shot_id
@@ -141,7 +155,7 @@ class PrevisService:
             # total_shots is left to resolve_total_shots, which reads shot_count /
             # shots off the execution_summary scene dict. Previs has no separate
             # shot list of its own, and the scene dict is the authoritative count.
-            prompt = build_shot_aware_prompt(
+            prompt = _build_generation_prompt(
                 scene_data=scene,
                 shot_number=shot_number,
                 take_number=take_number,
@@ -154,6 +168,26 @@ class PrevisService:
             blueprint_id = None
             blueprint_version_id = None
 
+        parameters = dict(storyboard["parameters"] if storyboard else {"duration": 3, "ratio": "1280:720"})
+        if render_settings is not None:
+            if render_settings.prompt is not None:
+                prompt = render_settings.prompt
+            explicit_planning = {key: value.strip() for key, value in render_settings.shot_planning.items() if value.strip()}
+            if explicit_planning:
+                prompt += "\n\n[CREATOR SHOT DIRECTIONS]\n" + "\n".join(f"{key}: {value}" for key, value in explicit_planning.items())
+                parameters["creator_shot_planning"] = explicit_planning
+            for field, key in (("duration_seconds", "duration"), ("resolution", "resolution"), ("seed", "seed")):
+                value = getattr(render_settings, field)
+                if value is not None:
+                    parameters[key] = value
+            parameters["strict_render_settings"] = True
+            if render_settings.prompt is not None or explicit_planning:
+                parameters["preserve_shot_prompt"] = True
+        prompt = append_shot_handoff(prompt, parameters.get("continuity_handoff") or {})
+        parameters.update(previs=True, blueprint_id=blueprint_id,
+                          blueprint_version_id=blueprint_version_id, storyboard_shot_id=storyboard_shot_id)
+        parameters.update(shot_number=shot_number, take_number=take_number)
+
         existing = storage.load_previs_images(project_id, scene_id)
         target_key = storyboard_shot_id or shot_id
         matching = [
@@ -162,7 +196,8 @@ class PrevisService:
         ]
         active = next((image for image in matching if image.get("status") in ACTIVE_STATUSES), None)
         if active:
-            return self._generation_response(active, shot_number, take_number, duplicate=True)
+            active_take = int((active.get("metadata") or {}).get("take_number") or take_number)
+            return self._generation_response(active, shot_number, active_take, duplicate=True)
         approved = next((image for image in matching if image.get("approved")), None)
         if approved and not allow_approved_revision:
             raise StateError(
@@ -171,22 +206,35 @@ class PrevisService:
                 metadata={"previs_image_id": approved["id"]},
             )
 
+        # Pick the render provider. A per-render override from the caller (the
+        # RENDER ENGINE dropdown) wins when it names a real, registered provider;
+        # otherwise fall back to the render system's own selection seam
+        # (RENDER_VIDEO_PROVIDER env → render_video_provider setting →
+        # "happyhorse"), the same one render.get_default_provider() uses
+        # everywhere else. This path used to hardcode "runway", which is why the
+        # front-end render ignored the OpenRouter migration.
+        requested = str(provider or "").strip().lower()
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            render_provider = self._renderer.get_default_provider()
+        else:
+            render_provider = "runway"
+
         try:
             job = self._renderer.create_job(
                 project_id=project_id,
                 shot_id=shot_id,
-                provider="runway",
+                provider=render_provider,
                 prompt=prompt,
                 reference_assets=reference_assets,
-                parameters={
-                    "duration": 3,
-                    "ratio": "1280:720",
-                    "previs": True,
-                    "blueprint_id": blueprint_id,
-                    "blueprint_version_id": blueprint_version_id,
-                    "storyboard_shot_id": storyboard_shot_id,
-                },
+                parameters=parameters,
             )
+        except (ValidationError, StateError):
+            raise
         except Exception as exc:
             raise ProviderError(
                 "Unable to create Previs render job",
@@ -216,6 +264,9 @@ class PrevisService:
                     "take_number": take_number,
                     "reference_assets": reference_assets,
                     "scene_context": scene,
+                    "render_provider": render_provider,
+                    "render_settings": render_settings.model_dump(exclude_none=True) if render_settings else None,
+                    "render_parameters": parameters,
                 },
             )
         except Exception as exc:
@@ -240,17 +291,20 @@ class PrevisService:
                     raise ProviderError(
                         "Previs provider completed without an output asset",
                         stage="previs_submit",
-                        metadata={"job_id": job.id, "provider": "runway"},
+                        metadata={"job_id": job.id, "provider": render_provider},
                     )
                 persisted_status = "complete"
                 storage.update_previs_image_status(job.id, persisted_status, image_path=asset_url)
+            elif submitted_status == "needs_review":
+                persisted_status = "needs_review"
+                storage.update_previs_image_status(job.id, persisted_status, failure_reason=str(getattr(submitted, "error_message", "") or "Review required shot facts before rendering"))
             elif submitted_status in {"failed", "cancelled"}:
                 reason = str(getattr(submitted, "error_message", "") or f"Provider job {submitted_status}")
                 storage.update_previs_image_status(job.id, submitted_status, failure_reason=reason)
                 raise ProviderError(
                     "Previs provider did not accept the generation",
                     stage="previs_submit",
-                    metadata={"job_id": job.id, "provider": "runway", "status": submitted_status},
+                    metadata={"job_id": job.id, "provider": render_provider, "status": submitted_status},
                 )
             else:
                 persisted_status = submitted_status if submitted_status in ACTIVE_STATUSES else "pending"
@@ -266,13 +320,14 @@ class PrevisService:
             raise ProviderError(
                 "Previs provider submission failed",
                 stage="previs_submit",
-                metadata={"job_id": job.id, "provider": "runway", "cause": type(exc).__name__},
+                metadata={"job_id": job.id, "provider": render_provider, "cause": type(exc).__name__},
             ) from exc
 
         logger.info(
-            "project_id=%s job_id=%s provider=runway stage=previs_submit duration_ms=%d",
+            "project_id=%s job_id=%s provider=%s stage=previs_submit duration_ms=%d",
             project_id,
             job.id,
+            render_provider,
             int((perf_counter() - started) * 1000),
         )
         record = storage.get_previs_image(image_id)
@@ -323,7 +378,7 @@ class PrevisService:
                             job.id,
                             getattr(job, "provider", ""),
                         )
-            elif status in {"failed", "cancelled"}:
+            elif status in {"failed", "cancelled", "needs_review"}:
                 reason = str(getattr(job, "error_message", "") or f"Provider job {status}")
                 storage.update_previs_image_status(image["job_id"], status, failure_reason=reason)
                 image["status"] = status
@@ -383,6 +438,8 @@ class PrevisService:
             allow_approved_revision=False,
             source_previs_image_id=image["id"],
             attempt_number=int(image.get("attempt_number") or 1) + 1,
+            provider=metadata.get("render_provider"),
+            render_settings=PrevisRenderSettings.model_validate(metadata["render_settings"]) if metadata.get("render_settings") else None,
         )
 
     def create_production_package(self, project_id: str, scene_id: str) -> dict[str, Any]:
@@ -419,8 +476,7 @@ class PrevisService:
                     "previs_image_id": approved_by_shot[shot.storyboard_shot_id]["id"],
                     "previs_job_id": approved_by_shot[shot.storyboard_shot_id]["job_id"],
                     "image_path": approved_by_shot[shot.storyboard_shot_id]["image_path"],
-                    "prompt": shot.render_contract.provider_neutral_prompt,
-                    "reference_assets": list(shot.render_contract.reference_assets),
+                    **self._packaged_render_inputs(shot, approved_by_shot[shot.storyboard_shot_id]),
                     "continuity": shot.continuity_plan.model_dump(mode="json"),
                     "staging": shot.visual_plan.blocking,
                 }
@@ -437,6 +493,30 @@ class PrevisService:
                 "payload": payload,
             }
         )
+
+    def _packaged_render_inputs(self, shot, image: dict) -> dict:
+        """Freeze the approved take's effective inputs for the production handoff."""
+        inputs = storyboard_render_inputs(shot)
+        metadata = image.get("metadata") or {}
+        parameters = {**inputs["parameters"], **(metadata.get("render_parameters") or {})}
+        prompt = image.get("prompt_used") or inputs["prompt"]
+        references = list(metadata.get("reference_assets") or inputs["reference_assets"])
+        provider = metadata.get("render_provider")
+        job = self._require_storage().get_job(image["job_id"])
+        if job is not None:
+            if job.project_id != shot.project_id or job.shot_id != shot.shot_id:
+                raise StateError("Approved Previs job does not belong to this storyboard shot", stage="previs_package")
+            # Includes the seed resolved at submission, not merely the UI input.
+            for key in ("duration", "duration_seconds", "ratio", "resolution", "seed", "storyboard_frame_url"):
+                if key in (job.input_payload.parameters or {}):
+                    parameters[key] = job.input_payload.parameters[key]
+            prompt = job.input_payload.prompt or prompt
+            references = list(job.input_payload.referenceAssets or references)
+            provider = job.provider
+        parameters.pop("previs", None)
+        parameters.pop("idempotency_key", None)
+        parameters["preserve_shot_prompt"] = True
+        return {"prompt": prompt, "reference_assets": references, "parameters": parameters, "render_provider": provider}
 
     async def generate_all(self, project_id: str) -> dict:
         scenes = self._scenes(project_id)
@@ -470,7 +550,7 @@ class PrevisService:
             "storyboard_shot_id": record.get("storyboard_shot_id"),
             "duplicate": duplicate,
             "message": (
-                f"Preview generation {'already active' if duplicate else 'started'} for Shot "
+                record.get("failure_reason") or f"Preview generation {'already active' if duplicate else 'started'} for Shot "
                 f"{shot_number}, Take {take_number} ({get_shot_type_label(shot_number)})"
             ),
         }

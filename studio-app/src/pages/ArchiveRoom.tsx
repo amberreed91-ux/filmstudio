@@ -35,15 +35,14 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type SortMode = 'recent' | 'az' | 'runtime' | 'status'
-type FilterMode = 'all' | 'in_progress' | 'complete' | 'archived'
+type SortMode = 'recent' | 'az' | 'status'
+type FilterMode = 'all' | 'in_progress' | 'complete'
 type FilmStatus = 'complete' | 'in_progress' | 'draft'
 
 interface FilmEntry {
   project: PersistedProjectState
   status: FilmStatus
   sceneCount: number
-  runtime: number
   genre: string
   logline: string
   thumbnailUrl?: string
@@ -70,15 +69,13 @@ interface ReadinessIssue {
 const SORT_LABELS: Record<SortMode, string> = {
   recent: 'Most Recent',
   az: 'A-Z',
-  runtime: 'Runtime',
   status: 'Status',
 }
 
 const FILTER_LABELS: Record<FilterMode, string> = {
   all: 'ALL',
   in_progress: 'IN PROGRESS',
-  complete: 'COMPLETE',
-  archived: 'ARCHIVED',
+  complete: 'SCENES APPROVED',
 }
 
 function statusBadgeClass(status: FilmStatus): string {
@@ -98,10 +95,6 @@ function deriveStatus(project: PersistedProjectState, scenes: Scene[]): FilmStat
   if (approvedCount > 0 && approvedCount >= scenes.length && scenes.length > 0) return 'complete'
   if (reviewedCount > 0 || approvedCount > 0) return 'in_progress'
   return 'draft'
-}
-
-function estimateRuntime(scenes: Scene[]): number {
-  return scenes.length * 2.5
 }
 
 function deriveGenre(project: PersistedProjectState): string {
@@ -192,7 +185,6 @@ export default function ArchiveRoom() {
             project,
             status: deriveStatus(project, scenes),
             sceneCount: scenes.length,
-            runtime: estimateRuntime(scenes),
             genre: deriveGenre(project),
             logline: deriveLogline(project),
           })
@@ -201,7 +193,6 @@ export default function ArchiveRoom() {
             project,
             status: 'draft',
             sceneCount: 0,
-            runtime: 0,
             genre: deriveGenre(project),
             logline: deriveLogline(project),
           })
@@ -275,9 +266,6 @@ export default function ArchiveRoom() {
       case 'az':
         sorted.sort((a, b) => a.project.title.localeCompare(b.project.title))
         break
-      case 'runtime':
-        sorted.sort((a, b) => b.runtime - a.runtime)
-        break
       case 'status': {
         const order: Record<FilmStatus, number> = { complete: 0, in_progress: 1, draft: 2 }
         sorted.sort((a, b) => order[a.status] - order[b.status])
@@ -314,7 +302,7 @@ export default function ArchiveRoom() {
       a.download = `${film.project.title}-export.json`
       a.click()
       URL.revokeObjectURL(url)
-      setSuccess(`Exported "${film.project.title}"`)
+      setSuccess(`Downloaded export details (JSON) for "${film.project.title}"`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Export failed')
     } finally {
@@ -330,14 +318,14 @@ export default function ArchiveRoom() {
       if (delError) {
         setError(delError)
       } else {
-        setSuccess(`"${film.project.title}" archived`)
+        setSuccess(`"${film.project.title}" deleted`)
         setFilms((prev) => prev.filter((f) => f.project.project_id !== film.project.project_id))
         if (selectedFilm?.project.project_id === film.project.project_id) {
           setSelectedFilm(null)
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Archive failed')
+      setError(err instanceof Error ? err.message : 'Delete failed')
     } finally {
       setArchiving(null)
       setShowArchiveConfirm(null)
@@ -372,7 +360,7 @@ export default function ArchiveRoom() {
 
       setReadinessIssues(issues)
       if (issues.length === 0) {
-        setSuccess('All checks passed — film is ready')
+        setSuccess('No issues found in these project checks. Review and approve the final output in Theatre.')
       } else {
         const errors = issues.filter((i) => i.severity === 'error').length
         const warnings = issues.filter((i) => i.severity === 'warning').length
@@ -391,9 +379,9 @@ export default function ArchiveRoom() {
     setError('')
     try {
       await fetchExportPackage(selectedFilm.project.project_id, 'festival-export')
-      setSuccess(`"${selectedFilm.project.title}" published to archive`)
+      setSuccess(`Export details are ready for "${selectedFilm.project.title}". Use Export JSON to download them.`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Publish failed')
+      setError(err instanceof Error ? err.message : 'Could not prepare export details')
     } finally {
       setPublishing(false)
     }
@@ -422,14 +410,14 @@ export default function ArchiveRoom() {
 
         {/* ── HEADER ROW ────────────────────────────────────────────────── */}
         <div className="px-4 pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h1
               className="text-2xl font-bold uppercase tracking-[0.2em] amber-glow"
               style={{ color: 'var(--color-primary)' }}
             >
               THE VAULT
             </h1>
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
               {/* Sort dropdown */}
               <select
                 value={sortMode}
@@ -483,7 +471,7 @@ export default function ArchiveRoom() {
         </div>
 
         {/* ── TWO-PANEL LAYOUT ──────────────────────────────────────────── */}
-        <div className="flex h-[calc(100vh-220px)] w-full gap-4 px-4 pb-4">
+        <div className="flex w-full flex-col gap-4 px-4 pb-8 xl:flex-row">
           {/* ── LEFT: FILM LIST (horizontal rows) ──────────────────────── */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
@@ -529,17 +517,17 @@ export default function ArchiveRoom() {
                       <span
                         className={`status-chip absolute right-2 top-2 z-10 rounded border px-1.5 py-0.5 text-[8px] font-bold ${statusBadgeClass(film.status)}`}
                       >
-                        {film.status.replace('_', ' ').toUpperCase()}
+                        {film.status === 'complete' ? 'Scenes approved' : film.status.replace('_', ' ').toUpperCase()}
                       </span>
                     </div>
 
                     {/* Right detail area */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <h3 className="headline-lg truncate text-on-surface">
                           {film.project.title}
                         </h3>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleScreen(film) }}
@@ -561,7 +549,7 @@ export default function ArchiveRoom() {
                             ) : (
                               <Download size={12} />
                             )}
-                            EXPORT
+                            EXPORT JSON
                           </button>
                           <button
                             type="button"
@@ -570,7 +558,7 @@ export default function ArchiveRoom() {
                             style={{ color: 'var(--color-on-surface-variant)' }}
                           >
                             <Edit3 size={12} />
-                            RENAME
+                            DETAILS
                           </button>
                           <button
                             type="button"
@@ -584,17 +572,15 @@ export default function ArchiveRoom() {
                             ) : (
                               <Trash2 size={12} />
                             )}
-                            ARCHIVE
+                            DELETE
                           </button>
                         </div>
                       </div>
                       {/* Metadata row */}
-                      <div className="mt-1.5 flex items-center gap-3 font-metadata-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-3 font-metadata-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
                         <span>{filmCompletedDate(film)}</span>
                         <span className="opacity-30">|</span>
                         <span>{film.sceneCount} SCENES</span>
-                        <span className="opacity-30">|</span>
-                        <span>{Math.round(film.runtime)}m RUNTIME</span>
                       </div>
                     </div>
                   </div>
@@ -604,11 +590,11 @@ export default function ArchiveRoom() {
           </div>
 
           {/* ── RIGHT: ASSET BIN PANEL (380px) ────────────────────────── */}
-          <div className="flex w-[380px] shrink-0 flex-col gap-3 overflow-y-auto">
+          <div className="flex min-w-0 w-full flex-col gap-3 xl:w-[360px] xl:shrink-0">
             {selectedFilm ? (
               <div className="glass-panel rounded-xl p-4 space-y-3">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <span className="font-metadata-sm text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--color-primary)' }}>
                       ASSET BIN
@@ -716,7 +702,7 @@ export default function ArchiveRoom() {
                 </button>
 
                 {/* Readiness scan + Publish actions */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => void handleReadinessScan()}
@@ -735,7 +721,7 @@ export default function ArchiveRoom() {
                     style={{ color: 'var(--color-on-surface-variant)' }}
                   >
                     {publishing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                    PUBLISH
+                    PREPARE EXPORT DETAILS
                   </button>
                 </div>
 
@@ -776,17 +762,17 @@ export default function ArchiveRoom() {
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
             onClick={() => setShowArchiveConfirm(null)}
           >
-            <div className="glass-panel w-[360px] rounded-xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="glass-panel w-[360px] max-w-[calc(100vw-32px)] rounded-xl p-6" onClick={(e) => e.stopPropagation()}>
               <div className="mb-2 flex items-center gap-2">
                 <AlertCircle size={20} style={{ color: 'var(--color-error)' }} />
                 <h3 className="text-lg font-bold" style={{ color: 'var(--color-on-surface)' }}>
-                  Archive Film
+                  Delete film
                 </h3>
               </div>
               <p className="mb-4 text-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
-                Are you sure you want to archive "{showArchiveConfirm.project.title}"? This will remove it from your active projects. This cannot be undone.
+                Delete "{showArchiveConfirm.project.title}" permanently? This deletes the project rather than moving it into an archive. This cannot be undone.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setShowArchiveConfirm(null)}
@@ -811,7 +797,7 @@ export default function ArchiveRoom() {
                   ) : (
                     <Trash2 size={14} />
                   )}
-                  ARCHIVE
+                  DELETE FILM
                 </button>
               </div>
             </div>

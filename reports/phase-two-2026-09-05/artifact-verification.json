@@ -1,0 +1,10 @@
+{
+  "real_clips": 6,
+  "hashes_verified": true,
+  "prompts_match_preserved_requests": true,
+  "model_and_reference_injection_verified": true,
+  "per_expectation_observations_present": true,
+  "no_video_retries": true,
+  "reported_video_cost_usd": 2.964,
+  "combined_cut_browser_play_and_seek": "passed"
+}

@@ -3,8 +3,6 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Brain,
   CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Download,
   Film,
@@ -21,6 +19,7 @@ import {
   Wand2,
 } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
+import { useTakeSelection } from '../hooks/useTakeSelection'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
 import ProductionAcceptancePanel from '../components/ProductionAcceptancePanel'
@@ -34,7 +33,6 @@ import CanonicalWorkflowPanel from '../components/CanonicalWorkflowPanel'
 import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
 import {
-  analyzeSceneEmotion,
   approveScreeningOutput,
   applyAudioBrief,
   assembleFilm,
@@ -54,7 +52,6 @@ import {
   stitchShortFilm,
   updateScene,
   type AssemblyStatusResponse,
-  type EmotionAnalysisResult,
   type FinalShortFilmPackage,
   type ProductionAcceptanceReport,
   type RenderJob,
@@ -64,8 +61,14 @@ import {
   type ScreeningManifest,
   type SoundAdvisory,
 } from '../lib/studioApi'
+import {
+  analyzeSceneEmotion,
+  getCachedSceneEmotion,
+  type EmotionAnalysisResult,
+} from '../lib/emotionAnalysisApi'
 import type { ProjectAudienceSimulation, SceneAudienceSimulation } from '../types/audienceSimulator'
 import { normalizeJobStatus } from '../lib/jobStatus'
+import { sceneShotTakes } from '../lib/screeningShots'
 import { persistActiveProjectId, resolveActiveProjectId } from '../lib/projectContext'
 import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
 import { browserPlaybackUrl } from '../lib/studioMedia'
@@ -89,17 +92,6 @@ interface CoDirectorNote {
   agentName: string
   text: string
   timestamp: string
-}
-
-interface WeakSceneMarker {
-  startPercent: number
-  endPercent: number
-}
-
-interface SceneAudienceMetrics {
-  engagement: number
-  tension: number
-  emotionalImpact: number
 }
 
 interface ShotInfo {
@@ -185,9 +177,11 @@ export default function ScreeningRoom() {
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([])
   const [screeningManifest, setScreeningManifest] = useState<ScreeningManifest | null>(null)
   const [approvingScreeningOutput, setApprovingScreeningOutput] = useState(false)
-  const [, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [activeStep, setActiveStep] = useState<'watch' | 'review' | 'approve' | 'deliver'>('watch')
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
 
   // ── Video player state ────────────────────────────────────────────────────
   const [sceneTakes, setSceneTakes] = useState<SceneTake[]>([])
@@ -197,11 +191,10 @@ export default function ScreeningRoom() {
   const [duration, setDuration] = useState(0)
   const [playbackRate, setPlaybackRate] = useState<PlaybackRate>(1)
   const [volume, setVolume] = useState(80)
-  const [showTakeDropdown, setShowTakeDropdown] = useState(false)
-  const [hoveringVideo, setHoveringVideo] = useState(false)
 
   // ── Shot navigation state ───────────────────────────────────────────────
   const [activeShotNumber, setActiveShotNumber] = useState(1)
+  const [previewScope, setPreviewScope] = useState<'shot' | 'scene'>('shot')
   const [activeShotTakeIndex, setActiveShotTakeIndex] = useState(0)
 
   useEffect(() => {
@@ -233,10 +226,8 @@ export default function ScreeningRoom() {
 
   // ── Per-scene audience sim cache ────────────────────────────────────────
   const [sceneAudienceCache, setSceneAudienceCache] = useState<Record<string, SceneAudienceSimulation>>({})
-  const [sceneAudienceLoading, setSceneAudienceLoading] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
-  const timelineRef = useRef<HTMLDivElement>(null)
 
   // ── Export state ──────────────────────────────────────────────────────────
   const [exporting, setExporting] = useState(false)
@@ -258,8 +249,9 @@ export default function ScreeningRoom() {
   const [isFullFilm, setIsFullFilm] = useState(false)
   const [showFinOverlay, setShowFinOverlay] = useState(false)
 
-  // ── Emotion analysis cache (Groq-powered audience scores) ───────────────
+  // ── Creator-requested external emotion analysis cache ──────────────────
   const [emotionAnalysisCache, setEmotionAnalysisCache] = useState<Record<string, EmotionAnalysisResult>>({})
+  const [emotionAnalysisLoading, setEmotionAnalysisLoading] = useState(false)
 
   // ── Scene composition cache (for status badges across all scenes) ────────
   const [sceneCompositionsCache, setSceneCompositionsCache] = useState<Record<string, SceneComposition | null>>({})
@@ -347,40 +339,9 @@ export default function ScreeningRoom() {
     return () => { cancelled = true }
   }, [activeTakeIndex, sceneTakes, effectiveProjectId])
 
-  // ── Weak scene markers (simulated) ────────────────────────────────────────
-  const weakSceneMarkers: WeakSceneMarker[] = useMemo(() => {
-    if (scenes.length === 0) return []
-    // Simulate weak scenes at ~30% and ~70% of timeline
-    return [
-      { startPercent: 28, endPercent: 35 },
-      { startPercent: 68, endPercent: 74 },
-    ]
-  }, [scenes])
-
   // ── Persist project ID ────────────────────────────────────────────────────
   useEffect(() => {
     if (effectiveProjectId) persistActiveProjectId(effectiveProjectId)
-  }, [effectiveProjectId])
-
-  // Canonical Screening Room registry: project-scoped, browser-safe playback URLs.
-  useEffect(() => {
-    if (!effectiveProjectId) {
-      setScreeningManifest(null)
-      return
-    }
-    let cancelled = false
-    async function loadManifest() {
-      try {
-        const manifest = await getScreeningManifest(effectiveProjectId || '')
-        if (!cancelled) setScreeningManifest(manifest)
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Screening media could not be loaded')
-      }
-    }
-    void loadManifest()
-    return () => {
-      cancelled = true
-    }
   }, [effectiveProjectId])
 
   // ── Load scenes ───────────────────────────────────────────────────────────
@@ -442,11 +403,7 @@ export default function ScreeningRoom() {
     const completedJobs = renderJobs.filter((j) => normalizeJobStatus(j.status) === 'complete')
     const takes: SceneTake[] = scenes.map((scene, index) => {
       const sceneAssembly = scenePipelineAssemblies[scene.scene_id]
-      const matchingJobs = completedJobs.filter((j) => {
-        const shotId = j.shot_id || j.input_payload?.shot_id || ''
-        const jobSceneId = shotId.split('_shot_')[0] || ''
-        return jobSceneId === scene.scene_id
-      })
+      const matchingJobs = Object.values(sceneShotTakes(completedJobs, effectiveProjectId || '', scene.scene_id)).flat()
       // Sort by created_at descending to get the most recent completed job
       const sortedJobs = [...matchingJobs].sort((a, b) => {
         return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
@@ -476,7 +433,7 @@ export default function ScreeningRoom() {
       }
     })
     setSceneTakes(takes)
-  }, [scenes, renderJobs, scenePipelineAssemblies, screeningManifest])
+  }, [scenes, renderJobs, scenePipelineAssemblies, screeningManifest, effectiveProjectId])
 
   // ── Load final package ────────────────────────────────────────────────────
   useEffect(() => {
@@ -536,27 +493,36 @@ export default function ScreeningRoom() {
     return () => { cancelled = true }
   }, [effectiveProjectId, scenes])
 
-  // ── Load assembly status ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!effectiveProjectId || scenes.length === 0) return
-    const cancelled = false
-    async function loadAssemblyStatus() {
-      try {
-        const status = await getAssemblyStatus(effectiveProjectId)
-        if (!cancelled) {
-          setAssemblyStatus(status)
-          if (status.film_assembled && status.film_url) {
-            setAssembledFilmUrl(status.film_url)
-          }
-        }
-      } catch {
-        // Assembly not available yet — that's fine
-      }
-    }
-    void loadAssemblyStatus()
-  }, [effectiveProjectId, scenes])
-
   const activeTake = sceneTakes[activeTakeIndex]
+  const takeSelection = useTakeSelection(effectiveProjectId || '', activeTake?.sceneId || '')
+  const chosenJobId = takeSelection.choices.find(choice => choice.shot_number === activeShotNumber)?.job_id
+  useEffect(() => {
+    setScreeningManifest(null)
+    setAssemblyStatus(null)
+    setAssembledFilmUrl(null)
+    if (!effectiveProjectId) return
+    let disposed = false
+    let request = 0
+    const refresh = async () => {
+      const sequence = ++request
+      const [delivery, registry] = await Promise.allSettled([
+        scenes.length ? getAssemblyStatus(effectiveProjectId) : Promise.resolve(null),
+        getScreeningManifest(effectiveProjectId),
+      ])
+      if (disposed || sequence !== request) return
+      if (delivery.status === 'fulfilled' && delivery.value) {
+        setAssemblyStatus(delivery.value)
+        setAssembledFilmUrl(delivery.value.film_url)
+      }
+      if (registry.status === 'fulfilled') setScreeningManifest(registry.value)
+      const failure = registry.status === 'rejected' ? registry.reason : delivery.status === 'rejected' ? delivery.reason : null
+      if (failure) setError(failure instanceof Error ? failure.message : 'Could not refresh delivery status')
+    }
+    void refresh()
+    window.addEventListener('focus', refresh)
+    return () => { disposed = true; window.removeEventListener('focus', refresh) }
+  }, [effectiveProjectId, scenes, takeSelection.revision])
+
   const canonicalSceneId = activeTake?.sceneId || querySceneId
   const canonicalSceneContext = useMemo(
     () => extractCanonicalSceneContext(
@@ -567,59 +533,76 @@ export default function ScreeningRoom() {
   )
 
   useEffect(() => {
-    setActiveShotNumber(1)
     setActiveShotTakeIndex(0)
     setCurrentTime(0)
     setDuration(0)
     setIsPlaying(false)
-    setIsFullFilm(false)
     setSuccess('')
   }, [effectiveProjectId, activeTake?.sceneId])
 
+  const appliedSelectionRoute = useRef('')
   useEffect(() => {
-    if (!querySceneId || sceneTakes.length === 0) return
-    const sceneIndex = sceneTakes.findIndex((take) => take.sceneId === querySceneId)
-    if (sceneIndex >= 0 && sceneIndex !== activeTakeIndex) setActiveTakeIndex(sceneIndex)
-    if (Number.isFinite(queryShotNumber) && queryShotNumber > 0) {
-      setActiveShotNumber(queryShotNumber)
-    }
-  }, [activeTakeIndex, querySceneId, queryShotNumber, sceneTakes])
+    if (sceneTakes.length === 0) return
+    const routeKey = `${effectiveProjectId}:${querySceneId}:${queryShotNumber}`
+    if (appliedSelectionRoute.current === routeKey) return
+    const sceneIndex = querySceneId ? sceneTakes.findIndex((take) => take.sceneId === querySceneId) : 0
+    if (sceneIndex < 0) return
+    appliedSelectionRoute.current = routeKey
+    setActiveTakeIndex(sceneIndex)
+    setActiveShotNumber(Number.isFinite(queryShotNumber) && queryShotNumber > 0 ? queryShotNumber : 1)
+    setPreviewScope('shot')
+    setActiveShotTakeIndex(0)
+    setCurrentTime(0)
+  }, [effectiveProjectId, querySceneId, queryShotNumber, sceneTakes])
 
-  useEffect(() => {
-    if (!activeTake?.sceneId) return
+  const selectScene = (index: number) => {
+    const scene = sceneTakes[index]
+    if (!scene) return
     const next = new URLSearchParams(searchParams)
-    let changed = false
-    if (next.get('scene') !== activeTake.sceneId) {
-      next.set('scene', activeTake.sceneId)
-      changed = true
-    }
-    if (next.get('shot') !== String(activeShotNumber)) {
-      next.set('shot', String(activeShotNumber))
-      changed = true
-    }
-    if (changed) setSearchParams(next, { replace: true })
-  }, [activeShotNumber, activeTake?.sceneId, searchParams, setSearchParams])
+    next.set('project_id', effectiveProjectId)
+    next.set('scene', scene.sceneId)
+    next.set('shot', '1')
+    setSearchParams(next, { replace: true })
+    setActiveTakeIndex(index)
+    setActiveShotNumber(1)
+    setActiveShotTakeIndex(0)
+    setCurrentTime(0)
+  }
 
-  // ── Emotion analysis cache (Groq) — load on scene change ─────────────────
+  const selectShot = (shotNumber: number) => {
+    setPreviewScope('shot')
+    const next = new URLSearchParams(searchParams)
+    next.set('project_id', effectiveProjectId)
+    if (activeTake?.sceneId) next.set('scene', activeTake.sceneId)
+    next.set('shot', String(shotNumber))
+    setSearchParams(next, { replace: true })
+    setActiveShotNumber(shotNumber)
+    setActiveShotTakeIndex(0)
+    setCurrentTime(0)
+  }
+
+  // Load a previously cached result. This read-only request never invokes Qwen.
   useEffect(() => {
     if (!effectiveProjectId || !activeTake?.sceneId) return
     if (emotionAnalysisCache[activeTake.sceneId]) return
     let cancelled = false
-    setSceneAudienceLoading(true)
-    analyzeSceneEmotion(effectiveProjectId, activeTake.sceneId)
+    const controller = new AbortController()
+    getCachedSceneEmotion(effectiveProjectId, activeTake.sceneId, controller.signal)
       .then((result) => {
-        if (!cancelled) {
-          setEmotionAnalysisCache((prev) => ({ ...prev, [activeTake.sceneId]: result }))
+        if (!cancelled && result) {
+          setEmotionAnalysisCache((prev) => ({ ...prev, [activeTake.sceneId]: result.analysis }))
         }
       })
       .catch((err) => {
-        console.warn('[emotion-analysis] failed for', activeTake.sceneId, err)
+        if (!cancelled && !controller.signal.aborted) {
+          console.warn('[emotion-analysis-cache] failed for', activeTake.sceneId, err)
+        }
       })
-      .finally(() => {
-        if (!cancelled) setSceneAudienceLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [effectiveProjectId, activeTake?.sceneId])
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [effectiveProjectId, activeTake?.sceneId, emotionAnalysisCache])
 
   // ── Video event handlers ──────────────────────────────────────────────────
   const handleTimeUpdate = useCallback(() => {
@@ -649,15 +632,8 @@ export default function ScreeningRoom() {
     }
   }, [isPlaying])
 
-  const handleSkipPrev = useCallback(() => {
-    setActiveTakeIndex((prev) => (prev > 0 ? prev - 1 : prev))
-    setCurrentTime(0)
-  }, [])
-
-  const handleSkipNext = useCallback(() => {
-    setActiveTakeIndex((prev) => (prev < sceneTakes.length - 1 ? prev + 1 : prev))
-    setCurrentTime(0)
-  }, [sceneTakes.length])
+  const handleSkipPrev = () => selectScene(Math.max(0, activeTakeIndex - 1))
+  const handleSkipNext = () => selectScene(Math.min(sceneTakes.length - 1, activeTakeIndex + 1))
 
   const handleRateChange = useCallback((rate: PlaybackRate) => {
     setPlaybackRate(rate)
@@ -674,24 +650,6 @@ export default function ScreeningRoom() {
     }
   }, [])
 
-  const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!timelineRef.current || !videoRef.current) return
-    const rect = timelineRef.current.getBoundingClientRect()
-    const percent = (e.clientX - rect.left) / rect.width
-    const newTime = percent * duration
-    videoRef.current.currentTime = newTime
-    setCurrentTime(newTime)
-  }, [duration])
-
-  const handleJumpToWeakScene = useCallback(() => {
-    if (weakSceneMarkers.length === 0 || !videoRef.current) return
-    const marker = weakSceneMarkers[0]
-    const newTime = (marker.startPercent / 100) * duration
-    videoRef.current.currentTime = newTime
-    setCurrentTime(newTime)
-    setSuccess('Jumped to weak scene')
-  }, [weakSceneMarkers, duration])
-
   // ── Full film playback ────────────────────────────────────────────────────
   const handleAssembleFilm = useCallback(async () => {
     if (!effectiveProjectId || assembling) return
@@ -700,7 +658,9 @@ export default function ScreeningRoom() {
     try {
       const result = await assembleFilm(effectiveProjectId)
       setAssembledFilmUrl(result.film_url)
-      setAssemblyStatus((prev) => prev ? { ...prev, film_assembled: true, film_url: result.film_url, has_audio: result.has_audio, scenes_with_compositions: result.scene_count, scenes_total: prev.scenes_total || result.scene_count } : null)
+      const manifest = await getScreeningManifest(effectiveProjectId)
+      setScreeningManifest(manifest)
+      setAssemblyStatus((prev) => prev ? { ...prev, film_assembled: true, film_outdated: false, film_url: result.film_url, has_audio: result.has_audio, scenes_with_compositions: result.scene_count, scenes_total: prev.scenes_total || result.scene_count } : null)
       setSuccess(`Film assembled: ${result.scene_count} scenes${result.has_audio ? ' with audio' : ''}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to assemble film')
@@ -731,7 +691,8 @@ export default function ScreeningRoom() {
 
   const handleVideoEnded = useCallback(() => {
     if (!isFullFilm) return
-    if (activeTakeIndex < scenes.length - 1) {
+    const playingWholeFilm = Boolean(screeningManifest?.current_final_output?.playback_url || assembledFilmUrl)
+    if (!playingWholeFilm && activeTakeIndex < scenes.length - 1) {
       setActiveTakeIndex((prev) => prev + 1)
       setActiveShotNumber(1)
       setActiveShotTakeIndex(0)
@@ -751,7 +712,7 @@ export default function ScreeningRoom() {
         }
       }, 3000)
     }
-  }, [isFullFilm, activeTakeIndex, scenes.length])
+  }, [isFullFilm, activeTakeIndex, scenes.length, screeningManifest, assembledFilmUrl])
 
   // ── Scene status badge helper ─────────────────────────────────────────────
   function getSceneStatus(sceneId: string): 'composed' | 'rendered' | 'unrendered' {
@@ -768,59 +729,16 @@ export default function ScreeningRoom() {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  const DEFAULT_ARC: number[] = [35, 45, 50, 55, 60, 70, 65, 75, 85, 80, 45]
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
 
-  // Fix 1: Shots for the current scene
-  const shotsForCurrentScene: ShotInfo[] = useMemo(() => {
-    if (!activeTake) return []
-    const sceneId = activeTake.sceneId
-    const completedJobs = renderJobs.filter((j) => normalizeJobStatus(j.status) === 'complete')
-    const shotMap = new Map<number, string>()
-    const sorted = [...completedJobs].sort(
-      (a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime(),
-    )
-    for (const job of sorted) {
-      const jobSceneId = job.shot_id?.split('_shot_')[0] || ''
-      if (jobSceneId !== sceneId) continue
-      const match = job.shot_id?.match(/_shot_(\d+)$/)
-      if (!match) continue
-      const shotNum = parseInt(match[1], 10)
-      const url = job.output_payload?.asset_url
-      if (url && typeof url === 'string' && url.trim().length > 0 && !shotMap.has(shotNum)) {
-        shotMap.set(shotNum, url)
-      }
-    }
-    return Array.from(shotMap.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([shotNumber, videoUrl]) => ({ shotNumber, videoUrl }))
-  }, [activeTake, renderJobs])
-
-  // Takes within each shot (grouped render jobs by shot_id, sorted by created_at desc)
-  const shotTakes: Record<number, RenderJob[]> = useMemo(() => {
-    if (!activeTake) return {}
-    const sceneId = activeTake.sceneId
-    const completedJobs = renderJobs.filter((j) => normalizeJobStatus(j.status) === 'complete')
-    const map: Record<number, RenderJob[]> = {}
-    for (const job of completedJobs) {
-      const jobSceneId = job.shot_id?.split('_shot_')[0] || ''
-      if (jobSceneId !== sceneId) continue
-      const match = job.shot_id?.match(/_shot_(\d+)$/)
-      if (!match) continue
-      const shotNum = parseInt(match[1], 10)
-      const url = job.output_payload?.asset_url
-      if (url && typeof url === 'string' && url.trim().length > 0) {
-        if (!map[shotNum]) map[shotNum] = []
-        map[shotNum].push(job)
-      }
-    }
-    for (const takes of Object.values(map)) {
-      takes.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-    }
-    return map
-  }, [activeTake, renderJobs])
+  const shotTakes = useMemo(
+    () => sceneShotTakes(renderJobs, effectiveProjectId || '', activeTake?.sceneId || ''),
+    [renderJobs, effectiveProjectId, activeTake?.sceneId],
+  )
+  const shotsForCurrentScene: ShotInfo[] = useMemo(() => Object.entries(shotTakes)
+    .map(([number, takes]) => ({ shotNumber: Number(number), videoUrl: takes[0].output_payload?.asset_url }))
+    .sort((a, b) => a.shotNumber - b.shotNumber), [shotTakes])
 
   const activeScenePipelineAssembly = activeTake?.sceneId ? scenePipelineAssemblies[activeTake.sceneId] : undefined
 
@@ -828,13 +746,13 @@ export default function ScreeningRoom() {
     const outputs = screeningManifest?.outputs || []
     const takes = shotTakes[activeShotNumber]
     const activeJob = takes?.[activeShotTakeIndex]
-    if (activeJob) {
+    if (previewScope === 'shot' && activeJob) {
       const exact = outputs.find(
         (output) => output.source_type === 'render_job'
           && output.source_id === activeJob.id
           && output.media_status === 'available',
       )
-      if (exact) return exact
+      return exact || null
     }
     if (!activeTake?.sceneId) return null
     return outputs.find(
@@ -846,16 +764,34 @@ export default function ScreeningRoom() {
         && output.output_type === 'shot'
         && output.media_status === 'available',
     ) || null
-  }, [screeningManifest, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake?.sceneId])
+  }, [screeningManifest, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake?.sceneId, previewScope])
+
+  // Active video URL: assembled film takes highest priority in full-film mode
+  const activeVideoUrl = useMemo(() => {
+    const takes = shotTakes[activeShotNumber]
+    const job = takes?.[activeShotTakeIndex]
+    if (isFullFilm) {
+      const delivery = screeningManifest?.outputs.find(output => output.source_type === 'film_delivery' && output.metadata?.film_url === assembledFilmUrl && output.media_status === 'available')
+      return [delivery?.playback_url, assembledFilmUrl, screeningManifest?.current_final_output?.playback_url].map(browserPlaybackUrl).find(Boolean) || ''
+    }
+    if (previewScope === 'shot' && job) {
+      return browserPlaybackUrl(activeRegisteredOutput?.playback_url || job.output_payload?.asset_url || '')
+    }
+    return [sceneComposition?.composed_url, activeScenePipelineAssembly?.output_url, activeRegisteredOutput?.playback_url, activeTake?.videoUrl].map(browserPlaybackUrl).find(Boolean) || ''
+
+  }, [isFullFilm, screeningManifest, assembledFilmUrl, activeRegisteredOutput, activeScenePipelineAssembly, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake, previewScope])
 
   const screeningApprovalTarget = useMemo(() => {
-    if (isFullFilm && finalPackage) {
-      return screeningManifest?.outputs.find(
-        (output) => output.output_type === 'final' && output.source_id === finalPackage.package_id,
-      ) || null
+    if (!activeVideoUrl) return null
+    const outputs = screeningManifest?.outputs || []
+    if (!isFullFilm && activeRegisteredOutput
+      && browserPlaybackUrl(activeRegisteredOutput.playback_url) === activeVideoUrl) {
+      return activeRegisteredOutput
     }
-    return activeRegisteredOutput
-  }, [isFullFilm, finalPackage, screeningManifest, activeRegisteredOutput])
+    return outputs.find((output) => output.media_status === 'available'
+      && browserPlaybackUrl(output.playback_url) === activeVideoUrl
+      && (!isFullFilm || output.output_type === 'final')) || null
+  }, [activeVideoUrl, activeRegisteredOutput, isFullFilm, screeningManifest])
 
   const handleApproveScreeningOutput = useCallback(async () => {
     if (!effectiveProjectId || !screeningApprovalTarget || screeningApprovalTarget.approved) return
@@ -884,21 +820,6 @@ export default function ScreeningRoom() {
     }
   }, [effectiveProjectId, screeningApprovalTarget])
 
-  // Active video URL: assembled film takes highest priority in full-film mode
-  const activeVideoUrl = useMemo(() => {
-    const takes = shotTakes[activeShotNumber]
-    const job = takes?.[activeShotTakeIndex]
-    return [
-      isFullFilm ? screeningManifest?.current_final_output?.playback_url : '',
-      isFullFilm ? assembledFilmUrl : '',
-      activeRegisteredOutput?.playback_url,
-      activeScenePipelineAssembly?.output_url,
-      sceneComposition?.composed_url,
-      job?.output_payload?.asset_url,
-      activeTake?.videoUrl,
-    ].map(browserPlaybackUrl).find(Boolean) || ''
-  }, [isFullFilm, screeningManifest, assembledFilmUrl, activeRegisteredOutput, activeScenePipelineAssembly, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake])
-
   const activeRenderJob = useMemo(() => {
     const takes = shotTakes[activeShotNumber]
     return takes?.[activeShotTakeIndex] || null
@@ -912,11 +833,6 @@ export default function ScreeningRoom() {
       ? storyboard as Record<string, unknown>
       : null
   }, [activeShotNumber, activeShotTakeIndex, shotTakes])
-
-  // Fix 1: Reset shot number when scene changes
-  useEffect(() => {
-    setActiveShotNumber(1)
-  }, [activeTakeIndex])
 
   // Fix 1: Ensure active shot is valid for current scene
   useEffect(() => {
@@ -935,92 +851,6 @@ export default function ScreeningRoom() {
     setIsPlaying(false)
   }, [activeShotNumber])
 
-  /** True if cached simulation has valid audience_reactions (not empty/malformed). */
-  function isValidCacheEntry(sim: SceneAudienceSimulation | undefined): boolean {
-    return !!sim && Array.isArray(sim.audience_reactions) && sim.audience_reactions.length > 0
-  }
-
-  // Fix 3: Auto-load audience sim when scene changes
-  useEffect(() => {
-    if (!effectiveProjectId || !activeTake?.sceneId) return
-    const cached = sceneAudienceCache[activeTake.sceneId]
-    if (isValidCacheEntry(cached)) return
-    if (cached) console.log('[auto-load] invalidating stale cache for', activeTake.sceneId)
-    let cancelled = false
-    setSceneAudienceLoading(true)
-    console.log('[auto-load] fetching audience sim for scene', activeTake.sceneId)
-    simulateSceneAudience(effectiveProjectId, activeTake.sceneId)
-      .then((result) => {
-        if (!cancelled) {
-          setSceneAudienceCache((prev) => ({ ...prev, [activeTake.sceneId]: result }))
-        }
-      })
-      .catch((err) => {
-        console.warn('[auto-load] failed for', activeTake.sceneId, err)
-      })
-      .finally(() => {
-        if (!cancelled) setSceneAudienceLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [activeTake?.sceneId, effectiveProjectId, sceneAudienceCache])
-
-  // Fix 3: Preload adjacent scene audience sims
-  useEffect(() => {
-    if (!effectiveProjectId || scenes.length === 0) return
-    const indices = [activeTakeIndex - 1, activeTakeIndex + 1].filter(
-      (i) => i >= 0 && i < scenes.length,
-    )
-    for (const i of indices) {
-      const sceneId = scenes[i]?.scene_id
-      if (!sceneId || isValidCacheEntry(sceneAudienceCache[sceneId])) continue
-      console.log('[preload] fetching adjacent scene', sceneId)
-      simulateSceneAudience(effectiveProjectId, sceneId)
-        .then((result) => {
-          setSceneAudienceCache((prev) => ({ ...prev, [sceneId]: result }))
-        })
-        .catch((err) => {
-          console.warn('[preload] failed for', sceneId, err)
-        })
-    }
-  }, [activeTakeIndex, scenes, effectiveProjectId, sceneAudienceCache])
-
-  function getEmotionalArc(): number[] {
-    return scenes.map((_, i) => {
-      const sid = scenes[i]?.scene_id
-      if (!sid) return DEFAULT_ARC[i] ?? 50
-      const analysis = emotionAnalysisCache[sid]
-      if (analysis) return analysis.general.emotional_impact
-      return DEFAULT_ARC[i] ?? 50
-    })
-  }
-
-  // Audience metrics from emotion analysis cache (Groq-powered real scores)
-  const audienceMetrics: SceneAudienceMetrics = useMemo(() => {
-    const analysis = activeTake?.sceneId ? emotionAnalysisCache[activeTake.sceneId] : undefined
-    if (analysis) {
-      const group = analysis[audienceSegment]
-      return {
-        engagement: group.engagement,
-        tension: group.tension,
-        emotionalImpact: group.emotional_impact,
-      }
-    }
-    return { engagement: 0, tension: 0, emotionalImpact: 0 }
-  }, [emotionAnalysisCache, activeTake?.sceneId, audienceSegment])
-
-  // Fix 2: Scene navigation
-  const handlePrevScene = useCallback(() => {
-    setActiveTakeIndex((prev) => (prev > 0 ? prev - 1 : prev))
-    setCurrentTime(0)
-    setShowTakeDropdown(false)
-  }, [])
-
-  const handleNextScene = useCallback(() => {
-    setActiveTakeIndex((prev) => (prev < sceneTakes.length - 1 ? prev + 1 : prev))
-    setCurrentTime(0)
-    setShowTakeDropdown(false)
-  }, [sceneTakes.length])
-
   // ── Export handlers ───────────────────────────────────────────────────────
   const handleExportMp4 = useCallback(async () => {
     const url = activeVideoUrl
@@ -1032,6 +862,7 @@ export default function ScreeningRoom() {
     setError('')
     try {
       const response = await fetch(url)
+      if (!response.ok) throw new Error(`Video export failed (${response.status})`)
       const blob = await response.blob()
       const blobUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -1039,7 +870,9 @@ export default function ScreeningRoom() {
       const projName = activeProject?.title?.toLowerCase().replace(/\s+/g, '-') || 'film'
       const sceneNum = String(activeTakeIndex + 1).padStart(2, '0')
       const shotNum = String(activeShotNumber).padStart(2, '0')
-      a.download = `${projName}-scene-${sceneNum}-shot-${shotNum}.mp4`
+      a.download = isFullFilm && (screeningManifest?.current_final_output?.playback_url || assembledFilmUrl)
+        ? `${projName}-film.mp4`
+        : `${projName}-scene-${sceneNum}-shot-${shotNum}.mp4`
       a.click()
       URL.revokeObjectURL(blobUrl)
       setSuccess('Video export downloaded')
@@ -1048,7 +881,7 @@ export default function ScreeningRoom() {
     } finally {
       setExporting(false)
     }
-  }, [activeVideoUrl, activeProject, activeTakeIndex, activeShotNumber, sceneTakes, shotsForCurrentScene, activeTake])
+  }, [activeVideoUrl, activeProject, activeTakeIndex, activeShotNumber, isFullFilm, screeningManifest, assembledFilmUrl])
 
   const handleDownloadFinalPackage = useCallback(async () => {
     if (!effectiveProjectId) return
@@ -1117,24 +950,7 @@ export default function ScreeningRoom() {
         const sceneResult = await simulateSceneAudience(effectiveProjectId, sId)
         setSceneAudienceCache((prev) => ({ ...prev, [sId]: sceneResult }))
       }
-      // Also refresh Groq-powered emotion analysis for all scenes
-      if (scenes.length > 0) {
-        const promises = scenes.map(async (sc) => {
-          try {
-            const analysis = await analyzeSceneEmotion(effectiveProjectId, sc.scene_id)
-            return { sceneId: sc.scene_id, analysis }
-          } catch {
-            return null
-          }
-        })
-        const results = await Promise.all(promises)
-        const newCache: Record<string, EmotionAnalysisResult> = {}
-        for (const r of results) {
-          if (r) newCache[r.sceneId] = r.analysis
-        }
-        setEmotionAnalysisCache(newCache)
-      }
-      setSuccess('Audience simulation complete')
+      setSuccess('Local audience simulation complete')
     } catch (err) {
       console.error('[handleSimulate] failed:', err)
       if (!isSceneNotFoundError(err)) {
@@ -1143,7 +959,27 @@ export default function ScreeningRoom() {
     } finally {
       setSimulating(false)
     }
-  }, [effectiveProjectId, activeTake, scenes])
+  }, [effectiveProjectId, activeTake])
+
+  const handleAnalyzeActiveScene = useCallback(async () => {
+    const sceneId = activeTake?.sceneId
+    if (!effectiveProjectId || !sceneId || emotionAnalysisLoading) return
+    setEmotionAnalysisLoading(true)
+    setError('')
+    try {
+      const result = await analyzeSceneEmotion(effectiveProjectId, sceneId)
+      setEmotionAnalysisCache((prev) => ({ ...prev, [sceneId]: result.analysis }))
+      setSuccess(
+        result.cached
+          ? 'Current Qwen analysis loaded from cache — no new provider call.'
+          : 'Active scene analysis complete.',
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Emotion analysis failed')
+    } finally {
+      setEmotionAnalysisLoading(false)
+    }
+  }, [activeTake?.sceneId, effectiveProjectId, emotionAnalysisLoading])
 
   // ── Request co-director notes ─────────────────────────────────────────────
   const handleRequestNotes = useCallback(async () => {
@@ -1166,9 +1002,6 @@ export default function ScreeningRoom() {
         system_prompt: '',
       }
 
-      console.log('[handleRequestNotes] URL:', url)
-      console.log('[handleRequestNotes] Payload:', JSON.stringify(payload, null, 2))
-
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1176,7 +1009,10 @@ export default function ScreeningRoom() {
       })
 
       const data = await res.json()
-      console.log('[handleRequestNotes] Raw response:', JSON.stringify(data, null, 2))
+      if (!res.ok) {
+        const detail = typeof data?.detail === 'string' ? data.detail : `Co-director request failed (${res.status})`
+        throw new Error(detail)
+      }
 
       const replyText: string = data?.reply || 'No response from Co-Director.'
       const note: CoDirectorNote = {
@@ -1270,9 +1106,10 @@ export default function ScreeningRoom() {
   const handleApplyAudioBrief = useCallback(async () => {
     if (!effectiveProjectId || !activeTake?.sceneId || !audioBrief) return
     setError('')
-    setSuccess('Audio direction queued for scene')
+    setSuccess('')
     try {
       await applyAudioBrief(effectiveProjectId, activeTake.sceneId)
+      setSuccess('Audio direction queued for scene')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to apply audio direction')
     }
@@ -1307,993 +1144,188 @@ export default function ScreeningRoom() {
     }
   }, [effectiveProjectId, posterGenerating])
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const steps = [
+    { id: 'watch', title: 'Watch', description: 'Give the footage your full attention.' },
+    { id: 'review', title: 'Review', description: 'Decide what to keep and what to revisit.' },
+    { id: 'approve', title: 'Approve', description: 'Record your decision for this output.' },
+    { id: 'deliver', title: 'Deliver', description: 'Download the right file for your next step.' },
+  ] as const
+  const stepIndex = steps.findIndex((step) => step.id === activeStep)
+  const currentStep = steps[stepIndex]
+  const nextStep = steps[stepIndex + 1]
+  const sceneEditAvailable = Boolean(activeScenePipelineAssembly?.output_url || sceneComposition?.composed_url || screeningManifest?.outputs.some((output) => output.scene_id === activeTake?.sceneId && output.output_type === 'scene' && output.media_status === 'available'))
+  const fullFilmAvailable = Boolean(screeningManifest?.current_final_output?.playback_url || assembledFilmUrl)
+  const viewingWholeFilm = isFullFilm && fullFilmAvailable
+  const outputScope = viewingWholeFilm
+    ? 'Full film'
+    : screeningApprovalTarget?.output_type === 'scene'
+      ? 'Assembled scene'
+      : `Shot ${activeShotNumber} · Take ${activeShotTakeIndex + 1}`
+  const activeAudienceSimulation = activeTake?.sceneId ? sceneAudienceCache[activeTake.sceneId] : undefined
+  const selectedReaction = activeAudienceSimulation?.audience_reactions.find((reaction) =>
+    reaction.audience_type.toLowerCase().replace(/[^a-z]/g, '').includes(audienceSegment === 'genre_fan' ? 'genre' : audienceSegment),
+  )
+  const activeEmotionAnalysis = activeTake?.sceneId ? emotionAnalysisCache[activeTake.sceneId] : undefined
+  const disclosureClass = 'rounded-md border border-white/10 bg-zinc-950/35 px-4 py-3'
+  const summaryClass = 'cursor-pointer py-1 text-sm font-medium text-zinc-200 marker:text-amber-200 focus-visible:outline-2 focus-visible:outline-amber-200'
+  const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-white/15 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 disabled:cursor-not-allowed disabled:opacity-40'
+  const primaryButtonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-100 disabled:cursor-not-allowed disabled:opacity-40'
+  const selectClass = 'min-h-11 w-full min-w-0 rounded-md border border-white/15 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-40'
+  const openPrevis = () => {
+    const params = new URLSearchParams({ project_id: effectiveProjectId })
+    if (activeTake?.sceneId) params.set('scene', activeTake.sceneId)
+    params.set('shot', String(activeShotNumber))
+    navigate(`/studio/project/${encodeURIComponent(effectiveProjectId)}/previs?${params}`)
+  }
+  const advanceStep = () => {
+    if (!nextStep) return
+    setActiveStep(nextStep.id)
+    requestAnimationFrame(() => {
+      stepHeadingRef.current?.focus({ preventScroll: true })
+      stepHeadingRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+    })
+  }
+
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: '100vw', height: '100vh', overflow: 'hidden' }}>
-      {/* 3D environment */}
-      <div style={{ position: 'absolute', inset: 0 }}>
-        <TheaterScene />
-      </div>
-
-      {/* UI overlay */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
-        <StudioShell title="Screening Room" subtitle="The Theater — Review and analyze your film" transparent>
+    <div className="relative min-h-screen w-full min-w-0 bg-[#0b0b0c]">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 opacity-35"><TheaterScene /></div>
+      <div className="relative z-10">
+        <StudioShell title="The Theatre" subtitle="Watch, review, approve, and deliver" transparent>
           <ProjectGuard>
-            <ProjectContextBar roomName="screening room" />
-
-            {/* Status messages */}
-            <div className="px-4 pt-2">
-              {error && (
-                <div className="mb-2 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
-                  {error}
+            <ProjectContextBar roomName="the theatre" compact />
+            <div className="mx-auto w-full max-w-[1480px] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+              <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/80">Your private screening</p>
+                  <h1 className="mt-1 text-2xl font-medium tracking-tight text-zinc-100 sm:text-3xl">The film comes first.</h1>
                 </div>
-              )}
-              {success && (
-                <div className="mb-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
-                  {success}
+                <p className="max-w-xs text-xs leading-relaxed text-zinc-400">Watch at your own pace. Notes, decisions, and delivery each have their place.</p>
+              </header>
+              <nav aria-label="Theatre production steps" className="mb-5 border-b border-white/10" data-testid="theatre-step-nav">
+                <ol className="grid grid-cols-4">
+                  {steps.map((step, index) => (
+                    <li key={step.id} className="min-w-0">
+                      <button type="button" aria-current={activeStep === step.id ? 'step' : undefined} aria-controls={`theatre-step-${step.id}`} onClick={() => setActiveStep(step.id)} className={`flex w-full flex-col items-center gap-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-amber-200 sm:flex-row sm:gap-3 sm:px-4 ${activeStep === step.id ? 'border-amber-200 bg-amber-200/5 text-amber-100' : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}>
+                        <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded border text-xs ${activeStep === step.id ? 'border-amber-200/40 text-amber-200' : 'border-white/15 text-zinc-500'}`}>{index + 1}</span>
+                        {step.title}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </nav>
+              {error && <div role="alert" className="mb-4 rounded-md border border-rose-400/30 bg-rose-950/60 px-4 py-3 text-sm text-rose-200">{error}</div>}
+              {success && <div role="status" className="mb-4 rounded-md border border-emerald-400/25 bg-emerald-950/50 px-4 py-3 text-sm text-emerald-200">{success}</div>}
+              <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)] xl:gap-8">
+                <div className="min-w-0 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
+                    <span className="flex items-center gap-2"><MonitorPlay size={14} className="text-amber-200/80" />{isFullFilm ? viewingWholeFilm ? 'Full film preview' : 'Scene previews in order' : 'Individual preview'}</span>
+                    {isFullFilm ? <button type="button" onClick={handleStopFilm} className="min-h-9 rounded px-2 text-xs text-amber-200 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-amber-200">Return to individual preview</button> : activeTake && <span>{getSceneStatus(activeTake.sceneId) === 'composed' ? 'Scene assembled' : getSceneStatus(activeTake.sceneId) === 'rendered' ? 'Footage available' : 'Awaiting footage'}</span>}
+                  </div>
+                  <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1fr)_110px_130px]">
+                    <label className="col-span-2 min-w-0 space-y-1.5 text-xs text-zinc-400 sm:col-span-1">Scene
+                      <select aria-label="Preview scene" className={selectClass} value={activeTakeIndex} disabled={loading || isFullFilm || sceneTakes.length === 0} onChange={(event) => selectScene(Number(event.target.value))}>
+                        {sceneTakes.length ? sceneTakes.map((take, index) => <option key={take.sceneId} value={index}>{String(index + 1).padStart(2, '0')} · {take.sceneName}</option>) : <option value={0}>{loading ? 'Loading scenes…' : 'No scenes yet'}</option>}
+                      </select>
+                    </label>
+                    <label className="min-w-0 space-y-1.5 text-xs text-zinc-400">Shot
+                      <select aria-label="Preview shot" className={selectClass} value={previewScope === 'scene' ? 'scene' : activeShotNumber} disabled={isFullFilm || (shotsForCurrentScene.length === 0 && !sceneEditAvailable)} onChange={(event) => { if (event.target.value === 'scene') { setPreviewScope('scene'); setCurrentTime(0) } else selectShot(Number(event.target.value)) }}>
+                        {sceneEditAvailable && <option value="scene">Scene edit</option>}
+                        {shotsForCurrentScene.length ? shotsForCurrentScene.map((shot) => <option key={shot.shotNumber} value={shot.shotNumber}>Shot {shot.shotNumber}</option>) : <option value={activeShotNumber}>No takes</option>}
+                      </select>
+                    </label>
+                    <label className="min-w-0 space-y-1.5 text-xs text-zinc-400">Take
+                      <select aria-label="Preview take" className={selectClass} value={activeShotTakeIndex} disabled={isFullFilm || previewScope === 'scene' || !shotTakes[activeShotNumber]?.length} onChange={(event) => { setActiveShotTakeIndex(Number(event.target.value)); setCurrentTime(0) }}>
+                        {shotTakes[activeShotNumber]?.length ? shotTakes[activeShotNumber].map((job, index) => <option key={job.id} value={index}>Take {index + 1}{index === 0 ? ' · latest' : ''}{chosenJobId === job.id ? ' · chosen' : ''}</option>) : <option value={0}>No takes</option>}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="overflow-hidden rounded-md border border-white/10 bg-black shadow-2xl shadow-black/35">
+                    <div className="relative aspect-video w-full">
+                      {activeVideoUrl ? <video key={`${activeTake?.sceneId || ''}-shot-${activeShotNumber}-${activeVideoUrl}`} ref={videoRef} src={activeVideoUrl} className="absolute inset-0 h-full w-full object-contain" playsInline onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={handleVideoEnded} onClick={togglePlay} aria-label={`${outputScope} preview`} /> : <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 text-center">{loading ? <Loader2 size={30} className="animate-spin text-zinc-500" /> : <MonitorPlay size={32} className="text-zinc-600" />}<p className="text-sm text-zinc-300">{loading ? 'Loading your screening…' : scenes.length ? 'Your footage will appear here.' : 'Your film starts with a scene.'}</p><p className="max-w-sm text-xs leading-relaxed text-zinc-500">{loading ? 'Gathering the saved outputs for this project.' : scenes.length ? 'Render a take in Previs, then return here to watch it.' : 'Add your script in The Page, then storyboard and render in Previs.'}</p></div>}
+                      {!isPlaying && activeVideoUrl && !showFinOverlay && <button type="button" onClick={togglePlay} aria-label="Play preview" className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/65 text-amber-100 transition-colors hover:bg-black/85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-200"><Play size={23} className="ml-0.5" /></button>}
+                      {showFinOverlay && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center"><p className="text-xl font-medium text-zinc-200 sm:text-3xl">{activeProject?.title || 'Your film'}</p><p className="text-sm tracking-[0.4em] text-amber-200">FIN</p></div>}
+                    </div>
+                    <div className="space-y-3 border-t border-white/10 bg-zinc-950 px-3 py-3 sm:px-4">
+                      <div className="flex items-center gap-3"><span className="w-10 font-mono text-xs text-zinc-400">{formatTimecode(currentTime)}</span><input aria-label="Playback position" type="range" min={0} max={Number.isFinite(duration) ? Math.max(duration, 0.01) : 0.01} step="0.1" value={Number.isFinite(currentTime) ? currentTime : 0} disabled={!activeVideoUrl} onChange={(event) => { const time = Number(event.target.value); if (videoRef.current) videoRef.current.currentTime = time; setCurrentTime(time) }} className="h-5 min-w-0 flex-1 cursor-pointer accent-amber-200 disabled:opacity-30" /><span className="w-10 text-right font-mono text-xs text-zinc-400">{formatTimecode(Number.isFinite(duration) ? duration : 0)}</span></div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1"><button type="button" onClick={handleSkipPrev} aria-label="Previous scene" disabled={activeTakeIndex === 0 || isFullFilm} className="flex h-10 w-10 items-center justify-center rounded text-zinc-400 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-25"><SkipBack size={17} /></button><button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} disabled={!activeVideoUrl} className="flex h-11 w-11 items-center justify-center rounded bg-amber-200/10 text-amber-200 hover:bg-amber-200/20 focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-30">{isPlaying ? <Pause size={19} /> : <Play size={19} />}</button><button type="button" onClick={handleSkipNext} aria-label="Next scene" disabled={activeTakeIndex >= sceneTakes.length - 1 || isFullFilm} className="flex h-10 w-10 items-center justify-center rounded text-zinc-400 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-25"><SkipForward size={17} /></button></div>
+                        <div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs text-zinc-400"><span className="sr-only">Playback speed</span><select aria-label="Playback speed" value={playbackRate} onChange={(event) => handleRateChange(Number(event.target.value) as PlaybackRate)} className="h-10 rounded border border-white/10 bg-zinc-950 px-2 text-xs text-zinc-300 focus-visible:outline-2 focus-visible:outline-amber-200">{PLAYBACK_RATES.map((rate) => <option key={rate} value={rate}>{rate}×</option>)}</select></label><label className="flex items-center gap-2"><Volume2 size={15} className="text-zinc-400" /><span className="sr-only">Volume</span><input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={handleVolumeChange} className="h-6 w-16 cursor-pointer accent-amber-200 sm:w-20" /></label></div>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs leading-relaxed text-zinc-500">{viewingWholeFilm ? 'You are watching the saved film output.' : 'Use this take for the cut to save your choice. Shots without a saved choice use their latest completed take. Assembly reuses existing footage and audio; it does not generate new voices or music.'}</p>
+                  {viewingWholeFilm && screeningApprovalTarget?.cut_freshness && screeningApprovalTarget.cut_freshness.status !== 'current' && <p role="status" className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">{screeningApprovalTarget.cut_freshness.reason}</p>}
+                  {!viewingWholeFilm && previewScope === 'shot' && activeRenderJob && <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" className={buttonClass} disabled={takeSelection.busy || !activeRenderJob.output_payload?.asset_url || chosenJobId === activeRenderJob.id} onClick={() => void takeSelection.save(activeShotNumber, activeRenderJob.id)}>{takeSelection.busy ? 'Saving…' : chosenJobId === activeRenderJob.id ? 'Chosen for the cut' : 'Use this take for the cut'}</button>
+                      {chosenJobId && <button type="button" className={buttonClass} disabled={takeSelection.busy} onClick={() => void takeSelection.save(activeShotNumber, null)}>Clear take choice</button>}
+                    </div>
+                    <p className="text-xs leading-relaxed text-zinc-400">Before choosing, compare the previous shot’s ending with this opening: prop ownership, eyeline, costume, light and action. Check where the dialogue belongs.</p>
+                    {takeSelection.error && <p role="alert" className="text-sm text-red-300">{takeSelection.error}</p>}
+                    {takeSelection.revision > 0 && !takeSelection.busy && !takeSelection.error && <p role="status" className="text-xs text-amber-200">Choice saved. Assemble the film to apply the current choices; existing exports remain available.</p>}
+                  </div>}
                 </div>
-              )}
-            </div>
+                <div className="min-w-0 border-t border-white/10 pt-5 xl:border-t-0 xl:border-l xl:pl-7 xl:pt-0">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200/80">Theatre · {stepIndex + 1} of 4</p>
+                  <h2 ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-6 text-xl font-medium text-zinc-100 focus-visible:outline-2 focus-visible:outline-amber-200">{currentStep.title}</h2>
+                  <p className="mb-5 mt-1 text-sm leading-relaxed text-zinc-400">{currentStep.description}</p>
 
-            {effectiveProjectId && canonicalSceneId ? (
-              <CanonicalWorkflowPanel
-                projectId={effectiveProjectId}
-                sceneId={canonicalSceneId}
-                sceneContext={canonicalSceneContext}
-                surface="screening"
-              />
-            ) : null}
-
-            {/* ── TWO-PANEL LAYOUT ────────────────────────────────────────── */}
-            <div className="flex h-[calc(100vh-140px)] w-full max-w-full gap-4 px-4 pb-4" style={{ overflowX: 'hidden' }}>
-              {/* ── LEFT: VIDEO PLAYER + CONTROLS ─────────────────────────── */}
-              <div className="flex flex-1 min-w-0 flex-col gap-3">
-                {/* PLAY FILM + ASSEMBLE FILM buttons (hidden during full film) */}
-                {!isFullFilm && (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handlePlayFilm}
-                      disabled={scenes.length === 0}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] amber-glow disabled:opacity-40"
-                      style={{
-                        background: 'rgba(255,209,101,0.12)',
-                        color: 'var(--color-primary)',
-                        border: '1px solid rgba(255,209,101,0.25)',
-                      }}
-                    >
-                      <Play size={16} />
-                      {assembledFilmUrl ? 'PLAY ASSEMBLED FILM' : 'PLAY FILM'}
-                    </button>
-                    {!assemblyStatus?.film_assembled && (
-                      <button
-                        type="button"
-                        onClick={handleAssembleFilm}
-                        disabled={assembling || scenes.length === 0}
-                        className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-40"
-                        style={{
-                          background: 'rgba(255,255,255,0.06)',
-                          color: 'var(--color-primary)',
-                          border: '1px solid rgba(255,255,255,0.12)',
-                        }}
-                      >
-                        {assembling ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : (
-                          <Film size={16} />
-                        )}
-                        {assembling ? 'ASSEMBLING...' : 'ASSEMBLE FILM'}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Full film progress indicator + STOP button */}
-                {isFullFilm && (
-                  <div className="flex items-center justify-between glass-panel rounded-xl px-4 py-2">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--color-primary)' }}>
-                      SCENE {activeTakeIndex + 1} of {scenes.length} — {scenes[activeTakeIndex]?.scene_name?.toUpperCase() || 'THE LAST TIDE'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleStopFilm}
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
-                      style={{ color: 'var(--color-on-surface-variant)' }}
-                    >
-                      <Pause size={12} />
-                      STOP
-                    </button>
-                  </div>
-                )}
-
-                {/* Scene navigation bar */}
-                <div className="flex items-center gap-2 glass-panel rounded-xl px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={handlePrevScene}
-                    disabled={activeTakeIndex === 0 || isFullFilm}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10 disabled:opacity-30"
-                    style={{ color: 'var(--color-on-surface-variant)' }}
-                  >
-                    <ChevronLeft size={14} />
-                    <span className="hidden sm:inline">PREV</span>
-                  </button>
-                  <div
-                    className="flex-1 flex items-center gap-2 overflow-x-auto min-w-0"
-                    style={{
-                      width: 0,
-                      scrollbarWidth: 'none',
-                      WebkitOverflowScrolling: 'touch',
-                      scrollSnapType: 'x mandatory',
-                      scrollBehavior: 'smooth',
-                    }}
-                  >
-                    {scenes.map((sc, idx) => {
-                      const status = getSceneStatus(sc.scene_id)
-                      return (
-                        <button
-                          key={sc.scene_id}
-                          type="button"
-                          onClick={() => { if (!isFullFilm) { setActiveTakeIndex(idx); setCurrentTime(0); setShowTakeDropdown(false) } }}
-                          className={`text-[10px] font-bold uppercase tracking-[0.12em] transition-all flex items-center gap-1.5 ${
-                            idx === activeTakeIndex
-                              ? 'text-primary'
-                              : 'text-white/30 hover:text-white/60'
-                          }`}
-                          style={{ flexShrink: 0, scrollSnapAlign: 'start' }}
-                        >
-                          {sc.scene_name || `Scene ${idx + 1}`}
-                          <span
-                            className={`text-[8px] px-1 py-0.5 rounded border ${
-                              status === 'composed'
-                                ? 'bg-amber-900/60 text-amber-400 border-amber-700/40'
-                                : status === 'rendered'
-                                  ? 'bg-emerald-900/60 text-emerald-400 border-emerald-700/40'
-                                  : 'bg-white/5 text-white/20 border-white/5'
-                            }`}
-                          >
-                            {status === 'composed' ? 'COMPOSED' : status === 'rendered' ? 'RENDERED' : 'UNRENDERED'}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleNextScene}
-                    disabled={activeTakeIndex === scenes.length - 1 || isFullFilm}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10 disabled:opacity-30"
-                    style={{ color: 'var(--color-on-surface-variant)' }}
-                  >
-                    <span className="hidden sm:inline">NEXT</span>
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-
-                {/* Fix 1: SHOTS row */}
-                {shotsForCurrentScene.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {shotsForCurrentScene.map((s) => (
-                      <button
-                        key={s.shotNumber}
-                        type="button"
-                        onClick={() => {
-                          setActiveShotNumber(s.shotNumber)
-                          setActiveShotTakeIndex(0)
-                          setCurrentTime(0)
-                        }}
-                        className={`rounded border px-3 py-1 text-[11px] font-bold transition-all ${
-                          activeShotNumber === s.shotNumber
-                            ? 'border-amber-400 text-amber-400'
-                            : 'border-white/10 text-white/40 hover:border-white/30 hover:text-white/70'
-                        }`}
-                        style={{
-                          borderColor: activeShotNumber === s.shotNumber ? undefined : undefined,
-                        }}
-                      >
-                        Shot {s.shotNumber}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* TAKES sub-row */}
-                {shotTakes[activeShotNumber]?.length > 0 && (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {shotTakes[activeShotNumber].map((job, idx) => (
-                      <button
-                        key={job.id || idx}
-                        type="button"
-                        onClick={() => {
-                          setActiveShotTakeIndex(idx)
-                          setCurrentTime(0)
-                        }}
-                        className={`rounded px-2 py-0.5 text-[10px] font-medium transition-all ${
-                          activeShotTakeIndex === idx
-                            ? 'border border-amber-400/70 text-amber-400'
-                            : 'text-[#6b7280] hover:text-white/70'
-                        }`}
-                        style={{ borderRadius: '4px' }}
-                      >
-                        Take {idx + 1}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {screeningApprovalTarget && (
-                  <div className="mb-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => void handleApproveScreeningOutput()}
-                      disabled={approvingScreeningOutput || screeningApprovalTarget.approved}
-                      className="rounded border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] disabled:opacity-60"
-                      style={{
-                        borderColor: screeningApprovalTarget.approved ? 'rgba(52,211,153,0.45)' : 'rgba(251,191,36,0.45)',
-                        color: screeningApprovalTarget.approved ? '#6ee7b7' : '#fbbf24',
-                      }}
-                    >
-                      {approvingScreeningOutput
-                        ? 'APPROVING…'
-                        : screeningApprovalTarget.approved
-                          ? 'APPROVED OUTPUT'
-                          : screeningApprovalTarget.output_type === 'final'
-                            ? 'APPROVE FINAL OUTPUT'
-                            : 'APPROVE THIS OUTPUT'}
-                    </button>
-                  </div>
-                )}
-
-                {/* Video player */}
-                <div
-                  className="glass-panel relative aspect-video w-full overflow-hidden rounded-xl isolate"
-                  onMouseEnter={() => setHoveringVideo(true)}
-                  onMouseLeave={() => setHoveringVideo(false)}
-                >
-                  {/* Video element */}
-                  {activeVideoUrl ? (
-                    <video
-                      key={`${activeTake?.sceneId || ''}-shot-${activeShotNumber}-${activeVideoUrl}`}
-                      ref={videoRef}
-                      src={activeVideoUrl}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      style={{ zIndex: 1, opacity: 1, visibility: 'visible' }}
-                      onTimeUpdate={handleTimeUpdate}
-                      onLoadedMetadata={handleLoadedMetadata}
-                      onPlay={() => setIsPlaying(true)}
-                      onPause={() => setIsPlaying(false)}
-                      onEnded={handleVideoEnded}
-                      onClick={togglePlay}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ background: 'var(--color-surface-container-lowest)' }}>
-                      <MonitorPlay size={40} className="opacity-20" style={{ color: 'var(--color-on-surface-variant)' }} />
-                      <div className="text-center">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                          No render available for this scene
-                        </div>
-                        <div className="mt-1 text-[10px] opacity-60" style={{ color: 'var(--color-on-surface-variant)' }}>
-                          Render in Previs Bay first
-                        </div>
+                  <section id="theatre-step-watch" aria-label="Watch your footage" hidden={activeStep !== 'watch'} className="space-y-5">
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Now in the player</p>
+                      <p className="text-lg text-zinc-100">{viewingWholeFilm ? activeProject?.title || 'Your film' : activeTake?.sceneName || 'No scene selected'}</p>
+                      {activeVideoUrl && <p className="text-sm text-amber-100/85">{outputScope}</p>}
+                      <p className="text-sm leading-relaxed text-zinc-400">Watch the feeling, framing, and movement. When you are ready, use Review to request a note or return to the shot.</p>
+                      {!isFullFilm && <button type="button" onClick={handlePlayFilm} disabled={!sceneTakes.some((take) => take.videoUrl) && !fullFilmAvailable} className={buttonClass}><Film size={16} />{fullFilmAvailable ? 'Watch full film' : 'Preview scenes in order'}</button>}
+                      {!activeVideoUrl && !loading && <button type="button" onClick={openPrevis} className={buttonClass}>Open Previs<ChevronRight size={15} /></button>}
+                    </div>
+                    <details className={disclosureClass}>
+                      <summary className={summaryClass}>Prepare the full film</summary>
+                      <div className="mt-3 space-y-3 text-sm leading-relaxed text-zinc-400">
+                        <p>Assemble the saved scene compositions into one film. Assemble individual scenes in Previs first.</p>
+                        {assemblyStatus && <p className="text-xs text-zinc-300">{assemblyStatus.scenes_with_compositions} of {assemblyStatus.scenes_total} scenes have compositions{assemblyStatus.film_assembled ? ' · Film assembled' : ''}.</p>}
+                        {!assemblyStatus?.film_assembled ? <button type="button" onClick={handleAssembleFilm} disabled={assembling || scenes.length === 0} className={buttonClass}>{assembling ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{assembling ? 'Assembling film…' : assemblyStatus?.film_outdated ? 'Rebuild film with current choices' : 'Assemble film'}</button> : <div className="space-y-2"><p className="flex items-center gap-2 text-emerald-300"><CheckCircle2 size={15} />A saved film is ready to watch.</p><button type="button" className={buttonClass} disabled={assembling} onClick={handleAssembleFilm}>{assembling ? 'Assembling film…' : 'Rebuild film'}</button></div>}
                       </div>
-                    </div>
-                  )}
+                    </details>
+                  </section>
 
-                  {/* Scene/Take label chip — top-left */}
-                  <div className="absolute left-3 top-3 z-10">
-                    <button
-                      type="button"
-                      onClick={() => setShowTakeDropdown((p) => !p)}
-                      className="status-chip flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em]"
-                      style={{
-                        background: 'rgba(0,0,0,0.7)',
-                        color: 'var(--color-on-surface)',
-                        borderColor: 'rgba(255,255,255,0.1)',
-                      }}
-                    >
-                      {activeTake
-                        ? `SCENE ${String(activeTakeIndex + 1).padStart(2, '0')} — SHOT ${String(activeShotNumber).padStart(2, '0')}`
-                        : 'NO SCENE'}
-                      <ChevronDown size={12} />
-                    </button>
-                    {showTakeDropdown && (
-                      <div className="glass-panel absolute left-0 top-full mt-1 max-h-60 w-64 overflow-y-auto rounded-xl py-1 shadow-2xl" style={{ zIndex: 50 }}>
-                        {sceneTakes.length === 0 ? (
-                          <div className="px-4 py-2 text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                            No rendered scenes
-                          </div>
-                        ) : (
-                          sceneTakes.map((take, idx) => (
-                            <button
-                              key={take.sceneId}
-                              type="button"
-                              onClick={() => {
-                                setActiveTakeIndex(idx)
-                                setShowTakeDropdown(false)
-                                setCurrentTime(0)
-                              }}
-                              className={`flex w-full items-center gap-2 px-4 py-2 text-left text-[11px] transition-all hover:bg-white/5 ${
-                                idx === activeTakeIndex ? 'bg-primary/10' : ''
-                              }`}
-                              style={{ color: idx === activeTakeIndex ? 'var(--color-primary)' : 'var(--color-on-surface)' }}
-                            >
-                              <span className="status-chip rounded bg-white/10 px-1.5 py-0.5 text-[8px]">
-                                {String(idx + 1).padStart(2, '0')}
-                              </span>
-                              {take.sceneName}
-                            </button>
-                          ))
-                        )}
+                  <section id="theatre-step-review" aria-label="Review and revise" hidden={activeStep !== 'review'} className="space-y-4">
+                    <div className="border-l-2 border-amber-200/50 pl-4"><h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-200/80">Why this shot matters</h3><p className="text-sm leading-relaxed text-zinc-300">{loadingRationale ? 'Loading the scene’s intent…' : shotRationale?.rationale || 'No saved rationale for this scene yet. Compare the footage with the intent you set in Previs.'}</p></div>
+                    <button type="button" onClick={openPrevis} disabled={!activeTake?.sceneId} className={buttonClass}>Revise this shot in Previs<ChevronRight size={15} /></button>
+                    <div className="space-y-3 border-t border-white/10 pt-4">
+                      <h3 className="flex items-center gap-2 text-sm font-medium text-zinc-200"><Brain size={16} className="text-amber-200/80" />Co-director notes</h3>
+                      {coDirectorNotes.length ? coDirectorNotes.map((note) => <p key={note.id} className="text-sm leading-relaxed text-zinc-300">{note.text}</p>) : <p className="text-sm leading-relaxed text-zinc-400">Request a specific perspective when you want a second pair of eyes.</p>}
+                      <button type="button" onClick={handleRequestNotes} disabled={requestingNotes || !effectiveProjectId || !activeTake?.sceneId} className={buttonClass}>{requestingNotes ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}{requestingNotes ? 'Requesting notes…' : 'Request a note'}</button>
+                      {coDirectorNotes.length > 0 && <div className="flex flex-col gap-2"><button type="button" onClick={handleApplyToShot} className={buttonClass}>Take this note to Previs<ChevronRight size={15} /></button><button type="button" onClick={handleSendToPage} className={buttonClass}>Save note to this scene in The Page</button><button type="button" onClick={handleSaveToMemory} className={buttonClass}>Save this decision to project memory</button></div>}
+                    </div>
+                    <details className={disclosureClass}>
+                      <summary className={summaryClass}>Audience perspective</summary>
+                      <div className="mt-4 space-y-4">
+                        <p className="text-xs leading-relaxed text-zinc-400">An optional interpretation of the scene, for you to consider.</p>
+                        <div className="flex flex-wrap gap-2" role="group" aria-label="Audience perspective">{AUDIENCE_SEGMENTS.map((segment) => <button key={segment.key} type="button" aria-pressed={audienceSegment === segment.key} onClick={() => setAudienceSegment(segment.key)} className={`min-h-10 rounded border px-3 py-2 text-xs focus-visible:outline-2 focus-visible:outline-amber-200 ${audienceSegment === segment.key ? 'border-amber-200/40 bg-amber-200/5 text-amber-100' : 'border-white/10 text-zinc-400 hover:text-zinc-200'}`}>{segment.key === 'genre_fan' ? 'Genre fan' : segment.key === 'cinephile' ? 'Cinephile' : 'General'}</button>)}</div>
+                        {selectedReaction ? <div className="space-y-2 text-sm leading-relaxed text-zinc-300"><p>{selectedReaction.likely_reaction}</p><p className="text-zinc-400">{selectedReaction.reasoning}</p>{selectedReaction.watch_out && <p className="border-l border-amber-200/40 pl-3 text-amber-100/80">{selectedReaction.watch_out}</p>}</div> : <p className="text-sm text-zinc-400">Run a local simulation to explore this audience’s perspective.</p>}
+                        <button type="button" onClick={handleSimulate} disabled={simulating || !effectiveProjectId} className={buttonClass}>{simulating ? <Loader2 size={15} className="animate-spin" /> : <Users size={15} />}{simulating ? 'Simulating…' : 'Simulate locally'}</button>
+                        <details className="border-t border-white/10 pt-3"><summary className={summaryClass}>External scene analysis</summary><div className="mt-3 space-y-3"><p className="text-xs leading-relaxed text-zinc-400">{activeEmotionAnalysis ? 'A saved scene analysis is available. Use the written audience perspective and your own viewing to guide revisions.' : 'No external scene analysis has been saved for this scene.'}</p><button type="button" onClick={handleAnalyzeActiveScene} disabled={emotionAnalysisLoading || !effectiveProjectId || !activeTake?.sceneId} className={buttonClass}>{emotionAnalysisLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}<span className="text-xs">{emotionAnalysisLoading ? 'Analyzing active scene…' : 'ANALYZE ACTIVE SCENE · QWEN'}</span></button><p className="text-xs leading-relaxed text-zinc-500">External AI call. Results are cached until the scene or tone context changes.</p></div></details>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Center play overlay */}
-                  {hoveringVideo && !isPlaying && !showFinOverlay && (
-                    <button
-                      type="button"
-                      onClick={togglePlay}
-                      className="glass-panel absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
-                      style={{ background: 'rgba(255,209,101,0.15)' }}
-                    >
-                      <Play size={28} style={{ color: 'var(--color-primary)' }} className="ml-1" />
-                    </button>
-                  )}
-
-                  {/* FIN overlay */}
-                  {showFinOverlay && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80">
-                      <div className="text-center">
-                        <div className="text-5xl font-bold tracking-[0.25em]" style={{ color: 'var(--color-primary)' }}>
-                          THE LAST TIDE
-                        </div>
-                        <div className="mt-4 text-2xl font-light tracking-[0.4em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                          FIN
-                        </div>
+                    </details>
+                    <details className={disclosureClass}>
+                      <summary className={summaryClass}>Audio direction</summary>
+                      <div className="mt-4 space-y-3">
+                        {audioBriefLoading ? <p className="flex items-center gap-2 text-sm text-zinc-400"><Loader2 size={15} className="animate-spin" />Loading the brief…</p> : audioBrief ? <div className="space-y-3 text-sm leading-relaxed text-zinc-300"><p className="text-amber-100/80">{audioBrief.mood}{audioBrief.silence_flag ? ' · Silence' : ''}</p>{'tempo' in audioBrief && <p className="text-xs text-zinc-400">Tempo: {String(audioBrief.tempo)}</p>}{'instrumentation' in audioBrief && <p className="text-xs text-zinc-400">Instrumentation: {String(audioBrief.instrumentation)}</p>}<div><h4 className="mb-1 text-xs font-semibold text-zinc-400">Music direction</h4><p>{audioBrief.score_notes}</p></div><div><h4 className="mb-1 text-xs font-semibold text-zinc-400">Ambient sound</h4><p>{audioBrief.ambient_notes}</p></div><button type="button" onClick={handleApplyAudioBrief} className={buttonClass}>Apply audio direction to scene</button></div> : <p className="text-sm text-zinc-400">No audio direction for this scene yet.</p>}
+                        <button type="button" onClick={handleGenerateBrief} disabled={audioBriefLoading || !effectiveProjectId || !activeTake?.sceneId} className={buttonClass}><Volume2 size={15} />{audioBriefLoading ? 'Loading brief…' : 'Request audio brief'}</button>
                       </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Playback controls bar */}
-                <div className="glass-panel rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {/* LEFT: transport controls */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={handleSkipPrev}
-                        className="rounded p-1.5 transition-all hover:bg-white/10"
-                        style={{ color: 'var(--color-on-surface-variant)' }}
-                      >
-                        <SkipBack size={18} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={togglePlay}
-                        className="rounded-full p-2.5 transition-all hover:scale-105"
-                        style={{
-                          background: 'rgba(255,209,101,0.15)',
-                          color: 'var(--color-primary)',
-                        }}
-                      >
-                        {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSkipNext}
-                        className="rounded p-1.5 transition-all hover:bg-white/10"
-                        style={{ color: 'var(--color-on-surface-variant)' }}
-                      >
-                        <SkipForward size={18} />
-                      </button>
-                    </div>
-
-                    {/* CENTER: timeline scrubber */}
-                    <div className="flex flex-1 items-center gap-2">
-                      <span className="font-mono text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        {formatTimecode(currentTime)}
-                      </span>
-                      <div
-                        ref={timelineRef}
-                        onClick={handleTimelineClick}
-                        className="relative h-6 flex-1 cursor-pointer"
-                      >
-                        {/* Track */}
-                        <div
-                          className="absolute top-1/2 h-1.5 w-full -translate-y-1/2 rounded-full"
-                          style={{
-                            background: 'linear-gradient(90deg, rgba(155,143,121,0.15), rgba(155,143,121,0.25), rgba(155,143,121,0.15))',
-                          }}
-                        />
-                        {/* Played portion */}
-                        <div
-                          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full amber-glow"
-                          style={{
-                            width: `${progressPercent}%`,
-                            background: 'var(--color-primary)',
-                          }}
-                        />
-                        {/* Scene markers */}
-                        {sceneTakes.map((_, idx) => {
-                          if (idx === 0 || sceneTakes.length === 0) return null
-                          const percent = (idx / sceneTakes.length) * 100
-                          return (
-                            <div
-                              key={idx}
-                              className="absolute top-1/2 h-3 w-px -translate-y-1/2"
-                              style={{ left: `${percent}%`, background: 'var(--color-on-surface-variant)', opacity: 0.4 }}
-                            />
-                          )
-                        })}
-                        {/* Weak scene indicators */}
-                        {weakSceneMarkers.map((marker, idx) => (
-                          <div
-                            key={`weak-${idx}`}
-                            className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
-                            style={{
-                              left: `${marker.startPercent}%`,
-                              width: `${marker.endPercent - marker.startPercent}%`,
-                              background: 'rgba(244,63,94,0.4)',
-                            }}
-                          />
-                        ))}
-                        {/* Playhead */}
-                        <div
-                          className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full"
-                          style={{
-                            left: `${progressPercent}%`,
-                            background: 'var(--color-primary)',
-                            boxShadow: '0 0 6px rgba(255,209,101,0.6)',
-                          }}
-                        />
-                      </div>
-                      <span className="font-mono text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        {formatTimecode(duration)}
-                      </span>
-                    </div>
-
-                    {/* Separator */}
-                    <div className="h-6 w-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
-
-                    {/* RIGHT GROUP */}
-                    <div className="flex items-center gap-2">
-                      {/* Jump to weak scene */}
-                      <button
-                        type="button"
-                        onClick={handleJumpToWeakScene}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
-                        style={{ color: 'var(--color-error)' }}
-                        title="Jump to weak scene"
-                      >
-                        <Brain size={14} />
-                        WEAK
-                      </button>
-
-                      {/* Playback rate */}
-                      <div className="flex items-center gap-0.5">
-                        {PLAYBACK_RATES.map((rate) => (
-                          <button
-                            key={rate}
-                            type="button"
-                            onClick={() => handleRateChange(rate)}
-                            className={`status-chip rounded px-1.5 py-0.5 text-[8px] font-bold transition-all ${
-                              playbackRate === rate
-                                ? 'bg-primary/15 text-primary'
-                                : 'hover:bg-white/8'
-                            }`}
-                            style={{
-                              color: playbackRate === rate ? undefined : 'var(--color-on-surface-variant)',
-                            }}
-                          >
-                            {rate}x
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Volume */}
-                      <div className="flex items-center gap-1">
-                        <Volume2 size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={volume}
-                          onChange={handleVolumeChange}
-                          className="h-1 w-16 cursor-pointer appearance-none rounded-full"
-                          style={{
-                            background: `linear-gradient(to right, var(--color-primary) ${volume}%, rgba(255,255,255,0.1) ${volume}%)`,
-                          }}
-                        />
-                      </div>
-
-                      {/* Export MP4 */}
-                      <button
-                        type="button"
-                        onClick={handleExportMp4}
-                        disabled={exporting}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10 disabled:opacity-50"
-                        style={{ color: 'var(--color-on-surface-variant)' }}
-                        title="Export MP4"
-                      >
-                        {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                        {exporting ? 'PREPARING...' : 'EXPORT'}
-                      </button>
-
-                      {/* Share */}
-                      <button
-                        type="button"
-                        onClick={handleShare}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
-                        style={{ color: shareCopied ? 'var(--color-secondary)' : 'var(--color-on-surface-variant)' }}
-                        title="Share"
-                      >
-                        {shareCopied ? <CheckCircle2 size={14} /> : <Share2 size={14} />}
-                        {shareCopied ? 'COPIED' : 'SHARE'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── RIGHT: ANALYSIS SIDEBAR (320px) ───────────────────────── */}
-              <div className="flex max-w-[320px] min-w-0 flex-col gap-3 overflow-y-auto">
-                {/* Why This Shot Matters */}
-                {shotRationale && !loadingRationale && (
-                  <div className="glass-panel rounded-xl border-l-2 p-4" style={{ borderLeftColor: 'var(--color-secondary)' }}>
-                    <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--color-secondary)' }}>
-                      WHY THIS SHOT MATTERS
-                    </div>
-                    <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
-                      {shotRationale.rationale}
-                    </p>
-                  </div>
-                )}
-
-                {activeStoryboardProvenance && (
-                  <div className="glass-panel rounded-xl border-l-2 p-4" style={{ borderLeftColor: 'rgb(251,191,36)' }}>
-                    <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'rgb(251,191,36)' }}>
-                      STORYBOARD SOURCE
-                    </div>
-                    <div className="space-y-1 text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      <div>Blueprint: {String(activeStoryboardProvenance.blueprint_id || 'linked')}</div>
-                      <div>Version: {String(activeStoryboardProvenance.version_id || 'unversioned')}</div>
-                      <div>Shot: {String(activeStoryboardProvenance.storyboard_shot_id || activeStoryboardProvenance.shot_id || 'current')}</div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="glass-panel rounded-xl p-4 space-y-4">
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>
-                      LIVE ANALYSIS
-                    </span>
-                    <span
-                      className="status-chip rounded px-1.5 py-0.5 text-[8px] font-bold"
-                      style={{ background: 'rgba(76,215,246,0.1)', color: 'var(--color-secondary)' }}
-                    >
-                      v2.1
-                    </span>
-                  </div>
-
-                  {/* Pacing metric */}
-                  <div className="rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      PACING
-                    </div>
-                    <div className="text-lg font-bold" style={{ color: 'var(--color-primary)' }}>
-                      Steady
-                    </div>
-                    <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      Rhythm holds tension well
-                    </div>
-                  </div>
-
-                  {/* Tension metric */}
-                  <div className="rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      TENSION
-                    </div>
-                    <div className="text-lg font-bold" style={{ color: 'var(--color-secondary)' }}>
-                      Building
-                    </div>
-                    <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      Escalates through Act 2
-                    </div>
-                  </div>
-
-                  {/* Emotional Curve (simplified) */}
-                  <div className="rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      EMOTIONAL CURVE
-                    </div>
-                    {(() => {
-                      const arc = getEmotionalArc()
-                      const w = 240, h = 80
-                      const padL = 4, padR = 4, padT = 4, padB = 16
-                      const plotW = w - padL - padR
-                      const plotH = h - padT - padB
-                      const xScale = (i: number) => padL + (i / Math.max(1, arc.length - 1)) * plotW
-                      const yScale = (v: number) => h - padB - (v / 100) * plotH
-                      const lineD = arc.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(v).toFixed(1)}`).join(' ')
-                      return (
-                        <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
-                          {arc.map((v, i) => (
-                            <circle
-                              key={i}
-                              cx={xScale(i)}
-                              cy={yScale(v)}
-                              r={i === activeTakeIndex ? 5 : 2.5}
-                              fill={i === activeTakeIndex ? '#f59e0b' : 'rgba(255,255,255,0.4)'}
-                              stroke={i === activeTakeIndex ? '#fff' : 'none'}
-                              strokeWidth={i === activeTakeIndex ? 1.5 : 0}
-                            />
-                          ))}
-                          <path d={lineD} fill="none" stroke="#f59e0b" strokeWidth="1.5" opacity="0.8" />
-                          {arc.map((_, i) => (
-                            <text
-                              key={`label-${i}`}
-                              x={xScale(i)}
-                              y={h - 2}
-                              textAnchor="middle"
-                              fill="rgba(255,255,255,0.25)"
-                              fontSize="7"
-                              fontFamily="monospace"
-                            >
-                              {i + 1}
-                            </text>
-                          ))}
-                        </svg>
-                      )
-                    })()}
-                  </div>
-
-                  {/* Audience Simulator */}
-                  <div className="rounded-lg border-l-2 border-t border-r border-b p-3" style={{ borderLeftColor: 'var(--color-secondary)', borderColor: 'rgba(255,255,255,0.06)' }}>
-                    <div className="mb-2 flex items-center gap-1.5">
-                      <Users size={14} style={{ color: 'var(--color-secondary)' }} />
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-secondary)' }}>
-                        EMOTIONAL AUDIENCE SIM
-                      </span>
-                      {sceneAudienceLoading && <Loader2 size={10} className="ml-1 animate-spin" style={{ color: 'var(--color-on-surface-variant)' }} />}
-                    </div>
-
-                    {/* Segment chips */}
-                    <div className="mb-3 flex gap-1">
-                      {AUDIENCE_SEGMENTS.map((seg) => (
-                        <button
-                          key={seg.key}
-                          type="button"
-                          onClick={() => setAudienceSegment(seg.key)}
-                          className={`status-chip flex-1 rounded border px-1.5 py-1 text-[8px] font-bold uppercase tracking-[0.08em] transition-all ${
-                            audienceSegment === seg.key
-                              ? 'border-secondary/50 bg-secondary/15 text-secondary'
-                              : 'hover:bg-white/8'
-                          }`}
-                          style={{
-                            borderColor: audienceSegment === seg.key ? undefined : 'rgba(255,255,255,0.08)',
-                            color: audienceSegment === seg.key ? undefined : 'var(--color-on-surface-variant)',
-                          }}
-                        >
-                          {seg.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Reaction bars */}
-                    <div className="space-y-2">
-                      {([
-                        { label: 'Engagement', value: audienceMetrics.engagement },
-                        { label: 'Tension', value: audienceMetrics.tension },
-                        { label: 'Emotional Impact', value: audienceMetrics.emotionalImpact },
-                      ]).map((metric) => (
-                        <div key={metric.label}>
-                          <div className="mb-0.5 flex items-center justify-between">
-                            <span className="text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              {metric.label}
-                            </span>
-                            <span className="text-[9px] font-bold" style={{ color: 'var(--color-primary)' }}>
-                              {metric.value}%
-                            </span>
-                          </div>
-                          <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{ width: `${metric.value}%`, background: 'var(--color-primary)' }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleSimulate}
-                      disabled={simulating || !effectiveProjectId}
-                      className="glass-panel mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
-                      style={{ color: 'var(--color-secondary)' }}
-                    >
-                      {simulating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                      {simulating ? 'SIMULATING...' : 'SIMULATE'}
-                    </button>
-                  </div>
-
-                  {/* Co-Director Notes */}
-                  <div className="flex flex-col rounded-lg border p-3" style={{ borderColor: 'rgba(255,255,255,0.06)', maxHeight: '340px' }}>
-                    <div className="mb-2 flex shrink-0 items-center gap-1.5">
-                      <Brain size={14} style={{ color: 'var(--color-primary)' }} />
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface)' }}>
-                        CO-DIRECTOR NOTES
-                      </span>
-                    </div>
-
-                    {coDirectorNotes.length === 0 ? (
-                      <div className="shrink-0 text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        No notes yet. Request analysis for insights.
-                      </div>
-                    ) : (
-                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-                        {coDirectorNotes.map((note) => (
-                          <div key={note.id} className="rounded border p-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                            <div className="mb-1 flex items-center gap-1.5">
-                              <span
-                                className="status-chip rounded px-1.5 py-0.5 text-[7px] font-bold"
-                                style={{ background: 'rgba(255,209,101,0.1)', color: 'var(--color-primary)' }}
-                              >
-                                {note.agentName}
-                              </span>
-                              <span className="text-[8px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                {new Date(note.timestamp).toLocaleTimeString()}
-                              </span>
-                            </div>
-                            <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
-                              {note.text}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {coDirectorNotes.length > 0 && (
-                      <div className="mt-2 flex shrink-0 gap-1">
-                        <button
-                          type="button"
-                          onClick={handleApplyToShot}
-                          className="flex-1 rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
-                          style={{ borderColor: 'rgba(255,209,101,0.3)', color: 'var(--color-primary)' }}
-                        >
-                          APPLY TO SHOT
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSendToPage}
-                          className="flex-1 rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
-                          style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-on-surface-variant)' }}
-                        >
-                          SEND TO PAGE
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveToMemory}
-                          className="flex-1 rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10"
-                          style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-on-surface-variant)' }}
-                        >
-                          SAVE TO MEMORY
-                        </button>
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={handleRequestNotes}
-                      disabled={requestingNotes || !effectiveProjectId}
-                      className="glass-panel mt-2 flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
-                      style={{ color: 'var(--color-on-surface-variant)' }}
-                    >
-                      {requestingNotes ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                      {requestingNotes ? 'ANALYZING...' : 'REQUEST NOTES'}
-                    </button>
-                  </div>
-
-                  {/* AUDIO DIRECTION */}
-                  <div className="flex max-w-[320px] min-w-0 flex-col gap-3 overflow-y-auto">
-                    <div className="glass-panel rounded-xl p-4">
-                      <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        AUDIO DIRECTION
-                      </h3>
-
-                      {audioBriefLoading ? (
-                        <div className="flex flex-col items-center justify-center gap-2 py-6">
-                          <Loader2 size={18} className="animate-spin" style={{ color: 'var(--color-on-surface-variant)' }} />
-                          <span className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
-                            Generating brief...
-                          </span>
-                        </div>
-                      ) : audioBrief ? (
-                        <div className="flex flex-col gap-2.5">
-                          {/* Status chips */}
-                          <div className="flex flex-wrap gap-1.5">
-                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              {audioBrief.mood}
-                            </span>
-                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              {String('tempo' in audioBrief ? audioBrief.tempo : 'Measured')}
-                            </span>
-                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              {String('instrumentation' in audioBrief ? audioBrief.instrumentation : 'Textural')}
-                            </span>
-                            {audioBrief.silence_flag && (
-                              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-300">
-                                SILENCE
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Score notes */}
-                          <div className="rounded-lg bg-white/5 p-2">
-                            <p className="text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              Score
-                            </p>
-                            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              {audioBrief.score_notes}
-                            </p>
-                          </div>
-
-                          {/* Ambient notes */}
-                          <div className="rounded-lg bg-white/5 p-2">
-                            <p className="text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              Ambient
-                            </p>
-                            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
-                              {audioBrief.ambient_notes}
-                            </p>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={handleApplyAudioBrief}
-                            className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01]"
-                            style={{
-                              background: 'rgba(255,255,255,0.06)',
-                              color: 'var(--color-primary)',
-                              border: '1px solid rgba(255,255,255,0.12)',
-                            }}
-                          >
-                            APPLY TO SCENE
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="text-[11px] italic" style={{ color: 'var(--color-on-surface-variant)' }}>
-                          No audio direction for this scene yet.
-                        </p>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={handleGenerateBrief}
-                        disabled={audioBriefLoading || !effectiveProjectId || !activeTake?.sceneId}
-                        className="glass-panel mt-3 flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
-                        style={{ color: 'var(--color-on-surface-variant)' }}
-                      >
-                        {audioBriefLoading ? (
-                          <>
-                            <Loader2 size={12} className="animate-spin" />
-                            GENERATING BRIEF...
-                          </>
-                        ) : (
-                          <>
-                            <Volume2 size={12} />
-                            GENERATE BRIEF
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* POSTER */}
-                  <div className="flex max-w-[320px] min-w-0 flex-col gap-3 overflow-y-auto">
-                    <div className="glass-panel rounded-xl p-4">
-                      <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        POSTER
-                      </h3>
-
-                      {posterLoading ? (
-                        <div className="flex flex-col items-center justify-center gap-2 py-6">
-                          <Loader2 size={18} className="animate-spin" style={{ color: 'var(--color-on-surface-variant)' }} />
-                          <span className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--color-on-surface-variant)' }}>
-                            Loading...
-                          </span>
-                        </div>
-                      ) : posterUrl ? (
-                        <div className="flex flex-col gap-2.5">
-                          <img
-                            src={posterUrl}
-                            alt="Project Poster"
-                            className="w-full rounded-lg"
-                            style={{ objectFit: 'cover', aspectRatio: '2/3' }}
-                          />
-                        </div>
-                      ) : (
-                        <p className="text-[11px] italic" style={{ color: 'var(--color-on-surface-variant)' }}>
-                          No poster generated yet.
-                        </p>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={handleGeneratePoster}
-                        disabled={posterGenerating || !effectiveProjectId}
-                        className="glass-panel mt-3 flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
-                        style={{ color: 'var(--color-on-surface-variant)' }}
-                      >
-                        {posterGenerating ? (
-                          <>
-                            <Loader2 size={12} className="animate-spin" />
-                            GENERATING POSTER...
-                          </>
-                        ) : (
-                          <>
-                            <Film size={12} />
-                            GENERATE POSTER
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Stitch Film / Download Final */}
-                  {finalPackage ? (
-                    <button
-                      type="button"
-                      onClick={handleDownloadFinalPackage}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[12px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] amber-glow"
-                      style={{
-                        background: 'rgba(52,211,153,0.15)',
-                        color: '#4ade80',
-                        border: '1px solid rgba(52,211,153,0.3)',
-                      }}
-                    >
-                      <Download size={16} />
-                      DOWNLOAD FINAL MP4
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleStitchFilm}
-                      disabled={stitching || !effectiveProjectId}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[12px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50 amber-glow"
-                      style={{
-                        background: 'rgba(255,209,101,0.15)',
-                        color: 'var(--color-primary)',
-                        border: '1px solid rgba(255,209,101,0.3)',
-                      }}
-                    >
-                      {stitching ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" />
-                          STITCHING...
-                        </>
-                      ) : (
-                        <>
-                          <Film size={16} />
-                          STITCH FILM
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  <EditorialIntelligencePanel
+                    </details>
+                    <details className={disclosureClass}><summary className={summaryClass}>Specialist review tools</summary><div className="mt-4 space-y-3">                  <details className={disclosureClass}><summary className={summaryClass}>Editing and rhythm</summary><div className="mt-4"><EditorialIntelligencePanel
                     projectId={effectiveProjectId}
                     sourcePackageId={finalPackage?.package_id || ''}
-                  />
+                  /></div></details>
 
                   {activeTake?.sceneId ? (
                     <div className="space-y-3">
-                      <CinematographerIntelligencePanel
+                      <details className={disclosureClass}><summary className={summaryClass}>Camera and composition</summary><div className="mt-4"><CinematographerIntelligencePanel
                         projectId={effectiveProjectId}
                         sceneId={activeTake.sceneId}
-                        shotId={`${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
+                        shotId={activeRenderJob?.shot_id || `${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
                         renderJobId={activeRenderJob?.id}
                         assetId={
                           typeof activeRenderJob?.output_payload?.metadata?.asset_id === 'string'
@@ -2306,11 +1338,11 @@ export default function ScreeningRoom() {
                           shot_number: activeShotNumber,
                           video_url: activeVideoUrl,
                         }}
-                      />
-                      <PerformanceAudioPanel
+                      /></div></details>
+                      <details className={disclosureClass}><summary className={summaryClass}>Performance and sound</summary><div className="mt-4"><PerformanceAudioPanel
                         projectId={effectiveProjectId}
                         sceneId={activeTake.sceneId}
-                        shotId={`${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
+                        shotId={activeRenderJob?.shot_id || `${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
                         renderJobId={activeRenderJob?.id}
                         assetId={
                           typeof activeRenderJob?.output_payload?.metadata?.asset_id === 'string'
@@ -2323,12 +1355,12 @@ export default function ScreeningRoom() {
                           shot_number: activeShotNumber,
                           video_url: activeVideoUrl,
                         }}
-                      />
-                      <CastingIntelligencePanel projectId={effectiveProjectId} />
-                      <ProductionDesignIntelligencePanel
+                      /></div></details>
+                      <details className={disclosureClass}><summary className={summaryClass}>Casting</summary><div className="mt-4"><CastingIntelligencePanel projectId={effectiveProjectId} compact /></div></details>
+                      <details className={disclosureClass}><summary className={summaryClass}>Production design</summary><div className="mt-4"><ProductionDesignIntelligencePanel
                         projectId={effectiveProjectId}
                         sceneId={activeTake.sceneId}
-                        shotId={`${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
+                        shotId={activeRenderJob?.shot_id || `${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
                         renderJobId={activeRenderJob?.id}
                         assetId={
                           typeof activeRenderJob?.output_payload?.metadata?.asset_id === 'string'
@@ -2341,11 +1373,11 @@ export default function ScreeningRoom() {
                           shot_number: activeShotNumber,
                           video_url: activeVideoUrl,
                         }}
-                      />
-                      <ColoristIntelligencePanel
+                      /></div></details>
+                      <details className={disclosureClass}><summary className={summaryClass}>Color and finish</summary><div className="mt-4"><ColoristIntelligencePanel
                         projectId={effectiveProjectId}
                         sceneId={activeTake.sceneId}
-                        shotId={`${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
+                        shotId={activeRenderJob?.shot_id || `${activeTake.sceneId}_shot_${String(activeShotNumber).padStart(3, '0')}`}
                         renderJobId={activeRenderJob?.id}
                         assetId={
                           typeof activeRenderJob?.output_payload?.metadata?.asset_id === 'string'
@@ -2358,20 +1390,27 @@ export default function ScreeningRoom() {
                           shot_number: activeShotNumber,
                           video_url: activeVideoUrl,
                         }}
-                      />
+                      /></div></details>
                     </div>
                   ) : null}
 
-                  <ProductionAcceptancePanel
-                    projectId={effectiveProjectId}
-                    finalPackage={finalPackage}
-                    report={acceptanceReport}
-                    onReport={setAcceptanceReport}
-                    loading={acceptanceLoading}
-                    setLoading={setAcceptanceLoading}
-                    error={acceptanceError}
-                    setError={setAcceptanceError}
-                  />
+</div></details>
+                    {activeStoryboardProvenance && <details className={disclosureClass}><summary className={summaryClass}>Storyboard source</summary><dl className="mt-3 space-y-2 break-words text-xs text-zinc-400"><div><dt className="text-zinc-500">Blueprint</dt><dd>{String(activeStoryboardProvenance.blueprint_id || 'Linked')}</dd></div><div><dt className="text-zinc-500">Version</dt><dd>{String(activeStoryboardProvenance.version_id || 'Unversioned')}</dd></div><div><dt className="text-zinc-500">Shot</dt><dd>{String(activeStoryboardProvenance.storyboard_shot_id || activeStoryboardProvenance.shot_id || 'Current')}</dd></div></dl></details>}
+                  </section>
+
+                  <section id="theatre-step-approve" aria-label="Approve the screening output" hidden={activeStep !== 'approve'} className="space-y-4">
+                    <div className="space-y-3"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Approval applies to</p><p className="text-lg text-zinc-100">{activeVideoUrl ? outputScope : 'No playable output selected'}</p><p className="text-sm leading-relaxed text-zinc-400">Approve the output currently in the player. Earlier approvals remain in its history.</p>{screeningApprovalTarget?.cut_freshness && screeningApprovalTarget.cut_freshness.status !== 'current' && <p role="status" className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">{screeningApprovalTarget.approved ? 'Approval belongs to this saved export. ' : ''}{screeningApprovalTarget.cut_freshness.reason}</p>}{screeningApprovalTarget ? <><p className="text-sm text-zinc-300">{screeningApprovalTarget.approved ? 'This output is already approved.' : 'This output is awaiting your decision.'}</p><button type="button" onClick={() => void handleApproveScreeningOutput()} disabled={approvingScreeningOutput || screeningApprovalTarget.approved} className={primaryButtonClass}>{approvingScreeningOutput ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}{approvingScreeningOutput ? 'Approving…' : screeningApprovalTarget.approved ? 'Output approved' : screeningApprovalTarget.output_type === 'final' ? 'Approve final film output' : 'Approve this output'}</button></> : <p className="rounded-md border border-dashed border-white/15 p-3 text-sm leading-relaxed text-zinc-400">{activeVideoUrl ? 'This file has no matching screening approval record yet. Choose a registered shot, scene, or final output to approve.' : 'Choose a rendered output in Watch before recording an approval.'}</p>}</div>
+                    <details className={disclosureClass}><summary className={summaryClass}>Production acceptance checks</summary><div className="mt-4"><ProductionAcceptancePanel projectId={effectiveProjectId} finalPackage={finalPackage} report={acceptanceReport} onReport={setAcceptanceReport} loading={acceptanceLoading} setLoading={setAcceptanceLoading} error={acceptanceError} setError={setAcceptanceError} /></div></details>
+                    <details className={disclosureClass}><summary className={summaryClass}>Production handoff</summary><p className="mt-3 text-xs leading-relaxed text-zinc-400">The Canonical Production Thread tracks its own production and review gates. Screening approval above records your choice of this media output.</p><div className="mt-4 min-w-0">{effectiveProjectId && canonicalSceneId ? <CanonicalWorkflowPanel projectId={effectiveProjectId} sceneId={canonicalSceneId} sceneContext={canonicalSceneContext} surface="screening" /> : <p className="text-sm text-zinc-400">Select a scene to open its production thread.</p>}</div></details>
+                  </section>
+
+                  <section id="theatre-step-deliver" aria-label="Deliver the film" hidden={activeStep !== 'deliver'} className="space-y-4">
+                    <div className="space-y-3"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Download from the player</p><p className="text-lg text-zinc-100">{activeVideoUrl ? outputScope : 'No video selected'}</p><p className="text-sm leading-relaxed text-zinc-400">{viewingWholeFilm ? 'Download the full film you are watching.' : fullFilmAvailable ? 'This downloads the current preview. To download the whole movie, choose Watch full film in the Watch step first.' : 'This downloads the current preview. Your full film is not assembled yet. Open Watch → Prepare the full film to assemble the saved scenes first.'}</p><button type="button" onClick={handleExportMp4} disabled={exporting || !activeVideoUrl} className={primaryButtonClass}>{exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}{exporting ? 'Preparing download…' : viewingWholeFilm ? 'Download film MP4' : 'Download preview MP4'}</button></div>
+                    <div className="space-y-2 border-t border-white/10 pt-4"><button type="button" onClick={handleShare} className={buttonClass}>{shareCopied ? <CheckCircle2 size={15} /> : <Share2 size={15} />}{shareCopied ? 'Link copied' : 'Copy screening link'}</button><p className="text-xs leading-relaxed text-zinc-500">Copies this project’s studio page address. The viewer needs access to this studio.</p></div>
+                    <details className={disclosureClass}><summary className={summaryClass}>Final package and export manifest</summary><div className="mt-4 space-y-3 text-sm leading-relaxed text-zinc-400"><p>Create the final package from the project’s prepared scene outputs. The export manifest contains delivery metadata and media links.</p>{finalPackage ? <><p className="flex items-center gap-2 text-emerald-300"><CheckCircle2 size={15} />Final package available</p><button type="button" onClick={handleDownloadFinalPackage} disabled={exporting} className={buttonClass}><Download size={15} />Export manifest (JSON)</button><p className="text-xs text-zinc-500">The manifest is a JSON document. Use the MP4 download above for the video itself.</p></> : <><button type="button" onClick={handleStitchFilm} disabled={stitching || !effectiveProjectId || !scenes.length} className={buttonClass}>{stitching ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{stitching ? 'Stitching film…' : 'Stitch final film'}</button><p className="text-xs text-zinc-500">Prepare scene outputs before stitching. This action does not add a soundtrack.</p></>}</div></details>
+                    <details className={disclosureClass}><summary className={summaryClass}>Film poster</summary><div className="mt-4 space-y-3">{posterLoading ? <p className="text-sm text-zinc-400">Loading poster…</p> : posterUrl ? <img src={posterUrl} alt={`${activeProject?.title || 'Film'} poster`} className="max-h-[420px] max-w-full rounded-md object-contain" /> : <p className="text-sm text-zinc-400">No poster generated yet.</p>}<button type="button" onClick={handleGeneratePoster} disabled={posterGenerating || !effectiveProjectId} className={buttonClass}>{posterGenerating ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{posterGenerating ? 'Generating poster…' : 'Generate poster'}</button></div></details>
+                  </section>
+                  {nextStep && <div className="mt-6 border-t border-white/10 pt-4"><button type="button" onClick={advanceStep} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-md px-2 text-sm font-medium text-amber-100 hover:bg-amber-200/5 focus-visible:outline-2 focus-visible:outline-amber-200">Next: {nextStep.title}<ChevronRight size={16} /></button></div>}
                 </div>
               </div>
             </div>

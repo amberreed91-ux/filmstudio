@@ -316,6 +316,13 @@ class CoDirectorChatService:
                 ((index, scene) for index, scene in enumerate(scenes) if _scene_id(scene) == requested_id),
                 None,
             )
+            if requested_id and match is None:
+                return (
+                    f"Project: {title}\nThe selected scene [{requested_id}] is unavailable in this project. "
+                    "Do not substitute another scene or claim to have reviewed it. Ask the creator to select an available scene for scene-specific advice.",
+                    0,
+                    (),
+                )
             # Match the frontend chip, which presents the first scene when no
             # explicit active scene has been supplied.
             index, selected = match or (0, scenes[0])

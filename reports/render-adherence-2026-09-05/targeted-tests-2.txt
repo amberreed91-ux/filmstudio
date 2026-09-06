@@ -1,0 +1,11 @@
+...................F................................................     [100%]
+=================================== FAILURES ===================================
+_____ test_short_creator_prompt_survives_automatic_and_structured_planning _____
+tests/test_storyboard_provider_conditioning.py:65: in test_short_creator_prompt_survives_automatic_and_structured_planning
+    assert "Close on her closed left hand." in job.input_payload.prompt
+E   AssertionError: assert 'Close on her closed left hand.' in 'preserve established wardrobe continuity. She opens her hand.. unspecified location; Support the action without addin...ted density; neutral warm-cool balance; restrained saturation with selective motif emphasis.. Cinematic, film quality.'
+E    +  where 'preserve established wardrobe continuity. She opens her hand.. unspecified location; Support the action without addin...ted density; neutral warm-cool balance; restrained saturation with selective motif emphasis.. Cinematic, film quality.' = RenderJobInput(shot_id='scene_001_shot_001', prompt='preserve established wardrobe continuity. She opens her hand.. un...l normal lens behavior', 'priority': 'cinematography', 'source': 'camera'}], 'ready': True}}, consistency_payload=None).prompt
+E    +    where RenderJobInput(shot_id='scene_001_shot_001', prompt='preserve established wardrobe continuity. She opens her hand.. un...l normal lens behavior', 'priority': 'cinematography', 'source': 'camera'}], 'ready': True}}, consistency_payload=None) = RenderJobModel(id='job-20260905110112-289ca348-scene_001_shot_001', project_id='p', shot_id='scene_001_shot_001', prov...try_advisory=None, created_at='2026-09-05T11:01:12.116368', updated_at='2026-09-05T11:01:12.116370', completed_at=None).input_payload
+=========================== short test summary info ============================
+FAILED tests/test_storyboard_provider_conditioning.py::test_short_creator_prompt_survives_automatic_and_structured_planning
+1 failed, 67 passed in 14.45s

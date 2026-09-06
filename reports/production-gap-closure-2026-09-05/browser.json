@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "checks": [
+    "preview has no write",
+    "exact older job selected",
+    "selection survives reload",
+    "failed clear retains choice and shows error",
+    "explicit clear",
+    "mobile no overflow",
+    "no page errors"
+  ],
+  "writes": [
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_001/take-choices/2",
+      "body": {
+        "job_id": "delivery-fixture-old"
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_001/take-choices/2",
+      "body": {
+        "job_id": null
+      }
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_001/take-choices/2",
+      "body": {
+        "job_id": null
+      }
+    }
+  ],
+  "errors": []
+}

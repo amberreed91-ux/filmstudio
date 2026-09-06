@@ -1,11 +1,16 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import CanonicalWorkflowPanel from './CanonicalWorkflowPanel'
+
+const state = vi.hoisted(() => ({
+  sceneContext: null as null | { scriptId: string; sequenceId: string; beatIds: string[] },
+}))
 
 vi.mock('../hooks/useCanonicalWorkflow', () => ({
   useCanonicalWorkflow: () => ({
     run: null,
+    sceneContext: state.sceneContext,
     availableRuns: [],
     currentBlueprintVersionId: 'blueprint-version-1',
     transitions: [],
@@ -21,6 +26,21 @@ vi.mock('../hooks/useCanonicalWorkflow', () => ({
 }))
 
 describe('CanonicalWorkflowPanel', () => {
+  afterEach(() => { state.sceneContext = null })
+  it('uses server-resolved script context to enable an older saved film', () => {
+    state.sceneContext = { scriptId: 'script_saved', sequenceId: '', beatIds: [] }
+    const html = renderToStaticMarkup(<CanonicalWorkflowPanel projectId="project-1" sceneId="scene-2" sceneContext={{ scriptId: '', sequenceId: '', beatIds: [] }} surface="previs" />)
+    expect(html).toMatch(/<button type="button" class="[^"]*">Start approved production thread<\/button>/)
+    expect(html).not.toContain('Save this film')
+  })
+
+  it('names the selected real provider in the production panel', () => {
+    const html = renderToStaticMarkup(<CanonicalWorkflowPanel projectId="project-1" sceneId="scene-2" sceneContext={{ scriptId: 'script-1', sequenceId: '', beatIds: [] }} surface="previs" renderProvider="openrouter-video" renderProviderLabel="OpenRouter · HappyHorse" />)
+    expect(html).toContain('OpenRouter · HappyHorse')
+    expect(html).not.toContain('simulated provider')
+    expect(html).toContain('Retries and revisions retain their original render provider')
+  })
+
   it('renders exact project and scene context with an explicit start action', () => {
     const html = renderToStaticMarkup(
       <CanonicalWorkflowPanel

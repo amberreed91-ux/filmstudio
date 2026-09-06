@@ -143,9 +143,6 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
     const model = selected.isActive ? selected.model : null
     const start = startedAtByTask[selected.taskId] ?? selected.createdAt
     const elapsedSeconds = Math.max(0, Math.floor((now - start) / 1000))
-    if (import.meta.env.DEV) {
-      console.log('[RenderActivity] selectedProvider:', resolvedSelectedProvider, 'activityProvider:', provider, 'activeRenderJob.provider:', selected.provider, 'model:', selected.model, 'runwayConfigured:', runwayConfigured)
-    }
     return {
       status: selected.status,
       provider,

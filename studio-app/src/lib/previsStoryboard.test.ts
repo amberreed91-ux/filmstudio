@@ -6,6 +6,7 @@ import {
   initialStoryboardImageState,
   promptChangedAfterEnhancement,
   providerIdForPrevisEngine,
+  shotNumberFromContinuityLabel,
 } from './previsStoryboard'
 
 describe('initialStoryboardImageState', () => {
@@ -53,8 +54,8 @@ describe('chooseDurationForProvider', () => {
 
 describe('providerIdForPrevisEngine', () => {
   it('routes named previs model choices through a backend-supported render provider', () => {
-    expect(providerIdForPrevisEngine('Wan 2.2')).toBe('runway')
-    expect(providerIdForPrevisEngine('LTX-Video')).toBe('runway')
+    expect(providerIdForPrevisEngine('Wan 2.2')).toBe('wan')
+    expect(providerIdForPrevisEngine('LTX-Video')).toBeUndefined()
   })
 
   it('lets auto selection fall through to the backend default provider', () => {
@@ -96,5 +97,19 @@ describe('buildStoryboardRenderReferences', () => {
       '/previs-assets/proj/scene_001_shot_001.png',
       'https://cdn.example.test/style.png',
     ])
+  })
+})
+
+describe('shotNumberFromContinuityLabel', () => {
+  it('targets the numbered shot from continuity review labels', () => {
+    expect(shotNumberFromContinuityLabel('003')).toBe(3)
+    expect(shotNumberFromContinuityLabel('Shot 12')).toBe(12)
+    expect(shotNumberFromContinuityLabel(2)).toBe(2)
+  })
+
+  it('rejects empty or unusable shot labels', () => {
+    expect(shotNumberFromContinuityLabel('')).toBeNull()
+    expect(shotNumberFromContinuityLabel('shot')).toBeNull()
+    expect(shotNumberFromContinuityLabel(0)).toBeNull()
   })
 })

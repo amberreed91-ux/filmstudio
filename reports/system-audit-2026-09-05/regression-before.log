@@ -1,0 +1,238 @@
+F.FFFF                                                                   [100%]
+=================================== FAILURES ===================================
+_________________ test_unknown_adapter_never_becomes_simulated _________________
+
+    def test_unknown_adapter_never_becomes_simulated():
+>       with pytest.raises(ValueError, match='Unknown provider'):
+E       Failed: DID NOT RAISE ValueError
+
+app/services/test_render_provider_safety.py:28: Failed
+_________ test_missing_provider_configuration_preserves_job_and_fails __________
+
+isolated_render = (<app.services.render.RenderService object at 0x108ac5f50>, RenderJobModel(id='provider-safety-job', project_id='safet...=None, retry_of=None, retry_advisory=None, created_at='', updated_at='2026-09-05T04:29:27.725856', completed_at=None)})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108a71750>
+
+    @pytest.mark.asyncio
+    async def test_missing_provider_configuration_preserves_job_and_fails(isolated_render, monkeypatch):
+        service, job, saved = isolated_render
+        del service._provider_configs['runway']
+        adapter_factory = AsyncMock()
+        monkeypatch.setattr(render_module, 'get_adapter', adapter_factory)
+        with pytest.raises(ProviderError):
+>           await service.submit_job(job.id)
+
+app/services/test_render_provider_safety.py:43: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.render.RenderService object at 0x108ac5f50>
+job_id = 'provider-safety-job'
+
+    async def submit_job(self, job_id: str) -> RenderJobModel:
+        """Submit a job to its provider with error handling"""
+        job = self._jobs.get(job_id)
+        if not job:
+            logger.error(f"Job {job_id} not found for submission")
+            raise ValueError(f"Job {job_id} not found")
+        if job_id in self._submit_locks:
+            logger.info("Duplicate submit blocked for %s", job_id)
+            return job
+        if job.status in {"rendering", "complete", "needs_review"}:
+            logger.info("Submit skipped for %s because status=%s", job_id, job.status)
+            return job
+        if job.status == "failed":
+            metadata = job.metadata if isinstance(job.metadata, dict) else {}
+            reliability = metadata.get("pipeline_reliability") if isinstance(metadata.get("pipeline_reliability"), dict) else {}
+            failure = reliability.get("failure_location") if isinstance(reliability.get("failure_location"), dict) else {}
+            if failure.get("category") == "permanent":
+                logger.info(
+                    "Submit skipped for permanent failed job %s phase=%s error_type=%s",
+                    job_id,
+                    failure.get("phase") or "",
+                    failure.get("error_type") or "",
+                )
+                return job
+        if job.status == "failed" and job.retry_count >= MAX_RETRIES:
+            _record_failure_location(
+                job,
+                phase="retry",
+                reason=f"Job {job_id} exceeded max retries",
+                error_type="retry_limit_reached",
+                category="permanent",
+            )
+            _set_zero_touch_phase(job, "retry", "failed", error="retry limit reached", error_type="retry_limit_reached")
+            _persist_job(job)
+            raise ValueError(f"Job {job_id} exceeded max retries")
+        self._submit_locks.add(job_id)
+        adapter: RenderProviderAdapter | None = None
+    
+        try:
+            config = self._provider_configs.get(job.provider)
+            if not config:
+                config = self._provider_configs["simulated"]
+                job.provider = "simulated"
+                logger.warning(f"Provider {job.provider} not found, falling back to simulated")
+    
+            params = job.input_payload.parameters if job.input_payload and isinstance(job.input_payload.parameters, dict) else {}
+            _validate_model_override(job.provider, params)
+            _missing_reference_assets = _missing_local_reference_assets(
+                list(job.input_payload.referenceAssets or []) if job.input_payload else []
+            )
+            if _missing_reference_assets:
+                job.status = "failed"
+                job.error_message = "Reference file missing before provider submission"
+                job.metadata = dict(job.metadata or {})
+                job.metadata["reference_asset_failure"] = {
+                    "error_type": "reference_file_missing",
+                    "missing_references": _missing_reference_assets,
+                    "message": job.error_message,
+                }
+                _set_zero_touch_phase(
+                    job,
+                    "resolve_references",
+                    "failed",
+                    error=job.error_message,
+                    error_type="reference_file_missing",
+                    missing_references=_missing_reference_assets,
+                )
+                _set_zero_touch_phase(job, "render", "skipped", reason="reference file missing before provider submission")
+                _set_zero_touch_phase(job, "evaluate", "skipped", reason="render not submitted")
+                _set_zero_touch_phase(job, "retry", "skipped", reason="render not submitted")
+                _record_failure_location(
+                    job,
+                    phase="resolve_references",
+                    reason=job.error_message,
+                    error_type="reference_file_missing",
+                    category="permanent",
+                )
+                _persist_job(job)
+                return job
+            _set_zero_touch_phase(
+                job,
+                "render",
+                "running",
+                provider=job.provider,
+                model=_provider_model_for_job(job.provider, params),
+            )
+            _persist_job(job)
+            adapter = get_adapter(job.provider, config)
+            previous_status = job.status
+            logger.info(f"Submitting job {job_id} to provider {job.provider}")
+    
+            # ── Seed locking: generate on first render, reuse on subsequent ──
+            try:
+                if _storage:
+                    shot_seed = _storage.get_shot_seed(job.project_id, job.shot_id)
+                    if shot_seed and shot_seed.get("seed") is not None:
+                        seed_val = int(shot_seed["seed"])
+                        logger.info(
+                            "SEED_REUSED | job=%s | shot=%s | seed=%d | locked=%s",
+                            job_id, job.shot_id, seed_val,
+                            bool(shot_seed.get("seed_locked")),
+                        )
+                    else:
+                        seed_val = int.from_bytes(os.urandom(4), byteorder="big", signed=False) % (2**31)
+                        _storage.save_shot_seed(job.project_id, job.shot_id, seed_val)
+                        logger.info(
+                            "SEED_GENERATED | job=%s | shot=%s | seed=%d",
+                            job_id, job.shot_id, seed_val,
+                        )
+                    if job.input_payload and job.input_payload.parameters:
+                        job.input_payload.parameters["seed"] = seed_val
+                    elif job.input_payload:
+                        job.input_payload.parameters = {"seed": seed_val}
+            except Exception as _exc:
+                logger.debug("Seed injection skipped for %s: %s", job_id, _exc)
+    
+            job.recovery_status = "active"
+            submitted_job = await asyncio.wait_for(
+>               adapter.submit_job(job),
+                ^^^^^^^^^^^^^^^^^^
+                timeout=PROVIDER_CALL_TIMEOUT_SECONDS,
+            )
+E           AttributeError: 'coroutine' object has no attribute 'submit_job'
+
+app/services/render.py:3015: AttributeError
+------------------------------ Captured log call -------------------------------
+WARNING  studio-render:render.py:2940 Provider simulated not found, falling back to simulated
+ERROR    studio-render:render.py:3053 Failed to submit job provider-safety-job: 'coroutine' object has no attribute 'submit_job'
+__________ test_poll_missing_provider_configuration_fails_recoverably __________
+
+isolated_render = (<app.services.render.RenderService object at 0x108a708d0>, RenderJobModel(id='provider-safety-job', project_id='safet...metadata=None, batch_id=None, retry_of=None, retry_advisory=None, created_at='', updated_at='', completed_at=None), {})
+
+    @pytest.mark.asyncio
+    async def test_poll_missing_provider_configuration_fails_recoverably(isolated_render):
+        service, job, saved = isolated_render
+        job.status = 'rendering'
+        job.provider_job_id = 'original-hosted-task'
+        del service._provider_configs['runway']
+        result = await service.get_job_status(job.id)
+>       assert result.status == 'failed'
+E       AssertionError: assert 'rendering' == 'failed'
+E         
+E         - failed
+E         + rendering
+
+app/services/test_render_provider_safety.py:58: AssertionError
+________ test_mutating_adapter_runs_completion_hooks_and_notifies_once _________
+
+isolated_render = (<app.services.render.RenderService object at 0x108b15a90>, RenderJobModel(id='provider-safety-job', project_id='safet...=None, retry_of=None, retry_advisory=None, created_at='', updated_at='2026-09-05T04:29:27.788437', completed_at=None)})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108ac5490>
+
+    @pytest.mark.asyncio
+    async def test_mutating_adapter_runs_completion_hooks_and_notifies_once(isolated_render, monkeypatch):
+        service, job, saved = isolated_render
+        job.status = 'rendering'
+        class Adapter:
+            async def get_job_status(self, current):
+                current.status = 'complete'
+                current.output_payload = RenderJobOutput(asset_url='https://example.test/film.mp4')
+                return current
+        monkeypatch.setattr(render_module, 'get_adapter', lambda *args: Adapter())
+        assert (await service.get_job_status(job.id)).status == 'complete'
+        await service.get_job_status(job.id)
+        for name in ('_run_continuity_review', '_run_render_quality_check', '_run_character_reference_lock', '_notify_update'):
+>           getattr(render_module, name).assert_awaited_once()
+
+app/services/test_render_provider_safety.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncMock id='4440950800'>
+
+    def assert_awaited_once(self):
+        """
+        Assert that the mock was awaited exactly once.
+        """
+        if not self.await_count == 1:
+            msg = (f"Expected {self._mock_name or 'mock'} to have been awaited once."
+                   f" Awaited {self.await_count} times.")
+>           raise AssertionError(msg)
+E           AssertionError: Expected mock to have been awaited once. Awaited 0 times.
+
+/Users/amberreed/.pyenv/versions/3.11.9/lib/python3.11/unittest/mock.py:2283: AssertionError
+___________________ test_submit_route_formats_provider_error ___________________
+
+isolated_render = (<app.services.render.RenderService object at 0x108b14550>, RenderJobModel(id='provider-safety-job', project_id='safet...y_advisory=None, created_at='2026-09-05T04:29:27.895483', updated_at='2026-09-05T04:29:27.895862', completed_at=None)})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108b15ad0>
+
+    def test_submit_route_formats_provider_error(isolated_render, monkeypatch):
+        from app.routes import render as routes
+        service, job, _ = isolated_render
+        del service._provider_configs['runway']
+        monkeypatch.setattr(routes, 'render_service', service)
+        app = FastAPI()
+        app.include_router(routes.router)
+        response = TestClient(app, raise_server_exceptions=False).post(f'/jobs/{job.id}/submit')
+>       assert response.status_code == 502
+E       assert 200 == 502
+E        +  where 200 = <Response [200 OK]>.status_code
+
+app/services/test_render_provider_safety.py:89: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  studio-render:render.py:2940 Provider simulated not found, falling back to simulated
+=========================== short test summary info ============================
+FAILED app/services/test_render_provider_safety.py::test_unknown_adapter_never_becomes_simulated
+FAILED app/services/test_render_provider_safety.py::test_missing_provider_configuration_preserves_job_and_fails
+FAILED app/services/test_render_provider_safety.py::test_poll_missing_provider_configuration_fails_recoverably
+FAILED app/services/test_render_provider_safety.py::test_mutating_adapter_runs_completion_hooks_and_notifies_once
+FAILED app/services/test_render_provider_safety.py::test_submit_route_formats_provider_error
+5 failed, 1 passed in 0.45s

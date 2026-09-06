@@ -38,6 +38,13 @@ def test_create_approve_and_render_storyboard_blueprint(tmp_path: Path) -> None:
     assert shots[0].render_contract.render_readiness == "ready"
     assert shots[0].render_contract.provider_neutral_prompt
 
+    review = service.run_continuity_review(
+        blueprint_id=blueprint.blueprint_id,
+        version_id=version.version_id,
+        reviewer="continuity_test",
+    )
+    assert review["status"] == "completed"
+
     approved = service.approve_version(
         blueprint_id=blueprint.blueprint_id,
         version_id=version.version_id,

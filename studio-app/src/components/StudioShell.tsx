@@ -22,9 +22,11 @@ import { lazyLoad } from './LazyLoad'
 import { useRenderActivity } from '../context/RenderActivityContext'
 import { useAudioUX } from '../context/AudioUXContext'
 import { getRouteByPath } from '../routes'
-import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId } from '../lib/projectContext'
+import { persistActiveProjectId, readPersistedActiveProjectId, resolveActiveProjectId, withProductionContext } from '../lib/projectContext'
 import { useRenderStatusStore } from '../stores/renderStatusStore'
 import CoDirectorDrawer from './CoDirectorDrawer'
+import ProductionJourneyGuide from './ProductionJourneyGuide'
+import { useStudio } from '../context/StudioContext'
 
 const LazyAICrewPresence = lazyLoad(
   () => import('./AICrewPresence'),
@@ -70,6 +72,7 @@ interface StudioShellProps {
   subtitle?: string
   transparent?: boolean
   children: ReactNode
+  beforeNavigate?: () => Promise<boolean>
 }
 
 type TabOption<T extends string> = { id: T; label: string }
@@ -248,7 +251,7 @@ function resolveBackgroundKey(pathname: string): string {
   return '/'
 }
 
-export default function StudioShell({ title, transparent, children }: StudioShellProps) {
+export default function StudioShell({ title, transparent, children, beforeNavigate }: StudioShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { activity } = useRenderActivity()
@@ -258,6 +261,7 @@ export default function StudioShell({ title, transparent, children }: StudioShel
   const { status: renderStatus, setStatus } = useRenderStatusStore()
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [mobileToolsExpanded, setMobileToolsExpanded] = useState(false)
   const [codirectorOpen, setCodirectorOpen] = useState(false)
   const { healthy, restarting, restart } = useBackendHealth()
 
@@ -277,6 +281,8 @@ export default function StudioShell({ title, transparent, children }: StudioShel
     }
   }, [activity, setStatus])
 
+  const { activeProjectId: contextProjectId } = useStudio()
+  const routeSearch = new URLSearchParams(location.search)
   const activeTitle = title || getRouteByPath(location.pathname)?.title || 'Studio'
   const projectMatch = matchPath({ path: '/studio/project/:projectId/*' }, location.pathname)
   const projectId = projectMatch?.params?.projectId
@@ -284,8 +290,15 @@ export default function StudioShell({ title, transparent, children }: StudioShel
     queryProjectId: new URLSearchParams(location.search).get('project_id'),
     routeProjectId: projectId,
     locationState: location.state,
-    persistedProjectId: readPersistedActiveProjectId(),
+    contextProjectId,
+    persistedProjectId: contextProjectId ? null : readPersistedActiveProjectId(),
   })
+  const productionContext = { projectId: activeProjectId, sceneId: routeSearch.get('scene') || routeSearch.get('scene_id'), shotNumber: Number.parseInt(routeSearch.get('shot') || '', 10) || null }
+  const roomUrl = (path: string) => withProductionContext(path, productionContext)
+  const navigateToRoom = async (path: string) => {
+    if (beforeNavigate && !(await beforeNavigate())) return
+    navigate(roomUrl(path))
+  }
   useEffect(() => {
     if (activeProjectId) persistActiveProjectId(activeProjectId)
   }, [activeProjectId])
@@ -307,12 +320,6 @@ export default function StudioShell({ title, transparent, children }: StudioShel
 
   useEffect(() => {
     if (prevPathRef.current !== location.pathname) {
-      if (import.meta.env.DEV) {
-        console.log('[RouteDebug] location changed', {
-          from: prevPathRef.current,
-          to: location.pathname,
-        })
-      }
       emitAudioEvent('room_transition', { from: prevPathRef.current, to: location.pathname })
       prevPathRef.current = location.pathname
     }
@@ -423,7 +430,8 @@ export default function StudioShell({ title, transparent, children }: StudioShel
         {/* ── SIDE NAV (fixed left, 72px, glass-panel) ── */}
         {isStudioRoute && (
           <nav
-            className="glass-panel fixed left-4 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-3 py-6 px-3 rounded-full"
+            aria-label="Studio rooms"
+            className="glass-panel fixed left-4 top-1/2 -translate-y-1/2 z-50 hidden flex-col items-center gap-3 py-6 px-3 rounded-full md:flex"
             style={{ width: '72px' }}
           >
             {ROOM_NAV_ITEMS.map((room) => {
@@ -439,7 +447,9 @@ export default function StudioShell({ title, transparent, children }: StudioShel
                 <div key={room.key} className="relative flex items-center justify-center">
                   <button
                     type="button"
-                    onClick={() => navigate(room.to)}
+                    onClick={() => void navigateToRoom(room.to)}
+                    aria-label={room.stitchName}
+                    aria-current={isActive ? 'page' : undefined}
                     onMouseEnter={() => setHoveredRoom(room.key)}
                     onMouseLeave={() => setHoveredRoom(null)}
                     onFocus={() => setHoveredRoom(room.key)}
@@ -467,10 +477,10 @@ export default function StudioShell({ title, transparent, children }: StudioShel
         )}
 
         {/* ── MAIN CONTENT AREA ── */}
-        <div className={`flex-1 flex flex-col ${isStudioRoute ? 'ml-[88px]' : ''}`}>
+        <div className={`min-w-0 flex-1 flex flex-col ${isStudioRoute ? 'md:ml-[88px]' : ''}`}>
           {/* ── TOP BAR ── */}
           {isStudioRoute && (
-            <header className="flex items-center justify-between px-6 h-14 flex-shrink-0" style={{ background: 'transparent' }}>
+            <header className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 py-3 flex-shrink-0 lg:h-14 lg:flex-nowrap lg:px-6 lg:py-0" style={{ background: 'transparent' }}>
               {/* Left: STUDIO logo */}
               <Link to="/studio" className="flex items-center gap-2 no-underline">
                 <span
@@ -481,13 +491,32 @@ export default function StudioShell({ title, transparent, children }: StudioShel
                 </span>
               </Link>
 
+              {/* Co-Director toggle (movie_filter) */}
+              <button
+                type="button"
+                onClick={() => setCodirectorOpen((prev) => !prev)}
+                aria-label="Toggle Co-Director Brain (Cmd+D)"
+                aria-pressed={codirectorOpen}
+                className={`lg:order-3 flex items-center gap-1.5 min-h-11 px-3 py-2 rounded-md text-xs transition-all ${
+                  codirectorOpen
+                    ? 'bg-primary/20 text-primary shadow-[0_0_18px_rgba(255,209,101,0.55)] amber-glow'
+                    : 'text-zinc-200 border border-white/15 hover:bg-[#3a3939]'
+                }`}
+              >
+                <Filter size={13} />
+                <span>Co-director</span>
+              </button>
+
+              <button type="button" onClick={() => setMobileToolsExpanded((expanded) => !expanded)} aria-expanded={mobileToolsExpanded} aria-controls="studio-header-tools" className="rounded border border-white/15 px-3 py-2 text-xs text-zinc-300 lg:hidden">Studio tools</button>
+
               {/* Right: search, status pill, icons */}
-              <div className="flex items-center gap-4">
+              <div id="studio-header-tools" className={`${mobileToolsExpanded ? 'flex' : 'hidden'} min-w-0 w-full flex-wrap items-center gap-3 lg:ml-auto lg:flex lg:w-auto lg:flex-nowrap lg:gap-4`}>
                 {/* Search input (cyber-input style) */}
                 <div className="relative">
                   <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: '#9b8f79' }} />
                   <input
                     type="text"
+                    aria-label="Search archive"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search archive..."
@@ -546,12 +575,12 @@ export default function StudioShell({ title, transparent, children }: StudioShel
                 )}
 
                 {/* Settings icon */}
-                <button type="button" className="flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
+                <button type="button" aria-label="Settings" className="flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
                   <Settings size={16} />
                 </button>
 
                 {/* Notifications bell with badge dot */}
-                <button type="button" className="relative flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
+                <button type="button" aria-label="Notifications" className="relative flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
                   <Bell size={16} />
                   {/* Badge dot: pending render jobs */}
                   {activity?.isActive && (
@@ -559,37 +588,25 @@ export default function StudioShell({ title, transparent, children }: StudioShel
                   )}
                 </button>
 
-                {/* Co-Director toggle (movie_filter) */}
-                <button
-                  type="button"
-                  onClick={() => setCodirectorOpen((prev) => !prev)}
-                  aria-label="Toggle Co-Director Brain (Cmd+D)"
-                  aria-pressed={codirectorOpen}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-status-xs transition-all ${
-                    codirectorOpen
-                      ? 'bg-primary/20 text-primary shadow-[0_0_18px_rgba(255,209,101,0.55)] amber-glow'
-                      : 'text-on-surface-variant opacity-70 hover:opacity-100 hover:bg-[#3a3939]'
-                  }`}
-                >
-                  <Filter size={13} />
-                  <span>CO-DIRECTOR</span>
-                </button>
-
                 {/* Account circle */}
-                <button type="button" className="flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
+                <button type="button" aria-label="Account" className="flex items-center justify-center w-8 h-8 rounded-full transition-colors text-[#d3c5ac] opacity-60 hover:opacity-100 hover:bg-[#3a3939]">
                   <User size={16} />
                 </button>
               </div>
             </header>
           )}
 
+          {isStudioRoute && <nav aria-label="Studio rooms on mobile" className="border-y border-white/10 px-4 py-2 md:hidden"><details><summary className="cursor-pointer text-xs text-zinc-300">Rooms <span className="ml-2 text-zinc-500">{activeTitle}</span></summary><div className="grid grid-cols-2 gap-2 pb-2 pt-3">{ROOM_NAV_ITEMS.map((room) => <button type="button" key={room.key} onClick={() => void navigateToRoom(room.to)} aria-label={room.stitchName} className="flex items-center gap-2 rounded border border-white/10 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5">{room.icon}<span>{room.stitchName}</span></button>)}</div></details></nav>}
+
+          <ProductionJourneyGuide pathname={location.pathname} context={productionContext} beforeNavigate={beforeNavigate} />
+
           {/* ── CHILDREN ── */}
-          <main className="flex-1 w-full">
+          <main className="min-w-0 flex-1 w-full">
             <div className="relative z-10 min-h-full">
               {children}
             </div>
           </main>
-          <LazyAICrewPresence />
+          <LazyAICrewPresence compact={isStudioRoute} projectId={activeProjectId} />
         </div>
 
         <CoDirectorDrawer

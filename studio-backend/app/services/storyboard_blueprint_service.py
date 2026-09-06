@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.data.storage import get_storage
+from app.prompt_assembly_context import preserve_generation_facts
 from app.models.storyboard_blueprint import (
     StoryboardBlueprint,
     StoryboardBlueprintInspection,
@@ -221,6 +222,18 @@ class StoryboardBlueprintService:
                 for position, shot in enumerate(shots, start=1):
                     shot.shot_number = position
 
+        # Carry explicit dialogue choices into revisions; removed shot IDs remain
+        # visible as unassigned in scene direction rather than losing the lines.
+        if "scene_direction" in source_version.metadata:
+            from copy import deepcopy
+            version.metadata["scene_direction"] = deepcopy(source_version.metadata["scene_direction"])
+            for shot in shots:
+                if shot.locked:
+                    continue
+                shot.render_contract.structured_parameters["dialogue_lines"] = [
+                    line for line in version.metadata["scene_direction"]["dialogue"] if line.get("shot_id") == shot.shot_id
+                ]
+
         superseded_version = None
         if source_version.status in {
             StoryboardBlueprintStatus.DRAFT,
@@ -366,6 +379,13 @@ class StoryboardBlueprintService:
                 stage="storyboard_blueprint_approve",
                 metadata={"blockers": blockers},
             )
+        review = self._continuity_review_from_metadata(blueprint.metadata, version_id)
+        if not review or review.get("status") != "completed":
+            raise ValidationError(
+                "Run Continuity Review before approving storyboard blueprint",
+                stage="storyboard_blueprint_approve",
+                metadata={"blueprint_id": blueprint_id, "version_id": version_id},
+            )
 
         now = utc_now_iso()
         version.status = StoryboardBlueprintStatus.APPROVED
@@ -383,6 +403,84 @@ class StoryboardBlueprintService:
             self.storage.save_storyboard_shot(shot)
         self._sync_scene_memory(blueprint.project_id, blueprint.scene_id, shots, approved=True)
         return self.get_blueprint_detail(project_id=blueprint.project_id, scene_id=blueprint.scene_id)
+
+    def run_continuity_review(
+        self,
+        *,
+        blueprint_id: str,
+        version_id: str | None = None,
+        reviewer: str = "continuity_intelligence",
+    ) -> dict[str, Any]:
+        started = perf_counter()
+        blueprint = self.storage.get_storyboard_blueprint_by_id(blueprint_id)
+        if blueprint is None:
+            raise StateError("Storyboard blueprint not found", stage="storyboard_continuity_review")
+        active_version_id = version_id or blueprint.current_version_id
+        if not active_version_id:
+            raise StateError("Storyboard version not found", stage="storyboard_continuity_review")
+        version = self.storage.get_storyboard_blueprint_version(active_version_id)
+        if version is None or version.blueprint_id != blueprint.blueprint_id:
+            raise StateError("Storyboard version not found", stage="storyboard_continuity_review")
+        shots = self.storage.list_storyboard_shots(blueprint.blueprint_id, active_version_id)
+        if not shots:
+            raise ValidationError("Storyboard version has no shots", stage="storyboard_continuity_review")
+
+        continuity_graph = self._load_continuity_graph(blueprint.project_id)
+        issues = self._build_storyboard_continuity_issues(shots, continuity_graph)
+        issue_counts = {
+            "high": sum(1 for issue in issues if issue["severity"] == "high"),
+            "medium": sum(1 for issue in issues if issue["severity"] == "medium"),
+            "low": sum(1 for issue in issues if issue["severity"] == "low"),
+        }
+        reviewed_at = utc_now_iso()
+        report = {
+            "review_id": f"scr_{uuid4().hex[:12]}",
+            "blueprint_id": blueprint.blueprint_id,
+            "version_id": active_version_id,
+            "project_id": blueprint.project_id,
+            "scene_id": blueprint.scene_id,
+            "status": "completed",
+            "reviewed_at": reviewed_at,
+            "reviewer": reviewer,
+            "summary": {
+                "shot_count": len(shots),
+                "issue_count": len(issues),
+                "high_count": issue_counts["high"],
+                "medium_count": issue_counts["medium"],
+                "low_count": issue_counts["low"],
+                "readiness": "needs_creator_attention" if issue_counts["high"] else "ready_for_creator_approval",
+                "advisory": self._continuity_review_advisory(issue_counts),
+            },
+            "issues": issues,
+            "comparison_modes": ["side_by_side", "overlay", "before_after"],
+            "generated_from": {
+                "continuity_intelligence": bool(continuity_graph),
+                "storyboard_blueprint": True,
+                "semantic_memory": True,
+                "director_memory": True,
+                "character_memory": True,
+                "project_memory": True,
+            },
+        }
+        blueprint.metadata = {
+            **(blueprint.metadata or {}),
+            "continuity_review": report,
+        }
+        blueprint.status = StoryboardBlueprintStatus.NEEDS_REVIEW if issue_counts["high"] else StoryboardBlueprintStatus.DRAFT
+        blueprint.updated_at = reviewed_at
+        version.metadata = {
+            **(version.metadata or {}),
+            "continuity_review": report,
+        }
+        self.storage.save_storyboard_blueprint_version(version)
+        self.storage.save_storyboard_blueprint(blueprint)
+        logger.info(
+            "project_id=%s job_id=storyboard_%s provider=internal stage=storyboard_continuity_review duration_ms=%d",
+            blueprint.project_id,
+            blueprint.scene_id,
+            int((perf_counter() - started) * 1000),
+        )
+        return report
 
     def lock_shot(self, *, blueprint_id: str, storyboard_shot_id: str, locked: bool) -> StoryboardShot:
         _, _, shot = self._require_current_editable_shot(
@@ -668,7 +766,9 @@ class StoryboardBlueprintService:
             stage="storyboard_shot_render",
         )
         svc = render_service or default_render_service
-        parameters = dict(shot.render_contract.structured_parameters or {})
+        from app.services.storyboard_render_inputs import storyboard_render_inputs
+        inputs = storyboard_render_inputs(shot)
+        parameters = inputs["parameters"]
         parameters["storyboard"] = self._storyboard_metadata_for_shot(shot)
         if shot.render_contract.seed is not None:
             parameters.setdefault("seed", shot.render_contract.seed)
@@ -677,11 +777,33 @@ class StoryboardBlueprintService:
             shot_id=shot.shot_id,
             provider=provider,
             prompt=shot.render_contract.provider_neutral_prompt,
-            reference_assets=shot.render_contract.reference_assets,
+            reference_assets=inputs["reference_assets"],
             parameters=parameters,
         )
         self.link_render_job(shot=shot, render_job_id=job.id, link_type=link_type)
         return job
+
+    def scene_render_inputs(self, project_id: str, scene_id: str) -> list[dict] | None:
+        """Use the current approved version, or signal that no blueprint exists."""
+        from app.services.storyboard_render_inputs import storyboard_render_inputs
+
+        blueprint = self.storage.get_storyboard_blueprint(project_id, scene_id)
+        if blueprint is None:
+            return None
+        if not blueprint.approved_version_id or blueprint.current_version_id != blueprint.approved_version_id:
+            raise StateError("Approve the current storyboard version before rendering this scene", stage="scene_pipeline_storyboard")
+        shots = self.storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.approved_version_id)
+        if not shots:
+            raise StateError("Approved storyboard has no shots", stage="scene_pipeline_storyboard")
+        result = []
+        for shot in sorted(shots, key=lambda item: item.shot_number):
+            self._validate_shot_renderable(shot=shot, blueprint_id=blueprint.blueprint_id, stage="scene_pipeline_storyboard")
+            inputs = storyboard_render_inputs(shot)
+            inputs["parameters"]["storyboard"] = {**self._storyboard_metadata_for_shot(shot), "link_type": "scene_pipeline_render"}
+            result.append({**inputs, "scene_id": shot.scene_id, "shot_id": shot.shot_id,
+                           "duration_seconds": shot.render_contract.duration_seconds,
+                           "shot_number": shot.shot_number, "storyboard_shot_id": shot.storyboard_shot_id})
+        return result
 
     def _validate_shot_renderable(
         self,
@@ -918,6 +1040,7 @@ class StoryboardBlueprintService:
             )
         return shots
 
+    @preserve_generation_facts
     def _build_provider_neutral_prompt(
         self,
         project_id: str,
@@ -952,7 +1075,7 @@ class StoryboardBlueprintService:
             rationale,
         ]
         text = ". ".join(part.strip().strip(".") for part in parts if str(part or "").strip())
-        return text[:512] if len(text) > 512 else text
+        return text
 
     def _build_provenance(self, project_id: str, scene_id: str, scene: dict[str, Any]) -> StoryboardBlueprintProvenance:
         provenance = StoryboardBlueprintProvenance()
@@ -1011,6 +1134,227 @@ class StoryboardBlueprintService:
             blockers=blockers,
             provenance=provenance,
         )
+
+    def _continuity_review_from_metadata(self, metadata: dict[str, Any] | None, version_id: str) -> dict[str, Any] | None:
+        review = (metadata or {}).get("continuity_review")
+        if not isinstance(review, dict):
+            return None
+        if str(review.get("version_id") or "") != version_id:
+            return None
+        return review
+
+    def _load_continuity_graph(self, project_id: str) -> dict[str, Any]:
+        try:
+            from app.services.continuity_intelligence_service import continuity_intelligence_service
+
+            graph = continuity_intelligence_service.get_graph(project_id)
+            return graph if isinstance(graph, dict) else {}
+        except Exception as exc:
+            logger.debug("Continuity graph unavailable for storyboard review %s: %s", project_id, exc)
+            return {}
+
+    def _build_storyboard_continuity_issues(
+        self,
+        shots: list[StoryboardShot],
+        continuity_graph: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        ordered = sorted(shots, key=lambda shot: shot.shot_number)
+        issues.extend(self._issues_from_continuity_graph(ordered, continuity_graph or {}))
+        for index, shot in enumerate(ordered):
+            previous = ordered[index - 1] if index > 0 else None
+            continuity = shot.continuity_plan
+            visual = shot.visual_plan
+            intent = shot.intent
+            shot_label = f"{shot.shot_number:03d}"
+            previous_label = f"{previous.shot_number:03d}" if previous else None
+
+            if not intent.emotional_target.strip():
+                issues.append(
+                    self._continuity_issue(
+                        severity="medium",
+                        category="Story Continuity",
+                        shot=shot_label,
+                        previous_shot=previous_label,
+                        expected="An emotional goal for the shot.",
+                        detected="No emotional goal is recorded.",
+                        explanation="The shot can be rendered, but its emotional handoff is thin without a stated target.",
+                        confidence="consistent",
+                        recommendation="Add the intended emotional beat before final approval.",
+                    )
+                )
+            if not visual.environment.strip() and not continuity.location_continuity.strip():
+                issues.append(
+                    self._continuity_issue(
+                        severity="high",
+                        category="Environment Continuity",
+                        shot=shot_label,
+                        previous_shot=previous_label,
+                        expected="A canonical location or environment constraint.",
+                        detected="No environment continuity field is available.",
+                        explanation="The visual world has too little anchoring for a professional script-supervisor pass.",
+                        confidence="consistent",
+                        recommendation="Restore a location or production-design constraint on this shot.",
+                    )
+                )
+            if not visual.framing.strip():
+                issues.append(
+                    self._continuity_issue(
+                        severity="medium",
+                        category="Camera Continuity",
+                        shot=shot_label,
+                        previous_shot=previous_label,
+                        expected="A framing or shot grammar choice.",
+                        detected="No framing plan is recorded.",
+                        explanation="Camera progression cannot be inspected when the shot grammar is blank.",
+                        confidence="consistent",
+                        recommendation="Set framing before approving the canonical blueprint.",
+                    )
+                )
+            if not shot.render_contract.provider_neutral_prompt.strip():
+                issues.append(
+                    self._continuity_issue(
+                        severity="high",
+                        category="Blueprint Consistency",
+                        shot=shot_label,
+                        previous_shot=previous_label,
+                        expected="A provider-neutral render prompt aligned to the blueprint.",
+                        detected="The render prompt is empty.",
+                        explanation="Previs would receive an under-specified handoff from the storyboard stage.",
+                        confidence="consistent",
+                        recommendation="Rebuild the render contract from the storyboard blueprint.",
+                    )
+                )
+            for warning in continuity.continuity_warnings:
+                if str(warning).strip():
+                    issues.append(
+                        self._continuity_issue(
+                            severity="medium",
+                            category="Blueprint Consistency",
+                            shot=shot_label,
+                            previous_shot=previous_label,
+                            expected="Continuity constraints without unresolved warnings.",
+                            detected=str(warning).strip(),
+                            explanation="The blueprint is already carrying a continuity warning that should be reviewed before approval.",
+                            confidence="emerging",
+                            recommendation="Fix the affected continuity field or mark it as an intentional creative choice.",
+                        )
+                    )
+            if previous:
+                previous_characters = set(previous.intent.character_focus)
+                current_characters = set(intent.character_focus)
+                if previous_characters and current_characters and previous_characters.isdisjoint(current_characters):
+                    issues.append(
+                        self._continuity_issue(
+                            severity="low",
+                            category="Blocking Continuity",
+                            shot=shot_label,
+                            previous_shot=previous_label,
+                            expected=", ".join(sorted(previous_characters)),
+                            detected=", ".join(sorted(current_characters)),
+                            explanation="The character focus changes sharply between adjacent shots; this may be intentional, but it deserves a quick check.",
+                            confidence="emerging",
+                            recommendation="Confirm the handoff or add an entrance, exit, or reaction beat.",
+                        )
+                    )
+                previous_location = previous.continuity_plan.location_continuity or previous.visual_plan.environment
+                current_location = continuity.location_continuity or visual.environment
+                if previous_location and current_location and previous_location.strip().lower() != current_location.strip().lower():
+                    issues.append(
+                        self._continuity_issue(
+                            severity="medium",
+                            category="Environment Continuity",
+                            shot=shot_label,
+                            previous_shot=previous_label,
+                            expected=previous_location,
+                            detected=current_location,
+                            explanation="Adjacent shots point at different location anchors inside the same storyboard scene.",
+                            confidence="consistent",
+                            recommendation="Align the location field or mark the change as an intentional spatial transition.",
+                        )
+                    )
+        return issues
+
+    def _issues_from_continuity_graph(
+        self,
+        shots: list[StoryboardShot],
+        continuity_graph: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        raw_issues = continuity_graph.get("issues") or continuity_graph.get("alerts") or []
+        if not isinstance(raw_issues, list):
+            return []
+        shot_by_id = {shot.shot_id: shot for shot in shots}
+        scene_ids = {shot.scene_id for shot in shots}
+        issues: list[dict[str, Any]] = []
+        for raw in raw_issues:
+            if not isinstance(raw, dict):
+                continue
+            raw_shot_id = str(raw.get("shot_id") or raw.get("source_shot_id") or raw.get("asset_id") or "").strip()
+            raw_scene_id = str(raw.get("scene_id") or "").strip()
+            shot = shot_by_id.get(raw_shot_id)
+            if shot is None and raw_scene_id and raw_scene_id not in scene_ids:
+                continue
+            if shot is None and raw_shot_id and raw_shot_id not in shot_by_id:
+                continue
+            affected = shot or shots[0] if shots else None
+            if affected is None:
+                continue
+            severity = str(raw.get("severity") or "medium").lower()
+            if severity not in {"high", "medium", "low"}:
+                severity = "medium"
+            description = str(raw.get("description") or raw.get("message") or raw.get("evidence") or "Continuity Intelligence flagged this beat.").strip()
+            recommendation = str(raw.get("recommendation") or raw.get("recommended_fix") or "Review this continuity signal against the canonical storyboard fields.").strip()
+            issues.append(
+                self._continuity_issue(
+                    severity=severity,
+                    category=str(raw.get("category") or raw.get("issue_type") or "Continuity Intelligence"),
+                    shot=f"{affected.shot_number:03d}",
+                    previous_shot=None,
+                    expected=str(raw.get("expected_state") or "The project continuity graph and storyboard blueprint should agree."),
+                    detected=str(raw.get("detected_state") or description),
+                    explanation=description,
+                    confidence=str(raw.get("confidence") or "emerging"),
+                    recommendation=recommendation,
+                )
+            )
+        return issues
+
+    def _continuity_issue(
+        self,
+        *,
+        severity: str,
+        category: str,
+        shot: str,
+        previous_shot: str | None,
+        expected: str,
+        detected: str,
+        explanation: str,
+        confidence: str,
+        recommendation: str,
+    ) -> dict[str, Any]:
+        return {
+            "issue_id": f"sci_{uuid4().hex[:10]}",
+            "severity": severity,
+            "category": category,
+            "affected_shot": shot,
+            "previous_shot": previous_shot,
+            "current_shot": shot,
+            "expected_state": expected,
+            "detected_state": detected,
+            "ai_explanation": explanation,
+            "confidence": confidence,
+            "recommended_fix": recommendation,
+            "actions": ["fix_automatically", "show_differences", "ignore", "regenerate_selected_shot"],
+        }
+
+    def _continuity_review_advisory(self, issue_counts: dict[str, int]) -> str:
+        if issue_counts.get("high", 0):
+            return "The storyboard is close, but one continuity risk could weaken the handoff into Previs."
+        if issue_counts.get("medium", 0):
+            return "Continuity mostly holds; review the flagged shot details before calling this blueprint canonical."
+        if issue_counts.get("low", 0):
+            return "Only soft continuity questions surfaced. The blueprint is ready for creator approval."
+        return "Continuity is clean enough for the storyboard to become the canonical blueprint."
 
     def _sync_scene_memory(self, project_id: str, scene_id: str, shots: list[StoryboardShot], *, approved: bool) -> None:
         try:

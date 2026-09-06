@@ -41,7 +41,8 @@ export function chooseDurationForProvider(
 
 export function providerIdForPrevisEngine(engine: PrevisRenderEngine): string | undefined {
   if (engine === 'Auto (Best Available)') return undefined
-  return 'runway'
+  if (engine === 'Wan 2.2') return 'wan'
+  return undefined
 }
 
 export function promptChangedAfterEnhancement(original: string, enhanced: string): boolean {
@@ -63,4 +64,14 @@ export function buildStoryboardRenderReferences(storyboardImageUrl: string | und
     ...(storyboardReference ? [storyboardReference] : []),
     ...contractReferences,
   ]))
+}
+
+export function shotNumberFromContinuityLabel(label: string | number | undefined): number | null {
+  if (typeof label === 'number') {
+    return Number.isInteger(label) && label > 0 ? label : null
+  }
+  const match = String(label || '').match(/\d+/)
+  if (!match) return null
+  const shotNumber = parseInt(match[0], 10)
+  return Number.isInteger(shotNumber) && shotNumber > 0 ? shotNumber : null
 }

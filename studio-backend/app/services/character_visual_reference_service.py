@@ -10,8 +10,10 @@ from uuid import uuid4
 
 from app.models import RenderJobModel
 from app.models.consistency import CharacterReferenceLock, ConsistencyPayload, ReferenceAsset
+from app.services.character_name_matching import text_mentions_character
 from app.services.project_store import project_store
 from app.utils.helpers import derive_scene_id_from_shot_id
+from app.utils.character_appearance import appearance_approval, approved_reference_rows
 
 logger = logging.getLogger("studio-character-visual-reference")
 
@@ -176,7 +178,12 @@ class CharacterVisualReferenceService:
         for character in all_characters:
             name = str(character.get("name") or "").strip()
             character_id = str(character.get("id") or "").strip()
-            if name and character_id and name.lower() in prompt_lower and character_id not in seen_ids:
+            if (
+                name
+                and character_id
+                and text_mentions_character(prompt_lower, name)
+                and character_id not in seen_ids
+            ):
                 seen_ids.add(character_id)
                 characters.append(character)
 
@@ -337,6 +344,10 @@ class CharacterVisualReferenceService:
             ref_id = str(raw.get("ref_id") or "").strip()
             kind = str(raw.get("kind") or "").strip()
             image_url = str(raw.get("image_url") or "").strip()
+            if kind in {"character_full", "character_face"} and any(appearance_approval(character) for character in characters):
+                # Reopened approvals must not silently reactivate a broad project
+                # reference that the creator has just chosen to revise.
+                continue
             if not ref_id or kind not in kind_weights or not image_url:
                 continue
             try:
@@ -403,6 +414,15 @@ class CharacterVisualReferenceService:
         Falls back to the single-lock read on storages that predate the
         multi-reference API.
         """
+        # A creator-approved snapshot wins over automatically captured frames,
+        # including frames from another costume/look. Reopening explicitly releases
+        # the reference until the creator approves its replacement.
+        character_reader = getattr(storage, "get_character", None)
+        character = character_reader(character_id, project_id) if callable(character_reader) else None
+        if isinstance(character, dict):
+            approved_rows = approved_reference_rows(character)
+            if approved_rows is not None:
+                return approved_rows
         rows: list[dict[str, Any]] = []
         reader = getattr(storage, "list_character_reference_locks_for_character", None)
         if callable(reader):
@@ -484,7 +504,9 @@ class CharacterVisualReferenceService:
             )
             return CharacterReferenceLock(**existing)
         if existing:
-            if str(existing.get("image_url") or "").strip() == clean_image:
+            if str(existing.get("image_url") or "").strip() == clean_image and not (
+                capture_method == "director_override" and existing.get("capture_method") != "director_override"
+            ):
                 return CharacterReferenceLock(**existing)
             superseded = dict(existing)
             superseded["lock_status"] = "superseded"

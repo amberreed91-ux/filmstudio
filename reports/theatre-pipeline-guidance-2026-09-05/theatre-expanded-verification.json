@@ -1,0 +1,79 @@
+{
+  "passed": true,
+  "results": [
+    {
+      "step": "Review",
+      "viewport": 1440,
+      "docWidth": 1432,
+      "outside": []
+    },
+    {
+      "step": "Approve",
+      "viewport": 1440,
+      "docWidth": 1432,
+      "outside": []
+    },
+    {
+      "step": "Deliver",
+      "viewport": 1440,
+      "docWidth": 1432,
+      "outside": []
+    },
+    {
+      "step": "Review",
+      "viewport": 1600,
+      "docWidth": 1592,
+      "outside": []
+    },
+    {
+      "step": "Approve",
+      "viewport": 1600,
+      "docWidth": 1592,
+      "outside": []
+    },
+    {
+      "step": "Deliver",
+      "viewport": 1600,
+      "docWidth": 1592,
+      "outside": []
+    },
+    {
+      "step": "Review",
+      "viewport": 900,
+      "docWidth": 892,
+      "outside": []
+    },
+    {
+      "step": "Approve",
+      "viewport": 900,
+      "docWidth": 892,
+      "outside": []
+    },
+    {
+      "step": "Deliver",
+      "viewport": 900,
+      "docWidth": 892,
+      "outside": []
+    },
+    {
+      "step": "Review",
+      "viewport": 390,
+      "docWidth": 382,
+      "outside": []
+    },
+    {
+      "step": "Approve",
+      "viewport": 390,
+      "docWidth": 382,
+      "outside": []
+    },
+    {
+      "step": "Deliver",
+      "viewport": 390,
+      "docWidth": 382,
+      "outside": []
+    }
+  ],
+  "mutations": [],
+  "errors": []
+}

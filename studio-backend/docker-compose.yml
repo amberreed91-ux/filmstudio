@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api:
     build:
@@ -8,8 +6,12 @@ services:
     ports:
       - "8010:8010"
     environment:
-      - DEMO_MODE=${DEMO_MODE:-true}
+      - APP_ENV=production
+      - STUDIO_ACCESS_MODE=authenticated
+      - DEMO_MODE=false
       - STORAGE_PATH=/app/data
+      - STUDIO_STORAGE_PATH=/app/data
+      - STUDIO_PROJECT_STORE_PATH=/app/data/project_state_store.json
       - LOG_FORMAT=${LOG_FORMAT:-text}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
@@ -21,6 +23,7 @@ services:
     volumes:
       - studio-data:/app/data
       - studio-outputs:/app/outputs
+      - studio-static:/app/static
       - studio-backups:/app/backups
     restart: unless-stopped
     deploy:
@@ -52,4 +55,5 @@ services:
 volumes:
   studio-data:
   studio-outputs:
+  studio-static:
   studio-backups:

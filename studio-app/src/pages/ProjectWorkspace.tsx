@@ -257,7 +257,7 @@ export function ProjectWorkspaceBody({
   }
 
   return (
-    <StudioShell title={`${identity.title} Workspace`} subtitle="Run the project like a studio head: review the pipeline, direct the crew, and lock creative decisions.">
+    <StudioShell title={`${identity.title} Workspace`} subtitle="Run the project like a studio head: review production gates, direct the crew, and keep a planning checklist.">
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Proactive Co-Director Card */}
         {proactiveCard && (
@@ -305,7 +305,7 @@ export function ProjectWorkspaceBody({
             </button>
           }
         >
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
               { label: 'Genre', value: identity.genre },
               { label: 'Tone', value: identity.tone },
@@ -322,7 +322,7 @@ export function ProjectWorkspaceBody({
               </div>
             ))}
           </div>
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Production Mode</label>
             <select
               value={workspaceState.productionMode}
@@ -342,27 +342,27 @@ export function ProjectWorkspaceBody({
 
         <DirectorMemoryPanel projectId={projectId} />
 
-        <div className="grid grid-cols-[1.45fr_0.95fr] gap-4">
-          <StudioPanel title="Production Pipeline Panel" subtitle="Stage-based workflow orchestration with approvals, revisions, and handoffs.">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_0.95fr] gap-4">
+          <StudioPanel title="Planning checklist" subtitle="Personal planning marks saved in this browser. Production approval is recorded through the workflow gates above.">
             <div className="space-y-3">
               {workflow.map((stage) => {
                 const approved = workspaceState.approvedStages.includes(stage.id)
                 return (
                   <div key={stage.id} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{stage.label}</div>
                         <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{stage.note}</div>
                       </div>
                       <button type="button" className="btn-ghost text-xs px-3 py-1.5 inline-flex items-center gap-1" onClick={() => toggleApprovedStage(stage.id)}>
                         <CheckCircle2 size={12} />
-                        {approved ? 'Unapprove' : 'Approve Stage'}
+                        {approved ? 'Clear planning mark' : 'Mark planned'}
                       </button>
                     </div>
-                    <div className="grid grid-cols-4 gap-2 mt-3">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
                       <div className="rounded-lg p-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                         <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Status</div>
-                        <div className="text-xs mt-1" style={{ color: approved ? 'var(--accent-green)' : 'var(--text-primary)' }}>{approved ? 'Approved' : stage.status}</div>
+                        <div className="text-xs mt-1" style={{ color: approved ? 'var(--accent-green)' : 'var(--text-primary)' }}>{approved ? 'Marked planned' : stage.status}</div>
                       </div>
                       <div className="rounded-lg p-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                         <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Agents</div>
@@ -390,7 +390,7 @@ export function ProjectWorkspaceBody({
             </div>
           </StudioPanel>
 
-          <StudioPanel title="Orchestration Layer" subtitle="Studio leadership controls pacing, approvals, and conflict resolution.">
+          <StudioPanel title="Planning notes" subtitle="Pin a suggested action to your planning checklist. A pin does not lock a scene or approve production.">
             <div className="space-y-3">
               <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
                 <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Controller Status</div>
@@ -413,7 +413,7 @@ export function ProjectWorkspaceBody({
                     >
                       <span className="inline-flex items-center gap-1">
                         <Lock size={12} />
-                        {workspaceState.lockedDecisions.includes(action) ? 'Locked' : 'Tap to lock'}:
+                        {workspaceState.lockedDecisions.includes(action) ? 'Pinned note' : 'Pin planning note'}:
                       </span>
                       <span className="ml-2">{action}</span>
                     </button>
@@ -434,12 +434,12 @@ export function ProjectWorkspaceBody({
           </StudioPanel>
         </div>
 
-        <div className="grid grid-cols-[1.1fr_0.9fr] gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
           <StudioPanel title="Crew Panel" subtitle="Agent roles, craft authority, performance, and anti-redundancy scoring.">
             <div className="space-y-3">
               {agents.map((agent) => (
                 <div key={agent.id} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{agent.role}</div>
                       <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{agent.mission}</div>
@@ -449,7 +449,7 @@ export function ProjectWorkspaceBody({
                       <div className="text-lg font-semibold" style={{ color: 'var(--accent-cyan)' }}>{agent.performanceScore}</div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 mt-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
                     <div className="rounded-lg p-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                       <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Current Task</div>
                       <div className="text-xs mt-1" style={{ color: 'var(--text-primary)' }}>{agent.currentTask}</div>
@@ -480,7 +480,7 @@ export function ProjectWorkspaceBody({
             <div className="space-y-3">
               {threads.map((thread) => (
                 <div key={thread.id} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{thread.title}</div>
                       <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{thread.objective}</div>
@@ -512,7 +512,7 @@ export function ProjectWorkspaceBody({
           </StudioPanel>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <StudioPanel title="Script and Story Panel" subtitle="Draft trajectory, scene objectives, character tracking, and dialogue shape.">
             <div className="space-y-3">
               <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
@@ -623,7 +623,7 @@ export function ProjectWorkspaceBody({
           </StudioPanel>
         </div>
 
-        <div className="grid grid-cols-[1.1fr_0.9fr] gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
           <StudioPanel title="Memory and Learning System" subtitle="Project memory, continuity, taste profile, and lessons learned.">
             <div className="grid grid-cols-2 gap-3">
               {memory.map((entry) => (
@@ -660,7 +660,7 @@ export function ProjectWorkspaceBody({
           </StudioPanel>
         </div>
 
-        <div className="grid grid-cols-[0.95fr_1.05fr] gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-4">
           <StudioPanel title="Evaluation Framework" subtitle="Role-based scoring for usefulness, novelty, alignment, and learning velocity.">
             <div className="space-y-2">
               {agents.map((agent) => (
@@ -669,7 +669,7 @@ export function ProjectWorkspaceBody({
                     <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{agent.role}</div>
                     <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Novelty {agent.evaluation.novelty}</div>
                   </div>
-                  <div className="grid grid-cols-5 gap-2 mt-2">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-2">
                     {Object.entries(agent.evaluation).map(([label, value]) => (
                       <div key={label} className="rounded-lg p-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                         <div className="text-[10px] uppercase" style={{ color: 'var(--text-muted)' }}>{label}</div>
@@ -682,13 +682,13 @@ export function ProjectWorkspaceBody({
             </div>
           </StudioPanel>
 
-          <StudioPanel title="Studio Leadership Notes" subtitle="Distilled notes become memory, sharpen approvals, and reduce repeated feedback." data-testid="execution-timeline-panel">
+          <StudioPanel title="Studio Leadership Notes" subtitle="Notes saved in this browser for planning. Use project memory to explicitly save creative decisions to the film." data-testid="execution-timeline-panel">
             <div className="space-y-3">
               <textarea
                 value={leadershipInput}
                 onChange={(event) => setLeadershipInput(event.target.value)}
                 rows={4}
-                placeholder="Lock a note about tone, pacing, blocking, continuity, market fit, or production feasibility."
+                placeholder="Write a planning note about tone, pacing, blocking, continuity, or production feasibility."
                 className="w-full rounded-xl p-3 text-sm"
                 style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}
               />
@@ -712,7 +712,7 @@ export function ProjectWorkspaceBody({
         </div>
 
         <StudioPanel title="Operational View" subtitle="Provider pressure, render queue, and approval-safe execution.">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
               {(queueProviderPressure.length > 0 ? queueProviderPressure : providers).map((provider) => {
                 const providerKey = 'id' in provider ? provider.id : provider.provider

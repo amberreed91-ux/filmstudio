@@ -59,7 +59,14 @@ def test_video_asset_endpoints_reject_missing_local_file():
     assert "Local file not found" in response.json()["detail"]
 
 
-def test_video_asset_status_update():
+def test_video_asset_status_update(tmp_path, monkeypatch):
+    from app.services.video_asset_service import video_asset_service
+
+    # Status updates should not depend on a developer's generated sample file.
+    sample = tmp_path / "mock-video" / "sample.mp4"
+    sample.parent.mkdir()
+    sample.write_bytes(b"test generated asset")
+    monkeypatch.setattr(video_asset_service, "_outputs_root", tmp_path)
     client = _client()
     created = client.post("/api/f51/studio/projects", json={"title": "Video Asset Film 3"})
     assert created.status_code == 200
@@ -188,3 +195,22 @@ def test_upload_triggers_metadata_auto_match_and_confirm_flow():
 
     unmatched = client.get("/api/f51/studio/video-assets/unmatched")
     assert unmatched.status_code == 200
+
+
+def test_generated_asset_route_rejects_path_escape(tmp_path, monkeypatch):
+    from app.services.video_asset_service import video_asset_service
+
+    outputs = tmp_path / "outputs"
+    outputs.mkdir()
+    (tmp_path / "private.txt").write_text("synthetic sentinel")
+    monkeypatch.setattr(video_asset_service, "_outputs_root", outputs)
+    client = _client()
+    created = client.post("/api/f51/studio/projects", json={"title": "Asset Boundary"})
+    project_id = created.json()["project_id"]
+    response = client.post(
+        f"/api/f51/studio/projects/{project_id}/video-assets",
+        json={"source_type": "generated_output", "source_url": "/outputs/../private.txt", "title": "Invalid asset"},
+    )
+    assert response.status_code == 400
+    assert "outputs directory" in response.json()["detail"]
+    assert not client.get(f"/api/f51/studio/projects/{project_id}/video-assets").json()["assets"]

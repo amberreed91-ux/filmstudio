@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "requests": [
+    "/api/f51/studio/projects/project_5907c60cddbc/co-director/chat",
+    "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_001/audio-brief/apply"
+  ]
+}

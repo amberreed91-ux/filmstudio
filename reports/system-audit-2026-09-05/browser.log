@@ -1,0 +1,186 @@
+🎭 Playwright Skill - Universal Executor
+
+📄 Executing file: /tmp/playwright-test-studio-isolated.js
+🚀 Starting automation...
+
+overview ACTIVE PRODUCTION
+Neon Dreams
+LAST MODIFIED
+4m ago
+SCENES
+12
+RUNTIME
+94 min
+CONTINUE FILM
+SWITCH PROJECT
+START NEW FILM
+AI CREW
+Director
+Creative vision and approval
+ACTIVE
+Writer
+Narrative and scene structure
+IDLE
+Cinematographer
+Visual style and framing
+IDLE
+Editor
+Pacing and structure
+IDLE
+Composer
+Score and audio landscape
+IDLE
+BACKEND: ONLINE
+|
+LAST RENDER: JUST NOW
+|
+QUEUE: 0 JOBS
+VIEW QUEUE →
+scheduler STUDIO
+RENDERING
+LIVE
+CO-DIRECTOR
+STUDIO DECISION GATE
+INSUFFICIENT DATA
+Not enough project data yet. Upload reference footage or generate scenes.
+CURRENT STAGE: INTAKE
+OPEN PREVIS
+OPEN SCREENING ROOM
+PRODUCTION PULSE HERO
+The studio needs active render output before this pipeline can move cleanly into screening.
+Gate: checking
+Renders: 0
+Reviews: 0
+Packages: 0
+DEPARTMENT STATUS
+Study
+CHECKING
+
+Gathering enough evidence for stronger creative guidance.
+
+Open Study
+Previs
+NEEDS ATTENTION
+
+Previs is waiting on stronger render and evidence continuity.
+
+Open Previs
+Production
+NEEDS ATTENTION
+
+Production needs render activity before downstream handoff.
+
+Open Production
+Screening
+NEEDS ATTENTION
+
+Screening is waiting on review/package readiness.
+
+Open Screening
+LIVE OPS NOTES
+
+Not enough project data yet. Upload reference footage or generate scenes.
+
+CREW INTELLIGENCE
+0 NEEDS ATTENTION
+
+Crew intelligence is ready; no department has produced new reasoning yet.
+
+CREW INTELLIGENCE
+
+Crew intelligence is ready; no department has produced new reasoning yet.
+
+ACTIVE
+RECENT REASONING
+
+No department reasoning has been recorded yet.
+
+ACTIVE HANDOFFS
+
+No active department handoffs.
+
+CREATOR ATTENTION
+
+No crew items currently need creator attention.
+
+PRODUCTION PIPELINE
+Projects
+1
+Active Renders
+0
+Completed Renders
+0
+Failed Renders
+0
+Pending Reviews
+0
+Pending Revisions
+0
+Packaged Films
+0
+CONTINUITY NOTES
+Open Previs
+Open Screening Room
+
+Not enough visual evidence yet. Extract keyframes and run frame analysis.
+
+DIRECTOR SIGNATURE · STYLE DRIFT
+Study Room
+Director Signature (confidence)
+—
+Style Drift (all)
+0
+High severity drift
+0
+Med / low drift
+0 / 0
+Studio Intelligence Status
+Needs Work
+VISUAL EVIDENCE
+Uploaded Assets
+0
+Keyframes Extracted
+0
+Frame Analyses Completed
+0
+SEMANTIC MEMORY
+Visual Embeddings
+0
+Memory Records
+0
+Director Signature
+✗ No
+QUALITY CONTROL
+Continuity Issues
+0
+Style Drift Issues
+0
+
+All counts are real project data. No simulated agents or fake progress. Use the Study Room to upload assets, extract keyframes, and build intelligence.
+
+No active crew operations yet.
+ACTIVE RENDER JOBS
+Open Production Board
+No render jobs yet.
+FAILED JOBS NEEDING ATTENTION
+No failed jobs.
+PROVIDER STATUS
+Runway
+available
+active: 0 • queued: 0
+Runway available.
+HappyHorse
+available
+active: 0 • queued: 0
+Provider available.
+HappyHorse Reference-to-Video
+available
+active: 0 • queued: 0
+Provider available.
+OpenRouter Video
+available
+active: 0 • queued: 0
+Provider available.
+OpenRou
+api [{"method":"GET","path":"/api/f51/studio/render/providers","status":200},{"method":"GET","path":"/api/f51/studio/overview","status":200},{"method":"GET","path":"/api/f51/studio/render/providers","status":200},{"method":"GET","path":"/api/f51/studio/overview","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001","status":200},{"method":"GET","path":"/health","status":200},{"method":"GET","path":"/api/f51/studio/production-queue/projects/proj-001/summary","status":200},{"method":"GET","path":"/api/f51/studio/production-queue/projects/proj-001/summary","status":200},{"method":"GET","path":"/health","status":200},{"method":"GET","path":"/health","status":200},{"method":"GET","path":"/api/f51/studio/render/jobs","status":200},{"method":"GET","path":"/health","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/clip-revisions","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/short-film-reviews","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/decision-gate","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/final-short-film-packages","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/video-assets","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/frame-analyses","status":200},{"method":"GET","path":"/health","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/embeddings","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/clip-revisions","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/memory","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/short-film-reviews","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/continuity-issues","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/final-short-film-packages","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/director-signature","status":200},{"method":"GET","path":"/health","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/style-drift-issues","status":200},{"method":"GET","path":"/api/f51/studio/render/jobs","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/decision-gate","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/memory","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/embeddings","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/frame-analyses","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/video-assets","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/continuity-issues","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/director-signature","status":200},{"method":"GET","path":"/api/f51/studio/projects/proj-001/style-drift-issues","status":200},{"method":"GET","path":"/api/f51/studio/crew/projects/proj-001/intelligence","status":200},{"method":"GET","path":"/api/f51/studio/crew/projects/proj-001/intelligence","status":200},{"method":"GET","path":"/api/f51/studio/render/providers","status":200},{"method":"GET","path":"/api/f51/studio/crew/projects/proj-001/intelligence","status":200},{"method":"GET","path":"/api/f51/studio/crew/projects/proj-001/intelligence","status":200}]
+errors []

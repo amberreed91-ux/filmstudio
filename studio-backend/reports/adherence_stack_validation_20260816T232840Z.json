@@ -1,0 +1,84 @@
+{
+  "generated_at": "2026-08-16T23:28:39.730199+00:00",
+  "phases": {
+    "offline": [
+      {
+        "check": "negative_prompt_in_submit_payload",
+        "question": "",
+        "result": "FAIL",
+        "detail": {
+          "error": "ImportError(\"cannot import name 'ProviderConfig' from 'app.services.providers.config' (/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/app/services/providers/config.py)\")"
+        }
+      },
+      {
+        "check": "intent_fidelity_detects_compression",
+        "question": "Does a real over-budget description get reported as lost intent?",
+        "result": "pass",
+        "detail": {
+          "status": "reduced",
+          "reduced_slots": [
+            "character_state"
+          ],
+          "advisory_note": "The prompt no longer carries \"boots caked in dry mud\" in who is on screen and how they look. The shot will render as written, so this will not show up as a mismatch later \u2014 worth deciding now whether it belongs in the shot.",
+          "prompt_length": 334
+        }
+      },
+      {
+        "check": "shot_leads_prompt_not_intent",
+        "question": "Is the shot in the highest-weighted position, with avoid-terms out of the positive prompt?",
+        "result": "pass",
+        "detail": {
+          "guidance": "contemplative unease; Deakins lighting",
+          "guidance_chars": 38,
+          "old_prefix_chars": 189,
+          "avoid_terms_routed_to_negative": [
+            "melodrama"
+          ],
+          "prompt_head": "Only MAYA visible; no extras.; MAYA: lean, late 20s. She sets the kettle down. T"
+        }
+      },
+      {
+        "check": "unavailable_embedder_is_not_reported_as_drift",
+        "question": "Does an unconfigured embedder stay silent instead of crying drift?",
+        "result": "pass",
+        "detail": {
+          "status": "unavailable",
+          "reason": "output_frame_not_local"
+        }
+      },
+      {
+        "check": "selected_embedding_adapter",
+        "question": "Is a real face embedder selected, or only a general-visual one?",
+        "result": "FAIL",
+        "detail": {
+          "adapter": "DashScopeMultimodalEmbeddingAdapter",
+          "kind": "general_visual",
+          "insightface_available": false,
+          "note": "face_identity is the only kind that measures likeness. general_visual is continuity evidence only. Install insightface + onnxruntime for real identity measurement."
+        }
+      }
+    ],
+    "probe": [
+      {
+        "check": "skipped",
+        "result": "info",
+        "detail": "pass --probe-providers to run live provider probes"
+      }
+    ],
+    "render": [
+      {
+        "check": "skipped",
+        "result": "info",
+        "detail": "pass --real-render --confirm-spend to create one paid job"
+      }
+    ]
+  },
+  "summary": {
+    "checks_run": 5,
+    "failures": 2,
+    "failed_checks": [
+      "negative_prompt_in_submit_payload",
+      "selected_embedding_adapter"
+    ]
+  }
+}

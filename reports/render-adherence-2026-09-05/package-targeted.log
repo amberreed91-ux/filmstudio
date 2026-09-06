@@ -1,0 +1,16 @@
+..........................                                               [100%]
+=============================== warnings summary ===============================
+app/config.py:4
+  /private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/studio-adherence-dit7r0oh/handoff-tests/app/config.py:4: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class Settings(BaseSettings):
+
+app/services/guardrails.py:24
+  /private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/studio-adherence-dit7r0oh/handoff-tests/app/services/guardrails.py:24: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class RateLimitConfig(BaseModel):
+
+app/models/script_intelligence.py:184
+  /private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/studio-adherence-dit7r0oh/handoff-tests/app/models/script_intelligence.py:184: PydanticDeprecatedSince20: `max_items` is deprecated and will be removed, use `max_length` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    history: List[SimulationHistoryEntry] = Field(default_factory=list, max_items=5)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+26 passed, 3 warnings in 9.66s

@@ -1,0 +1,725 @@
+--- a/studio-backend/app/models/consistency.py
++++ b/studio-backend/app/models/consistency.py
+@@ -30,6 +30,16 @@
+     reference_role: Literal[
+         "face", "full_body", "wardrobe", "temporary_state", "general", "alternate_angle"
+     ] = "general"
++    # A character can look materially different across a film — a costume change,
++    # an injury, rain-soaked vs dry. One canonical reference per character forces
++    # all of those through a single image, so the later look fights the reference
++    # on every shot. Locks are keyed by look as well as role; "default" is the
++    # single-look case and stays the common path.
++    look_id: str = "default"
++    # Frame quality at capture (edge-energy score from _score_candidate_frame).
++    # Retained so a later, cleaner frame can be recognised as an upgrade rather
++    # than merely different. 0.0 means unscored — e.g. a thumbnail or remote URL.
++    frame_score: float = 0.0
+     reliability: Literal["low", "medium", "high"] = "medium"
+     source_job_id: str = ""
+     source_status: Literal["approved", "provisional", "rejected", "failed", "superseded"] = "provisional"
+--- a/studio-backend/app/data/storage.py
++++ b/studio-backend/app/data/storage.py
+@@ -3563,6 +3563,16 @@
+                 CREATE INDEX IF NOT EXISTS idx_character_reference_locks_character_status
+                     ON character_reference_locks(project_id, character_id, lock_status);
+             """),
++            (59, "Scope character reference locks by look", """
++                ALTER TABLE character_reference_locks ADD COLUMN look_id TEXT NOT NULL DEFAULT 'default';
++                ALTER TABLE character_reference_locks ADD COLUMN frame_score REAL NOT NULL DEFAULT 0.0;
++                DROP INDEX IF EXISTS idx_character_reference_locks_active_role;
++                CREATE UNIQUE INDEX IF NOT EXISTS idx_character_reference_locks_active_look
++                    ON character_reference_locks(project_id, character_id, look_id, reference_role)
++                    WHERE lock_status = 'locked';
++                CREATE INDEX IF NOT EXISTS idx_character_reference_locks_look
++                    ON character_reference_locks(project_id, character_id, look_id);
++            """),
+         ]
+ 
+         cursor.execute("SELECT MAX(version) FROM schema_migrations")
+@@ -12908,8 +12918,8 @@
+                      source_shot_id, image_url, lock_status, provider,
+                      capture_method, created_at, updated_at, reference_role,
+                      reliability, source_job_id, source_status, review_status,
+-                     trace_notes)
+-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++                     trace_notes, look_id, frame_score)
++                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     """,
+                     (
+                         lock_id,
+@@ -12931,6 +12941,8 @@
+                         ),
+                         lock.get("review_status") or "unreviewed",
+                         lock.get("trace_notes", ""),
++                        lock.get("look_id") or "default",
++                        float(lock.get("frame_score") or 0.0),
+                     ),
+                 )
+                 conn.commit()
+@@ -12949,6 +12961,7 @@
+         character_id: str,
+         lock_status: str = "locked",
+         reference_role: str | None = None,
++        look_id: str | None = None,
+     ) -> dict | None:
+         """Return a character's active visual reference lock within a project.
+ 
+@@ -12966,6 +12979,9 @@
+             if reference_role:
+                 query += " AND reference_role = ?"
+                 params.append(reference_role)
++            if look_id:
++                query += " AND look_id = ?"
++                params.append(look_id)
+             query += " ORDER BY created_at DESC LIMIT 1"
+             cursor.execute(query, params)
+             row = cursor.fetchone()
+@@ -12977,6 +12993,7 @@
+         character_id: str,
+         lock_status: str = "locked",
+         limit: int = 9,
++        look_id: str | None = None,
+     ) -> list[dict]:
+         """Return every locked reference held for one character, newest first.
+ 
+@@ -12989,10 +13006,11 @@
+                 """
+                 SELECT * FROM character_reference_locks
+                 WHERE project_id = ? AND character_id = ? AND lock_status = ?
++                  AND (? IS NULL OR look_id = ?)
+                 ORDER BY created_at DESC
+                 LIMIT ?
+                 """,
+-                (project_id, character_id, lock_status, max(1, limit)),
++                (project_id, character_id, lock_status, look_id, look_id, max(1, limit)),
+             )
+             return [dict(row) for row in cursor.fetchall()]
+ 
+--- a/studio-backend/app/services/character_visual_reference_service.py
++++ b/studio-backend/app/services/character_visual_reference_service.py
+@@ -3,6 +3,7 @@
+ import logging
+ import subprocess
+ from datetime import datetime
++from hashlib import sha1
+ from pathlib import Path
+ from typing import Any
+ from uuid import uuid4
+@@ -42,6 +43,48 @@
+         "temporary_state": 0.6,
+     }
+ 
++    # A frame materially cleaner than the stored one is an upgrade; a marginally
++    # different one is churn. Re-locking on every small improvement would keep
++    # rewriting a character's canonical reference for no visible gain.
++    FRAME_UPGRADE_RATIO = 1.25
++
++    @staticmethod
++    def resolve_look_id_for_shot(
++        *,
++        project_id: str,
++        character_id: str,
++        shot_id: str,
++        storage: Any,
++    ) -> str:
++        """Which of a character's looks this shot belongs to.
++
++        Derived from the per-scene `appearance_override` already stored on
++        character_stagings, which is where a costume change, an injury, or a
++        rain-soaked state is expressed today. Two shots carrying the same
++        override share a look; a different override is a different look and gets
++        its own canonical reference instead of fighting the first one.
++
++        Returns "default" when no override applies, which is the single-look case
++        and stays the common path.
++        """
++        if not shot_id or not character_id:
++            return "default"
++        scene_id = derive_scene_id_from_shot_id(shot_id)
++        reader = getattr(storage, "get_character_staging", None)
++        if not callable(reader):
++            return "default"
++        try:
++            row = reader(character_id, scene_id, shot_id)
++        except Exception:
++            row = None
++        override = str(row.get("appearance_override") or "").strip() if isinstance(row, dict) else ""
++        if not override:
++            return "default"
++        # Stable, content-derived id so the same wardrobe note always resolves to
++        # the same look without anyone having to name it.
++        digest = sha1(" ".join(override.lower().split()).encode("utf-8")).hexdigest()[:10]
++        return f"look_{digest}"
++
+     @classmethod
+     def prominence_by_character(
+         cls,
+@@ -176,7 +219,15 @@
+             character_name = str(character.get("name") or "").strip()
+             if not character_id:
+                 continue
+-            locks = self.get_reference_locks_for_character(storage, project_id, character_id)
++            look_id = self.resolve_look_id_for_shot(
++                project_id=project_id,
++                character_id=character_id,
++                shot_id=shot_id,
++                storage=storage,
++            )
++            locks = self.get_reference_locks_for_character(
++                storage, project_id, character_id, look_id
++            )
+             if not locks:
+                 continue
+ 
+@@ -189,7 +240,12 @@
+                     continue
+                 lock_status = str(lock.get("lock_status") or "locked").strip()
+                 role = str(lock.get("reference_role") or "general").strip()
+-                ref_id = f"charlock:{character_id}:{role}"
++                lock_look = str(lock.get("look_id") or "default")
++                ref_id = (
++                    f"charlock:{character_id}:{role}"
++                    if lock_look == "default"
++                    else f"charlock:{character_id}:{lock_look}:{role}"
++                )
+                 refs.append(
+                     ReferenceAsset(
+                         ref_id=ref_id,
+@@ -338,6 +394,7 @@
+         storage: Any,
+         project_id: str,
+         character_id: str,
++        look_id: str | None = None,
+     ) -> list[dict[str, Any]]:
+         """Every usable reference for one character, best first.
+ 
+@@ -350,10 +407,18 @@
+         reader = getattr(storage, "list_character_reference_locks_for_character", None)
+         if callable(reader):
+             try:
+-                rows = list(reader(project_id, character_id, "locked") or [])
++                rows = list(reader(project_id, character_id, "locked", 9, look_id) or [])
+             except Exception as exc:
+                 logger.debug("Multi-reference lookup failed for %s/%s: %s", project_id, character_id, exc)
+                 rows = []
++        if not rows and look_id and look_id != "default":
++            # This look has nothing locked yet — a character's first shot in a new
++            # costume. The default look is still better evidence for face and
++            # build than no reference at all.
++            try:
++                rows = list(reader(project_id, character_id, "locked", 9, "default") or []) if callable(reader) else []
++            except Exception:
++                rows = []
+         if not rows:
+             single = storage.get_character_reference_lock(project_id, character_id, "locked")
+             rows = [single] if single else []
+@@ -384,6 +449,8 @@
+         source_job_id: str = "",
+         capture_method: str = "director_override",
+         reason: str = "",
++        look_id: str = "default",
++        frame_score: float = 0.0,
+     ) -> CharacterReferenceLock | None:
+         """Replace a character's locked reference for one role.
+ 
+@@ -400,8 +467,22 @@
+ 
+         now = datetime.now().isoformat()
+         existing = storage.get_character_reference_lock(
+-            project_id, character_id, "locked", reference_role
++            project_id, character_id, "locked", reference_role, look_id
+         )
++        if (
++            existing
++            and capture_method != "director_override"
++            and str(existing.get("capture_method") or "") == "director_override"
++        ):
++            # A director chose this frame deliberately. Automation does not get to
++            # quietly replace a human decision, however good the new frame looks.
++            logger.info(
++                "CHARACTER_REFERENCE_UPGRADE_DECLINED | project=%s | character=%s | "
++                "reason=director_override_protected",
++                project_id,
++                character_id,
++            )
++            return CharacterReferenceLock(**existing)
+         if existing:
+             if str(existing.get("image_url") or "").strip() == clean_image:
+                 return CharacterReferenceLock(**existing)
+@@ -425,6 +506,8 @@
+             provider=str((existing or {}).get("provider") or ""),
+             capture_method=capture_method,
+             reference_role=reference_role,  # type: ignore[arg-type]
++            look_id=look_id,
++            frame_score=frame_score,
+             reliability="high",
+             source_job_id=source_job_id,
+             source_status="approved",
+@@ -437,9 +520,10 @@
+         if not saved:
+             return None
+         logger.info(
+-            "CHARACTER_REFERENCE_RELOCKED | project=%s | character=%s | role=%s | method=%s",
++            "CHARACTER_REFERENCE_RELOCKED | project=%s | character=%s | look=%s | role=%s | method=%s",
+             project_id,
+             character_id,
++            look_id,
+             reference_role,
+             capture_method,
+         )
+@@ -564,10 +648,13 @@
+         self,
+         job: RenderJobModel,
+         count: int | None = None,
+-    ) -> list[tuple[str, str, str]]:
++    ) -> list[tuple[str, str, str, float]]:
+         """Capture up to `count` reference views from a completed job.
+ 
+-        Returns [(image_url, capture_method, reference_role), ...] best first.
++        Returns [(image_url, capture_method, reference_role, frame_score), ...]
++        best first. frame_score is the capture quality, retained so a later,
++        cleaner frame can be recognised as an upgrade rather than merely
++        different; 0.0 means unscored.
+         Only the local-video path can yield more than one view; still images,
+         thumbnails, and remote URLs collapse to the single primary reference.
+         """
+@@ -587,15 +674,15 @@
+             frames = self._extract_reference_frames(job, local_path, count=limit)
+             if frames:
+                 return [
+-                    (image_url, "representative_frame", self._role_for_rank(index))
+-                    for index, (image_url, _score) in enumerate(frames)
++                    (image_url, "representative_frame", self._role_for_rank(index), score)
++                    for index, (image_url, score) in enumerate(frames)
+                 ]
+ 
+         primary = self.capture_reference_image(job)
+         if not primary:
+             return []
+         image_url, capture_method = primary
+-        return [(image_url, capture_method, "general")]
++        return [(image_url, capture_method, "general", 0.0)]
+ 
+     @staticmethod
+     def _role_for_rank(index: int) -> str:
+@@ -632,7 +719,18 @@
+             character_id = str(character.get("id") or "").strip()
+             if not character_id:
+                 continue
+-            existing_locked = storage.get_character_reference_lock(job.project_id, character_id, "locked")
++            existing_locked = storage.get_character_reference_lock(
++                job.project_id,
++                character_id,
++                "locked",
++                None,
++                self.resolve_look_id_for_shot(
++                    project_id=job.project_id,
++                    character_id=character_id,
++                    shot_id=job.shot_id,
++                    storage=storage,
++                ),
++            )
+             if existing_locked:
+                 continue
+             existing_provisional = storage.get_character_reference_lock(
+@@ -658,7 +756,13 @@
+             # Lock every captured view, not just one. Uniqueness is per
+             # (project, character, role), so the primary frame and any
+             # additional angles coexist and are all sent to r2v.
+-            for image_url, capture_method, reference_role in captures:
++            character_look_id = self.resolve_look_id_for_shot(
++                project_id=job.project_id,
++                character_id=character_id,
++                shot_id=job.shot_id,
++                storage=storage,
++            )
++            for image_url, capture_method, reference_role, frame_score in captures:
+                 lock = CharacterReferenceLock(
+                     lock_id=f"charlock_{uuid4().hex[:12]}",
+                     project_id=job.project_id,
+@@ -670,6 +774,8 @@
+                     provider=job.provider,
+                     capture_method=capture_method,
+                     reference_role=reference_role,  # type: ignore[arg-type]
++                    look_id=character_look_id,
++                    frame_score=frame_score,
+                     reliability="high" if reference_role == "general" else "medium",
+                     source_job_id=job.id,
+                     source_status="approved",
+@@ -691,6 +797,94 @@
+             )
+         return locked
+ 
++    def upgrade_references_from_verified_job(
++        self,
++        *,
++        job: RenderJobModel,
++        storage: Any,
++        identity_report: dict[str, Any] | None,
++    ) -> list[CharacterReferenceLock]:
++        """Replace a locked reference when a later render yields a better frame.
++
++        A lock made from a mediocre frame used to be permanent, and because a
++        weak reference makes later shots more likely to fail, nothing ever
++        promoted a better one. This closes that loop — but conservatively, since
++        a reference silently churning under the director is its own problem:
++
++        - Only on a render whose identity actually verified as consistent. A
++          shot that drifted is not evidence of a better likeness.
++        - Only when the new frame is materially cleaner (FRAME_UPGRADE_RATIO),
++          not merely different.
++        - Never over a director's explicit choice; `relock_character_reference`
++          enforces that.
++        """
++        if job.status != "complete" or not isinstance(identity_report, dict):
++            return []
++        if identity_report.get("status") != "consistent":
++            return []
++
++        captures = self.capture_reference_images(job, count=1)
++        if not captures:
++            return []
++        image_url, capture_method, _role, frame_score = captures[0]
++        if capture_method != "representative_frame" or frame_score <= 0.0:
++            # Only scored frames can be compared; a thumbnail says nothing about
++            # quality relative to what is already locked.
++            return []
++
++        upgraded: list[CharacterReferenceLock] = []
++        for row in identity_report.get("characters") or []:
++            if not isinstance(row, dict):
++                continue
++            character_id = str(row.get("character_id") or "").strip()
++            if not character_id:
++                continue
++            look_id = self.resolve_look_id_for_shot(
++                project_id=job.project_id,
++                character_id=character_id,
++                shot_id=job.shot_id,
++                storage=storage,
++            )
++            existing = storage.get_character_reference_lock(
++                job.project_id, character_id, "locked", "general", look_id
++            )
++            if not existing:
++                continue
++            existing_score = float(existing.get("frame_score") or 0.0)
++            if existing_score > 0.0 and frame_score < existing_score * self.FRAME_UPGRADE_RATIO:
++                continue
++            if existing_score <= 0.0 and capture_method != "representative_frame":
++                continue
++
++            lock = self.relock_character_reference(
++                project_id=job.project_id,
++                character_id=character_id,
++                image_url=image_url,
++                storage=storage,
++                reference_role="general",
++                character_name=str(row.get("character_name") or ""),
++                source_shot_id=job.shot_id,
++                source_job_id=job.id,
++                capture_method="automatic_upgrade",
++                reason=(
++                    "A later verified-consistent render produced a cleaner frame "
++                    f"({frame_score:.1f} vs {existing_score:.1f})."
++                ),
++                look_id=look_id,
++                frame_score=frame_score,
++            )
++            if lock is not None and lock.capture_method == "automatic_upgrade":
++                upgraded.append(lock)
++
++        if upgraded:
++            logger.info(
++                "CHARACTER_REFERENCE_UPGRADED | job=%s | shot=%s | characters=%d",
++                job.id,
++                job.shot_id,
++                len(upgraded),
++            )
++        return upgraded
++
+     def verify_shot_identity(
+         self,
+         *,
+--- a/studio-backend/app/services/adherence_service.py
++++ b/studio-backend/app/services/adherence_service.py
+@@ -16,7 +16,7 @@
+ import json
+ import logging
+ import os
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
+ from typing import Any, Dict, List, Optional
+ 
+ from groq import Groq
+@@ -80,6 +80,11 @@
+     adherence_score: float  # 0-100 weighted aggregate
+     verdict: str  # pass | correctable | manual_review
+     failed_slots: List[str]
++    # Corrected slot text proposed by the vision model in the same call that
++    # scored the frames. It is the only component that has seen both the intent
++    # and the pixels — the text corrector downstream works from a summary of
++    # what the vision model said, one remove from the evidence.
++    proposed_corrections: Dict[str, str] = field(default_factory=dict)
+ 
+ 
+ @dataclass
+@@ -303,6 +308,20 @@
+                 attempt_n,
+             )
+         
++        raw_corrections = vision_result.get("proposed_corrections")
++        proposed_corrections = {
++            str(slot): str(text).strip()
++            for slot, text in (raw_corrections or {}).items()
++            if isinstance(slot, str) and str(text or "").strip()
++        } if isinstance(raw_corrections, dict) else {}
++        if proposed_corrections:
++            logger.info(
++                "ADHERENCE_VISION_PROPOSED_CORRECTIONS | shot=%s | attempt=%d | slots=%s",
++                shot_id,
++                attempt_n,
++                ",".join(sorted(proposed_corrections)),
++            )
++
+         score_result = AdherenceScore(
+             shot_id=shot_id,
+             attempt_n=attempt_n,
+@@ -312,6 +331,7 @@
+             adherence_score=adherence_score,
+             verdict=verdict,
+             failed_slots=failed_slots,
++            proposed_corrections=proposed_corrections,
+         )
+         
+         logger.info(
+@@ -625,6 +645,7 @@
+         score: AdherenceScore,
+         current_slots: Dict[str, str],
+         max_prompt_length: int = 512,
++        dropped_elements: Optional[Dict[str, List[str]]] = None,
+     ) -> FullCorrectedPrompt:
+         """
+         Build a complete corrected prompt that restates ALL 5 slots.
+@@ -636,7 +657,9 @@
+         restates all 5 slots:
+ 
+         - Passing slots → carried forward VERBATIM (exact original text)
+-        - Failing slots → corrected by the Groq corrector
++        - Failing slots → corrected, preferring the vision model's own proposal
++          over the text corrector, and restoring any phrasing that budget
++          compression removed before the render (see intent_fidelity_service)
+ 
+         Design decisions (resolving the open questions from the finding):
+         1. Verbatim: passing slots are copied character-for-character from
+@@ -663,6 +686,8 @@
+             FullCorrectedPrompt with slots, provenance, assembled prompt, and
+             compression metadata.
+         """
++        from app.services.shot_prompt_builder import SLOT_BUDGETS as _slot_budgets
++
+         # Step 1: Call the full corrector with ALL 5 slots + pass/fail status
+         corrector_result = await self._call_groq_full_corrector(
+             score=score,
+@@ -674,16 +699,41 @@
+         #   - Failing slots: use the corrector's corrected text
+         final_slots: Dict[str, str] = {}
+         provenance: Dict[str, str] = {}
++        correction_sources: Dict[str, str] = {}
+ 
+         for slot in self.ALL_SLOTS:
+             if slot in score.failed_slots:
+-                # Failing slot — use corrected text from the corrector
+-                corrected_text = corrector_result.get("slots", {}).get(slot, "")
++                # Prefer the vision model's proposal. It saw the frames and the
++                # intent; the text corrector only ever sees a summary of what the
++                # vision model reported, one remove from the evidence.
++                corrected_text = str(score.proposed_corrections.get(slot) or "").strip()
++                source = "vision"
+                 if not corrected_text:
+-                    # Fallback: if corrector didn't return this slot, keep original
++                    corrected_text = corrector_result.get("slots", {}).get(slot, "")
++                    source = "text_corrector"
++                if not corrected_text:
++                    # Neither produced anything — keep the original rather than
++                    # emptying a slot.
+                     corrected_text = current_slots.get(slot, "")
++                    source = "unchanged"
++
++                # Restore anything budget compression removed from this slot
++                # before the render, if it still fits. A correction that
++                # reinvents text the director already wrote is worse than one
++                # that puts it back.
++                restorable = [
++                    phrase for phrase in (dropped_elements or {}).get(slot, [])
++                    if phrase and phrase.lower() not in corrected_text.lower()
++                ]
++                for phrase in restorable:
++                    candidate = f"{corrected_text}; {phrase}" if corrected_text else phrase
++                    if len(candidate) <= _slot_budgets.get(slot, 110):
++                        corrected_text = candidate
++                        source = f"{source}+restored"
++
+                 final_slots[slot] = corrected_text
+                 provenance[slot] = "corrected"
++                correction_sources[slot] = source
+             else:
+                 # Passing slot — VERBATIM from current_slots
+                 final_slots[slot] = current_slots.get(slot, "")
+@@ -703,6 +753,14 @@
+ 
+         chars_remaining = max_prompt_length - len(prompt)
+ 
++        if correction_sources:
++            logger.info(
++                "CORRECTION_SOURCES | shot=%s | attempt=%d | %s",
++                score.shot_id,
++                score.attempt_n,
++                ", ".join(f"{slot}={source}" for slot, source in sorted(correction_sources.items())),
++            )
++
+         logger.info(
+             "FULL_CORRECTED_PROMPT_BUILT | shot=%s | attempt=%d | "
+             "carried_forward=%d | corrected=%d | compressed=%d | "
+@@ -1038,6 +1096,7 @@
+ Expected Environment: {expected_environment}
+ 
+ Analyze the 3 provided frames (10%, 50%, 90% of shot duration) and score each dimension 0-100.
++For any dimension you score at or below 70, also propose replacement prompt text for that dimension: a short, concrete phrase describing what should have been on screen, written as a render instruction rather than a critique. You are the only reader that has seen both the intended shot and the actual frames, so your proposal is better grounded than one written from your summary alone. Keep each proposal under 110 characters and omit dimensions you scored above 70.
+ Identity continuity means whether recurring characters remain recognizably the same actor and character across face, body, silhouette, skin tone, hair, age presentation, wardrobe continuity, accessories, persistent props, and temporary marks when those traits are expected.
+ Detect temporal drift across the shot.
+ 
+@@ -1051,7 +1110,8 @@
+     "lighting": {{"score": 0-100, "evidence": "str", "expected": "{expected_lighting}", "observed": "str"}},
+     "environment_persistence": {{"score": 0-100, "evidence": "str", "expected": "{expected_environment}", "observed": "str"}}
+   }},
+-  "temporal_drift": {{"start_score": 0-100, "end_score": 0-100}}
++  "temporal_drift": {{"start_score": 0-100, "end_score": 0-100}},
++  "proposed_corrections": {{"<dimension name>": "replacement prompt text"}}
+ }}"""
+         
+         # Load frames as PIL Image objects for Gemini
+--- a/studio-backend/app/services/render_retry_service.py
++++ b/studio-backend/app/services/render_retry_service.py
+@@ -619,6 +619,55 @@
+             )
+             return ""
+ 
++    def _dropped_elements_for_shot(self, shot_id: str) -> Dict[str, List[str]]:
++        """Phrasing that budget compression removed before the original render.
++
++        The intent-fidelity check records what it cut (see
++        intent_fidelity_service). Handing that to the correction path means a
++        retry can put the director's own words back rather than inventing
++        replacement text for something that was never wrong — it was only too
++        long to fit.
++
++        Returns {} when nothing was recorded, which leaves correction behaviour
++        exactly as it was.
++        """
++        if not self._storage:
++            return {}
++        try:
++            # Storage has no by-shot job accessor, so filter the recent list.
++            # The record lives on the render job rather than render_attempts,
++            # because it is produced at prompt-assembly time, before an attempt
++            # exists.
++            jobs = [
++                job
++                for job in (self._storage.list_jobs(limit=200) or [])
++                if getattr(job, "shot_id", None) == shot_id
++            ]
++        except Exception:
++            return {}
++
++        for job in reversed(jobs):
++            parameters = getattr(getattr(job, "input_payload", None), "parameters", None)
++            if not isinstance(parameters, dict):
++                continue
++            record = parameters.get("intent_fidelity")
++            if not isinstance(record, dict) or record.get("status") != "reduced":
++                continue
++            dropped: Dict[str, List[str]] = {}
++            for slot, slot_report in (record.get("slots") or {}).items():
++                if not isinstance(slot_report, dict):
++                    continue
++                phrases = [
++                    str(item).strip()
++                    for item in (slot_report.get("dropped_elements") or [])
++                    if str(item or "").strip()
++                ]
++                if phrases:
++                    dropped[str(slot)] = phrases
++            if dropped:
++                return dropped
++        return {}
++
+     def _get_previous_score(self, shot_id: str, attempt_n: int) -> Optional[float]:
+         """
+         Get adherence score from previous attempt for stuck shot detection.
+@@ -1056,6 +1105,7 @@
+             full_prompt = await self._adherence_service.build_full_corrected_prompt(
+                 score=original_score,
+                 current_slots=original_slots,
++                dropped_elements=self._dropped_elements_for_shot(shot_id),
+             )
+             slot_order = self._reorder_slots_by_failure(original_score.dimensions)
+             full_prompt.prompt = self._assemble_prompt_from_slots(
+--- a/studio-backend/app/services/render.py
++++ b/studio-backend/app/services/render.py
+@@ -308,12 +308,31 @@
+             job=job,
+             storage=storage,
+         )
+-        if locks or identity_report:
++
++        # Close the loop: a lock made from a mediocre frame stayed permanent
++        # because a weak reference makes later shots more likely to fail, so
++        # nothing ever promoted a better one. Only runs on a verified-consistent
++        # render, and never over a director's explicit choice.
++        upgraded = []
++        try:
++            upgraded = _char_ref_svc.upgrade_references_from_verified_job(
++                job=job,
++                storage=storage,
++                identity_report=identity_report,
++            )
++        except Exception as upgrade_exc:
++            logger.debug("Reference upgrade skipped for job %s: %s", job.id, upgrade_exc)
++
++        if locks or identity_report or upgraded:
+             job.metadata = dict(job.metadata or {})
+             if locks:
+                 job.metadata["character_reference_locks_created"] = [
+                     lock.model_dump(mode="json") for lock in locks
+                 ]
++            if upgraded:
++                job.metadata["character_reference_locks_upgraded"] = [
++                    lock.model_dump(mode="json") for lock in upgraded
++                ]
+             if identity_report:
+                 job.metadata["character_identity_verification"] = identity_report
+                 if identity_report.get("status") == "identity_drift":
+--- a/studio-backend/app/services/test_character_reference_multi_view.py
++++ b/studio-backend/app/services/test_character_reference_multi_view.py
+@@ -328,7 +328,8 @@
+ 
+ def test_capture_collapses_to_one_view_without_a_local_video():
+     captures = CharacterVisualReferenceService().capture_reference_images(_job(), count=3)
+-    assert captures == [("https://cdn.example.test/thumb.jpg", "thumbnail", "general")]
++    # The fourth element is the capture quality score; a thumbnail is unscored.
++    assert captures == [("https://cdn.example.test/thumb.jpg", "thumbnail", "general", 0.0)]
+ 
+ 
+ def test_capture_labels_additional_views_as_alternate_angles(monkeypatch, tmp_path):
+@@ -345,7 +346,9 @@
+     )
+ 
+     captures = CharacterVisualReferenceService().capture_reference_images(_job(), count=3)
+-    assert [role for _, _, role in captures] == ["general", "alternate_angle"]
++    assert [role for _, _, role, _score in captures] == ["general", "alternate_angle"]
++    # Scores travel with the captures so an upgrade can be recognised later.
++    assert [score for _, _, _, score in captures] == [9.0, 7.0]
+ 
+ 
+ def test_role_for_rank_is_honest_about_what_it_knows():

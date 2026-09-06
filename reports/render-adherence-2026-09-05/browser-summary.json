@@ -1,0 +1,14 @@
+{
+  "project_id": "project_f3d7e18e9232",
+  "request": {
+    "duration": 8,
+    "resolution": "720p",
+    "promptLength": 2149
+  },
+  "status": "needs_review",
+  "persisted_http_status": 200,
+  "persisted_duration": 8,
+  "provider_job_id": null,
+  "page_errors": [],
+  "visual_generation_executed": false
+}

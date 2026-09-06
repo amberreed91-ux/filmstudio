@@ -48,8 +48,6 @@ export function PromptGenerationPanel({ projectId }: PromptGenerationPanelProps)
 
   const handleSave = (sceneId: string) => {
     // In production, you'd persist this back to the project scene data
-    console.log('Saving edited prompt for scene:', sceneId, editingPrompts[sceneId]);
-    
     // Clear editing state
     setEditingPrompts(prev => {
       const next = { ...prev };

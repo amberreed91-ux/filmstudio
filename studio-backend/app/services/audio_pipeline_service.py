@@ -1115,12 +1115,8 @@ class AudioPipelineService:
         shot_id: str,
     ) -> Path | None:
         """Return a convention-based local dialogue file for *shot_id*, if present."""
-        supplied_dir = self._scene_dir(project_id, scene_id) / "pre_supplied"
-        for extension in (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac"):
-            candidate = supplied_dir / f"{shot_id}{extension}"
-            if candidate.is_file():
-                return candidate
-        return None
+        from app.services.scene_audio_source_service import SceneAudioSourceService
+        return SceneAudioSourceService(self.output_base).supplied_path(project_id, scene_id, shot_id)
 
     # ------------------------------------------------------------------
     # Static file URL helper
@@ -1967,6 +1963,7 @@ os._exit(0)
         split_reason: str | None = None,
         provider: str | None = None,
         scene_context: dict[str, Any] | None = None,
+        allow_generation: bool = True,
     ) -> Dict[str, Any]:
         """Resolve or generate a single shot's dialogue WAV.
 
@@ -2096,6 +2093,14 @@ os._exit(0)
                 "advisory": f"Pre-supplied local dialogue used for {shot_id}.",
             }
 
+        if not allow_generation:
+            return {
+                "track": "shot_dialogue", "status": TrackStatus.SKIPPED,
+                "provider": "none", "source": "none", "file_path": None,
+                "file_url": None, "lines_generated": 0, "shot_id": shot_id,
+                "advisory": "Existing-media assembly: no new dialogue generated. Audio already in the take is retained.",
+            }
+
         generation_source = "mock" if MOCK_MODE else "live_provider"
         logger.info(
             "SHOT_DIALOGUE_SOURCE | project_id=%s | scene_id=%s | shot_id=%s "
@@ -2137,7 +2142,7 @@ os._exit(0)
         # Fallback: range-slice from re-extracted scene lines — only when the
         # preferred list is empty AND a range is available AND this is not a
         # monologue split (range is ambiguous for monologue sub-shots, §1.2).
-        if not lines and scene_text and isinstance(dialogue_line_range, dict):
+        if dialogue_lines is None and scene_text and isinstance(dialogue_line_range, dict):
             if split_reason == "vo_monologue_split":
                 return _skipped(
                     "monologue split without dialogue_lines — range-slice "

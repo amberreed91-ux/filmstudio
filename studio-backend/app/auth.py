@@ -104,7 +104,7 @@ class AuthService:
             return None, error
         
         # Check if user exists
-        if username in _users_db:
+        if (self.storage.access_get_user(username=username) if self.storage else _users_db.get(username)):
             return None, "Username already exists"
         
         # Create user
@@ -124,7 +124,13 @@ class AuthService:
             "locked_until": None,
         }
         
-        _users_db[username] = user
+        if self.storage:
+            try:
+                self.storage.access_save_user(user, create=True)
+            except Exception:
+                return None, "Unable to create account"
+        else:
+            _users_db[username] = user
         
         # Return user without sensitive data
         return {k: v for k, v in user.items() if k not in ('password_hash', 'salt')}, ""
@@ -136,7 +142,7 @@ class AuthService:
         if not allowed:
             return None, error
         
-        user = _users_db.get(username)
+        user = self.storage.access_get_user(username=username) if self.storage else _users_db.get(username)
         if not user:
             return None, "Invalid username or password"
         
@@ -147,15 +153,19 @@ class AuthService:
                 return None, "Account is temporarily locked. Try again later."
         
         # Verify password
-        password_hash = _create_password_hash(password, user.get("salt", ""))
+        password_hash = _create_password_hash(password, (user.get("salt") or ""))
         
-        if password_hash != user.get("password_hash"):
+        if not secrets.compare_digest(password_hash, user.get("password_hash") or ""):
             # Failed attempt
             user["failed_attempts"] = user.get("failed_attempts", 0) + 1
             
+            if self.storage:
+                self.storage.access_save_user(user)
             # Lock after 5 failed attempts
             if user["failed_attempts"] >= 5:
                 user["locked_until"] = (datetime.now() + timedelta(minutes=15)).isoformat()
+                if self.storage:
+                    self.storage.access_save_user(user)
                 return None, "Too many failed attempts. Account locked for 15 minutes."
             
             return None, "Invalid username or password"
@@ -165,6 +175,8 @@ class AuthService:
         user["locked_until"] = None
         user["last_login"] = datetime.now().isoformat()
         
+        if self.storage:
+            self.storage.access_save_user(user)
         # Create session
         session = self._create_session(user["user_id"])
         
@@ -186,11 +198,16 @@ class AuthService:
             "last_active_at": now.isoformat(),
         }
         
-        _sessions_db[session_id] = session
+        if self.storage:
+            self.storage.create_session(session_id, user_id, _session_ttl)
+        else:
+            _sessions_db[session_id] = session
         return session
     
     def get_session(self, session_id: str) -> Optional[dict]:
         """Get valid session"""
+        if self.storage:
+            return self.storage.get_session(session_id)
         session = _sessions_db.get(session_id)
         if not session:
             return None
@@ -206,6 +223,8 @@ class AuthService:
     
     def delete_session(self, session_id: str) -> bool:
         """Delete session"""
+        if self.storage:
+            return self.storage.delete_session(session_id)
         if session_id in _sessions_db:
             del _sessions_db[session_id]
             return True
@@ -213,6 +232,9 @@ class AuthService:
     
     def get_user(self, user_id: str) -> Optional[dict]:
         """Get user by ID"""
+        if self.storage:
+            user = self.storage.access_get_user(user_id=user_id)
+            return {k: v for k, v in user.items() if k not in ('password_hash', 'salt')} if user else None
         for user in _users_db.values():
             if user["user_id"] == user_id:
                 return {k: v for k, v in user.items() if k not in ('password_hash', 'salt')}
@@ -244,7 +266,8 @@ def demo_login(username: str) -> tuple[Optional[dict], str]:
     # Sanitize username
     username = username.strip().lower()
     
-    if username not in _users_db:
+    existing = auth_service.storage.access_get_user(username=username) if auth_service.storage else _users_db.get(username)
+    if not existing:
         # Create demo user
         user_id = f"user-{secrets.token_hex(8)}"
         _users_db[username] = {
@@ -260,7 +283,9 @@ def demo_login(username: str) -> tuple[Optional[dict], str]:
             "locked_until": None,
         }
     
-    user = _users_db[username]
+    user = existing or _users_db[username]
+    if auth_service.storage and not existing:
+        auth_service.storage.access_save_user(user, create=True)
     user["last_login"] = datetime.now().isoformat()
     
     session = auth_service._create_session(user["user_id"])

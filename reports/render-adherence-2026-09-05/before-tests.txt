@@ -1,0 +1,47 @@
+........FFFFFFF                                                          [100%]
+=================================== FAILURES ===================================
+__________ test_render_uses_creator_settings_and_retry_preserves_them __________
+tests/test_checkpoint_4b_previs_integrity.py:300: in test_render_uses_creator_settings_and_retry_preserves_them
+    from app.models.previs_render import PrevisRenderSettings
+E   ModuleNotFoundError: No module named 'app.models.previs_render'
+_____ test_approved_board_frame_and_timing_reach_previs_and_direct_render ______
+tests/test_checkpoint_4b_previs_integrity.py:332: in test_approved_board_frame_and_timing_reach_previs_and_direct_render
+    assert job.parameters["duration"] == 8
+E   assert 3 == 8
+__________________ test_previs_rejects_stale_approved_version __________________
+tests/test_checkpoint_4b_previs_integrity.py:346: in test_previs_rejects_stale_approved_version
+    with pytest.raises(StateError):
+E   Failed: DID NOT RAISE StateError
+___________________ test_prompt_review_is_terminal_in_previs ___________________
+tests/test_checkpoint_4b_previs_integrity.py:363: in test_prompt_review_is_terminal_in_previs
+    assert result["status"] == "needs_review"
+E   AssertionError: assert 'pending' == 'needs_review'
+E     
+E     - needs_review
+E     + pending
+____________ test_previs_route_validates_and_passes_render_settings ____________
+tests/test_checkpoint_4b_previs_integrity.py:383: in test_previs_route_validates_and_passes_render_settings
+    assert calls[0]["render_settings"].duration_seconds == 8
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'render_settings'
+________ test_board_is_a_first_frame_and_other_assets_remain_references ________
+tests/test_storyboard_provider_conditioning.py:24: in test_board_is_a_first_frame_and_other_assets_remain_references
+    assert body["frame_images"] == [{"type": "image_url", "image_url": {"url": "https://media.test/board.png"}, "frame_type": "first_frame"}]
+           ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'frame_images'
+______________ test_provider_alias_uses_the_same_budget_and_model ______________
+tests/test_storyboard_provider_conditioning.py:31: in test_provider_alias_uses_the_same_budget_and_model
+    assert _provider_model_for_job("openrouter-video", {}) == "alibaba/happyhorse-1.1"
+E   AssertionError: assert 'openrouter-video' == 'alibaba/happyhorse-1.1'
+E     
+E     - alibaba/happyhorse-1.1
+E     + openrouter-video
+=========================== short test summary info ============================
+FAILED tests/test_checkpoint_4b_previs_integrity.py::test_render_uses_creator_settings_and_retry_preserves_them
+FAILED tests/test_checkpoint_4b_previs_integrity.py::test_approved_board_frame_and_timing_reach_previs_and_direct_render
+FAILED tests/test_checkpoint_4b_previs_integrity.py::test_previs_rejects_stale_approved_version
+FAILED tests/test_checkpoint_4b_previs_integrity.py::test_prompt_review_is_terminal_in_previs
+FAILED tests/test_checkpoint_4b_previs_integrity.py::test_previs_route_validates_and_passes_render_settings
+FAILED tests/test_storyboard_provider_conditioning.py::test_board_is_a_first_frame_and_other_assets_remain_references
+FAILED tests/test_storyboard_provider_conditioning.py::test_provider_alias_uses_the_same_budget_and_model
+7 failed, 8 passed in 1.48s

@@ -50,31 +50,17 @@ class SceneAssemblyService:
         self.audio_service = audio_service or audio_pipeline_service
         self.backend_root = backend_root or Path(__file__).resolve().parents[2]
         self.composed_root = composed_root or (self.backend_root / "static" / "composed")
+        from app.services.scene_audio_source_service import SceneAudioSourceService
+        self.audio_sources = SceneAudioSourceService(getattr(self.audio_service, "output_base", self.backend_root / "outputs" / "audio"))
+
 
     def collect_scene_jobs(
         self,
         project_id: str,
         scene_id: str,
     ) -> list[tuple[int, RenderJobModel]]:
-        storage = self.storage or get_storage("sqlite")
-        jobs = storage.list_jobs(project_id=project_id, limit=500)
-        latest_by_number: dict[int, RenderJobModel] = {}
-        for job in jobs:
-            if getattr(job, "status", "") != "complete":
-                continue
-            shot_id = str(getattr(job, "shot_id", "") or "")
-            if derive_scene_id_from_shot_id(shot_id) != scene_id:
-                continue
-            output = getattr(job, "output_payload", None)
-            if not str(getattr(output, "asset_url", "") or "").strip():
-                continue
-            number = derive_shot_number_from_shot_id(shot_id)
-            if number <= 0:
-                continue
-            existing = latest_by_number.get(number)
-            if existing is None or str(job.created_at) > str(existing.created_at):
-                latest_by_number[number] = job
-        return sorted(latest_by_number.items())
+        from app.services.take_selection_service import TakeSelectionService
+        return TakeSelectionService(self.storage or get_storage("sqlite")).resolve(project_id, scene_id)
 
     async def assemble_completed_scene(
         self,
@@ -84,21 +70,29 @@ class SceneAssemblyService:
         dialogue_provider: str = "cosyvoice",
         score_ambient_provider: str | None = None,
         overwrite: bool = True,
+        allow_audio_generation: bool = False,
     ) -> dict[str, Any]:
         timer = start_timer()
         jobs = self.collect_scene_jobs(project_id, scene_id)
-        if len(jobs) < 2:
+        if not jobs:
             raise StateError(
-                f"Need at least 2 completed shots to assemble {scene_id}; found {len(jobs)}",
+                f"Need at least 1 completed shot to assemble {scene_id}; found {len(jobs)}",
                 stage="scene_assembly_discovery",
                 metadata={"project_id": project_id, "scene_id": scene_id},
             )
 
+        audio_inputs = self.audio_sources.snapshot(project_id, scene_id, [job.shot_id for _, job in jobs])
         output_dir = self.composed_root / project_id
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / f"{scene_id}_audio.mp4"
-        if output_path.exists() and not overwrite:
-            return self._result(project_id, scene_id, jobs, output_path, [], "existing")
+        from uuid import uuid4
+        output_path = output_dir / f"{scene_id}_{uuid4().hex[:12]}_audio.mp4"
+        if not overwrite:
+            storage = self.storage or get_storage("sqlite")
+            previous = storage.get_delivery_manifest(project_id, scene_id)
+            if previous and previous.get("job_ids") == [job.id for _, job in jobs] and previous.get("audio_inputs") == audio_inputs:
+                previous_path = self._local_path(previous.get("composed_url", ""))
+                if previous_path and previous_path.is_file():
+                    return self._result(project_id, scene_id, jobs, previous_path, [], "existing")
 
         scene_text, characters = self._scene_context(project_id, scene_id)
         shot_records: list[dict[str, Any]] = []
@@ -106,6 +100,7 @@ class SceneAssemblyService:
         with tempfile.TemporaryDirectory(prefix=f"scene_assembly_{scene_id}_") as temp:
             work_dir = Path(temp)
             normalized: list[Path] = []
+            canvas: tuple[int, int] | None = None
             async with httpx.AsyncClient(follow_redirects=True) as client:
                 for index, (shot_number, job) in enumerate(jobs, start=1):
                     shot_timer = start_timer()
@@ -126,6 +121,7 @@ class SceneAssemblyService:
                         characters=characters,
                         split_reason=params.get("split_reason"),
                         provider=dialogue_provider,
+                        allow_generation=allow_audio_generation,
                         scene_context={"shot_number": shot_number, "scene_id": scene_id},
                     )
                     if dialogue.get("status") == TrackStatus.FAILED:
@@ -153,15 +149,27 @@ class SceneAssemblyService:
                             video_path=raw_path,
                             audio_path=Path(dialogue_path),
                             replace_original=False,
-                            on_audio_overrun="freeze_last_frame",
+                            on_audio_overrun="error",
                         )
+                        if merge.get("status") != TrackStatus.COMPLETE:
+                            raise StateError(
+                                "Shot audio does not fit the chosen take. Adjust dialogue timing or choose a longer take.",
+                                stage="scene_assembly_audio_timing",
+                                metadata={"project_id": project_id, "job_id": job.id, "shot_id": job.shot_id, "audio_result": merge},
+                            )
                         merged_path = Path(str(merge.get("file_path") or ""))
                         if merge.get("status") == TrackStatus.COMPLETE and merged_path.exists():
                             clip_path = merged_path
                             merged = True
 
                     canonical = work_dir / f"shot_{index:03d}_canonical.mp4"
-                    self._normalize_clip(clip_path, canonical)
+                    if canvas is None:
+                        video = next((row for row in self._probe_streams(clip_path) if row.get("codec_type") == "video"), None)
+                        if not video:
+                            raise PlaybackError("Chosen take has no video stream", stage="scene_assembly_normalize", metadata={"job_id": job.id})
+                        width, height = int(video["width"]), int(video["height"])
+                        canvas = (width + width % 2, height + height % 2)
+                    self._normalize_clip(clip_path, canonical, canvas=canvas)
                     normalized.append(canonical)
                     shot_record = {
                         "shot_id": job.shot_id,
@@ -194,7 +202,7 @@ class SceneAssemblyService:
             provider = (score_ambient_provider or SCORE_AMBIENT_PROVIDER or "none").strip().lower()
             final_source = concat_path
             score_status = "skipped"
-            if provider != "none":
+            if allow_audio_generation and provider != "none":
                 duration = self._probe_duration(concat_path) or 15.0
                 score = await self.audio_service.generate_score_ambient(
                     scene_id=scene_id,
@@ -222,6 +230,8 @@ class SceneAssemblyService:
                 metadata=validation,
             )
 
+        if self.audio_sources.snapshot(project_id, scene_id, [job.shot_id for _, job in jobs]) != audio_inputs:
+            raise StateError("A recording changed during assembly. Rebuild the scene to use the new audio.", stage="scene_assembly_audio_inputs", metadata={"project_id": project_id, "scene_id": scene_id})
         storage = self.storage or get_storage("sqlite")
         duration = self._probe_duration(output_path)
         composed_url = (
@@ -234,6 +244,11 @@ class SceneAssemblyService:
             shot_count=len(jobs),
             duration_seconds=duration,
         )
+        storage.save_delivery_manifest(project_id, scene_id, {
+            "composed_url": composed_url,
+            "job_ids": [job.id for _, job in jobs],
+            "audio_inputs": audio_inputs,
+        })
         result = self._result(
             project_id,
             scene_id,
@@ -242,7 +257,8 @@ class SceneAssemblyService:
             shot_records,
             "complete",
         )
-        result["score_ambient_provider"] = provider
+        result["audio_generation_requested"] = allow_audio_generation
+        result["score_ambient_provider"] = provider if allow_audio_generation else "none"
         result["score_ambient_status"] = score_status
         result["dialogue_provider_requested"] = dialogue_provider
         result["audio_continuity"] = validation
@@ -296,7 +312,7 @@ class SceneAssemblyService:
             return None
         return candidate if candidate.exists() else None
 
-    def _normalize_clip(self, source: Path, destination: Path) -> None:
+    def _normalize_clip(self, source: Path, destination: Path, *, canvas: tuple[int, int] | None = None) -> None:
         duration = self._probe_duration(source)
         if not duration:
             raise PlaybackError(
@@ -321,6 +337,10 @@ class SceneAssemblyService:
                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "48000", "-ac", "2",
                 str(destination),
             ]
+        if canvas:
+            width, height = canvas
+            command[-1:-1] = ["-map", "0:v:0", "-map", "0:a:0" if self._has_audio(source) else "1:a:0",
+                "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24"]
         self._run_ffmpeg(command, "scene_assembly_normalize")
 
     def _concat(self, clips: list[Path], destination: Path) -> None:
@@ -551,6 +571,7 @@ class SceneAssemblyService:
             "output_path": str(output_path),
             "shot_count": len(jobs),
             "shot_ids": [job.shot_id for _, job in jobs],
+            "job_ids": [job.id for _, job in jobs],
             "duration_seconds": self._probe_duration(output_path),
             "has_audio": self._has_audio(output_path),
             "shots": shots,

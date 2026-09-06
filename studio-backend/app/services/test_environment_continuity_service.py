@@ -252,3 +252,11 @@ def test_render_job_injects_environment_context_and_warning_metadata(monkeypatch
         "destruction_damage: window was previously broken"
     ]
     assert job.input_payload.parameters["environment_continuity_context"]["location_id"] == "harbor-house-kitchen"
+
+
+def test_gaze_and_costume_prose_do_not_create_location_identity():
+    svc = ContinuityIntelligenceService(storage=_EnvironmentStorage())
+    for prompt in ['Nina looks at Jules.', 'Jules stands in blue work clothes.', 'A hand reaches inside the jacket.']:
+        location, name = svc._resolve_location_id({}, prompt)
+        assert (location, name) == ('', '')
+    assert svc._resolve_location_id({'location': 'Workshop'}, 'Nina looks at Jules.') == ('workshop', 'Workshop')

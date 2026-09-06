@@ -27,6 +27,7 @@ import {
 
 type CastingIntelligencePanelProps = {
   projectId: string
+  compact?: boolean
 }
 
 function label(value: string | undefined | null) {
@@ -56,7 +57,7 @@ function RoleRow({
         selected ? 'border-amber-400/70 bg-amber-400/10' : 'border-zinc-700/60 bg-zinc-950/40 hover:border-zinc-500'
       }`}
     >
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-zinc-100">{role.character_name}</div>
           <div className="mt-1 text-xs text-zinc-500">{label(role.role_size)} · {role.scene_ids.length} scene{role.scene_ids.length === 1 ? '' : 's'}</div>
@@ -70,7 +71,7 @@ function RoleRow({
   )
 }
 
-function TalentForm({ onCreate, busy }: { onCreate: (name: string, modality: CastingModality) => void; busy: boolean }) {
+function TalentForm({ onCreate, busy, compact = false }: { onCreate: (name: string, modality: CastingModality) => void; busy: boolean; compact?: boolean }) {
   const [name, setName] = useState('AI Stand-In')
   const [modality, setModality] = useState<CastingModality>('placeholder')
   return (
@@ -79,17 +80,17 @@ function TalentForm({ onCreate, busy }: { onCreate: (name: string, modality: Cas
         <UserPlus size={14} className="text-cyan-300" />
         Talent
       </div>
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+      <div className={`grid min-w-0 gap-2 ${compact ? 'grid-cols-1' : 'sm:grid-cols-[minmax(0,1fr)_auto_auto]'}`}>
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          className="h-9 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-cyan-400"
+          className="h-9 min-w-0 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-cyan-400"
           aria-label="Talent name"
         />
         <select
           value={modality}
           onChange={(event) => setModality(event.target.value as CastingModality)}
-          className="h-9 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-cyan-400"
+          className="h-9 min-w-0 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-cyan-400"
           aria-label="Talent modality"
         >
           <option value="placeholder">Placeholder</option>
@@ -113,7 +114,7 @@ function TalentForm({ onCreate, busy }: { onCreate: (name: string, modality: Cas
   )
 }
 
-export default function CastingIntelligencePanel({ projectId }: CastingIntelligencePanelProps) {
+export default function CastingIntelligencePanel({ projectId, compact = false }: CastingIntelligencePanelProps) {
   const [roles, setRoles] = useState<CastingRoleBreakdown[]>([])
   const [talent, setTalent] = useState<TalentProfile[]>([])
   const [selectedRoleId, setSelectedRoleId] = useState('')
@@ -212,7 +213,7 @@ export default function CastingIntelligencePanel({ projectId }: CastingIntellige
 
   return (
     <section className="rounded-lg border border-zinc-700/70 bg-zinc-900/60 p-4 text-zinc-100" data-testid="casting-intelligence-panel">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className={`flex min-w-0 flex-col gap-3 ${compact ? '' : 'md:flex-row md:items-start md:justify-between'}`}>
         <div>
           <div className="flex items-center gap-2">
             <UsersRound size={16} className="text-amber-300" />
@@ -249,8 +250,8 @@ export default function CastingIntelligencePanel({ projectId }: CastingIntellige
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <div className="space-y-2">
+      <div className={`mt-4 grid min-w-0 gap-4 ${compact ? 'grid-cols-1' : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]'}`}>
+        <div className="min-w-0 space-y-2">
           {roles.map((role) => (
             <RoleRow key={role.role_id} role={role} selected={role.role_id === selectedRoleId} onSelect={() => setSelectedRoleId(role.role_id)} />
           ))}
@@ -261,8 +262,8 @@ export default function CastingIntelligencePanel({ projectId }: CastingIntellige
           ) : null}
         </div>
 
-        <div className="space-y-3">
-          <TalentForm onCreate={(name, modality) => talentMutation.mutate({ name, modality })} busy={talentMutation.isPending} />
+        <div className="min-w-0 space-y-3">
+          <TalentForm compact={compact} onCreate={(name, modality) => talentMutation.mutate({ name, modality })} busy={talentMutation.isPending} />
 
           <div className="rounded-md border border-zinc-700/60 bg-zinc-950/45 p-3">
             <div className="mb-2 text-sm font-semibold text-zinc-100">Audition</div>
@@ -302,11 +303,11 @@ export default function CastingIntelligencePanel({ projectId }: CastingIntellige
               <BrainCircuit size={14} className="text-amber-300" />
               Match
             </div>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <div className={`grid min-w-0 gap-2 ${compact ? 'grid-cols-1' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
               <select
                 value={selectedTalentId}
                 onChange={(event) => setSelectedTalentId(event.target.value)}
-                className="h-9 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-amber-400"
+                className="h-9 min-w-0 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-amber-400"
                 aria-label="Talent profile"
               >
                 <option value="">Select talent</option>

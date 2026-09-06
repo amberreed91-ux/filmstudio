@@ -1,0 +1,9 @@
+{
+  "handlersBefore": 9,
+  "handlersAfter": 9,
+  "changed": [
+    "handleEditNode"
+  ],
+  "missing": [],
+  "explanation": "handleEditNode now preserves existing universe_tags for non-character entries; all other callbacks are unchanged."
+}

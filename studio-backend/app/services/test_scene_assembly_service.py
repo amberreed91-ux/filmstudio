@@ -37,6 +37,12 @@ class FakeStorage:
         self.jobs = jobs
         self.saved = None
 
+    def list_take_choices(self, project_id, scene_id):
+        return []
+
+    def save_delivery_manifest(self, project_id, scope, payload):
+        self.manifest = payload
+
     def list_jobs(self, project_id, limit=500):
         return self.jobs
 
@@ -166,3 +172,55 @@ def test_assemble_three_shot_scene_bakes_cosyvoice_and_keeps_audio_continuous(tm
         "cosyvoice",
     ]
     assert storage.saved["shot_count"] == 3
+
+
+def test_chosen_older_take_is_the_actual_assembled_picture(tmp_path: Path):
+    import numpy as np
+    old = _job(tmp_path, 'scene_001_shot_001', 'red', '2026-01-01')
+    new = _job(tmp_path, 'scene_001_shot_001', 'blue', '2026-02-01')
+    old.output_payload.asset_url = str(tmp_path / 'old.mp4')
+    new.output_payload.asset_url = str(tmp_path / 'new.mp4')
+    _video(Path(old.output_payload.asset_url), 'red')
+    _video(Path(new.output_payload.asset_url), 'blue')
+    store = FakeStorage([new, old])
+    store.list_take_choices = lambda *args: [{'shot_number': 1, 'job_id': old.id}]
+    store.get_job = lambda id: old if id == old.id else new
+    service = SceneAssemblyService(storage=store, audio_service=FakeAudio(tmp_path), backend_root=tmp_path, composed_root=tmp_path / 'composed')
+    result = run_async(service.assemble_completed_scene(project_id='project_real', scene_id='scene_001', score_ambient_provider='none'))
+    pixels = subprocess.run(['ffmpeg', '-v', 'error', '-ss', '0.3', '-i', result['output_path'], '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], capture_output=True, check=True).stdout
+    mean = np.frombuffer(pixels, dtype=np.uint8).reshape(-1, 3).mean(axis=0)
+    assert mean[0] > 200 and mean[2] < 30
+    assert store.manifest['job_ids'] == [old.id]
+
+
+def test_dialogue_overrun_stops_without_saving_or_freezing(tmp_path: Path):
+    import pytest
+    from app.services.stability import StateError
+    jobs = [_job(tmp_path, 'scene_001_shot_001', 'red', '2026-01-01', create_video=True)]
+    store = FakeStorage(jobs)
+    audio = FakeAudio(tmp_path)
+    async def overrun(**kwargs):
+        assert kwargs['on_audio_overrun'] == 'error'
+        return {'status': TrackStatus.FAILED, 'advisory': 'Audio longer than video'}
+    audio.merge_audio_onto_video = overrun
+    service = SceneAssemblyService(storage=store, audio_service=audio, backend_root=tmp_path)
+    with pytest.raises(StateError) as error:
+        run_async(service.assemble_completed_scene(project_id='project_real', scene_id='scene_001', score_ambient_provider='none'))
+    assert error.value.stage == 'scene_assembly_audio_timing'
+    assert store.saved is None
+
+
+def test_recording_changed_during_assembly_keeps_previous_composition(tmp_path, monkeypatch):
+    import pytest
+    from app.services.stability import StateError
+
+    job = _job(tmp_path, 'shot_scene_002_001', 'red', '2026-01-01', create_video=True)
+    storage = FakeStorage([job])
+    previous = {'composed_url': '/static/previous.mp4'}
+    storage.saved = previous
+    service = SceneAssemblyService(storage=storage, audio_service=FakeAudio(tmp_path), backend_root=tmp_path)
+    snapshots = iter([{'shot_scene_002_001': None}, {'shot_scene_002_001': {'sha256': 'changed'}}])
+    monkeypatch.setattr(service.audio_sources, 'snapshot', lambda *args: next(snapshots))
+    with pytest.raises(StateError, match='recording changed'):
+        run_async(service.assemble_completed_scene(project_id='project_real', scene_id='scene_002', score_ambient_provider='none'))
+    assert storage.saved == previous

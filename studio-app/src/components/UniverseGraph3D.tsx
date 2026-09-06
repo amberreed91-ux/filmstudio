@@ -1,673 +1,265 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Html } from '@react-three/drei'
-import { EffectComposer, Bloom } from '@react-three/postprocessing'
-import { BlendFunction, KernelSize } from 'postprocessing'
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { OrbitControls, Html, Line } from '@react-three/drei'
+import { Compass, Minus, Pause, Play, Plus, RotateCcw } from 'lucide-react'
 import * as THREE from 'three'
 import type { UniverseNode, UniverseRelationship } from '../types/universe'
 
 interface UniverseGraph3DProps {
   nodes: UniverseNode[]
+  layoutNodes?: UniverseNode[]
   relationships: UniverseRelationship[]
   selectedNodeId: string | null
   onNodeClick: (node: UniverseNode) => void
   onNodeHover: (node: UniverseNode | null) => void
 }
 
-const RELATIONSHIP_COLORS: Record<string, string> = {
-  ally: '#4cd7f6',
-  rival: '#ffb4ab',
-  love: '#ffd165',
-  family: '#d3c5ac',
-  mentor: '#4cd7f6',
-  default: 'rgba(255,255,255,0.15)',
-}
-
-// Node-type visual style: fill, border (alpha), and glow color.
-// These drive the colored circle + tinted halo + outline border per type.
-export interface NodeTypeStyle {
-  fill: string
-  border: string
-  glow: string
-}
-
+export interface NodeTypeStyle { fill: string; border: string; glow: string }
 // eslint-disable-next-line react-refresh/only-export-components
 export const NODE_TYPE_STYLES: Record<string, NodeTypeStyle> = {
-  character: {
-    fill: '#4cd7f6', // secondary / cyan
-    border: 'rgba(76,215,246,0.6)',
-    glow: 'rgba(76,215,246,0.5)',
-  },
-  location: {
-    fill: '#ffd165', // primary / amber
-    border: 'rgba(255,209,101,0.6)',
-    glow: 'rgba(255,209,101,0.5)',
-  },
-  scene: {
-    fill: '#c084fc', // purple
-    border: 'rgba(192,132,252,0.6)',
-    glow: 'rgba(192,132,252,0.5)',
-  },
-  object: {
-    fill: '#4ade80', // green
-    border: 'rgba(74,222,128,0.6)',
-    glow: 'rgba(74,222,128,0.5)',
-  },
-  lore: {
-    fill: '#fb923c', // orange
-    border: 'rgba(251,146,60,0.6)',
-    glow: 'rgba(251,146,60,0.5)',
-  },
+  character: { fill: '#b2d3e6', border: '#779eaf', glow: '#6f9caf' },
+  location: { fill: '#ddbf87', border: '#af9362', glow: '#b99b69' },
+  object: { fill: '#a0c4af', border: '#6b967f', glow: '#86b29a' },
+  lore: { fill: '#c2b3d5', border: '#9083a3', glow: '#a399ba' },
 }
-
 // eslint-disable-next-line react-refresh/only-export-components
-export const DEFAULT_NODE_TYPE_STYLE: NodeTypeStyle = {
-  fill: '#9b8f79', // outline / warm gray
-  border: 'rgba(155,143,121,0.6)',
-  glow: 'rgba(155,143,121,0.45)',
-}
-
+export const DEFAULT_NODE_TYPE_STYLE: NodeTypeStyle = { fill: '#c6c0b6', border: '#938b7e', glow: '#a9a294' }
 // eslint-disable-next-line react-refresh/only-export-components
-export const NODE_TYPE_LEGEND: Array<{ key: string; label: string; style: NodeTypeStyle }> = [
-  { key: 'character', label: 'CHARACTER', style: NODE_TYPE_STYLES.character },
-  { key: 'location', label: 'LOCATION', style: NODE_TYPE_STYLES.location },
-  { key: 'scene', label: 'SCENE', style: NODE_TYPE_STYLES.scene },
-  { key: 'object', label: 'OBJECT', style: NODE_TYPE_STYLES.object },
-  { key: 'lore', label: 'LORE', style: NODE_TYPE_STYLES.lore },
+export const NODE_TYPE_LEGEND = [
+  { key: 'character', label: 'Characters', style: NODE_TYPE_STYLES.character },
+  { key: 'location', label: 'Locations', style: NODE_TYPE_STYLES.location },
+  { key: 'object', label: 'Objects', style: NODE_TYPE_STYLES.object },
+  { key: 'lore', label: 'Lore', style: NODE_TYPE_STYLES.lore },
 ]
-
 // eslint-disable-next-line react-refresh/only-export-components
 export function getNodeTypeStyle(nodeType: string): NodeTypeStyle {
   return NODE_TYPE_STYLES[nodeType] || DEFAULT_NODE_TYPE_STYLE
 }
 
-const TYPE_ICONS: Record<string, string> = {
-  character: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-  location: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M14 9h1"/><path d="M14 13h1"/></svg>`,
-  scene: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20"/><path d="M17 2v20"/><path d="M2 12h20"/><path d="M2 7h5"/><path d="M2 17h5"/><path d="M17 17h5"/><path d="M17 7h5"/></svg>`,
-  object: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.2" cy="14.4" r="3.2"/><path d="M10.2 17.6L12 21l5.6-3.6"/><path d="M15.5 7.5a2.121 2.121 0 0 1 3 3L12 16l-3-1.5"/></svg>`,
-  lore: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>`,
+type Position = [number, number, number]
+type MapCommand = { type: 'in' | 'out' | 'reset'; sequence: number }
+
+function seedFromId(id: string) {
+  let seed = 2166136261
+  for (let index = 0; index < id.length; index += 1) seed = Math.imul(seed ^ id.charCodeAt(index), 16777619)
+  return (seed >>> 0) / 4294967295
 }
 
-// Relationship Line Component with animated pulse
-const RelationshipLine = ({
-  start,
-  end,
-  type,
-  hoveredNodeId,
-  connectedToHovered,
-}: {
-  start: [number, number, number]
-  end: [number, number, number]
-  type: string
-  hoveredNodeId: string | null
-  connectedToHovered: boolean
-}) => {
-  const pulse1Ref = useRef<THREE.Mesh>(null)
-  const pulse2Ref = useRef<THREE.Mesh>(null)
-  const lineRef = useRef<THREE.Mesh>(null)
-  const config = RELATIONSHIP_COLORS[type] || RELATIONSHIP_COLORS.default
-
-  const points = useMemo(() => [new THREE.Vector3(...start), new THREE.Vector3(...end)], [start, end])
-  const curve = useMemo(() => new THREE.LineCurve3(points[0], points[1]), [points])
-
-  useFrame(({ clock }) => {
-    if (lineRef.current) {
-      const mat = lineRef.current.material as THREE.MeshBasicMaterial
-      if (connectedToHovered) {
-        mat.opacity = THREE.MathUtils.lerp(mat.opacity, 0.8, 0.1)
-      } else if (hoveredNodeId) {
-        mat.opacity = THREE.MathUtils.lerp(mat.opacity, 0.1, 0.1)
-      } else {
-        mat.opacity = THREE.MathUtils.lerp(mat.opacity, 0.2, 0.05)
-      }
+function useMapActivity() {
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [visible, setVisible] = useState(() => !document.hidden)
+  const [paused, setPaused] = useState(false)
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const updateMotion = () => setReducedMotion(query.matches)
+    const updateVisibility = () => setVisible(!document.hidden)
+    query.addEventListener('change', updateMotion)
+    document.addEventListener('visibilitychange', updateVisibility)
+    return () => {
+      query.removeEventListener('change', updateMotion)
+      document.removeEventListener('visibilitychange', updateVisibility)
     }
-
-    const duration = 2
-    const t1 = ((clock.elapsedTime) % duration) / duration
-    const t2 = ((clock.elapsedTime + 1) % duration) / duration
-
-    if (pulse1Ref.current) {
-      pulse1Ref.current.position.lerpVectors(points[0], points[1], t1)
-    }
-    if (pulse2Ref.current) {
-      pulse2Ref.current.position.lerpVectors(points[0], points[1], t2)
-    }
-  })
-
-  return (
-    <group>
-      <mesh ref={lineRef}>
-        <tubeGeometry args={[curve, 1, 0.025, 8, false]} />
-        <meshBasicMaterial color={config} transparent opacity={0.2} />
-      </mesh>
-      <mesh ref={pulse1Ref}>
-        <sphereGeometry args={[0.06, 16, 16]} />
-        <meshBasicMaterial color={config} />
-      </mesh>
-      <mesh ref={pulse2Ref}>
-        <sphereGeometry args={[0.06, 16, 16]} />
-        <meshBasicMaterial color={config} />
-      </mesh>
-    </group>
-  )
-}
-
-// Node Component
-const Node = ({
-  node,
-  position,
-  isSelected,
-  onClick,
-  onHover,
-}: {
-  node: UniverseNode
-  position: [number, number, number]
-  isSelected: boolean
-  onClick: () => void
-  onHover: (hovered: boolean) => void
-}) => {
-  const meshRef = useRef<THREE.Mesh>(null)
-  const glowRef = useRef<THREE.Mesh>(null)
-  const groupRef = useRef<THREE.Group>(null)
-  const outlineRef = useRef<THREE.LineSegments>(null)
-
-  const isProtagonist = node.universe_tags.includes('protagonist')
-  const isSupporting = node.universe_tags.includes('supporting')
-
-  // Type-based style drives fill / border / glow color.
-  // Sizes still depend on character role tags — only color is type-derived.
-  const typeStyle = getNodeTypeStyle(node.node_type)
-  const baseColor = typeStyle.fill
-
-  const scale = isProtagonist ? 1.5 : isSupporting ? 0.95 : 0.7
-
-  // Stable outline geometry so we don't rebuild it on every frame.
-  const outlineGeometry = useMemo(() => new THREE.SphereGeometry(0.5, 16, 16), [])
-
-  useFrame(({ clock }) => {
-    if (meshRef.current && !isSelected) {
-      const t = clock.elapsedTime
-      // Per-node phase from id length gives each node its own micro-orbit.
-      const phase = node.node_id.length * 0.7
-      meshRef.current.position.x = Math.sin(t * 0.32 + phase) * 0.06
-      meshRef.current.position.y = Math.sin(t * 0.5 + phase * 1.3) * 0.09
-      meshRef.current.position.z = Math.cos(t * 0.4 + phase * 0.6) * 0.06
-    }
-    if (glowRef.current) {
-      const s = scale + 0.2 + Math.sin(clock.elapsedTime * 1.5) * 0.05
-      glowRef.current.scale.setScalar(s)
-    }
-  })
-
-  return (
-    <group ref={groupRef} position={position} scale={[scale, scale, scale]}>
-      {/* Outer glow halo — applied to every node, color = type fill */}
-      <mesh ref={glowRef}>
-        <sphereGeometry args={[0.72, 32, 32]} />
-        <meshBasicMaterial
-          color={baseColor}
-          transparent
-          opacity={isProtagonist ? 0.35 : 0.18}
-        />
-      </mesh>
-
-      {/* Border outline — wireframe edges in type border color */}
-      <lineSegments ref={outlineRef}>
-        <edgesGeometry args={[outlineGeometry]} />
-        <lineBasicMaterial color={typeStyle.border} transparent opacity={isSelected ? 0.95 : 0.6} />
-      </lineSegments>
-
-      {/* Inner tinted fill — 0.15 opacity (or full when selected) */}
-      <mesh
-        ref={meshRef}
-        onClick={(e) => {
-          e.stopPropagation()
-          onClick()
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation()
-          onHover(true)
-        }}
-        onPointerOut={(e) => {
-          e.stopPropagation()
-          onHover(false)
-        }}
-      >
-        <sphereGeometry args={[0.5, 32, 32]} />
-        <meshStandardMaterial
-          color={baseColor}
-          transparent
-          opacity={isSelected ? 1 : 0.15}
-          emissive={baseColor}
-          emissiveIntensity={isSelected ? 0.6 : 0.35}
-          depthWrite={false}
-        />
-      </mesh>
-
-      {isProtagonist && (
-        <mesh>
-          <boxGeometry args={[1.6, 1.6, 1.6]} />
-          <meshBasicMaterial color={baseColor} wireframe transparent opacity={0.5} />
-        </mesh>
-      )}
-
-      <Html position={[0, 0, 0]} center pointerEvents="none" style={{ pointerEvents: 'none' }}>
-        <div
-          className="flex items-center justify-center"
-          style={{
-            width: 28,
-            height: 28,
-            color: 'rgba(255,255,255,0.8)',
-          }}
-          dangerouslySetInnerHTML={{ __html: TYPE_ICONS[node.node_type] || '' }}
-        />
-      </Html>
-
-      <Html position={[0, -1.05, 0]} center pointerEvents="none">
-        <div
-          className="font-status-xs uppercase tracking-[0.15em] text-[10px]"
-          style={{
-            color: 'var(--color-on-surface)',
-            whiteSpace: 'nowrap',
-            textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-          }}
-        >
-          {node.name}
-        </div>
-      </Html>
-    </group>
-  )
-}
-
-// ── Star field & nebula ────────────────────────────────────────────────────
-// Multi-layer star field rendered as additive points with a custom shader for
-// per-vertex twinkle, plus a handful of large additive-blended sphere "clouds"
-// that simulate deep-space dust/nebula.
-
-const STAR_VERTEX_SHADER = /* glsl */ `
-  attribute float aSize;
-  attribute float aPhase;
-  attribute float aBrightness;
-  varying vec3 vColor;
-  varying float vAlpha;
-  uniform float uTime;
-  uniform float uPixelRatio;
-
-  void main() {
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    // Independent twinkle per star; mix keeps even the dim stars visible.
-    float twinkle = mix(0.55, 1.0, sin(uTime * 1.4 + aPhase) * 0.5 + 0.5);
-    vAlpha = aBrightness * twinkle;
-    vColor = color;
-    gl_PointSize = aSize * uPixelRatio * (300.0 / max(-mvPosition.z, 0.1));
-    gl_Position = projectionMatrix * mvPosition;
-  }
-`
-
-const STAR_FRAGMENT_SHADER = /* glsl */ `
-  varying vec3 vColor;
-  varying float vAlpha;
-
-  void main() {
-    vec2 cxy = 2.0 * gl_PointCoord - 1.0;
-    float r2 = dot(cxy, cxy);
-    if (r2 > 1.0) discard;
-    // Soft round sprite: bright core + gentle halo.
-    float core = smoothstep(0.55, 0.0, r2);
-    float halo = exp(-r2 * 3.2);
-    gl_FragColor = vec4(vColor, (core * 0.95 + halo * 0.35) * vAlpha);
-  }
-`
-
-// Stellar color palette (true-ish star classes: O/B blue-white, G sun-like,
-// K orange, M red dwarfs). Most stars lean toward the G/A range.
-const STAR_COLORS = {
-  blueWhite: new THREE.Color('#cfe6ff'),
-  white: new THREE.Color('#f2eee9'),
-  warmWhite: new THREE.Color('#ffe7c4'),
-  amber: new THREE.Color('#ffb878'),
-  red: new THREE.Color('#ff8a6a'),
-}
-
-function pickStarColor(): THREE.Color {
-  const r = Math.random()
-  if (r < 0.62) return STAR_COLORS.white
-  if (r < 0.82) return STAR_COLORS.warmWhite
-  if (r < 0.92) return STAR_COLORS.blueWhite
-  if (r < 0.98) return STAR_COLORS.amber
-  return STAR_COLORS.red
-}
-
-function buildStarLayer(
-  count: number,
-  radiusMin: number,
-  radiusMax: number,
-  sizeMin: number,
-  sizeMax: number,
-  brightnessMin: number,
-  brightnessMax: number,
-): THREE.BufferGeometry {
-  const positions = new Float32Array(count * 3)
-  const colors = new Float32Array(count * 3)
-  const sizes = new Float32Array(count)
-  const phases = new Float32Array(count)
-  const brightness = new Float32Array(count)
-
-  for (let i = 0; i < count; i++) {
-    // Uniform sphere distribution.
-    const u = Math.random()
-    const v = Math.random()
-    const theta = 2 * Math.PI * u
-    const phi = Math.acos(2 * v - 1)
-    const r = radiusMin + Math.random() * (radiusMax - radiusMin)
-    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
-    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
-    positions[i * 3 + 2] = r * Math.cos(phi)
-
-    const c = pickStarColor()
-    colors[i * 3] = c.r
-    colors[i * 3 + 1] = c.g
-    colors[i * 3 + 2] = c.b
-
-    sizes[i] = sizeMin + Math.random() * (sizeMax - sizeMin)
-    phases[i] = Math.random() * Math.PI * 2
-    // Power curve biases toward dimmer stars; the rare bright ones pop.
-    const t = Math.random()
-    brightness[i] = brightnessMin + Math.pow(t, 2.4) * (brightnessMax - brightnessMin)
-  }
-
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
-  geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1))
-  geometry.setAttribute('aBrightness', new THREE.BufferAttribute(brightness, 1))
-  return geometry
-}
-
-// Nebula clouds — large, additive-blended sphere meshes placed far behind
-// the action to create soft, colored depth.
-const NEBULA_CLOUDS = [
-  { position: [18, 6, -28] as const, color: '#3b1d6e', size: 22, opacity: 0.18 },
-  { position: [-22, -8, -24] as const, color: '#1e3a8a', size: 18, opacity: 0.16 },
-  { position: [10, -14, -32] as const, color: '#7c2d12', size: 20, opacity: 0.14 },
-  { position: [-14, 14, -34] as const, color: '#581c87', size: 24, opacity: 0.15 },
-  { position: [4, 4, 28] as const, color: '#0c4a6e', size: 22, opacity: 0.12 },
-]
-
-const Nebula = () => (
-  <>
-    {NEBULA_CLOUDS.map((c, i) => (
-      <mesh key={i} position={[...c.position]}>
-        <sphereGeometry args={[c.size, 24, 24]} />
-        <meshBasicMaterial
-          color={c.color}
-          transparent
-          opacity={c.opacity}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          side={THREE.BackSide}
-        />
-      </mesh>
-    ))}
-  </>
-)
-
-// Slowly drift the far-star group around Y for parallax — the sky itself
-// keeps gently turning when the camera is idle.
-const StarField = () => {
-  const farGroupRef = useRef<THREE.Group>(null)
-  const midGroupRef = useRef<THREE.Group>(null)
-  const materialRef = useRef<THREE.ShaderMaterial | null>(null)
-
-  // Three depth layers give the sense of parallax when the camera drifts.
-  const farGeometry = useMemo(
-    () => buildStarLayer(600, 38, 65, 0.05, 0.14, 0.35, 0.7),
-    [],
-  )
-  const midGeometry = useMemo(
-    () => buildStarLayer(220, 20, 34, 0.1, 0.22, 0.55, 0.9),
-    [],
-  )
-  const brightGeometry = useMemo(
-    () => buildStarLayer(45, 12, 22, 0.18, 0.42, 0.85, 1.0),
-    [],
-  )
-
-  const material = useMemo(() => {
-    const mat = new THREE.ShaderMaterial({
-      vertexShader: STAR_VERTEX_SHADER,
-      fragmentShader: STAR_FRAGMENT_SHADER,
-      uniforms: {
-        uTime: { value: 0 },
-        uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
-      },
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      vertexColors: true,
-    })
-    materialRef.current = mat
-    return mat
   }, [])
-
-  useFrame(({ clock }, delta) => {
-    if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value = clock.elapsedTime
-    }
-    if (farGroupRef.current) farGroupRef.current.rotation.y += delta * 0.006
-    if (midGroupRef.current) midGroupRef.current.rotation.y += delta * 0.018
-  })
-
-  return (
-    <>
-      <group ref={farGroupRef}>
-        <points geometry={farGeometry} material={material} />
-      </group>
-      <group ref={midGroupRef}>
-        <points geometry={midGeometry} material={material} />
-      </group>
-      <points geometry={brightGeometry} material={material} />
-    </>
-  )
+  return { active: visible && !paused && !reducedMotion, paused: paused || reducedMotion, reducedMotion, setPaused }
 }
 
-// Controls Manager
-const ControlsManager = () => {
-  const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null)
-  const lastInteractionTime = useRef(0)
-  useEffect(() => { lastInteractionTime.current = Date.now() }, [])
-  const baseTarget = useMemo(() => new THREE.Vector3(0, 0, 0), [])
-
-  useFrame(({ clock }) => {
-    if (!controlsRef.current) return
-    const now = Date.now()
-    const idleTime = now - lastInteractionTime.current
-    controlsRef.current.autoRotate = idleTime > 4000
-
-    // Subtle camera-target drift while idle — the eye keeps gently wandering.
-    if (idleTime > 4000) {
-      const t = clock.elapsedTime
-      controlsRef.current.target.set(
-        Math.sin(t * 0.07) * 0.18,
-        Math.sin(t * 0.05 + 1.4) * 0.12,
-        Math.cos(t * 0.06) * 0.18,
-      )
-      controlsRef.current.update()
-    } else if (
-      controlsRef.current.target.x !== 0 ||
-      controlsRef.current.target.y !== 0 ||
-      controlsRef.current.target.z !== 0
-    ) {
-      // Snap target back to origin on interaction so dragging feels stable.
-      controlsRef.current.target.copy(baseTarget)
+function StarDepth({ active }: { active: boolean }) {
+  const group = useRef<THREE.Group>(null)
+  const positions = useMemo(() => {
+    const points = new Float32Array(180 * 3)
+    for (let index = 0; index < 180; index += 1) {
+      points[index * 3] = (seedFromId(`x${index}`) - 0.5) * 65
+      points[index * 3 + 1] = (seedFromId(`y${index}`) - 0.5) * 42
+      points[index * 3 + 2] = -10 - seedFromId(`z${index}`) * 24
     }
+    return points
+  }, [])
+  useFrame((_, delta) => {
+    if (active && group.current) group.current.rotation.z += Math.min(delta, 0.05) * 0.002
   })
-
-  const handleInteraction = () => {
-    lastInteractionTime.current = Date.now()
-    if (controlsRef.current) {
-      controlsRef.current.autoRotate = false
-    }
-  }
-
-  return (
-    <OrbitControls
-      ref={controlsRef}
-      autoRotate
-      autoRotateSpeed={0.28}
-      enableDamping
-      dampingFactor={0.08}
-      minDistance={5}
-      maxDistance={20}
-      onStart={handleInteraction}
-      onChange={handleInteraction}
-    />
-  )
+  return <group ref={group}><points>
+    <bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry>
+    <pointsMaterial color="#d2dce6" size={0.032} transparent opacity={0.55} depthWrite={false} sizeAttenuation />
+  </points></group>
 }
 
-// Main Scene
-const Scene = ({
-  nodes,
-  relationships,
-  selectedNodeId,
-  onNodeClick,
-  onHover,
-}: {
-  nodes: UniverseNode[]
-  relationships: UniverseRelationship[]
-  selectedNodeId: string | null
-  onNodeClick: (node: UniverseNode) => void
-  onHover: (node: UniverseNode | null) => void
-}) => {
-  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
+function RelationshipPath({ start, end, highlighted, subdued }: {
+  start: Position; end: Position; highlighted: boolean; subdued: boolean
+}) {
+  const points = useMemo(() => {
+    const first = new THREE.Vector3(...start)
+    const last = new THREE.Vector3(...end)
+    const mid = first.clone().add(last).multiplyScalar(0.5)
+    mid.z -= Math.min(first.distanceTo(last) * 0.13, 1.2)
+    return new THREE.QuadraticBezierCurve3(first, mid, last).getPoints(24)
+  }, [start, end])
+  return <Line points={points} color={highlighted ? '#e5c687' : '#8aabbc'} lineWidth={highlighted ? 1.35 : 0.65}
+    transparent opacity={highlighted ? 0.9 : subdued ? 0.08 : 0.27} depthWrite={false} />
+}
 
-  const nodePositions = useMemo(() => {
-    const positions: Record<string, [number, number, number]> = {}
-    const count = nodes.length
-    nodes.forEach((node, i) => {
-      const phi = Math.acos(-1 + (2 * i) / count)
-      const theta = Math.sqrt(count * Math.PI) * phi
-      const radius = 5
-      const x = radius * Math.cos(theta) * Math.sin(phi)
-      const y = radius * Math.sin(theta) * Math.sin(phi)
-      const z = Math.sin(i * 1.3) * 2.5
-      positions[node.node_id] = [x, y, z]
+function StoryNode({ node, position, selected, connected, subdued, showLabel, onSelect, onHover }: {
+  node: UniverseNode; position: Position; selected: boolean; connected: boolean; subdued: boolean; showLabel: boolean
+  onSelect: () => void; onHover: (hovered: boolean) => void
+}) {
+  const style = getNodeTypeStyle(node.node_type)
+  const radius = node.node_type === 'character' ? 0.23 : 0.15
+  return <group position={position}>
+    <mesh onClick={(event) => { event.stopPropagation(); onSelect() }}
+      onPointerOver={(event) => { event.stopPropagation(); onHover(true) }}
+      onPointerOut={() => onHover(false)}>
+      <sphereGeometry args={[radius, 24, 20]} />
+      <meshStandardMaterial color={selected ? '#f2dfb6' : style.fill} metalness={0.42} roughness={0.38}
+        emissive={style.fill} emissiveIntensity={selected ? 0.45 : subdued ? 0.025 : 0.12} />
+    </mesh>
+    {(selected || connected) && <mesh>
+      <ringGeometry args={[radius + 0.095, radius + 0.11, 48]} />
+      <meshBasicMaterial color={selected ? '#f1d29c' : style.fill} transparent opacity={selected ? 0.85 : 0.5} side={THREE.DoubleSide} depthWrite={false} />
+    </mesh>}
+    <Html center position={[0, -radius - 0.27, 0]} zIndexRange={[12, 0]} style={{ pointerEvents: 'none' }}>
+      <div className={`${showLabel ? 'block' : 'hidden'} ${selected ? '' : 'max-sm:hidden'} w-[112px] text-center`}
+        style={{ opacity: subdued ? 0.4 : 1 }}>
+        <span className={`inline-block max-w-full rounded px-1.5 py-1 text-[11px] leading-[1.35] ${selected ? 'bg-[#111923]/95 text-[#f5ddb2]' : 'bg-[#070e16]/80 text-[#dde5ed]'}`}>
+          <span className="line-clamp-2 break-words">{node.name}</span>
+        </span>
+      </div>
+    </Html>
+    {/* A large invisible hit target supports touch; the atlas provides keyboard equivalents. */}
+    <mesh onClick={(event) => { event.stopPropagation(); onSelect() }}
+      onPointerOver={(event) => { event.stopPropagation(); onHover(true) }} onPointerOut={() => onHover(false)}>
+      <sphereGeometry args={[radius + 0.2, 8, 8]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+  </group>
+}
+
+function MapControls({ command }: { command: MapCommand }) {
+  const ref = useRef<React.ComponentRef<typeof OrbitControls>>(null)
+  const { camera, size, invalidate } = useThree()
+  const defaultDistance = Math.max(16.5, 17 / Math.max(size.width / size.height, 0.5))
+  useEffect(() => {
+    camera.position.set(0, 0, defaultDistance)
+    camera.lookAt(0, 0, 0)
+    ref.current?.target.set(0, 0, 0)
+    ref.current?.update()
+    invalidate()
+  }, [camera, defaultDistance, invalidate])
+  useEffect(() => {
+    if (!ref.current) return
+    if (command.type === 'reset') {
+      camera.position.set(0, 0, defaultDistance)
+      ref.current.target.set(0, 0, 0)
+    } else {
+      const offset = camera.position.clone().sub(ref.current.target)
+      offset.setLength(THREE.MathUtils.clamp(offset.length() * (command.type === 'in' ? 0.8 : 1.25), 6, 48))
+      camera.position.copy(ref.current.target).add(offset)
+    }
+    ref.current.update()
+    invalidate()
+  }, [command, camera, defaultDistance, invalidate])
+  return <OrbitControls ref={ref} makeDefault enableDamping dampingFactor={0.1} minDistance={6} maxDistance={48}
+    maxPolarAngle={Math.PI * 0.8} minPolarAngle={Math.PI * 0.2} />
+}
+
+function GalaxyScene({ nodes, layoutNodes, relationships, selectedNodeId, onNodeClick, onNodeHover, active }: UniverseGraph3DProps & { active: boolean }) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const positions = useMemo(() => {
+    const result = new Map<string, Position>()
+    const ordered = [...(layoutNodes || nodes)].sort((a, b) => a.node_id.localeCompare(b.node_id))
+    ordered.forEach((node, index) => {
+      const angle = index * 2.399963
+      const radius = Math.sqrt((index + 0.65) / Math.max(ordered.length, 1))
+      result.set(node.node_id, [Math.cos(angle) * radius * 6.1, Math.sin(angle) * radius * 4.1, (seedFromId(node.node_id) - 0.5) * 1.5])
     })
-    return positions
-  }, [nodes])
-
-  const connectedNodeIds = useMemo(() => {
-    if (!hoveredNodeId) return new Set<string>()
+    return result
+  }, [layoutNodes, nodes])
+  const focusId = hoveredId || selectedNodeId
+  const connectedIds = useMemo(() => {
     const connected = new Set<string>()
-    relationships.forEach((r) => {
-      if (r.from_node === hoveredNodeId) connected.add(r.to_node)
-      if (r.to_node === hoveredNodeId) connected.add(r.from_node)
+    if (focusId) relationships.forEach((relationship) => {
+      if (relationship.from_node === focusId) connected.add(relationship.to_node)
+      if (relationship.to_node === focusId) connected.add(relationship.from_node)
     })
     return connected
-  }, [hoveredNodeId, relationships])
-
-  return (
-    <>
-      {/* Hemisphere ambient — bluish above (cool cosmic), warm below (sun-side dust). */}
-      <hemisphereLight args={['#4a6fa5', '#1a0f0a', 0.28]} />
-      {/* Distributed warm + cool point lights — adds subtle color variation across nodes. */}
-      <pointLight position={[0, 6, 4]} intensity={0.55} color="#ffd165" distance={25} decay={2} />
-      <pointLight position={[-10, -3, 5]} intensity={0.32} color="#4cd7f6" distance={22} decay={2} />
-      <pointLight position={[9, -6, -8]} intensity={0.28} color="#c084fc" distance={20} decay={2} />
-      <pointLight position={[4, 9, -6]} intensity={0.22} color="#fb923c" distance={18} decay={2} />
-
-      {relationships.map((rel) => {
-        const startPos = nodePositions[rel.from_node]
-        const endPos = nodePositions[rel.to_node]
-        if (!startPos || !endPos) return null
-        const isConnectedToHovered = connectedNodeIds.has(rel.from_node) || connectedNodeIds.has(rel.to_node)
-
-        return (
-          <RelationshipLine
-            key={rel.relationship_id}
-            start={startPos}
-            end={endPos}
-            type={rel.relationship_type}
-            hoveredNodeId={hoveredNodeId}
-            connectedToHovered={isConnectedToHovered}
-          />
-        )
-      })}
-
-      {nodes.map((node) => {
-        const position = nodePositions[node.node_id]
-        if (!position) return null
-        return (
-          <Node
-            key={node.node_id}
-            node={node}
-            position={position}
-            isSelected={selectedNodeId === node.node_id}
-            onClick={() => onNodeClick(node)}
-            onHover={(hovered) => {
-              setHoveredNodeId(hovered ? node.node_id : null)
-              onHover(hovered ? node : null)
-            }}
-          />
-        )
-      })}
-
-      {/* Cosmic backdrop drawn last so it sits behind everything. */}
-      <Nebula />
-      <StarField />
-    </>
-  )
+  }, [focusId, relationships])
+  const visibleIds = useMemo(() => new Set(nodes.map((node) => node.node_id)), [nodes])
+  return <>
+    <ambientLight intensity={0.65} />
+    <directionalLight position={[-4, 6, 8]} intensity={2.4} color="#dfedff" />
+    <directionalLight position={[6, -4, 2]} intensity={0.9} color="#d9ad75" />
+    <StarDepth active={active} />
+    {relationships.map((relationship) => {
+      const start = positions.get(relationship.from_node)
+      const end = positions.get(relationship.to_node)
+      if (!start || !end || !visibleIds.has(relationship.from_node) || !visibleIds.has(relationship.to_node)) return null
+      const highlighted = relationship.from_node === focusId || relationship.to_node === focusId
+      return <RelationshipPath key={relationship.relationship_id} start={start} end={end} highlighted={highlighted} subdued={Boolean(focusId) && !highlighted} />
+    })}
+    {nodes.map((node) => <StoryNode key={node.node_id} node={node} position={positions.get(node.node_id) || [0, 0, 0]}
+      selected={node.node_id === selectedNodeId} connected={connectedIds.has(node.node_id)}
+      subdued={Boolean(focusId) && focusId !== node.node_id && !connectedIds.has(node.node_id)}
+      showLabel={!focusId || focusId === node.node_id || connectedIds.has(node.node_id)}
+      onSelect={() => onNodeClick(node)} onHover={(hovered) => { setHoveredId(hovered ? node.node_id : null); onNodeHover(hovered ? node : null) }} />)}
+  </>
 }
 
-// Main Component
-const UniverseGraph3D: React.FC<UniverseGraph3DProps> = ({
-  nodes,
-  relationships,
-  selectedNodeId,
-  onNodeClick,
-  onNodeHover,
-}) => {
-  return (
-    <div
-      className="w-full h-full"
-      style={{
-        // Deep-space backdrop — radial vignette pulls the eye toward the center.
-        background:
-          'radial-gradient(ellipse at 50% 55%, #08111c 0%, #050810 45%, #02040a 100%)',
-      }}
-    >
-      <Canvas
-        camera={{ position: [0, 0, 14], fov: 50 }}
-        style={{ width: '100%', height: '100%' }}
-        gl={{ powerPreference: "high-performance", antialias: false, alpha: true }}
-        scene={{ background: null }}
-      >
-        {/* Atmospheric distance fade — soft enough that far stars still read. */}
-        <fog attach="fog" args={['#050810', 18, 75]} />
-        <ControlsManager />
-        <Scene
-          nodes={nodes}
-          relationships={relationships}
-          selectedNodeId={selectedNodeId}
-          onNodeClick={onNodeClick}
-          onHover={onNodeHover}
-        />
-        {/* Subtle bloom — only the emissive nodes/halos really light up. */}
-        <EffectComposer multisampling={0}>
-          <Bloom
-            intensity={0.85}
-            luminanceThreshold={0.35}
-            luminanceSmoothing={0.2}
-            mipmapBlur
-            kernelSize={KernelSize.LARGE}
-            blendFunction={BlendFunction.SCREEN}
-          />
-        </EffectComposer>
-      </Canvas>
+function supportsWebGL() {
+  try {
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('webgl2')
+    if (!context) return false
+    context.getExtension('WEBGL_lose_context')?.loseContext()
+    return true
+  } catch { return false }
+}
+
+const UniverseGraph3D: React.FC<UniverseGraph3DProps> = (props) => {
+  const [webglAvailable, setWebglAvailable] = useState(supportsWebGL)
+  const { active, paused, reducedMotion, setPaused } = useMapActivity()
+  const [command, setCommand] = useState<MapCommand>({ type: 'reset', sequence: 0 })
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const contextLost = (event: Event) => { event.preventDefault(); setWebglAvailable(false) }
+    canvas.addEventListener('webglcontextlost', contextLost)
+    return () => canvas.removeEventListener('webglcontextlost', contextLost)
+  }, [webglAvailable])
+  const changeView = (type: MapCommand['type']) => setCommand((current) => ({ type, sequence: current.sequence + 1 }))
+  return <div data-testid="universe-map" className="relative isolate h-full min-h-[420px] overflow-hidden bg-[#050a11]">
+    <img src="/backgrounds/assets/universe-galaxy-atlas.jpg" alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-80" />
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_10%,rgba(3,8,15,0.52)_100%)]" />
+    {webglAvailable ? <Canvas ref={canvasRef} camera={{ position: [0, 0, 17], fov: 45 }} dpr={[1, 1.5]}
+      frameloop={active ? 'always' : 'demand'} gl={{ antialias: true, alpha: true }} style={{ width: '100%', height: '100%' }}
+      fallback={<MapFallback />}>
+      <Suspense fallback={null}><MapControls command={command} /><GalaxyScene {...props} active={active} /></Suspense>
+    </Canvas> : <MapFallback />}
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 bg-gradient-to-b from-[#060c14]/80 to-transparent p-4 sm:p-5">
+      <div><div className="flex items-center gap-2 text-xs font-medium text-[#e5d3af]"><Compass size={14} /> Constellation view</div>
+        <p className="mt-1 max-w-[230px] text-[11px] leading-5 text-[#b4c3d1]">Every point belongs to your story.</p></div>
+      <span className="mt-1 font-mono text-[10px] text-[#adc0ce]">{props.nodes.length} entries</span>
     </div>
-  )
+    {props.nodes.length === 0 && webglAvailable && <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center p-8 text-center">
+      <p className="max-w-xs rounded-lg bg-[#070e17]/90 px-5 py-4 text-sm leading-6 text-[#d7e0e8]">No entries in this view. Change the atlas filters or add your first character.</p>
+    </div>}
+    <div className="absolute inset-x-0 bottom-0 z-20 flex flex-wrap items-end justify-between gap-3 bg-gradient-to-t from-[#060c14] to-transparent p-4 sm:p-5">
+      <p className="basis-full text-[11px] leading-5 text-[#b4c3d1] sm:max-w-[180px] sm:basis-auto">Drag to orbit · Scroll to zoom<br /><span className="text-[#879dac]">Select a point or an atlas entry</span></p>
+      <div className="flex gap-1 rounded-lg border border-white/15 bg-[#101a25]/95 p-1">
+        {([{ type: 'in', label: 'Zoom in', icon: Plus }, { type: 'out', label: 'Zoom out', icon: Minus }, { type: 'reset', label: 'Reset map view', icon: RotateCcw }] as const).map(({ type, label, icon: Icon }) => <button key={type} type="button" aria-label={label} title={label} onClick={() => changeView(type)} disabled={!webglAvailable} className="rounded p-2 text-[#d8e3eb] hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-35"><Icon size={16} /></button>)}
+        <span className="my-1 w-px bg-white/10" />
+        <button type="button" aria-label={paused ? 'Resume map motion' : 'Pause map motion'} aria-pressed={paused} disabled={!webglAvailable || reducedMotion}
+          title={reducedMotion ? 'Motion paused by your reduced-motion preference' : paused ? 'Resume map motion' : 'Pause map motion'}
+          onClick={() => setPaused(!paused)} className="rounded p-2 text-[#d8e3eb] hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-35">{paused ? <Play size={16} /> : <Pause size={16} />}</button>
+      </div>
+    </div>
+  </div>
+}
+
+function MapFallback() {
+  return <div data-testid="universe-map-fallback" role="status" className="absolute inset-0 grid place-items-center p-8 text-center">
+    <div className="max-w-xs rounded-lg border border-white/15 bg-[#09121d]/95 p-6 text-sm leading-6 text-[#d2deea]">
+      <Compass className="mx-auto mb-3 text-[#d7bd8b]" size={28} />
+      The 3D view isn’t available on this device. Explore every entry and connection in the story atlas.
+    </div>
+  </div>
 }
 
 export default UniverseGraph3D

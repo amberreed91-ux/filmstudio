@@ -48,6 +48,10 @@ class BackfillStoryboardBlueprintsRequest(BaseModel):
     preserve_locked_shots: bool = True
 
 
+class RunContinuityReviewRequest(BaseModel):
+    reviewer: str = "continuity_intelligence"
+
+
 class CreateStoryboardVersionRequest(BaseModel):
     shot_count: int | None = Field(default=None, ge=1, le=20)
     preserve_locked_shots: bool = True
@@ -159,6 +163,24 @@ def approve_storyboard_version(
                 blueprint_id=blueprint_id,
                 version_id=version_id,
                 approved_by=payload.approved_by,
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.post("/storyboard-blueprints/{blueprint_id}/versions/{version_id}/continuity-review")
+def run_storyboard_continuity_review(
+    blueprint_id: str,
+    version_id: str,
+    payload: RunContinuityReviewRequest = Body(default_factory=RunContinuityReviewRequest),
+) -> dict[str, Any]:
+    try:
+        return _serialize(
+            storyboard_blueprint_service.run_continuity_review(
+                blueprint_id=blueprint_id,
+                version_id=version_id,
+                reviewer=payload.reviewer,
             )
         )
     except StabilityError as exc:

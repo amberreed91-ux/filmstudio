@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "results": [
+    {
+      "room": "study-room",
+      "explicitProjectWins": true,
+      "preservedLinks": 1
+    },
+    {
+      "room": "writers-room",
+      "explicitProjectWins": true,
+      "preservedLinks": 1
+    },
+    {
+      "room": "production-board",
+      "explicitProjectWins": true,
+      "preservedLinks": 1
+    },
+    {
+      "room": "universe-graph",
+      "explicitProjectWins": true,
+      "preservedLinks": 1
+    },
+    {
+      "room": "screening-room",
+      "explicitProjectWins": true,
+      "preservedLinks": 0
+    }
+  ]
+}

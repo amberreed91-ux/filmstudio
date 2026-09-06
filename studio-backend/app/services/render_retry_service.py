@@ -1115,12 +1115,35 @@ class RenderRetryService:
                 compressed_slots=[],
             )
         else:
-            full_prompt = await self._adherence_service.build_full_corrected_prompt(
-                score=original_score,
-                current_slots=original_slots,
-                dropped_elements=self._dropped_elements_for_shot(shot_id, project_id),
-            )
             slot_order = self._reorder_slots_by_failure(original_score.dimensions)
+            try:
+                full_prompt = await self._adherence_service.build_full_corrected_prompt(
+                    score=original_score,
+                    current_slots=original_slots,
+                    dropped_elements=self._dropped_elements_for_shot(shot_id, project_id),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "FULL_CORRECTED_PROMPT_FALLBACK | shot=%s | cause=%s",
+                    shot_id,
+                    type(exc).__name__,
+                )
+                fallback_prompt = self._assemble_prompt_from_slots(
+                    original_slots,
+                    slot_order,
+                )
+                full_prompt = FullCorrectedPrompt(
+                    base_attempt=original_score.attempt_n,
+                    seed_locked=False,
+                    slots=original_slots,
+                    provenance={
+                        slot: "carried_forward_after_corrector_failure"
+                        for slot in original_slots
+                    },
+                    prompt=fallback_prompt,
+                    chars_remaining=max(0, 512 - len(fallback_prompt)),
+                    compressed_slots=[],
+                )
             full_prompt.prompt = self._assemble_prompt_from_slots(
                 full_prompt.slots,
                 slot_order,

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     storage_type: str = "sqlite"
     storage_path: str = "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-backend/data"
 
+    studio_access_mode: str = "authenticated"
+
     # Auth settings
     session_ttl_seconds: int = 86400
     demo_mode: bool = False
@@ -68,6 +70,14 @@ class Settings(BaseSettings):
     # Internal timeout for the primary Qwen call before falling back to OpenRouter.
     # Kept well under the frontend's 30s AbortController timeout.
     qwen_internal_timeout_seconds: float = 12.0
+    # Adherence vision scoring provider selection. Declared here so
+    # pydantic-settings (which forbids unknown .env keys) accepts them;
+    # adherence_service reads these to choose qwen / gemini / openrouter.
+    adherence_vision_provider: str = "qwen"
+    adherence_vision_model: str = ""
+    # Video render model on OpenRouter (default alibaba/happyhorse-1.1, the
+    # same model as DashScope). Set to e.g. bytedance/seedance-2.5 to switch.
+    openrouter_video_model: str = "alibaba/happyhorse-1.1"
 
     # CORS settings
     cors_origins: str = ""  # Comma-separated production origins. Empty = same-origin only.

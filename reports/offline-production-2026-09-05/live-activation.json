@@ -1,0 +1,78 @@
+{
+  "ready": {
+    "ready": true,
+    "components": {
+      "database": "ready",
+      "schema": "ready (v62)",
+      "background_tasks": "ready (3 active)"
+    },
+    "timestamp": 1788646682.34748
+  },
+  "previous_render_counts": {
+    "complete": 6,
+    "failed": 42
+  },
+  "pid": 65452,
+  "projects": [
+    {
+      "project_id": "project_ca31687b1ca7",
+      "choices": {
+        "project_id": "project_ca31687b1ca7",
+        "scene_id": "scene_001",
+        "choices": []
+      },
+      "assembly": {
+        "scenes_with_compositions": 0,
+        "scenes_total": 11,
+        "film_assembled": false,
+        "film_url": null,
+        "has_audio": false,
+        "film_outdated": false,
+        "scenes_needing_assembly": [
+          "scene_001",
+          "scene_002",
+          "scene_003",
+          "scene_004",
+          "scene_005",
+          "scene_006",
+          "scene_007",
+          "scene_008",
+          "scene_009",
+          "scene_010",
+          "scene_011"
+        ]
+      }
+    },
+    {
+      "project_id": "project_5907c60cddbc",
+      "choices": {
+        "project_id": "project_5907c60cddbc",
+        "scene_id": "scene_001",
+        "choices": []
+      },
+      "assembly": {
+        "scenes_with_compositions": 1,
+        "scenes_total": 14,
+        "film_assembled": false,
+        "film_url": null,
+        "has_audio": false,
+        "film_outdated": false,
+        "scenes_needing_assembly": [
+          "scene_002",
+          "scene_003",
+          "scene_004",
+          "scene_005",
+          "scene_006",
+          "scene_007",
+          "scene_008",
+          "scene_009",
+          "scene_010",
+          "scene_011",
+          "scene_012",
+          "scene_013",
+          "scene_014"
+        ]
+      }
+    }
+  ]
+}

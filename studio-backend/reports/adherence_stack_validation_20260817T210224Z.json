@@ -1,0 +1,195 @@
+{
+  "generated_at": "2026-08-17T21:02:23.301107+00:00",
+  "phases": {
+    "offline": [
+      {
+        "check": "negative_prompt_in_submit_payload",
+        "question": "Does the negative prompt survive into both t2v and r2v provider request bodies?",
+        "result": "pass",
+        "detail": {
+          "t2v_input_keys": [
+            "negative_prompt",
+            "prompt"
+          ],
+          "r2v_input_keys": [
+            "media",
+            "negative_prompt",
+            "prompt"
+          ],
+          "t2v_negative_prompt": "extra people, watermark, deformed hands",
+          "r2v_negative_prompt": "extra people, watermark, deformed hands"
+        }
+      },
+      {
+        "check": "intent_fidelity_detects_compression",
+        "question": "Does a real over-budget description get reported as lost intent?",
+        "result": "pass",
+        "detail": {
+          "status": "reduced",
+          "reduced_slots": [
+            "character_state"
+          ],
+          "advisory_note": "The prompt no longer carries \"boots caked in dry mud\" in who is on screen and how they look. The shot will render as written, so this will not show up as a mismatch later \u2014 worth deciding now whether it belongs in the shot.",
+          "prompt_length": 334
+        }
+      },
+      {
+        "check": "shot_leads_prompt_not_intent",
+        "question": "Is the shot in the highest-weighted position, with avoid-terms out of the positive prompt?",
+        "result": "pass",
+        "detail": {
+          "guidance": "contemplative unease; Deakins lighting",
+          "guidance_chars": 38,
+          "old_prefix_chars": 189,
+          "avoid_terms_routed_to_negative": [
+            "melodrama"
+          ],
+          "prompt_head": "Only MAYA visible; no extras.; MAYA: lean, late 20s. She sets the kettle down. T"
+        }
+      },
+      {
+        "check": "unavailable_embedder_is_not_reported_as_drift",
+        "question": "Does an unconfigured embedder stay silent instead of crying drift?",
+        "result": "pass",
+        "detail": {
+          "status": "unavailable",
+          "reason": "output_frame_not_local"
+        }
+      },
+      {
+        "check": "selected_embedding_adapter",
+        "question": "Is a real face embedder selected, or only a general-visual one?",
+        "result": "pass",
+        "detail": {
+          "adapter": "LocalFaceEmbeddingAdapter",
+          "kind": "face_identity",
+          "insightface_available": true,
+          "note": "face_identity is the only kind that measures likeness. general_visual is continuity evidence only. Install insightface + onnxruntime for real identity measurement."
+        }
+      }
+    ],
+    "probe": [
+      {
+        "check": "skipped",
+        "result": "info",
+        "detail": "pass --probe-providers to run live provider probes"
+      }
+    ],
+    "render": [
+      {
+        "check": "project_resolvable_by_render_path",
+        "question": "Can create_job actually resolve this project and the shot's scene?",
+        "result": "pass",
+        "detail": {
+          "project_id": "project_3dba9330f43a",
+          "shot_id": "scene_002_shot_001",
+          "scene_id": "scene_002",
+          "resolved_in_render_store": true,
+          "render_store_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/data/project_state_store.json",
+          "present_in_sqlite": true,
+          "sqlite_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/data/studio.db",
+          "scene_found": true,
+          "error": null
+        }
+      },
+      {
+        "check": "job_carries_negative_prompt",
+        "question": "Did a production job actually get a negative prompt?",
+        "result": "pass",
+        "detail": {
+          "negative_prompt": "extra people, background crowd, bystanders, additional characters, text overlay, subtitles, captions, watermark, logo, timecode, split screen, collage, borders, letterboxing, deformed hands, extra fingers, extra limbs, morphing faces, warping features, flickering, blurry, low resolution, shaky camera, jump cut, sudden zoom, camera whip pan, multiple shots, scene change, montage"
+        }
+      },
+      {
+        "check": "job_carries_intent_fidelity",
+        "question": "Did the intent-fidelity record attach to a production job?",
+        "result": "pass",
+        "detail": {
+          "status": "reduced",
+          "shot_id": "scene_002_shot_001",
+          "slots": {
+            "character_state": {
+              "source_length": 384,
+              "final_length": 209,
+              "chars_dropped": 178,
+              "dropped_elements": [
+                "and a short grown-out fade",
+                "natural hair in worn locs or protective twists",
+                "lean and deliberate build",
+                "In this shot: proof-run staging: Maya holds near the broken curb",
+                "shoulders still",
+                "watching Dre before either of them moves"
+              ],
+              "truncated": true,
+              "material": true
+            },
+            "action": {
+              "source_length": 98,
+              "final_length": 98,
+              "chars_dropped": 0,
+              "dropped_elements": [],
+              "truncated": false,
+              "material": false
+            },
+            "environment_persistence": {
+              "source_length": 39,
+              "final_length": 39,
+              "chars_dropped": 0,
+              "dropped_elements": [],
+              "truncated": false,
+              "material": false
+            }
+          },
+          "reduced_slots": [
+            "character_state"
+          ],
+          "chars_dropped_total": 178,
+          "prompt_length": 448,
+          "skipped_defaulted_slots": [
+            "camera"
+          ],
+          "advisory_note": "The prompt no longer carries \"and a short grown-out fade\" and \"natural hair in worn locs or protective twists\" in who is on screen and how they look. The shot will render as written, so this will not show up as a mismatch later \u2014 worth deciding now whether it belongs in the shot."
+        }
+      },
+      {
+        "check": "prompt_within_budget",
+        "question": "Did the assembled prompt leave create_job non-empty and within the 512-char budget?",
+        "result": "pass",
+        "detail": {
+          "prompt_length": 512,
+          "prompt": "Only DRE and MAYA visible; no extras.; DRE: A black man in his early 30s with a broad build, medium brown skin...; Canon: DRE fixed identity: face: A black man i...; Canon: DRE: hat, MAYA: hat; MAYA casting .... same city. Different world. The L train is frozen. Buildings are cracked. Nature has reclaimed the. DOWNTOWN CHICAGO \u2014 AFTER THE APOCALYPSE; Canon: DOWNTOWN CHICAGO \u2014 AFTER THE APOCAL.... Proof correction: hold the ...; Canon: medium framing, none, observ.... motiv...\n\n[ENVIRONMENT CONTINUITY]\nEnvir"
+        }
+      },
+      {
+        "check": "references_attached",
+        "question": "Were locked character references attached, and did routing switch to r2v?",
+        "result": "pass",
+        "detail": {
+          "reference_count": 2,
+          "provider_routed_to": "happyhorse-r2v",
+          "weights": {
+            "charlock:chr_b5c125804376:general": 0.9,
+            "charlock:chr_2a1792f179c5:general": 0.675
+          }
+        }
+      },
+      {
+        "check": "job_created",
+        "question": "Identifiers for following this render through to completion.",
+        "result": "info",
+        "detail": {
+          "job_id": "job-20260817170223-5dcca509-scene_002_shot_001",
+          "shot_id": "scene_002_shot_001",
+          "provider": "happyhorse-r2v",
+          "status": "pending",
+          "next": "Once complete, read job.metadata['character_identity_verification'] for the identity result on this shot."
+        }
+      }
+    ]
+  },
+  "summary": {
+    "checks_run": 10,
+    "failures": 0,
+    "failed_checks": []
+  }
+}

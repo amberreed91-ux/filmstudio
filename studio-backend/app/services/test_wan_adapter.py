@@ -73,6 +73,26 @@ def test_wan_builds_documented_dashscope_payload() -> None:
     }
 
 
+def test_wan_normalizes_cinematic_shot_labels_to_provider_contract() -> None:
+    adapter = _adapter()
+
+    assert WanTextToVideoAdapter._normalize_wan_shot_type("single") == "single"
+    assert WanTextToVideoAdapter._normalize_wan_shot_type("multi") == "multi"
+    assert WanTextToVideoAdapter._normalize_wan_shot_type("WIDE") == "multi"
+    assert WanTextToVideoAdapter._normalize_wan_shot_type("medium") == "multi"
+
+    payload = adapter._build_submit_payload(
+        job=_job(),
+        resolution="1080P",
+        duration=10,
+        ratio="16:9",
+        seed=None,
+        params={"shot_type": "WIDE"},
+    )
+
+    assert payload["parameters"]["shot_type"] == "multi"
+
+
 @pytest.mark.asyncio
 async def test_wan_submits_polls_and_preserves_provider_audio(monkeypatch) -> None:
     adapter = _adapter()

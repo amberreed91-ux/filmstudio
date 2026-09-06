@@ -1,0 +1,108 @@
+{
+  "passed": true,
+  "findings": [
+    {
+      "name": "study-desktop-Bibles",
+      "width": 1592,
+      "viewport": 1600
+    },
+    {
+      "name": "study-desktop-References",
+      "width": 1592,
+      "viewport": 1600
+    },
+    {
+      "name": "study-desktop-Saved guidance",
+      "width": 1592,
+      "viewport": 1600
+    },
+    {
+      "name": "writer-desktop-script",
+      "width": 1592,
+      "viewport": 1600
+    },
+    {
+      "name": "writer-desktop-profiles",
+      "width": 1600,
+      "viewport": 1600
+    },
+    {
+      "name": "previs-desktop",
+      "width": 1592,
+      "viewport": 1600
+    },
+    {
+      "journey": "Study → Writer → Previs → Theatre",
+      "project": "project_5907c60cddbc",
+      "scene": "scene_001",
+      "shot": "2"
+    },
+    {
+      "name": "study-900",
+      "width": 892,
+      "viewport": 900
+    },
+    {
+      "name": "study-390",
+      "width": 382,
+      "viewport": 390
+    },
+    {
+      "name": "study-mobile-References",
+      "width": 382,
+      "viewport": 390
+    },
+    {
+      "name": "study-mobile-Saved guidance",
+      "width": 382,
+      "viewport": 390
+    },
+    {
+      "name": "writer-900",
+      "width": 892,
+      "viewport": 900
+    },
+    {
+      "name": "writer-390",
+      "width": 382,
+      "viewport": 390
+    },
+    {
+      "name": "writer-mobile-profiles",
+      "width": 382,
+      "viewport": 390
+    },
+    {
+      "name": "board-900",
+      "width": 892,
+      "viewport": 900
+    },
+    {
+      "name": "board-390",
+      "width": 382,
+      "viewport": 390
+    },
+    {
+      "name": "universe-900",
+      "width": 900,
+      "viewport": 900
+    },
+    {
+      "name": "universe-390",
+      "width": 382,
+      "viewport": 390
+    },
+    {
+      "name": "archive-900",
+      "width": 900,
+      "viewport": 900
+    },
+    {
+      "name": "archive-390",
+      "width": 382,
+      "viewport": 390
+    }
+  ],
+  "errors": [],
+  "writes": []
+}

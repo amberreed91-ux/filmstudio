@@ -3,6 +3,7 @@ from datetime import datetime
 import hashlib
 import json
 import os
+import time
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
@@ -13,7 +14,10 @@ from app.models import (
 from app.models.consistency import ConsistencyPayload, ReferenceAsset
 from app.adapters import RenderProviderAdapter, get_adapter, ADAPTER_REGISTRY
 from app.config import get_settings
+from app.prompt_assembly_context import preserve_generation_facts
 from app.services.project_store import project_store
+from app.services.stability import ProviderError, log_stage_event
+from app.services.character_name_matching import character_name_match_position
 from app.services.shared.dashscope_client import DashScopeConfigError, get_dashscope_config
 from app.utils.helpers import derive_scene_id_from_shot_id
 import logging
@@ -558,7 +562,8 @@ def _extract_visual_action(text: str, max_chars: int = 280) -> str:
         action_parts.append(stripped)
 
     result = " ".join(action_parts)
-    if len(result) > max_chars:
+    from app.prompt_assembly_context import collecting_generation_prompt
+    if not collecting_generation_prompt.get() and len(result) > max_chars:
         result = result[:max_chars]
         # Truncate at last word boundary for clean cutoff
         last_space = result.rfind(" ")
@@ -600,7 +605,8 @@ def _extract_initial_visual_beat(text: str, max_chars: int = 360) -> str:
             break
 
     result = " ".join(action_parts)
-    if len(result) > max_chars:
+    from app.prompt_assembly_context import collecting_generation_prompt
+    if not collecting_generation_prompt.get() and len(result) > max_chars:
         result = result[:max_chars]
         last_space = result.rfind(" ")
         if last_space > int(max_chars * 0.6):
@@ -647,8 +653,8 @@ def _infer_scene_characters_from_text(
             name_lower = name.lower()
             if not name or name_lower in seen:
                 continue
-            index = text_lower.find(name_lower)
-            if index >= 0:
+            index = character_name_match_position(text_lower, name)
+            if index is not None:
                 seen.add(name_lower)
                 matches.append((index, name))
         for _, name in sorted(matches, key=lambda item: item[0]):
@@ -699,6 +705,40 @@ def _format_visible_cast_constraint(character_names: list[str]) -> str:
     return f"Only {joined} visible; no extras."
 
 
+def _compact_prompt_guidance(lines: list[str], max_chars: int) -> str:
+    clean = " ".join(
+        " ".join(str(line or "").split())
+        for line in lines
+        if str(line or "").strip()
+    ).strip()
+    from app.prompt_assembly_context import collecting_generation_prompt
+    if collecting_generation_prompt.get() or len(clean) <= max_chars:
+        return clean
+    shortened = clean[: max_chars - 3]
+    last_space = shortened.rfind(" ")
+    if last_space >= int(max_chars * 0.55):
+        shortened = shortened[:last_space]
+    return shortened.rstrip(" ,;:.") + "..."
+
+
+def _prepend_bounded_prompt_context(
+    prompt: str,
+    context: str,
+    *,
+    budget: int = _PROMPT_BUDGET,
+) -> str:
+    clean_prompt = str(prompt or "").strip()
+    clean_context = str(context or "").strip()
+    if not clean_context:
+        return clean_prompt
+    combined = f"{clean_context}. {clean_prompt}" if clean_prompt else clean_context
+    from app.prompt_assembly_context import collecting_generation_prompt
+    if collecting_generation_prompt.get() or len(combined) <= budget:
+        return combined
+    prompt_budget = max(0, budget - len(clean_context) - 2)
+    return f"{clean_context}. {_compact_prompt_guidance([clean_prompt], prompt_budget)}".strip()
+
+
 def _shot_planning_value(shot_planning: Any, key: str) -> str:
     if not isinstance(shot_planning, dict):
         return ""
@@ -719,6 +759,8 @@ def _provider_model_for_job(provider: str, parameters: dict[str, Any]) -> str:
     requested = str(parameters.get("model") or "").strip()
     if requested:
         return requested
+    if provider in {"openrouter", "openrouter-video"}:
+        return os.getenv("OPENROUTER_VIDEO_MODEL", "alibaba/happyhorse-1.1").strip() or "alibaba/happyhorse-1.1"
     if provider == "runway":
         return os.getenv("RUNWAY_MODEL", "gen4.5").strip() or "gen4.5"
     if provider == "happyhorse-r2v":
@@ -1181,12 +1223,9 @@ class RenderService:
             else ("RUNWAY_API_KEY" if os.getenv("RUNWAY_API_KEY", "").strip() else ("VIDEO_PROVIDER_API_KEY" if os.getenv("VIDEO_PROVIDER_API_KEY", "").strip() else "none"))
         )
         logger.info(
-            "Runway key source=%s exists=%s length=%s first4=%s last4=%s",
+            "Runway key source=%s configured=%s",
             runway_key_source,
             bool(runway_api_key),
-            len(runway_api_key),
-            runway_api_key[:4] if runway_api_key else "",
-            runway_api_key[-4:] if runway_api_key else "",
         )
 
         # Runway primary path for active video requests.
@@ -1233,6 +1272,22 @@ class RenderService:
             requires=["api_key"],
             capabilities=["video_generation", "reference_to_video", "image_conditioning"],
         )
+        # OpenRouter video render — routes off DashScope (billing arrears) onto
+        # OpenRouter's prepaid credits, same model (alibaba/happyhorse-1.1). The
+        # adapter reads OPENROUTER_API_KEY from settings if this api_key is unset,
+        # so it stays available even when this env var is only in .env.
+        _openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        for _or_id in ("openrouter", "openrouter-video"):
+            self._provider_configs[_or_id] = ProviderConfig(
+                provider_id=_or_id,
+                name="OpenRouter Video",
+                enabled=True,
+                is_simulated=False,
+                api_key=_openrouter_api_key or None,
+                api_endpoint="https://openrouter.ai/api/v1",
+                requires=["api_key"],
+                capabilities=["video_generation", "reference_to_video", "image_conditioning"],
+            )
         self._provider_configs["wan"] = ProviderConfig(
             provider_id="wan",
             name="Alibaba Wan",
@@ -1467,6 +1522,7 @@ class RenderService:
             
         return polled_job
 
+    @preserve_generation_facts
     def create_job(
         self,
         project_id: str,
@@ -1514,6 +1570,12 @@ class RenderService:
             provider = self.get_default_provider()
 
         _initial_parameters = dict(parameters or {})
+        if _initial_parameters.get("storyboard_frame_url") and provider not in {"openrouter", "openrouter-video", "runway"}:
+            from app.services.stability import ValidationError
+            raise ValidationError(
+                "This provider integration cannot use the approved storyboard as a first frame. Choose OpenRouter or Runway for storyboard rendering.",
+                stage="storyboard_conditioning", metadata={"provider": provider},
+            )
         _validate_model_override(provider, _initial_parameters)
         _idempotency_key, _explicit_idempotency_key = _request_idempotency_key(
             project_id=project_id,
@@ -1547,7 +1609,7 @@ class RenderService:
         # If prompt is generic or too short, fetch the actual scene description
         _scene_id = derive_scene_id_from_shot_id(shot_id)
         job_id = f"job-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}-{shot_id}"
-        _is_generic = (
+        _is_generic = not _initial_parameters.get("preserve_shot_prompt") and (
             not prompt.strip()
             or len(prompt.strip()) < 50
             or "Generate scene" in prompt
@@ -1555,6 +1617,13 @@ class RenderService:
         )
         _prompt_slots_for_adherence: dict[str, str] | None = None
         _intent_fidelity_report: dict | None = None
+        _render_scene_data: dict[str, Any] = {}
+        _render_scene_chars: list[str] = []
+        _render_knowledge_context = None
+        _department_render_context = None
+        _render_context_storage = None
+        _knowledge_prompt_applied = False
+        _identity_prompt_applied = False
         
         if _is_generic:
             try:
@@ -1567,6 +1636,7 @@ class RenderService:
                         None
                     )
                     if _scene:
+                        _render_scene_data = dict(_scene)
                         _heading = str(_scene.get("heading") or "").strip()
                         # Pull scene text from any of the supported fields so the full
                         # scene block (action lines + dialogue) feeds the render prompt,
@@ -1612,6 +1682,7 @@ class RenderService:
                                 _active_storage = _get_storage()
                             except Exception:
                                 _active_storage = _storage
+                            _render_context_storage = _active_storage
                             # 2. Extract visual action (strip dialogue). This
                             # also gives us shot-local text for cast inference
                             # when the scene's saved characters list is empty.
@@ -1717,6 +1788,7 @@ class RenderService:
                                             )
                                 except Exception:
                                     pass
+                            _render_scene_chars = list(_scene_chars)
 
                             # 3. Derive shot_number from shot_id for camera defaults
                             #    e.g. "scene_001_shot_003" → 3
@@ -1736,6 +1808,55 @@ class RenderService:
                                 p for p in [_time_of_day, _tone] if p
                             ).strip()
 
+                            # 4b. Per-shot staging override.
+                            #
+                            # Everything above fills the slots from scene-level
+                            # fallbacks -- location and time-of-day -- which are
+                            # identical for every shot in the scene. When the
+                            # shot carries reviewed staging in its visual_plan
+                            # (an AD pass the director approved), it replaces
+                            # those fallbacks with real light, a real action
+                            # line, and a real camera. Absent staging leaves the
+                            # fallbacks untouched, so this only ever adds
+                            # specificity -- it can never blank a slot that had
+                            # content. This is the wire that carries the
+                            # director's shot into the prompt; without it the
+                            # staging sits in the database unread.
+                            _camera_direction = ""
+                            try:
+                                _shot_staging = {}
+                                if _render_context_storage is not None and hasattr(
+                                    _render_context_storage, "get_shot_visual_plan"
+                                ):
+                                    _shot_staging = (
+                                        _render_context_storage.get_shot_visual_plan(
+                                            project_id, shot_id
+                                        )
+                                        or {}
+                                    )
+                                if _shot_staging.get("action"):
+                                    _action_text = str(_shot_staging["action"])
+                                if _shot_staging.get("lighting"):
+                                    _lighting = str(_shot_staging["lighting"])
+                                _camera_direction = "; ".join(
+                                    part for part in (
+                                        _shot_staging.get("camera_angle"),
+                                        _shot_staging.get("lens_language"),
+                                        _shot_staging.get("composition"),
+                                    ) if part
+                                )
+                                _staging_props = _shot_staging.get("props")
+                                if _staging_props:
+                                    _environment = (
+                                        f"{_environment}. {_staging_props}"
+                                        if _environment else str(_staging_props)
+                                    )
+                            except Exception as _staging_exc:
+                                logger.debug(
+                                    "Shot staging override skipped for %s/%s: %s",
+                                    project_id, shot_id, _staging_exc,
+                                )
+
                             # 5. Build the slotted prompt
                             from app.services.shot_prompt_builder import build_slotted_prompt
                             _slotted = build_slotted_prompt(
@@ -1744,7 +1865,7 @@ class RenderService:
                                 character_visual_canon=_char_visuals,
                                 action_text=_action_text,
                                 environment_motifs=_environment,
-                                camera_direction="",  # let builder default from shot_number
+                                camera_direction=_camera_direction,
                                 lighting_direction=_lighting,
                             )
                             prompt = _slotted["prompt"]
@@ -1799,6 +1920,107 @@ class RenderService:
                             )
             except Exception as _exc:
                 logger.warning("Failed to fetch scene description for prompt: %s", _exc)
+
+        _knowledge_started = time.perf_counter()
+        try:
+            if not _render_scene_data:
+                _project_for_context = project_store.get_project(project_id)
+                if isinstance(_project_for_context, dict):
+                    _summary_for_context = _project_for_context.get("execution_summary") or {}
+                    _scenes_for_context = _summary_for_context.get("scenes") or []
+                    _found_for_context = next(
+                        (
+                            scene
+                            for scene in _scenes_for_context
+                            if isinstance(scene, dict)
+                            and scene.get("scene_id") == _scene_id
+                        ),
+                        None,
+                    )
+                    if isinstance(_found_for_context, dict):
+                        _render_scene_data = dict(_found_for_context)
+            if not _render_scene_chars and _render_scene_data:
+                _render_scene_chars = _normalize_character_names(
+                    _render_scene_data.get("characters")
+                    or _render_scene_data.get("character_appearances")
+                    or []
+                )
+            if _render_context_storage is None:
+                _render_context_storage = _storage
+                if _render_context_storage is None:
+                    from app.data.storage import get_storage as _get_context_storage
+
+                    _render_context_storage = _get_context_storage("sqlite")
+            if not _render_scene_chars and _render_context_storage is not None:
+                _all_context_characters = _render_context_storage.get_characters(project_id)
+                _context_scene_text = " ".join(
+                    str(_render_scene_data.get(key) or "")
+                    for key in ("text", "content", "description", "scene_text")
+                )
+                _render_scene_chars = _infer_scene_characters_from_text(
+                    _all_context_characters,
+                    primary_text=prompt,
+                    fallback_text=_context_scene_text,
+                )
+
+            from app.services.render_context_enrichment_service import (
+                render_context_enrichment_service as _render_context_svc,
+            )
+
+            _render_knowledge_context = _render_context_svc.build_context(
+                project_id=project_id,
+                scene_id=_scene_id,
+                shot_id=shot_id,
+                scene_data=_render_scene_data,
+                character_names=_render_scene_chars,
+                storage=_render_context_storage,
+            )
+            if (
+                _render_knowledge_context is not None
+                and not _render_knowledge_context.is_empty
+                and _prompt_slots_for_adherence
+                and "_slotted" in locals()
+            ):
+                from app.services.shot_prompt_builder import (
+                    merge_knowledge_guidance_into_slots,
+                    reassemble_prompt_from_slots,
+                )
+
+                merge_knowledge_guidance_into_slots(
+                    _slotted["slots"],
+                    _render_knowledge_context.slot_guidance,
+                )
+                _knowledge_prompt_applied = True
+                prompt = reassemble_prompt_from_slots(_slotted["slots"])
+                _prompt_slots_for_adherence = {
+                    str(_slot_name): str(_slot_value or "")
+                    for _slot_name, _slot_value in (_slotted.get("slots") or {}).items()
+                    if _slot_name != "reserve"
+                }
+        except Exception as _exc:
+            logger.warning(
+                "Render knowledge context unavailable for %s/%s: %s",
+                project_id,
+                shot_id,
+                _exc,
+            )
+        finally:
+            from app.services.stability import log_stage_event
+
+            log_stage_event(
+                project_id=project_id,
+                job_id=job_id,
+                provider=provider,
+                stage="render_context_enrichment",
+                duration_ms=int((time.perf_counter() - _knowledge_started) * 1000),
+                extra={
+                    "selected_atom_count": (
+                        len(_render_knowledge_context.selected_atom_ids)
+                        if _render_knowledge_context is not None
+                        else 0
+                    ),
+                },
+            )
 
         _consistency_payload = None
         _canonical_identity_context = None
@@ -1881,10 +2103,28 @@ class RenderService:
                             _identity_scene = dict(_found_scene)
                 except Exception:
                     pass
-                _identity_records = _identity_svc.build_records_from_storage(
-                    project_id=project_id,
-                    storage=_active_storage_for_identity,
-                    character_ids=_identity_character_ids or None,
+                if (
+                    not _normalize_character_names(
+                        _identity_scene.get("characters")
+                        or _identity_scene.get("character_appearances")
+                        or []
+                    )
+                    and _identity_characters
+                ):
+                    _identity_scene["characters"] = [
+                        str(character.get("name") or "").strip()
+                        for character in _identity_characters
+                        if isinstance(character, dict)
+                        and str(character.get("name") or "").strip()
+                    ]
+                _identity_records = (
+                    _identity_svc.build_records_from_storage(
+                        project_id=project_id,
+                        storage=_active_storage_for_identity,
+                        character_ids=_identity_character_ids,
+                    )
+                    if _identity_character_ids
+                    else []
                 )
                 if _identity_records:
                     _canonical_identity_context = _identity_svc.build_provider_context_from_records(
@@ -1895,6 +2135,83 @@ class RenderService:
                     )
         except Exception as _exc:
             logger.debug("Canonical character identity context skipped for %s/%s: %s", project_id, shot_id, _exc)
+
+        _identity_prompt_guidance = ""
+        if isinstance(_canonical_identity_context, dict):
+            _constraint = _canonical_identity_context.get("constraint_injection")
+            if isinstance(_constraint, dict):
+                _identity_prompt_guidance = _compact_prompt_guidance(
+                    [
+                        str(line).strip()
+                        for line in (_constraint.get("text_constraints") or [])
+                        if str(line).strip()
+                        and not (
+                            "not yet verified" in str(line).lower()
+                            and "current appearance:" not in str(line).lower()
+                        )
+                    ],
+                    150,
+                )
+        if _identity_prompt_guidance and _prompt_slots_for_adherence and "_slotted" in locals():
+            from app.services.shot_prompt_builder import (
+                merge_identity_guidance_into_slots,
+                reassemble_prompt_from_slots,
+            )
+
+            merge_identity_guidance_into_slots(
+                _slotted["slots"],
+                _identity_prompt_guidance,
+            )
+            _identity_prompt_applied = True
+            prompt = reassemble_prompt_from_slots(_slotted["slots"])
+            _prompt_slots_for_adherence = {
+                str(_slot_name): str(_slot_value or "")
+                for _slot_name, _slot_value in (_slotted.get("slots") or {}).items()
+                if _slot_name != "reserve"
+            }
+
+        if (
+            _prompt_slots_for_adherence
+            and "_slotted" in locals()
+            and isinstance(parameters, dict)
+            and parameters.get("structured_prompt")
+            and not parameters.get("preserve_shot_prompt")
+        ):
+            try:
+                from app.services.department_render_context_service import (
+                    department_render_context_service as _dept_context_svc,
+                )
+                from app.services.shot_prompt_builder import (
+                    merge_knowledge_guidance_into_slots,
+                    reassemble_prompt_from_slots,
+                )
+
+                _department_scene_context = dict(_render_scene_data or {})
+                if isinstance(parameters, dict):
+                    _shot_planning = parameters.get("shot_planning")
+                    if isinstance(_shot_planning, dict):
+                        _department_scene_context["shot_planning"] = _shot_planning
+                    _department_scene_context["prompt_text"] = prompt
+                _department_render_context = _dept_context_svc.build_slot_guidance(
+                    project_id=project_id,
+                    scene_id=_scene_id,
+                    shot_id=shot_id,
+                    render_job_id=job_id,
+                    scene_context=_department_scene_context,
+                    parameters=parameters if isinstance(parameters, dict) else {},
+                )
+                merge_knowledge_guidance_into_slots(
+                    _slotted["slots"],
+                    _department_render_context.get("slot_guidance") or {},
+                )
+                prompt = reassemble_prompt_from_slots(_slotted["slots"])
+                _prompt_slots_for_adherence = {
+                    str(_slot_name): str(_slot_value or "")
+                    for _slot_name, _slot_value in (_slotted.get("slots") or {}).items()
+                    if _slot_name != "reserve"
+                }
+            except Exception as _exc:
+                logger.debug("Department render context skipped for %s/%s: %s", project_id, shot_id, _exc)
 
         _input_parameters = dict(parameters or {})
         if _prompt_slots_for_adherence:
@@ -1918,6 +2235,17 @@ class RenderService:
             _input_parameters["prompt_slots"] = _prompt_slots_for_adherence
         if _canonical_identity_context is not None:
             _input_parameters["character_identity_context"] = _canonical_identity_context
+        if (
+            _render_knowledge_context is not None
+            and not _render_knowledge_context.is_empty
+        ):
+            _input_parameters["render_knowledge_context"] = (
+                _render_knowledge_context.as_metadata()
+            )
+        if _department_render_context is not None:
+            _input_parameters["department_render_context"] = (
+                _department_render_context.get("metadata") or {}
+            )
         _validate_model_override(provider, _input_parameters)
 
         _environment_context = None
@@ -2021,6 +2349,7 @@ class RenderService:
                 except Exception as _intent_exc:
                     logger.debug("Director intent negatives skipped for %s: %s", project_id, _intent_exc)
 
+                _input_parameters["required_negative_terms"] = list(_input_parameters.get("negative_prompt_terms") or []) + _intent_avoid_terms
                 _negative_prompt = _build_negative_prompt(
                     cast_names=_render_scene_chars or [],
                     extra_terms=[
@@ -2168,28 +2497,39 @@ class RenderService:
                                     _char_summaries.append(_resolved)
                     if _char_summaries:
                         _cast_constraint = _format_visible_cast_constraint(_scene_chars)
-                        _char_block = "Characters: " + "; ".join(
+                        _char_state = "; ".join(
                             [part for part in [_cast_constraint, *_char_summaries] if part]
                         )
+                        from app.services.shot_prompt_builder import (
+                            SLOT_BUDGETS,
+                            _fit_character_state_to_budget,
+                            merge_identity_guidance_into_slots,
+                        )
+
+                        _char_state = _fit_character_state_to_budget(
+                            _char_state,
+                            SLOT_BUDGETS["character_state"],
+                        )
+                        if _identity_prompt_guidance:
+                            _identity_slots = {"character_state": _char_state}
+                            merge_identity_guidance_into_slots(
+                                _identity_slots,
+                                _identity_prompt_guidance,
+                            )
+                            _char_state = _identity_slots["character_state"]
+                        _char_block = "Characters: " + _char_state
                         _current_prompt = job.input_payload.prompt or ""
                         # Skip if characters already present (e.g., generic prompt path)
                         if "Characters:" not in _current_prompt:
-                            _sep = ". " if not _current_prompt.rstrip().endswith((".", "!", "?")) else " "
-                            _new_prompt = f"{_current_prompt}{_sep}{_char_block}"
-                            # If over budget, truncate original prompt to fit characters
-                            if len(_new_prompt) > _PROMPT_BUDGET:
-                                _char_len = len(_sep) + len(_char_block)
-                                _orig_budget = _PROMPT_BUDGET - _char_len
-                                if _orig_budget > 50:
-                                    _truncated_orig = _current_prompt[:_orig_budget]
-                                    _last_sp = _truncated_orig.rfind(" ")
-                                    if _last_sp > int(_orig_budget * 0.6):
-                                        _truncated_orig = _truncated_orig[:_last_sp]
-                                    _new_prompt = f"{_truncated_orig}{_sep}{_char_block}"
-                                else:
-                                    # Not enough room for both; prioritize characters
-                                    _new_prompt = _char_block[:_PROMPT_BUDGET]
+                            _new_prompt = _prepend_bounded_prompt_context(
+                                _current_prompt,
+                                _char_block,
+                            )
                             job.input_payload.prompt = _new_prompt
+                            _identity_prompt_applied = bool(
+                                _identity_prompt_applied
+                                or _identity_prompt_guidance
+                            )
                             logger.info(
                                 "CHARACTER_PROMPT_INJECTION | scene=%s | chars=%d | source=previs_prompt",
                                 _scene_id,
@@ -2202,6 +2542,7 @@ class RenderService:
             isinstance(parameters, dict)
             and parameters.get("structured_prompt")
             and not job.input_payload.parameters.get("prompt_slots")
+            and not parameters.get("preserve_shot_prompt")
         ):
             try:
                 from app.services.shot_prompt_builder import build_slotted_prompt
@@ -2271,6 +2612,49 @@ class RenderService:
                     camera_direction=_camera_direction,
                     lighting_direction=_lighting,
                 )
+                from app.services.shot_prompt_builder import (
+                    merge_identity_guidance_into_slots,
+                    merge_knowledge_guidance_into_slots,
+                )
+
+                if (
+                    _render_knowledge_context is not None
+                    and not _render_knowledge_context.is_empty
+                ):
+                    merge_knowledge_guidance_into_slots(
+                        _slotted["slots"],
+                        _render_knowledge_context.slot_guidance,
+                    )
+                    _knowledge_prompt_applied = True
+                if _identity_prompt_guidance:
+                    merge_identity_guidance_into_slots(
+                        _slotted["slots"],
+                        _identity_prompt_guidance,
+                    )
+                    _identity_prompt_applied = True
+                try:
+                    from app.services.department_render_context_service import (
+                        department_render_context_service as _dept_context_svc,
+                    )
+
+                    _department_scene_context = dict(_scene_for_slots or {})
+                    if isinstance(_shot_planning, dict):
+                        _department_scene_context["shot_planning"] = _shot_planning
+                    _department_scene_context["prompt_text"] = _current_prompt
+                    _department_render_context = _dept_context_svc.build_slot_guidance(
+                        project_id=project_id,
+                        scene_id=_scene_id,
+                        shot_id=shot_id,
+                        render_job_id=job_id,
+                        scene_context=_department_scene_context,
+                        parameters=parameters if isinstance(parameters, dict) else {},
+                    )
+                    merge_knowledge_guidance_into_slots(
+                        _slotted["slots"],
+                        _department_render_context.get("slot_guidance") or {},
+                    )
+                except Exception as _exc:
+                    logger.debug("Department structured prompt context skipped for %s: %s", job_id, _exc)
                 from app.services.standing_corrections_service import (
                     standing_corrections_service as _sc_svc,
                 )
@@ -2298,11 +2682,11 @@ class RenderService:
                                 _slot_val, SLOT_BUDGETS[_slot_name]
                             )
 
-                job.input_payload.prompt = _slotted["prompt"]
-                if _sc_applied:
-                    _reassembled = reassemble_prompt_from_slots(_slotted["slots"])
-                    if _reassembled != "Cinematic shot. Film quality.":
-                        job.input_payload.prompt = _reassembled
+                _reassembled = reassemble_prompt_from_slots(_slotted["slots"])
+                if _reassembled != "Cinematic shot. Film quality.":
+                    job.input_payload.prompt = _reassembled
+                else:
+                    job.input_payload.prompt = _slotted["prompt"]
                 job.input_payload.parameters["prompt_slots"] = {
                     str(_slot): str(_value or "")
                     for _slot, _value in (_slotted.get("slots") or {}).items()
@@ -2314,6 +2698,10 @@ class RenderService:
                 _structured_fidelity = _build_intent_fidelity(_slotted, shot_id)
                 if _structured_fidelity:
                     job.input_payload.parameters["intent_fidelity"] = _structured_fidelity
+                if _department_render_context is not None:
+                    job.input_payload.parameters["department_render_context"] = (
+                        _department_render_context.get("metadata") or {}
+                    )
                 logger.info(
                     "STRUCTURED_PREVIS_PROMPT_APPLIED | job=%s | scene=%s | shot_planning=%s | slots=%s",
                     job_id,
@@ -2323,6 +2711,41 @@ class RenderService:
                 )
             except Exception as _exc:
                 logger.debug("Structured prompt assembly skipped for job %s: %s", job_id, _exc)
+
+        if job.input_payload and job.input_payload.prompt:
+            prompt = job.input_payload.prompt
+
+        _missing_provider_context: list[str] = []
+        if _identity_prompt_guidance and not _identity_prompt_applied:
+            _missing_provider_context.append(
+                f"Identity canon: {_identity_prompt_guidance}"
+            )
+        if (
+            _render_knowledge_context is not None
+            and not _render_knowledge_context.is_empty
+            and not _knowledge_prompt_applied
+        ):
+            _knowledge_lines = [
+                str(_render_knowledge_context.slot_guidance.get(slot_name) or "").strip()
+                for slot_name in (
+                    "character_state",
+                    "action",
+                    "environment_persistence",
+                    "camera",
+                    "lighting",
+                )
+                if str(_render_knowledge_context.slot_guidance.get(slot_name) or "").strip()
+            ]
+            _creative_canon = _compact_prompt_guidance(_knowledge_lines, 132)
+            if _creative_canon:
+                _missing_provider_context.append(
+                    f"Bible and Creative Spine canon: {_creative_canon}"
+                )
+        if _missing_provider_context:
+            job.input_payload.prompt = _prepend_bounded_prompt_context(
+                job.input_payload.prompt or "",
+                _compact_prompt_guidance(_missing_provider_context, 220),
+            )
 
         # ── Continuity context injection ──────────────────────────────────────
         # Derive scene_id from shot_id (e.g. "scene_001_shot_001" → "scene_001").
@@ -2390,25 +2813,15 @@ class RenderService:
         except Exception as _exc:  # never block a render
             logger.debug("Continuity context injection skipped: %s", _exc)
 
-        # ── Final prompt-budget enforcement ──────────────────────────────────
-        # The slot system assembles within 512 characters, then intent guidance
-        # and the continuity block are appended after it. Nothing enforced the
-        # ceiling again afterwards, so the prompt could leave here over budget
-        # and be sent to the provider raw.
-        #
-        # Truncation keeps the head, which is the shot itself — the provider
-        # weights it most heavily, and standing project context is the right
-        # thing to lose first.
-        _final_prompt = job.input_payload.prompt or ""
-        if len(_final_prompt) > _PROMPT_BUDGET:
-            job.input_payload.prompt = _final_prompt[:_PROMPT_BUDGET].rstrip()
-            logger.warning(
-                "RENDER_PROMPT_BUDGET_TRIMMED | job=%s | shot=%s | from=%d | to=%d",
-                job_id,
-                shot_id,
-                len(_final_prompt),
-                len(job.input_payload.prompt),
-            )
+        # Authoritative provider budgeting happens after all shot context and
+        # corrections are collected, preserving whole required facts.
+        from app.services.prompt_budget_service import budget_job
+        _budget_result = budget_job(job)
+        log_stage_event(
+            project_id=project_id, job_id=job_id, provider=provider,
+            stage="prompt_budget", duration_ms=0,
+            extra={"ready": _budget_result.ready, "omitted_fact_count": len(_budget_result.omitted_ids)},
+        )
 
         _zero_touch_debug = _zero_touch_debug_metadata(
             project_id=project_id,
@@ -2523,13 +2936,16 @@ class RenderService:
             raise ValueError(f"Job {job_id} exceeded max retries")
         self._submit_locks.add(job_id)
         adapter: RenderProviderAdapter | None = None
+        submission_started = time.perf_counter()
 
         try:
             config = self._provider_configs.get(job.provider)
             if not config:
-                config = self._provider_configs["simulated"]
-                job.provider = "simulated"
-                logger.warning(f"Provider {job.provider} not found, falling back to simulated")
+                raise ProviderError(
+                    f"Provider configuration unavailable for {job.provider!r}",
+                    stage="provider_resolution",
+                    metadata={"provider": job.provider},
+                )
 
             params = job.input_payload.parameters if job.input_payload and isinstance(job.input_payload.parameters, dict) else {}
             _validate_model_override(job.provider, params)
@@ -2579,7 +2995,7 @@ class RenderService:
 
             # ── Seed locking: generate on first render, reuse on subsequent ──
             try:
-                if _storage:
+                if _storage and (job.input_payload.parameters or {}).get("seed") is None:
                     shot_seed = _storage.get_shot_seed(job.project_id, job.shot_id)
                     if shot_seed and shot_seed.get("seed") is not None:
                         seed_val = int(shot_seed["seed"])
@@ -2642,6 +3058,14 @@ class RenderService:
                 if isinstance(e, TimeoutError)
                 else str(e)
             )
+            if isinstance(e, ProviderError):
+                error_message = e.message
+            log_stage_event(
+                project_id=job.project_id, job_id=job.id, provider=job.provider,
+                stage="provider_resolution" if isinstance(e, ProviderError) else "provider_submission",
+                duration_ms=int((time.perf_counter() - submission_started) * 1000),
+                extra={"error_type": "provider_error"},
+            )
             logger.error(f"Failed to submit job {job_id}: {error_message}")
             job.status = "failed"
             job.error_message = error_message
@@ -2674,7 +3098,14 @@ class RenderService:
         if not job.is_terminal():
             try:
                 config = self._provider_configs.get(job.provider)
+                if not config:
+                    raise ProviderError(
+                        f"Provider configuration unavailable for {job.provider!r}",
+                        stage="provider_resolution",
+                        metadata={"provider": job.provider},
+                    )
                 if config:
+                    previous_status = job.status
                     adapter = get_adapter(job.provider, config)
                     try:
                         updated = await asyncio.wait_for(
@@ -2711,7 +3142,7 @@ class RenderService:
                     
                     # Detect transition to complete status
                     transitioned_to_complete = (
-                        job.status != "complete" and updated.status == "complete"
+                        previous_status != "complete" and updated.status == "complete"
                     )
                     
                     self._jobs[job_id] = updated
@@ -2725,14 +3156,14 @@ class RenderService:
                         await _run_render_quality_check(updated)
                         await _run_character_reference_lock(updated)
                     
-                    if updated.status != job.status:
+                    if updated.status != previous_status:
                         await _notify_update(job_id, updated.model_dump())
                     return updated
             except Exception as _exc:
                 poll_error = (
                     f"Provider status poll timed out after {PROVIDER_CALL_TIMEOUT_SECONDS}s"
                     if isinstance(_exc, TimeoutError)
-                    else str(_exc)
+                    else (_exc.message if isinstance(_exc, ProviderError) else str(_exc))
                 )
                 job.status = "failed"
                 job.error_message = f"Provider status poll failed: {poll_error}"

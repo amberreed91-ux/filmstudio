@@ -51,6 +51,48 @@ MAX_ATTEMPTS = 3
 # face that reads as a different actor fails the shot no matter how well the rest
 # scored. Any *real* identity score at or below this floor forces a correctable
 # verdict regardless of the weighted aggregate.
+# A slot that was never really specified cannot be failed, and a dimension that
+# cannot be failed inflates every score it touches. "Use light, color, and
+# atmosphere to underline the beat" is advice to the filmmaker, not a
+# description of the frame — a vision model shown any competently lit shot will
+# score it high, and the render passes on a dimension nobody ever set.
+#
+# These are matched at the start of the expected text only, so a real
+# description that happens to contain one of these words is unaffected.
+UNSPECIFIED_INTENT_OPENERS = (
+    "use light",
+    "use color",
+    "use the",
+    "clarify ",
+    "ensure ",
+    "consider ",
+    "make sure",
+    "let the",
+    "keep the",
+    "show, don",
+    "never explain",
+    "avoid explaining",
+    "a beat that earns",
+)
+
+# Below this, there is not enough text to describe anything a camera could see.
+MIN_SPECIFIED_INTENT_CHARS = 12
+
+
+def intent_is_specified(expected: str) -> bool:
+    """Did the director actually say what this dimension should look like?
+
+    Returns False for an empty slot and for text that instructs the filmmaker
+    rather than describing the frame. Scoring such a dimension produces a number
+    that looks like evidence and is not.
+    """
+    text = str(expected or "").strip()
+    if len(text) < MIN_SPECIFIED_INTENT_CHARS:
+        return False
+    lowered = text.lstrip(" :;-\u2014").lower()
+    return not lowered.startswith(UNSPECIFIED_INTENT_OPENERS)
+
+
 IDENTITY_HARD_GATE_THRESHOLD = 65
 
 # Marker written by _ensure_identity_continuity_dimension when the evaluator did
@@ -92,6 +134,12 @@ class AdherenceScore:
     # threshold tuned against the scorer still in use.
     scored_by_provider: str = ""
     scored_by_model: str = ""
+    # Dimensions excluded from the aggregate because the expected text never
+    # described anything — an empty slot, or a directive to the filmmaker. They
+    # are reported rather than silently dropped: "we did not measure this"
+    # is a different statement from "this scored well", and the director needs
+    # to be able to tell them apart.
+    unscored_dimensions: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -256,11 +304,42 @@ class AdherenceService:
             ),
         }
         
-        # Calculate weighted adherence score
-        adherence_score = sum(
-            dimensions[dim].score * DIMENSION_WEIGHTS[dim]
-            for dim in DIMENSION_WEIGHTS
+        # Calculate weighted adherence score over the dimensions that were
+        # actually specified. Weights are renormalised across those, so an
+        # unspecified dimension neither contributes a free high score nor drags
+        # the aggregate down — it simply is not measured.
+        unscored_dimensions = [
+            dim for dim in DIMENSION_WEIGHTS
+            if dim in dimensions and not intent_is_specified(dimensions[dim].expected)
+        ]
+        scored_weight = sum(
+            weight for dim, weight in DIMENSION_WEIGHTS.items()
+            if dim in dimensions and dim not in unscored_dimensions
         )
+        if scored_weight <= 0:
+            # Nothing in this prompt described the shot. An aggregate here would
+            # be a number invented out of boilerplate.
+            adherence_score = 0.0
+            logger.warning(
+                "ADHERENCE_NOTHING_SPECIFIED | shot=%s | attempt=%d | "
+                "no dimension carried a description; not scoring",
+                shot_id,
+                attempt_n,
+            )
+        else:
+            adherence_score = sum(
+                dimensions[dim].score * DIMENSION_WEIGHTS[dim]
+                for dim in DIMENSION_WEIGHTS
+                if dim in dimensions and dim not in unscored_dimensions
+            ) / scored_weight
+        if unscored_dimensions:
+            logger.info(
+                "ADHERENCE_UNSPECIFIED_DIMENSIONS | shot=%s | attempt=%d | "
+                "not measured: %s",
+                shot_id,
+                attempt_n,
+                ",".join(sorted(unscored_dimensions)),
+            )
         
         # Determine verdict
         if adherence_score >= VERDICT_PASS_THRESHOLD:
@@ -301,6 +380,7 @@ class AdherenceService:
         failed_slots = [
             dim for dim, score_obj in dimensions.items()
             if score_obj.score <= 70
+            and dim not in unscored_dimensions
             and not (
                 dim == "identity_continuity"
                 and self._identity_score_is_inferred(score_obj)
@@ -346,6 +426,7 @@ class AdherenceService:
             proposed_corrections=proposed_corrections,
             scored_by_provider=self._vision_provider,
             scored_by_model=self._vision_model,
+            unscored_dimensions=unscored_dimensions,
         )
         
         logger.info(
@@ -893,6 +974,33 @@ class AdherenceService:
 
         return compressed_slots, prompt, compressed_names
 
+    async def _call_groq_json(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+    ) -> tuple[str, str]:
+        """Call Groq in JSON mode and return (response_text, finish_reason)."""
+
+        def _sync_call() -> tuple[str, str]:
+            client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content
+            finish_reason = response.choices[0].finish_reason
+            return content, finish_reason
+
+        return await asyncio.to_thread(_sync_call)
+
     async def _call_groq_full_corrector(
         self,
         score: AdherenceScore,
@@ -986,23 +1094,6 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
         DEFAULT_MAX_OUTPUT_TOKENS = 2048
         RETRY_MAX_OUTPUT_TOKENS = 4096
 
-        def _sync_groq_call(max_tokens: int) -> tuple[str, str]:
-            """Make synchronous Groq API call and return (response_text, finish_reason)."""
-            client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_tokens=max_tokens,
-                temperature=0.3,
-                response_format={"type": "json_object"},
-            )
-            content = response.choices[0].message.content
-            finish_reason = response.choices[0].finish_reason
-            return content, finish_reason
-
         logger.info(
             "GROQ_FULL_CORRECTOR_CALL | failed=%d | total_slots=5 | max_output_tokens=%d",
             len(score.failed_slots),
@@ -1010,8 +1101,10 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
         )
 
         try:
-            response_text, finish_reason = await asyncio.to_thread(
-                _sync_groq_call, DEFAULT_MAX_OUTPUT_TOKENS
+            response_text, finish_reason = await self._call_groq_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
             )
 
             if finish_reason == "length":
@@ -1020,8 +1113,10 @@ Regenerate all 5 slots. For PASSED slots, mark "carried_forward" and echo the cu
                     finish_reason,
                     RETRY_MAX_OUTPUT_TOKENS,
                 )
-                response_text, finish_reason = await asyncio.to_thread(
-                    _sync_groq_call, RETRY_MAX_OUTPUT_TOKENS
+                response_text, finish_reason = await self._call_groq_json(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    max_tokens=RETRY_MAX_OUTPUT_TOKENS,
                 )
 
             result = json.loads(response_text)
@@ -1408,23 +1503,6 @@ is where you apply the fix. If you see structured slots (character_state, action
         DEFAULT_MAX_OUTPUT_TOKENS = 2048
         RETRY_MAX_OUTPUT_TOKENS = 4096
 
-        def _sync_groq_call(max_tokens: int) -> tuple[str, str]:
-            """Make synchronous Groq API call and return (response_text, finish_reason)."""
-            client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                max_tokens=max_tokens,
-                temperature=0.3,  # Lower temp for structured output
-                response_format={"type": "json_object"},  # Force JSON mode
-            )
-            content = response.choices[0].message.content
-            finish_reason = response.choices[0].finish_reason
-            return content, finish_reason
-
         logger.info(
             "GROQ_CORRECTOR_CALL | failed_dims=%d | chars_remaining=%d | max_output_tokens=%d",
             len(failed_dimensions),
@@ -1433,8 +1511,10 @@ is where you apply the fix. If you see structured slots (character_state, action
         )
 
         try:
-            response_text, finish_reason = await asyncio.to_thread(
-                _sync_groq_call, DEFAULT_MAX_OUTPUT_TOKENS
+            response_text, finish_reason = await self._call_groq_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
             )
             
             # Check for truncation (finish_reason will be "length" if truncated)
@@ -1446,8 +1526,10 @@ is where you apply the fix. If you see structured slots (character_state, action
                     DEFAULT_MAX_OUTPUT_TOKENS,
                     RETRY_MAX_OUTPUT_TOKENS,
                 )
-                response_text, finish_reason = await asyncio.to_thread(
-                    _sync_groq_call, RETRY_MAX_OUTPUT_TOKENS
+                response_text, finish_reason = await self._call_groq_json(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    max_tokens=RETRY_MAX_OUTPUT_TOKENS,
                 )
                 
                 if finish_reason == "length":

@@ -8,13 +8,42 @@ This file ensures:
 """
 
 import asyncio
+import os
+import tempfile
+from pathlib import Path
+
+# Set paths BEFORE application imports construct storage singletons. The autouse
+# grounding fixture deletes a fixed project ID, so inheriting developer paths
+# here can destroy real project state. Each pytest process gets its own stores.
+_test_storage = tempfile.TemporaryDirectory(prefix="studio-pytest-")
+os.environ["STUDIO_STORAGE_PATH"] = _test_storage.name
+os.environ["STUDIO_PROJECT_STORE_PATH"] = str(Path(_test_storage.name) / "project_state_store.json")
+
+os.environ["STUDIO_ACCESS_MODE"] = "local"
+
 import pytest
 from typing import Generator
 
+from app.config import settings
 from app.services.render import RenderService
 from app.services.project_store import project_store
 from app.data.storage import get_storage
 from app.models import StudioProject
+
+
+@pytest.fixture(scope="function", autouse=True)
+def test_render_provider_default_isolation(monkeypatch) -> Generator[None, None, None]:
+    """
+    Keep local .env render-provider choices from changing test baselines.
+    Individual tests can still override RENDER_VIDEO_PROVIDER with monkeypatch.
+    """
+    original_provider = settings.render_video_provider
+    monkeypatch.delenv("RENDER_VIDEO_PROVIDER", raising=False)
+    settings.render_video_provider = "happyhorse"
+    try:
+        yield
+    finally:
+        settings.render_video_provider = original_provider
 
 
 @pytest.fixture(scope="function", autouse=True)

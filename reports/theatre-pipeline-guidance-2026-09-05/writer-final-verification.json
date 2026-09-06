@@ -1,0 +1,69 @@
+{
+  "passed": true,
+  "results": [
+    "legacy scene_id opens scene 2",
+    "immediate room navigation flushes correct scene",
+    "API failure remains visible and preserves draft",
+    "failed save prevents explicit room handoff",
+    "failed draft recovered on return",
+    "retry persists recovered draft",
+    "profile changes require explicit save before handoff",
+    "failed character save preserves editable draft; explicit retry succeeds"
+  ],
+  "writes": [
+    {
+      "method": "PUT",
+      "url": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_002",
+      "body": {
+        "text": "Second draft flushed when leaving immediately",
+        "description": "Second draft flushed when leaving immediately"
+      }
+    },
+    {
+      "method": "PUT",
+      "url": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_002",
+      "body": {
+        "text": "Keep this failed draft",
+        "description": "Keep this failed draft"
+      }
+    },
+    {
+      "method": "PUT",
+      "url": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_002",
+      "body": {
+        "text": "Keep this failed draft",
+        "description": "Keep this failed draft"
+      }
+    },
+    {
+      "method": "PUT",
+      "url": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_002",
+      "body": {
+        "text": "Keep this failed draft",
+        "description": "Keep this failed draft"
+      }
+    },
+    {
+      "method": "PUT",
+      "url": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_002",
+      "body": {
+        "text": "Keep this failed draft",
+        "description": "Keep this failed draft"
+      }
+    },
+    {
+      "method": "PUT",
+      "url": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_char",
+      "body": {
+        "look": "A distinct blue coat"
+      }
+    },
+    {
+      "method": "PUT",
+      "url": "/api/f51/studio/projects/project_5907c60cddbc/characters/fixture_char",
+      "body": {
+        "look": "A distinct blue coat"
+      }
+    }
+  ]
+}

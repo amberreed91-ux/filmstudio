@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "checks": [
+    "Scene wall first; frame loaded and MP4 did not replace storyboard; failed frame has feedback; no writes on entry",
+    "Character filter and clear retain accessible scene actions",
+    "Board handoff opens storyboard step and preserves project, scene, shot",
+    "Explicit review advances to approval; issue/comparison/repair controls remain accessible",
+    "Approval remains explicit and exposes rendering handoff",
+    "Switching storyboard substages preserves image provider choice",
+    "Cancel sends cancel once, never retry, then refreshes actual job state",
+    "Empty scene list offers The Page without automatic redirect",
+    "Scene read error remains visible"
+  ],
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/storyboard-blueprints/sbp_project_5907c60cddbc_scene_001_b28d2c4f/versions/sbv_33ba18db0a10/continuity-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/storyboard-blueprints/sbp_project_5907c60cddbc_scene_001_b28d2c4f/versions/sbv_33ba18db0a10/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/api/f51/studio/render/jobs/fixture-active/cancel"
+    }
+  ],
+  "errors": []
+}

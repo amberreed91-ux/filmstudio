@@ -59,6 +59,7 @@ export type CanonicalWorkflowResponse = {
 export type CanonicalWorkflowListResponse = {
   runs: CanonicalWorkflowRun[]
   current_blueprint_version_id: string
+  scene_context?: { script_id: string; sequence_id: string; beat_ids: string[] } | null
 }
 
 type RequestOptions = { signal?: AbortSignal }
@@ -125,8 +126,12 @@ export function beginCanonicalWorkflow(input: {
   )
 }
 
-export function generateCanonicalPrevis(runId: string) {
-  return fetchJson<CanonicalWorkflowResponse>(workflowPath(runId, '/previs/generate'), jsonPost({}))
+export function generateCanonicalPrevis(runId: string, provider?: string) {
+  return fetchJson<CanonicalWorkflowResponse>(workflowPath(runId, '/previs/generate'), {
+    ...jsonPost({ provider: provider || undefined }),
+    timeoutMs: 600_000,
+    timeoutLabel: 'Approved Previs generation',
+  })
 }
 
 export function approveCanonicalPrevis(runId: string, artifactIds: string[]) {
@@ -140,10 +145,10 @@ export function createCanonicalProductionPackage(runId: string) {
   return fetchJson<CanonicalWorkflowResponse>(workflowPath(runId, '/production-package'), jsonPost({}))
 }
 
-export function renderCanonicalProductionPackage(runId: string, retryConfirmed = false) {
+export function renderCanonicalProductionPackage(runId: string, retryConfirmed = false, provider?: string) {
   return fetchJson<CanonicalWorkflowResponse>(
     workflowPath(runId, '/renders'),
-    jsonPost({ provider: 'simulated', retry_confirmed: retryConfirmed }),
+    { ...jsonPost({ provider: provider || undefined, retry_confirmed: retryConfirmed }), timeoutMs: 600_000 },
   )
 }
 
@@ -201,10 +206,10 @@ export function createCanonicalRevision(runId: string, input: {
   )
 }
 
-export function renderCanonicalRevision(runId: string) {
+export function renderCanonicalRevision(runId: string, provider?: string) {
   return fetchJson<CanonicalWorkflowResponse>(
     workflowPath(runId, '/revision/render'),
-    jsonPost({ provider: 'simulated' }),
+    { ...jsonPost({ provider: provider || undefined }), timeoutMs: 600_000 },
   )
 }
 

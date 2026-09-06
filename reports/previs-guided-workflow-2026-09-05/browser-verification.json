@@ -1,0 +1,70 @@
+{
+  "passed": true,
+  "errors": [],
+  "failures": [],
+  "mutations": [
+    {
+      "method": "POST",
+      "url": "http://localhost:5001/api/f51/studio/projects/project_5907c60cddbc/previs/generate-scene/scene_001?shot_number=1&take_number=2&storyboard_shot_id=sbs_6c08f1595c22&allow_approved_revision=true&provider=openrouter-video",
+      "body": "{\"prompt\":\"Hold a steady wide shot. Amber stands left of the doorway, pauses, then turns toward the rain. No cuts.\",\"duration_seconds\":8,\"resolution\":\"1080p\",\"seed\":0}"
+    }
+  ],
+  "snapshots": [
+    {
+      "step": "plan",
+      "layout": {
+        "viewport": 1600,
+        "width": 1592
+      }
+    },
+    {
+      "step": "storyboard",
+      "layout": {
+        "viewport": 1600,
+        "width": 1592
+      }
+    },
+    {
+      "step": "render",
+      "layout": {
+        "viewport": 1600,
+        "width": 1592
+      }
+    },
+    {
+      "step": "review",
+      "layout": {
+        "viewport": 1600,
+        "width": 1592
+      }
+    },
+    {
+      "step": "mobile-plan",
+      "layout": {
+        "viewport": 390,
+        "width": 382
+      }
+    },
+    {
+      "step": "mobile-storyboard",
+      "layout": {
+        "viewport": 390,
+        "width": 382
+      }
+    },
+    {
+      "step": "mobile-render",
+      "layout": {
+        "viewport": 390,
+        "width": 382
+      }
+    },
+    {
+      "step": "mobile-review",
+      "layout": {
+        "viewport": 390,
+        "width": 382
+      }
+    }
+  ]
+}

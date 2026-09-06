@@ -1,0 +1,205 @@
+[
+  {
+    "project_id": "project_ca31687b1ca7",
+    "title": "THE LAST TIDE",
+    "scene_count": 11,
+    "approved_scenes": [],
+    "blueprints": [],
+    "recent_saved_jobs": [
+      {
+        "id": "job-20260707183059-f4ef4026-scene_011_shot_001",
+        "shot_id": "scene_011_shot_001",
+        "provider": "runway",
+        "status": "failed",
+        "prompt_length": 315,
+        "reference_count": 0,
+        "duration": 5,
+        "storyboard_shot_id": null
+      },
+      {
+        "id": "job-20260707183059-7dce6320-scene_010_shot_001",
+        "shot_id": "scene_010_shot_001",
+        "provider": "runway",
+        "status": "failed",
+        "prompt_length": 225,
+        "reference_count": 0,
+        "duration": 5,
+        "storyboard_shot_id": null
+      },
+      {
+        "id": "job-20260707183059-9040abd7-scene_009_shot_001",
+        "shot_id": "scene_009_shot_001",
+        "provider": "runway",
+        "status": "failed",
+        "prompt_length": 229,
+        "reference_count": 0,
+        "duration": 5,
+        "storyboard_shot_id": null
+      },
+      {
+        "id": "job-20260707183059-7bc0821b-scene_008_shot_001",
+        "shot_id": "scene_008_shot_001",
+        "provider": "runway",
+        "status": "failed",
+        "prompt_length": 237,
+        "reference_count": 0,
+        "duration": 5,
+        "storyboard_shot_id": null
+      },
+      {
+        "id": "job-20260707183059-2450a71c-scene_006_shot_001",
+        "shot_id": "scene_006_shot_001",
+        "provider": "runway",
+        "status": "failed",
+        "prompt_length": 321,
+        "reference_count": 0,
+        "duration": 5,
+        "storyboard_shot_id": null
+      }
+    ]
+  },
+  {
+    "project_id": "project_5907c60cddbc",
+    "title": "I was reborn",
+    "scene_count": 14,
+    "approved_scenes": [],
+    "blueprints": [
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_002_3400a20b",
+        "scene_id": "scene_002",
+        "status": "draft",
+        "current_version_id": "sbv_dbafa23cf4a1",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_003_e1bdc2a1",
+        "scene_id": "scene_003",
+        "status": "draft",
+        "current_version_id": "sbv_665f0acb147e",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_004_30cc5d62",
+        "scene_id": "scene_004",
+        "status": "draft",
+        "current_version_id": "sbv_5c4dd2439b89",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_005_bf5644cf",
+        "scene_id": "scene_005",
+        "status": "draft",
+        "current_version_id": "sbv_7a570a58a053",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_006_a79a08f3",
+        "scene_id": "scene_006",
+        "status": "draft",
+        "current_version_id": "sbv_76ef95908019",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_007_21862c5d",
+        "scene_id": "scene_007",
+        "status": "draft",
+        "current_version_id": "sbv_1b6484095966",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_008_ae9db645",
+        "scene_id": "scene_008",
+        "status": "draft",
+        "current_version_id": "sbv_8aa9b9b5a6ee",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_009_03149fc7",
+        "scene_id": "scene_009",
+        "status": "draft",
+        "current_version_id": "sbv_b04e1e535747",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_010_1fb08710",
+        "scene_id": "scene_010",
+        "status": "draft",
+        "current_version_id": "sbv_4603804d5ee4",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_011_ff413045",
+        "scene_id": "scene_011",
+        "status": "draft",
+        "current_version_id": "sbv_72c944aee5fc",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_012_95371c42",
+        "scene_id": "scene_012",
+        "status": "draft",
+        "current_version_id": "sbv_2b962fb0a93a",
+        "approved_version_id": null
+      },
+      {
+        "blueprint_id": "sbp_project_5907c60cddbc_scene_001_b28d2c4f",
+        "scene_id": "scene_001",
+        "status": "draft",
+        "current_version_id": "sbv_33ba18db0a10",
+        "approved_version_id": "sbv_33ba18db0a10"
+      }
+    ],
+    "recent_saved_jobs": [
+      {
+        "id": "job-20260826055419-f33b1af4-scene_002_shot_001",
+        "shot_id": "scene_002_shot_001",
+        "provider": "openrouter-video",
+        "status": "failed",
+        "prompt_length": 512,
+        "reference_count": 0,
+        "duration": 4,
+        "storyboard_shot_id": null
+      },
+      {
+        "id": "job-20260825235317-fd5bb8f9-scene_001_shot_001",
+        "shot_id": "scene_001_shot_001",
+        "provider": "openrouter-video",
+        "status": "failed",
+        "prompt_length": 512,
+        "reference_count": 0,
+        "duration": 4,
+        "storyboard_shot_id": null
+      },
+      {
+        "id": "job-20260824234712-e9dbc20a-scene_001_shot_001",
+        "shot_id": "scene_001_shot_001",
+        "provider": "happyhorse-r2v",
+        "status": "failed",
+        "prompt_length": 512,
+        "reference_count": 0,
+        "duration": 3,
+        "storyboard_shot_id": null
+      },
+      {
+        "id": "job-20260824234328-4cc31b0b-scene_001_shot_001",
+        "shot_id": "scene_001_shot_001",
+        "provider": "happyhorse-r2v",
+        "status": "failed",
+        "prompt_length": 512,
+        "reference_count": 0,
+        "duration": 3,
+        "storyboard_shot_id": null
+      },
+      {
+        "id": "job-20260730031632-a6f80b8b-scene_001_shot_001",
+        "shot_id": "scene_001_shot_001",
+        "provider": "happyhorse-r2v",
+        "status": "failed",
+        "prompt_length": 509,
+        "reference_count": 0,
+        "duration": null,
+        "storyboard_shot_id": null
+      }
+    ]
+  }
+]

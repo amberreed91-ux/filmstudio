@@ -8,6 +8,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.data.storage import get_storage
+from app.models.film_delivery import CutFreshness
+from app.services.film_delivery_service import FilmDeliveryService
 from app.services.final_short_film_package_service import FinalShortFilmPackageService
 from app.services.render import RenderService, render_service
 from app.services.stability import PersistenceError, PlaybackError, StateError, ValidationError
@@ -17,12 +19,13 @@ from app.utils.helpers import derive_scene_id_from_shot_id
 class ScreeningRoomService:
     """Canonical, project-scoped registry for media exposed in the Screening Room."""
 
-    def __init__(self, storage: Any | None = None, renderer: RenderService | None = None) -> None:
+    def __init__(self, storage: Any | None = None, renderer: RenderService | None = None, delivery_service: Any | None = None) -> None:
         self.storage = storage or get_storage("sqlite")
         self.renderer = renderer or render_service
         self.backend_root = Path(__file__).resolve().parents[2]
         self.outputs_root = (self.backend_root / "outputs").resolve()
         self.static_root = (self.backend_root / "static").resolve()
+        self.delivery_service = delivery_service
         self.package_service = FinalShortFilmPackageService(storage=self.storage)
 
     def sync_manifest(self, project_id: str) -> dict[str, Any]:
@@ -111,6 +114,24 @@ class ScreeningRoomService:
                     warnings=warnings,
                 )
 
+        # Scene delivery and full-film exports have their own immutable files.
+        # Register them so the exact downloaded cut can also be reviewed/approved.
+        for row in self.storage.list_scene_compositions_for_project(project_id):
+            if row["scene_id"] not in scene_ids or not row.get("composed_url"):
+                continue
+            url = str(row["composed_url"])
+            self._register(project_id=project_id, scene_id=row["scene_id"], shot_id=None,
+                source_type="scene_delivery", source_id=row["id"], output_type="scene",
+                original_url=urlparse(url).path if urlparse(url).hostname in {"localhost", "127.0.0.1"} else url,
+                created_at=row.get("updated_at") or "", metadata={"composed_url": url}, warnings=warnings)
+        film = self.storage.get_film(project_id)
+        if film and film.get("film_url"):
+            url = str(film["film_url"])
+            self._register(project_id=project_id, scene_id=None, shot_id=None,
+                source_type="film_delivery", source_id=film["id"], output_type="final",
+                original_url=urlparse(url).path if urlparse(url).hostname in {"localhost", "127.0.0.1"} else url,
+                created_at=film.get("updated_at") or "", metadata={"film_url": url, "scene_count": film["scene_count"]}, warnings=warnings)
+
         for package in self.storage.list_final_short_film_packages_for_project(project_id):
             if package.project_id != project_id or not str(package.final_output_url or "").strip():
                 continue
@@ -146,6 +167,8 @@ class ScreeningRoomService:
         state = self.storage.get_screening_project_state(project_id)
         current_final_id = state.get("current_final_output_id")
         public_outputs = [self._public_output(row) for row in outputs]
+        current = next((row for row in public_outputs if row["screening_output_id"] == current_final_id), None)
+        outdated = bool(current and current.get("cut_freshness", {}).get("status") == "outdated")
         return {
             "project_id": project_id,
             "outputs": public_outputs,
@@ -153,8 +176,8 @@ class ScreeningRoomService:
                 (row for row in public_outputs if row["screening_output_id"] == current_final_id),
                 None,
             ),
-            "completion_status": state.get("completion_status") or "in_progress",
-            "completed_at": state.get("completed_at"),
+            "completion_status": "in_progress" if outdated else state.get("completion_status") or "in_progress",
+            "completed_at": None if outdated else state.get("completed_at"),
             "warnings": [],
         }
 
@@ -172,7 +195,7 @@ class ScreeningRoomService:
         if output is None or output["project_id"] != project_id:
             raise StateError("Screening output not found", stage="screening_approve")
         self._assert_media_available(output)
-        if output["output_type"] == "final":
+        if output["output_type"] == "final" and output["source_type"] == "final_package":
             package = self.package_service.get_package(output["source_id"])
             if package is None or package.project_id != project_id:
                 raise StateError("Final package not found for Screening output", stage="screening_approve")
@@ -322,13 +345,33 @@ class ScreeningRoomService:
             if isinstance(scene, dict) and str(scene.get("scene_id") or "").strip()
         }
 
-    @staticmethod
-    def _public_output(output: dict[str, Any]) -> dict[str, Any]:
-        return {
+    def _public_output(self, output: dict[str, Any]) -> dict[str, Any]:
+        public = {
             key: value
             for key, value in output.items()
             if key != "original_url"
         }
+        if output.get("source_type") == "film_delivery":
+            delivery = self.delivery_service or FilmDeliveryService(
+                storage=self.storage, backend_root=self.backend_root, project_loader=self._project,
+            )
+            try:
+                status = delivery.status(output["project_id"])
+                original = (output.get("metadata") or {}).get("film_url")
+                if not original or not status.film_url:
+                    freshness = CutFreshness(status="unverified", reason="This export has no current assembly record to compare.")
+                elif original != status.film_url or status.film_outdated:
+                    freshness = CutFreshness(status="outdated", reason="This export no longer matches the current cut. Rebuild the film and review it before approving the new version.")
+                else:
+                    freshness = CutFreshness(status="current", reason="This export matches the current take choices and recordings.")
+            except (StateError, ValidationError, PersistenceError):
+                freshness = CutFreshness(status="unverified", reason="The current cut could not be verified. Refresh delivery status before approving.")
+            public["cut_freshness"] = freshness.model_dump()
+        elif output.get("output_type") == "final":
+            public["cut_freshness"] = CutFreshness(
+                status="unverified", reason="This package has no take and recording fingerprint. Review its contents before treating it as the current cut.",
+            ).model_dump()
+        return public
 
 
 screening_room_service = ScreeningRoomService()

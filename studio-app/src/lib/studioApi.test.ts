@@ -35,6 +35,17 @@ describe('camera grammar API', () => {
     vi.restoreAllMocks()
   })
 
+  it('sends the visible Previs prompt and take settings to the backend', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ job_id: 'j', status: 'pending', scene_id: 's' })))
+    const renderSettings = { prompt: 'Close on her left hand. She keeps the key.', duration_seconds: 8, resolution: '1080p' as const, seed: 0 }
+    await generatePrevisScene('p', 's', { provider: 'openrouter-video', shotNumber: 2, takeNumber: 3, renderSettings })
+    const [url, request] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('provider=openrouter-video')
+    expect(String(url)).toContain('take_number=3')
+    expect(JSON.parse(String(request?.body))).toEqual(renderSettings)
+    expect(new Headers(request?.headers).get('Content-Type')).toBe('application/json')
+  })
+
   it('creates camera grammar plans through the cinematography API', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

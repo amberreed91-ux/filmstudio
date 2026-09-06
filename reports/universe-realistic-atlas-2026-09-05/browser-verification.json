@@ -1,0 +1,46 @@
+{
+  "passed": true,
+  "results": [
+    {
+      "label": "desktop",
+      "viewport": 1600,
+      "width": 1592
+    },
+    {
+      "label": "tablet",
+      "viewport": 900,
+      "width": 892
+    },
+    {
+      "label": "tablet-inspector",
+      "viewport": 900,
+      "width": 892
+    },
+    {
+      "label": "mobile",
+      "viewport": 390,
+      "width": 382
+    },
+    {
+      "label": "mobile-inspector",
+      "viewport": 390,
+      "width": 382
+    },
+    {
+      "scenario": "populated",
+      "errors": [],
+      "failures": [],
+      "mutations": []
+    },
+    {
+      "label": "empty-mobile",
+      "viewport": 390,
+      "width": 382
+    },
+    {
+      "scenario": "webgl-unavailable",
+      "atlasSelectable": true,
+      "errors": []
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+_____ test_saving_scene_plan_keeps_creator_access_and_excludes_other_users _____
+tests/test_project_access_boundary.py:117: in test_saving_scene_plan_keeps_creator_access_and_excludes_other_users
+    assert result.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+=========================== short test summary info ============================
+FAILED tests/test_project_access_boundary.py::test_saving_scene_plan_keeps_creator_access_and_excludes_other_users
+1 failed, 1 passed in 7.25s

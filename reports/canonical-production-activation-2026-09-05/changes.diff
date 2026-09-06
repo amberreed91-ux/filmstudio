@@ -1,0 +1,2030 @@
+diff --git a/studio-app/backendSupervisor.ts b/studio-app/backendSupervisor.ts
+index 601bb458..e0604cf9 100644
+--- a/studio-app/backendSupervisor.ts
++++ b/studio-app/backendSupervisor.ts
+@@ -28,6 +28,10 @@ export function backendSupervisorMiddleware(): Connect.NextHandleFunction {
+       next()
+       return
+     }
++    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress ?? '')) {
++      sendJson(response, 403, { detail: 'Backend startup requires a local connection' })
++      return
++    }
+     if (request.method !== 'POST') {
+       sendJson(response, 405, { detail: 'Method not allowed' })
+       return
+@@ -46,9 +50,10 @@ export function backendSupervisorMiddleware(): Connect.NextHandleFunction {
+     try {
+       const child = spawn(
+         python,
+-        ['-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8010', '--log-level', 'info'],
++        ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '8010', '--log-level', 'info'],
+         {
+           cwd: BACKEND_DIR,
++          env: { ...process.env, STUDIO_ACCESS_MODE: 'local', RATE_LIMIT_PER_MINUTE: process.env.RATE_LIMIT_PER_MINUTE || '600' },
+           detached: true,
+           stdio: 'ignore',
+         },
+diff --git a/studio-app/src/components/CanonicalWorkflowPanel.test.tsx b/studio-app/src/components/CanonicalWorkflowPanel.test.tsx
+index 665a94ee..3e001e21 100644
+--- a/studio-app/src/components/CanonicalWorkflowPanel.test.tsx
++++ b/studio-app/src/components/CanonicalWorkflowPanel.test.tsx
+@@ -1,11 +1,16 @@
+ import { renderToStaticMarkup } from 'react-dom/server'
+-import { describe, expect, it, vi } from 'vitest'
++import { afterEach, describe, expect, it, vi } from 'vitest'
+ 
+ import CanonicalWorkflowPanel from './CanonicalWorkflowPanel'
+ 
++const state = vi.hoisted(() => ({
++  sceneContext: null as null | { scriptId: string; sequenceId: string; beatIds: string[] },
++}))
++
+ vi.mock('../hooks/useCanonicalWorkflow', () => ({
+   useCanonicalWorkflow: () => ({
+     run: null,
++    sceneContext: state.sceneContext,
+     availableRuns: [],
+     currentBlueprintVersionId: 'blueprint-version-1',
+     transitions: [],
+@@ -21,6 +26,21 @@ vi.mock('../hooks/useCanonicalWorkflow', () => ({
+ }))
+ 
+ describe('CanonicalWorkflowPanel', () => {
++  afterEach(() => { state.sceneContext = null })
++  it('uses server-resolved script context to enable an older saved film', () => {
++    state.sceneContext = { scriptId: 'script_saved', sequenceId: '', beatIds: [] }
++    const html = renderToStaticMarkup(<CanonicalWorkflowPanel projectId="project-1" sceneId="scene-2" sceneContext={{ scriptId: '', sequenceId: '', beatIds: [] }} surface="previs" />)
++    expect(html).toMatch(/<button type="button" class="[^"]*">Start approved production thread<\/button>/)
++    expect(html).not.toContain('Save this film')
++  })
++
++  it('names the selected real provider in the production panel', () => {
++    const html = renderToStaticMarkup(<CanonicalWorkflowPanel projectId="project-1" sceneId="scene-2" sceneContext={{ scriptId: 'script-1', sequenceId: '', beatIds: [] }} surface="previs" renderProvider="openrouter-video" renderProviderLabel="OpenRouter · HappyHorse" />)
++    expect(html).toContain('OpenRouter · HappyHorse')
++    expect(html).not.toContain('simulated provider')
++    expect(html).toContain('Retries and revisions retain their original render provider')
++  })
++
+   it('renders exact project and scene context with an explicit start action', () => {
+     const html = renderToStaticMarkup(
+       <CanonicalWorkflowPanel
+diff --git a/studio-app/src/components/CanonicalWorkflowPanel.tsx b/studio-app/src/components/CanonicalWorkflowPanel.tsx
+index caecdb3f..0f6e3dee 100644
+--- a/studio-app/src/components/CanonicalWorkflowPanel.tsx
++++ b/studio-app/src/components/CanonicalWorkflowPanel.tsx
+@@ -35,6 +35,8 @@ type CanonicalWorkflowPanelProps = {
+   sceneId: string
+   sceneContext: CanonicalSceneContext
+   surface: 'previs' | 'screening'
++  renderProvider?: string
++  renderProviderLabel?: string
+ }
+ 
+ function record(value: unknown): AnyRecord | null {
+@@ -63,8 +65,11 @@ export default function CanonicalWorkflowPanel({
+   sceneId,
+   sceneContext,
+   surface,
++  renderProvider,
++  renderProviderLabel,
+ }: CanonicalWorkflowPanelProps) {
+   const controller = useCanonicalWorkflow(projectId, sceneId)
++  const resolvedSceneContext = controller.sceneContext ?? sceneContext
+   const [revisionPrompt, setRevisionPrompt] = useState('')
+   const [revisionReason, setRevisionReason] = useState('')
+   const [changedFields, setChangedFields] = useState('timing, performance_guidance')
+@@ -84,6 +89,7 @@ export default function CanonicalWorkflowPanel({
+   const memorySaved = Boolean(text(run?.data.identifiers.memory_record_id))
+   const failure = run?.data.failures?.[run.data.failures.length - 1]
+   const busy = Boolean(controller.action) || controller.polling
++  const providerLabel = renderProvider ? (renderProviderLabel || renderProvider) : 'Approved Previs provider'
+ 
+   const apply = (
+     label: string,
+@@ -152,6 +158,11 @@ export default function CanonicalWorkflowPanel({
+         </div>
+       </div>
+ 
++      <p className="mt-2 text-[10px] text-zinc-400" data-testid="canonical-render-provider">
++        New renders: {providerLabel}. {renderProvider ? '' : 'New Previs uses the server default. '}
++        Retries and revisions retain their original render provider.
++      </p>
++
+       {controller.loading ? (
+         <div className="mt-3 flex items-center gap-2 text-xs text-zinc-400">
+           <Loader2 size={13} className="animate-spin" /> Loading durable production state…
+@@ -191,11 +202,11 @@ export default function CanonicalWorkflowPanel({
+               onClick={() => apply('Starting thread', () => beginCanonicalWorkflow({
+                 projectId,
+                 sceneId,
+-                scriptId: sceneContext.scriptId,
+-                sequenceId: sceneContext.sequenceId,
+-                beatIds: sceneContext.beatIds,
++                scriptId: resolvedSceneContext.scriptId,
++                sequenceId: resolvedSceneContext.sequenceId,
++                beatIds: resolvedSceneContext.beatIds,
+               }))}
+-              disabled={busy || !projectId || !sceneId || !sceneContext.scriptId}
++              disabled={busy || !projectId || !sceneId || !resolvedSceneContext.scriptId}
+               className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 disabled:opacity-40"
+             >
+               Start approved production thread
+@@ -203,7 +214,7 @@ export default function CanonicalWorkflowPanel({
+           ) : null}
+ 
+           {nextAction === 'generate_previs' ? (
+-            <button type="button" disabled={busy} onClick={() => apply('Generating Previs', () => generateCanonicalPrevis(run!.run_id))} className="btn-ghost px-3 py-2 text-[10px]">
++            <button type="button" disabled={busy} onClick={() => apply('Generating Previs', () => generateCanonicalPrevis(run!.run_id, renderProvider))} className="btn-ghost px-3 py-2 text-[10px]">
+               Generate approved Previs
+             </button>
+           ) : null}
+@@ -234,13 +245,13 @@ export default function CanonicalWorkflowPanel({
+               type="button"
+               disabled={busy}
+               onClick={() => confirmAction(
+-                'Queue the exact approved package with the simulated provider?',
++                `Queue the exact approved package with ${providerLabel}?`,
+                 'Queuing render',
+-                () => renderCanonicalProductionPackage(run!.run_id),
++                () => renderCanonicalProductionPackage(run!.run_id, false, renderProvider),
+               )}
+               className="btn-ghost px-3 py-2 text-[10px]"
+             >
+-              Queue simulated render
++              Queue approved render
+             </button>
+           ) : null}
+ 
+@@ -417,8 +428,11 @@ export default function CanonicalWorkflowPanel({
+         </div>
+       ) : null}
+ 
+-      {!run && !controller.loading && !sceneContext.scriptId ? (
+-        <p className="mt-2 text-[10px] text-amber-200">The selected scene has no canonical Script ID yet. Return to Write and regenerate the scene structure.</p>
++      {!run && !controller.loading && !resolvedSceneContext.scriptId ? (
++        <p className="mt-2 text-[10px] text-amber-200">Save this film’s script in Write before starting a production thread.</p>
++      ) : null}
++      {!run && !controller.loading && resolvedSceneContext.scriptId && !controller.currentBlueprintVersionId ? (
++        <p className="mt-2 text-[10px] text-amber-200">Build and approve this scene’s Storyboard Blueprint, then start its production thread.</p>
+       ) : null}
+ 
+       {run ? (
+diff --git a/studio-app/src/hooks/useCanonicalWorkflow.ts b/studio-app/src/hooks/useCanonicalWorkflow.ts
+index 17d15b9f..8966228b 100644
+--- a/studio-app/src/hooks/useCanonicalWorkflow.ts
++++ b/studio-app/src/hooks/useCanonicalWorkflow.ts
+@@ -8,7 +8,7 @@ import {
+   type CanonicalWorkflowRun,
+   type CanonicalWorkflowTransition,
+ } from '../lib/canonicalWorkflowApi'
+-import { isCanonicalPollingStatus, isRevisionSubmitted } from '../lib/canonicalWorkflowContext'
++import { isCanonicalPollingStatus, isRevisionSubmitted, type CanonicalSceneContext } from '../lib/canonicalWorkflowContext'
+ 
+ const POLL_INTERVAL_MS = 2500
+ const POLL_TIMEOUT_MS = 10 * 60 * 1000
+@@ -17,6 +17,7 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
+   const [run, setRun] = useState<CanonicalWorkflowRun | null>(null)
+   const [availableRuns, setAvailableRuns] = useState<CanonicalWorkflowRun[]>([])
+   const [currentBlueprintVersionId, setCurrentBlueprintVersionId] = useState('')
++  const [sceneContext, setSceneContext] = useState<CanonicalSceneContext | null>(null)
+   const [transitions, setTransitions] = useState<CanonicalWorkflowTransition[]>([])
+   const [loading, setLoading] = useState(false)
+   const [polling, setPolling] = useState(false)
+@@ -32,6 +33,7 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
+     setRun(null)
+     setAvailableRuns([])
+     setCurrentBlueprintVersionId('')
++    setSceneContext(null)
+     setTransitions([])
+     setError('')
+     setAction('')
+@@ -44,13 +46,18 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
+     const requestKey = contextKey
+     setLoading(true)
+     void listCanonicalWorkflows(projectId, sceneId, { signal: controller.signal })
+-      .then(async ({ runs, current_blueprint_version_id }) => {
++      .then(async ({ runs, current_blueprint_version_id, scene_context }) => {
+         if (controller.signal.aborted || contextKeyRef.current !== requestKey) return
+         const exactRuns = runs.filter((candidate) => (
+           candidate.project_id === projectId && candidate.scene_id === sceneId
+         ))
+         setAvailableRuns(exactRuns)
+         setCurrentBlueprintVersionId(current_blueprint_version_id || '')
++        setSceneContext(scene_context ? {
++          scriptId: scene_context.script_id,
++          sequenceId: scene_context.sequence_id,
++          beatIds: scene_context.beat_ids,
++        } : null)
+         const exact = current_blueprint_version_id
+           ? exactRuns.find((candidate) => candidate.blueprint_version_id === current_blueprint_version_id)
+           : [...exactRuns].sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0]
+@@ -167,6 +174,7 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
+     run,
+     availableRuns,
+     currentBlueprintVersionId,
++    sceneContext,
+     transitions,
+     loading,
+     polling,
+diff --git a/studio-app/src/lib/canonicalWorkflowApi.test.ts b/studio-app/src/lib/canonicalWorkflowApi.test.ts
+index e00eb8dd..a43a1d8a 100644
+--- a/studio-app/src/lib/canonicalWorkflowApi.test.ts
++++ b/studio-app/src/lib/canonicalWorkflowApi.test.ts
+@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
+ 
+ import {
+   beginCanonicalWorkflow,
++  generateCanonicalPrevis,
++  renderCanonicalRevision,
+   listCanonicalWorkflows,
+   renderCanonicalProductionPackage,
+ } from './canonicalWorkflowApi'
+@@ -68,6 +70,28 @@ describe('canonical workflow API', () => {
+     const [url, init] = fetchMock.mock.calls[0]
+     expect(String(url)).toContain('/api/f51/studio/production-threads/run-1/renders')
+     expect(init?.method).toBe('POST')
+-    expect(JSON.parse(String(init?.body))).toEqual({ provider: 'simulated', retry_confirmed: true })
++    expect(JSON.parse(String(init?.body))).toEqual({ retry_confirmed: true })
++  })
++})
++
++
++describe('canonical provider selection', () => {
++  afterEach(() => vi.restoreAllMocks())
++
++  it.each(['openrouter-video', 'runway', 'simulated'])('sends explicit %s for new Previs, package and revision jobs', async (provider) => {
++    const request = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ run: {}, transitions: [] }), { status: 200 }))
++    await generateCanonicalPrevis('run-1', provider)
++    await renderCanonicalProductionPackage('run-1', false, provider)
++    await renderCanonicalRevision('run-1', provider)
++    expect(request.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).provider)).toEqual([provider, provider, provider])
++    for (const [, init] of request.mock.calls) expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json')
++  })
++
++  it('omits provider overrides when polling or retaining approved settings', async () => {
++    const request = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ run: {}, transitions: [] }), { status: 200 }))
++    await generateCanonicalPrevis('run-1')
++    await renderCanonicalProductionPackage('run-1')
++    await renderCanonicalRevision('run-1')
++    for (const [, init] of request.mock.calls) expect(JSON.parse(String(init?.body))).not.toHaveProperty('provider')
+   })
+ })
+diff --git a/studio-app/src/lib/canonicalWorkflowApi.ts b/studio-app/src/lib/canonicalWorkflowApi.ts
+index d0a08e92..b8a00074 100644
+--- a/studio-app/src/lib/canonicalWorkflowApi.ts
++++ b/studio-app/src/lib/canonicalWorkflowApi.ts
+@@ -59,6 +59,7 @@ export type CanonicalWorkflowResponse = {
+ export type CanonicalWorkflowListResponse = {
+   runs: CanonicalWorkflowRun[]
+   current_blueprint_version_id: string
++  scene_context?: { script_id: string; sequence_id: string; beat_ids: string[] } | null
+ }
+ 
+ type RequestOptions = { signal?: AbortSignal }
+@@ -125,8 +126,12 @@ export function beginCanonicalWorkflow(input: {
+   )
+ }
+ 
+-export function generateCanonicalPrevis(runId: string) {
+-  return fetchJson<CanonicalWorkflowResponse>(workflowPath(runId, '/previs/generate'), jsonPost({}))
++export function generateCanonicalPrevis(runId: string, provider?: string) {
++  return fetchJson<CanonicalWorkflowResponse>(workflowPath(runId, '/previs/generate'), {
++    ...jsonPost({ provider: provider || undefined }),
++    timeoutMs: 600_000,
++    timeoutLabel: 'Approved Previs generation',
++  })
+ }
+ 
+ export function approveCanonicalPrevis(runId: string, artifactIds: string[]) {
+@@ -140,10 +145,10 @@ export function createCanonicalProductionPackage(runId: string) {
+   return fetchJson<CanonicalWorkflowResponse>(workflowPath(runId, '/production-package'), jsonPost({}))
+ }
+ 
+-export function renderCanonicalProductionPackage(runId: string, retryConfirmed = false) {
++export function renderCanonicalProductionPackage(runId: string, retryConfirmed = false, provider?: string) {
+   return fetchJson<CanonicalWorkflowResponse>(
+     workflowPath(runId, '/renders'),
+-    jsonPost({ provider: 'simulated', retry_confirmed: retryConfirmed }),
++    { ...jsonPost({ provider: provider || undefined, retry_confirmed: retryConfirmed }), timeoutMs: 600_000 },
+   )
+ }
+ 
+@@ -201,10 +206,10 @@ export function createCanonicalRevision(runId: string, input: {
+   )
+ }
+ 
+-export function renderCanonicalRevision(runId: string) {
++export function renderCanonicalRevision(runId: string, provider?: string) {
+   return fetchJson<CanonicalWorkflowResponse>(
+     workflowPath(runId, '/revision/render'),
+-    jsonPost({ provider: 'simulated' }),
++    { ...jsonPost({ provider: provider || undefined }), timeoutMs: 600_000 },
+   )
+ }
+ 
+diff --git a/studio-app/src/pages/PrevisRoom.tsx b/studio-app/src/pages/PrevisRoom.tsx
+index 234fe7b5..7d582187 100644
+--- a/studio-app/src/pages/PrevisRoom.tsx
++++ b/studio-app/src/pages/PrevisRoom.tsx
+@@ -1,6 +1,7 @@
+ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+ import {
++  AlertTriangle,
+   Sparkles,
+   Camera,
+   CheckCircle2,
+@@ -8,14 +9,17 @@ import {
+   ChevronRight,
+   Clock,
+   History,
++  Layers,
+   Loader2,
+   Lock,
+   LockOpen,
+   Play,
+   RotateCcw,
++  Search,
+   X,
+ } from 'lucide-react'
+ import StudioShell from '../components/StudioShell'
++import StageScenePanel from '../components/StageScenePanel'
+ import ProjectContextBar from '../components/ProjectContextBar'
+ import ProjectGuard from '../components/ProjectGuard'
+ import CinematographerIntelligencePanel from '../components/CinematographerIntelligencePanel'
+@@ -43,10 +47,14 @@ import {
+   recommendGenerationSettings,
+   recommendShotCount,
+   retryRenderJobForAdherence,
++  runStoryboardContinuityReview,
+   togglePrevisSeedLock,
++  updateStoryboardShot,
+   type RenderJob,
+   type Scene,
+   type StoryboardBlueprintDetail,
++  type StoryboardContinuityIssue,
++  type StoryboardContinuityReview,
+   type StoryboardImageProvider,
+   type StoryboardShot,
+   type ScenePipelineGenerateResult,
+@@ -69,6 +77,7 @@ import {
+   chooseDurationForProvider,
+   initialStoryboardImageState,
+   promptChangedAfterEnhancement,
++  shotNumberFromContinuityLabel,
+   type PrevisRenderEngine,
+   type StoryboardImageStatus,
+ } from '../lib/previsStoryboard'
+@@ -218,7 +227,7 @@ function derivePromptFromScene(scene: Scene, shotNumber: number = 1, takeNumber:
+         const tag = classifyScriptLineTag(line)
+         return tag === 'ACT' || tag === 'DLG' || tag === null
+       })
+-    const actionText = actionLines.slice(0, 2).join(' ')
++    const actionText = actionLines.join(' ')
+     if (actionText) parts.push(actionText)
+   }
+ 
+@@ -239,11 +248,6 @@ function derivePromptFromScene(scene: Scene, shotNumber: number = 1, takeNumber:
+     prompt += ` ${takeVariation}`
+   }
+ 
+-  // Truncate if needed (Runway limit ~512 chars)
+-  if (prompt.length > 512) {
+-    prompt = prompt.slice(0, 509) + '...'
+-  }
+-
+   return prompt
+ }
+ 
+@@ -341,6 +345,17 @@ const FPS_OPTIONS: FpsOption[] = [8, 12, 16, 24]
+ const RESOLUTIONS: ResolutionOption[] = ['480p', '720p', '1080p']
+ const ENGINES: RenderEngine[] = ['Wan 2.2', 'LTX-Video', 'Auto (Best Available)']
+ 
++// Real render providers the RENDER ENGINE dropdown can force for a render.
++// value '' = use the server's configured default (RENDER_VIDEO_PROVIDER); every
++// other value is a provider id the backend registers in its adapter registry.
++const RENDER_PROVIDERS: { label: string; value: string }[] = [
++  { label: 'Auto (Server Default)', value: '' },
++  { label: 'OpenRouter · HappyHorse', value: 'openrouter-video' },
++  { label: 'Runway', value: 'runway' },
++  { label: 'Wan 2.2', value: 'wan' },
++  { label: 'HappyHorse · DashScope', value: 'happyhorse-r2v' },
++]
++
+ function generateSeed(): number {
+   return Math.floor(Math.random() * 10_000_000)
+ }
+@@ -432,6 +447,11 @@ export default function PrevisRoom() {
+     resolution: '720p',
+     seed: null,
+   })
++  // Render-provider override for the RENDER ENGINE dropdown. '' = let the server
++  // choose (its RENDER_VIDEO_PROVIDER default); a concrete id forces that
++  // provider for the next render. Kept separate from genConfig.model, which the
++  // generation-settings recommendation owns.
++  const [renderProvider, setRenderProvider] = useState<string>('')
+   const [audioConfig, setAudioConfig] = useState<AudioConfig>({
+     voiceEnabled: false,
+     voiceLine: '',
+@@ -513,6 +533,9 @@ export default function PrevisRoom() {
+   const [storyboardBlueprint, setStoryboardBlueprint] = useState<StoryboardBlueprintDetail | null>(null)
+   const [blueprintLoading, setBlueprintLoading] = useState(false)
+   const [blueprintApproving, setBlueprintApproving] = useState(false)
++  const [continuityReviewRunning, setContinuityReviewRunning] = useState(false)
++  const [continuityActionRunning, setContinuityActionRunning] = useState<string | null>(null)
++  const [comparisonMode, setComparisonMode] = useState<'side_by_side' | 'overlay' | 'before_after'>('side_by_side')
+   const [settingsRecommendation, setSettingsRecommendation] = useState<GenerationSettingsResponse | null>(null)
+   const [durationDraft, setDurationDraft] = useState('4')
+   const [shotPlanningOverrides, setShotPlanningOverrides] = useState<Record<number, Partial<ShotPlanningDetails>>>({})
+@@ -713,6 +736,15 @@ export default function PrevisRoom() {
+     return storyboardBlueprint?.shots.find((shot) => shot.shot_number === activeShotNumber) || null
+   }, [activeShotNumber, storyboardBlueprint?.shots])
+ 
++  const continuityReview = useMemo<StoryboardContinuityReview | null>(() => {
++    const review = storyboardBlueprint?.blueprint.metadata?.continuity_review
++    if (!review || typeof review !== 'object') return null
++    const typedReview = review as StoryboardContinuityReview
++    return typedReview.version_id === storyboardBlueprint?.version?.version_id ? typedReview : null
++  }, [storyboardBlueprint?.blueprint.metadata, storyboardBlueprint?.version?.version_id])
++
++  const continuityReviewComplete = continuityReview?.status === 'completed'
++
+   const activeStoryboardState = storyboardImageStates[activeShotNumber]
+     || initialStoryboardImageState(currentStoryboardImageUrl, loading)
+ 
+@@ -944,7 +976,11 @@ export default function PrevisRoom() {
+           timer = setTimeout(loadJobs, 10000)
+         }
+       } catch (caught) {
+-        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Render jobs could not be refreshed.')
++        // Background poll: don't hijack the room-wide error banner. A transient
++        // render-jobs fetch failure (or a 500 from that endpoint) should not
++        // paint a persistent "Internal Server Error" over the whole Previs Room
++        // — it just means the render-history list couldn't refresh this tick.
++        if (!cancelled) console.warn('[PrevisRoom] render jobs refresh failed:', caught)
+       }
+     }
+     void loadJobs()
+@@ -1005,7 +1041,6 @@ export default function PrevisRoom() {
+           setProgress(100)
+           // Add to render history
+           const videoUrl = job.output_payload?.asset_url || job.output_url || undefined
+-          console.log('Video URL:', videoUrl)
+           const completedShotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
+           const completedShotNumber = completedShotNumMatch ? parseInt(completedShotNumMatch[1], 10) : activeShotNumber
+           const shotLabel = getShotTypeLabel(completedShotNumber)
+@@ -1054,7 +1089,7 @@ export default function PrevisRoom() {
+           setCurrentJobId(null)
+           setSuccess(`Shot ${completedShotNumber} Take ${takeNumber} complete (${shotLabel})!`)
+           if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+-        } else if (status === 'failed') {
++        } else if (status === 'failed' || status === 'needs_review') {
+           setPipelineStatus({ loop1: 'done', loop2: 'done', compose: 'done', mp4: 'failed' })
+           setProgress(0)
+           setRendering(false)
+@@ -1121,6 +1156,16 @@ export default function PrevisRoom() {
+     setPromptText(newPrompt)
+   }, [activeShotNumber, selectedSceneId, scenes, totalShots])
+ 
++  useEffect(() => {
++    if (!activeBlueprintShot) return
++    setPromptText(activeBlueprintShot.render_contract.provider_neutral_prompt)
++    setGenConfig((previous) => ({
++      ...previous,
++      duration: activeBlueprintShot.render_contract.duration_seconds,
++      seed: activeBlueprintShot.render_contract.seed ?? null,
++    }))
++  }, [activeBlueprintShot?.storyboard_shot_id])
++
+   // ── Load history from render jobs ─────────────────────────────────────────
+   useEffect(() => {
+     if (!selectedSceneId || renderJobs.length === 0) {
+@@ -1214,7 +1259,7 @@ export default function PrevisRoom() {
+       return
+     }
+     const storyboardPrompt = activeBlueprintShot?.render_contract.provider_neutral_prompt?.trim() || ''
+-    const renderPrompt = storyboardPrompt || promptText.trim()
++    const renderPrompt = promptText.trim() || storyboardPrompt
+     if (!renderPrompt) {
+       setError('Enter a prompt before rendering')
+       return
+@@ -1240,10 +1285,25 @@ export default function PrevisRoom() {
+         takeNumber,
+         storyboardShotId,
+         allowApprovedRevision: true,
++        provider: renderProvider || undefined,
++        renderSettings: {
++          prompt: renderPrompt,
++          duration_seconds: genConfig.duration,
++          resolution: genConfig.resolution,
++          seed: genConfig.seed,
++          shot_planning: shotPlanningOverrides[activeShotNumber],
++        },
+       })
++      if (generated.status === 'needs_review') {
++        setRendering(false)
++        setCurrentJobId(null)
++        setError(generated.message || 'Review required shot facts before rendering.')
++        setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
++        return
++      }
+       setCurrentJobId(generated.job_id)
+       setSuccess(generated.duplicate
+-        ? `Render already active — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})`
++        ? generated.message || 'A render is already active for this shot.'
+         : `Render queued — Shot ${activeShotNumber}, Take ${takeNumber} (${shotLabel})`)
+ 
+       if (generated.status === 'complete') {
+@@ -1281,7 +1341,7 @@ export default function PrevisRoom() {
+       setRendering(false)
+       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
+     }
+-  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, selectedSceneId, activeShotNumber, visibleRenderHistory])
++  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, renderProvider, selectedSceneId, activeShotNumber, visibleRenderHistory, shotPlanningOverrides])
+ 
+   // ── Delete render job ────────────────────────────────────────────────────
+   const handleDeleteRender = useCallback(async (jobId: string) => {
+@@ -1455,35 +1515,15 @@ export default function PrevisRoom() {
+     }
+   }, [effectiveProjectId, selectedSceneId, totalShots])
+ 
+-  const handleApproveStoryboardBlueprint = useCallback(async () => {
+-    const blueprint = storyboardBlueprint?.blueprint
+-    const version = storyboardBlueprint?.version
+-    if (!blueprint || !version) {
+-      setError('Create a storyboard blueprint before approval')
+-      return
+-    }
+-    setBlueprintApproving(true)
+-    setError('')
+-    try {
+-      const result = await approveStoryboardVersion(blueprint.blueprint_id, version.version_id)
+-      setStoryboardBlueprint(result)
+-      setSuccess('Storyboard approved for production')
+-    } catch (err) {
+-      setError(err instanceof Error ? err.message : 'Storyboard approval failed')
+-    } finally {
+-      setBlueprintApproving(false)
+-    }
+-  }, [storyboardBlueprint])
+-
+   // ── Handle Generate Storyboard ─────────────────────────────────────────────
+-  const handleGenerateStoryboard = useCallback(async () => {
++  const handleGenerateStoryboardForShot = useCallback(async (shotNumber: number) => {
+     if (!selectedSceneId || !effectiveProjectId) {
+       setError('Select a scene first')
+       return
+     }
+     setLoading(true)
+     setError('')
+-    const requestedShotNumber = activeShotNumber
++    const requestedShotNumber = Math.max(1, shotNumber)
+     setStoryboardImageStates((prev) => ({ ...prev, [requestedShotNumber]: 'generating' }))
+     try {
+       const result = await generateSceneStoryboard(effectiveProjectId, selectedSceneId, storyboardProvider, requestedShotNumber)
+@@ -1511,7 +1551,197 @@ export default function PrevisRoom() {
+     } finally {
+       setLoading(false)
+     }
+-  }, [selectedSceneId, effectiveProjectId, storyboardProvider, loadScenes, activeShotNumber])
++  }, [selectedSceneId, effectiveProjectId, storyboardProvider, loadScenes])
++
++  const handleGenerateStoryboard = useCallback(async () => {
++    await handleGenerateStoryboardForShot(activeShotNumber)
++  }, [activeShotNumber, handleGenerateStoryboardForShot])
++
++  const handleRunContinuityReview = useCallback(async () => {
++    const blueprint = storyboardBlueprint?.blueprint
++    const version = storyboardBlueprint?.version
++    if (!blueprint || !version) {
++      setError('Build a storyboard blueprint before continuity review')
++      return
++    }
++    setContinuityReviewRunning(true)
++    setError('')
++    try {
++      const report = await runStoryboardContinuityReview(blueprint.blueprint_id, version.version_id)
++      setStoryboardBlueprint((prev) => prev
++        ? {
++            ...prev,
++            blueprint: {
++              ...prev.blueprint,
++              status: report.summary.high_count > 0 ? 'needs_review' : prev.blueprint.status,
++              metadata: { ...prev.blueprint.metadata, continuity_review: report },
++            },
++            version: prev.version
++              ? { ...prev.version, metadata: { ...prev.version.metadata, continuity_review: report } }
++              : prev.version,
++          }
++        : prev)
++      setSuccess('Continuity review complete')
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Continuity review failed')
++    } finally {
++      setContinuityReviewRunning(false)
++    }
++  }, [storyboardBlueprint])
++
++  const handleContinuityIssueAction = useCallback(async (
++    issue: StoryboardContinuityIssue,
++    action: string,
++  ) => {
++    const blueprint = storyboardBlueprint?.blueprint
++    const version = storyboardBlueprint?.version
++    if (!blueprint || !version) {
++      setError('Build a storyboard blueprint before reviewing continuity actions')
++      return
++    }
++    const shotNumber = shotNumberFromContinuityLabel(issue.affected_shot)
++    const affectedShot = shotNumber
++      ? storyboardBlueprint?.shots.find((shot) => shot.shot_number === shotNumber)
++      : null
++    if (!shotNumber || !affectedShot) {
++      setError('Could not find the affected storyboard shot')
++      return
++    }
++
++    const actionKey = `${issue.issue_id}-${action}`
++    setContinuityActionRunning(actionKey)
++    setError('')
++    setActiveShotNumber(shotNumber)
++
++    try {
++      if (action === 'show_differences') {
++        setComparisonMode(issue.previous_shot ? 'before_after' : 'side_by_side')
++        setSuccess(`Showing continuity context for Shot ${issue.affected_shot}`)
++        return
++      }
++
++      if (action === 'regenerate_selected_shot') {
++        await handleGenerateStoryboardForShot(shotNumber)
++        setSuccess(`Regenerated storyboard for Shot ${issue.affected_shot}`)
++        return
++      }
++
++      const continuityPlan = { ...(affectedShot.continuity_plan || {}) }
++      const visualPlan = { ...(affectedShot.visual_plan || {}) }
++      const intent = { ...(affectedShot.intent || {}) }
++      const renderContract = { ...(affectedShot.render_contract || {}) }
++      const warnings = Array.isArray(continuityPlan.continuity_warnings)
++        ? continuityPlan.continuity_warnings.filter((warning) => String(warning) !== issue.detected_state)
++        : []
++      const note = action === 'ignore'
++        ? `Creator reviewed ${issue.category.toLowerCase()} on Shot ${issue.affected_shot} and kept the current choice.`
++        : issue.recommended_fix
++
++      if (action === 'ignore') {
++        continuityPlan.motif_continuity = Array.from(new Set([
++          ...(Array.isArray(continuityPlan.motif_continuity) ? continuityPlan.motif_continuity : []),
++          note,
++        ]))
++        continuityPlan.continuity_warnings = warnings
++      } else if (issue.category.toLowerCase().includes('environment')) {
++        continuityPlan.location_continuity = String(
++          continuityPlan.location_continuity
++          || selectedScene?.location
++          || selectedScene?.heading
++          || issue.expected_state
++          || issue.recommended_fix,
++        )
++        visualPlan.environment = String(visualPlan.environment || continuityPlan.location_continuity)
++        continuityPlan.continuity_warnings = warnings
++      } else if (issue.category.toLowerCase().includes('story')) {
++        intent.emotional_target = String(
++          intent.emotional_target
++          || selectedScene?.emotional_tone
++          || issue.recommended_fix,
++        )
++        continuityPlan.emotional_continuity = String(
++          continuityPlan.emotional_continuity
++          || intent.emotional_target
++          || issue.recommended_fix,
++        )
++        continuityPlan.continuity_warnings = warnings
++      } else if (issue.category.toLowerCase().includes('camera')) {
++        visualPlan.framing = String(visualPlan.framing || issue.recommended_fix)
++        continuityPlan.continuity_warnings = warnings
++      } else if (issue.category.toLowerCase().includes('blueprint')) {
++        const promptFallback = [
++          selectedScene?.heading,
++          selectedScene?.description,
++          visualPlan.framing,
++          visualPlan.environment,
++          issue.recommended_fix,
++        ].filter(Boolean).join('. ')
++        renderContract.provider_neutral_prompt = String(renderContract.provider_neutral_prompt || promptFallback)
++        continuityPlan.continuity_warnings = warnings
++      } else {
++        continuityPlan.motif_continuity = Array.from(new Set([
++          ...(Array.isArray(continuityPlan.motif_continuity) ? continuityPlan.motif_continuity : []),
++          note,
++        ]))
++        continuityPlan.continuity_warnings = warnings
++      }
++
++      const updatedShot = await updateStoryboardShot(blueprint.blueprint_id, affectedShot.storyboard_shot_id, {
++        intent,
++        visual_plan: visualPlan,
++        continuity_plan: continuityPlan,
++        render_contract: renderContract,
++        change_reason: action === 'ignore' ? 'continuity_issue_acknowledged' : 'continuity_issue_action_applied',
++      })
++      setStoryboardBlueprint((prev) => prev
++        ? { ...prev, shots: prev.shots.map((shot) => shot.storyboard_shot_id === updatedShot.storyboard_shot_id ? updatedShot : shot) }
++        : prev)
++
++      const report = await runStoryboardContinuityReview(blueprint.blueprint_id, version.version_id)
++      setStoryboardBlueprint((prev) => prev
++        ? {
++            ...prev,
++            blueprint: {
++              ...prev.blueprint,
++              status: report.summary.high_count > 0 ? 'needs_review' : 'draft',
++              metadata: { ...prev.blueprint.metadata, continuity_review: report },
++            },
++            version: prev.version
++              ? { ...prev.version, metadata: { ...prev.version.metadata, continuity_review: report } }
++              : prev.version,
++          }
++        : prev)
++      setSuccess(action === 'ignore' ? `Continuity choice kept for Shot ${issue.affected_shot}` : `Continuity action applied to Shot ${issue.affected_shot}`)
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Continuity action failed')
++    } finally {
++      setContinuityActionRunning(null)
++    }
++  }, [handleGenerateStoryboardForShot, selectedScene, storyboardBlueprint])
++
++  const handleApproveStoryboardBlueprint = useCallback(async () => {
++    const blueprint = storyboardBlueprint?.blueprint
++    const version = storyboardBlueprint?.version
++    if (!blueprint || !version) {
++      setError('Create a storyboard blueprint before approval')
++      return
++    }
++    if (!continuityReviewComplete) {
++      setError('Run Continuity Review before approving this storyboard blueprint')
++      return
++    }
++    setBlueprintApproving(true)
++    setError('')
++    try {
++      const result = await approveStoryboardVersion(blueprint.blueprint_id, version.version_id)
++      setStoryboardBlueprint(result)
++      setSuccess('Storyboard approved for production')
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Storyboard approval failed')
++    } finally {
++      setBlueprintApproving(false)
++    }
++  }, [continuityReviewComplete, storyboardBlueprint])
+ 
+   // ── Handle Toggle Seed Lock ────────────────────────────────────────────────
+   const handleToggleSeedLock = useCallback(async () => {
+@@ -1538,8 +1768,16 @@ export default function PrevisRoom() {
+         {/* Status messages */}
+         <div className="px-4 pt-2">
+           {error && (
+-            <div className="mb-2 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
+-              {error}
++            <div className="mb-2 flex items-start justify-between gap-3 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
++              <span>{error}</span>
++              <button
++                type="button"
++                onClick={() => setError('')}
++                aria-label="Dismiss error"
++                className="shrink-0 rounded px-1 text-rose-300/70 hover:text-rose-100"
++              >
++                ✕
++              </button>
+             </div>
+           )}
+           {success && (
+@@ -1555,6 +1793,8 @@ export default function PrevisRoom() {
+             sceneId={selectedSceneId}
+             sceneContext={canonicalSceneContext}
+             surface="previs"
++            renderProvider={renderProvider || undefined}
++            renderProviderLabel={RENDER_PROVIDERS.find((option) => option.value === renderProvider)?.label}
+           />
+         ) : null}
+ 
+@@ -1573,14 +1813,14 @@ export default function PrevisRoom() {
+                   RENDER ENGINE
+                 </label>
+                 <select
+-                  value={genConfig.model}
+-                  onChange={(e) => setGenConfig((p) => ({ ...p, model: e.target.value as RenderEngine }))}
++                  value={renderProvider}
++                  onChange={(e) => setRenderProvider(e.target.value)}
+                   className="glass-panel w-full rounded-lg px-3 py-2 text-xs outline-none"
+                   style={{ color: 'var(--color-on-surface)' }}
+                 >
+-                  {ENGINES.map((eng) => (
+-                    <option key={eng} value={eng} className="bg-zinc-900">
+-                      {eng}
++                  {RENDER_PROVIDERS.map((opt) => (
++                    <option key={opt.value || 'auto'} value={opt.value} className="bg-zinc-900">
++                      {opt.label}
+                     </option>
+                   ))}
+                 </select>
+@@ -1686,26 +1926,7 @@ export default function PrevisRoom() {
+                 <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                   FRAME RATE
+                 </label>
+-                <div className="flex gap-1">
+-                  {FPS_OPTIONS.map((fps) => (
+-                    <button
+-                      key={fps}
+-                      type="button"
+-                      onClick={() => setGenConfig((p) => ({ ...p, fps }))}
+-                      className={`status-chip flex-1 rounded border px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all ${
+-                        genConfig.fps === fps
+-                          ? 'border-primary/50 bg-primary/15 text-primary'
+-                          : 'hover:bg-white/8'
+-                      }`}
+-                      style={{
+-                        borderColor: genConfig.fps === fps ? undefined : 'rgba(255,255,255,0.08)',
+-                        color: genConfig.fps === fps ? undefined : 'var(--color-on-surface-variant)',
+-                      }}
+-                    >
+-                      {fps}fps
+-                    </button>
+-                  ))}
+-                </div>
++                <p className="text-xs text-zinc-400">Set by the video model. Shot duration controls the length of this take.</p>
+               </div>
+ 
+               {/* 4. Resolution */}
+@@ -1745,7 +1966,7 @@ export default function PrevisRoom() {
+                     type="number"
+                     value={genConfig.seed ?? ''}
+                     onChange={(e) => setGenConfig((p) => ({ ...p, seed: e.target.value ? parseInt(e.target.value, 10) : null }))}
+-                    placeholder="Random"
++                    placeholder="Auto / saved seed"
+                     className="cyber-input flex-1 rounded px-3 py-1.5 text-xs outline-none"
+                     style={{ color: 'var(--color-on-surface)' }}
+                   />
+@@ -1870,11 +2091,101 @@ export default function PrevisRoom() {
+                     ? `Shot ${activeBlueprintShot.shot_number}: ${activeBlueprintShot.render_contract.render_readiness}`
+                     : 'No canonical shot contract loaded for this scene.'}
+                 </div>
++                <p className="text-[10px] text-zinc-400">
++                  {activeBlueprintShot?.storyboard_image_url
++                    ? 'The approved storyboard image anchors the first frame. Prompt edits and settings apply to this take.'
++                    : 'No storyboard frame is attached to this shot. Create and approve its image to anchor the composition.'}
++                </p>
+                 {activeBlueprintShot?.rationale ? (
+                   <div className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                     {activeBlueprintShot.rationale}
+                   </div>
+                 ) : null}
++                <div className="rounded-lg border p-2.5 space-y-2" style={{ borderColor: continuityReviewComplete ? 'rgba(52,211,153,0.18)' : 'rgba(255,209,101,0.18)', background: 'rgba(255,255,255,0.025)' }}>
++                  <div className="flex items-center justify-between gap-2">
++                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
++                      {continuityReviewComplete ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
++                      Continuity Review
++                    </div>
++                    <span className="rounded border px-2 py-0.5 text-[9px] uppercase tracking-[0.1em]" style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}>
++                      {continuityReviewRunning ? 'running' : continuityReviewComplete ? 'complete' : 'required'}
++                    </span>
++                  </div>
++                  <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
++                    {continuityReview?.summary.advisory || 'Run the script-supervisor pass before this blueprint becomes canonical.'}
++                  </p>
++                  {continuityReview ? (
++                    <div className="grid grid-cols-4 gap-1 text-center text-[9px] uppercase tracking-[0.08em]">
++                      <div className="rounded border px-1 py-1" style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}>Shots {continuityReview.summary.shot_count}</div>
++                      <div className="rounded border px-1 py-1" style={{ borderColor: 'rgba(244,63,94,0.22)', color: 'rgb(253,164,175)' }}>High {continuityReview.summary.high_count}</div>
++                      <div className="rounded border px-1 py-1" style={{ borderColor: 'rgba(255,209,101,0.22)', color: 'var(--color-primary)' }}>Med {continuityReview.summary.medium_count}</div>
++                      <div className="rounded border px-1 py-1" style={{ borderColor: 'rgba(125,211,252,0.2)', color: 'rgb(125,211,252)' }}>Low {continuityReview.summary.low_count}</div>
++                    </div>
++                  ) : null}
++                  <button
++                    type="button"
++                    onClick={() => void handleRunContinuityReview()}
++                    disabled={!storyboardBlueprint?.version || continuityReviewRunning}
++                    className="flex w-full items-center justify-center gap-2 rounded-lg border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
++                    style={{ borderColor: 'rgba(125,211,252,0.28)', color: 'rgb(186,230,253)', background: 'rgba(14,165,233,0.08)' }}
++                  >
++                    {continuityReviewRunning ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
++                    Run Review
++                  </button>
++                  {continuityReview?.issues.length ? (
++                    <div className="space-y-2">
++                      <div className="flex gap-1">
++                        {(['side_by_side', 'overlay', 'before_after'] as const).map((mode) => (
++                          <button
++                            key={mode}
++                            type="button"
++                            onClick={() => setComparisonMode(mode)}
++                            className="flex-1 rounded border px-1.5 py-1 text-[9px] uppercase tracking-[0.08em]"
++                            style={{
++                              borderColor: comparisonMode === mode ? 'rgba(125,211,252,0.42)' : 'rgba(255,255,255,0.08)',
++                              color: comparisonMode === mode ? 'rgb(186,230,253)' : 'var(--color-on-surface-variant)',
++                              background: comparisonMode === mode ? 'rgba(14,165,233,0.1)' : 'transparent',
++                            }}
++                          >
++                            {mode.replaceAll('_', ' ')}
++                          </button>
++                        ))}
++                      </div>
++                      {continuityReview.issues.slice(0, 2).map((issue) => (
++                        <div key={issue.issue_id} className="rounded border p-2" style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.16)' }}>
++                          <div className="flex items-center justify-between gap-2 text-[10px]">
++                            <span className="font-semibold" style={{ color: 'var(--color-on-surface)' }}>{issue.category}</span>
++                            <span className="uppercase" style={{ color: issue.severity === 'high' ? 'rgb(253,164,175)' : 'var(--color-on-surface-variant)' }}>{issue.severity}</span>
++                          </div>
++                          <div className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
++                            Shot {issue.affected_shot}: {issue.ai_explanation}
++                          </div>
++                          <div className="mt-1 text-[10px]" style={{ color: 'rgb(186,230,253)' }}>{issue.recommended_fix}</div>
++                          <div className="mt-2 grid grid-cols-2 gap-1">
++                            {issue.actions.map((action) => (
++                              <button
++                                key={`${issue.issue_id}-${action}`}
++                                type="button"
++                                onClick={() => void handleContinuityIssueAction(issue, action)}
++                                disabled={continuityActionRunning !== null || loading}
++                                className="flex min-h-7 items-center justify-center gap-1 rounded border px-1 py-1 text-[9px] uppercase tracking-[0.06em] disabled:cursor-not-allowed disabled:opacity-50"
++                                style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}
++                              >
++                                {continuityActionRunning === `${issue.issue_id}-${action}` ? <Loader2 size={10} className="animate-spin" /> : null}
++                                {action === 'show_differences' && continuityActionRunning !== `${issue.issue_id}-${action}` ? <Layers size={10} /> : null}
++                                {action.replaceAll('_', ' ')}
++                              </button>
++                            ))}
++                          </div>
++                        </div>
++                      ))}
++                    </div>
++                  ) : continuityReviewComplete ? (
++                    <div className="rounded border px-2 py-1.5 text-[10px]" style={{ borderColor: 'rgba(52,211,153,0.2)', color: 'rgb(167,243,208)' }}>
++                      No continuity issues surfaced in this pass.
++                    </div>
++                  ) : null}
++                </div>
+                 <div className="grid grid-cols-2 gap-2">
+                   <button
+                     type="button"
+@@ -1889,7 +2200,7 @@ export default function PrevisRoom() {
+                   <button
+                     type="button"
+                     onClick={() => void handleApproveStoryboardBlueprint()}
+-                    disabled={!storyboardBlueprint?.version || blueprintApproving || storyboardBlueprint?.blueprint.status === 'approved'}
++                    disabled={!storyboardBlueprint?.version || !continuityReviewComplete || blueprintApproving || storyboardBlueprint?.blueprint.status === 'approved'}
+                     className="flex items-center justify-center gap-2 rounded-lg border px-2 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                     style={{ borderColor: 'rgba(16,185,129,0.35)', color: 'rgb(110,231,183)', background: 'rgba(16,185,129,0.08)' }}
+                   >
+@@ -2057,6 +2368,9 @@ export default function PrevisRoom() {
+                         }
+                       }
+                       setSelectedSceneId(sceneId)
++                      // Fresh scene, fresh slate — clear any stale error banner
++                      // left over from a previous scene's action.
++                      setError('')
+                     }}
+                     className="glass-panel rounded-lg px-3 py-1 text-[10px] outline-none"
+                     style={{ color: 'var(--color-on-surface-variant)' }}
+@@ -2122,7 +2436,7 @@ export default function PrevisRoom() {
+                           color: seedLocked ? 'var(--color-tertiary)' : 'var(--color-on-surface-variant)',
+                           border: seedLocked ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                         }}
+-                        title={seedLocked ? 'Unlock seed for random generation' : 'Lock seed for consistent regeneration'}
++                        title={seedLocked ? 'Unlock storyboard image seed' : 'Lock storyboard image seed; video takes use the render seed above'}
+                       >
+                         {seedLocked ? (
+                           <>
+@@ -2338,7 +2652,6 @@ export default function PrevisRoom() {
+                             className="w-full h-full object-cover rounded"
+                             muted
+                             onError={(e) => console.error('Video load error:', e)}
+-                            onLoadedData={() => console.log('Video loaded successfully')}
+                           />
+                         ) : (
+                           <span className="text-white/20 text-lg">📷</span>
+@@ -2377,6 +2690,18 @@ export default function PrevisRoom() {
+               )}
+             </div>
+ 
++            {/* SCENE STAGING (AI) — proposes per-shot visual plans, then applies
++                them to storyboard_shots.visual_plan_json so the render prompt
++                describes the shot. Merge-safe; runs after a scene has shots. */}
++            {selectedSceneId && effectiveProjectId && (
++              <div className="px-4 pt-3">
++                <StageScenePanel
++                  projectId={effectiveProjectId}
++                  sceneId={selectedSceneId}
++                />
++              </div>
++            )}
++
+             {/* AI ENHANCE + INITIALIZE - PINNED BOTTOM */}
+             <div className="px-4 py-3 border-t border-white/10 flex flex-col gap-2 shrink-0">
+               <button
+@@ -2389,6 +2714,7 @@ export default function PrevisRoom() {
+               </button>
+               <button
+                 onClick={handleInitializeRender}
++                disabled={rendering}
+                 className="w-full py-3 text-sm font-medium rounded 
+                            bg-amber-900/60 border border-amber-600/40 
+                            text-amber-200 hover:bg-amber-800/60"
+diff --git a/studio-backend/app/data/storage.py b/studio-backend/app/data/storage.py
+index a592c1ba..ee6f1555 100644
+--- a/studio-backend/app/data/storage.py
++++ b/studio-backend/app/data/storage.py
+@@ -135,6 +135,15 @@ class DatabaseStorage:
+ 
+             yield conn
+         finally:
++            # A failed write (or an early return) must not leave a transaction
++            # holding SQLite's writer lock inside the idle connection pool.
++            if conn and conn.in_transaction:
++                try:
++                    conn.rollback()
++                except sqlite3.Error:
++                    logger.exception("Discarding connection after transaction cleanup failed")
++                    conn.close()
++                    conn = None
+             if conn and not self._closed:
+                 try:
+                     with self._pool_lock:
+@@ -3555,6 +3564,29 @@ class DatabaseStorage:
+                 CREATE INDEX IF NOT EXISTS idx_canonical_workflow_transition_order
+                     ON canonical_workflow_transitions(run_id, created_at, transition_id);
+             """),
++            (57, "Add cached creator-confirmed emotion analysis results", """
++                CREATE TABLE IF NOT EXISTS emotion_analysis_results (
++                    analysis_id TEXT PRIMARY KEY,
++                    project_id TEXT NOT NULL,
++                    scene_id TEXT NOT NULL,
++                    context_hash TEXT NOT NULL,
++                    provider TEXT NOT NULL,
++                    model TEXT NOT NULL,
++                    analysis_json TEXT NOT NULL,
++                    created_at TEXT NOT NULL,
++                    updated_at TEXT NOT NULL,
++                    CHECK (analysis_id != ''),
++                    CHECK (project_id != ''),
++                    CHECK (scene_id != ''),
++                    CHECK (context_hash != ''),
++                    CHECK (provider != ''),
++                    CHECK (model != '')
++                );
++                CREATE UNIQUE INDEX IF NOT EXISTS idx_emotion_analysis_context
++                    ON emotion_analysis_results(project_id, scene_id, context_hash);
++                CREATE INDEX IF NOT EXISTS idx_emotion_analysis_scene_updated
++                    ON emotion_analysis_results(project_id, scene_id, updated_at);
++            """),
+             (58, "Allow multiple locked character references per role", """
+                 DROP INDEX IF EXISTS idx_character_reference_locks_active;
+                 CREATE UNIQUE INDEX IF NOT EXISTS idx_character_reference_locks_active_role
+@@ -3573,6 +3605,52 @@ class DatabaseStorage:
+                 CREATE INDEX IF NOT EXISTS idx_character_reference_locks_look
+                     ON character_reference_locks(project_id, character_id, look_id);
+             """),
++            (60, "Add durable authentication and project ownership", """
++                CREATE TABLE IF NOT EXISTS access_users (
++                    username TEXT PRIMARY KEY,
++                    user_id TEXT NOT NULL UNIQUE,
++                    payload_json TEXT NOT NULL
++                );
++                CREATE TABLE IF NOT EXISTS project_owners (
++                    project_id TEXT PRIMARY KEY REFERENCES projects(project_id) ON DELETE CASCADE,
++                    user_id TEXT NOT NULL REFERENCES access_users(user_id),
++                    created_at TEXT NOT NULL
++                );
++                CREATE INDEX IF NOT EXISTS idx_project_owners_user ON project_owners(user_id);
++            """),
++            (61, "Persist review-blocked jobs and generation evidence", """
++                CREATE TABLE render_jobs_review (
++                    id TEXT PRIMARY KEY,
++                    project_id TEXT NOT NULL,
++                    shot_id TEXT NOT NULL,
++                    provider TEXT NOT NULL,
++                    provider_job_id TEXT,
++                    status TEXT NOT NULL DEFAULT 'pending'
++                        CHECK (status IN ('pending', 'rendering', 'complete', 'failed', 'cancelled', 'needs_review', 'skipped')),
++                    progress INTEGER NOT NULL DEFAULT 0
++                        CHECK (progress >= 0 AND progress <= 100),
++                    input_payload TEXT,
++                    output_payload TEXT,
++                    error_message TEXT,
++                    retry_count INTEGER NOT NULL DEFAULT 0
++                        CHECK (retry_count >= 0),
++                    created_at TEXT NOT NULL,
++                    updated_at TEXT NOT NULL,
++                    completed_at TEXT,
++                    metadata_json TEXT NOT NULL DEFAULT '{}',
++                    CHECK (id != ''),
++                    CHECK (project_id != ''),
++                    CHECK (shot_id != ''),
++                    CHECK (provider != '')
++                );
++                INSERT INTO render_jobs_review (id, project_id, shot_id, provider, provider_job_id, status, progress, input_payload, output_payload, error_message, retry_count, created_at, updated_at, completed_at) SELECT id, project_id, shot_id, provider, provider_job_id, status, progress, input_payload, output_payload, error_message, retry_count, created_at, updated_at, completed_at FROM render_jobs;
++                DROP TABLE render_jobs;
++                ALTER TABLE render_jobs_review RENAME TO render_jobs;
++                CREATE INDEX idx_render_jobs_project ON render_jobs(project_id);
++                CREATE INDEX idx_render_jobs_status ON render_jobs(status);
++                CREATE INDEX idx_render_jobs_created ON render_jobs(created_at);
++                CREATE INDEX idx_render_jobs_provider ON render_jobs(provider);
++            """),
+         ]
+ 
+         cursor.execute("SELECT MAX(version) FROM schema_migrations")
+@@ -3743,20 +3821,27 @@ class DatabaseStorage:
+                 has_created_at = "created_at" in columns
+                 has_updated_at = "updated_at" in columns
+ 
+-                if has_created_at and has_updated_at:
++                # REPLACE deletes the parent row first, cascading into ownership
++                # and storyboard records. A project save must retain its identity.
++                if row is not None:
++                    if has_updated_at:
++                        cursor.execute("UPDATE projects SET data = ?, updated_at = ? WHERE project_id = ?", (payload, project.updated_at, project.project_id))
++                    else:
++                        cursor.execute("UPDATE projects SET data = ? WHERE project_id = ?", (payload, project.project_id))
++                elif has_created_at and has_updated_at:
+                     cursor.execute(
+-                        """INSERT OR REPLACE INTO projects (project_id, data, created_at, updated_at)
++                        """INSERT INTO projects (project_id, data, created_at, updated_at)
+                            VALUES (?, ?, COALESCE((SELECT created_at FROM projects WHERE project_id = ?), ?), ?)""",
+                         (project.project_id, payload, project.project_id, now, project.updated_at),
+                     )
+                 elif has_updated_at:
+                     cursor.execute(
+-                        "INSERT OR REPLACE INTO projects (project_id, data, updated_at) VALUES (?, ?, ?)",
++                        "INSERT INTO projects (project_id, data, updated_at) VALUES (?, ?, ?)",
+                         (project.project_id, payload, project.updated_at),
+                     )
+                 else:
+                     cursor.execute(
+-                        "INSERT OR REPLACE INTO projects (project_id, data) VALUES (?, ?)",
++                        "INSERT INTO projects (project_id, data) VALUES (?, ?)",
+                         (project.project_id, payload),
+                     )
+                 conn.commit()
+@@ -5815,20 +5900,20 @@ class DatabaseStorage:
+     def save_job(self, job: RenderJobModel) -> RenderJobModel:
+         with self._get_connection() as conn:
+             cursor = conn.cursor()
++            columns = ['id', 'project_id', 'shot_id', 'provider', 'provider_job_id', 'status', 'progress',
++                       'input_payload', 'output_payload', 'error_message', 'retry_count', 'created_at', 'updated_at', 'completed_at']
++            values = [job.id, job.project_id, job.shot_id, job.provider, job.provider_job_id, job.status, job.progress,
++                      json.dumps(job.input_payload.model_dump()) if job.input_payload else None,
++                      json.dumps(job.output_payload.model_dump()) if job.output_payload else None,
++                      job.error_message, job.retry_count, job.created_at, job.updated_at, job.completed_at]
++            # Extensions may supply a stricter legacy table. Preserve its native
++            # constraints instead of masking them with an unknown-column error.
++            if 'metadata_json' in {row[1] for row in cursor.execute('PRAGMA table_info(render_jobs)')}:
++                columns.append('metadata_json')
++                values.append(json.dumps(job.metadata or {}))
+             cursor.execute(
+-                """INSERT OR REPLACE INTO render_jobs
+-                   (id, project_id, shot_id, provider, provider_job_id, status, progress,
+-                    input_payload, output_payload, error_message, retry_count,
+-                    created_at, updated_at, completed_at)
+-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+-                (
+-                    job.id, job.project_id, job.shot_id, job.provider, job.provider_job_id,
+-                    job.status, job.progress,
+-                    json.dumps(job.input_payload.model_dump()) if job.input_payload else None,
+-                    json.dumps(job.output_payload.model_dump()) if job.output_payload else None,
+-                    job.error_message, job.retry_count,
+-                    job.created_at, job.updated_at, job.completed_at
+-                )
++                f"INSERT OR REPLACE INTO render_jobs ({', '.join(columns)}) VALUES ({', '.join('?' for _ in values)})",
++                values,
+             )
+             conn.commit()
+         return job
+@@ -5927,6 +6012,7 @@ class DatabaseStorage:
+         if row["output_payload"]:
+             output_payload = RenderJobOutput(**json.loads(row["output_payload"]))
+         return RenderJobModel(
++            metadata=json.loads(row["metadata_json"] or "{}") if "metadata_json" in row.keys() else None,
+             id=row["id"],
+             project_id=row["project_id"],
+             shot_id=row["shot_id"],
+@@ -6679,6 +6765,83 @@ class DatabaseStorage:
+             return None
+ 
+     # Session management
++    def access_get_user(self, *, username=None, user_id=None):
++        with self._get_connection() as conn:
++            row = conn.execute(
++                "SELECT payload_json FROM access_users WHERE username = ? OR user_id = ?",
++                (username, user_id),
++            ).fetchone()
++            return json.loads(row[0]) if row else None
++
++    def access_save_user(self, user, *, create=False):
++        with self._get_connection() as conn:
++            if create:
++                conn.execute("INSERT INTO access_users VALUES (?, ?, ?)",
++                             (user["username"], user["user_id"], json.dumps(user)))
++            else:
++                conn.execute("UPDATE access_users SET payload_json = ? WHERE user_id = ?",
++                             (json.dumps(user), user["user_id"]))
++            conn.commit()
++
++    def access_claim_project(self, project_id, user_id):
++        with self._get_connection() as conn:
++            conn.execute("INSERT INTO project_owners VALUES (?, ?, ?)",
++                         (project_id, user_id, datetime.now().isoformat()))
++            conn.commit()
++
++    def access_owned_projects(self, user_id):
++        with self._get_connection() as conn:
++            return {row[0] for row in conn.execute(
++                "SELECT project_id FROM project_owners WHERE user_id = ?", (user_id,))}
++
++    def access_resource_projects(self, identifier):
++        """Resolve opaque identifiers through schema-owned columns, never URL guesses.
++
++        SQL identifiers come exclusively from SQLite metadata. Values are bound.
++        Unresolved resources are denied by the access service.
++        """
++        projects = set()
++        with self._get_connection() as conn:
++            tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
++            for table in tables:
++                quoted = '"' + table.replace('"', '""') + '"'
++                columns = [row[1] for row in conn.execute(f"PRAGMA table_info({quoted})")]
++                if "project_id" not in columns:
++                    continue
++                ids = [c for c in columns if c == "id" or c.endswith("_id")]
++                clauses = ' OR '.join('"' + c.replace('"', '""') + '" = ?' for c in ids)
++                projects.update(row[0] for row in conn.execute(
++                    f"SELECT project_id FROM {quoted} WHERE {clauses}", [identifier] * len(ids)) if row[0])
++        return projects
++
++    def access_media_projects(self, path):
++        """Exact registered URL matching; URL path text is not ownership proof."""
++        from urllib.parse import urlsplit
++        projects = set()
++        def contains(value):
++            if isinstance(value, dict):
++                return any(contains(v) for v in value.values())
++            if isinstance(value, list):
++                return any(contains(v) for v in value)
++            if isinstance(value, str):
++                if value.startswith(("/", "http://", "https://")) and urlsplit(value).path == path:
++                    return True
++                try:
++                    decoded = json.loads(value)
++                except (ValueError, TypeError):
++                    return False
++                return contains(decoded) if isinstance(decoded, (dict, list)) else False
++            return False
++        with self._get_connection() as conn:
++            for table in ("render_jobs", "video_assets", "previs_images", "screening_outputs"):
++                columns = [row[1] for row in conn.execute(f'PRAGMA table_info("{table}")')]
++                if "project_id" not in columns:
++                    continue
++                for row in conn.execute(f'SELECT * FROM "{table}"'):
++                    if contains(dict(row)):
++                        projects.add(row["project_id"])
++        return projects
++
+     def create_session(self, session_id: str, user_id: str, ttl_seconds: int = 86400) -> bool:
+         now = datetime.now()
+         expires = datetime.fromtimestamp(now.timestamp() + ttl_seconds)
+@@ -10189,6 +10352,108 @@ class DatabaseStorage:
+             row = cursor.fetchone()
+             return self._row_to_storyboard_shot(row) if row else None
+ 
++    def get_shot_visual_plan(self, project_id: str, shot_id: str) -> dict:
++        """Return a shot's reviewed visual-plan staging as a plain dict.
++
++        Keyed by (project_id, shot_id) because that is what the render path has
++        in scope -- the storyboard_shot_id primary key is not available there.
++        Newest row wins when a shot exists across blueprint versions. Returns an
++        empty dict when the shot has no staging, so the render path can treat
++        "no staging" as "use the scene-level fallbacks" without special-casing.
++        """
++        with self._get_connection() as conn:
++            cursor = conn.cursor()
++            cursor.execute(
++                """
++                SELECT visual_plan_json FROM storyboard_shots
++                WHERE project_id = ? AND shot_id = ?
++                ORDER BY updated_at DESC
++                LIMIT 1
++                """,
++                (project_id, shot_id),
++            )
++            row = cursor.fetchone()
++        if not row or not row[0]:
++            return {}
++        try:
++            data = json.loads(row[0])
++        except Exception:
++            return {}
++        return data if isinstance(data, dict) else {}
++
++    def list_scene_shots(self, project_id: str, scene_id: str) -> list[dict]:
++        """Return one row per shot in a scene (newest version wins), as plain
++        dicts with shot_id, shot_number, intent_json and visual_plan_json.
++
++        Used by the scene-staging previs assist to iterate a scene's shots
++        without going through the blueprint-version model. Newest-per-shot keeps
++        it consistent with get_shot_visual_plan, which the render path reads.
++        """
++        with self._get_connection() as conn:
++            cursor = conn.cursor()
++            cursor.execute(
++                """
++                SELECT shot_id, shot_number, intent_json, visual_plan_json
++                FROM storyboard_shots
++                WHERE project_id = ? AND scene_id = ?
++                ORDER BY shot_number ASC, updated_at DESC
++                """,
++                (project_id, scene_id),
++            )
++            rows = cursor.fetchall()
++        seen: set = set()
++        shots: list[dict] = []
++        for shot_id, shot_number, intent_json, visual_plan_json in rows:
++            if shot_id in seen:
++                continue
++            seen.add(shot_id)
++            shots.append({
++                "shot_id": shot_id,
++                "shot_number": shot_number,
++                "intent_json": intent_json,
++                "visual_plan_json": visual_plan_json,
++            })
++        return shots
++
++    def update_shot_visual_plan(self, project_id: str, shot_id: str, plan: dict) -> bool:
++        """Merge staging fields into a shot's visual_plan (newest row).
++
++        The write counterpart of get_shot_visual_plan. MERGES: only the keys in
++        `plan` are changed, so it never blanks a field the storyboard already
++        set, and an empty `plan` is a no-op. Returns True if a row was updated.
++        """
++        if not isinstance(plan, dict) or not plan:
++            return False
++        with self._get_connection() as conn:
++            cursor = conn.cursor()
++            cursor.execute(
++                """
++                SELECT rowid, visual_plan_json FROM storyboard_shots
++                WHERE project_id = ? AND shot_id = ?
++                ORDER BY updated_at DESC
++                LIMIT 1
++                """,
++                (project_id, shot_id),
++            )
++            row = cursor.fetchone()
++            if not row:
++                return False
++            rowid, existing_json = row
++            try:
++                existing = json.loads(existing_json) if existing_json else {}
++                if not isinstance(existing, dict):
++                    existing = {}
++            except Exception:
++                existing = {}
++            existing.update(plan)
++            cursor.execute(
++                "UPDATE storyboard_shots SET visual_plan_json = ?, "
++                "updated_at = datetime('now') WHERE rowid = ?",
++                (json.dumps(existing), rowid),
++            )
++            conn.commit()
++        return True
++
+     def list_storyboard_shots(self, blueprint_id: str, version_id: str | None = None) -> list[Any]:
+         with self._get_connection() as conn:
+             cursor = conn.cursor()
+@@ -12017,6 +12282,81 @@ class DatabaseStorage:
+         data["payload"] = json.loads(data.pop("payload_json") or "{}")
+         return data
+ 
++    def save_emotion_analysis_result(self, record: dict[str, Any]) -> dict[str, Any]:
++        now = datetime.now().isoformat()
++        created_at = str(record.get("created_at") or now)
++        updated_at = str(record.get("updated_at") or now)
++
++        def _write() -> None:
++            with self._get_connection() as conn:
++                conn.execute(
++                    """
++                    INSERT INTO emotion_analysis_results (
++                        analysis_id, project_id, scene_id, context_hash, provider,
++                        model, analysis_json, created_at, updated_at
++                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
++                    ON CONFLICT(project_id, scene_id, context_hash) DO UPDATE SET
++                        provider = excluded.provider,
++                        model = excluded.model,
++                        analysis_json = excluded.analysis_json,
++                        updated_at = excluded.updated_at
++                    """,
++                    (
++                        record["analysis_id"],
++                        record["project_id"],
++                        record["scene_id"],
++                        record["context_hash"],
++                        record["provider"],
++                        record["model"],
++                        json.dumps(record["analysis"], ensure_ascii=False),
++                        created_at,
++                        updated_at,
++                    ),
++                )
++                conn.commit()
++
++        self._execute_write_with_retry("save_emotion_analysis_result", _write)
++        saved = self.get_emotion_analysis_result(
++            record["project_id"],
++            record["scene_id"],
++            record["context_hash"],
++        )
++        if saved is None:
++            raise RuntimeError("Emotion analysis result was not persisted")
++        return saved
++
++    def get_emotion_analysis_result(
++        self,
++        project_id: str,
++        scene_id: str,
++        context_hash: str | None = None,
++    ) -> dict[str, Any] | None:
++        with self._get_connection() as conn:
++            if context_hash:
++                row = conn.execute(
++                    """
++                    SELECT * FROM emotion_analysis_results
++                    WHERE project_id = ? AND scene_id = ? AND context_hash = ?
++                    LIMIT 1
++                    """,
++                    (project_id, scene_id, context_hash),
++                ).fetchone()
++            else:
++                row = conn.execute(
++                    """
++                    SELECT * FROM emotion_analysis_results
++                    WHERE project_id = ? AND scene_id = ?
++                    ORDER BY updated_at DESC
++                    LIMIT 1
++                    """,
++                    (project_id, scene_id),
++                ).fetchone()
++        if row is None:
++            return None
++        result = dict(row)
++        result["analysis"] = json.loads(result.pop("analysis_json") or "{}")
++        return result
++
+     def get_scene_previs_seed(self, project_id: str, scene_id: str) -> Optional[int]:
+         """
+         Get the previs seed for a scene (returns seed if it exists, None otherwise).
+diff --git a/studio-backend/app/models/canonical_workflow.py b/studio-backend/app/models/canonical_workflow.py
+index a27934e0..502b1ced 100644
+--- a/studio-backend/app/models/canonical_workflow.py
++++ b/studio-backend/app/models/canonical_workflow.py
+@@ -62,8 +62,12 @@ class ApprovalRequest(BaseModel):
+     artifact_ids: list[str] = Field(default_factory=list)
+ 
+ 
+-class RenderWorkflowRequest(BaseModel):
+-    provider: str = "simulated"
++class WorkflowProviderRequest(BaseModel):
++    # Omission preserves the approved provider, or uses the server default for Previs.
++    provider: str | None = Field(default=None, min_length=1, pattern=r"^\S+$")
++
++
++class RenderWorkflowRequest(WorkflowProviderRequest):
+     retry_confirmed: bool = False
+ 
+ 
+@@ -89,8 +93,8 @@ class RevisionWorkflowRequest(BaseModel):
+     confirmed: bool = False
+ 
+ 
+-class RevisionRenderWorkflowRequest(BaseModel):
+-    provider: str = "simulated"
++class RevisionRenderWorkflowRequest(WorkflowProviderRequest):
++    pass
+ 
+ 
+ class MemoryWorkflowRequest(BaseModel):
+@@ -104,6 +108,13 @@ class CanonicalWorkflowResponse(BaseModel):
+     transitions: list[CanonicalWorkflowTransition] = Field(default_factory=list)
+ 
+ 
++class CanonicalWorkflowSceneContext(BaseModel):
++    script_id: str
++    sequence_id: str = ""
++    beat_ids: list[str] = Field(default_factory=list)
++
++
+ class CanonicalWorkflowListResponse(BaseModel):
+     runs: list[CanonicalWorkflowRun] = Field(default_factory=list)
+     current_blueprint_version_id: str = ""
++    scene_context: CanonicalWorkflowSceneContext | None = None
+diff --git a/studio-backend/app/models/storyboard_blueprint.py b/studio-backend/app/models/storyboard_blueprint.py
+index 698661fe..8c39c5f8 100644
+--- a/studio-backend/app/models/storyboard_blueprint.py
++++ b/studio-backend/app/models/storyboard_blueprint.py
+@@ -4,7 +4,7 @@ from datetime import datetime, timezone
+ from enum import Enum
+ from typing import Any
+ 
+-from pydantic import BaseModel, Field
++from pydantic import BaseModel, Field, field_validator
+ 
+ 
+ def utc_now_iso() -> str:
+@@ -90,6 +90,13 @@ class StoryboardShotVisualPlan(BaseModel):
+     reference_asset_ids: list[str] = Field(default_factory=list)
+     negative_visual_constraints: list[str] = Field(default_factory=list)
+ 
++    @field_validator("props", mode="before")
++    @classmethod
++    def read_legacy_props(cls, value: Any) -> Any:
++        if isinstance(value, str):
++            return [prop.strip() for prop in value.split(",") if prop.strip()]
++        return value
++
+ 
+ class StoryboardShotContinuityPlan(BaseModel):
+     location_continuity: str = ""
+@@ -205,4 +212,3 @@ class StoryboardRevisionLink(BaseModel):
+     change_scope: dict[str, Any] = Field(default_factory=dict)
+     created_at: str = Field(default_factory=utc_now_iso)
+     metadata: dict[str, Any] = Field(default_factory=dict)
+-
+diff --git a/studio-backend/app/routes/canonical_workflow.py b/studio-backend/app/routes/canonical_workflow.py
+index 5446ffa8..10e3018a 100644
+--- a/studio-backend/app/routes/canonical_workflow.py
++++ b/studio-backend/app/routes/canonical_workflow.py
+@@ -14,6 +14,7 @@ from app.models.canonical_workflow import (
+     RenderWorkflowRequest,
+     RevisionRenderWorkflowRequest,
+     RevisionWorkflowRequest,
++    WorkflowProviderRequest,
+ )
+ from app.services.canonical_production_workflow_service import canonical_production_workflow_service
+ from app.services.stability import StabilityError
+@@ -61,6 +62,10 @@ def list_production_threads(
+                 if scene_id
+                 else ""
+             ),
++            scene_context=(
++                canonical_production_workflow_service.scene_context(project_id, scene_id)
++                if scene_id else None
++            ),
+         )
+     except StabilityError as exc:
+         raise _http_error(exc) from exc
+@@ -97,9 +102,9 @@ def get_production_thread(run_id: str) -> CanonicalWorkflowResponse:
+ 
+ 
+ @router.post("/production-threads/{run_id}/previs/generate", response_model=CanonicalWorkflowResponse)
+-async def generate_thread_previs(run_id: str) -> CanonicalWorkflowResponse:
++async def generate_thread_previs(run_id: str, payload: WorkflowProviderRequest | None = None) -> CanonicalWorkflowResponse:
+     try:
+-        await canonical_production_workflow_service.generate_previs(run_id)
++        await canonical_production_workflow_service.generate_previs(run_id, provider=payload.provider if payload else None)
+         return _response(run_id)
+     except StabilityError as exc:
+         raise _http_error(exc) from exc
+diff --git a/studio-backend/app/services/canonical_production_workflow_service.py b/studio-backend/app/services/canonical_production_workflow_service.py
+index 2f101467..e31c77b2 100644
+--- a/studio-backend/app/services/canonical_production_workflow_service.py
++++ b/studio-backend/app/services/canonical_production_workflow_service.py
+@@ -240,7 +240,35 @@ class CanonicalProductionWorkflowService:
+         self.get(run_id)
+         return self.storage.list_canonical_workflow_transitions(run_id)
+ 
+-    async def generate_previs(self, run_id: str) -> dict[str, Any]:
++    def scene_context(self, project_id: str, scene_id: str) -> dict[str, Any]:
++        project = self._project(project_id)
++        scene = self._scene(project, scene_id)
++        return {
++            "script_id": self._canonical_script_id(project, scene),
++            "sequence_id": _text(scene.get("sequence_id")),
++            "beat_ids": self._beat_ids(scene, []),
++        }
++
++    def _canonical_script_id(self, project: dict[str, Any], scene: dict[str, Any]) -> str:
++        summary = _dict(project.get("execution_summary"))
++        explicit = _text(scene.get("script_id")) or _text(summary.get("script_id"))
++        if explicit:
++            return explicit
++        # Older saved films predate script IDs. Derive a project-scoped version
++        # from their saved script instead of requiring a destructive reparse.
++        script_text = _text(project.get("script_text"))
++        if not script_text:
++            scenes = [
++                {"scene_id": _text(row.get("scene_id")), "heading": _text(row.get("heading")),
++                 "text": _text(row.get("text")) or _text(row.get("description"))}
++                for row in summary.get("scenes") or [] if isinstance(row, dict)
++            ]
++            if not any(row["text"] for row in scenes):
++                return ""
++            return "script_" + self._hash({"project_id": project["project_id"], "scenes": scenes})[:24]
++        return "script_" + self._hash({"project_id": project["project_id"], "script_text": script_text})[:24]
++
++    async def generate_previs(self, run_id: str, *, provider: str | None = None) -> dict[str, Any]:
+         started = perf_counter()
+         run = self.get(run_id)
+         if self._at_or_after(run, "previs_generated"):
+@@ -254,6 +282,7 @@ class CanonicalProductionWorkflowService:
+                     run["scene_id"],
+                     shot_number=int(shot["shot_number"]),
+                     storyboard_shot_id=shot["storyboard_shot_id"],
++                    provider=provider,
+                 )
+                 generated.append(result)
+         except StabilityError as exc:
+@@ -361,7 +390,7 @@ class CanonicalProductionWorkflowService:
+         self,
+         run_id: str,
+         *,
+-        provider: str = "simulated",
++        provider: str | None = None,
+         retry_confirmed: bool = False,
+     ) -> dict[str, Any]:
+         started = perf_counter()
+@@ -391,6 +420,7 @@ class CanonicalProductionWorkflowService:
+                 storyboard_shot_id = _text(package_shot.get("storyboard_shot_id"))
+                 shot_context = self._workflow_shot(run, storyboard_shot_id)
+                 parameters = {
++                    **dict(package_shot.get("parameters") or {}),
+                     "idempotency_key": f"{run_id}:package:{package['package_id']}:shot:{storyboard_shot_id}",
+                     "canonical_workflow": {
+                         "run_id": run_id,
+@@ -412,12 +442,11 @@ class CanonicalProductionWorkflowService:
+                 }
+                 references = list(dict.fromkeys([
+                     *[str(value) for value in package_shot.get("reference_assets") or [] if str(value).strip()],
+-                    *([package_shot["image_path"]] if _text(package_shot.get("image_path")) else []),
+                 ]))
+                 job = self.renderer.create_job(
+                     project_id=run["project_id"],
+                     shot_id=package_shot["shot_id"],
+-                    provider=provider,
++                    provider=provider or package_shot.get("render_provider"),
+                     prompt=package_shot["prompt"],
+                     reference_assets=references,
+                     parameters=parameters,
+@@ -782,7 +811,7 @@ class CanonicalProductionWorkflowService:
+         self._log(updated, "workflow_revision_create", started)
+         return updated
+ 
+-    async def render_revision(self, run_id: str, *, provider: str = "simulated") -> dict[str, Any]:
++    async def render_revision(self, run_id: str, *, provider: str | None = None) -> dict[str, Any]:
+         started = perf_counter()
+         run = self.get(run_id)
+         if run["status"] == "revision_completed":
+@@ -817,7 +846,7 @@ class CanonicalProductionWorkflowService:
+                 job = self.renderer.create_job(
+                     project_id=run["project_id"],
+                     shot_id=original.shot_id,
+-                    provider=provider,
++                    provider=provider or original.provider,
+                     prompt=revision.revision_prompt,
+                     reference_assets=list(original.input_payload.referenceAssets or []),
+                     parameters=parameters,
+@@ -828,7 +857,7 @@ class CanonicalProductionWorkflowService:
+                 self.storage.update_clip_revision(revision)
+                 submitted = await self.renderer.submit_job(job.id)
+             if submitted.status != "complete" or not _text(getattr(submitted.output_payload, "asset_url", "")):
+-                if submitted.status in {"failed", "cancelled"}:
++                if submitted.status in {"failed", "cancelled", "needs_review"}:
+                     raise ProviderError(
+                         "Revision render failed",
+                         stage="workflow_revision_render",
+@@ -848,7 +877,7 @@ class CanonicalProductionWorkflowService:
+                     data=data,
+                     payload={"revision_id": revision_id, "render_job_id": revision.new_job_id},
+                 )
+-                self._log(submitted_run, "workflow_revision_submit", started, provider=provider)
++                self._log(submitted_run, "workflow_revision_submit", started, provider=job.provider)
+                 return submitted_run
+             revision.status = "complete"
+             revision.output_url = submitted.output_payload.asset_url
+@@ -967,7 +996,7 @@ class CanonicalProductionWorkflowService:
+         self,
+         run: dict[str, Any],
+         *,
+-        provider: str,
++        provider: str | None,
+         started: float,
+         submit: bool = False,
+     ) -> dict[str, Any]:
+@@ -983,7 +1012,7 @@ class CanonicalProductionWorkflowService:
+                     raise StateError("Workflow render job not found", stage="workflow_render")
+                 if submit and job.status != "complete":
+                     job = await self.renderer.submit_job(job.id)
+-                elif job.status not in {"complete", "failed", "cancelled"}:
++                elif job.status not in {"complete", "failed", "cancelled", "needs_review"}:
+                     job = await self.renderer.get_job_status(job.id)
+                 refreshed.append({**row, **self._render_status(job)})
+         except StabilityError as exc:
+@@ -998,7 +1027,7 @@ class CanonicalProductionWorkflowService:
+             self._mark_render_failed(run, data, refreshed or rows, error)
+             raise error from exc
+         data["artifacts"]["render_jobs"] = refreshed
+-        terminal_failure = next((row for row in refreshed if row.get("status") in {"failed", "cancelled"}), None)
++        terminal_failure = next((row for row in refreshed if row.get("status") in {"failed", "cancelled", "needs_review"}), None)
+         if terminal_failure:
+             error = ProviderError(
+                 "A workflow render reached a failed terminal state",
+@@ -1020,7 +1049,7 @@ class CanonicalProductionWorkflowService:
+             data=data,
+             payload={"render_job_ids": [row["render_job_id"] for row in refreshed]},
+         )
+-        self._log(updated, "workflow_render", started, provider=provider)
++        self._log(updated, "workflow_render", started, provider=provider or "approved")
+         return updated
+ 
+     def _mark_render_failed(
+@@ -1129,8 +1158,7 @@ class CanonicalProductionWorkflowService:
+     ) -> None:
+         if not _text(script_id):
+             raise ValidationError("script_id is required", stage="workflow_ownership")
+-        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+-        canonical_script_id = _text(scene.get("script_id")) or _text(summary.get("script_id"))
++        canonical_script_id = self._canonical_script_id(project, scene)
+         if not canonical_script_id or script_id != canonical_script_id:
+             raise StateError("Script does not own the requested scene", stage="workflow_ownership")
+         canonical_sequence_id = _text(scene.get("sequence_id"))
+diff --git a/studio-backend/app/services/editorial_intelligence_service.py b/studio-backend/app/services/editorial_intelligence_service.py
+index f2322f61..c4218d02 100644
+--- a/studio-backend/app/services/editorial_intelligence_service.py
++++ b/studio-backend/app/services/editorial_intelligence_service.py
+@@ -174,8 +174,9 @@ class EditorialIntelligenceService:
+             if _as_str(scene_id)
+         ]
+         now = editorial_utc_now_iso()
++        legacy_cut_id = _as_str(legacy.get("cut_id"))
+         cut = {
+-            "cut_id": _as_str(legacy.get("cut_id")) or f"film-cut-{project_id}-v1",
++            "cut_id": legacy_cut_id if legacy_cut_id and legacy_cut_id != "default" else f"film-cut-{project_id}-v1",
+             "project_id": project_id,
+             "version_number": 1,
+             "status": _as_str(legacy.get("status")) or "draft",
+@@ -198,11 +199,15 @@ class EditorialIntelligenceService:
+             try:
+                 current = commit(cut)
+             except Exception as exc:
+-                raise PersistenceError(
+-                    "Initial Film Cut persistence failed",
+-                    stage="film_cut_create",
+-                    metadata={"cause": type(exc).__name__},
+-                ) from exc
++                # Two read requests can bootstrap the same saved cut together.
++                # Reuse the committed version if another request won the race.
++                current = get_current(project_id) if callable(get_current) else None
++                if current is None:
++                    raise PersistenceError(
++                        "Initial Film Cut persistence failed",
++                        stage="film_cut_create",
++                        metadata={"cause": type(exc).__name__},
++                    ) from exc
+             self._mirror_cut(project_id, current)
+             return current
+         return {**legacy, **cut}
+diff --git a/studio-backend/tests/test_checkpoint_5_canonical_workflow_routes.py b/studio-backend/tests/test_checkpoint_5_canonical_workflow_routes.py
+index 57472589..ae0d9b5c 100644
+--- a/studio-backend/tests/test_checkpoint_5_canonical_workflow_routes.py
++++ b/studio-backend/tests/test_checkpoint_5_canonical_workflow_routes.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import pytest
+ from fastapi.testclient import TestClient
+ 
+ import app.routes.canonical_workflow as workflow_routes
+@@ -53,6 +54,9 @@ class RouteWorkflowService:
+             return []
+         return [self.run]
+ 
++    def scene_context(self, project_id: str, scene_id: str):
++        return {"script_id": "script-route", "sequence_id": "sequence-route", "beat_ids": ["beat-route"]}
++
+     def current_blueprint_version_id(self, project_id: str, scene_id: str):
+         if project_id != self.run["project_id"] or scene_id != self.run["scene_id"]:
+             return ""
+@@ -93,6 +97,7 @@ def test_canonical_workflow_routes_are_mounted_once_and_reachable(monkeypatch) -
+     assert listed.status_code == 200, listed.text
+     assert [row["run_id"] for row in listed.json()["runs"]] == ["workflow-route-001"]
+     assert listed.json()["current_blueprint_version_id"] == "version-route"
++    assert listed.json()["scene_context"] == fake.scene_context("project-route", "scene-route")
+ 
+ 
+ def test_canonical_workflow_route_formats_ownership_errors(monkeypatch) -> None:
+@@ -105,3 +110,26 @@ def test_canonical_workflow_route_formats_ownership_errors(monkeypatch) -> None:
+     assert response.status_code == 409
+     assert response.json()["detail"]["error_type"] == "state_error"
+     assert response.json()["detail"]["stage"] == "workflow_ownership"
++
++
++@pytest.mark.parametrize("suffix,method", [("previs/generate", "generate_previs"), ("renders", "render_production_package"), ("revision/render", "render_revision")])
++@pytest.mark.parametrize("provider", [None, "openrouter-video", "simulated"])
++def test_provider_selection_reaches_service(monkeypatch, suffix, method, provider):
++    fake = RouteWorkflowService()
++    calls = []
++    async def operation(run_id, **kwargs):
++        calls.append((run_id, kwargs))
++        return fake.run
++    setattr(fake, method, operation)
++    monkeypatch.setattr(workflow_routes, "canonical_production_workflow_service", fake)
++    body = {} if provider is None else {"provider": provider}
++    response = TestClient(app).post(f"/api/f51/studio/production-threads/workflow-route-001/{suffix}", json=body)
++    assert response.status_code == 200, response.text
++    assert len(calls) == 1
++    assert calls[0][1]["provider"] == provider
++
++
++@pytest.mark.parametrize("provider", ["", "   ", "runway video"])
++def test_invalid_provider_rejected_before_workflow_action(provider):
++    response = TestClient(app).post("/api/f51/studio/production-threads/workflow-route-001/renders", json={"provider": provider})
++    assert response.status_code == 422
+diff --git a/studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py b/studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py
+index 242c7f8b..ea9eb7d0 100644
+--- a/studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py
++++ b/studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py
+@@ -237,7 +237,8 @@ def _through_package(service: CanonicalProductionWorkflowService) -> dict:
+     return service.create_production_package(run["run_id"])
+ 
+ 
+-def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path) -> None:
++@pytest.mark.parametrize("provider", ["simulated", "openrouter-video"])
++def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provider: str) -> None:
+     service, storage, state, renderer = _environment(tmp_path)
+     run = _begin(service)
+     run_id = run["run_id"]
+@@ -272,10 +273,10 @@ def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path) -> No
+     assert package["blueprint_version_id"] == run["blueprint_version_id"]
+     assert package["payload"]["shots"][0]["continuity"]
+ 
+-    run = asyncio.run(service.render_production_package(run_id, provider="simulated"))
++    run = asyncio.run(service.render_production_package(run_id, provider=provider))
+     assert run["status"] == "render_completed"
+     production_create_count = renderer.create_count
+-    assert asyncio.run(service.render_production_package(run_id, provider="simulated"))["status"] == "render_completed"
++    assert asyncio.run(service.render_production_package(run_id, provider=provider))["status"] == "render_completed"
+     assert renderer.create_count == production_create_count
+     render_row = run["data"]["artifacts"]["render_jobs"][0]
+     render_job = renderer.get_job(render_row["render_job_id"])
+@@ -360,13 +361,14 @@ def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path) -> No
+ 
+     renderer.delay_next_submission = True
+     revision_create_count = renderer.create_count
+-    submitted_run = asyncio.run(service.render_revision(run_id, provider="simulated"))
++    submitted_run = asyncio.run(service.render_revision(run_id))
+     assert submitted_run["status"] == "revision_pending"
+     assert submitted_run["data"]["artifacts"]["revision"]["status"] == "submitted"
+     assert submitted_run["data"]["identifiers"]["revision_render_job_id"]
+     assert renderer.create_count == revision_create_count + 1
++    assert renderer.get_job(submitted_run["data"]["identifiers"]["revision_render_job_id"]).provider == provider
+ 
+-    run = asyncio.run(service.render_revision(run_id, provider="simulated"))
++    run = asyncio.run(service.render_revision(run_id))
+     assert run["status"] == "revision_completed"
+     assert renderer.create_count == revision_create_count + 1
+     revision = storage.get_clip_revision(revision_id)
+@@ -461,3 +463,134 @@ def test_workflow_rejects_cross_script_and_invalid_state_transitions(tmp_path: P
+             changed_fields=["timing"],
+             confirmed=True,
+         )
++
++
++@pytest.mark.parametrize("provider_override", [None, "openrouter-video"])
++def test_package_render_keeps_frozen_settings_and_never_uses_video_as_image(tmp_path, provider_override):
++    service, storage, state, renderer = _environment(tmp_path)
++    run = _begin(service)
++    run = asyncio.run(service.generate_previs(run["run_id"]))
++    for job in renderer.jobs.values():
++        job.input_payload.parameters.update(duration=8, seed=7, ratio="9:16", storyboard_frame_url="https://media.test/approved-frame.png")
++        job.input_payload.referenceAssets = ["https://media.test/approved-frame.png"]
++        job.provider = "openrouter-video"
++        storage.save_job(job)
++    ids = [row["previs_image_id"] for row in run["data"]["artifacts"]["previs"]]
++    run = service.approve_previs(run["run_id"], previs_image_ids=ids, confirmed=True)
++    run = service.create_production_package(run["run_id"])
++    result = asyncio.run(service.render_production_package(run["run_id"], provider=provider_override))
++    assert result["status"] == "render_completed"
++    for row in result["data"]["artifacts"]["render_jobs"]:
++        job = renderer.get_job(row["render_job_id"])
++        assert job.provider == "openrouter-video"
++        assert job.input_payload.parameters["duration"] == 8
++        assert job.input_payload.parameters["seed"] == 7
++        assert job.input_payload.parameters["ratio"] == "9:16"
++        assert job.input_payload.parameters["storyboard_frame_url"] == "https://media.test/approved-frame.png"
++        assert job.input_payload.referenceAssets == ["https://media.test/approved-frame.png"]
++
++
++def test_package_render_review_stop_does_not_poll_forever(tmp_path):
++    service, storage, state, renderer = _environment(tmp_path)
++    run = _through_package(service)
++    renderer.delay_next_submission = True
++    queued = asyncio.run(service.render_production_package(run["run_id"], provider="simulated"))
++    for row in queued["data"]["artifacts"]["render_jobs"]:
++        job = renderer.get_job(row["render_job_id"])
++        if job.status != "complete":
++            job.status = "needs_review"
++            job.error_message = "Required facts exceed this model budget"
++    with pytest.raises(ProviderError):
++        asyncio.run(service.render_production_package(run["run_id"], provider="simulated"))
++    assert service.get(run["run_id"])["status"] == "render_failed"
++
++
++@pytest.mark.parametrize("provider", ["runway", "openrouter-video", "simulated"])
++def test_canonical_previs_passes_explicit_provider_to_render_job(tmp_path, provider):
++    service, storage, state, renderer = _environment(tmp_path)
++    run = _begin(service)
++    result = asyncio.run(service.generate_previs(run["run_id"], provider=provider))
++    assert result["status"] == "previs_generated"
++    assert renderer.jobs
++    assert {job.provider for job in renderer.jobs.values()} == {provider}
++
++
++def test_polling_does_not_change_queued_provider(tmp_path):
++    service, storage, state, renderer = _environment(tmp_path)
++    run = _through_package(service)
++    renderer.delay_next_submission = True
++    queued = asyncio.run(service.render_production_package(run["run_id"], provider="openrouter-video"))
++    count = renderer.create_count
++    assert queued["status"] == "render_queued"
++    completed = asyncio.run(service.render_production_package(run["run_id"]))
++    assert completed["status"] == "render_completed"
++    assert renderer.create_count == count
++    assert {renderer.get_job(row["render_job_id"]).provider for row in completed["data"]["artifacts"]["render_jobs"]} == {"openrouter-video"}
++
++
++def test_legacy_script_context_can_begin_without_reparsing_saved_scenes(tmp_path):
++    service, storage, state, renderer = _environment(tmp_path)
++    project = state.get_project("project-thread")
++    project["execution_summary"].pop("script_id", None)
++    project["execution_summary"]["scenes"][0].pop("script_id", None)
++    state.save_project(project)
++    storage.save_project(StudioProject(**project))
++    saved = state.get_project("project-thread")
++    context = service.scene_context("project-thread", "scene_001")
++    assert context["script_id"].startswith("script_")
++    assert context["beat_ids"] == ["beat_001", "beat_002"]
++    run = service.begin(project_id="project-thread", scene_id="scene_001", **context)
++    assert run["script_id"] == context["script_id"]
++    reloaded = CanonicalProductionWorkflowService(storage=storage, project_store=state, renderer=renderer)
++    assert reloaded.scene_context("project-thread", "scene_001") == context
++    assert state.get_project("project-thread") == saved
++    assert reloaded.get(run["run_id"])["script_id"] == context["script_id"]
++
++
++def test_legacy_script_context_is_bound_to_project_and_script_version(tmp_path):
++    service, storage, state, renderer = _environment(tmp_path)
++    project = state.get_project("project-thread")
++    project["execution_summary"].pop("script_id", None)
++    project["execution_summary"]["scenes"][0].pop("script_id", None)
++    state.save_project(project)
++    storage.save_project(StudioProject(**project))
++    context = service.scene_context("project-thread", "scene_001")
++    project["script_text"] += " Maya closes her hand."
++    state.save_project(project)
++    storage.save_project(StudioProject(**project))
++    updated = service.scene_context("project-thread", "scene_001")
++    assert updated["script_id"] != context["script_id"]
++    with pytest.raises(StateError, match="Script does not own"):
++        service.begin(project_id="project-thread", scene_id="scene_001", **context)
++    other = dict(project, project_id="project-other")
++    state.save_project(other)
++    storage.save_project(StudioProject(**other))
++    assert service.scene_context("project-other", "scene_001")["script_id"] != updated["script_id"]
++
++
++def test_explicit_script_context_is_preserved(tmp_path):
++    service, storage, state, renderer = _environment(tmp_path)
++    assert service.scene_context("project-thread", "scene_001")["script_id"] == "script-thread-001"
++
++
++def test_legacy_scene_text_resolves_script_context_without_raw_script(tmp_path):
++    service, storage, state, renderer = _environment(tmp_path)
++    project = state.get_project("project-thread")
++    # A fresh legacy record avoids the store's intentional preservation of
++    # previously non-empty raw script text during partial project saves.
++    project["project_id"] = "project-scenes-only"
++    project["script_text"] = ""
++    project["execution_summary"].pop("script_id", None)
++    scene = project["execution_summary"]["scenes"][0]
++    scene.pop("script_id", None)
++    storage.save_project(StudioProject(**project))
++    assert storage.get_project("project-scenes-only").script_text == ""
++    context = service.scene_context("project-scenes-only", "scene_001")
++    assert context["script_id"].startswith("script_")
++    with pytest.raises(StateError, match="Approved Storyboard Blueprint"):
++        service.begin(project_id="project-scenes-only", scene_id="scene_001", **context)
++    project["project_id"] = "project-empty"
++    scene["description"] = ""
++    scene["text"] = ""
++    storage.save_project(StudioProject(**project))
++    assert service.scene_context("project-empty", "scene_001")["script_id"] == ""

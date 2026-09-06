@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Optional
+from app.utils.character_appearance import appearance_approval, appearance_description
 
 logger = logging.getLogger("studio-character-staging")
 
@@ -34,6 +35,8 @@ def _resolve_base_appearance(character: dict[str, Any]) -> str:
     with a scene-specific staging_prompt.
     """
     name = str(character.get("name") or "").strip()
+    if appearance_approval(character).get("status") == "locked":
+        return f"{name}: {appearance_description(character)}"
 
     # ── Migrated path ──────────────────────────────────────────────────────
     if str(character.get("description_status") or "").strip() == "migrated":
@@ -84,6 +87,8 @@ def resolve_character_prompt(
             if staging:
                 override = (staging.get("appearance_override") or "").strip()
                 if override:
+                    if appearance_approval(character).get("status") == "locked":
+                        return f"{_resolve_base_appearance(character)}. Scene appearance (preserve approved face, build, skin tone and age): {override}"
                     return override
                 staging_prompt = (staging.get("staging_prompt") or "").strip()
                 if staging_prompt:

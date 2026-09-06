@@ -1,0 +1,62 @@
+{
+  "checks": [
+    {
+      "page": "board",
+      "width": 1600,
+      "overflow": false,
+      "sceneCount": 14,
+      "launcher": true
+    },
+    {
+      "page": "drawer",
+      "width": 1600,
+      "dialogWidth": 400,
+      "overflow": false
+    },
+    {
+      "page": "storyboard",
+      "width": 1600,
+      "overflow": false,
+      "substage": "1\nCreate frame"
+    },
+    {
+      "page": "board",
+      "width": 900,
+      "overflow": false,
+      "sceneCount": 14,
+      "launcher": true
+    },
+    {
+      "page": "drawer",
+      "width": 900,
+      "dialogWidth": 400,
+      "overflow": false
+    },
+    {
+      "page": "storyboard",
+      "width": 900,
+      "overflow": false,
+      "substage": "1\nCreate frame"
+    },
+    {
+      "page": "board",
+      "width": 390,
+      "overflow": false,
+      "sceneCount": 14,
+      "launcher": true
+    },
+    {
+      "page": "drawer",
+      "width": 390,
+      "dialogWidth": 382,
+      "overflow": false
+    },
+    {
+      "page": "storyboard",
+      "width": 390,
+      "overflow": false,
+      "substage": "1\nCreate frame"
+    }
+  ],
+  "writes": []
+}

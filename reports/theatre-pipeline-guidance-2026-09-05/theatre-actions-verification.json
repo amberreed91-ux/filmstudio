@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "mutations": [
+    {
+      "method": "POST",
+      "url": "http://localhost:5001/api/f51/studio/projects/project_5907c60cddbc/screening/outputs/fixture-current-final/approve"
+    }
+  ],
+  "errors": [],
+  "exportName": "i-was-reborn-film.mp4",
+  "sceneEditChangesVideo": true,
+  "onePlayer": true
+}

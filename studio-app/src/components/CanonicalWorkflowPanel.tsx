@@ -35,6 +35,8 @@ type CanonicalWorkflowPanelProps = {
   sceneId: string
   sceneContext: CanonicalSceneContext
   surface: 'previs' | 'screening'
+  renderProvider?: string
+  renderProviderLabel?: string
 }
 
 function record(value: unknown): AnyRecord | null {
@@ -63,8 +65,11 @@ export default function CanonicalWorkflowPanel({
   sceneId,
   sceneContext,
   surface,
+  renderProvider,
+  renderProviderLabel,
 }: CanonicalWorkflowPanelProps) {
   const controller = useCanonicalWorkflow(projectId, sceneId)
+  const resolvedSceneContext = controller.sceneContext ?? sceneContext
   const [revisionPrompt, setRevisionPrompt] = useState('')
   const [revisionReason, setRevisionReason] = useState('')
   const [changedFields, setChangedFields] = useState('timing, performance_guidance')
@@ -84,6 +89,7 @@ export default function CanonicalWorkflowPanel({
   const memorySaved = Boolean(text(run?.data.identifiers.memory_record_id))
   const failure = run?.data.failures?.[run.data.failures.length - 1]
   const busy = Boolean(controller.action) || controller.polling
+  const providerLabel = renderProvider ? (renderProviderLabel || renderProvider) : 'Approved Previs provider'
 
   const apply = (
     label: string,
@@ -152,6 +158,11 @@ export default function CanonicalWorkflowPanel({
         </div>
       </div>
 
+      <p className="mt-2 text-[10px] text-zinc-400" data-testid="canonical-render-provider">
+        New renders: {providerLabel}. {renderProvider ? '' : 'New Previs uses the server default. '}
+        Retries and revisions retain their original render provider.
+      </p>
+
       {controller.loading ? (
         <div className="mt-3 flex items-center gap-2 text-xs text-zinc-400">
           <Loader2 size={13} className="animate-spin" /> Loading durable production state…
@@ -191,11 +202,11 @@ export default function CanonicalWorkflowPanel({
               onClick={() => apply('Starting thread', () => beginCanonicalWorkflow({
                 projectId,
                 sceneId,
-                scriptId: sceneContext.scriptId,
-                sequenceId: sceneContext.sequenceId,
-                beatIds: sceneContext.beatIds,
+                scriptId: resolvedSceneContext.scriptId,
+                sequenceId: resolvedSceneContext.sequenceId,
+                beatIds: resolvedSceneContext.beatIds,
               }))}
-              disabled={busy || !projectId || !sceneId || !sceneContext.scriptId}
+              disabled={busy || !projectId || !sceneId || !resolvedSceneContext.scriptId}
               className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 disabled:opacity-40"
             >
               Start approved production thread
@@ -203,7 +214,7 @@ export default function CanonicalWorkflowPanel({
           ) : null}
 
           {nextAction === 'generate_previs' ? (
-            <button type="button" disabled={busy} onClick={() => apply('Generating Previs', () => generateCanonicalPrevis(run!.run_id))} className="btn-ghost px-3 py-2 text-[10px]">
+            <button type="button" disabled={busy} onClick={() => apply('Generating Previs', () => generateCanonicalPrevis(run!.run_id, renderProvider))} className="btn-ghost px-3 py-2 text-[10px]">
               Generate approved Previs
             </button>
           ) : null}
@@ -234,13 +245,13 @@ export default function CanonicalWorkflowPanel({
               type="button"
               disabled={busy}
               onClick={() => confirmAction(
-                'Queue the exact approved package with the simulated provider?',
+                `Queue the exact approved package with ${providerLabel}?`,
                 'Queuing render',
-                () => renderCanonicalProductionPackage(run!.run_id),
+                () => renderCanonicalProductionPackage(run!.run_id, false, renderProvider),
               )}
               className="btn-ghost px-3 py-2 text-[10px]"
             >
-              Queue simulated render
+              Queue approved render
             </button>
           ) : null}
 
@@ -417,8 +428,11 @@ export default function CanonicalWorkflowPanel({
         </div>
       ) : null}
 
-      {!run && !controller.loading && !sceneContext.scriptId ? (
-        <p className="mt-2 text-[10px] text-amber-200">The selected scene has no canonical Script ID yet. Return to Write and regenerate the scene structure.</p>
+      {!run && !controller.loading && !resolvedSceneContext.scriptId ? (
+        <p className="mt-2 text-[10px] text-amber-200">Save this film’s script in Write before starting a production thread.</p>
+      ) : null}
+      {!run && !controller.loading && resolvedSceneContext.scriptId && !controller.currentBlueprintVersionId ? (
+        <p className="mt-2 text-[10px] text-amber-200">Build and approve this scene’s Storyboard Blueprint, then start its production thread.</p>
       ) : null}
 
       {run ? (

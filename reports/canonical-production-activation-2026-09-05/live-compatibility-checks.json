@@ -1,0 +1,49 @@
+{
+  "requests": [
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/film-cut",
+      "status": 200,
+      "seconds": 0.349,
+      "cut_id": "film-cut-project_5907c60cddbc-v1"
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/film-cut",
+      "status": 200,
+      "seconds": 0.318,
+      "cut_id": "film-cut-project_5907c60cddbc-v1"
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/film-cut",
+      "status": 200,
+      "seconds": 0.383,
+      "cut_id": "film-cut-project_5907c60cddbc-v1"
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/film-cut",
+      "status": 200,
+      "seconds": 0.409,
+      "cut_id": "film-cut-project_5907c60cddbc-v1"
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_001/storyboard-blueprint",
+      "status": 200,
+      "seconds": 0.214,
+      "cut_id": null
+    },
+    {
+      "path": "/api/f51/studio/projects/project_5907c60cddbc/scenes/scene_001/storyboard-blueprint",
+      "status": 200,
+      "seconds": 0.215,
+      "cut_id": null
+    }
+  ],
+  "ready": {
+    "ready": true,
+    "components": {
+      "database": "ready",
+      "schema": "ready (v61)",
+      "background_tasks": "ready (3 active)"
+    },
+    "timestamp": 1788626093.738304
+  }
+}

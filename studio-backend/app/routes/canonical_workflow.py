@@ -14,6 +14,7 @@ from app.models.canonical_workflow import (
     RenderWorkflowRequest,
     RevisionRenderWorkflowRequest,
     RevisionWorkflowRequest,
+    WorkflowProviderRequest,
 )
 from app.services.canonical_production_workflow_service import canonical_production_workflow_service
 from app.services.stability import StabilityError
@@ -61,6 +62,10 @@ def list_production_threads(
                 if scene_id
                 else ""
             ),
+            scene_context=(
+                canonical_production_workflow_service.scene_context(project_id, scene_id)
+                if scene_id else None
+            ),
         )
     except StabilityError as exc:
         raise _http_error(exc) from exc
@@ -97,9 +102,9 @@ def get_production_thread(run_id: str) -> CanonicalWorkflowResponse:
 
 
 @router.post("/production-threads/{run_id}/previs/generate", response_model=CanonicalWorkflowResponse)
-async def generate_thread_previs(run_id: str) -> CanonicalWorkflowResponse:
+async def generate_thread_previs(run_id: str, payload: WorkflowProviderRequest | None = None) -> CanonicalWorkflowResponse:
     try:
-        await canonical_production_workflow_service.generate_previs(run_id)
+        await canonical_production_workflow_service.generate_previs(run_id, provider=payload.provider if payload else None)
         return _response(run_id)
     except StabilityError as exc:
         raise _http_error(exc) from exc

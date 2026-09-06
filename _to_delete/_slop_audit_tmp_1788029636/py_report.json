@@ -1,0 +1,1213 @@
+{
+ "py_files": 515,
+ "total_loc": 220493,
+ "stub_count": 62,
+ "stubs": [
+  [
+   "auth.py",
+   "_load_users",
+   83,
+   "pass-only"
+  ],
+  [
+   "adapters/__init__.py",
+   "submit_job",
+   89,
+   "pass-only"
+  ],
+  [
+   "adapters/__init__.py",
+   "get_job_status",
+   94,
+   "pass-only"
+  ],
+  [
+   "adapters/__init__.py",
+   "cancel_job",
+   99,
+   "pass-only"
+  ],
+  [
+   "adapters/__init__.py",
+   "fetch_outputs",
+   104,
+   "pass-only"
+  ],
+  [
+   "adapters/__init__.py",
+   "get_status",
+   109,
+   "pass-only"
+  ],
+  [
+   "adapters/__init__.py",
+   "cancel_job",
+   1788,
+   "returns constant only"
+  ],
+  [
+   "adapters/__init__.py",
+   "cancel_job",
+   2277,
+   "returns constant only"
+  ],
+  [
+   "data/storage.py",
+   "_json_storage_get_latest_performance_analysis",
+   14700,
+   "returns constant only"
+  ],
+  [
+   "data/storage.py",
+   "_json_storage_update_performance_decision",
+   14769,
+   "returns constant only"
+  ],
+  [
+   "data/storage.py",
+   "_json_storage_forget_performance_decision",
+   14773,
+   "returns constant only"
+  ],
+  [
+   "data/storage.py",
+   "_json_storage_get_casting_artifact",
+   14825,
+   "returns constant only"
+  ],
+  [
+   "data/storage.py",
+   "get_all_projects",
+   23,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "get_project",
+   26,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "save_project",
+   29,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "delete_project",
+   32,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "list_project_ids",
+   35,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "save_error_report",
+   38,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "get_universe_nodes",
+   42,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "save_universe_node",
+   45,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "delete_universe_node",
+   48,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "get_universe_relationships",
+   51,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "save_universe_relationship",
+   54,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "delete_universe_relationship",
+   57,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "delete_universe_project_data",
+   60,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "list_universe_project_ids",
+   63,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "get_all_projects",
+   15901,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "get_project",
+   15904,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "save_project",
+   15907,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "delete_project",
+   15910,
+   "raise NotImplementedError"
+  ],
+  [
+   "data/storage.py",
+   "list_project_ids",
+   15913,
+   "raise NotImplementedError"
+  ],
+  [
+   "routes/memory.py",
+   "get_current_user_id",
+   22,
+   "returns constant only"
+  ],
+  [
+   "routes/agents.py",
+   "get_current_user_id",
+   17,
+   "returns constant only"
+  ],
+  [
+   "routes/crew.py",
+   "get_current_user_id",
+   34,
+   "returns constant only"
+  ],
+  [
+   "services/test_dialogue_provider_selection.py",
+   "get_response",
+   1105,
+   "returns constant only"
+  ],
+  [
+   "services/test_dialogue_provider_selection.py",
+   "get_last_request_id",
+   1108,
+   "returns constant only"
+  ],
+  [
+   "services/vision_model_adapter.py",
+   "analyze_image",
+   29,
+   "raise NotImplementedError"
+  ],
+  [
+   "services/visual_embedding_adapter.py",
+   "embed_image",
+   83,
+   "raise NotImplementedError"
+  ],
+  [
+   "services/audience_simulator_service.py",
+   "_determine_variance",
+   185,
+   "returns constant only"
+  ],
+  [
+   "services/audience_simulator_service.py",
+   "_generate_synthesis",
+   188,
+   "returns constant only"
+  ],
+  [
+   "services/test_render_reference_consistency.py",
+   "no_op_review",
+   256,
+   "returns constant only"
+  ],
+  [
+   "services/test_render_refresh_url_service.py",
+   "_noop_async",
+   27,
+   "returns constant only"
+  ],
+  [
+   "services/story_scoring_service.py",
+   "analyze",
+   71,
+   "returns constant only"
+  ],
+  [
+   "services/demo_seed_service.py",
+   "_demo_output_url",
+   40,
+   "returns constant only"
+  ],
+  [
+   "services/test_continuity_motif_threads.py",
+   "delete_continuity_issues_for_project",
+   57,
+   "returns constant only"
+  ],
+  [
+   "services/cinematographer_intelligence_service.py",
+   "_screen_direction_strategy",
+   619,
+   "returns constant only"
+  ],
+  [
+   "services/orchestrator.py",
+   "execute",
+   77,
+   "raise NotImplementedError"
+  ],
+  [
+   "services/test_render_batch.py",
+   "_isolate",
+   193,
+   "pass-only"
+  ],
+  [
+   "services/test_render_batch.py",
+   "_isolate",
+   269,
+   "pass-only"
+  ],
+  [
+   "services/test_runway_provider_hardening.py",
+   "_no_sleep",
+   195,
+   "returns constant only"
+  ],
+  [
+   "services/test_runway_provider_hardening.py",
+   "raise_for_status",
+   94,
+   "returns constant only"
+  ],
+  [
+   "services/test_story_scoring_service.py",
+   "analyze",
+   611,
+   "returns constant only"
+  ],
+  [
+   "services/test_story_scoring_service.py",
+   "analyze",
+   633,
+   "returns constant only"
+  ],
+  [
+   "services/test_story_scoring_service.py",
+   "analyze",
+   672,
+   "returns constant only"
+  ],
+  [
+   "services/test_story_scoring_service.py",
+   "analyze",
+   700,
+   "returns constant only"
+  ],
+  [
+   "services/test_story_scoring_service.py",
+   "analyze",
+   723,
+   "returns constant only"
+  ],
+  [
+   "services/script_parser.py",
+   "_build_locations",
+   14081,
+   "empty"
+  ],
+  [
+   "services/test_continuity_causal_impossibilities.py",
+   "delete_continuity_issues_for_project",
+   62,
+   "returns constant only"
+  ],
+  [
+   "services/test_continuity_character_knowledge.py",
+   "delete_continuity_issues_for_project",
+   73,
+   "returns constant only"
+  ],
+  [
+   "services/test_render_pipeline_hardening.py",
+   "cancel_job",
+   55,
+   "returns constant only"
+  ],
+  [
+   "services/test_clip_revision_service.py",
+   "submit_job",
+   215,
+   "pass-only"
+  ],
+  [
+   "services/providers/base.py",
+   "render",
+   14,
+   "empty"
+  ]
+ ],
+ "marker_count": 850,
+ "markers_sample": [
+  [
+   "auth.py",
+   85,
+   "# Placeholder - in production load from database"
+  ],
+  [
+   "models/casting_intelligence.py",
+   9,
+   "CastingModality = Literal[\"human\", \"ai\", \"hybrid\", \"voice_only\", \"visual_only\", \"placeholder\"]"
+  ],
+  [
+   "models/cinematic_language.py",
+   70,
+   "PLACEHOLDER = \"placeholder\"  # Conservative fallback"
+  ],
+  [
+   "models/cinematic_language.py",
+   132,
+   "analysis_method: str = AnalysisMethod.PLACEHOLDER"
+  ],
+  [
+   "models/script_intelligence.py",
+   42,
+   "# Placeholder for Phase 2"
+  ],
+  [
+   "models/script_intelligence.py",
+   81,
+   "# Placeholder for Phase 3"
+  ],
+  [
+   "models/script_intelligence.py",
+   110,
+   "# Placeholder for Phase 4"
+  ],
+  [
+   "adapters/__init__.py",
+   158,
+   "Uses a public sample MP4 as placeholder output."
+  ],
+  [
+   "adapters/__init__.py",
+   528,
+   "url = str(os.getenv(\"RUNWAY_MOCK_VIDEO_URL\", \"/outputs/mock-video/sample.mp4\")).strip()"
+  ],
+  [
+   "adapters/__init__.py",
+   529,
+   "return url or \"/outputs/mock-video/sample.mp4\""
+  ],
+  [
+   "adapters/__init__.py",
+   785,
+   "job.provider_job_id = f\"mock-task-{job.id}\""
+  ],
+  [
+   "adapters/__init__.py",
+   1153,
+   "if self._runway_test_mode() == \"mock_success\" and isinstance(job.provider_job_id, str) and job.provider_job_id.startswit"
+  ],
+  [
+   "adapters/__init__.py",
+   1379,
+   "\"\"\"Return provider metadata without temporary signed media URLs.\"\"\""
+  ],
+  [
+   "adapters/__init__.py",
+   1387,
+   "clean[key] = \"<redacted temporary provider URL>\""
+  ],
+  [
+   "adapters/__init__.py",
+   1708,
+   "\"hosted_video_url\": \"<redacted temporary provider URL>\","
+  ],
+  [
+   "adapters/__init__.py",
+   1767,
+   "\"hosted_video_url\": \"<redacted temporary provider URL>\","
+  ],
+  [
+   "data/storage.py",
+   11517,
+   "fallback: Whether this is a fallback/placeholder image"
+  ],
+  [
+   "data/storage.py",
+   15893,
+   "\"\"\"PostgreSQL storage - scaffold for production deployment (not implemented)\"\"\""
+  ],
+  [
+   "routes/render.py",
+   596,
+   "For simulated/local jobs: regenerate the placeholder URL immediately."
+  ],
+  [
+   "routes/export.py",
+   65,
+   "\"EXPORT_START | project=%s | resolution=%s | format=%s | quality=%s | mock=%s\","
+  ],
+  [
+   "routes/export.py",
+   147,
+   "# Return URL for client-side download (mock mode or remote)"
+  ],
+  [
+   "routes/agents.py",
+   18,
+   "\"\"\"Placeholder - would use real auth in production\"\"\""
+  ],
+  [
+   "routes/test_recommended_duration_route.py",
+   55,
+   "stub = _StubService(payload)"
+  ],
+  [
+   "routes/test_recommended_duration_route.py",
+   56,
+   "monkeypatch.setattr(estimator_module, \"shot_duration_estimator_service\", stub)"
+  ],
+  [
+   "routes/test_recommended_duration_route.py",
+   63,
+   "assert stub.calls == [(\"p1\", \"scene_001_shot_001\", None)]"
+  ],
+  [
+   "routes/test_recommended_duration_route.py",
+   67,
+   "stub = _StubService({\"found\": True, \"recommended_seconds\": 5.0})"
+  ],
+  [
+   "routes/test_recommended_duration_route.py",
+   68,
+   "monkeypatch.setattr(estimator_module, \"shot_duration_estimator_service\", stub)"
+  ],
+  [
+   "routes/test_recommended_duration_route.py",
+   73,
+   "assert stub.calls[0][2] == \"fast\""
+  ],
+  [
+   "routes/test_recommended_duration_route.py",
+   77,
+   "stub = _StubService({}, raise_value_error=True)"
+  ],
+  [
+   "routes/test_recommended_duration_route.py",
+   78,
+   "monkeypatch.setattr(estimator_module, \"shot_duration_estimator_service\", stub)"
+  ],
+  [
+   "routes/test_casting_intelligence_routes.py",
+   49,
+   "\"modality\": \"placeholder\","
+  ],
+  [
+   "routes/production_scan.py",
+   31,
+   "# For now, we'll just run a new one since we don't have persistence for scans yet"
+  ],
+  [
+   "routes/crew.py",
+   35,
+   "\"\"\"Placeholder - would use real auth in production\"\"\""
+  ],
+  [
+   "routes/stitching.py",
+   133,
+   "# Return the URL for client-side download (mock mode or remote)"
+  ],
+  [
+   "routes/audio.py",
+   131,
+   "\"AUDIO_GENERATE | project=%s scene=%s track=%s mock=%s\","
+  ],
+  [
+   "routes/audio.py",
+   168,
+   "\"Running in mock mode \u2014 install torch, TTS, and audiocraft for real generation.\""
+  ],
+  [
+   "routes/audio.py",
+   204,
+   "\"\"\"Return audio generation capabilities and mock mode status.\"\"\""
+  ],
+  [
+   "routes/audio.py",
+   451,
+   "\"AUDIO_PIPELINE_GENERATE | project=%s scene=%s mock=%s merge=%s\","
+  ],
+  [
+   "routes/script_intelligence.py",
+   112,
+   "# \u2500\u2500 Placeholder Endpoints for Future Phases \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+  ],
+  [
+   "services/test_dialogue_provider_selection.py",
+   84,
+   "\"\"\"Stub Piper TTS to write a valid WAV instantly.\"\"\""
+  ],
+  [
+   "services/test_dialogue_provider_selection.py",
+   93,
+   "\"\"\"Stub ElevenLabs TTS to write a valid WAV (via normalise) instantly.\"\"\""
+  ],
+  [
+   "services/test_dialogue_provider_selection.py",
+   531,
+   "\"\"\"Stub Fish Audio TTS to write a valid WAV instantly.\"\"\""
+  ],
+  [
+   "services/test_dialogue_provider_selection.py",
+   656,
+   "\"\"\"Stub CosyVoice TTS to write a valid WAV instantly.\"\"\""
+  ],
+  [
+   "services/test_video_understanding_status_routes.py",
+   43,
+   "frame_path=\"/tmp/fake-route.jpg\","
+  ],
+  [
+   "services/test_render_job_persistence.py",
+   24,
+   "\"\"\"Mock SQLite storage that tracks saved jobs.\"\"\""
+  ],
+  [
+   "services/test_render_job_persistence.py",
+   235,
+   "assert already_exists == 0, \"No jobs should exist initially in mock storage\""
+  ],
+  [
+   "services/casting_intelligence_service.py",
+   568,
+   "if talent.modality == \"placeholder\":"
+  ],
+  [
+   "services/test_scene_production_pipeline_service.py",
+   25,
+   "video.write_bytes(b\"fake-video\")"
+  ],
+  [
+   "services/test_scene_production_pipeline_service.py",
+   61,
+   "final.write_bytes(b\"fake-video-with-audio\")"
+  ],
+  [
+   "services/test_character_reference_multi_view.py",
+   337,
+   "video.write_bytes(b\"stub\")"
+  ],
+  [
+   "services/test_festival_validation.py",
+   12,
+   "\"\"\"Create a temporary storage instance.\"\"\""
+  ],
+  [
+   "services/vision_model_adapter.py",
+   70,
+   "caption=\"Mock local frame analysis (still-image mode).\","
+  ],
+  [
+   "services/vision_model_adapter.py",
+   80,
+   "model=\"mock-vision-v1\","
+  ],
+  [
+   "services/vision_model_adapter.py",
+   93,
+   "if provider in {\"mock\", \"mock_local\", \"local\"}:"
+  ],
+  [
+   "services/test_story_scoring_integration.py",
+   66,
+   "# Mock the story_scoring_service"
+  ],
+  [
+   "services/test_story_scoring_integration.py",
+   67,
+   "mock_score = Mock()"
+  ],
+  [
+   "services/test_story_scoring_integration.py",
+   75,
+   "mock_score.priority = Mock(value=\"medium\")"
+  ],
+  [
+   "services/test_story_scoring_integration.py",
+   77,
+   "mock_score.to_dict = Mock(return_value={"
+  ],
+  [
+   "services/test_story_scoring_integration.py",
+   124,
+   "mock_score = Mock()"
+  ],
+  [
+   "services/test_story_scoring_integration.py",
+   125,
+   "mock_score.to_dict = Mock(return_value={"
+  ]
+ ],
+ "big_files": [
+  [
+   "data/storage.py",
+   15915
+  ],
+  [
+   "services/script_parser.py",
+   14902
+  ],
+  [
+   "services/test_film_structure_service.py",
+   14811
+  ],
+  [
+   "services/render.py",
+   3943
+  ],
+  [
+   "services/continuity_intelligence_service.py",
+   3827
+  ],
+  [
+   "services/audio_pipeline_service.py",
+   3405
+  ],
+  [
+   "routes/projects.py",
+   2708
+  ],
+  [
+   "services/providers/test_providers.py",
+   2427
+  ],
+  [
+   "services/test_provider_request_service.py",
+   2379
+  ],
+  [
+   "adapters/__init__.py",
+   2327
+  ],
+  [
+   "services/agent_executor.py",
+   2103
+  ],
+  [
+   "services/test_scene_output.py",
+   1829
+  ],
+  [
+   "services/test_script_intelligence_service.py",
+   1764
+  ],
+  [
+   "services/storyboard_blueprint_service.py",
+   1612
+  ],
+  [
+   "services/adherence_service.py",
+   1590
+  ],
+  [
+   "routes/crew.py",
+   1547
+  ],
+  [
+   "services/test_dialogue_provider_selection.py",
+   1480
+  ],
+  [
+   "services/script_intelligence_service.py",
+   1462
+  ],
+  [
+   "services/test_story_scoring_service.py",
+   1345
+  ],
+  [
+   "services/canonical_production_workflow_service.py",
+   1339
+  ],
+  [
+   "services/provider_request_service.py",
+   1329
+  ],
+  [
+   "services/render_retry_service.py",
+   1323
+  ],
+  [
+   "services/story_scoring_service.py",
+   1312
+  ],
+  [
+   "services/character_visual_reference_service.py",
+   1305
+  ],
+  [
+   "services/spine_consumption_service.py",
+   1291
+  ]
+ ],
+ "big_funcs": [
+  [
+   "services/script_parser.py",
+   "build_script_breakdown_bundle",
+   5830
+  ],
+  [
+   "data/storage.py",
+   "_init_schema",
+   3459
+  ],
+  [
+   "services/render.py",
+   "create_job",
+   1370
+  ],
+  [
+   "services/test_film_structure_service.py",
+   "test_build_script_breakdown_bundle_handles_empty_script_safely",
+   784
+  ],
+  [
+   "services/test_film_structure_service.py",
+   "test_build_script_breakdown_bundle_matches_individual_helper_outputs",
+   687
+  ],
+  [
+   "services/test_film_structure_service.py",
+   "test_build_script_breakdown_bundle_returns_full_bundle_for_valid_script",
+   604
+  ],
+  [
+   "adapters/__init__.py",
+   "submit_job",
+   395
+  ],
+  [
+   "services/demo_seed_service.py",
+   "seed_demo_project",
+   365
+  ],
+  [
+   "services/continuity_intelligence_service.py",
+   "check_causal_impossibilities",
+   335
+  ],
+  [
+   "services/audio_pipeline_service.py",
+   "generate_shot_dialogue",
+   328
+  ],
+  [
+   "services/generate_short_film_workflow_service.py",
+   "handle_generate_short_film_request",
+   316
+  ],
+  [
+   "services/continuity_intelligence_service.py",
+   "build_film_dna",
+   311
+  ],
+  [
+   "services/agent_executor.py",
+   "_build_scene_output",
+   302
+  ],
+  [
+   "services/studio_brain_service.py",
+   "build_orchestration_bundle",
+   277
+  ],
+  [
+   "services/test_film_structure_service.py",
+   "test_controlled_real_multi_shot_executes_up_to_cap_preserves_order_and_marks_remaining",
+   270
+  ],
+  [
+   "services/test_film_structure_service.py",
+   "test_build_script_breakdown_bundle_has_expected_keys",
+   251
+  ],
+  [
+   "services/audio_pipeline_service.py",
+   "merge_audio_onto_video",
+   247
+  ],
+  [
+   "services/adherence_service.py",
+   "_call_vision_model",
+   233
+  ],
+  [
+   "services/render_retry_service.py",
+   "evaluate_and_retry",
+   231
+  ],
+  [
+   "services/script_parser.py",
+   "build_image_render_assets",
+   228
+  ],
+  [
+   "services/adherence_service.py",
+   "score_render_attempt",
+   223
+  ],
+  [
+   "services/test_film_structure_service.py",
+   "test_controlled_real_execution_failure_is_normalized_without_retry",
+   222
+  ],
+  [
+   "services/performance_intelligence_service.py",
+   "analyze_scene_performance",
+   216
+  ],
+  [
+   "routes/exports.py",
+   "build_export_package_payload",
+   210
+  ],
+  [
+   "services/continuity_intelligence_service.py",
+   "build_character_journey_map",
+   206
+  ]
+ ],
+ "dup_body_groups": 14,
+ "dup_top": [
+  [
+   "services/visual_embedding_service.py:102 cosine_similarity()",
+   "services/semantic_search_service.py:16 cosine_similarity()"
+  ],
+  [
+   "services/test_short_film_stitching_service.py:358 _fake_download()",
+   "services/test_short_film_stitching_service.py:404 _fake_download()"
+  ],
+  [
+   "services/test_final_short_film_package_service.py:312 __init__()",
+   "services/test_final_short_film_package_service.py:402 __init__()"
+  ],
+  [
+   "services/test_dialogue_provider_selection.py:74 temp_storage()",
+   "services/test_voice_resolution.py:24 temp_storage()"
+  ],
+  [
+   "services/script_parser.py:12038 build_provider_intent_signal()",
+   "services/providers/config_surface.py:201 build_provider_intent_signal()"
+  ],
+  [
+   "services/script_parser.py:11972 build_credential_validation_summary()",
+   "services/providers/config_surface.py:136 build_credential_validation_summary()"
+  ],
+  [
+   "services/script_parser.py:11935 build_provider_config_validation()",
+   "services/providers/config_surface.py:98 build_provider_config_validation()"
+  ],
+  [
+   "services/providers/test_providers.py:1201 test_script_parser_has_no_provider_import_leakage()",
+   "services/providers/test_providers.py:2027 test_phase160_script_parser_has_no_provider_imports()"
+  ],
+  [
+   "services/audio_pipeline_service.py:3302 get_project_status()",
+   "services/audio_generation_service.py:555 get_project_status()"
+  ],
+  [
+   "services/adherence_service.py:1070 _sync_groq_call()",
+   "services/adherence_service.py:1492 _sync_groq_call()"
+  ],
+  [
+   "data/storage.py:5618 save_performance_decision()",
+   "data/storage.py:14028 save_performance_decision()"
+  ],
+  [
+   "data/storage.py:5534 save_performance_relationship_read()",
+   "data/storage.py:13944 save_performance_relationship_read()"
+  ],
+  [
+   "data/storage.py:5432 save_performance_brief()",
+   "data/storage.py:13834 save_performance_brief()"
+  ],
+  [
+   "data/storage.py:5342 save_performance_analysis()",
+   "data/storage.py:13728 save_performance_analysis()"
+  ]
+ ],
+ "unused_heuristic_count": 594,
+ "unused_sample": [
+  [
+   "auth.py",
+   "require_role"
+  ],
+  [
+   "circuit_breaker.py",
+   "with_circuit_breaker"
+  ],
+  [
+   "circuit_breaker.py",
+   "request_shutdown"
+  ],
+  [
+   "circuit_breaker.py",
+   "is_shutting_down"
+  ],
+  [
+   "circuit_breaker.py",
+   "register_task"
+  ],
+  [
+   "circuit_breaker.py",
+   "unregister_task"
+  ],
+  [
+   "circuit_breaker.py",
+   "wait_for_tasks"
+  ],
+  [
+   "middleware/structured_logging.py",
+   "StructuredLoggingMiddleware"
+  ],
+  [
+   "middleware/request_id.py",
+   "RequestIDMiddleware"
+  ],
+  [
+   "middleware/rate_limit.py",
+   "RateLimitMiddleware"
+  ],
+  [
+   "models/memory.py",
+   "get_theme_emphasis"
+  ],
+  [
+   "models/co_director.py",
+   "increment_repeated_critique"
+  ],
+  [
+   "models/__init__.py",
+   "can_transition_to"
+  ],
+  [
+   "models/__init__.py",
+   "get_progress"
+  ],
+  [
+   "models/crew.py",
+   "get_character_presence"
+  ],
+  [
+   "models/crew.py",
+   "get_tone_at_scene"
+  ],
+  [
+   "models/production_queue.py",
+   "ProductionQueuePolicy"
+  ],
+  [
+   "models/studio_brain.py",
+   "StudioBrainCreatorEscalation"
+  ],
+  [
+   "models/spine.py",
+   "get_constraint_weights"
+  ],
+  [
+   "models/production_intelligence.py",
+   "to_event_summary"
+  ],
+  [
+   "adapters/__init__.py",
+   "normalize_response"
+  ],
+  [
+   "data/storage.py",
+   "get_camera_grammar_assessment"
+  ],
+  [
+   "data/storage.py",
+   "get_character_voice_profile"
+  ],
+  [
+   "data/storage.py",
+   "get_audio_intelligence_assessment"
+  ],
+  [
+   "data/storage.py",
+   "list_audio_decision_memory_projections"
+  ],
+  [
+   "data/storage.py",
+   "get_production_design_assessment"
+  ],
+  [
+   "data/storage.py",
+   "update_queue_item_status"
+  ],
+  [
+   "data/storage.py",
+   "cleanup_expired_sessions"
+  ],
+  [
+   "data/storage.py",
+   "get_memory_entry"
+  ],
+  [
+   "data/storage.py",
+   "save_review_memory"
+  ],
+  [
+   "data/storage.py",
+   "delete_crew_task"
+  ],
+  [
+   "data/storage.py",
+   "delete_visual_embeddings_for_asset"
+  ],
+  [
+   "data/storage.py",
+   "get_cinematic_memory_record"
+  ],
+  [
+   "data/storage.py",
+   "list_cinematic_memory_records_for_project"
+  ],
+  [
+   "data/storage.py",
+   "delete_cinematic_memory_records_for_project"
+  ],
+  [
+   "data/storage.py",
+   "get_latest_style_signature"
+  ],
+  [
+   "data/storage.py",
+   "get_film_cut_state"
+  ],
+  [
+   "data/storage.py",
+   "get_previs_image_by_job"
+  ],
+  [
+   "data/storage.py",
+   "get_study_memories_by_category"
+  ],
+  [
+   "data/storage.py",
+   "delete_character"
+  ],
+  [
+   "data/storage.py",
+   "detect_unknown_characters"
+  ],
+  [
+   "data/storage.py",
+   "get_render_attempt"
+  ],
+  [
+   "data/storage.py",
+   "get_standing_correction"
+  ],
+  [
+   "data/storage.py",
+   "get_reference_asset"
+  ],
+  [
+   "data/storage.py",
+   "get_color_palette_continuity_record"
+  ],
+  [
+   "data/storage.py",
+   "get_color_story_arc"
+  ],
+  [
+   "data/storage.py",
+   "get_color_final_verification"
+  ],
+  [
+   "routes/standing_corrections.py",
+   "propose_standing_correction"
+  ],
+  [
+   "routes/standing_corrections.py",
+   "confirm_standing_correction"
+  ],
+  [
+   "routes/exports.py",
+   "export_pitch_pack"
+  ],
+  [
+   "routes/exports.py",
+   "export_shot_list"
+  ],
+  [
+   "routes/exports.py",
+   "export_prompt_pack"
+  ],
+  [
+   "routes/exports.py",
+   "export_cut_manifest"
+  ],
+  [
+   "routes/exports.py",
+   "export_archive_snapshot"
+  ],
+  [
+   "routes/exports.py",
+   "export_festival"
+  ],
+  [
+   "routes/exports.py",
+   "export_youtube"
+  ],
+  [
+   "routes/exports.py",
+   "export_trailer"
+  ],
+  [
+   "routes/exports.py",
+   "export_teaser"
+  ],
+  [
+   "routes/exports.py",
+   "export_subtitles"
+  ],
+  [
+   "routes/production_recovery.py",
+   "start_production_recovery"
+  ]
+ ]
+}

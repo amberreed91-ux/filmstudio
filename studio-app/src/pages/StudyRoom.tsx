@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Brain,
+  Check,
+  FileText,
   Film,
   Loader2,
   MessageSquare,
@@ -15,18 +17,20 @@ import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
 import KnowledgeLibraryPanel from '../components/KnowledgeLibraryPanel'
-import { useStudio } from '../context/StudioContext'
+import { useProjectRouteContext } from '../hooks/useProjectRouteContext'
 import {
   STUDIO_API_BASE,
+  attachStudioBrainLibraryFiles,
   deleteDirectorMemoryEntry,
   getDirectorMemory,
   getStudioProject,
-  listProjects,
+  listStudioBrainLibrary,
   reorganizeReferenceLibrary,
   saveCreativeDecisionMemory,
   saveDirectorMemoryEntry,
   studyReferencePrompt,
 } from '../lib/studioApi'
+import type { StudioBrainLibraryFile } from '../lib/studioApi'
 import { persistActiveProjectId } from '../lib/projectContext'
 import type {
   DirectorMemoryBundle,
@@ -190,7 +194,7 @@ function MemorySection({
 }) {
   return (
     <div>
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
+      <div className="mb-1.5 text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface)' }}>
         {title}
       </div>
       {items.length === 0 ? (
@@ -252,30 +256,10 @@ export default function StudyRoom() {
   // ============ ALL HOOKS — NO EXCEPTIONS ============
   // Custom hooks first
   const [searchParams] = useSearchParams()
-  const { activeProjectId } = useStudio()
-
-  // useMemo (derived values, no side effects)
-  const queryProjectId = useMemo(() => searchParams.get('project_id') || '', [searchParams])
-  const effectiveProjectId = useMemo(() => activeProjectId || queryProjectId || null, [activeProjectId, queryProjectId])
-  const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (effectiveProjectId) {
-      setResolvedProjectId(effectiveProjectId)
-      return
-    }
-    const timeout = setTimeout(async () => {
-      try {
-        const result = await listProjects()
-        if (result.projects?.length > 0) {
-          setResolvedProjectId(result.projects[0].project_id)
-        }
-      } catch (e) {
-        console.error('Could not resolve project:', e)
-      }
-    }, 3000)
-    return () => clearTimeout(timeout)
-  }, [effectiveProjectId])
+  const queryProjectId = searchParams.get('project_id') || ''
+  const { projectId: resolvedProjectId, projectError } = useProjectRouteContext(queryProjectId)
+  const [studyStep, setStudyStep] = useState<'bibles' | 'references' | 'guidance'>('bibles')
+  const [reorganizing, setReorganizing] = useState(false)
 
   // useState — ALL of them, unconditionally
   const [category, setCategory] = useState<CategoryFilter>('all')
@@ -303,6 +287,10 @@ export default function StudyRoom() {
   const [showMemoryDrawer, setShowMemoryDrawer] = useState(false)
   const [memoryBundle, setMemoryBundle] = useState<DirectorMemoryBundle>(EMPTY_BUNDLE)
   const [loadingMemories, setLoadingMemories] = useState(false)
+  const [studioBrainFiles, setStudioBrainFiles] = useState<StudioBrainLibraryFile[]>([])
+  const [selectedStudioBrainFiles, setSelectedStudioBrainFiles] = useState<Set<string>>(new Set())
+  const [loadingStudioBrainFiles, setLoadingStudioBrainFiles] = useState(false)
+  const [attachingStudioBrainFiles, setAttachingStudioBrainFiles] = useState(false)
 
   // useRef — ALL of them
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -312,7 +300,6 @@ export default function StudyRoom() {
     () => categorizeDirectorMemory(memoryBundle),
     [memoryBundle],
   )
-  const memoryCount = allMemories.length
 
   const filteredReferences = useMemo(() => {
     let result = references
@@ -334,6 +321,8 @@ export default function StudyRoom() {
     return result
   }, [references, category, activeBatches])
 
+  const selectedStudioBrainCount = selectedStudioBrainFiles.size
+
   // useCallback — ALL of them
   const toggleBatch = useCallback((batch: IntelligenceBatch) => {
     setActiveBatches((prev) => {
@@ -348,12 +337,6 @@ export default function StudyRoom() {
     if (!resolvedProjectId) return
     setLoadingRefs(true)
     try {
-      // First re-categorize all existing references using content-based category detection
-      try {
-        await reorganizeReferenceLibrary(resolvedProjectId)
-      } catch {
-        // Non-critical — continue even if reorg fails
-      }
       const project = await getStudioProject(resolvedProjectId)
       if (project?.reference_study_library?.studies) {
         const refs: ReferenceCard[] = (project.reference_study_library.studies as Array<Record<string, unknown>>).map((study: Record<string, unknown>) => ({
@@ -381,13 +364,25 @@ export default function StudyRoom() {
     }
   }, [resolvedProjectId])
 
+  async function handleReorganizeReferences() {
+    if (!resolvedProjectId || reorganizing) return
+    setReorganizing(true)
+    setError('')
+    try {
+      await reorganizeReferenceLibrary(resolvedProjectId)
+      await loadReferences()
+      setSuccess('Reference categories refreshed.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not reorganize references.')
+    } finally { setReorganizing(false) }
+  }
+
   const loadMemories = useCallback(async () => {
     if (!resolvedProjectId) return
     setLoadingMemories(true)
     try {
       const response = await getDirectorMemory(resolvedProjectId)
       const bundle = response.memory ?? EMPTY_BUNDLE
-      console.log('Memory count set to:', Object.values(bundle).flat().length, 'source: API response', 'project_id:', resolvedProjectId)
       setMemoryBundle(bundle)
     } catch (err) {
       // Suppress 404 errors for non-critical endpoints
@@ -395,12 +390,57 @@ export default function StudyRoom() {
       if (!is404) {
         console.error('loadMemories failed:', err)
       }
-      console.log('Memory count set to: 0', 'source: error fallback')
       setMemoryBundle(EMPTY_BUNDLE)
     } finally {
       setLoadingMemories(false)
     }
   }, [resolvedProjectId])
+
+  const loadStudioBrainFiles = useCallback(async () => {
+    setLoadingStudioBrainFiles(true)
+    try {
+      const result = await listStudioBrainLibrary()
+      setStudioBrainFiles(result.files || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load Studio Brain library')
+      setStudioBrainFiles([])
+    } finally {
+      setLoadingStudioBrainFiles(false)
+    }
+  }, [])
+
+  const toggleStudioBrainFile = useCallback((filename: string) => {
+    setSelectedStudioBrainFiles((prev) => {
+      const next = new Set(prev)
+      if (next.has(filename)) next.delete(filename)
+      else next.add(filename)
+      return next
+    })
+  }, [])
+
+  const handleAttachStudioBrainFiles = useCallback(async () => {
+    if (!resolvedProjectId || selectedStudioBrainFiles.size === 0) return
+    setAttachingStudioBrainFiles(true)
+    setError('')
+    setSuccess('')
+    try {
+      const result = await attachStudioBrainLibraryFiles(resolvedProjectId, Array.from(selectedStudioBrainFiles))
+      setSelectedStudioBrainFiles(new Set())
+      const skipped = result.skipped?.length || 0
+      const attached = result.total_attached || 0
+      setSuccess(
+        skipped > 0
+          ? `${attached} Studio Brain files added; ${skipped} already existed or could not be added.`
+          : `${attached} Studio Brain files added to this project.`,
+      )
+      void loadReferences()
+      void loadMemories()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add Studio Brain files')
+    } finally {
+      setAttachingStudioBrainFiles(false)
+    }
+  }, [resolvedProjectId, selectedStudioBrainFiles, loadReferences, loadMemories])
 
   const handleSaveReference = useCallback(async (ref: ReferenceCard) => {
     if (!resolvedProjectId) return
@@ -419,7 +459,8 @@ export default function StudyRoom() {
 
   const handleReferenceCardClick = useCallback((ref: ReferenceCard) => {
     setIngestText(`From reference "${ref.title}": ${ref.summary}`)
-    document.getElementById('teach-studio-bar')?.scrollIntoView({ behavior: 'smooth' })
+    setStudyStep('guidance')
+    requestAnimationFrame(() => document.getElementById('teach-studio-bar')?.scrollIntoView({ behavior: 'smooth' }))
   }, [])
 
   const handleAnalyze = useCallback(async () => {
@@ -535,10 +576,6 @@ export default function StudyRoom() {
   }
 
   const handleFileIngest = useCallback(async (files: File[]) => {
-    console.log('handleFileIngest called:', {
-      files: files.map(f => f.name),
-      resolvedProjectId,
-    })
     try {
       if (!resolvedProjectId) {
         setError('No active project. Select a project first.')
@@ -555,7 +592,6 @@ export default function StudyRoom() {
       }
       if (validFiles.length === 0) return
       for (const file of validFiles) {
-        console.log('About to call API with:', { projectId: resolvedProjectId, fileName: file.name })
         uploadFileWithProgress(resolvedProjectId, file)
       }
     } catch (err) {
@@ -656,6 +692,8 @@ export default function StudyRoom() {
 
   useEffect(() => { void loadMemories() }, [loadMemories])
 
+  useEffect(() => { void loadStudioBrainFiles() }, [loadStudioBrainFiles])
+
   // ============ RENDER ============
   return (
     <>
@@ -676,13 +714,13 @@ export default function StudyRoom() {
       `}</style>
       <StudioShell title="Study" subtitle="The Study — AI Research Room">
         <ProjectGuard>
-          <ProjectContextBar roomName="study" />
+          <ProjectContextBar roomName="study" compact />
 
           {/* Status messages */}
           <div className="px-4 pt-2">
-            {error && (
+            {(error || projectError) && (
               <div className="mb-2 rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
-                {error}
+                {error || projectError}
               </div>
             )}
             {success && (
@@ -692,14 +730,335 @@ export default function StudyRoom() {
             )}
           </div>
 
-          {/* TWO-PANEL LAYOUT */}
-          <div className="flex h-[calc(100vh-160px)] w-full gap-4 px-4 pb-4">
-            {/* LEFT: ACTIVE MEMORY PANEL (33%) */}
-            <div className="flex w-[33%] flex-col gap-4 overflow-y-auto">
+          <div className="mx-auto max-w-[1320px] px-4 pb-10 pt-5 md:px-6">
+            <header className="mb-6">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-amber-200/80">The Study</p>
+              <h1 className="mt-2 text-2xl font-medium tracking-tight text-zinc-100 md:text-3xl">Define the world before the first frame.</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">Keep your film’s rules, creative references, and saved direction in one place. Begin with what you already have.</p>
+            </header>
+            <nav aria-label="Study steps" className="mb-6 grid grid-cols-3 gap-2 border-b border-white/10 pb-4">
+              {([{ id: 'bibles', title: 'Bibles' }, { id: 'references', title: 'References' }, { id: 'guidance', title: 'Saved guidance' }] as const).map((step, index) => <button key={step.id} type="button" onClick={() => setStudyStep(step.id)} aria-current={studyStep === step.id ? 'step' : undefined} className={studyStep === step.id ? 'rounded-md border border-amber-200/40 bg-amber-200/5 px-3 py-3 text-left text-xs text-amber-100' : 'rounded-md border border-white/10 px-3 py-3 text-left text-xs text-zinc-400 hover:text-zinc-200'}><span className="mb-1 block text-xs opacity-60">0{index + 1}</span><span className="font-medium">{step.title}</span></button>)}
+            </nav>
+            <section aria-label="Project Bibles" className={studyStep === 'bibles' ? 'space-y-5' : 'hidden'}>
+              <div><h2 className="text-lg font-medium text-zinc-100">The rules of your film</h2><p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-400">Add your story, visual, or character Bible here. These are project rules; reference films and research belong in the next step.</p></div>
+              {resolvedProjectId && <KnowledgeLibraryPanel key={resolvedProjectId} projectId={resolvedProjectId} />}
+              <button type="button" onClick={() => setStudyStep('references')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100">Continue to references →</button>
+            </section>
+            <section aria-label="Creative references" className={studyStep === 'references' ? 'space-y-5' : 'hidden'}>
+              <div><h2 className="text-lg font-medium text-zinc-100">Show the studio what you mean</h2><p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-400">Upload a reference or study a film title for lighting, rhythm, sound, or story. Choose a focus for title studies. Uploaded files are organized automatically.</p></div>
+              <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.4fr)]">
+                <div id="study-reference-upload" className="min-w-0 rounded-lg border border-white/10 bg-zinc-950/60 p-5 space-y-4">
+                   <div className="flex items-center gap-2">
+                     <Film size={14} style={{ color: 'var(--color-secondary)' }} />
+                     <span className="font-metadata-sm text-xs font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--color-secondary)' }}>FILM REFERENCES</span>
+                     {!resolvedProjectId && <span className="ml-1.5 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />}
+                   </div>
+
+                  {/* Segmented Control */}
+                  <div className="flex rounded-lg border p-0.5" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                    <button type="button" onClick={() => setFilmIngestMode('title')} className={`flex-1 rounded px-2 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] transition-all ${filmIngestMode === 'title' ? 'bg-white/10 text-on-surface' : 'text-on-surface-variant hover:bg-white/5'}`}>FILM TITLE</button>
+                    <button type="button" onClick={() => { setFilmIngestMode('upload'); document.getElementById('study-reference-upload')?.scrollIntoView({ behavior: 'smooth' }) }} className={`flex-1 rounded px-2 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] transition-all ${filmIngestMode === 'upload' ? 'bg-white/10 text-on-surface' : 'text-on-surface-variant hover:bg-white/5'}`}>UPLOAD FILE</button>
+                  </div>
+
+                  {/* Hidden file input — always mounted regardless of tab */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    accept={ACCEPTED_EXTENSIONS}
+                    onChange={handleFileInputChange}
+                  />
+
+                  {/* FILM TITLE Mode */}
+                  {filmIngestMode === 'title' && (
+                    <div className="space-y-2">
+                      <input type="text" aria-label="Film reference title" value={filmTitle} onChange={(e) => { setFilmTitle(e.target.value); if (filmTitleInvalid) setFilmTitleInvalid(false) }} onKeyDown={(e) => { if (e.key === 'Enter') void handleFilmTitleIngest() }} placeholder="Film title, director, year..." className={`cyber-input w-full rounded px-2 py-1.5 text-xs outline-none ${filmTitleInvalid ? 'animate-shake border-rose-400' : ''}`} style={{ color: 'var(--color-on-surface)' }} />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-on-surface-variant)' }}>ANALYZE FOR →</span>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        <select aria-label="Film title study focus" value={filmDimensions} onChange={(e) => setFilmDimensions(e.target.value as any)} className="cyber-input rounded px-2 py-1 text-xs font-bold uppercase tracking-[0.08em] outline-none" style={{ color: 'var(--color-on-surface)' }}>
+                          <option value="all">All Dimensions</option>
+                          <option value="cinematography">Cinematography</option>
+                          <option value="editing">Editing</option>
+                          <option value="sound">Sound</option>
+                          <option value="narrative">Narrative</option>
+                        </select>
+                      </div>
+                       <button type="button" onClick={handleFilmTitleIngest} disabled={filmProcessing || !resolvedProjectId} title={!resolvedProjectId ? 'Loading project...' : undefined} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
+                        {filmProcessing ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                        {filmProcessing ? 'ANALYZING...' : 'Study this reference'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* UPLOAD FILE Mode */}
+                  {filmIngestMode === 'upload' && (
+                    <div className="space-y-2">
+                      <p className="text-xs leading-relaxed text-zinc-400">Uploaded references are categorized automatically from their filename and content.</p>
+                       <div role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click() } }} title={!resolvedProjectId ? 'Loading project...' : undefined} className={`rounded-lg border-2 border-dashed p-4 text-center transition-all cursor-pointer ${isDragging ? 'border-secondary shadow-[0_0_20px_rgba(76,215,246,0.3)]' : 'border-outline-variant'} ${!resolvedProjectId ? 'opacity-50 pointer-events-none' : ''}`} style={isDragging ? undefined : { borderColor: 'rgba(255,255,255,0.2)' }} onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+                        <Upload size={20} className="mx-auto mb-2" style={{ color: 'var(--color-on-surface-variant)' }} />
+                        <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>{filmFile ? filmFile.name : 'Drop a file here or click to browse'}</p>
+                        <p className="text-[11px] mt-1" style={{ color: 'var(--color-on-surface-variant)' }}>PDF, FDX, TXT, MD, MP4, MOV, MP3, WAV supported</p>
+                      </div>
+
+                      {Object.values(uploadProgress).map((item) => (
+                        <div key={item.filename} className={`glass-panel rounded-lg p-2.5 ${item.status === 'error' ? '!border-rose-400/40' : ''}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Upload size={12} style={{ color: 'var(--color-on-surface-variant)' }} />
+                            <span className="flex-1 truncate text-xs font-medium" style={{ color: 'var(--color-on-surface)' }}>{item.filename}</span>
+                            {item.status === 'complete' && <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-secondary)' }}>● INGESTED</span>}
+                            {item.status === 'error' && <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300">⚠ ERROR</span>}
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                            <div className={`h-full rounded-full transition-all duration-300 ${item.status === 'error' ? 'bg-rose-400' : 'bg-[var(--color-primary)]'}`} style={{ width: `${item.progress}%` }} />
+                          </div>
+                          <div className="mt-1 flex justify-between">
+                            <span className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>{item.status === 'uploading' ? `${item.progress}%` : item.status === 'complete' ? 'Complete' : item.error || 'Failed'}</span>
+                            {item.status === 'complete' && <span className="text-[11px] text-emerald-300">✓</span>}
+                          </div>
+                        </div>
+                      ))}
+
+
+                      <p className="text-xs leading-relaxed text-zinc-400">Selecting or dropping files starts the upload. Review them in the reference library when it finishes.</p>
+                    </div>
+                  )}
+
+                  {filmProcessing && (
+                    <div className="glass-panel rounded-lg p-3">
+                      <p className="font-bold text-xs" style={{ color: 'var(--color-on-surface)' }}>{filmTitle || filmFile?.name || 'Film Reference'}</p>
+                      <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.1em] animate-pulse" style={{ color: 'var(--color-secondary)' }}>ANALYZING...</p>
+                    </div>
+                  )}
+
+                  {filmLearned && !filmProcessing && (
+                    <div className="glass-panel rounded-lg p-3">
+                      <p className="font-bold text-xs" style={{ color: 'var(--color-on-surface)' }}>{filmTitle || filmFile?.name || 'Film Reference'}</p>
+                      <ul className="mt-2 space-y-1">
+                        {filmLearned.slice(0, 4).map((insight, idx) => (
+                          <li key={idx} className="font-metadata-sm text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>● Learned: {insight}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {filmIngestConfirmed && (
+                    <div className="text-xs font-semibold transition-opacity duration-300" style={{ color: 'var(--color-secondary)' }}>● INGESTED — added to Reference Library</div>
+                  )}
+                </div>
+                <div className="min-w-0 space-y-4"><details className="rounded-md border border-white/10 p-3"><summary className="cursor-pointer text-xs text-zinc-300">Filter references</summary><div className="pt-3"><div className="glass-panel rounded-xl p-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap gap-1">
+                    {(Object.entries(CATEGORY_LABELS) as [CategoryFilter, string][]).map(([key, label]) => (
+                      <button key={key} type="button" onClick={() => setCategory(key)} className={`status-chip rounded border px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em] transition-all ${category === key ? 'border-primary/50 bg-primary/15 text-primary' : 'hover:bg-white/8'}`} style={{ borderColor: category === key ? undefined : 'rgba(255,255,255,0.08)', color: category === key ? undefined : 'var(--color-on-surface-variant)' }}>{label}</button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(Object.entries(BATCH_LABELS) as [IntelligenceBatch, string][]).map(([key, label]) => {
+                      const isActive = activeBatches.has(key)
+                      return (
+                        <button key={key} type="button" onClick={() => toggleBatch(key)} className={`status-chip rounded border px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em] transition-all ${isActive ? 'border-secondary/50 bg-secondary/15 text-secondary' : 'hover:bg-white/8'}`} style={{ borderColor: isActive ? undefined : 'rgba(255,255,255,0.08)', color: isActive ? undefined : 'var(--color-on-surface-variant)' }}>[{key[0].toUpperCase()}] {label}</button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div></div></details><div className="glass-panel rounded-xl p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>REFERENCE LIBRARY</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>{filteredReferences.length} items</span>
+                      <button type="button" onClick={() => setFilmIngestMode('upload')} className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-white/10" style={{ color: 'var(--color-secondary)' }} title="Add a new reference"><Plus size={10} />ADD REFERENCE</button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-y-auto ">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      {filteredReferences.map((ref) => (
+                        <div key={ref.id} className="glass-panel rounded-lg p-3 transition-all hover:scale-[1.01] cursor-pointer group relative" onClick={() => handleReferenceCardClick(ref)} title="Click to use this reference in Teach Studio">
+                          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-secondary)' }}>{ref.category}</div>
+                          <h3 className="mb-1 text-[13px] font-bold pr-6" style={{ color: 'var(--color-on-surface)' }}>{ref.title}</h3>
+                          <p className="line-clamp-2 text-xs leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>{ref.summary}</p>
+                          {ref.source && <p className="mt-1.5 text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>Source: {ref.source}</p>}
+                          <button type="button" onClick={(e) => { e.stopPropagation(); void handleSaveReference(ref) }} className="absolute top-2.5 right-2 rounded p-1 transition-all hover:bg-white/10 opacity-70 group-hover:opacity-100 focus-visible:opacity-100" style={{ color: 'var(--color-secondary)' }} title="Save to Director's Memory">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg>
+                          </button>
+                        </div>
+                      ))}
+                      {filteredReferences.length === 0 && !loadingRefs && (
+                        <p className="col-span-full text-center text-[11px] py-4" style={{ color: 'var(--color-on-surface-variant)' }}>No references match the current filters. Click + ADD REFERENCE to add one.</p>
+                      )}
+                    </div>
+                  </div>
+                </div></div>
+              </div>
+              <details className="rounded-lg border border-white/10 p-4"><summary className="cursor-pointer text-sm text-zinc-300">Study a question with Studio Brain</summary><div className="pt-4"><div className="glass-panel rounded-xl border-l-2 p-4" id="ask-studio-brain" style={{ borderLeftColor: 'var(--color-secondary)' }}>
+                <div className="mb-3 flex items-center gap-1.5">
+                  <Brain size={16} style={{ color: 'var(--color-secondary)' }} />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--color-secondary)' }}>ASK STUDIO BRAIN</span>
+                </div>
+
+                <textarea aria-label="Research question" value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="Enter a research question, topic, or area you'd like Studio Brain to analyze..." rows={3} className="cyber-input mb-3 w-full rounded px-3 py-2 text-sm outline-none" style={{ color: 'var(--color-on-surface)' }} />
+
+                <button type="button" onClick={handleAnalyze} disabled={analyzing || !queryText.trim()} className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
+                  {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  {analyzing ? 'ANALYZING...' : 'ANALYZE'}
+                </button>
+
+                {analysisResult && (
+                  <div className="glass-panel mt-3 rounded-lg border-l-2 p-4" style={{ borderLeftColor: 'var(--color-secondary)' }}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="status-chip bg-secondary/20 text-secondary text-[11px] font-bold uppercase tracking-[0.1em] px-2 py-1 rounded">ANALYSIS COMPLETE</span>
+                    </div>
+                    {(() => {
+                      let resultObj: Record<string, unknown> | null = null
+                      try {
+                        resultObj = typeof analysisResult === 'string' ? JSON.parse(analysisResult) : analysisResult
+                      } catch {
+                        resultObj = null
+                      }
+                      const cards = resultObj?.study_cards as Array<Record<string, unknown>> | undefined
+                      if (Array.isArray(cards) && cards.length > 0) {
+                        return (
+                          <div className="space-y-3">
+                            {cards.map((card, ci) => (
+                              <div key={ci} className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="status-chip rounded border px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.1em]" style={{ borderColor: 'rgba(255,255,255,0.15)', color: 'var(--color-on-surface-variant)' }}>
+                                    {String(card.agent || '')} — {String(card.department || '')}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] font-bold" style={{ color: 'var(--color-on-surface)' }}>
+                                  {String(card.study_focus || '')}
+                                </div>
+                                {Array.isArray(card.reusable_principles) && card.reusable_principles.length > 0 && (
+                                  <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.1em] mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>Key Principles</div>
+                                    <ul className="space-y-0.5">
+                                      {card.reusable_principles.map((principle: unknown, pi: number) => (
+                                        <li key={pi} className="flex items-start gap-1.5 text-xs" style={{ color: 'var(--color-on-surface)' }}>
+                                          <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
+                                          {String(principle)}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                {Array.isArray(card.observations_to_make) && card.observations_to_make.length > 0 && (
+                                  <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.1em] mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>Observations</div>
+                                    <ul className="space-y-0.5">
+                                      {card.observations_to_make.map((obs: unknown, oi: number) => (
+                                        <li key={oi} className="flex items-start gap-1.5 text-xs" style={{ color: 'var(--color-on-surface)' }}>
+                                          <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
+                                          {String(obs)}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                {Array.isArray(card.next_actions) && card.next_actions.length > 0 && (
+                                  <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.1em] mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>Next Actions</div>
+                                    <ul className="space-y-0.5">
+                                      {card.next_actions.map((action: unknown, ai: number) => (
+                                        <li key={ai} className="flex items-start gap-1.5 text-xs" style={{ color: 'var(--color-on-surface)' }}>
+                                          <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
+                                          {String(action)}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+                      return (
+                        <p className="text-on-surface text-sm leading-relaxed font-body whitespace-pre-wrap" style={{ color: 'var(--color-on-surface)' }}>
+                          {typeof analysisResult === 'string' ? analysisResult : JSON.stringify(analysisResult, null, 2)}
+                        </p>
+                      )
+                    })()}
+                  </div>
+                )}
+              </div></div></details>
+              <details className="rounded-lg border border-white/10 p-4"><summary className="cursor-pointer text-sm text-zinc-300">Add from the Studio Brain library</summary><div className="pt-4"><div className="glass-panel rounded-xl p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <FileText size={15} style={{ color: 'var(--color-secondary)' }} />
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>PERMANENT STUDIO BRAIN</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAttachStudioBrainFiles}
+                    disabled={!resolvedProjectId || selectedStudioBrainCount === 0 || attachingStudioBrainFiles}
+                    className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-white/10 disabled:opacity-50"
+                    style={{ color: 'var(--color-secondary)' }}
+                    title="Add selected Studio Brain files to this project"
+                  >
+                    {attachingStudioBrainFiles ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
+                    ADD SELECTED {selectedStudioBrainCount > 0 ? `(${selectedStudioBrainCount})` : ''}
+                  </button>
+                </div>
+
+                {loadingStudioBrainFiles ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 size={18} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+                  </div>
+                ) : (
+                  <div className="max-h-[260px] overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                      {studioBrainFiles.map((file) => {
+                        const selected = selectedStudioBrainFiles.has(file.filename)
+                        return (
+                          <label
+                            key={file.filename}
+                            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 transition-all ${selected ? 'bg-secondary/10' : 'hover:bg-white/5'}`}
+                            style={{ borderColor: selected ? 'rgba(76,215,246,0.45)' : 'rgba(255,255,255,0.08)' }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleStudioBrainFile(file.filename)}
+                              className="mt-0.5 h-4 w-4 shrink-0"
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-[12px] font-bold" style={{ color: 'var(--color-on-surface)' }}>{file.title}</span>
+                              <span className="mt-0.5 block text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-secondary)' }}>{file.study_focus}</span>
+                              {file.summary && <span className="mt-1 line-clamp-2 block text-xs leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>{file.summary}</span>}
+                            </span>
+                          </label>
+                        )
+                      })}
+                      {studioBrainFiles.length === 0 && (
+                        <p className="col-span-full text-center text-[11px] py-4" style={{ color: 'var(--color-on-surface-variant)' }}>No permanent Studio Brain Markdown files found.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div></div></details>
+              <details className="rounded-lg border border-white/10 p-4"><summary className="cursor-pointer text-xs text-zinc-400">Library maintenance</summary><p className="mt-3 text-xs leading-relaxed text-zinc-400">Reorganize existing references when you want their categories refreshed.</p><button type="button" disabled={reorganizing || !resolvedProjectId} onClick={() => void handleReorganizeReferences()} className="mt-3 rounded border border-white/15 px-3 py-2 text-xs text-zinc-200 disabled:opacity-40">{reorganizing ? 'Reorganizing…' : 'Reorganize references'}</button></details>
+              <button type="button" onClick={() => setStudyStep('guidance')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100">Review saved guidance →</button>
+            </section>
+            <section aria-label="Saved creative guidance" className={studyStep === 'guidance' ? 'space-y-5' : 'hidden'}>
+              <div><h2 className="text-lg font-medium text-zinc-100">Keep the direction you believe in</h2><p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-400">Save a creative decision when it belongs to this film. Uploading a reference is separate from saving your own direction.</p></div>
+              <div className="glass-panel rounded-xl p-4" id="teach-studio-bar">
+                <div className="flex flex-wrap items-center gap-3">
+                  <MessageSquare size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
+                  <input type="text" aria-label="Creative decision to remember" value={ingestText} onChange={(e) => setIngestText(e.target.value)} placeholder="The direction I want to remember for this film…" className="cyber-input min-w-0 basis-[220px] flex-1 rounded px-3 py-2 text-sm outline-none" style={{ color: 'var(--color-on-surface)' }} onKeyDown={(e) => { if (e.key === 'Enter') void handleIngest() }} />
+                  <button type="button" onClick={handleIngest} disabled={ingesting || !ingestText.trim()} className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-[0.1em] transition-all hover:scale-[1.02] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
+                    {ingesting ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                    Save this decision
+                  </button>
+                </div>
+                {ingestConfirmed && <div className="mt-2 text-xs font-semibold transition-opacity duration-300" style={{ color: 'var(--color-secondary)' }}>● LEARNED — added to Director's Memory</div>}
+              </div>
               <div className="glass-panel rounded-xl p-4 space-y-4">
                 {/* Header */}
                 <div className="flex items-center gap-2">
-                  <span className="status-chip rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em]" style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-on-surface-variant)' }}>memory</span>
+                  <span className="status-chip rounded border px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-on-surface-variant)' }}>memory</span>
                   <span className="font-metadata-sm text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--color-secondary)' }}>ACTIVE MEMORY</span>
                 </div>
 
@@ -743,291 +1102,18 @@ export default function StudyRoom() {
                 )}
 
                 {/* Film Reference Ingest Section */}
-                <div className="glass-panel rounded-lg p-3 space-y-3">
-                   <div className="flex items-center gap-2">
-                     <Film size={14} style={{ color: 'var(--color-secondary)' }} />
-                     <span className="font-metadata-sm text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--color-secondary)' }}>FILM REFERENCES</span>
-                     {!resolvedProjectId && <span className="ml-1.5 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />}
-                   </div>
 
-                  {/* Segmented Control */}
-                  <div className="flex rounded-lg border p-0.5" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-                    <button type="button" onClick={() => setFilmIngestMode('title')} className={`flex-1 rounded px-2 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all ${filmIngestMode === 'title' ? 'bg-white/10 text-on-surface' : 'text-on-surface-variant hover:bg-white/5'}`}>FILM TITLE</button>
-                    <button type="button" onClick={() => setFilmIngestMode('upload')} className={`flex-1 rounded px-2 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all ${filmIngestMode === 'upload' ? 'bg-white/10 text-on-surface' : 'text-on-surface-variant hover:bg-white/5'}`}>UPLOAD FILE</button>
-                  </div>
 
-                  {/* Hidden file input — always mounted regardless of tab */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    accept={ACCEPTED_EXTENSIONS}
-                    onChange={handleFileInputChange}
-                  />
-
-                  {/* FILM TITLE Mode */}
-                  {filmIngestMode === 'title' && (
-                    <div className="space-y-2">
-                      <input type="text" value={filmTitle} onChange={(e) => { setFilmTitle(e.target.value); if (filmTitleInvalid) setFilmTitleInvalid(false) }} onKeyDown={(e) => { if (e.key === 'Enter') void handleFilmTitleIngest() }} placeholder="Film title, director, year..." className={`cyber-input w-full rounded px-2 py-1.5 text-xs outline-none ${filmTitleInvalid ? 'animate-shake border-rose-400' : ''}`} style={{ color: 'var(--color-on-surface)' }} />
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-on-surface-variant)' }}>ANALYZE FOR →</span>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        <select value={filmDimensions} onChange={(e) => setFilmDimensions(e.target.value as any)} className="cyber-input rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] outline-none" style={{ color: 'var(--color-on-surface)' }}>
-                          <option value="all">All Dimensions</option>
-                          <option value="cinematography">Cinematography</option>
-                          <option value="editing">Editing</option>
-                          <option value="sound">Sound</option>
-                          <option value="narrative">Narrative</option>
-                        </select>
-                      </div>
-                       <button type="button" onClick={handleFilmTitleIngest} disabled={filmProcessing || !resolvedProjectId} title={!resolvedProjectId ? 'Loading project...' : undefined} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
-                        {filmProcessing ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                        {filmProcessing ? 'ANALYZING...' : '+ INGEST FILM'}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* UPLOAD FILE Mode */}
-                  {filmIngestMode === 'upload' && (
-                    <div className="space-y-2">
-                       <div role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click() }} title={!resolvedProjectId ? 'Loading project...' : undefined} className={`rounded-lg border-2 border-dashed p-4 text-center transition-all cursor-pointer ${isDragging ? 'border-secondary shadow-[0_0_20px_rgba(76,215,246,0.3)]' : 'border-outline-variant'} ${!resolvedProjectId ? 'opacity-50 pointer-events-none' : ''}`} style={isDragging ? undefined : { borderColor: 'rgba(255,255,255,0.2)' }} onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-                        <Upload size={20} className="mx-auto mb-2" style={{ color: 'var(--color-on-surface-variant)' }} />
-                        <p className="text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>{filmFile ? filmFile.name : 'Drop a file here or click to browse'}</p>
-                        <p className="text-[8px] mt-1" style={{ color: 'var(--color-on-surface-variant)' }}>PDF, FDX, TXT, MD, MP4, MOV, MP3, WAV supported</p>
-                      </div>
-
-                      {Object.values(uploadProgress).map((item) => (
-                        <div key={item.filename} className={`glass-panel rounded-lg p-2.5 ${item.status === 'error' ? '!border-rose-400/40' : ''}`}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <Upload size={12} style={{ color: 'var(--color-on-surface-variant)' }} />
-                            <span className="flex-1 truncate text-[10px] font-medium" style={{ color: 'var(--color-on-surface)' }}>{item.filename}</span>
-                            {item.status === 'complete' && <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-secondary)' }}>● INGESTED</span>}
-                            {item.status === 'error' && <span className="text-[9px] font-bold uppercase tracking-wider text-rose-300">⚠ ERROR</span>}
-                          </div>
-                          <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-                            <div className={`h-full rounded-full transition-all duration-300 ${item.status === 'error' ? 'bg-rose-400' : 'bg-[var(--color-primary)]'}`} style={{ width: `${item.progress}%` }} />
-                          </div>
-                          <div className="mt-1 flex justify-between">
-                            <span className="text-[8px]" style={{ color: 'var(--color-on-surface-variant)' }}>{item.status === 'uploading' ? `${item.progress}%` : item.status === 'complete' ? 'Complete' : item.error || 'Failed'}</span>
-                            {item.status === 'complete' && <span className="text-[8px] text-emerald-300">✓</span>}
-                          </div>
-                        </div>
-                      ))}
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-on-surface-variant)' }}>ANALYZE FOR →</span>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        <select value={filmDimensions} onChange={(e) => setFilmDimensions(e.target.value as any)} className="cyber-input rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] outline-none" style={{ color: 'var(--color-on-surface)' }}>
-                          <option value="all">All Dimensions</option>
-                          <option value="cinematography">Cinematography</option>
-                          <option value="editing">Editing</option>
-                          <option value="sound">Sound</option>
-                          <option value="narrative">Narrative</option>
-                        </select>
-                      </div>
-                      <button type="button" onClick={() => { if (!resolvedProjectId) return; if (filmFile) { uploadFileWithProgress(resolvedProjectId, filmFile) } else if (Object.keys(uploadProgress).length === 0) { setError('Select files by clicking the drop zone or dragging files in') } }} disabled={filmProcessing || !resolvedProjectId} title={!resolvedProjectId ? 'Loading project...' : undefined} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px Solid rgba(255,209,101,0.3)' }}>
-                        {filmProcessing ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                        {filmProcessing ? 'PROCESSING...' : '+ INGEST FILE'}
-                      </button>
-                    </div>
-                  )}
-
-                  {filmProcessing && (
-                    <div className="glass-panel rounded-lg p-3">
-                      <p className="font-bold text-xs" style={{ color: 'var(--color-on-surface)' }}>{filmTitle || filmFile?.name || 'Film Reference'}</p>
-                      <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.1em] animate-pulse" style={{ color: 'var(--color-secondary)' }}>ANALYZING...</p>
-                    </div>
-                  )}
-
-                  {filmLearned && !filmProcessing && (
-                    <div className="glass-panel rounded-lg p-3">
-                      <p className="font-bold text-xs" style={{ color: 'var(--color-on-surface)' }}>{filmTitle || filmFile?.name || 'Film Reference'}</p>
-                      <ul className="mt-2 space-y-1">
-                        {filmLearned.slice(0, 4).map((insight, idx) => (
-                          <li key={idx} className="font-metadata-sm text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>● Learned: {insight}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {filmIngestConfirmed && (
-                    <div className="text-[10px] font-semibold transition-opacity duration-300" style={{ color: 'var(--color-secondary)' }}>● INGESTED — added to Reference Library</div>
-                  )}
-                </div>
-
-                <button type="button" onClick={() => setShowMemoryDrawer(true)} className="glass-panel w-full rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01]" style={{ color: 'var(--color-on-surface-variant)' }}>OPEN FULL MEMORY BANK</button>
+                <button type="button" onClick={() => setShowMemoryDrawer(true)} className="glass-panel w-full rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01]" style={{ color: 'var(--color-on-surface-variant)' }}>OPEN FULL MEMORY BANK</button>
               </div>
-            </div>
-
-            {/* RIGHT: RESEARCH PANEL (67%) */}
-            <div className="flex flex-[2] flex-col gap-4 overflow-y-auto">
-              {resolvedProjectId && <KnowledgeLibraryPanel projectId={resolvedProjectId} />}
-
-              <div className="glass-panel rounded-xl p-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex flex-wrap gap-1">
-                    {(Object.entries(CATEGORY_LABELS) as [CategoryFilter, string][]).map(([key, label]) => (
-                      <button key={key} type="button" onClick={() => setCategory(key)} className={`status-chip rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] transition-all ${category === key ? 'border-primary/50 bg-primary/15 text-primary' : 'hover:bg-white/8'}`} style={{ borderColor: category === key ? undefined : 'rgba(255,255,255,0.08)', color: category === key ? undefined : 'var(--color-on-surface-variant)' }}>{label}</button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {(Object.entries(BATCH_LABELS) as [IntelligenceBatch, string][]).map(([key, label]) => {
-                      const isActive = activeBatches.has(key)
-                      return (
-                        <button key={key} type="button" onClick={() => toggleBatch(key)} className={`status-chip rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] transition-all ${isActive ? 'border-secondary/50 bg-secondary/15 text-secondary' : 'hover:bg-white/8'}`} style={{ borderColor: isActive ? undefined : 'rgba(255,255,255,0.08)', color: isActive ? undefined : 'var(--color-on-surface-variant)' }}>[{key[0].toUpperCase()}] {label}</button>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-
-                <div className="glass-panel rounded-xl p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>REFERENCE LIBRARY</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[9px]" style={{ color: 'var(--color-on-surface-variant)' }}>{filteredReferences.length} items</span>
-                      <button type="button" onClick={() => setFilmIngestMode('upload')} className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider transition-all hover:bg-white/10" style={{ color: 'var(--color-secondary)' }} title="Add a new reference"><Plus size={10} />ADD REFERENCE</button>
-                    </div>
-                  </div>
-
-                  <div className="overflow-y-auto max-h-[600px]">
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      {filteredReferences.map((ref) => (
-                        <div key={ref.id} className="glass-panel rounded-lg p-3 transition-all hover:scale-[1.01] cursor-pointer group relative" onClick={() => handleReferenceCardClick(ref)} title="Click to use this reference in Teach Studio">
-                          <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-secondary)' }}>{ref.category}</div>
-                          <h3 className="mb-1 text-[13px] font-bold pr-6" style={{ color: 'var(--color-on-surface)' }}>{ref.title}</h3>
-                          <p className="line-clamp-2 text-[10px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>{ref.summary}</p>
-                          {ref.source && <p className="mt-1.5 text-[8px]" style={{ color: 'var(--color-on-surface-variant)' }}>Source: {ref.source}</p>}
-                          <button type="button" onClick={(e) => { e.stopPropagation(); void handleSaveReference(ref) }} className="absolute top-2.5 right-2 rounded p-1 transition-all hover:bg-white/10 opacity-0 group-hover:opacity-100" style={{ color: 'var(--color-secondary)' }} title="Save to Director's Memory">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg>
-                          </button>
-                        </div>
-                      ))}
-                      {filteredReferences.length === 0 && !loadingRefs && (
-                        <p className="col-span-full text-center text-[11px] py-4" style={{ color: 'var(--color-on-surface-variant)' }}>No references match the current filters. Click + ADD REFERENCE to add one.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-              <div className="glass-panel rounded-xl border-l-2 p-4" id="ask-studio-brain" style={{ borderLeftColor: 'var(--color-secondary)' }}>
-                <div className="mb-3 flex items-center gap-1.5">
-                  <Brain size={16} style={{ color: 'var(--color-secondary)' }} />
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--color-secondary)' }}>ASK STUDIO BRAIN</span>
-                </div>
-
-                <textarea value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="Enter a research question, topic, or area you'd like Studio Brain to analyze..." rows={3} className="cyber-input mb-3 w-full rounded px-3 py-2 text-sm outline-none" style={{ color: 'var(--color-on-surface)' }} />
-
-                <button type="button" onClick={handleAnalyze} disabled={analyzing || !queryText.trim()} className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
-                  {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                  {analyzing ? 'ANALYZING...' : 'ANALYZE'}
-                </button>
-
-                {analysisResult && (
-                  <div className="glass-panel mt-3 rounded-lg border-l-2 p-4" style={{ borderLeftColor: 'var(--color-secondary)' }}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="status-chip bg-secondary/20 text-secondary text-[9px] font-bold uppercase tracking-[0.1em] px-2 py-1 rounded">ANALYSIS COMPLETE</span>
-                    </div>
-                    {(() => {
-                      let resultObj: Record<string, unknown> | null = null
-                      try {
-                        resultObj = typeof analysisResult === 'string' ? JSON.parse(analysisResult) : analysisResult
-                      } catch {
-                        resultObj = null
-                      }
-                      const cards = resultObj?.study_cards as Array<Record<string, unknown>> | undefined
-                      if (Array.isArray(cards) && cards.length > 0) {
-                        return (
-                          <div className="space-y-3">
-                            {cards.map((card, ci) => (
-                              <div key={ci} className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="status-chip rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.1em]" style={{ borderColor: 'rgba(255,255,255,0.15)', color: 'var(--color-on-surface-variant)' }}>
-                                    {String(card.agent || '')} — {String(card.department || '')}
-                                  </span>
-                                </div>
-                                <div className="text-[11px] font-bold" style={{ color: 'var(--color-on-surface)' }}>
-                                  {String(card.study_focus || '')}
-                                </div>
-                                {Array.isArray(card.reusable_principles) && card.reusable_principles.length > 0 && (
-                                  <div>
-                                    <div className="text-[9px] font-semibold uppercase tracking-[0.1em] mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>Key Principles</div>
-                                    <ul className="space-y-0.5">
-                                      {card.reusable_principles.map((principle: unknown, pi: number) => (
-                                        <li key={pi} className="flex items-start gap-1.5 text-[10px]" style={{ color: 'var(--color-on-surface)' }}>
-                                          <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
-                                          {String(principle)}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                                {Array.isArray(card.observations_to_make) && card.observations_to_make.length > 0 && (
-                                  <div>
-                                    <div className="text-[9px] font-semibold uppercase tracking-[0.1em] mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>Observations</div>
-                                    <ul className="space-y-0.5">
-                                      {card.observations_to_make.map((obs: unknown, oi: number) => (
-                                        <li key={oi} className="flex items-start gap-1.5 text-[10px]" style={{ color: 'var(--color-on-surface)' }}>
-                                          <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
-                                          {String(obs)}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                                {Array.isArray(card.next_actions) && card.next_actions.length > 0 && (
-                                  <div>
-                                    <div className="text-[9px] font-semibold uppercase tracking-[0.1em] mb-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>Next Actions</div>
-                                    <ul className="space-y-0.5">
-                                      {card.next_actions.map((action: unknown, ai: number) => (
-                                        <li key={ai} className="flex items-start gap-1.5 text-[10px]" style={{ color: 'var(--color-on-surface)' }}>
-                                          <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
-                                          {String(action)}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )
-                      }
-                      return (
-                        <p className="text-on-surface text-sm leading-relaxed font-body whitespace-pre-wrap" style={{ color: 'var(--color-on-surface)' }}>
-                          {typeof analysisResult === 'string' ? analysisResult : JSON.stringify(analysisResult, null, 2)}
-                        </p>
-                      )
-                    })()}
-                  </div>
-                )}
-              </div>
-
-              <div className="glass-panel rounded-xl p-4" id="teach-studio-bar">
-                <div className="flex items-center gap-2">
-                  <MessageSquare size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
-                  <input type="text" value={ingestText} onChange={(e) => setIngestText(e.target.value)} placeholder="Teach Studio a new pattern..." className="cyber-input flex-1 rounded px-3 py-1.5 text-xs outline-none" style={{ color: 'var(--color-on-surface)' }} onKeyDown={(e) => { if (e.key === 'Enter') void handleIngest() }} />
-                  <button type="button" onClick={handleIngest} disabled={ingesting || !ingestText.trim()} className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all hover:scale-[1.02] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
-                    {ingesting ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                    INGEST
-                  </button>
-                </div>
-                {ingestConfirmed && <div className="mt-2 text-[10px] font-semibold transition-opacity duration-300" style={{ color: 'var(--color-secondary)' }}>● LEARNED — added to Director's Memory</div>}
-              </div>
-            </div>
+            </section>
           </div>
 
-          <button type="button" onClick={() => setShowMemoryDrawer(true)} className="glass-panel fixed right-4 top-4 z-30 flex items-center gap-2 rounded-lg px-3 py-1.5 transition-all hover:scale-[1.05]" style={{ color: 'var(--color-on-surface-variant)' }}>
-            <Brain size={14} />
-            <span className="text-[10px] font-bold uppercase tracking-[0.1em]">{memoryCount} MEMOR{memoryCount === 1 ? 'Y' : 'IES'}</span>
-          </button>
-
           {showMemoryDrawer && (
-            <div className="glass-panel fixed right-4 top-14 z-40 w-[320px] rounded-xl p-4 shadow-2xl" style={{ maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }}>
+            <div className="mx-auto mb-8 max-w-[1288px] rounded-lg border border-white/15 bg-zinc-950 p-5">
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>DIRECTOR'S MEMORY</span>
-                <button type="button" onClick={() => setShowMemoryDrawer(false)} className="rounded p-1 transition-all hover:bg-white/10" style={{ color: 'var(--color-on-surface-variant)' }}><X size={14} /></button>
+                <button type="button" onClick={() => setShowMemoryDrawer(false)} aria-label="Close saved memories" className="rounded p-1 transition-all hover:bg-white/10" style={{ color: 'var(--color-on-surface-variant)' }}><X size={14} /></button>
               </div>
 
               {loadingMemories ? (
@@ -1040,9 +1126,9 @@ export default function StudyRoom() {
                     <div key={mem.entry_id} className="rounded-lg border p-2.5" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                       <div className="mb-1 flex items-center justify-between">
                         <span className="truncate text-[11px] font-semibold" style={{ color: 'var(--color-on-surface)' }}>{mem.text}</span>
-                        <button type="button" onClick={() => void handleDeleteMemory(mem.entry_id, mem.kind)} className="ml-1 rounded p-0.5 transition-all hover:bg-white/10" style={{ color: 'var(--color-error)' }}><Trash2 size={10} /></button>
+                        <button type="button" onClick={() => void handleDeleteMemory(mem.entry_id, mem.kind)} aria-label={`Forget saved memory: ${mem.text}`} className="ml-1 rounded p-2 transition-all hover:bg-white/10" style={{ color: 'var(--color-error)' }}><Trash2 size={10} /></button>
                       </div>
-                      <p className="text-[8px] uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>{mem.kind}</p>
+                      <p className="text-[11px] uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>{mem.kind}</p>
                     </div>
                   ))}
                 </div>

@@ -15,6 +15,7 @@ import shutil
 import os
 
 from app.services.previs_service import previs_service
+from app.models.previs_render import PrevisRenderSettings
 from app.services.stability import PersistenceError, ProviderError, StabilityError, StateError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,8 @@ async def generate_scene_previs(
     take_number: int = 1,
     storyboard_shot_id: Optional[str] = None,
     allow_approved_revision: bool = False,
+    provider: Optional[str] = None,
+    body: PrevisRenderSettings | None = None,
 ) -> PrevisGenerateResponse:
     """
     Generate a preview image for a scene shot.
@@ -100,9 +103,9 @@ async def generate_scene_previs(
     This endpoint:
     1. Fetches the scene from the database
     2. Builds a shot-aware cinematic prompt using shot/take context
-    3. Submits a render job to Runway
-    4. Stores the job in previs_images table
-    5. Returns immediately with pending status
+    3. Persists the requested take and settings before submission
+    4. Submits through the render service to the selected provider
+    5. Returns the actual submission status (some adapters await completion)
     
     The image will be extracted from the video when the render completes.
     
@@ -113,13 +116,20 @@ async def generate_scene_previs(
         take_number: Take number for this shot (1-based, default 1)
     """
     try:
+        generation_kwargs = {
+            "storyboard_shot_id": storyboard_shot_id,
+            "allow_approved_revision": allow_approved_revision,
+        }
+        if provider is not None:
+            generation_kwargs["provider"] = provider
+        if body is not None:
+            generation_kwargs["render_settings"] = body
         result = await previs_service.generate_scene(
             project_id,
             scene_id,
             shot_number,
             take_number,
-            storyboard_shot_id=storyboard_shot_id,
-            allow_approved_revision=allow_approved_revision,
+            **generation_kwargs,
         )
         return PrevisGenerateResponse(**result)
     except StabilityError as exc:
@@ -253,6 +263,37 @@ class ShotCountResponse(BaseModel):
     recommended_shot_count: int
     reasoning: str
     study_memories_used: int
+
+
+class StageSceneShotProposal(BaseModel):
+    shot_id: str
+    shot_number: int = 0
+    beat_excerpt: str = ""
+    staging: dict = Field(default_factory=dict)
+    left_blank: List[str] = Field(default_factory=list)
+    over_budget: dict = Field(default_factory=dict)
+
+
+class StageSceneResponse(BaseModel):
+    scene_id: str
+    proposals: List[StageSceneShotProposal] = Field(default_factory=list)
+    shots_staged: int = 0
+    fields_blank: int = 0
+    all_blank: bool = False
+
+
+class StageSceneApplyItem(BaseModel):
+    shot_id: str
+    staging: dict = Field(default_factory=dict)
+
+
+class StageSceneApplyRequest(BaseModel):
+    shots: List[StageSceneApplyItem] = Field(default_factory=list)
+
+
+class StageSceneApplyResponse(BaseModel):
+    scene_id: str
+    applied: int = 0
 
 
 class GenerationSettingsRequest(BaseModel):
@@ -427,6 +468,152 @@ async def previs_director_notes(
         notes=notes,
         study_memories_used=mem_count,
     )
+
+
+import re as _re
+
+
+def _characters_in_beat(beat_upper: str, canon: dict) -> dict:
+    present = {}
+    for name, desc in canon.items():
+        if _re.search(rf"\b{_re.escape(name.upper())}\b", beat_upper):
+            present[name] = desc
+    return present
+
+
+def _character_canon(storage, project_id: str) -> dict:
+    canon = {}
+    try:
+        for record in storage.get_characters(project_id) or []:
+            rec = record if isinstance(record, dict) else getattr(record, "__dict__", {})
+            name = str(rec.get("name") or "").strip()
+            if not name:
+                continue
+            desc = str(rec.get("appearance_core") or rec.get("look")
+                       or rec.get("visual_prompt_summary") or "")[:280]
+            canon[name] = desc
+    except Exception:
+        pass
+    return canon
+
+
+@router.post("/projects/{project_id}/previs/stage-scene/{scene_id}")
+async def stage_scene(
+    project_id: str,
+    scene_id: str,
+) -> StageSceneResponse:
+    """Propose per-shot staging for a scene's shots (review before apply).
+
+    A previs assist, sibling to shot-count and enhance-prompt: it turns each
+    shot's screenplay beat into camera / lighting / action / blocking the render
+    prompt can actually use, filling the visual_plan fields the storyboard
+    generator leaves empty. It only PROPOSES — nothing is written until the
+    caller posts the reviewed result to .../apply. Uses the app's LLM fallback,
+    same as the other previs assists.
+    """
+    import asyncio
+    import json as _json
+    from app.data.storage import get_storage
+    from app.services.shot_staging_service import (
+        build_staging_messages, parse_staging, strip_screenplay_furniture, over_budget,
+        STAGING_FIELDS,
+    )
+
+    storage = get_storage()
+    shots = storage.list_scene_shots(project_id, scene_id)
+    if not shots:
+        raise HTTPException(status_code=404, detail=f"No storyboard shots for scene {scene_id}. Generate the storyboard first.")
+
+    canon = _character_canon(storage, project_id)
+    llm_with_fallback = _get_llm_with_fallback()
+    total = len(shots)
+
+    # Each shot is an independent LLM call. Staging a whole scene serially made
+    # wall-clock time scale with shot count and blow past the client timeout, so
+    # fan the calls out under a small semaphore: total time is ~one call while
+    # staying gentle on the provider's rate limits. Each worker owns its own
+    # error handling and returns a proposal, so gather never raises.
+    semaphore = asyncio.Semaphore(4)
+
+    async def _stage_one(index: int, shot: dict) -> StageSceneShotProposal:
+        try:
+            intent = _json.loads(shot.get("intent_json") or "{}")
+        except Exception:
+            intent = {}
+        try:
+            visual = _json.loads(shot.get("visual_plan_json") or "{}")
+        except Exception:
+            visual = {}
+        beat = str(intent.get("narrative_function") or "")
+        beat_upper = strip_screenplay_furniture(beat).upper()
+        system_prompt, user_message = build_staging_messages(
+            shot_number=shot.get("shot_number") or index,
+            total_shots=total,
+            scene_id=scene_id,
+            purpose=str(intent.get("purpose") or ""),
+            location=str(visual.get("environment") or ""),
+            framing=str(visual.get("framing") or ""),
+            beat_text=beat,
+            characters_present=_characters_in_beat(beat_upper, canon),
+        )
+        try:
+            async with semaphore:
+                reply, _provider = await llm_with_fallback(system_prompt, user_message, max_tokens=900)
+            staging = parse_staging(reply)
+        except Exception as exc:
+            logger.error("STAGE_SCENE_SHOT_FAILED | project=%s | shot=%s | %s",
+                         project_id, shot.get("shot_id"), exc)
+            staging = {f: "" for f in STAGING_FIELDS}
+
+        blanks = [f for f in STAGING_FIELDS if not staging.get(f)]
+        return StageSceneShotProposal(
+            shot_id=str(shot.get("shot_id")),
+            shot_number=int(shot.get("shot_number") or index),
+            beat_excerpt=strip_screenplay_furniture(beat)[:200],
+            staging=staging,
+            left_blank=blanks,
+            over_budget=over_budget(staging),
+        )
+
+    # gather preserves input order, so proposals stay in shot order.
+    proposals: list[StageSceneShotProposal] = list(
+        await asyncio.gather(*(_stage_one(i, s) for i, s in enumerate(shots, start=1)))
+    )
+    blank_total = sum(len(p.left_blank) for p in proposals)
+
+    possible = total * len(STAGING_FIELDS)
+    return StageSceneResponse(
+        scene_id=scene_id,
+        proposals=proposals,
+        shots_staged=total,
+        fields_blank=blank_total,
+        all_blank=(blank_total == possible and possible > 0),
+    )
+
+
+@router.post("/projects/{project_id}/previs/stage-scene/{scene_id}/apply")
+async def apply_scene_staging(
+    project_id: str,
+    scene_id: str,
+    body: StageSceneApplyRequest,
+) -> StageSceneApplyResponse:
+    """Persist reviewed staging into the shots' visual_plan (merge-safe).
+
+    Writes only the non-empty fields of each shot's staging, so it never blanks
+    a field the storyboard already set. This is the only write in the feature;
+    run it after the director has reviewed the stage-scene proposal.
+    """
+    from app.data.storage import get_storage
+    from app.services.shot_staging_service import staging_to_visual_plan
+
+    storage = get_storage()
+    applied = 0
+    for item in body.shots:
+        plan = staging_to_visual_plan(item.staging or {})
+        if plan and storage.update_shot_visual_plan(project_id, item.shot_id, plan):
+            applied += 1
+    logger.info("STAGE_SCENE_APPLIED | project=%s | scene=%s | shots=%d", project_id, scene_id, applied)
+    return StageSceneApplyResponse(scene_id=scene_id, applied=applied)
 
 
 @router.post("/projects/{project_id}/previs/shot-count")

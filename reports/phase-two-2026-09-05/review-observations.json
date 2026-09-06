@@ -1,0 +1,146 @@
+{
+  "method": "Extracted frames inspected at 2 fps for shots 1\u20133 and 5\u20136, and 4 fps for shot 4; a full-resolution first frame verifies shot 6 prop/window evidence. Complete original clips and a straight concatenation are retained for playback. This is a sampled visual baseline, not exhaustive frame-by-frame, audio, or audience evaluation.",
+  "reference_limitation": "The master reference's foreground bandage appears to be on Nina's right wrist despite requested left wrist. Laterality is a fixture ambiguity; inherited reference errors must not be attributed only to the video model.",
+  "shots": {
+    "scene_001_shot_001": {
+      "results": [
+        "preserved",
+        "unclear",
+        "preserved",
+        "preserved",
+        "preserved"
+      ],
+      "evidence": [
+        "0.0\u20133.5s: Nina's locs/face and Jules's curls/beard/face track the master still.",
+        "Olive jacket and blue shirt persist. Bandage stays on the camera-near wrist; anatomical left/right conflicts with the requested fixture and needs human confirmation.",
+        "0.0\u20133.5s: Nina stays left, Jules right; door and window retain their sides.",
+        "0.5\u20133.5s: brass key remains near Nina and red mug stays near table center.",
+        "0.0\u20133.5s: blue dusk window and amber practical light stay consistent."
+      ],
+      "screenplay_note": "Guarded stillness is legible; no large action was requested. The shot establishes the intended room and cast."
+    },
+    "scene_001_shot_002": {
+      "results": [
+        "preserved",
+        "preserved",
+        "preserved",
+        "preserved",
+        "preserved"
+      ],
+      "evidence": [
+        "0.0\u20133.5s: Nina remains recognizable against shot 1 and the master reference.",
+        "Olive work jacket retains shape and color.",
+        "Starts looking right toward Jules, then lowers gaze toward the table.",
+        "Key remains near Nina; mug remains near the middle of the table.",
+        "Blue window and warm lamp match shot 1."
+      ],
+      "screenplay_note": "Coverage is weaker than requested: begins as a wide two-shot and pushes toward a medium view of Nina, rather than establishing the requested medium close-up. Her downward gaze supports hesitation. Jules changes posture across the cut."
+    },
+    "scene_001_shot_003": {
+      "results": [
+        "preserved",
+        "preserved",
+        "preserved",
+        "preserved",
+        "unclear"
+      ],
+      "evidence": [
+        "0.0\u20133.5s: Jules retains curls, facial hair and recognizable face.",
+        "Blue shirt stays consistent.",
+        "Initially looks left toward Nina; gaze becomes more frontal as camera moves closer.",
+        "Room keeps door left and window right; no visible axis crossing.",
+        "The face softens, but hopeful progression cannot be established confidently from sampled frames."
+      ],
+      "screenplay_note": "Again starts from the wide reference composition, then moves toward Jules. It does not begin as the requested reverse medium close-up. Shot 2 to 3 resets to a wide frame instead of cutting between complementary close-ups."
+    },
+    "scene_001_shot_004": {
+      "results": [
+        "unclear",
+        "unclear",
+        "preserved",
+        "preserved",
+        "preserved"
+      ],
+      "evidence": [
+        "Key remains small in wide frame; its precise shape cannot be reliably compared.",
+        "The bandage remains on the camera-near wrist; the master-reference laterality ambiguity persists.",
+        "1.25\u20133.75s: Nina advances her hand and the key from left toward Jules on right; Jules starts reaching at the end.",
+        "Mug stays on the table near center throughout 16 sampled frames.",
+        "Olive sleeve, bandage and blue sleeve are consistent with the established cast."
+      ],
+      "screenplay_note": "The requested table insert is not delivered: the entire shot stays a wide two-shot. The direction of the key transfer is legible, but the exact key shape and completion are harder to inspect."
+    },
+    "scene_001_shot_005": {
+      "results": [
+        "preserved",
+        "violated",
+        "preserved",
+        "preserved",
+        "preserved"
+      ],
+      "evidence": [
+        "Both people remain recognizable across 0.0\u20133.5s.",
+        "The brass key resets to the table beside Nina, clearly visible at 1.0\u20133.5s; Jules does not hold it as requested. This breaks the handoff state from shot 4.",
+        "Red mug, left door, right window and seating geography remain recognizable.",
+        "Nina visibly leans back and releases her posture around 1.0\u20132.5s, supporting the requested release of tension.",
+        "Olive jacket and blue shirt persist."
+      ],
+      "screenplay_note": "The emotional release is visible, but its narrative cause is undermined because the key has returned to Nina\u2019s side instead of remaining with Jules."
+    },
+    "scene_002_shot_001": {
+      "results": [
+        "preserved",
+        "violated",
+        "preserved",
+        "violated",
+        "unclear"
+      ],
+      "evidence": [
+        "Both faces remain recognizable through the final sampled clip.",
+        "0.0\u20133.5s: window stays visibly blue like prior dusk shots; amber lamp persists but the requested later-night change is absent.",
+        "Same green workshop, door/window sides and Nina-left/Jules-right composition.",
+        "A brass key remains clearly on the table near Nina (see shot-06-first.png). A small object appears in Jules\u2019s hand initially, but does not remove the original key; possible duplication rather than a clean carried-forward prop state.",
+        "The exchange is subdued, but a transition to trust is not clearly established by the sampled performance."
+      ],
+      "screenplay_note": "The scene retains visual identity but does not reliably carry the key state or the requested time progression."
+    }
+  },
+  "film_answers": [
+    {
+      "question": "Did the character remain the same person?",
+      "answer": "Both faces appear recognizable across the six sampled clips and match the master reference; no human identity adjudication was performed."
+    },
+    {
+      "question": "Did wardrobe remain correct?",
+      "answer": "Olive jacket and blue shirt remain consistent. Wrist laterality is ambiguous in the original reference and not resolved here."
+    },
+    {
+      "question": "Did the environment remain recognizable?",
+      "answer": "Yes in the sampled frames: green tile, wooden table, door left, window right, lamp and seating persist."
+    },
+    {
+      "question": "Did important props persist?",
+      "answer": "The mug does. The key state fails: it returns beside Nina after the handoff and remains there in the final clip."
+    },
+    {
+      "question": "Did lighting remain logically continuous?",
+      "answer": "The amber practical and dusk atmosphere stay consistent, but the requested later-night transition is missing."
+    },
+    {
+      "question": "Did spatial relationships make sense?",
+      "answer": "Seating and screen direction remain stable. Repeated wide openings weaken the intended close-up/reverse/insert coverage."
+    },
+    {
+      "question": "Did the shot follow the screenplay?",
+      "answer": "Partly: the handoff direction and Nina\u2019s physical release are visible, but coverage, post-handoff prop ownership and time progression are not reliable."
+    },
+    {
+      "question": "Did adjacent shots feel as though they belong to the same scene?",
+      "answer": "They share visible identities and setting, but the key reset breaks action continuity; close-up shots also restart from a wide composition."
+    },
+    {
+      "question": "Did all shots feel as though they belong to the same film?",
+      "answer": "They share a consistent visible world. This run does not yet establish reliable sequential storytelling: the changed story state is not consistently carried forward."
+    }
+  ]
+}

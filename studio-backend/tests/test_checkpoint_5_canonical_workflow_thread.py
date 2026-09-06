@@ -237,7 +237,8 @@ def _through_package(service: CanonicalProductionWorkflowService) -> dict:
     return service.create_production_package(run["run_id"])
 
 
-def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path) -> None:
+@pytest.mark.parametrize("provider", ["simulated", "openrouter-video"])
+def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provider: str) -> None:
     service, storage, state, renderer = _environment(tmp_path)
     run = _begin(service)
     run_id = run["run_id"]
@@ -272,10 +273,10 @@ def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path) -> No
     assert package["blueprint_version_id"] == run["blueprint_version_id"]
     assert package["payload"]["shots"][0]["continuity"]
 
-    run = asyncio.run(service.render_production_package(run_id, provider="simulated"))
+    run = asyncio.run(service.render_production_package(run_id, provider=provider))
     assert run["status"] == "render_completed"
     production_create_count = renderer.create_count
-    assert asyncio.run(service.render_production_package(run_id, provider="simulated"))["status"] == "render_completed"
+    assert asyncio.run(service.render_production_package(run_id, provider=provider))["status"] == "render_completed"
     assert renderer.create_count == production_create_count
     render_row = run["data"]["artifacts"]["render_jobs"][0]
     render_job = renderer.get_job(render_row["render_job_id"])
@@ -360,13 +361,14 @@ def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path) -> No
 
     renderer.delay_next_submission = True
     revision_create_count = renderer.create_count
-    submitted_run = asyncio.run(service.render_revision(run_id, provider="simulated"))
+    submitted_run = asyncio.run(service.render_revision(run_id))
     assert submitted_run["status"] == "revision_pending"
     assert submitted_run["data"]["artifacts"]["revision"]["status"] == "submitted"
     assert submitted_run["data"]["identifiers"]["revision_render_job_id"]
     assert renderer.create_count == revision_create_count + 1
+    assert renderer.get_job(submitted_run["data"]["identifiers"]["revision_render_job_id"]).provider == provider
 
-    run = asyncio.run(service.render_revision(run_id, provider="simulated"))
+    run = asyncio.run(service.render_revision(run_id))
     assert run["status"] == "revision_completed"
     assert renderer.create_count == revision_create_count + 1
     revision = storage.get_clip_revision(revision_id)
@@ -461,3 +463,134 @@ def test_workflow_rejects_cross_script_and_invalid_state_transitions(tmp_path: P
             changed_fields=["timing"],
             confirmed=True,
         )
+
+
+@pytest.mark.parametrize("provider_override", [None, "openrouter-video"])
+def test_package_render_keeps_frozen_settings_and_never_uses_video_as_image(tmp_path, provider_override):
+    service, storage, state, renderer = _environment(tmp_path)
+    run = _begin(service)
+    run = asyncio.run(service.generate_previs(run["run_id"]))
+    for job in renderer.jobs.values():
+        job.input_payload.parameters.update(duration=8, seed=7, ratio="9:16", storyboard_frame_url="https://media.test/approved-frame.png")
+        job.input_payload.referenceAssets = ["https://media.test/approved-frame.png"]
+        job.provider = "openrouter-video"
+        storage.save_job(job)
+    ids = [row["previs_image_id"] for row in run["data"]["artifacts"]["previs"]]
+    run = service.approve_previs(run["run_id"], previs_image_ids=ids, confirmed=True)
+    run = service.create_production_package(run["run_id"])
+    result = asyncio.run(service.render_production_package(run["run_id"], provider=provider_override))
+    assert result["status"] == "render_completed"
+    for row in result["data"]["artifacts"]["render_jobs"]:
+        job = renderer.get_job(row["render_job_id"])
+        assert job.provider == "openrouter-video"
+        assert job.input_payload.parameters["duration"] == 8
+        assert job.input_payload.parameters["seed"] == 7
+        assert job.input_payload.parameters["ratio"] == "9:16"
+        assert job.input_payload.parameters["storyboard_frame_url"] == "https://media.test/approved-frame.png"
+        assert job.input_payload.referenceAssets == ["https://media.test/approved-frame.png"]
+
+
+def test_package_render_review_stop_does_not_poll_forever(tmp_path):
+    service, storage, state, renderer = _environment(tmp_path)
+    run = _through_package(service)
+    renderer.delay_next_submission = True
+    queued = asyncio.run(service.render_production_package(run["run_id"], provider="simulated"))
+    for row in queued["data"]["artifacts"]["render_jobs"]:
+        job = renderer.get_job(row["render_job_id"])
+        if job.status != "complete":
+            job.status = "needs_review"
+            job.error_message = "Required facts exceed this model budget"
+    with pytest.raises(ProviderError):
+        asyncio.run(service.render_production_package(run["run_id"], provider="simulated"))
+    assert service.get(run["run_id"])["status"] == "render_failed"
+
+
+@pytest.mark.parametrize("provider", ["runway", "openrouter-video", "simulated"])
+def test_canonical_previs_passes_explicit_provider_to_render_job(tmp_path, provider):
+    service, storage, state, renderer = _environment(tmp_path)
+    run = _begin(service)
+    result = asyncio.run(service.generate_previs(run["run_id"], provider=provider))
+    assert result["status"] == "previs_generated"
+    assert renderer.jobs
+    assert {job.provider for job in renderer.jobs.values()} == {provider}
+
+
+def test_polling_does_not_change_queued_provider(tmp_path):
+    service, storage, state, renderer = _environment(tmp_path)
+    run = _through_package(service)
+    renderer.delay_next_submission = True
+    queued = asyncio.run(service.render_production_package(run["run_id"], provider="openrouter-video"))
+    count = renderer.create_count
+    assert queued["status"] == "render_queued"
+    completed = asyncio.run(service.render_production_package(run["run_id"]))
+    assert completed["status"] == "render_completed"
+    assert renderer.create_count == count
+    assert {renderer.get_job(row["render_job_id"]).provider for row in completed["data"]["artifacts"]["render_jobs"]} == {"openrouter-video"}
+
+
+def test_legacy_script_context_can_begin_without_reparsing_saved_scenes(tmp_path):
+    service, storage, state, renderer = _environment(tmp_path)
+    project = state.get_project("project-thread")
+    project["execution_summary"].pop("script_id", None)
+    project["execution_summary"]["scenes"][0].pop("script_id", None)
+    state.save_project(project)
+    storage.save_project(StudioProject(**project))
+    saved = state.get_project("project-thread")
+    context = service.scene_context("project-thread", "scene_001")
+    assert context["script_id"].startswith("script_")
+    assert context["beat_ids"] == ["beat_001", "beat_002"]
+    run = service.begin(project_id="project-thread", scene_id="scene_001", **context)
+    assert run["script_id"] == context["script_id"]
+    reloaded = CanonicalProductionWorkflowService(storage=storage, project_store=state, renderer=renderer)
+    assert reloaded.scene_context("project-thread", "scene_001") == context
+    assert state.get_project("project-thread") == saved
+    assert reloaded.get(run["run_id"])["script_id"] == context["script_id"]
+
+
+def test_legacy_script_context_is_bound_to_project_and_script_version(tmp_path):
+    service, storage, state, renderer = _environment(tmp_path)
+    project = state.get_project("project-thread")
+    project["execution_summary"].pop("script_id", None)
+    project["execution_summary"]["scenes"][0].pop("script_id", None)
+    state.save_project(project)
+    storage.save_project(StudioProject(**project))
+    context = service.scene_context("project-thread", "scene_001")
+    project["script_text"] += " Maya closes her hand."
+    state.save_project(project)
+    storage.save_project(StudioProject(**project))
+    updated = service.scene_context("project-thread", "scene_001")
+    assert updated["script_id"] != context["script_id"]
+    with pytest.raises(StateError, match="Script does not own"):
+        service.begin(project_id="project-thread", scene_id="scene_001", **context)
+    other = dict(project, project_id="project-other")
+    state.save_project(other)
+    storage.save_project(StudioProject(**other))
+    assert service.scene_context("project-other", "scene_001")["script_id"] != updated["script_id"]
+
+
+def test_explicit_script_context_is_preserved(tmp_path):
+    service, storage, state, renderer = _environment(tmp_path)
+    assert service.scene_context("project-thread", "scene_001")["script_id"] == "script-thread-001"
+
+
+def test_legacy_scene_text_resolves_script_context_without_raw_script(tmp_path):
+    service, storage, state, renderer = _environment(tmp_path)
+    project = state.get_project("project-thread")
+    # A fresh legacy record avoids the store's intentional preservation of
+    # previously non-empty raw script text during partial project saves.
+    project["project_id"] = "project-scenes-only"
+    project["script_text"] = ""
+    project["execution_summary"].pop("script_id", None)
+    scene = project["execution_summary"]["scenes"][0]
+    scene.pop("script_id", None)
+    storage.save_project(StudioProject(**project))
+    assert storage.get_project("project-scenes-only").script_text == ""
+    context = service.scene_context("project-scenes-only", "scene_001")
+    assert context["script_id"].startswith("script_")
+    with pytest.raises(StateError, match="Approved Storyboard Blueprint"):
+        service.begin(project_id="project-scenes-only", scene_id="scene_001", **context)
+    project["project_id"] = "project-empty"
+    scene["description"] = ""
+    scene["text"] = ""
+    storage.save_project(StudioProject(**project))
+    assert service.scene_context("project-empty", "scene_001")["script_id"] == ""

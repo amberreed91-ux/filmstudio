@@ -1885,14 +1885,9 @@ class ContinuityIntelligenceService:
             or payload.get("room")
         )
         name = self._normalize_env_text(raw)
-        if not name:
-            prompt_text = self._normalize_env_text(prompt)
-            lowered = prompt_text.lower()
-            for marker in (" inside ", " in ", " at "):
-                if marker in lowered:
-                    chunk = prompt_text[lowered.index(marker) + len(marker):]
-                    name = chunk.split(".")[0].split(",")[0].strip()
-                    break
+        # A gaze such as "looks at Jules" or a costume such as "in blue"
+        # is not location evidence. Only structured scene/environment fields
+        # establish persistent location identity.
         return self._normalize_location_id(payload.get("location_id") or name), name
 
     def _default_environment_record(

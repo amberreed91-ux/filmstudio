@@ -1,0 +1,144 @@
+--- a/studio-backend/app/services/render_retry_service.py
++++ b/studio-backend/app/services/render_retry_service.py
+@@ -619,7 +619,11 @@
+             )
+             return ""
+ 
+-    def _dropped_elements_for_shot(self, shot_id: str) -> Dict[str, List[str]]:
++    def _dropped_elements_for_shot(
++        self,
++        shot_id: str,
++        project_id: str = "",
++    ) -> Dict[str, List[str]]:
+         """Phrasing that budget compression removed before the original render.
+ 
+         The intent-fidelity check records what it cut (see
+@@ -634,19 +638,28 @@
+         if not self._storage:
+             return {}
+         try:
+-            # Storage has no by-shot job accessor, so filter the recent list.
++            # Storage has no by-shot job accessor, so filter a scoped list.
+             # The record lives on the render job rather than render_attempts,
+             # because it is produced at prompt-assembly time, before an attempt
+             # exists.
++            #
++            # Scoped by project: an unscoped fetch takes the most recent jobs
++            # across every project, so on a busy install this shot's jobs can
++            # fall outside the window and the restoration silently does nothing.
+             jobs = [
+                 job
+-                for job in (self._storage.list_jobs(limit=200) or [])
++                for job in (
++                    self._storage.list_jobs(project_id=project_id or None, limit=200) or []
++                )
+                 if getattr(job, "shot_id", None) == shot_id
+             ]
+         except Exception:
+             return {}
+ 
+-        for job in reversed(jobs):
++        # list_jobs returns newest-first. The render being corrected is the most
++        # recent one for this shot, so take that record — not the oldest, which
++        # would restore phrasing from a superseded assembly.
++        for job in jobs:
+             parameters = getattr(getattr(job, "input_payload", None), "parameters", None)
+             if not isinstance(parameters, dict):
+                 continue
+@@ -1105,7 +1118,7 @@
+             full_prompt = await self._adherence_service.build_full_corrected_prompt(
+                 score=original_score,
+                 current_slots=original_slots,
+-                dropped_elements=self._dropped_elements_for_shot(shot_id),
++                dropped_elements=self._dropped_elements_for_shot(shot_id, project_id),
+             )
+             slot_order = self._reorder_slots_by_failure(original_score.dimensions)
+             full_prompt.prompt = self._assemble_prompt_from_slots(
+--- a/studio-backend/app/services/test_vision_authored_corrections.py
++++ b/studio-backend/app/services/test_vision_authored_corrections.py
+@@ -254,3 +254,85 @@
+ 
+     assert score.proposed_corrections == {}
+     assert score.verdict == "pass"
++
++
++# ── B3 lookup correctness (regression: ordering and project scoping) ─────────
++
++
++class _StubStorage:
++    """Mimics storage.list_jobs, which returns newest-first and is project-scoped."""
++
++    def __init__(self, jobs):
++        self._jobs = jobs
++        self.calls = []
++
++    def list_jobs(self, project_id=None, status=None, limit=100):
++        self.calls.append({"project_id": project_id, "limit": limit})
++        rows = [j for j in self._jobs if project_id is None or j.project_id == project_id]
++        return rows[:limit]
++
++
++def _job_with_dropped(job_id, shot_id, phrase, project_id="proj-a"):
++    from app.models import RenderJobInput, RenderJobModel
++
++    return RenderJobModel(
++        id=job_id,
++        project_id=project_id,
++        shot_id=shot_id,
++        provider="happyhorse",
++        status="complete",
++        input_payload=RenderJobInput(
++            shot_id=shot_id,
++            parameters={
++                "intent_fidelity": {
++                    "status": "reduced",
++                    "slots": {"character_state": {"dropped_elements": [phrase]}},
++                }
++            },
++        ),
++        created_at="2026-08-16T00:00:00",
++        updated_at="2026-08-16T00:00:00",
++    )
++
++
++def _service_with(storage):
++    from app.services.render_retry_service import RenderRetryService
++
++    service = RenderRetryService()
++    service.set_storage(storage)
++    return service
++
++
++def test_lookup_takes_the_most_recent_render_not_the_oldest():
++    """list_jobs is newest-first; the render being corrected is the newest one."""
++    storage = _StubStorage([
++        _job_with_dropped("job-new", "scene_001_shot_002", "newest phrasing"),
++        _job_with_dropped("job-old", "scene_001_shot_002", "superseded phrasing"),
++    ])
++    dropped = _service_with(storage)._dropped_elements_for_shot("scene_001_shot_002", "proj-a")
++    assert dropped["character_state"] == ["newest phrasing"]
++
++
++def test_lookup_is_scoped_to_the_project():
++    storage = _StubStorage([
++        _job_with_dropped("job-other", "scene_001_shot_002", "other project", project_id="proj-b"),
++        _job_with_dropped("job-mine", "scene_001_shot_002", "this project", project_id="proj-a"),
++    ])
++    dropped = _service_with(storage)._dropped_elements_for_shot("scene_001_shot_002", "proj-a")
++    assert dropped["character_state"] == ["this project"]
++    assert storage.calls[0]["project_id"] == "proj-a"
++
++
++def test_lookup_ignores_other_shots():
++    storage = _StubStorage([
++        _job_with_dropped("job-elsewhere", "scene_009_shot_001", "different shot"),
++        _job_with_dropped("job-here", "scene_001_shot_002", "this shot"),
++    ])
++    dropped = _service_with(storage)._dropped_elements_for_shot("scene_001_shot_002", "proj-a")
++    assert dropped["character_state"] == ["this shot"]
++
++
++def test_lookup_without_storage_returns_nothing():
++    from app.services.render_retry_service import RenderRetryService
++
++    assert RenderRetryService()._dropped_elements_for_shot("scene_001_shot_002", "proj-a") == {}

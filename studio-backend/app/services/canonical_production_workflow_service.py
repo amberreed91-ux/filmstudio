@@ -240,7 +240,35 @@ class CanonicalProductionWorkflowService:
         self.get(run_id)
         return self.storage.list_canonical_workflow_transitions(run_id)
 
-    async def generate_previs(self, run_id: str) -> dict[str, Any]:
+    def scene_context(self, project_id: str, scene_id: str) -> dict[str, Any]:
+        project = self._project(project_id)
+        scene = self._scene(project, scene_id)
+        return {
+            "script_id": self._canonical_script_id(project, scene),
+            "sequence_id": _text(scene.get("sequence_id")),
+            "beat_ids": self._beat_ids(scene, []),
+        }
+
+    def _canonical_script_id(self, project: dict[str, Any], scene: dict[str, Any]) -> str:
+        summary = _dict(project.get("execution_summary"))
+        explicit = _text(scene.get("script_id")) or _text(summary.get("script_id"))
+        if explicit:
+            return explicit
+        # Older saved films predate script IDs. Derive a project-scoped version
+        # from their saved script instead of requiring a destructive reparse.
+        script_text = _text(project.get("script_text"))
+        if not script_text:
+            scenes = [
+                {"scene_id": _text(row.get("scene_id")), "heading": _text(row.get("heading")),
+                 "text": _text(row.get("text")) or _text(row.get("description"))}
+                for row in summary.get("scenes") or [] if isinstance(row, dict)
+            ]
+            if not any(row["text"] for row in scenes):
+                return ""
+            return "script_" + self._hash({"project_id": project["project_id"], "scenes": scenes})[:24]
+        return "script_" + self._hash({"project_id": project["project_id"], "script_text": script_text})[:24]
+
+    async def generate_previs(self, run_id: str, *, provider: str | None = None) -> dict[str, Any]:
         started = perf_counter()
         run = self.get(run_id)
         if self._at_or_after(run, "previs_generated"):
@@ -254,6 +282,7 @@ class CanonicalProductionWorkflowService:
                     run["scene_id"],
                     shot_number=int(shot["shot_number"]),
                     storyboard_shot_id=shot["storyboard_shot_id"],
+                    provider=provider,
                 )
                 generated.append(result)
         except StabilityError as exc:
@@ -361,7 +390,7 @@ class CanonicalProductionWorkflowService:
         self,
         run_id: str,
         *,
-        provider: str = "simulated",
+        provider: str | None = None,
         retry_confirmed: bool = False,
     ) -> dict[str, Any]:
         started = perf_counter()
@@ -391,6 +420,7 @@ class CanonicalProductionWorkflowService:
                 storyboard_shot_id = _text(package_shot.get("storyboard_shot_id"))
                 shot_context = self._workflow_shot(run, storyboard_shot_id)
                 parameters = {
+                    **dict(package_shot.get("parameters") or {}),
                     "idempotency_key": f"{run_id}:package:{package['package_id']}:shot:{storyboard_shot_id}",
                     "canonical_workflow": {
                         "run_id": run_id,
@@ -412,12 +442,11 @@ class CanonicalProductionWorkflowService:
                 }
                 references = list(dict.fromkeys([
                     *[str(value) for value in package_shot.get("reference_assets") or [] if str(value).strip()],
-                    *([package_shot["image_path"]] if _text(package_shot.get("image_path")) else []),
                 ]))
                 job = self.renderer.create_job(
                     project_id=run["project_id"],
                     shot_id=package_shot["shot_id"],
-                    provider=provider,
+                    provider=provider or package_shot.get("render_provider"),
                     prompt=package_shot["prompt"],
                     reference_assets=references,
                     parameters=parameters,
@@ -782,7 +811,7 @@ class CanonicalProductionWorkflowService:
         self._log(updated, "workflow_revision_create", started)
         return updated
 
-    async def render_revision(self, run_id: str, *, provider: str = "simulated") -> dict[str, Any]:
+    async def render_revision(self, run_id: str, *, provider: str | None = None) -> dict[str, Any]:
         started = perf_counter()
         run = self.get(run_id)
         if run["status"] == "revision_completed":
@@ -817,7 +846,7 @@ class CanonicalProductionWorkflowService:
                 job = self.renderer.create_job(
                     project_id=run["project_id"],
                     shot_id=original.shot_id,
-                    provider=provider,
+                    provider=provider or original.provider,
                     prompt=revision.revision_prompt,
                     reference_assets=list(original.input_payload.referenceAssets or []),
                     parameters=parameters,
@@ -828,7 +857,7 @@ class CanonicalProductionWorkflowService:
                 self.storage.update_clip_revision(revision)
                 submitted = await self.renderer.submit_job(job.id)
             if submitted.status != "complete" or not _text(getattr(submitted.output_payload, "asset_url", "")):
-                if submitted.status in {"failed", "cancelled"}:
+                if submitted.status in {"failed", "cancelled", "needs_review"}:
                     raise ProviderError(
                         "Revision render failed",
                         stage="workflow_revision_render",
@@ -848,7 +877,7 @@ class CanonicalProductionWorkflowService:
                     data=data,
                     payload={"revision_id": revision_id, "render_job_id": revision.new_job_id},
                 )
-                self._log(submitted_run, "workflow_revision_submit", started, provider=provider)
+                self._log(submitted_run, "workflow_revision_submit", started, provider=job.provider)
                 return submitted_run
             revision.status = "complete"
             revision.output_url = submitted.output_payload.asset_url
@@ -967,7 +996,7 @@ class CanonicalProductionWorkflowService:
         self,
         run: dict[str, Any],
         *,
-        provider: str,
+        provider: str | None,
         started: float,
         submit: bool = False,
     ) -> dict[str, Any]:
@@ -983,7 +1012,7 @@ class CanonicalProductionWorkflowService:
                     raise StateError("Workflow render job not found", stage="workflow_render")
                 if submit and job.status != "complete":
                     job = await self.renderer.submit_job(job.id)
-                elif job.status not in {"complete", "failed", "cancelled"}:
+                elif job.status not in {"complete", "failed", "cancelled", "needs_review"}:
                     job = await self.renderer.get_job_status(job.id)
                 refreshed.append({**row, **self._render_status(job)})
         except StabilityError as exc:
@@ -998,7 +1027,7 @@ class CanonicalProductionWorkflowService:
             self._mark_render_failed(run, data, refreshed or rows, error)
             raise error from exc
         data["artifacts"]["render_jobs"] = refreshed
-        terminal_failure = next((row for row in refreshed if row.get("status") in {"failed", "cancelled"}), None)
+        terminal_failure = next((row for row in refreshed if row.get("status") in {"failed", "cancelled", "needs_review"}), None)
         if terminal_failure:
             error = ProviderError(
                 "A workflow render reached a failed terminal state",
@@ -1020,7 +1049,7 @@ class CanonicalProductionWorkflowService:
             data=data,
             payload={"render_job_ids": [row["render_job_id"] for row in refreshed]},
         )
-        self._log(updated, "workflow_render", started, provider=provider)
+        self._log(updated, "workflow_render", started, provider=provider or "approved")
         return updated
 
     def _mark_render_failed(
@@ -1129,8 +1158,7 @@ class CanonicalProductionWorkflowService:
     ) -> None:
         if not _text(script_id):
             raise ValidationError("script_id is required", stage="workflow_ownership")
-        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
-        canonical_script_id = _text(scene.get("script_id")) or _text(summary.get("script_id"))
+        canonical_script_id = self._canonical_script_id(project, scene)
         if not canonical_script_id or script_id != canonical_script_id:
             raise StateError("Script does not own the requested scene", stage="workflow_ownership")
         canonical_sequence_id = _text(scene.get("sequence_id"))

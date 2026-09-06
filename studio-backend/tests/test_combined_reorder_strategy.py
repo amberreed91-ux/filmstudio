@@ -567,6 +567,48 @@ class TestCombinedStrategyStructure:
         )
         assert result["corrected_prompt"].slot_order == EXPECTED_REORDER_ATTEMPT9
 
+    @pytest.mark.asyncio
+    async def test_uses_reordered_original_prompt_when_corrector_fails(self):
+        """Corrector provider failures should not block queueing a fresh retry."""
+        service = RenderRetryService()
+        original_score = AdherenceScore(
+            shot_id="test_shot",
+            attempt_n=1,
+            frames_scored=[0.1, 0.5, 0.9],
+            dimensions=ATTEMPT9_DIMS,
+            temporal_drift={"start_score": 20.0, "end_score": 20.0},
+            adherence_score=19.0,
+            verdict="correctable",
+            failed_slots=["action", "lighting", "character_state", "environment_persistence"],
+        )
+
+        service._reconstruct_original_score = AsyncMock(return_value=original_score)
+        service._adherence_service = MagicMock()
+        service._adherence_service.build_full_corrected_prompt = AsyncMock(
+            side_effect=RuntimeError("Invalid API Key")
+        )
+
+        with patch("app.services.render.render_service") as mock_render_service:
+            mock_render_service.get_default_provider.return_value = "happyhorse"
+            mock_job = MagicMock()
+            mock_job.id = "job-fallback"
+            mock_render_service.create_job.return_value = mock_job
+            mock_render_service.submit_job = AsyncMock(return_value=mock_job)
+
+            result = await service.evaluate_and_select_best(
+                shot_id="test_shot",
+                project_id="test_project",
+                original_slots=ORIGINAL_SLOTS,
+                max_attempts=1,
+                submission_strategy="combined_reorder_and_fresh_seeds",
+            )
+
+        params = mock_render_service.create_job.call_args.kwargs["parameters"]
+        assert params["slot_order"] == EXPECTED_REORDER_ATTEMPT9
+        assert result["jobs_submitted"] == [{"job_id": "job-fallback", "seed": result["seeds_used"][0], "status": "submitted"}]
+        assert result["corrected_prompt"].prompt.startswith(ORIGINAL_SLOTS["action"])
+        assert result["corrected_prompt"].provenance["action"] == "carried_forward_after_corrector_failure"
+
 
 # =============================================================================
 # TESTS: All scores from the real data (summary validation)

@@ -148,6 +148,9 @@ def build_negative_prompt(
     """
     disabled = {str(name or "").strip().lower() for name in (disabled_groups or [])}
 
+    from app.prompt_assembly_context import collecting_generation_prompt
+    if collecting_generation_prompt.get():
+        max_length = 10**9  # Final provider boundary budgets required exclusions first.
     terms: list[str] = []
     terms.extend(build_cast_exclusion_terms(cast_names))
     for group_name, group_terms in NEGATIVE_GROUPS.items():

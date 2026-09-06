@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Bold,
   Brain,
@@ -22,8 +22,13 @@ import {
 import StudioShell from '../components/StudioShell'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
+import CharacterLookApproval from '../components/CharacterLookApproval'
+import { useCharacterLooks } from '../hooks/useCharacterLooks'
+import { characterLookError } from '../lib/characterLookApi'
 import VoicePicker from '../components/VoicePicker'
 import { useStudio } from '../context/StudioContext'
+import { resolveActiveProjectId, withProductionContext } from '../lib/projectContext'
+import { createSceneDraftBuffer } from '../lib/sceneDrafts'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
 import WritersDebateModal from '../components/WritersDebateModal'
 import { PageScene } from '../rooms/ThePage'
@@ -91,15 +96,26 @@ function timeAgo(date: Date): string {
   return `${hours}h ago`
 }
 
+// Reversible, unsaved profile form state; never written to creative memory or storage.
+const profileDrafts = new Map<string, Record<string, Partial<CharacterRecord>>>()
+
+const scriptDrafts = createSceneDraftBuffer(async (projectId, sceneId, text) => {
+  const result = await updateScene(projectId, sceneId, { text, description: text })
+  if (result.error) throw new Error(result.error)
+})
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function WritersRoom() {
+  const navigate = useNavigate()
   const { projectId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryProjectId = searchParams.get('project_id') || ''
-  const { activeProjectId } = useStudio()
-
-  const effectiveProjectId = activeProjectId || projectId || queryProjectId
+  const querySceneId = searchParams.get('scene') || searchParams.get('scene_id') || ''
+  const { activeProjectId, activeProject, loadProject } = useStudio()
+  const effectiveProjectId = resolveActiveProjectId({ queryProjectId, routeProjectId: projectId, contextProjectId: activeProjectId })
+  const currentProjectRef = useRef(effectiveProjectId)
+  const [editorProjectId, setEditorProjectId] = useState('')
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [scenes, setScenes] = useState<Scene[]>([])
@@ -117,13 +133,6 @@ export default function WritersRoom() {
   const [isDirty, setIsDirty] = useState(false)
   const [showExportDropdown, setShowExportDropdown] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null)
-
-  useEffect(() => {
-    if (!activeSceneId || searchParams.get('scene') === activeSceneId) return
-    const next = new URLSearchParams(searchParams)
-    next.set('scene', activeSceneId)
-    setSearchParams(next, { replace: true })
-  }, [activeSceneId, searchParams, setSearchParams])
 
   // Undo/redo stack
   const [undoStack, setUndoStack] = useState<string[]>([])
@@ -149,13 +158,28 @@ export default function WritersRoom() {
   const [memorySavedChip, setMemorySavedChip] = useState(false)
 
   // ── Character descriptions state ──────────────────────────────────────────
-  const [rightTab, setRightTab] = useState<'scenes' | 'characters'>('scenes')
+  const requestedStep = searchParams.get('step')
+  const rightTab = requestedStep === 'looks' ? 'looks' : requestedStep === 'characters' ? 'characters' : 'scenes'
+  const selectedLookCharacter = searchParams.get('character') || ''
+  const characterLooks = useCharacterLooks(effectiveProjectId)
+  const refreshCharacterLooks = characterLooks.refresh
+  const setRightTab = (step: 'scenes' | 'characters' | 'looks') => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous)
+      next.set('step', step)
+      return next
+    }, { replace: true })
+    if (step === 'looks') void refreshCharacterLooks()
+  }
   const [characters, setCharacters] = useState<CharacterRecord[]>([])
   const [charactersLoading, setCharactersLoading] = useState(false)
+  const [charactersLoaded, setCharactersLoaded] = useState(false)
   const [charactersSaving, setCharactersSaving] = useState<Record<string, boolean>>({})
   const [characterUploading, setCharacterUploading] = useState<Record<string, boolean>>({})
   const [newCharacterNames, setNewCharacterNames] = useState<string[]>([])
   const [editDrafts, setEditDrafts] = useState<Record<string, Partial<CharacterRecord>>>({})
+  const [characterDraftProjectId, setCharacterDraftProjectId] = useState('')
+  const latestCharacterDirty = useRef(false)
   const [voicePickerChar, setVoicePickerChar] = useState<CharacterRecord | null>(null)
   const [voiceUpdates, setVoiceUpdates] = useState<Record<string, {
     voiceId: string
@@ -185,6 +209,13 @@ export default function WritersRoom() {
     return Array.from(chars).sort()
   }, [scenes])
 
+  useEffect(() => {
+    latestCharacterDirty.current = Object.keys(editDrafts).length > 0
+    if (!characterDraftProjectId || characterDraftProjectId !== effectiveProjectId) return
+    if (latestCharacterDirty.current) profileDrafts.set(characterDraftProjectId, editDrafts)
+    else profileDrafts.delete(characterDraftProjectId)
+  }, [editDrafts, characterDraftProjectId, effectiveProjectId])
+
   // ── Close export dropdown on outside click ────────────────────────────────
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -195,6 +226,32 @@ export default function WritersRoom() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  // Explicit room links select their film before loading scene/editor state.
+  useEffect(() => {
+    currentProjectRef.current = effectiveProjectId
+    setScenes([])
+    setActiveSceneId(null)
+    setScriptText('')
+    setEditorProjectId('')
+    setIsDirty(false)
+    setLastSavedAt(null)
+    setCharacters([])
+    setCharactersLoaded(false)
+    setVoiceUpdates({})
+    setRecentImports([])
+    setEditDrafts(profileDrafts.get(effectiveProjectId) || {})
+    setCharacterDraftProjectId(effectiveProjectId)
+    setNewCharacterNames([])
+    setUndoStack([])
+    setRedoStack([])
+  }, [effectiveProjectId])
+
+  useEffect(() => {
+    if (effectiveProjectId && activeProject?.project_id !== effectiveProjectId) {
+      void loadProject(effectiveProjectId).catch((caught) => setError(caught instanceof Error ? caught.message : 'Could not open this film.'))
+    }
+  }, [activeProject?.project_id, effectiveProjectId, loadProject])
 
   // ── Load project and scenes ──────────────────────────────────────────────
   useEffect(() => {
@@ -223,15 +280,30 @@ export default function WritersRoom() {
     setError('')
     try {
       const result = await listScenes(effectiveProjectId)
+      if (currentProjectRef.current !== effectiveProjectId) return
       if (result.error) {
         setError(result.error)
       } else {
         setScenes(result.scenes)
-        // If no active scene set, default to first
-        if (!activeSceneId && result.scenes.length > 0) {
-          setActiveSceneId(result.scenes[0].scene_id)
-          setScriptText(result.scenes[0].text || result.scenes[0].description || '')
-          setIsDirty(false)
+        const selected = result.scenes.find((scene) => scene.scene_id === (querySceneId || activeSceneId))
+          || (!querySceneId ? result.scenes[0] : undefined)
+        if (querySceneId && !selected) {
+          setActiveSceneId(null)
+          setScriptText('')
+          setError('The linked scene is not available in this film. Select a scene to continue.')
+        } else if (selected && (editorProjectId !== effectiveProjectId || !activeSceneId || activeSceneId !== selected.scene_id || !isDirty)) {
+          const draft = scriptDrafts.read(effectiveProjectId, selected.scene_id)
+          setActiveSceneId(selected.scene_id)
+          setEditorProjectId(effectiveProjectId)
+          setScriptText(draft ?? selected.text ?? selected.description ?? '')
+          setIsDirty(draft !== undefined)
+          if (draft !== undefined) setError('An unsaved script draft was recovered in this tab. Save it before continuing.')
+          setSearchParams((params) => {
+            const next = new URLSearchParams(params)
+            next.set('scene', selected.scene_id)
+            next.delete('scene_id')
+            return next
+          }, { replace: true })
         }
       }
     } catch (err) {
@@ -246,11 +318,12 @@ export default function WritersRoom() {
     setCharactersLoading(true)
     try {
       const result = await listCharacters(effectiveProjectId)
-      if (!result.error) {
-        setCharacters(result.characters)
-      }
-    } catch {
-      // silent
+      if (currentProjectRef.current !== effectiveProjectId) return
+      if (result.error) throw new Error(result.error)
+      setCharacters(result.characters)
+      setCharactersLoaded(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not load character profiles.')
     } finally {
       setCharactersLoading(false)
     }
@@ -258,7 +331,7 @@ export default function WritersRoom() {
 
   // Detect new characters from scenes vs DB
   useEffect(() => {
-    if (characters.length > 0 && scenes.length > 0) {
+    if (charactersLoaded && scenes.length > 0) {
       const dbNames = new Set(characters.map((c) => c.name.toUpperCase()))
       const sceneNames = new Set<string>()
       for (const scene of scenes) {
@@ -271,61 +344,130 @@ export default function WritersRoom() {
         if (!dbNames.has(name)) unknown.push(name)
       }
       setNewCharacterNames(unknown)
+    } else {
+      setNewCharacterNames([])
     }
-  }, [characters, scenes])
+  }, [characters, charactersLoaded, scenes])
 
   // Load characters when scenes load
   useEffect(() => {
-    if (effectiveProjectId && scenes.length > 0) {
+    if (effectiveProjectId) {
       void loadCharacters()
     }
   }, [effectiveProjectId, scenes.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Scene selection ──────────────────────────────────────────────────────
-  const handleSelectScene = useCallback(
-    (sceneId: string) => {
-      // Save current scene text before switching
-      if (activeScene && isDirty) {
-        void saveCurrentScene()
-      }
-      const scene = scenes.find((s) => s.scene_id === sceneId)
-      if (scene) {
-        setActiveSceneId(sceneId)
-        setScriptText(scene.text || scene.description || '')
-        setIsDirty(false)
-        setUndoStack([])
-        setRedoStack([])
-      }
-    },
-    [activeScene, isDirty, scenes], // eslint-disable-line react-hooks/exhaustive-deps
-  )
+  // ── Script saves and room handoffs ───────────────────────────────────────
+  const latestEditor = useRef({ projectId: '', sceneId: '', text: '', dirty: false })
+  const mountedEditor = useRef(false)
+  useEffect(() => {
+    latestEditor.current = { projectId: editorProjectId, sceneId: activeSceneId || '', text: scriptText, dirty: isDirty }
+    if (isDirty && editorProjectId && activeSceneId) scriptDrafts.write(editorProjectId, activeSceneId, scriptText)
+  }, [editorProjectId, activeSceneId, scriptText, isDirty])
 
-  // ── Auto-save ─────────────────────────────────────────────────────────────
-  const saveCurrentScene = useCallback(async () => {
-    if (!effectiveProjectId || !activeSceneId) return
-    setIsSaving(true)
-    try {
-      await updateScene(effectiveProjectId, activeSceneId, { text: scriptText, description: scriptText })
-      setLastSavedAt(new Date())
-      setIsDirty(false)
-    } catch (err) {
-      console.error('Autosave failed:', err)
-    } finally {
-      setIsSaving(false)
+  useEffect(() => {
+    mountedEditor.current = true
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (latestEditor.current.dirty || latestCharacterDirty.current) {
+        event.preventDefault()
+        event.returnValue = ''
+      }
     }
-  }, [effectiveProjectId, activeSceneId, scriptText])
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => {
+      mountedEditor.current = false
+      window.removeEventListener('beforeunload', beforeUnload)
+      const draft = latestEditor.current
+      if (draft.dirty && draft.projectId && draft.sceneId) {
+        // Flush on in-app navigation; a failed request keeps the in-tab buffer recoverable.
+        void scriptDrafts.save(draft.projectId, draft.sceneId, draft.text).catch((caught) => {
+          console.error('Script save is pending; draft retained in this tab:', caught)
+        })
+      }
+    }
+  }, [])
 
-  // Debounced auto-save
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    const draft = latestEditor.current
+    if (draft.dirty && draft.projectId === effectiveProjectId && draft.sceneId) {
+      void scriptDrafts.save(draft.projectId, draft.sceneId, draft.text).catch((caught) => {
+        console.error('Script save is pending; draft retained in this tab:', caught)
+      })
+    }
+  }, [effectiveProjectId])
+
+  const saveCurrentScene = useCallback(async (): Promise<boolean> => {
+    const draft = latestEditor.current
+    if (!draft.projectId || !draft.sceneId || !draft.dirty) return true
+    setIsSaving(true)
+    setError('')
+    try {
+      await scriptDrafts.save(draft.projectId, draft.sceneId, draft.text)
+      if (!mountedEditor.current) return true
+      const current = latestEditor.current
+      if (current.projectId === draft.projectId && current.sceneId === draft.sceneId) {
+        setScenes((previous) => previous.map((scene) => scene.scene_id === draft.sceneId ? { ...scene, text: draft.text, description: draft.text } : scene))
+        setLastSavedAt(new Date())
+        if (current.text === draft.text) {
+          latestEditor.current = { ...current, dirty: false }
+          setIsDirty(false)
+          return true
+        }
+      }
+      return false
+    } catch (caught) {
+      if (mountedEditor.current && latestEditor.current.projectId === draft.projectId) {
+        setError(`Script not saved: ${caught instanceof Error ? caught.message : 'Please try again.'} Your draft is still here.`)
+      }
+      return false
+    } finally {
+      if (mountedEditor.current) setIsSaving(false)
+    }
+  }, [])
+
+  const prepareRoomHandoff = useCallback(async (): Promise<boolean> => {
+    if (characterLooks.busy) {
+      setError('Your character look is still saving. Wait for it to finish before leaving The Page.')
+      return false
+    }
+    if (Object.keys(editDrafts).length > 0) {
+      setError('Save your character profile changes before leaving The Page. Your drafts are still here.')
+      return false
+    }
+    return saveCurrentScene()
+  }, [editDrafts, saveCurrentScene, characterLooks.busy])
+
+  const handleSelectScene = useCallback(async (sceneId: string) => {
+    if (sceneId === activeSceneId || isSaving) return
+    const scene = scenes.find((candidate) => candidate.scene_id === sceneId)
+    if (!scene || !(await saveCurrentScene())) return
+    if (currentProjectRef.current !== effectiveProjectId) return
+    const draft = scriptDrafts.read(effectiveProjectId, sceneId)
+    setEditorProjectId(effectiveProjectId)
+    setActiveSceneId(sceneId)
+    setScriptText(draft ?? scene.text ?? scene.description ?? '')
+    setIsDirty(draft !== undefined)
+    setLastSavedAt(null)
+    setUndoStack([])
+    setRedoStack([])
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params)
+      next.set('scene', sceneId)
+      next.delete('scene_id')
+      return next
+    }, { replace: true })
+  }, [activeSceneId, isSaving, scenes, saveCurrentScene, effectiveProjectId, setSearchParams])
+
+  // Read incoming same-room scene links too (including legacy Production Board links).
+  useEffect(() => {
+    if (querySceneId && querySceneId !== activeSceneId && editorProjectId === effectiveProjectId && !isDirty && !isSaving) {
+      void handleSelectScene(querySceneId)
+    }
+  }, [querySceneId, activeSceneId, editorProjectId, effectiveProjectId, isDirty, isSaving, handleSelectScene])
+
   useEffect(() => {
     if (!isDirty) return
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      void saveCurrentScene()
-    }, 3000)
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    }
+    const timer = setTimeout(() => { void saveCurrentScene() }, 3000)
+    return () => clearTimeout(timer)
   }, [scriptText, isDirty, saveCurrentScene])
 
   // ── Editor handlers ──────────────────────────────────────────────────────
@@ -399,19 +541,29 @@ export default function WritersRoom() {
     [scriptText],
   )
 
-  // ── Export handlers (stubs — 501) ────────────────────────────────────────
-  const handleExport = useCallback(
-    (format: ExportFormat) => {
-      setShowExportDropdown(false)
+  // ── Export the current screenplay draft ─────────────────────────────────
+  const handleExport = useCallback(async (format: ExportFormat) => {
+    setShowExportDropdown(false)
+    setError('')
+    try {
       if (format === 'clipboard') {
-        navigator.clipboard.writeText(scriptText).catch(() => {})
-        setSuccess('Copied to clipboard')
-        return
+        await navigator.clipboard.writeText(scriptText)
+        setSuccess('Script draft copied to clipboard')
+      } else if (format === 'txt') {
+        const url = URL.createObjectURL(new Blob([scriptText], { type: 'text/plain;charset=utf-8' }))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `${activeSceneId || 'screenplay'}-draft.txt`
+        link.click()
+        URL.revokeObjectURL(url)
+        setSuccess('Script draft downloaded as text')
+      } else {
+        setError('Download a text draft to open in your screenplay editor for PDF or Final Draft export.')
       }
-      setError(`Export to ${format.toUpperCase()} — endpoint returning 501 (not implemented yet)`)
-    },
-    [scriptText, setSuccess, setError],
-  )
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The script draft could not be exported.')
+    }
+  }, [scriptText, activeSceneId])
 
   // ── AI suggestion handlers ───────────────────────────────────────────────
   const acceptSuggestion = useCallback(() => {
@@ -435,6 +587,12 @@ export default function WritersRoom() {
     async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
       if (!file || !effectiveProjectId) return
+      if (!/\.(txt|fountain)$/i.test(file.name)) {
+        setError('Import a plain-text .txt or .fountain screenplay. Export PDF or Final Draft scripts to text first.')
+        event.target.value = ''
+        return
+      }
+      if (!(await saveCurrentScene())) return
 
       const reader = new FileReader()
       reader.onload = async (e) => {
@@ -473,11 +631,12 @@ export default function WritersRoom() {
           setUploadingScript(false)
         }
       }
+      reader.onerror = () => setError('The script file could not be read. Please try again.')
       reader.readAsText(file)
       // Reset file input so same file can be re-uploaded
       event.target.value = ''
     },
-    [effectiveProjectId, loadScenes],
+    [effectiveProjectId, loadScenes, saveCurrentScene],
   )
 
   // ── Add scene ─────────────────────────────────────────────────────────────
@@ -583,31 +742,44 @@ export default function WritersRoom() {
       setCharactersSaving((p) => ({ ...p, [charId]: true }))
       try {
         const result = await updateCharacter(effectiveProjectId, charId, draft)
+        if (currentProjectRef.current !== effectiveProjectId) return
+        if (result.error) throw new Error(result.error)
         if (result.character) {
           setCharacters((prev) => prev.map((c) => (c.id === charId ? result.character! : c)))
           setEditDrafts((prev) => {
+            if (prev[charId] !== draft) return prev
             const next = { ...prev }
             delete next[charId]
             return next
           })
+          await refreshCharacterLooks()
         }
-      } catch {
-        // silent
+      } catch (caught) {
+        if (currentProjectRef.current === effectiveProjectId) setError(`Character profile not saved: ${characterLookError(caught)}`)
       } finally {
         setCharactersSaving((p) => ({ ...p, [charId]: false }))
       }
     },
-    [editDrafts, effectiveProjectId],
+    [editDrafts, effectiveProjectId, refreshCharacterLooks],
   )
 
   const handleCreateSkeletonCharacters = useCallback(async () => {
-    if (!effectiveProjectId) return
-    for (const name of newCharacterNames) {
-      await createCharacterSkeleton(effectiveProjectId, name)
+    if (!effectiveProjectId || charactersLoading || !charactersLoaded) return
+    setCharactersLoading(true)
+    setError('')
+    try {
+      for (const name of newCharacterNames) {
+        const result = await createCharacterSkeleton(effectiveProjectId, name)
+        if (result.error) throw new Error(result.error)
+      }
+      setSuccess('Character profiles created. Add their appearance and voice before storyboarding.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Character profiles could not be created.')
+    } finally {
+      await loadCharacters()
+      await refreshCharacterLooks()
     }
-    setNewCharacterNames([])
-    void loadCharacters()
-  }, [effectiveProjectId, newCharacterNames, loadCharacters])
+  }, [effectiveProjectId, charactersLoading, charactersLoaded, newCharacterNames, loadCharacters, refreshCharacterLooks])
 
   const handleUploadDescriptor = useCallback(
     async (charId: string) => {
@@ -622,6 +794,7 @@ export default function WritersRoom() {
         setError('')
         try {
           const result = await uploadCharacterDescriptor(effectiveProjectId, charId, file)
+          if (currentProjectRef.current !== effectiveProjectId) return
           if (result && result.character) {
             const char = result.character
             setCharacters((prev) => prev.map((c) => (c.id === charId ? char : c)))
@@ -635,6 +808,7 @@ export default function WritersRoom() {
               },
             }))
             setSuccess(`Character "${char.name}" updated from descriptor`)
+            await refreshCharacterLooks()
           } else if (result && result.error) {
             setError(result.error)
           }
@@ -646,22 +820,22 @@ export default function WritersRoom() {
       }
       input.click()
     },
-    [effectiveProjectId],
+    [effectiveProjectId, refreshCharacterLooks],
   )
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
+    <div className="relative min-h-screen w-full">
       {/* 3D environment */}
-      <div style={{ position: 'absolute', inset: 0 }}>
+      <div className="pointer-events-none fixed inset-0">
         <PageScene />
       </div>
 
       {/* UI overlay */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 10, pointerEvents: 'auto' }}>
-        <StudioShell title="Writer's Room" subtitle="The Page — Draft and manage your script" transparent>
+      <div className="relative z-10">
+        <StudioShell title="Writer's Room" subtitle="The Page — Draft and manage your script" beforeNavigate={prepareRoomHandoff} transparent>
           <ProjectGuard>
-            <ProjectContextBar roomName="writer's room" />
+            <ProjectContextBar roomName="writer's room" compact />
 
             {/* Status bars */}
             <div className="px-4 pt-2">
@@ -683,7 +857,7 @@ export default function WritersRoom() {
                       type="button"
                       onClick={retryHealthCheck}
                       disabled={healthCheckLoading}
-                      className="rounded border border-amber-300/50 bg-amber-500/14 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-100"
+                      className="rounded border border-amber-300/50 bg-amber-500/14 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-amber-100"
                     >
                       {healthCheckLoading ? 'Checking...' : 'Retry'}
                     </button>
@@ -692,20 +866,285 @@ export default function WritersRoom() {
               )}
             </div>
 
-            {/* ── THREE-PANEL LAYOUT ────────────────────────────────────────── */}
-            <div className="flex h-[calc(100vh-100px)] w-full px-4 pb-4 gap-4">
-              {/* ── LEFT: INGEST PANEL (25%) ─────────────────────────────── */}
-              <div className="flex w-1/4 flex-col gap-4 overflow-y-auto">
-                {/* Ingest Section */}
-                <div className="glass-panel rounded-xl p-4">
+            <div className="mx-auto max-w-[1400px] px-4 pb-10 pt-5 md:px-6">
+              <header className="mb-6">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-amber-200/80">The Page</p>
+                <h1 className="mt-2 text-2xl font-medium tracking-tight text-zinc-100 md:text-3xl">Give the film its voice.</h1>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">Shape the script, prepare the profiles, then cast and lock your characters before you storyboard.</p>
+              </header>
+              <nav aria-label="Writing steps" className="mb-6 grid grid-cols-1 gap-2 border-b border-white/10 pb-4 sm:flex sm:flex-wrap">
+                <button type="button" onClick={() => setRightTab('scenes')} aria-current={rightTab === 'scenes' ? 'step' : undefined} className={rightTab === 'scenes' ? 'rounded-md border border-amber-200/40 bg-amber-200/5 px-4 py-3 text-sm text-amber-100' : 'rounded-md border border-white/10 px-4 py-3 text-sm text-zinc-400'}>1. Script</button>
+                <button type="button" onClick={() => setRightTab('characters')} aria-current={rightTab === 'characters' ? 'step' : undefined} className={rightTab === 'characters' ? 'rounded-md border border-amber-200/40 bg-amber-200/5 px-4 py-3 text-sm text-amber-100' : 'rounded-md border border-white/10 px-4 py-3 text-sm text-zinc-400'}>2. Character profiles{newCharacterNames.length > 0 && <span className="ml-2 text-xs text-amber-200">· {newCharacterNames.length} to add</span>}</button>
+                <button type="button" onClick={() => setRightTab('looks')} aria-current={rightTab === 'looks' ? 'step' : undefined} className={rightTab === 'looks' ? 'rounded-md border border-amber-200/40 bg-amber-200/5 px-4 py-3 text-sm text-amber-100' : 'rounded-md border border-white/10 px-4 py-3 text-sm text-zinc-400'}>3. Lock character looks</button>
+              </nav>
+              <section aria-label="Script workspace" className={rightTab === 'scenes' ? 'grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]' : 'hidden'}>
+                <div className="min-w-0 space-y-3">
+                {/* Editor header */}
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-zinc-950/80 px-4 py-3">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-primary)' }}>
+                    THE PAGE
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-3">
+                    {/* Scene selector */}
+                    {scenes.length > 0 ? (
+                      <select
+                        value={activeSceneId || ''}
+                        aria-label="Current script scene"
+                        onChange={(e) => handleSelectScene(e.target.value)}
+                        className="min-w-0 max-w-full rounded-md border border-white/15 bg-zinc-950 px-3 py-2 text-xs outline-none"
+                        style={{ color: 'var(--color-on-surface)' }}
+                      >
+                        {scenes.map((scene) => (
+                          <option key={scene.scene_id} value={scene.scene_id} className="bg-zinc-900">
+                            {scene.scene_name} {scene.location ? `(${scene.location})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        No scenes loaded
+                      </span>
+                    )}
+                    <button type="button" onClick={() => void saveCurrentScene()} disabled={isSaving || !isDirty} className="inline-flex items-center gap-2 rounded-md border border-amber-200/30 bg-amber-200/5 px-3 py-2 text-xs text-amber-100 disabled:opacity-40"><Save size={13} />{isSaving ? 'Saving…' : 'Save script'}</button>
+                    {/* Autosave indicator */}
+                    <span
+                      className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em]"
+                      style={{ color: 'var(--color-outline-variant)' }}
+                    >
+                      {isSaving ? (
+                        <>
+                          <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                          </span>
+                          SAVING
+                        </>
+                      ) : isDirty ? (
+                        <span className="text-amber-200">Unsaved changes</span>
+                      ) : lastSavedAt ? (
+                        <>
+                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                          SAVED {timeAgo(lastSavedAt)}
+                        </>
+                      ) : (
+                        <>
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-outline)' }} />
+                          {activeSceneId ? 'Loaded from project' : 'Choose a scene'}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Toolbar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-zinc-950/80 px-3 py-2">
+                  {/* Left group — Fountain format */}
+                  <div className="flex items-center gap-1">
+                    {FOUNTAIN_PREFIXES.map((item) => (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => insertFountainPrefix(item.prefix)}
+                        title={item.shortcut}
+                        className="status-chip rounded border px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
+                        style={{
+                          borderColor: 'rgba(255,255,255,0.1)',
+                          color: 'var(--color-on-surface-variant)',
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Right group — formatting / actions */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => wrapSelection('**', '**')}
+                      className="rounded p-1.5 transition-all hover:bg-white/10"
+                      title="Bold"
+                      style={{ color: 'var(--color-on-surface-variant)' }}
+                    >
+                      <Bold size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => wrapSelection('*', '*')}
+                      className="rounded p-1.5 transition-all hover:bg-white/10"
+                      title="Italic"
+                      style={{ color: 'var(--color-on-surface-variant)' }}
+                    >
+                      <Italic size={14} />
+                    </button>
+                    <span className="mx-1 h-4 w-px opacity-20" style={{ backgroundColor: 'var(--color-on-surface)' }} />
+                    <button
+                      type="button"
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      className="rounded p-1.5 transition-all hover:bg-white/10 disabled:opacity-30"
+                      title="Undo"
+                      style={{ color: 'var(--color-on-surface-variant)' }}
+                    >
+                      <Undo2 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRedo}
+                      disabled={redoStack.length === 0}
+                      className="rounded p-1.5 transition-all hover:bg-white/10 disabled:opacity-30"
+                      title="Redo"
+                      style={{ color: 'var(--color-on-surface-variant)' }}
+                    >
+                      <Redo2 size={14} />
+                    </button>
+                    <span className="mx-1 h-4 w-px opacity-20" style={{ backgroundColor: 'var(--color-on-surface)' }} />
+                    {/* Export dropdown */}
+                    <div className="relative" ref={exportRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowExportDropdown((p) => !p)}
+                        className="flex items-center gap-1 rounded px-2 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                      >
+                        Export
+                        <ChevronDown size={12} />
+                      </button>
+                      {showExportDropdown && (
+                        <div
+                          className="glass-panel absolute right-0 top-full mt-1 w-48 overflow-hidden rounded-xl py-1 shadow-2xl"
+                          style={{ zIndex: 50 }}
+                        >
+                          {([
+                            { key: 'txt' as ExportFormat, icon: FileText, label: 'Download TXT' },
+                            { key: 'clipboard' as ExportFormat, icon: Copy, label: 'Copy to Clipboard' },
+                          ]).map((item) => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() => handleExport(item.key)}
+                              className="flex w-full items-center gap-3 px-4 py-2 text-[11px] transition-all hover:bg-white/5"
+                              style={{ color: 'var(--color-on-surface)' }}
+                            >
+                              <item.icon size={14} className="shrink-0" style={{ color: 'var(--color-on-surface-variant)' }} />
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Script textarea */}
+                <div className="relative min-h-[460px] rounded-lg border border-white/10 bg-zinc-950/85">
+                  <textarea
+                    ref={editorRef}
+                    value={scriptText}
+                    onChange={handleTextChange}
+                    placeholder={activeScene ? 'Write your script here...' : 'Select or create a scene to start writing...'}
+                    aria-label="Scene script" className="min-h-[460px] w-full resize-y bg-transparent p-4 text-sm leading-7 text-zinc-100 outline-none focus-visible:ring-1 focus-visible:ring-amber-200/30 md:p-6"
+                    style={{
+                      color: 'var(--color-on-surface)',
+                      fontFamily: 'var(--font-jetbrains)',
+                      lineHeight: '1.8',
+                    }}
+                    disabled={!activeScene}
+                  />
+
+                  {/* Word count */}
+                  <div
+                    className="absolute bottom-3 right-4 text-xs font-semibold uppercase tracking-[0.1em]"
+                    style={{ color: 'var(--color-outline-variant)' }}
+                  >
+                    {estimateWordCount(scriptText)} words
+                  </div>
+
+                  {/* AI suggestion bubble */}
+                  {aiSuggestion && !aiSuggestion.accepted && !aiSuggestion.dismissed && (
+                    <div className="absolute bottom-12 left-4 right-4 glass-panel rounded-xl border p-4 shadow-2xl" style={{ borderColor: 'rgba(255,209,101,0.3)' }}>
+                      <div className="mb-2 flex items-center gap-2">
+                        <Brain size={14} style={{ color: 'var(--color-primary)' }} />
+                        <span
+                          className="text-xs font-bold uppercase tracking-[0.12em]"
+                          style={{ color: 'var(--color-primary)' }}
+                        >
+                          AI Suggestion
+                        </span>
+                      </div>
+                      <p className="mb-3 text-xs leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
+                        {aiSuggestion.text}
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={acceptSuggestion}
+                          className="rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
+                          style={{
+                            background: 'rgba(255,209,101,0.15)',
+                            color: 'var(--color-primary)',
+                            border: '1px solid rgba(255,209,101,0.3)',
+                          }}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={dismissSuggestion}
+                          className="rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
+                          style={{ color: 'var(--color-on-surface-variant)' }}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Director's Notes — read-only reference from Screening Room */}
+                {activeScene?.notes && (
+                  <div className="glass-panel rounded-xl p-4">
+                    <div
+                      className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
+                      style={{ color: 'var(--color-primary)' }}
+                    >
+                      DIRECTOR'S NOTES
+                    </div>
+                    <div className="border-t pt-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        {activeScene.notes}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Character Mind Simulation */}
+                {characterMindResult && (
+                  <div className="glass-panel rounded-xl p-4">
+                    <div
+                      className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
+                      style={{ color: 'var(--color-secondary)' }}
+                    >
+                      CHARACTER MIND — {selectedCharacter}
+                    </div>
+                    <div className="border-t pt-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                      <p className="text-[12px] leading-relaxed italic" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        {characterMindResult}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+                <aside className="min-w-0 space-y-4">
+                  <div className="glass-panel rounded-xl p-4">
                   <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--color-primary)' }}>
-                    INGEST
+                    Import a screenplay
                   </div>
 
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,.fdx,.txt,.fountain"
+                    accept=".txt,.fountain"
                     onChange={handleFileUpload}
                     className="hidden"
                   />
@@ -725,7 +1164,7 @@ export default function WritersRoom() {
                   {recentImports.length > 0 && (
                     <div className="mt-3 space-y-1">
                       <div
-                        className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em]"
+                        className="mb-1 text-xs font-semibold uppercase tracking-[0.12em]"
                         style={{ color: 'var(--color-on-surface-variant)' }}
                       >
                         Recent Imports
@@ -749,13 +1188,91 @@ export default function WritersRoom() {
                       className="mt-3 text-[11px]"
                       style={{ color: 'var(--color-on-surface-variant)' }}
                     >
-                      No imports yet. Upload a .pdf, .fdx, or .txt script.
+                      No imports yet. Upload a .txt or .fountain screenplay.
                     </div>
                   )}
                 </div>
-
-                {/* Intelligence Section */}
-                <div className="glass-panel rounded-xl p-4">
+                  <details className="rounded-lg border border-white/10 bg-zinc-950/60 p-4" open={scenes.length === 0}><summary className="cursor-pointer text-sm text-zinc-300">Scene outline · {scenes.length} scenes</summary><div className="mt-3 space-y-3">{rightTab === 'scenes' && (
+                  <>
+                    <div className="glass-panel flex items-center justify-between rounded-xl px-4 py-3">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>
+                        SCENE LIST
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddScene}
+                        disabled={loading || !effectiveProjectId}
+                        className="rounded-lg p-1.5 transition-all hover:bg-white/10 disabled:opacity-50"
+                        title="Add scene"
+                        style={{ color: 'var(--color-primary)' }}
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                    {loading && scenes.length === 0 ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+                      </div>
+                    ) : scenes.length === 0 ? (
+                      <div className="glass-panel flex flex-col items-center justify-center rounded-xl px-4 py-12 text-center">
+                        <Edit3 size={24} className="mb-3 opacity-30" style={{ color: 'var(--color-on-surface-variant)' }} />
+                        <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          No scenes yet. Import a script or add one manually.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {scenes.map((scene, index) => {
+                          const isActive = scene.scene_id === activeSceneId
+                          const wordCount = estimateWordCount(scene.description || '')
+                          return (
+                            <button
+                              key={scene.scene_id}
+                              type="button"
+                              onClick={() => handleSelectScene(scene.scene_id)}
+                              className={`flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition-all ${
+                                isActive
+                                  ? 'border-l-2 shadow-[inset_0_0_20px_rgba(255,209,101,0.06)]'
+                                  : 'hover:bg-white/5'
+                              }`}
+                              style={{
+                                borderLeftColor: isActive ? 'var(--color-primary)' : 'transparent',
+                                background: isActive ? 'rgba(255,209,101,0.04)' : 'transparent',
+                              }}
+                            >
+                              <span
+                                className="status-chip mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold"
+                                style={{
+                                  background: isActive ? 'rgba(255,209,101,0.15)' : 'rgba(255,255,255,0.06)',
+                                  color: isActive ? 'var(--color-primary)' : 'var(--color-outline)',
+                                }}
+                              >
+                                {String(index + 1).padStart(2, '0')}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div
+                                  className="truncate text-[12px] font-medium leading-tight"
+                                  style={{
+                                    color: isActive ? 'var(--color-primary)' : 'var(--color-on-surface)',
+                                  }}
+                                >
+                                  {scene.scene_name || `Scene ${index + 1}`}
+                                </div>
+                                <div
+                                  className="mt-0.5 text-xs"
+                                  style={{ color: 'var(--color-on-surface-variant)' }}
+                                >
+                                  {scene.location || 'No location'} · {wordCount} words
+                                </div>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}</div></details>
+                  <details className="rounded-lg border border-white/10 bg-zinc-950/60 p-4"><summary className="cursor-pointer text-sm text-zinc-300">Creative support</summary><p className="mt-3 text-xs leading-relaxed text-zinc-400">Explore a debate or a character’s motivation when you need another perspective.</p><div className="pt-3"><div className="glass-panel rounded-xl p-4">
                   <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--color-secondary)' }}>
                     INTELLIGENCE
                   </div>
@@ -782,14 +1299,14 @@ export default function WritersRoom() {
 
                       {debateMode && (
                         <div className="mt-2 space-y-2 rounded-lg border p-3" style={{ borderColor: 'rgba(76,215,246,0.2)' }}>
-                          <p className="text-[10px] text-zinc-500 leading-relaxed">
+                          <p className="text-xs text-zinc-500 leading-relaxed">
                             Debates two opposing directorial perspectives — Restraint vs Urgency — on the current scene.
                           </p>
                           <button
                             type="button"
                             onClick={handleStartDebate}
                             disabled={debateRunning || !activeSceneId}
-                            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.02] disabled:opacity-50"
                             style={{
                               background: 'rgba(76,215,246,0.15)',
                               color: 'var(--color-secondary)',
@@ -849,7 +1366,7 @@ export default function WritersRoom() {
                             type="button"
                             onClick={handleSimulateCharacter}
                             disabled={characterSimulating || !selectedCharacter}
-                            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.02] disabled:opacity-50"
                             style={{
                               background: 'rgba(76,215,246,0.15)',
                               color: 'var(--color-secondary)',
@@ -879,9 +1396,9 @@ export default function WritersRoom() {
                         style={{ color: 'var(--color-on-surface)' }}
                       >
                         <MemoryStick size={16} />
-                        Director's Memory
+                        Save this decision to project memory
                         {memorySavedChip && (
-                          <span className="ml-auto flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-emerald-400">
+                          <span className="ml-auto flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-400">
                             <CheckCircle2 size={10} />
                             SAVED
                           </span>
@@ -892,385 +1409,11 @@ export default function WritersRoom() {
                       </button>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* ── CENTER: EDITOR (50%) ──────────────────────────────────── */}
-              <div className="flex w-1/2 flex-col gap-3 z-20">
-                {/* Editor header */}
-                <div className="glass-panel flex items-center justify-between rounded-xl px-4 py-3">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-primary)' }}>
-                    THE PAGE
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {/* Scene selector */}
-                    {scenes.length > 0 ? (
-                      <select
-                        value={activeSceneId || ''}
-                        onChange={(e) => handleSelectScene(e.target.value)}
-                        className="glass-panel rounded-lg px-3 py-1.5 text-xs outline-none"
-                        style={{ color: 'var(--color-on-surface)' }}
-                      >
-                        {scenes.map((scene) => (
-                          <option key={scene.scene_id} value={scene.scene_id} className="bg-zinc-900">
-                            {scene.scene_name} {scene.location ? `(${scene.location})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        No scenes loaded
-                      </span>
-                    )}
-                    {/* Autosave indicator */}
-                    <span
-                      className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]"
-                      style={{ color: 'var(--color-outline-variant)' }}
-                    >
-                      {isSaving ? (
-                        <>
-                          <span className="relative flex h-2 w-2">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                          </span>
-                          SAVING
-                        </>
-                      ) : lastSavedAt ? (
-                        <>
-                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                          SAVED {timeAgo(lastSavedAt)}
-                        </>
-                      ) : (
-                        <>
-                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-outline)' }} />
-                          UNSAVED
-                        </>
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Toolbar */}
-                <div className="glass-panel flex items-center justify-between rounded-xl px-3 py-2">
-                  {/* Left group — Fountain format */}
-                  <div className="flex items-center gap-1">
-                    {FOUNTAIN_PREFIXES.map((item) => (
-                      <button
-                        key={item.label}
-                        type="button"
-                        onClick={() => insertFountainPrefix(item.prefix)}
-                        title={item.shortcut}
-                        className="status-chip rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
-                        style={{
-                          borderColor: 'rgba(255,255,255,0.1)',
-                          color: 'var(--color-on-surface-variant)',
-                        }}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Right group — formatting / actions */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => wrapSelection('**', '**')}
-                      className="rounded p-1.5 transition-all hover:bg-white/10"
-                      title="Bold"
-                      style={{ color: 'var(--color-on-surface-variant)' }}
-                    >
-                      <Bold size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => wrapSelection('*', '*')}
-                      className="rounded p-1.5 transition-all hover:bg-white/10"
-                      title="Italic"
-                      style={{ color: 'var(--color-on-surface-variant)' }}
-                    >
-                      <Italic size={14} />
-                    </button>
-                    <span className="mx-1 h-4 w-px opacity-20" style={{ backgroundColor: 'var(--color-on-surface)' }} />
-                    <button
-                      type="button"
-                      onClick={handleUndo}
-                      disabled={undoStack.length === 0}
-                      className="rounded p-1.5 transition-all hover:bg-white/10 disabled:opacity-30"
-                      title="Undo"
-                      style={{ color: 'var(--color-on-surface-variant)' }}
-                    >
-                      <Undo2 size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRedo}
-                      disabled={redoStack.length === 0}
-                      className="rounded p-1.5 transition-all hover:bg-white/10 disabled:opacity-30"
-                      title="Redo"
-                      style={{ color: 'var(--color-on-surface-variant)' }}
-                    >
-                      <Redo2 size={14} />
-                    </button>
-                    <span className="mx-1 h-4 w-px opacity-20" style={{ backgroundColor: 'var(--color-on-surface)' }} />
-                    {/* Export dropdown */}
-                    <div className="relative" ref={exportRef}>
-                      <button
-                        type="button"
-                        onClick={() => setShowExportDropdown((p) => !p)}
-                        className="flex items-center gap-1 rounded px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
-                        style={{ color: 'var(--color-on-surface-variant)' }}
-                      >
-                        Export
-                        <ChevronDown size={12} />
-                      </button>
-                      {showExportDropdown && (
-                        <div
-                          className="glass-panel absolute right-0 top-full mt-1 w-48 overflow-hidden rounded-xl py-1 shadow-2xl"
-                          style={{ zIndex: 50 }}
-                        >
-                          {([
-                            { key: 'pdf' as ExportFormat, icon: FileText, label: 'Download PDF' },
-                            { key: 'fdx' as ExportFormat, icon: FileText, label: 'Download FDX' },
-                            { key: 'txt' as ExportFormat, icon: FileText, label: 'Download TXT' },
-                            { key: 'clipboard' as ExportFormat, icon: Copy, label: 'Copy to Clipboard' },
-                          ]).map((item) => (
-                            <button
-                              key={item.key}
-                              type="button"
-                              onClick={() => handleExport(item.key)}
-                              className="flex w-full items-center gap-3 px-4 py-2 text-[11px] transition-all hover:bg-white/5"
-                              style={{ color: 'var(--color-on-surface)' }}
-                            >
-                              <item.icon size={14} className="shrink-0" style={{ color: 'var(--color-on-surface-variant)' }} />
-                              {item.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Script textarea */}
-                <div className="glass-panel relative flex-1 overflow-hidden rounded-xl">
-                  <textarea
-                    ref={editorRef}
-                    value={scriptText}
-                    onChange={handleTextChange}
-                    placeholder={activeScene ? 'Write your script here...' : 'Select or create a scene to start writing...'}
-                    className="h-full w-full resize-none bg-transparent p-6 text-sm leading-relaxed outline-none"
-                    style={{
-                      color: 'var(--color-on-surface)',
-                      fontFamily: 'var(--font-jetbrains)',
-                      lineHeight: '1.8',
-                    }}
-                    disabled={!activeScene}
-                  />
-
-                  {/* Word count */}
-                  <div
-                    className="absolute bottom-3 right-4 text-[10px] font-semibold uppercase tracking-[0.1em]"
-                    style={{ color: 'var(--color-outline-variant)' }}
-                  >
-                    {estimateWordCount(scriptText)} words
-                  </div>
-
-                  {/* AI suggestion bubble */}
-                  {aiSuggestion && !aiSuggestion.accepted && !aiSuggestion.dismissed && (
-                    <div className="absolute bottom-12 left-4 right-4 glass-panel rounded-xl border p-4 shadow-2xl" style={{ borderColor: 'rgba(255,209,101,0.3)' }}>
-                      <div className="mb-2 flex items-center gap-2">
-                        <Brain size={14} style={{ color: 'var(--color-primary)' }} />
-                        <span
-                          className="text-[10px] font-bold uppercase tracking-[0.12em]"
-                          style={{ color: 'var(--color-primary)' }}
-                        >
-                          AI Suggestion
-                        </span>
-                      </div>
-                      <p className="mb-3 text-xs leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
-                        {aiSuggestion.text}
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={acceptSuggestion}
-                          className="rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
-                          style={{
-                            background: 'rgba(255,209,101,0.15)',
-                            color: 'var(--color-primary)',
-                            border: '1px solid rgba(255,209,101,0.3)',
-                          }}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={dismissSuggestion}
-                          className="rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
-                          style={{ color: 'var(--color-on-surface-variant)' }}
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Director's Notes — read-only reference from Screening Room */}
-                {activeScene?.notes && (
-                  <div className="glass-panel rounded-xl p-4">
-                    <div
-                      className="mb-2 text-[9px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: 'var(--color-primary)' }}
-                    >
-                      DIRECTOR'S NOTES
-                    </div>
-                    <div className="border-t pt-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        {activeScene.notes}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Character Mind Simulation */}
-                {characterMindResult && (
-                  <div className="glass-panel rounded-xl p-4">
-                    <div
-                      className="mb-2 text-[9px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: 'var(--color-secondary)' }}
-                    >
-                      CHARACTER MIND — {selectedCharacter}
-                    </div>
-                    <div className="border-t pt-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                      <p className="text-[12px] leading-relaxed italic" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        {characterMindResult}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── RIGHT: TABBED PANEL (25%) ────────────────────────────── */}
-              <div className="flex w-1/4 flex-col gap-3 overflow-y-auto">
-                {/* Tab bar */}
-                <div className="glass-panel flex items-center rounded-xl px-1 py-1">
-                  <button
-                    type="button"
-                    onClick={() => setRightTab('scenes')}
-                    className={`flex-1 rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] transition-all ${
-                      rightTab === 'scenes' ? 'bg-white/10 shadow-sm' : 'hover:bg-white/5'
-                    }`}
-                    style={{
-                      color: rightTab === 'scenes' ? 'var(--color-primary)' : 'var(--color-on-surface-variant)',
-                    }}
-                  >
-                    Scene List
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRightTab('characters')}
-                    className={`flex items-center justify-center gap-1.5 flex-1 rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] transition-all ${
-                      rightTab === 'characters' ? 'bg-white/10 shadow-sm' : 'hover:bg-white/5'
-                    }`}
-                    style={{
-                      color: rightTab === 'characters' ? 'var(--color-primary)' : 'var(--color-on-surface-variant)',
-                    }}
-                  >
-                    <Users size={12} />
-                    Characters
-                    {newCharacterNames.length > 0 && (
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black">
-                        {newCharacterNames.length}
-                      </span>
-                    )}
-                  </button>
-                </div>
-
-                {/* Scene List Tab */}
-                {rightTab === 'scenes' && (
-                  <>
-                    <div className="glass-panel flex items-center justify-between rounded-xl px-4 py-3">
-                      <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>
-                        SCENE LIST
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleAddScene}
-                        disabled={loading || !effectiveProjectId}
-                        className="rounded-lg p-1.5 transition-all hover:bg-white/10 disabled:opacity-50"
-                        title="Add scene"
-                        style={{ color: 'var(--color-primary)' }}
-                      >
-                        <Plus size={16} />
-                      </button>
-                    </div>
-                    {loading && scenes.length === 0 ? (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-                      </div>
-                    ) : scenes.length === 0 ? (
-                      <div className="glass-panel flex flex-col items-center justify-center rounded-xl px-4 py-12 text-center">
-                        <Edit3 size={24} className="mb-3 opacity-30" style={{ color: 'var(--color-on-surface-variant)' }} />
-                        <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
-                          No scenes yet. Import a script or add one manually.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        {scenes.map((scene, index) => {
-                          const isActive = scene.scene_id === activeSceneId
-                          const wordCount = estimateWordCount(scene.description || '')
-                          return (
-                            <button
-                              key={scene.scene_id}
-                              type="button"
-                              onClick={() => handleSelectScene(scene.scene_id)}
-                              className={`flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition-all ${
-                                isActive
-                                  ? 'border-l-2 shadow-[inset_0_0_20px_rgba(255,209,101,0.06)]'
-                                  : 'hover:bg-white/5'
-                              }`}
-                              style={{
-                                borderLeftColor: isActive ? 'var(--color-primary)' : 'transparent',
-                                background: isActive ? 'rgba(255,209,101,0.04)' : 'transparent',
-                              }}
-                            >
-                              <span
-                                className="status-chip mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold"
-                                style={{
-                                  background: isActive ? 'rgba(255,209,101,0.15)' : 'rgba(255,255,255,0.06)',
-                                  color: isActive ? 'var(--color-primary)' : 'var(--color-outline)',
-                                }}
-                              >
-                                {String(index + 1).padStart(2, '0')}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <div
-                                  className="truncate text-[12px] font-medium leading-tight"
-                                  style={{
-                                    color: isActive ? 'var(--color-primary)' : 'var(--color-on-surface)',
-                                  }}
-                                >
-                                  {scene.scene_name || `Scene ${index + 1}`}
-                                </div>
-                                <div
-                                  className="mt-0.5 text-[10px]"
-                                  style={{ color: 'var(--color-on-surface-variant)' }}
-                                >
-                                  {scene.location || 'No location'} · {wordCount} words
-                                </div>
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Character Descriptions Tab */}
+                </div></div></details>
+                </aside>
+              </section>
+              <section aria-label="Production character profiles" className={rightTab === 'characters' ? 'space-y-5' : 'hidden'}>
+                <div><h2 className="text-lg font-medium text-zinc-100">Make your characters recognizable.</h2><p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-400">Save appearance, energy, render description, and voice here. In the next step, generate casting options or upload portraits, then approve each physical look.</p></div>
                 {rightTab === 'characters' && (
                   <div className="flex flex-col gap-3">
                     {/* New characters banner */}
@@ -1278,20 +1421,20 @@ export default function WritersRoom() {
                       <div className="glass-panel rounded-xl border px-4 py-3" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-400">
+                            <div className="text-xs font-bold uppercase tracking-[0.12em] text-amber-400">
                               New characters detected
                             </div>
                             <div className="mt-1 text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
                               {newCharacterNames.join(', ')}
                             </div>
-                            <div className="mt-1 text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            <div className="mt-1 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
                               Add descriptions to improve render quality.
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={handleCreateSkeletonCharacters}
-                            className="shrink-0 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
+                            className="shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
                             style={{
                               background: 'rgba(251,191,36,0.15)',
                               color: '#fbbf24',
@@ -1316,9 +1459,12 @@ export default function WritersRoom() {
                         </p>
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
                         {characters.map((char) => {
                           const draft = editDrafts[char.id] || {}
+                          const savedLook = characterLooks.looks.find((item) => item.character_id === char.id)
+                          const appearanceLocked = savedLook?.status === 'locked'
+                          const appearanceUnavailable = !savedLook || characterLooks.loading || Boolean(characterLooks.error)
                           const isSaving = charactersSaving[char.id] || false
                           const look = draft.look ?? char.look ?? ''
                           const energy = draft.energy ?? char.energy ?? ''
@@ -1334,7 +1480,7 @@ export default function WritersRoom() {
                               key={char.id}
                               className="glass-panel rounded-xl p-4"
                             >
-                              <div className="mb-2 flex items-center justify-between">
+                              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                                 <div className="flex items-center gap-2">
                                   <span className="text-[12px] font-bold" style={{ color: 'var(--color-on-surface)' }}>
                                     {char.name}
@@ -1349,8 +1495,8 @@ export default function WritersRoom() {
                                   <button
                                     type="button"
                                     onClick={() => handleUploadDescriptor(char.id)}
-                                    disabled={characterUploading[char.id]}
-                                    className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                                    disabled={characterUploading[char.id] || appearanceLocked || appearanceUnavailable}
+                                    className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
                                     style={{
                                       background: 'rgba(76,175,80,0.15)',
                                       color: '#4caf50',
@@ -1370,7 +1516,7 @@ export default function WritersRoom() {
                                       type="button"
                                       onClick={() => handleSaveCharacter(char.id)}
                                       disabled={isSaving}
-                                      className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                                      className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
                                       style={{
                                         background: 'rgba(255,209,101,0.15)',
                                         color: 'var(--color-primary)',
@@ -1388,11 +1534,13 @@ export default function WritersRoom() {
                                 </div>
                               </div>
 
+                              {appearanceLocked && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-amber-200/20 bg-amber-200/5 px-3 py-2"><span className="text-xs text-amber-100">Physical look locked · version {savedLook.version}</span><button type="button" onClick={() => { setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('step', 'looks'); next.set('character', char.id); return next }, { replace: true }); void refreshCharacterLooks() }} className="py-1 text-xs text-zinc-200 underline underline-offset-4">Review or revise look</button></div>}
+                              {appearanceUnavailable && <p className="mb-3 text-xs text-zinc-400">{characterLooks.error ? 'Appearance approval could not be checked. Reload saved looks in step 3.' : 'Checking appearance approval…'}</p>}
                               {/* Voice assignment */}
                               <div className="mb-2 flex items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/30 px-3 py-2">
                                 <div className="flex items-center gap-2">
                                   <Mic size={12} style={{ color: 'var(--color-on-surface-variant)' }} />
-                                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
+                                  <span className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
                                     Voice
                                   </span>
                                   <span className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>
@@ -1410,7 +1558,7 @@ export default function WritersRoom() {
                                 <button
                                   type="button"
                                   onClick={() => setVoicePickerChar(char)}
-                                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
+                                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
                                   style={{
                                     background: 'rgba(6,182,212,0.12)',
                                     color: '#22d3ee',
@@ -1423,12 +1571,15 @@ export default function WritersRoom() {
                               </div>
 
                               <div className="space-y-2">
+                                <label className="block text-[11px] text-zinc-400">Age<input aria-label={`${char.name} age`} value={age} disabled={appearanceLocked || appearanceUnavailable} onChange={(event) => setEditDrafts((previous) => ({ ...previous, [char.id]: { ...(previous[char.id] || {}), age: event.target.value } }))} className="mt-1 block w-full rounded border border-white/10 bg-transparent p-2 text-xs text-zinc-200 outline-none focus:border-amber-400/60 disabled:opacity-60" /></label>
                                 <div>
-                                  <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
+                                  <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
                                     Look
                                   </div>
                                   <textarea
                                     value={look}
+                                    disabled={appearanceLocked || appearanceUnavailable}
+                                  aria-label={`${char.name} appearance`}
                                     onChange={(e) =>
                                       setEditDrafts((p) => ({
                                         ...p,
@@ -1441,11 +1592,12 @@ export default function WritersRoom() {
                                   />
                                 </div>
                                 <div>
-                                  <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
+                                  <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
                                     Energy
                                   </div>
                                   <textarea
                                     value={energy}
+                                  aria-label={`${char.name} energy`}
                                     onChange={(e) =>
                                       setEditDrafts((p) => ({
                                         ...p,
@@ -1458,11 +1610,13 @@ export default function WritersRoom() {
                                   />
                                 </div>
                                 <div>
-                                  <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
+                                  <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
                                     Visual Prompt Summary
                                   </div>
                                   <textarea
                                     value={vps}
+                                    disabled={appearanceLocked || appearanceUnavailable}
+                                  aria-label={`${char.name} render description`}
                                     onChange={(e) =>
                                       setEditDrafts((p) => ({
                                         ...p,
@@ -1482,6 +1636,11 @@ export default function WritersRoom() {
                     )}
                   </div>
                 )}
+              </section>
+              {rightTab === 'looks' && <CharacterLookApproval controller={characterLooks} selectedId={selectedLookCharacter} onSelect={(id) => setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('character', id); return next }, { replace: true })} onProfiles={() => setRightTab('characters')} hasProfileDrafts={Object.keys(editDrafts).length > 0} />}
+              <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
+                <p className="max-w-xl text-xs leading-relaxed text-zinc-400">{rightTab === 'scenes' ? 'Edits save while you work. Review character profiles before planning your shots.' : Object.keys(editDrafts).length ? 'Save the changed character profiles before continuing.' : rightTab === 'characters' ? 'Next, cast each character with generated options or your own portraits, then lock the look.' : 'Your saved script, profiles, and approved looks stay with this film in Previs.'}</p>
+                {rightTab === 'scenes' ? <button type="button" onClick={() => setRightTab('characters')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100">Review character profiles →</button> : rightTab === 'characters' ? <button type="button" disabled={Object.keys(editDrafts).length > 0 || Object.values(charactersSaving).some(Boolean)} onClick={() => setRightTab('looks')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">Review and lock character looks →</button> : <button type="button" disabled={isSaving || !activeSceneId || Object.keys(editDrafts).length > 0 || characterLooks.busy} onClick={async () => { if (await saveCurrentScene()) navigate(withProductionContext('/studio/previs', { projectId: effectiveProjectId, sceneId: activeSceneId, shotNumber: Number(searchParams.get('shot')) || null })) }} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">Continue to storyboard →</button>}
               </div>
             </div>
 

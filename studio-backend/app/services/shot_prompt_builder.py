@@ -10,6 +10,7 @@ Phase 2: Fixed-slot prompt assembly with character budgets and slot-addressable 
 import logging
 import re
 from typing import Optional
+from app.utils.character_appearance import appearance_approval, appearance_description
 
 logger = logging.getLogger(__name__)
 
@@ -24,29 +25,13 @@ SLOT_BUDGETS = {
     "reserve": 32,                # Unallocated headroom for corrections later
 }
 
-# KNOWN DEFECT -- diagnosed 2026-08-17, deliberately not patched here.
-#
-# 1. This ceiling is Runway's hard limit. Renders now go through
-#    DashScope/HappyHorse, which does not impose it, so the limit is inherited
-#    rather than required.
-# 2. SLOT_BUDGETS above sum to 582. With the ~34 chars reassemble_prompt_from_slots()
-#    adds, no render can fit 512, so every prompt truncates regardless of content.
-# 3. _truncate_to_budget() slices on a raw character index, producing severed
-#    fragments ("medium brown skin...", "A black man i...") and prompts that end
-#    mid-word. This is a prompt-adherence defect in its own right: the model is
-#    asked to follow text that was never coherent.
-#
-# Two fixes were tried and reverted, both green-to-red on the existing suite:
-# shrinking the slots to fit 512 breaks standing-correction injection into
-# `camera` and starves `action`; making truncation cut on word/clause boundaries
-# returns shorter strings, which changes upstream branching in _merge_slot_text
-# and drops injected corrections. Both regressions share one cause -- the budget
-# is over-subscribed, so any better-behaved truncation removes characters that
-# other features currently depend on surviving.
-#
-# Correct order of repair: make MAX_PROMPT_LENGTH provider-aware against the real
-# DashScope limit FIRST, then rebalance SLOT_BUDGETS to fit it, then make
-# truncation boundary-aware. Steps 2 and 3 are not safely separable from step 1.
+# Legacy preview/adherence display ceiling, not a verified vendor maximum.
+# Slots total 582 before separators/suffixes and historically clipped later
+# lighting and severed individual facts. During RenderService.create_job these
+# helpers collect losslessly; prompt_budget_service applies the final provider
+# policy once all corrections and continuity facts have been assembled.
+# Standalone previews retain this legacy layout for compatibility; their text
+# is not evidence of the actual outgoing video-provider prompt.
 MAX_PROMPT_LENGTH = 512
 
 
@@ -178,7 +163,7 @@ def _extract_characters_from_segment(segment: str, all_characters: list[dict]) -
         if char_name.lower() in segment_lower:
             mentioned_characters.append({
                 "name": char_name,
-                "visual_prompt_summary": char.get("visual_prompt_summary", ""),
+                "visual_prompt_summary": appearance_description(char) if appearance_approval(char).get("status") == "locked" else char.get("visual_prompt_summary", ""),
                 "age": char.get("age", ""),
             })
     
@@ -215,7 +200,7 @@ def _merge_scene_characters(
         if normalized and normalized in scene_names and normalized not in seen:
             merged.append({
                 "name": char_name,
-                "visual_prompt_summary": char.get("visual_prompt_summary", ""),
+                "visual_prompt_summary": appearance_description(char) if appearance_approval(char).get("status") == "locked" else char.get("visual_prompt_summary", ""),
                 "age": char.get("age", ""),
             })
             seen.add(normalized)
@@ -466,6 +451,9 @@ def get_shot_type_label(shot_number: int) -> str:
 
 def _truncate_to_budget(text: str, budget: int) -> str:
     """Truncate text to fit within character budget."""
+    from app.prompt_assembly_context import collecting_generation_prompt
+    if collecting_generation_prompt.get():
+        return text
     if len(text) <= budget:
         return text
     return text[:budget - 3] + "..."
@@ -489,10 +477,19 @@ def _compress_character_segment(segment: str, budget: int) -> str:
 
 def _fit_character_state_to_budget(text: str, budget: int) -> str:
     """Fit character_state without allowing early cast members to erase later ones."""
+    from app.prompt_assembly_context import collecting_generation_prompt
+    if collecting_generation_prompt.get():
+        return text
     if len(text) <= budget:
         return text
 
     segments = [segment.strip() for segment in text.split(";") if segment.strip()]
+    if (
+        len(segments) >= 2
+        and segments[0].startswith("Only ")
+        and segments[1].strip().lower() in {"no extras", "no extras."}
+    ):
+        segments = [f"{segments[0]}; {segments[1]}", *segments[2:]]
     if len(segments) <= 1:
         return _truncate_to_budget(text, budget)
 
@@ -526,6 +523,54 @@ _SLOT_ASSEMBLY_ORDER = (
 )
 
 
+def merge_identity_guidance_into_slots(slots: dict, guidance: str) -> None:
+    """Fold identity guidance into the character_state slot, in place.
+
+    Reconstructed 2026-08-25. render.py imported this (and
+    merge_knowledge_guidance_into_slots below) from two call sites, but neither
+    was ever defined here -- create_job raised ImportError on any shot that
+    carried identity guidance, and the knowledge call only survived because its
+    caller wrapped it in try/except. Both are kept deliberately conservative:
+    they ADD guidance to the identity/target slot within that slot's existing
+    budget and never when the text is already present, so they can only enrich a
+    slot, never blank or reorder one.
+    """
+    if not isinstance(slots, dict):
+        return
+    text = " ".join(str(guidance or "").split())
+    if not text:
+        return
+    current = str(slots.get("character_state") or "").strip()
+    if text in current:
+        return
+    combined = f"{current}; {text}" if current else text
+    slots["character_state"] = _truncate_to_budget(
+        combined, SLOT_BUDGETS["character_state"]
+    )
+
+
+def merge_knowledge_guidance_into_slots(slots: dict, slot_guidance: dict) -> None:
+    """Fold per-slot department/knowledge guidance into matching slots, in place.
+
+    slot_guidance maps a slot name to guidance text. Each entry is appended to
+    its slot within budget, never duplicated; unknown slot names and the reserve
+    slot are ignored. See merge_identity_guidance_into_slots for why this exists.
+    """
+    if not isinstance(slots, dict) or not isinstance(slot_guidance, dict):
+        return
+    for slot_name, guidance in slot_guidance.items():
+        if slot_name not in SLOT_BUDGETS or slot_name == "reserve":
+            continue
+        text = " ".join(str(guidance or "").split())
+        if not text:
+            continue
+        current = str(slots.get(slot_name) or "").strip()
+        if text in current:
+            continue
+        combined = f"{current}; {text}" if current else text
+        slots[slot_name] = _truncate_to_budget(combined, SLOT_BUDGETS[slot_name])
+
+
 def reassemble_prompt_from_slots(slots: dict) -> str:
     """Re-assemble prompt string from a slots dict.
 
@@ -537,7 +582,8 @@ def reassemble_prompt_from_slots(slots: dict) -> str:
         base_prompt = ". ".join(parts) + ". Cinematic, film quality."
     else:
         base_prompt = "Cinematic shot. Film quality."
-    if len(base_prompt) > MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"]:
+    from app.prompt_assembly_context import collecting_generation_prompt
+    if not collecting_generation_prompt.get() and len(base_prompt) > MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"]:
         base_prompt = base_prompt[:MAX_PROMPT_LENGTH - SLOT_BUDGETS["reserve"] - 3] + "..."
     return base_prompt
 
@@ -639,7 +685,16 @@ def build_slotted_prompt(
         # Default based on shot number
         shot_type = _determine_shot_type(shot_number, "")
         source_slots["camera"] = shot_type
-        slots["camera"] = _truncate_to_budget(shot_type, SLOT_BUDGETS["camera"])
+        # Template explanations are optional; select complete sentences rather
+        # than emitting a severed default such as "R...". Creator camera text
+        # above remains intact for the final provider budget.
+        default_camera_parts = []
+        for sentence in re.split(r"(?<=[.!?])\s+", shot_type):
+            candidate = " ".join(default_camera_parts + [sentence])
+            if len(candidate) > SLOT_BUDGETS["camera"]:
+                break
+            default_camera_parts.append(sentence)
+        slots["camera"] = " ".join(default_camera_parts) or shot_type
         defaulted_slots.append("camera")
     
     # 5. lighting (60 chars) - controlled vocabulary

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.utils.character_appearance import approved_reference_rows, appearance_approval
+
 import json
 from datetime import datetime
 from typing import Any, Dict, List
@@ -156,6 +158,16 @@ class CharacterIdentityMemoryService:
         return appearance
 
     def _legacy_core(self, row: dict[str, Any]) -> CharacterIdentityCore:
+        approval = appearance_approval(row)
+        if approval.get("status") == "locked":
+            snapshot = approval["profile"]
+            # The Page exposes look/age for explicit approval. Older structured
+            # identity fields must not contradict the appearance the creator saw.
+            return CharacterIdentityCore(
+                face_reference=str(approval.get("face_image_url") or ""),
+                facial_identity=str(snapshot.get("look") or snapshot.get("appearance_core") or snapshot.get("visual_prompt_summary") or ""),
+                age_presentation=str(snapshot.get("age") or ""),
+            )
         core = self._json_dict(row.get("identity_core_json") or row.get("identity_core"))
         facial_identity = (
             core.get("facial_identity")
@@ -267,6 +279,11 @@ class CharacterIdentityMemoryService:
             reliability=self._reliability(state.get("reliability")),  # type: ignore[arg-type]
             trace_sources=self._json_list(state.get("trace_sources")),
         )
+        approved_rows = approved_reference_rows(character)
+        if approved_rows is not None:
+            reference_locks = approved_rows
+            # Physical identity images come from the explicit approval snapshot.
+            record.identity_core.face_reference = str(appearance_approval(character).get("face_image_url") or "") if approved_rows else ""
         self._attach_reference_locks(record, reference_locks)
         record.conflict_warnings = self.detect_record_conflicts(record)
         record.needs_human_review = self.needs_human_review(record)
@@ -497,13 +514,13 @@ class CharacterIdentityMemoryService:
                     f"emotional state: {appearance.emotional_state}" if appearance.emotional_state else "",
                 ] if part
             ]
-            line = f"{record.name or record.character_id} fixed identity: {'; '.join(fixed) or 'not yet verified'}"
+            line = f"{record.name or record.character_id} fixed identity: {'; '.join(fixed)}" if fixed else ""
             if variable:
-                line += f" | current appearance: {'; '.join(variable)}"
+                line += f" | current appearance: {'; '.join(variable)}" if line else f"{record.name or record.character_id} current appearance: {'; '.join(variable)}"
             if record.needs_human_review:
-                line += " | human review needed before treating ambiguous evidence as canonical"
                 review_required = True
-            lines.append(line)
+            if line:
+                lines.append(line)
             references[record.character_id] = [
                 ref.model_dump(mode="json") for ref in record.approved_visual_references
             ]

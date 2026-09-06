@@ -524,3 +524,109 @@ same ground from the other side, making this a cleanup rather than a fix.
 Tier 2 and 3 items remain testable against the existing no-spend capture verifiers
 (`scripts/verify_character_reference_locking_capture.py`,
 `scripts/prove_new_render_pipeline_wiring.py`) — no paid provider calls needed to prove them.
+
+---
+
+## 2026-08-25 — B1 addressed: the director's shot now reaches the prompt (+ a budget defect surfaced)
+
+This session tackled B1 — "nothing measures the prompt against what the director actually
+asked for" — from the input side: the prompt was not describing the shot at all, so there
+was nothing faithful to measure. Findings and changes, on project `project_5907c60cddbc`
+("I was reborn").
+
+### Root cause found: the shot's staging never reached the prompt
+
+Every one of the 60 storyboard shots had 9 of 12 visual-plan fields empty
+(`camera_angle`, `lens_language`, `blocking`, `composition`, `lighting`, `color_palette`,
+`props`, `reference_asset_ids`, `negative_visual_constraints`), and the action slot was fed
+raw screenplay prose (dialogue, V.O., transitions), then truncated to 110 chars. `render.py`
+filled the empty slots from scene-level fallbacks (location, time-of-day) plus style-bible
+text, so the provider received the same boilerplate for every shot in a scene — e.g. the
+lighting slot literally read "Use light, color, and atmosphere to underline the beat", a note
+to the director that a vision model cannot fail. Confirmed against a real prior scored render:
+it PASSED at 85/100 with lighting scored 95 against that non-instruction.
+
+New diagnostic: `scripts/diagnose_shot_inputs.py` reports empty-field counts, action-slot
+overflow, dialogue-in-action, and identical-shot decomposition per project.
+
+### Changes made (all committed to disk; NOT yet git-committed — foreign uncommitted work
+was already present in the working tree, so these were delivered file-by-file)
+
+1. **Em-dash slugline parser fix** (`app/services/script_parser.py`) — `_parse_simple_heading`
+   split only on `" - "` (ASCII hyphen). "I was reborn" uses em dashes, so `time_of_day` came
+   back empty for all 12 scenes and `LOCATION — NIGHT` folded whole into the location. Now
+   splits on em/en/hyphen. Test: `app/services/test_script_parser_headings.py`.
+
+2. **Staging generator** (`scripts/generate_shot_staging.py`) — an AD pass that turns each
+   screenplay beat into stageable per-shot fields via OpenRouter (Ox Alpha), written to a
+   review file for director edit before `--apply` writes them to `storyboard_shots.visual_plan`.
+   Instructed to leave a field blank rather than invent. Note: Ox Alpha is a reasoning model
+   whose reasoning is billed as completion tokens; `max_tokens` must be generous (16000) or it
+   returns empty content with `finish_reason=length`.
+
+3. **The wire** (`app/services/render.py` + `app/data/storage.py`) — the live slot path
+   (`if _full_content:`) now reads the shot's reviewed staging via a new
+   `DatabaseStorage.get_shot_visual_plan(project_id, shot_id)` and overrides the scene-level
+   fallbacks: action, lighting, camera (angle+lens+composition), and environment (+props).
+   Absent staging leaves the old behavior untouched. NOTE: a second, structured-previs slot
+   path in render.py is gated on `parameters["structured_prompt"]`, which nothing in the
+   codebase ever sets — it is dead code and was not used.
+
+4. **Two missing functions implemented** (`app/services/shot_prompt_builder.py`) —
+   `merge_identity_guidance_into_slots` and `merge_knowledge_guidance_into_slots`. render.py
+   imported both from two call sites but neither was ever defined; `create_job` raised
+   ImportError on any shot carrying identity guidance (the knowledge one was caught by a
+   try/except and only warned). Reconstructed conservatively from the call sites: additive,
+   dedup, budget-clamped. This means the identity-guidance path in `create_job` had never
+   actually run before this session.
+
+5. **Config regression fixed** (`app/config.py`) — `ADHERENCE_VISION_PROVIDER` /
+   `ADHERENCE_VISION_MODEL` were added to `.env` earlier this session without being declared
+   as `Settings` fields; pydantic-settings forbids unknown keys, so every `Settings()` — and
+   thus backend startup — would have crashed. Now declared. (Self-inflicted; fixed same day.)
+
+6. **Adherence scorer honesty** (`app/services/adherence_service.py`, earlier this session) —
+   a dimension whose expected text is empty or is a director-instruction ("underline the beat")
+   is now excluded from the weighted aggregate and reported in `unscored_dimensions`, rather
+   than scored ~95 and inflating the verdict. Test: `test_unspecified_dimensions.py`.
+
+### Proven end to end
+
+`scripts/show_shot_prompt.py` runs the real `create_job` assembly (no provider call, no spend)
+and prints the assembled prompt. For `scene_001_shot_001` the lighting, camera, environment,
+and action slots now carry the director's staging ("Low western sun, warm backlight, long
+shadows"; "Maya walks down a crowded sidewalk, slowing to watch a family laughing") instead of
+boilerplate. B1's input side is closed for wired shots.
+
+### NEXT: the budget/duplication defect (the remaining real problem)
+
+The assembled prompt is 590–608 chars against the 512 ceiling and trims the tail mid-word.
+The identity description is duplicated: once in `character_state`, again in a separate
+`identity_continuity` block (~600 chars alone, not part of the 5-slot assembly order). Result:
+the prompt is ~70% Maya's appearance and ~30% the actual shot. This is the KNOWN DEFECT already
+documented at the top of `shot_prompt_builder.py` (slots sum to 582 > 512; two prior fixes went
+green-to-red and were reverted).
+
+One test is currently red: `test_render_canon_integration.py::
+test_generic_render_uses_visible_character_and_saved_canon` — asserts `"practical light"` (a
+knowledge atom) is in the prompt; it is trimmed by the 512 cut (608→512). **Unverified whether
+this test was already red before this session** — `merge_knowledge_guidance_into_slots` did not
+exist, so knowledge guidance was never merged and the atom likely never reached the prompt.
+Verify first next session with: `git stash && python -m pytest
+app/services/test_render_canon_integration.py::test_generic_render_uses_visible_character_and_saved_canon -q`
+then `git stash pop`.
+
+Recommended next task, test-first, in the fragile budget area:
+- De-duplicate identity: do not repeat the full appearance in `character_state` when
+  `identity_continuity` already carries it.
+- Trim `identity_continuity` to the fixed-identity essentials; drop emotional-state and
+  review-note prose from the render prompt (keep it in the record, not the prompt).
+- Make truncation cut on word/phrase boundaries, not raw character index.
+- Separate concern, lower priority: department/knowledge guidance is injecting bible craft
+  notes ("Never explain a motif…") into the action slot — the same non-instruction class as
+  "underline the beat".
+
+Render effect is still unproven: DashScope/HappyHorse is in billing arrears (all July renders
+failed `Arrearage`), so a paid render can't run until billing is resolved or the render moves
+to OpenRouter. Adherence scoring can be exercised now on the ~290 existing clips via
+`scripts/score_rendered_shot.py`.

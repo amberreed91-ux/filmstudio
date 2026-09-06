@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
+import { useCoDirectorConversation } from '../hooks/useCoDirectorConversation'
 import { useLocation } from 'react-router-dom'
 import {
-  buildCoDirectorChatPayload,
   formatMemoryProvenance,
   type CoDirectorContext as Context,
   type CoDirectorSceneSummary as SceneSummary,
@@ -20,13 +19,6 @@ import {
   ArrowLeftRight,
   Filter,
 } from 'lucide-react'
-
-interface Message {
-  role: 'user' | 'agent'
-  text: string
-  specialist?: Specialist
-  timestamp: number
-}
 
 interface CoDirectorDrawerProps {
   isOpen: boolean
@@ -57,37 +49,15 @@ const CONTEXT_LABELS: Record<Context, string> = {
   custom: 'Custom',
 }
 
-interface DirectorMemoryBundle {
-  symbols?: unknown[]
-  motifs?: unknown[]
-  characters?: unknown[]
-  themes?: unknown[]
-  notes?: unknown[]
-  debates?: unknown[]
-}
-
-function countMemoryEntries(bundle: DirectorMemoryBundle | null | undefined): number {
-  if (!bundle) return 0
-  let total = 0
-  for (const key of ['symbols', 'motifs', 'characters', 'themes', 'notes', 'debates'] as const) {
-    const list = bundle[key]
-    if (Array.isArray(list)) total += list.length
-  }
-  return total
-}
-
-interface ProjectScenesResponse {
-  scenes?: SceneSummary[]
-}
-
 function deriveSceneContextLabel(
   context: Context,
   scenes: SceneSummary[] | undefined,
   activeSceneId?: string,
 ): string {
   if (context === 'current_scene') {
-    if (!scenes || scenes.length === 0) return 'CURRENT SCENE'
+    if (!scenes || scenes.length === 0) return activeSceneId ? `SCENE ${activeSceneId.toUpperCase()}` : 'CURRENT SCENE'
     const idx = scenes.findIndex((s) => s.scene_id === activeSceneId)
+    if (activeSceneId && idx < 0) return `SCENE ${activeSceneId.toUpperCase()} · UNAVAILABLE`
     const scene = idx >= 0 ? scenes[idx] : scenes[0]
     const num = String(idx >= 0 ? idx + 1 : 1).padStart(2, '0')
     const title = scene.location || scene.scene_name || scene.scene_id
@@ -102,11 +72,8 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
   const location = useLocation()
   const [specialist, setSpecialist] = useState<Specialist>('director')
   const [context, setContext] = useState<Context>('current_scene')
-  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
   const [showContextMenu, setShowContextMenu] = useState(false)
-  const [lastMemoryEntriesSupplied, setLastMemoryEntriesSupplied] = useState<number | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -115,40 +82,11 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
     [specialist],
   )
 
-  // ── Director's Memory count for indicator ─────────────────────────────────
-  const memoryQuery = useQuery<{ memory: DirectorMemoryBundle }>({
-    queryKey: ['director-memory', activeProjectId],
-    enabled: !!activeProjectId && isOpen,
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? '')}/director-memory`,
-      )
-      if (!res.ok) throw new Error(`director-memory ${res.status}`)
-      return res.json()
-    },
-    staleTime: 60 * 1000,
-    retry: 1,
+  const activeSceneId = new URLSearchParams(location.search).get('scene') || new URLSearchParams(location.search).get('scene_id') || undefined
+  const { messages, loading, lastMemoryEntriesSupplied, memoryEntries, scenes, send } = useCoDirectorConversation({
+    projectId: activeProjectId, activeSceneId, specialist, context, systemPrompt: activeSpecialistData.prompt, enabled: isOpen,
   })
-
-  const memoryEntries = countMemoryEntries(memoryQuery.data?.memory)
-
-  // ── Lightweight scene list for context chip ───────────────────────────────
-  const scenesQuery = useQuery<ProjectScenesResponse>({
-    queryKey: ['project-scenes-light', activeProjectId],
-    enabled: !!activeProjectId && isOpen,
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? '')}/scenes`,
-      )
-      if (!res.ok) return { scenes: [] }
-      return res.json()
-    },
-    staleTime: 60 * 1000,
-    retry: 0,
-  })
-
-  const activeSceneId = new URLSearchParams(location.search).get('scene') || undefined
-  const contextLabel = deriveSceneContextLabel(context, scenesQuery.data?.scenes, activeSceneId)
+  const contextLabel = deriveSceneContextLabel(context, scenes, activeSceneId)
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -157,12 +95,10 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
     }
   }, [messages, loading])
 
-  // Reset thread when specialist changes
+  // Input and replies belong to the selected film, scene, and specialist.
   useEffect(() => {
-    setMessages([])
     setInput('')
-    setLastMemoryEntriesSupplied(null)
-  }, [specialist])
+  }, [specialist, activeProjectId, activeSceneId, context])
 
   // Close on Escape
   useEffect(() => {
@@ -178,73 +114,9 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
 
   const handleSend = async () => {
     const trimmed = input.trim()
-    if (!trimmed || loading) return
-
-    const userMsg: Message = {
-      role: 'user',
-      text: trimmed,
-      specialist,
-      timestamp: Date.now(),
-    }
-    setMessages((prev) => [...prev, userMsg])
+    if (!trimmed || loading || !activeProjectId) return
     setInput('')
-    setLoading(true)
-
-    try {
-      const payload = buildCoDirectorChatPayload({
-        specialist,
-        message: trimmed,
-        context,
-        projectId: activeProjectId,
-        systemPrompt: activeSpecialistData.prompt,
-        scenes: scenesQuery.data?.scenes,
-        activeSceneId,
-      })
-
-      const res = await fetch(
-        `/api/f51/studio/projects/${encodeURIComponent(activeProjectId ?? '')}/co-director/chat`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        },
-      )
-
-      const data = await res.json().catch(() => null)
-
-      if (!res.ok) {
-        throw new Error(String(data?.detail || `Co-Director request failed (${res.status})`))
-      }
-
-      let replyText = ''
-      if (data?.reply) replyText = String(data.reply)
-      else if (data?.message) replyText = String(data.message)
-      else if (data?.response) replyText = String(data.response)
-      if (!replyText.trim()) {
-        throw new Error('Co-Director returned an empty response')
-      }
-      setLastMemoryEntriesSupplied(
-        typeof data?.memory_entries_used === 'number' ? data.memory_entries_used : null,
-      )
-
-      const agentMsg: Message = {
-        role: 'agent',
-        text: replyText,
-        specialist,
-        timestamp: Date.now(),
-      }
-      setMessages((prev) => [...prev, agentMsg])
-    } catch {
-      const agentMsg: Message = {
-        role: 'agent',
-        text: 'The Co-Director could not respond just now. Please retry when the service is available.',
-        specialist,
-        timestamp: Date.now(),
-      }
-      setMessages((prev) => [...prev, agentMsg])
-    } finally {
-      setLoading(false)
-    }
+    await send(trimmed)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -275,7 +147,7 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
           <motion.aside
             role="dialog"
             aria-label="Co-Director Brain"
-            className="fixed right-0 top-0 z-[150] h-screen w-[400px] flex flex-col glass-panel"
+            className="fixed right-0 top-0 z-[150] h-dvh w-[400px] max-w-full flex flex-col glass-panel"
             style={{
               borderTopLeftRadius: 16,
               borderBottomLeftRadius: 16,
@@ -469,7 +341,7 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
                 <button
                   type="button"
                   onClick={handleSend}
-                  disabled={loading || input.trim().length === 0}
+                  disabled={loading || !activeProjectId || input.trim().length === 0}
                   aria-label="Send"
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-primary text-xs font-semibold text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
                 >

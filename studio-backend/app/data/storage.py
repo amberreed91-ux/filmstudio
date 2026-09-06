@@ -135,6 +135,15 @@ class DatabaseStorage:
 
             yield conn
         finally:
+            # A failed write (or an early return) must not leave a transaction
+            # holding SQLite's writer lock inside the idle connection pool.
+            if conn and conn.in_transaction:
+                try:
+                    conn.rollback()
+                except sqlite3.Error:
+                    logger.exception("Discarding connection after transaction cleanup failed")
+                    conn.close()
+                    conn = None
             if conn and not self._closed:
                 try:
                     with self._pool_lock:
@@ -3555,6 +3564,29 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_canonical_workflow_transition_order
                     ON canonical_workflow_transitions(run_id, created_at, transition_id);
             """),
+            (57, "Add cached creator-confirmed emotion analysis results", """
+                CREATE TABLE IF NOT EXISTS emotion_analysis_results (
+                    analysis_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL,
+                    context_hash TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    analysis_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (analysis_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (scene_id != ''),
+                    CHECK (context_hash != ''),
+                    CHECK (provider != ''),
+                    CHECK (model != '')
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_emotion_analysis_context
+                    ON emotion_analysis_results(project_id, scene_id, context_hash);
+                CREATE INDEX IF NOT EXISTS idx_emotion_analysis_scene_updated
+                    ON emotion_analysis_results(project_id, scene_id, updated_at);
+            """),
             (58, "Allow multiple locked character references per role", """
                 DROP INDEX IF EXISTS idx_character_reference_locks_active;
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_character_reference_locks_active_role
@@ -3572,6 +3604,65 @@ class DatabaseStorage:
                     WHERE lock_status = 'locked';
                 CREATE INDEX IF NOT EXISTS idx_character_reference_locks_look
                     ON character_reference_locks(project_id, character_id, look_id);
+            """),
+            (60, "Add durable authentication and project ownership", """
+                CREATE TABLE IF NOT EXISTS access_users (
+                    username TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL UNIQUE,
+                    payload_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS project_owners (
+                    project_id TEXT PRIMARY KEY REFERENCES projects(project_id) ON DELETE CASCADE,
+                    user_id TEXT NOT NULL REFERENCES access_users(user_id),
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_project_owners_user ON project_owners(user_id);
+            """),
+            (61, "Persist review-blocked jobs and generation evidence", """
+                CREATE TABLE render_jobs_review (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    shot_id TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    provider_job_id TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'rendering', 'complete', 'failed', 'cancelled', 'needs_review', 'skipped')),
+                    progress INTEGER NOT NULL DEFAULT 0
+                        CHECK (progress >= 0 AND progress <= 100),
+                    input_payload TEXT,
+                    output_payload TEXT,
+                    error_message TEXT,
+                    retry_count INTEGER NOT NULL DEFAULT 0
+                        CHECK (retry_count >= 0),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    CHECK (id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (shot_id != ''),
+                    CHECK (provider != '')
+                );
+                INSERT INTO render_jobs_review (id, project_id, shot_id, provider, provider_job_id, status, progress, input_payload, output_payload, error_message, retry_count, created_at, updated_at, completed_at) SELECT id, project_id, shot_id, provider, provider_job_id, status, progress, input_payload, output_payload, error_message, retry_count, created_at, updated_at, completed_at FROM render_jobs;
+                DROP TABLE render_jobs;
+                ALTER TABLE render_jobs_review RENAME TO render_jobs;
+                CREATE INDEX idx_render_jobs_project ON render_jobs(project_id);
+                CREATE INDEX idx_render_jobs_status ON render_jobs(status);
+                CREATE INDEX idx_render_jobs_created ON render_jobs(created_at);
+                CREATE INDEX idx_render_jobs_provider ON render_jobs(provider);
+            """),
+            (62, "Persist creator take choices and delivery provenance", """
+                CREATE TABLE IF NOT EXISTS scene_take_choices (
+                    project_id TEXT NOT NULL, scene_id TEXT NOT NULL,
+                    shot_number INTEGER NOT NULL, job_id TEXT,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (project_id, scene_id, shot_number)
+                );
+                CREATE TABLE IF NOT EXISTS delivery_manifests (
+                    project_id TEXT NOT NULL, scope TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (project_id, scope)
+                );
             """),
         ]
 
@@ -3743,20 +3834,27 @@ class DatabaseStorage:
                 has_created_at = "created_at" in columns
                 has_updated_at = "updated_at" in columns
 
-                if has_created_at and has_updated_at:
+                # REPLACE deletes the parent row first, cascading into ownership
+                # and storyboard records. A project save must retain its identity.
+                if row is not None:
+                    if has_updated_at:
+                        cursor.execute("UPDATE projects SET data = ?, updated_at = ? WHERE project_id = ?", (payload, project.updated_at, project.project_id))
+                    else:
+                        cursor.execute("UPDATE projects SET data = ? WHERE project_id = ?", (payload, project.project_id))
+                elif has_created_at and has_updated_at:
                     cursor.execute(
-                        """INSERT OR REPLACE INTO projects (project_id, data, created_at, updated_at)
+                        """INSERT INTO projects (project_id, data, created_at, updated_at)
                            VALUES (?, ?, COALESCE((SELECT created_at FROM projects WHERE project_id = ?), ?), ?)""",
                         (project.project_id, payload, project.project_id, now, project.updated_at),
                     )
                 elif has_updated_at:
                     cursor.execute(
-                        "INSERT OR REPLACE INTO projects (project_id, data, updated_at) VALUES (?, ?, ?)",
+                        "INSERT INTO projects (project_id, data, updated_at) VALUES (?, ?, ?)",
                         (project.project_id, payload, project.updated_at),
                     )
                 else:
                     cursor.execute(
-                        "INSERT OR REPLACE INTO projects (project_id, data) VALUES (?, ?)",
+                        "INSERT INTO projects (project_id, data) VALUES (?, ?)",
                         (project.project_id, payload),
                     )
                 conn.commit()
@@ -3796,6 +3894,8 @@ class DatabaseStorage:
         """Delete a project and ALL child records in correct order.
         Wraps the entire delete in a transaction for atomicity."""
         child_tables = [
+            "scene_take_choices",
+            "delivery_manifests",
             "crew_department_status_snapshots",
             "crew_deliberation_records",
             "crew_handoff_packets",
@@ -5815,20 +5915,20 @@ class DatabaseStorage:
     def save_job(self, job: RenderJobModel) -> RenderJobModel:
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            columns = ['id', 'project_id', 'shot_id', 'provider', 'provider_job_id', 'status', 'progress',
+                       'input_payload', 'output_payload', 'error_message', 'retry_count', 'created_at', 'updated_at', 'completed_at']
+            values = [job.id, job.project_id, job.shot_id, job.provider, job.provider_job_id, job.status, job.progress,
+                      json.dumps(job.input_payload.model_dump()) if job.input_payload else None,
+                      json.dumps(job.output_payload.model_dump()) if job.output_payload else None,
+                      job.error_message, job.retry_count, job.created_at, job.updated_at, job.completed_at]
+            # Extensions may supply a stricter legacy table. Preserve its native
+            # constraints instead of masking them with an unknown-column error.
+            if 'metadata_json' in {row[1] for row in cursor.execute('PRAGMA table_info(render_jobs)')}:
+                columns.append('metadata_json')
+                values.append(json.dumps(job.metadata or {}))
             cursor.execute(
-                """INSERT OR REPLACE INTO render_jobs
-                   (id, project_id, shot_id, provider, provider_job_id, status, progress,
-                    input_payload, output_payload, error_message, retry_count,
-                    created_at, updated_at, completed_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    job.id, job.project_id, job.shot_id, job.provider, job.provider_job_id,
-                    job.status, job.progress,
-                    json.dumps(job.input_payload.model_dump()) if job.input_payload else None,
-                    json.dumps(job.output_payload.model_dump()) if job.output_payload else None,
-                    job.error_message, job.retry_count,
-                    job.created_at, job.updated_at, job.completed_at
-                )
+                f"INSERT OR REPLACE INTO render_jobs ({', '.join(columns)}) VALUES ({', '.join('?' for _ in values)})",
+                values,
             )
             conn.commit()
         return job
@@ -5927,6 +6027,7 @@ class DatabaseStorage:
         if row["output_payload"]:
             output_payload = RenderJobOutput(**json.loads(row["output_payload"]))
         return RenderJobModel(
+            metadata=json.loads(row["metadata_json"] or "{}") if "metadata_json" in row.keys() else None,
             id=row["id"],
             project_id=row["project_id"],
             shot_id=row["shot_id"],
@@ -6575,6 +6676,32 @@ class DatabaseStorage:
             recent_failures=[self._row_to_queue_item(row) for row in failure_rows],
         )
 
+    def list_take_choices(self, project_id: str, scene_id: str) -> list[dict]:
+        with self._get_connection() as conn:
+            return [dict(row) for row in conn.execute(
+                "SELECT * FROM scene_take_choices WHERE project_id=? AND scene_id=? ORDER BY shot_number",
+                (project_id, scene_id),
+            ).fetchall()]
+
+    def save_take_choice(self, project_id: str, scene_id: str, shot_number: int, job_id: str | None) -> None:
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT INTO scene_take_choices VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(project_id, scene_id, shot_number) DO UPDATE SET job_id=excluded.job_id, updated_at=excluded.updated_at",
+                (project_id, scene_id, shot_number, job_id, datetime.now().isoformat()),
+            )
+            conn.commit()
+
+    def get_delivery_manifest(self, project_id: str, scope: str) -> dict | None:
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT payload_json FROM delivery_manifests WHERE project_id=? AND scope=?", (project_id, scope)).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def save_delivery_manifest(self, project_id: str, scope: str, payload: dict) -> None:
+        with self._get_connection() as conn:
+            conn.execute("INSERT OR REPLACE INTO delivery_manifests VALUES (?, ?, ?)", (project_id, scope, json.dumps(payload)))
+            conn.commit()
+
     # Scene Composition Persistence
     def save_scene_composition(self, project_id: str, scene_id: str, composed_url: str, shot_count: int, duration_seconds: float | None = None) -> dict:
         from datetime import datetime
@@ -6679,6 +6806,83 @@ class DatabaseStorage:
             return None
 
     # Session management
+    def access_get_user(self, *, username=None, user_id=None):
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT payload_json FROM access_users WHERE username = ? OR user_id = ?",
+                (username, user_id),
+            ).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def access_save_user(self, user, *, create=False):
+        with self._get_connection() as conn:
+            if create:
+                conn.execute("INSERT INTO access_users VALUES (?, ?, ?)",
+                             (user["username"], user["user_id"], json.dumps(user)))
+            else:
+                conn.execute("UPDATE access_users SET payload_json = ? WHERE user_id = ?",
+                             (json.dumps(user), user["user_id"]))
+            conn.commit()
+
+    def access_claim_project(self, project_id, user_id):
+        with self._get_connection() as conn:
+            conn.execute("INSERT INTO project_owners VALUES (?, ?, ?)",
+                         (project_id, user_id, datetime.now().isoformat()))
+            conn.commit()
+
+    def access_owned_projects(self, user_id):
+        with self._get_connection() as conn:
+            return {row[0] for row in conn.execute(
+                "SELECT project_id FROM project_owners WHERE user_id = ?", (user_id,))}
+
+    def access_resource_projects(self, identifier):
+        """Resolve opaque identifiers through schema-owned columns, never URL guesses.
+
+        SQL identifiers come exclusively from SQLite metadata. Values are bound.
+        Unresolved resources are denied by the access service.
+        """
+        projects = set()
+        with self._get_connection() as conn:
+            tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+            for table in tables:
+                quoted = '"' + table.replace('"', '""') + '"'
+                columns = [row[1] for row in conn.execute(f"PRAGMA table_info({quoted})")]
+                if "project_id" not in columns:
+                    continue
+                ids = [c for c in columns if c == "id" or c.endswith("_id")]
+                clauses = ' OR '.join('"' + c.replace('"', '""') + '" = ?' for c in ids)
+                projects.update(row[0] for row in conn.execute(
+                    f"SELECT project_id FROM {quoted} WHERE {clauses}", [identifier] * len(ids)) if row[0])
+        return projects
+
+    def access_media_projects(self, path):
+        """Exact registered URL matching; URL path text is not ownership proof."""
+        from urllib.parse import urlsplit
+        projects = set()
+        def contains(value):
+            if isinstance(value, dict):
+                return any(contains(v) for v in value.values())
+            if isinstance(value, list):
+                return any(contains(v) for v in value)
+            if isinstance(value, str):
+                if value.startswith(("/", "http://", "https://")) and urlsplit(value).path == path:
+                    return True
+                try:
+                    decoded = json.loads(value)
+                except (ValueError, TypeError):
+                    return False
+                return contains(decoded) if isinstance(decoded, (dict, list)) else False
+            return False
+        with self._get_connection() as conn:
+            for table in ("render_jobs", "video_assets", "previs_images", "screening_outputs", "characters", "character_reference_locks", "reference_assets"):
+                columns = [row[1] for row in conn.execute(f'PRAGMA table_info("{table}")')]
+                if "project_id" not in columns:
+                    continue
+                for row in conn.execute(f'SELECT * FROM "{table}"'):
+                    if contains(dict(row)):
+                        projects.add(row["project_id"])
+        return projects
+
     def create_session(self, session_id: str, user_id: str, ttl_seconds: int = 86400) -> bool:
         now = datetime.now()
         expires = datetime.fromtimestamp(now.timestamp() + ttl_seconds)
@@ -10189,6 +10393,108 @@ class DatabaseStorage:
             row = cursor.fetchone()
             return self._row_to_storyboard_shot(row) if row else None
 
+    def get_shot_visual_plan(self, project_id: str, shot_id: str) -> dict:
+        """Return a shot's reviewed visual-plan staging as a plain dict.
+
+        Keyed by (project_id, shot_id) because that is what the render path has
+        in scope -- the storyboard_shot_id primary key is not available there.
+        Newest row wins when a shot exists across blueprint versions. Returns an
+        empty dict when the shot has no staging, so the render path can treat
+        "no staging" as "use the scene-level fallbacks" without special-casing.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT visual_plan_json FROM storyboard_shots
+                WHERE project_id = ? AND shot_id = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (project_id, shot_id),
+            )
+            row = cursor.fetchone()
+        if not row or not row[0]:
+            return {}
+        try:
+            data = json.loads(row[0])
+        except Exception:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def list_scene_shots(self, project_id: str, scene_id: str) -> list[dict]:
+        """Return one row per shot in a scene (newest version wins), as plain
+        dicts with shot_id, shot_number, intent_json and visual_plan_json.
+
+        Used by the scene-staging previs assist to iterate a scene's shots
+        without going through the blueprint-version model. Newest-per-shot keeps
+        it consistent with get_shot_visual_plan, which the render path reads.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT shot_id, shot_number, intent_json, visual_plan_json
+                FROM storyboard_shots
+                WHERE project_id = ? AND scene_id = ?
+                ORDER BY shot_number ASC, updated_at DESC
+                """,
+                (project_id, scene_id),
+            )
+            rows = cursor.fetchall()
+        seen: set = set()
+        shots: list[dict] = []
+        for shot_id, shot_number, intent_json, visual_plan_json in rows:
+            if shot_id in seen:
+                continue
+            seen.add(shot_id)
+            shots.append({
+                "shot_id": shot_id,
+                "shot_number": shot_number,
+                "intent_json": intent_json,
+                "visual_plan_json": visual_plan_json,
+            })
+        return shots
+
+    def update_shot_visual_plan(self, project_id: str, shot_id: str, plan: dict) -> bool:
+        """Merge staging fields into a shot's visual_plan (newest row).
+
+        The write counterpart of get_shot_visual_plan. MERGES: only the keys in
+        `plan` are changed, so it never blanks a field the storyboard already
+        set, and an empty `plan` is a no-op. Returns True if a row was updated.
+        """
+        if not isinstance(plan, dict) or not plan:
+            return False
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT rowid, visual_plan_json FROM storyboard_shots
+                WHERE project_id = ? AND shot_id = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (project_id, shot_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False
+            rowid, existing_json = row
+            try:
+                existing = json.loads(existing_json) if existing_json else {}
+                if not isinstance(existing, dict):
+                    existing = {}
+            except Exception:
+                existing = {}
+            existing.update(plan)
+            cursor.execute(
+                "UPDATE storyboard_shots SET visual_plan_json = ?, "
+                "updated_at = datetime('now') WHERE rowid = ?",
+                (json.dumps(existing), rowid),
+            )
+            conn.commit()
+        return True
+
     def list_storyboard_shots(self, blueprint_id: str, version_id: str | None = None) -> list[Any]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -10219,6 +10525,7 @@ class DatabaseStorage:
         version: Any,
         shots: list[Any],
         superseded_version: Any | None = None,
+        expected_version_id: str | None = None,
     ) -> Any:
         """Persist a blueprint pointer, version, and its shots in one transaction."""
         blueprint_data = blueprint.model_dump(mode="json") if hasattr(blueprint, "model_dump") else dict(blueprint)
@@ -10257,7 +10564,11 @@ class DatabaseStorage:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 try:
-                    cursor.execute("BEGIN")
+                    cursor.execute("BEGIN IMMEDIATE" if expected_version_id is not None else "BEGIN")
+                    if expected_version_id is not None:
+                        current = cursor.execute("SELECT current_version_id FROM storyboard_blueprints WHERE blueprint_id = ?", (blueprint_data["blueprint_id"],)).fetchone()
+                        if current is None or current[0] != expected_version_id:
+                            raise ValueError("Storyboard version changed")
                     if superseded_data is not None:
                         _write_version(cursor, superseded_data)
                     cursor.execute(
@@ -12017,6 +12328,81 @@ class DatabaseStorage:
         data["payload"] = json.loads(data.pop("payload_json") or "{}")
         return data
 
+    def save_emotion_analysis_result(self, record: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now().isoformat()
+        created_at = str(record.get("created_at") or now)
+        updated_at = str(record.get("updated_at") or now)
+
+        def _write() -> None:
+            with self._get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO emotion_analysis_results (
+                        analysis_id, project_id, scene_id, context_hash, provider,
+                        model, analysis_json, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(project_id, scene_id, context_hash) DO UPDATE SET
+                        provider = excluded.provider,
+                        model = excluded.model,
+                        analysis_json = excluded.analysis_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        record["analysis_id"],
+                        record["project_id"],
+                        record["scene_id"],
+                        record["context_hash"],
+                        record["provider"],
+                        record["model"],
+                        json.dumps(record["analysis"], ensure_ascii=False),
+                        created_at,
+                        updated_at,
+                    ),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_emotion_analysis_result", _write)
+        saved = self.get_emotion_analysis_result(
+            record["project_id"],
+            record["scene_id"],
+            record["context_hash"],
+        )
+        if saved is None:
+            raise RuntimeError("Emotion analysis result was not persisted")
+        return saved
+
+    def get_emotion_analysis_result(
+        self,
+        project_id: str,
+        scene_id: str,
+        context_hash: str | None = None,
+    ) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            if context_hash:
+                row = conn.execute(
+                    """
+                    SELECT * FROM emotion_analysis_results
+                    WHERE project_id = ? AND scene_id = ? AND context_hash = ?
+                    LIMIT 1
+                    """,
+                    (project_id, scene_id, context_hash),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT * FROM emotion_analysis_results
+                    WHERE project_id = ? AND scene_id = ?
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (project_id, scene_id),
+                ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result["analysis"] = json.loads(result.pop("analysis_json") or "{}")
+        return result
+
     def get_scene_previs_seed(self, project_id: str, scene_id: str) -> Optional[int]:
         """
         Get the previs seed for a scene (returns seed if it exists, None otherwise).
@@ -12291,6 +12677,36 @@ class DatabaseStorage:
                 return dict(cursor.fetchone())
 
         return self._execute_write_with_retry("save_character", _write)
+
+    def patch_character_revision(
+        self, project_id: str, character_id: str, updates: dict, expected_updated_at: str,
+    ) -> dict | None:
+        """Atomically update scoped character columns if the caller's revision is current."""
+        columns = {
+            "name", "age", "look", "energy", "core_wound", "core_desire", "relationship_notes",
+            "visual_prompt_summary", "appearance_core", "appearance_notes", "description_status",
+            "identity_core_json", "default_appearance_json", "continuity_state_json",
+            "appearance_version_history_json", "voice_provider", "voice_id", "voice_name",
+            "voice_source_type", "voice_style_prompt", "elevenlabs_voice_id", "elevenlabs_voice_name",
+        }
+        if not updates or not set(updates).issubset(columns):
+            raise ValueError("Unsupported character columns")
+        assignments = ", ".join(f"{column} = ?" for column in updates)
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    f"UPDATE characters SET {assignments}, updated_at = ? "
+                    "WHERE id = ? AND project_id = ? AND updated_at = ?",
+                    (*updates.values(), datetime.now().isoformat(), character_id, project_id, expected_updated_at),
+                )
+                if cursor.rowcount != 1:
+                    return None
+                row = conn.execute("SELECT * FROM characters WHERE id = ? AND project_id = ?", (character_id, project_id)).fetchone()
+                conn.commit()
+                return dict(row)
+
+        return self._execute_write_with_retry("patch_character_revision", _write)
 
     # ── Character Stagings (Phase 1: scene-aware character staging) ──────────
 

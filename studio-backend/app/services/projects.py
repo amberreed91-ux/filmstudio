@@ -783,6 +783,10 @@ class ReferenceStudyService:
 
     def __init__(self, storage=None):
         self.storage = storage
+        from pathlib import Path
+        self.studio_brain_library_dir = (
+            Path(__file__).resolve().parents[2] / "data" / "studio_brain_library"
+        )
 
     @staticmethod
     def _derive_title_from_filename(filename: str) -> str:
@@ -790,6 +794,124 @@ class ReferenceStudyService:
         base = os.path.splitext(os.path.basename(filename))[0]
         title = base.replace('_', ' ').replace('-', ' ').strip()
         return title.title() if title else "Untitled"
+
+    @staticmethod
+    def _extract_markdown_title_and_summary(markdown: str, filename: str) -> tuple[str, str]:
+        import re
+
+        h1 = re.search(r"^#\s+(.+)$", markdown, re.MULTILINE)
+        title = h1.group(1).strip() if h1 else ReferenceStudyService._derive_title_from_filename(filename)
+        paragraphs = [
+            line.strip()
+            for line in markdown.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        summary = paragraphs[0][:500] if paragraphs else ""
+        return title, summary
+
+    def list_studio_brain_library(self, derive_category) -> dict:
+        """List permanent Studio Brain markdown references available for project attachment."""
+        files = []
+        if not self.studio_brain_library_dir.exists():
+            return {"files": files}
+
+        for path in sorted(self.studio_brain_library_dir.iterdir(), key=lambda item: item.name.lower()):
+            if not path.is_file() or path.suffix.lower() not in {".md", ".markdown"}:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            title, summary = self._extract_markdown_title_and_summary(text, path.name)
+            files.append({
+                "filename": path.name,
+                "title": title,
+                "summary": summary,
+                "study_focus": derive_category(title, summary or text[:500]),
+            })
+        return {"files": files}
+
+    def attach_studio_brain_references(
+        self,
+        project_id: str,
+        filenames: list[str],
+        derive_category,
+    ) -> dict:
+        """Attach selected permanent Studio Brain markdown files to a project's reference library."""
+        if not self.storage:
+            raise LookupError("Project storage unavailable")
+        project = self.storage.get_project(project_id)
+        if not project:
+            raise LookupError("Project not found")
+
+        if project.reference_study_library is None:
+            project.reference_study_library = ReferenceStudyLibrary(studies=[])
+
+        existing_sources = {
+            str(study.source_stats.get("studio_brain_filename", ""))
+            for study in project.reference_study_library.studies
+            if isinstance(study.source_stats, dict)
+        }
+
+        attached = []
+        skipped = []
+        for filename in filenames:
+            safe_name = filename.strip()
+            if not safe_name or "/" in safe_name or "\\" in safe_name:
+                skipped.append({"filename": filename, "reason": "invalid_filename"})
+                continue
+            path = self.studio_brain_library_dir / safe_name
+            if (
+                not path.exists()
+                or not path.is_file()
+                or path.suffix.lower() not in {".md", ".markdown"}
+            ):
+                skipped.append({"filename": filename, "reason": "not_found"})
+                continue
+            if safe_name in existing_sources:
+                skipped.append({"filename": filename, "reason": "already_attached"})
+                continue
+
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            title, summary = self._extract_markdown_title_and_summary(text, path.name)
+            study_focus = derive_category(title, summary or text[:500])
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+            study_ref = StudyReference(
+                reference_id=f"study-brain-{timestamp}",
+                filename=title,
+                content_type="text/markdown",
+                rights_status="analysis_only",
+                allowed_use="study_only",
+                study_focus=study_focus,
+                notes=summary,
+                source_stats={
+                    "studio_brain_filename": safe_name,
+                    "source": "permanent_studio_brain_library",
+                },
+                extraction_status="complete",
+                study_cards=[],
+                risk_register=[],
+                next_actions=["Review extracted study cards", "Save to memory library"],
+            )
+            project.reference_study_library.studies.append(study_ref)
+            attached.append(study_ref)
+
+        self.storage.save_project(project)
+        try:
+            project_store.save_project(project.model_dump(mode='json'))
+        except Exception:
+            pass
+
+        return {
+            "project_id": project_id,
+            "attached": attached,
+            "skipped": skipped,
+            "total_attached": len(attached),
+            "_project": project,
+        }
 
     def study_reference_prompt(
         self,

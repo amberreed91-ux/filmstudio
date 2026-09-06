@@ -6,6 +6,7 @@ import type {
   Absence,
   AbsenceReport,
 } from '../types/universe'
+import type { PrevisShotPlanningPayload } from './previsStoryboard'
 
 export type StudioOverview = {
   build?: string
@@ -105,6 +106,20 @@ export type StudyReferenceStudy = {
   }>
   risk_register: string[]
   next_actions: string[]
+}
+
+export type StudioBrainLibraryFile = {
+  filename: string
+  title: string
+  summary: string
+  study_focus: string
+}
+
+export type StudioBrainAttachResult = {
+  project_id: string
+  attached: StudyReferenceStudy[]
+  skipped: Array<{ filename: string; reason: string }>
+  total_attached: number
 }
 
 export type SceneIntelligenceRecord = {
@@ -347,7 +362,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
   // Default timeout: 30 seconds (increased from 8 seconds)
   // Can be overridden per-endpoint for faster/slower operations
   const timeout = setTimeout(() => controller.abort(), init?.timeoutMs ?? 30000)
-  const signal = externalSignal ?? controller.signal
+  const signal = controller.signal
   const abortHandler = () => controller.abort()
 
   if (externalSignal) {
@@ -368,7 +383,6 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
         ...(rest?.headers || {}),
       },
     })
-    clearTimeout(timeout)
     const text = await response.text()
     let body: unknown = null
     if (text) {
@@ -401,10 +415,6 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
     }
     return body as T
   } catch (err) {
-    clearTimeout(timeout)
-    if (externalSignal) {
-      externalSignal.removeEventListener('abort', abortHandler)
-    }
     if (err instanceof Error && err.name === 'AbortError') {
       if (externalSignal?.aborted) {
         throw new Error('Request aborted.')
@@ -419,6 +429,9 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
     // Log all API errors to console for debugging
     console.error(`[Studio API Error] ${path}:`, err)
     throw err
+  } finally {
+    clearTimeout(timeout)
+    externalSignal?.removeEventListener('abort', abortHandler)
   }
 }
 
@@ -2421,6 +2434,44 @@ export type StoryboardBlueprintDetail = {
   inspection: StoryboardBlueprintInspection
 }
 
+export type StoryboardContinuityIssue = {
+  issue_id: string
+  severity: 'high' | 'medium' | 'low' | string
+  category: string
+  affected_shot: string
+  previous_shot?: string | null
+  current_shot: string
+  expected_state: string
+  detected_state: string
+  ai_explanation: string
+  confidence: 'emerging' | 'consistent' | 'strong' | string
+  recommended_fix: string
+  actions: Array<'fix_automatically' | 'show_differences' | 'ignore' | 'regenerate_selected_shot' | string>
+}
+
+export type StoryboardContinuityReview = {
+  review_id: string
+  blueprint_id: string
+  version_id: string
+  project_id: string
+  scene_id: string
+  status: 'completed' | string
+  reviewed_at: string
+  reviewer: string
+  summary: {
+    shot_count: number
+    issue_count: number
+    high_count: number
+    medium_count: number
+    low_count: number
+    readiness: string
+    advisory: string
+  }
+  issues: StoryboardContinuityIssue[]
+  comparison_modes: string[]
+  generated_from: Record<string, boolean>
+}
+
 export type StoryboardBlueprintSummary = {
   blueprint_id: string
   project_id: string
@@ -3184,16 +3235,25 @@ export function reorganizeReferenceLibrary(projectId: string) {
   )
 }
 
+export function listStudioBrainLibrary() {
+  return fetchJson<{ files: StudioBrainLibraryFile[] }>('/api/f51/studio/studio-brain-library')
+}
+
+export function attachStudioBrainLibraryFiles(projectId: string, filenames: string[]) {
+  return fetchJson<StudioBrainAttachResult>(`/api/f51/studio/projects/${encodeURIComponent(projectId)}/studio-brain-library/attach`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filenames }),
+  })
+}
+
 export function studyReferenceUpload(projectId: string, file: File, options?: { rightsStatus?: string; studyFocus?: string; notes?: string }) {
-  console.log('studyReferenceUpload called with:', { projectId, fileName: file.name })
   const form = new FormData()
   form.append('project_id', projectId)
   form.append('file', file)
   form.append('rights_status', options?.rightsStatus || 'analysis_only')
   form.append('study_focus', options?.studyFocus || 'cinematography, editing, sound, and production design')
   form.append('notes', options?.notes || '')
-  console.log('studyReferenceUpload making request:', { projectId })
-  console.log('API base:', STUDIO_API_BASE)
   return fetchJson<StudyReferenceStudy>('/api/f51/studio/study-reference', {
     method: 'POST',
     body: form,
@@ -3294,6 +3354,22 @@ export function approveStoryboardVersion(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approved_by: approvedBy, acknowledged_warnings: [] }),
       timeoutMs: 10000,
+    },
+  )
+}
+
+export function runStoryboardContinuityReview(
+  blueprintId: string,
+  versionId: string,
+  reviewer = 'continuity_intelligence',
+) {
+  return fetchJson<StoryboardContinuityReview>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/continuity-review`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewer }),
+      timeoutMs: 30000,
     },
   )
 }
@@ -3439,6 +3515,17 @@ export function generatePrevisScene(
     takeNumber?: number
     storyboardShotId?: string | null
     allowApprovedRevision?: boolean
+    // Optional render-provider override. Empty/undefined → the backend uses its
+    // configured default (RENDER_VIDEO_PROVIDER). A concrete id (e.g.
+    // "openrouter-video", "runway", "wan") forces that provider for this render.
+    provider?: string
+    renderSettings?: {
+      prompt?: string
+      duration_seconds?: number
+      resolution?: '480p' | '720p' | '1080p'
+      seed?: number | null
+      shot_planning?: PrevisShotPlanningPayload
+    }
   } = {},
 ) {
   const params = new URLSearchParams({
@@ -3447,9 +3534,10 @@ export function generatePrevisScene(
   })
   if (options.storyboardShotId) params.set('storyboard_shot_id', options.storyboardShotId)
   if (options.allowApprovedRevision) params.set('allow_approved_revision', 'true')
+  if (options.provider) params.set('provider', options.provider)
   return fetchJson<PrevisGenerateResult>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/generate-scene/${encodeURIComponent(sceneId)}?${params.toString()}`,
-    { method: 'POST', timeoutMs: 30000 },
+    { method: 'POST', timeoutMs: 600000, ...(options.renderSettings ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(options.renderSettings) } : {}) },
   )
 }
 
@@ -3494,6 +3582,7 @@ export function createPrevisProductionPackage(projectId: string, sceneId: string
 }
 
 export type ScreeningOutput = {
+  cut_freshness?: { status: 'current' | 'outdated' | 'unverified'; reason: string }
   screening_output_id: string
   project_id: string
   scene_id?: string | null
@@ -3825,6 +3914,69 @@ export async function recommendShotCount(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       timeoutLabel: 'Shot count recommendation',
+    },
+  )
+}
+
+// ── Scene Staging (previs assist: fills visual_plan the render prompt reads) ──
+
+export type StageSceneShotProposal = {
+  shot_id: string
+  shot_number: number
+  beat_excerpt: string
+  staging: Record<string, unknown>
+  left_blank: string[]
+  over_budget: Record<string, number>
+}
+
+export type StageSceneResponse = {
+  scene_id: string
+  proposals: StageSceneShotProposal[]
+  shots_staged: number
+  fields_blank: number
+  all_blank: boolean
+}
+
+export type StageSceneApplyResponse = {
+  scene_id: string
+  applied: number
+}
+
+// Propose per-shot staging for a scene. Writes nothing — review before apply.
+export async function stageScene(
+  projectId: string,
+  sceneId: string,
+): Promise<StageSceneResponse> {
+  return fetchJson<StageSceneResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/stage-scene/${encodeURIComponent(sceneId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+      // One LLM call per shot; the backend fans them out, but a large scene on a
+      // slow provider can still take a couple of minutes. Give it real room.
+      timeoutMs: 4 * 60 * 1000,
+      timeoutLabel: 'Scene staging',
+    },
+  )
+}
+
+// Persist the reviewed staging into each shot's visual_plan (merge-safe).
+export async function applySceneStaging(
+  projectId: string,
+  sceneId: string,
+  shots: Array<{ shot_id: string; staging: Record<string, unknown> }>,
+): Promise<StageSceneApplyResponse> {
+  return fetchJson<StageSceneApplyResponse>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/stage-scene/${encodeURIComponent(sceneId)}/apply`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shots }),
+      // A DB write per shot — fast, but scale the ceiling with the shot count so
+      // a big scene never trips the default.
+      timeoutMs: 90 * 1000,
+      timeoutLabel: 'Apply scene staging',
     },
   )
 }
@@ -4174,7 +4326,6 @@ export function createRenderJob(payload: {
   if (payload.reference_assets) params.append('reference_assets', JSON.stringify(payload.reference_assets))
   if (payload.parameters) params.append('parameters', JSON.stringify(payload.parameters))
   const url = '/api/f51/studio/render/jobs?' + params.toString()
-  console.log('Calling render endpoint:', url, payload)
   return fetchJson<RenderJob>(url, {
     method: 'POST',
   })
@@ -4215,7 +4366,9 @@ export function retryRenderJobById(jobId: string) {
 export type AdherenceRetryResult = {
   strategy: string
   jobs_submitted: Array<{ job_id: string; seed: number; status: string }>
+  submission_errors?: Array<{ attempt: number; seed: number; error: string }>
   seeds_used?: number[]
+  corrected_prompt?: Record<string, unknown>
   best_attempt?: Record<string, unknown> | null
   all_scored_attempts?: Array<Record<string, unknown>>
 }
@@ -4390,6 +4543,8 @@ export type FilmAssemblyResponse = {
 }
 
 export type AssemblyStatusResponse = {
+  film_outdated?: boolean
+  scenes_needing_assembly?: string[]
   scenes_with_compositions: number
   scenes_total: number
   film_assembled: boolean
@@ -5328,13 +5483,6 @@ export async function uploadVideoAsset(payload: {
     form.append('metadata_json', JSON.stringify(payload.metadata))
   }
   const tryUpload = async (path: string): Promise<{ asset: VideoAsset }> => {
-    if (import.meta.env.DEV) {
-      console.log('[StudyRoomUpload] request', {
-        url: buildStudioApiUrl(path),
-        method: 'POST',
-        file: payload.file?.name,
-      })
-    }
     return fetchJson<{ asset: VideoAsset }>(path, { method: 'POST', body: form })
   }
   try {
@@ -6953,11 +7101,17 @@ export type EmotionAnalysisResult = {
 export async function analyzeSceneEmotion(
   projectId: string,
   sceneId: string,
+  options: { confirmed: true; force?: boolean },
 ): Promise<EmotionAnalysisResult> {
-  return fetchJson<EmotionAnalysisResult>(
+  const response = await fetchJson<{ analysis: EmotionAnalysisResult }>(
     `/api/f51/studio/emotion-analysis/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/analyze`,
-    { method: 'POST' },
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmed: options.confirmed, force: options.force === true }),
+    },
   )
+  return response.analysis
 }
 
 export async function getSceneRationale(

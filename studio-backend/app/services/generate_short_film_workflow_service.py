@@ -145,7 +145,7 @@ class GenerateShortFilmWorkflowService:
             logger.info(
                 "[OneButtonDebug] request project_id=%s provider=%s submit_renders=%s assemble_final=%s use_mock_success=%s app_env=%s render_provider_test_mode=%s manual_overrides=%s scenes=%s shots=%s",
                 project_id,
-                as_non_empty_string(payload.get("manual_overrides", {}).get("provider")) or "runway",
+                as_non_empty_string(payload.get("manual_overrides", {}).get("provider")) or "default",
                 submit_renders,
                 assemble_final,
                 use_mock_success,
@@ -158,7 +158,12 @@ class GenerateShortFilmWorkflowService:
 
         if submit_renders:
             self._ensure_canonical_project_before_render(project_id, current)
-            selected_provider = as_non_empty_string(payload.get("manual_overrides", {}).get("provider")) or "runway"
+            from app.services import render_service
+
+            selected_provider = (
+                as_non_empty_string(payload.get("manual_overrides", {}).get("provider"))
+                or render_service.get_default_provider()
+            )
             if selected_provider == "mock_success":
                 # Mock-success is a backend test mode for runway adapter, not a provider id.
                 selected_provider = "runway"
@@ -208,8 +213,6 @@ class GenerateShortFilmWorkflowService:
                         "shot_count": len(shots),
                     },
                 )
-            
-            from app.services import render_service
             
             for idx, shot in enumerate(shots):
                 if not isinstance(shot, dict):

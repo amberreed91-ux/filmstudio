@@ -13,6 +13,7 @@ import { disableStudioDevMode, enableStudioDevMode } from './lib/devMode'
 import { reportError } from './lib/errorTelemetry'
 import { cleanupStaleStorage } from './lib/localStorage'
 import './index.css'
+import { StudioSessionGate } from './components/StudioSessionGate'
 
 // Register global error handlers for telemetry
 if (typeof window !== 'undefined') {
@@ -110,6 +111,7 @@ export default function App() {
   
   return (
     <AppErrorBoundary>
+      <StudioSessionGate>
       <QueryClientProvider client={queryClient}>
         <StudioProvider>
           <AudioUXProvider>
@@ -124,6 +126,7 @@ export default function App() {
           </AudioUXProvider>
         </StudioProvider>
       </QueryClientProvider>
+      </StudioSessionGate>
     </AppErrorBoundary>
   )
 }

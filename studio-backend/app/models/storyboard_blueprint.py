@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def utc_now_iso() -> str:
@@ -90,8 +90,18 @@ class StoryboardShotVisualPlan(BaseModel):
     reference_asset_ids: list[str] = Field(default_factory=list)
     negative_visual_constraints: list[str] = Field(default_factory=list)
 
+    @field_validator("props", mode="before")
+    @classmethod
+    def read_legacy_props(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return [prop.strip() for prop in value.split(",") if prop.strip()]
+        return value
+
 
 class StoryboardShotContinuityPlan(BaseModel):
+    opening_state: str = Field(default="", max_length=1500)
+    action_change: str = Field(default="", max_length=1500)
+    ending_state: str = Field(default="", max_length=1500)
     location_continuity: str = ""
     character_identity_constraints: list[str] = Field(default_factory=list)
     wardrobe_constraints: list[str] = Field(default_factory=list)
@@ -205,4 +215,3 @@ class StoryboardRevisionLink(BaseModel):
     change_scope: dict[str, Any] = Field(default_factory=dict)
     created_at: str = Field(default_factory=utc_now_iso)
     metadata: dict[str, Any] = Field(default_factory=dict)
-

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from app.models.studio_knowledge import (
     KnowledgeBibleCreateRequest,
@@ -31,6 +31,41 @@ def _map_error(exc: Exception) -> HTTPException:
 
 @router.post("/{project_id}/knowledge/bibles", response_model=KnowledgeBibleResponse)
 def register_knowledge_bible(project_id: str, request: KnowledgeBibleCreateRequest):
+    try:
+        return studio_knowledge_service.register_bible(project_id, request)
+    except Exception as exc:
+        raise _map_error(exc) from exc
+
+
+@router.post("/{project_id}/knowledge/bibles/upload", response_model=KnowledgeBibleResponse)
+async def upload_knowledge_bible(
+    project_id: str,
+    file: UploadFile = File(...),
+    title: str = Form(""),
+    bible_type: str = Form("general"),
+):
+    filename = (file.filename or "").strip()
+    lower_filename = filename.lower()
+    if not lower_filename.endswith((".md", ".markdown")):
+        raise HTTPException(status_code=400, detail="Only .md or .markdown Bible files are accepted")
+
+    try:
+        raw_content = await file.read()
+        content = raw_content.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Bible file must be UTF-8 encoded Markdown") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to read Bible file: {exc}") from exc
+
+    display_title = (title or "").strip() or filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").strip()
+    request = KnowledgeBibleCreateRequest(
+        title=display_title or "Uploaded Bible",
+        bible_type=(bible_type or "general").strip() or "general",
+        content=content,
+        content_type="markdown",
+        source_filename=filename,
+        metadata={"ingest_mode": "markdown_upload"},
+    )
     try:
         return studio_knowledge_service.register_bible(project_id, request)
     except Exception as exc:

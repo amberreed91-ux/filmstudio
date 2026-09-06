@@ -69,48 +69,11 @@ async def compose_scene(project_id: str, scene_id: str) -> dict:
 
     storage = get_storage("sqlite")
 
-    # Get all render jobs for this project
-    all_jobs = storage.list_jobs(project_id=project_id, limit=500)
-
-    # Filter to only completed jobs for this scene, and map to shot number
-    scene_jobs: list[RenderJobModel] = []
-    for job in all_jobs:
-        if job.status != "complete":
-            continue
-        if _scene_id_from_shot_id(job.shot_id) != scene_id:
-            continue
-        asset_url = (
-            job.output_payload.asset_url if job.output_payload else None
-        )
-        if not asset_url:
-            continue
-        scene_jobs.append(job)
-
-    if len(scene_jobs) < 2:
-        raise ValueError(
-            f"Need at least 2 completed shots with valid URLs to compose. "
-            f"Found {len(scene_jobs)}."
-        )
-
-    # Group by shot number, keep most recent per shot
-    shot_map: dict[int, RenderJobModel] = {}
-    for job in scene_jobs:
-        shot_num = _extract_shot_number(job.shot_id)
-        if shot_num == 0:
-            continue
-        existing = shot_map.get(shot_num)
-        if existing is None or job.created_at > existing.created_at:
-            shot_map[shot_num] = job
-
-    # Sort by shot number ascending
-    sorted_shots = sorted(shot_map.items(), key=lambda x: x[0])
+    from app.services.take_selection_service import TakeSelectionService
+    sorted_shots = TakeSelectionService(storage).resolve(project_id, scene_id)
     shot_urls = [job.output_payload.asset_url for _, job in sorted_shots]
-
-    if len(shot_urls) < 2:
-        raise ValueError(
-            f"Need at least 2 shots with valid URLs to compose. "
-            f"Found {len(shot_urls)}."
-        )
+    if not shot_urls:
+        raise ValueError("No completed shots with valid URLs to compose")
 
     # Download and concatenate
     with tempfile.TemporaryDirectory() as tmpdir:

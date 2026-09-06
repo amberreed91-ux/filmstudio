@@ -57,7 +57,10 @@ class VideoAssetService:
             if parsed.scheme in {"http", "https"} and parsed.netloc:
                 return True, {"kind": "url", "is_remote": True}
             if source_url.startswith("/outputs/"):
-                output_path = self._outputs_root / source_url.removeprefix("/outputs/")
+                outputs_root = self._outputs_root.resolve()
+                output_path = (outputs_root / source_url.removeprefix("/outputs/")).resolve()
+                if not output_path.is_relative_to(outputs_root):
+                    return False, {"reason": "Generated output must stay within the outputs directory"}
                 if output_path.exists() and output_path.is_file():
                     return True, {"kind": "url", "is_remote": False, "file_size_bytes": output_path.stat().st_size}
                 return False, {"reason": f"Generated output not found: {source_url}"}

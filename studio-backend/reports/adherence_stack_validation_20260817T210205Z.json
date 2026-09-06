@@ -1,0 +1,105 @@
+{
+  "generated_at": "2026-08-17T21:02:04.859860+00:00",
+  "phases": {
+    "offline": [
+      {
+        "check": "negative_prompt_in_submit_payload",
+        "question": "Does the negative prompt survive into both t2v and r2v provider request bodies?",
+        "result": "pass",
+        "detail": {
+          "t2v_input_keys": [
+            "negative_prompt",
+            "prompt"
+          ],
+          "r2v_input_keys": [
+            "media",
+            "negative_prompt",
+            "prompt"
+          ],
+          "t2v_negative_prompt": "extra people, watermark, deformed hands",
+          "r2v_negative_prompt": "extra people, watermark, deformed hands"
+        }
+      },
+      {
+        "check": "intent_fidelity_detects_compression",
+        "question": "Does a real over-budget description get reported as lost intent?",
+        "result": "pass",
+        "detail": {
+          "status": "reduced",
+          "reduced_slots": [
+            "character_state"
+          ],
+          "advisory_note": "The prompt no longer carries \"boots caked in dry mud\" in who is on screen and how they look. The shot will render as written, so this will not show up as a mismatch later \u2014 worth deciding now whether it belongs in the shot.",
+          "prompt_length": 334
+        }
+      },
+      {
+        "check": "shot_leads_prompt_not_intent",
+        "question": "Is the shot in the highest-weighted position, with avoid-terms out of the positive prompt?",
+        "result": "pass",
+        "detail": {
+          "guidance": "contemplative unease; Deakins lighting",
+          "guidance_chars": 38,
+          "old_prefix_chars": 189,
+          "avoid_terms_routed_to_negative": [
+            "melodrama"
+          ],
+          "prompt_head": "Only MAYA visible; no extras.; MAYA: lean, late 20s. She sets the kettle down. T"
+        }
+      },
+      {
+        "check": "unavailable_embedder_is_not_reported_as_drift",
+        "question": "Does an unconfigured embedder stay silent instead of crying drift?",
+        "result": "pass",
+        "detail": {
+          "status": "unavailable",
+          "reason": "output_frame_not_local"
+        }
+      },
+      {
+        "check": "selected_embedding_adapter",
+        "question": "Is a real face embedder selected, or only a general-visual one?",
+        "result": "pass",
+        "detail": {
+          "adapter": "LocalFaceEmbeddingAdapter",
+          "kind": "face_identity",
+          "insightface_available": true,
+          "note": "face_identity is the only kind that measures likeness. general_visual is continuity evidence only. Install insightface + onnxruntime for real identity measurement."
+        }
+      }
+    ],
+    "probe": [
+      {
+        "check": "skipped",
+        "result": "info",
+        "detail": "pass --probe-providers to run live provider probes"
+      }
+    ],
+    "render": [
+      {
+        "check": "project_resolvable_by_render_path",
+        "question": "Can create_job actually resolve this project and the shot's scene?",
+        "result": "FAIL",
+        "detail": {
+          "project_id": "project_definitely_missing",
+          "shot_id": "scene_002_shot_001",
+          "scene_id": "scene_002",
+          "resolved_in_render_store": false,
+          "render_store_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/data/project_state_store.json",
+          "present_in_sqlite": false,
+          "sqlite_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/data/studio.db",
+          "scene_found": false,
+          "error": null,
+          "note": "create_job resolves scenes through ProjectStore (JSON), not the projects table in studio.db. A project present only in SQLite renders with an empty prompt and no references attached."
+        }
+      }
+    ]
+  },
+  "summary": {
+    "checks_run": 6,
+    "failures": 1,
+    "failed_checks": [
+      "project_resolvable_by_render_path"
+    ]
+  }
+}

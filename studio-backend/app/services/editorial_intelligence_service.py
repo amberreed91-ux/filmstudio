@@ -174,8 +174,9 @@ class EditorialIntelligenceService:
             if _as_str(scene_id)
         ]
         now = editorial_utc_now_iso()
+        legacy_cut_id = _as_str(legacy.get("cut_id"))
         cut = {
-            "cut_id": _as_str(legacy.get("cut_id")) or f"film-cut-{project_id}-v1",
+            "cut_id": legacy_cut_id if legacy_cut_id and legacy_cut_id != "default" else f"film-cut-{project_id}-v1",
             "project_id": project_id,
             "version_number": 1,
             "status": _as_str(legacy.get("status")) or "draft",
@@ -198,11 +199,15 @@ class EditorialIntelligenceService:
             try:
                 current = commit(cut)
             except Exception as exc:
-                raise PersistenceError(
-                    "Initial Film Cut persistence failed",
-                    stage="film_cut_create",
-                    metadata={"cause": type(exc).__name__},
-                ) from exc
+                # Two read requests can bootstrap the same saved cut together.
+                # Reuse the committed version if another request won the race.
+                current = get_current(project_id) if callable(get_current) else None
+                if current is None:
+                    raise PersistenceError(
+                        "Initial Film Cut persistence failed",
+                        stage="film_cut_create",
+                        metadata={"cause": type(exc).__name__},
+                    ) from exc
             self._mirror_cut(project_id, current)
             return current
         return {**legacy, **cut}
