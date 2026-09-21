@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.models import ClipRevision
+
+logger = logging.getLogger("clip-revision-service")
 
 
 class ClipRevisionService:
@@ -32,6 +35,14 @@ class ClipRevisionService:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> ClipRevision:
         """Create a new clip revision"""
+        _metadata = dict(metadata or {})
+        try:
+            from app.services.identity_snapshot_service import identity_snapshot_service
+
+            _metadata = identity_snapshot_service.attach_to_metadata(_metadata, project_id)
+        except Exception as exc:  # noqa: BLE001 — identity snapshot is advisory only
+            logger.warning("identity snapshot attach failed for %s: %s", project_id, exc)
+
         revision = ClipRevision(
             revision_id=self._generate_revision_id(),
             project_id=project_id,
@@ -45,7 +56,7 @@ class ClipRevisionService:
             output_url=None,
             created_at=self._now_iso(),
             updated_at=self._now_iso(),
-            metadata=metadata or {},
+            metadata=_metadata,
         )
         
         if self._storage:

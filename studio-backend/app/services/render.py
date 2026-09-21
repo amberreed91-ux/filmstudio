@@ -2379,6 +2379,17 @@ class RenderService:
         if _intent_fidelity_report:
             _input_parameters["intent_fidelity"] = _intent_fidelity_report
 
+        # Capture the project's cinematic identity so revisions can be traced
+        # against the visual language that was in force when this job was created.
+        _identity_snapshot = None
+        try:
+            from app.services.identity_snapshot_service import identity_snapshot_service
+
+            _identity_snapshot = identity_snapshot_service.capture(project_id)
+        except Exception as exc:  # noqa: BLE001 — identity snapshot is advisory only
+            logger.warning("identity snapshot capture failed for %s: %s", project_id, exc)
+            _identity_snapshot = None
+
         job = RenderJobModel(
             id=job_id,
             project_id=project_id,
@@ -2413,6 +2424,11 @@ class RenderService:
                     "created_at": datetime.now().isoformat(),
                     "phase_timing": {},
                 },
+                **(
+                    {"cinematic_identity_snapshot": _identity_snapshot}
+                    if _identity_snapshot
+                    else {}
+                ),
             },
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat()

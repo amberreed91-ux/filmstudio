@@ -19,6 +19,9 @@ from app.models.production_acceptance import (
     ProductionAcceptanceRunRequest,
     ProductionAcceptanceSummary,
 )
+from app.services.revision_identity_comparison import (
+    revision_identity_comparison_service,
+)
 
 logger = logging.getLogger("studio-production-acceptance")
 
@@ -171,6 +174,7 @@ class ProductionAcceptanceService:
                     "continuity_issues",
                     "style_drift_issues",
                     "cinematic_memory_records",
+                    "cinematic_identity_snapshots",
                 ],
                 **(request.metadata or {}),
             },
@@ -488,6 +492,7 @@ class ProductionAcceptanceService:
                 self._check_continuity,
                 self._check_style,
                 self._check_memory,
+                self._check_identity_continuity,
             ])
         return checks
 
@@ -813,6 +818,45 @@ class ProductionAcceptanceService:
             title="Memory traceability is thin",
             summary="No cinematic memory records are available for this project.",
         )
+
+    def _check_identity_continuity(self, context: ProductionAcceptanceContext):
+        snapshots = self._collect_identity_snapshots(context)
+        if len(snapshots) < 2:
+            return ProductionAcceptanceCheckResult(
+                check_id="identity_continuity_traceable",
+                category="style",
+                severity="not_applicable",
+                title="Identity continuity is thin",
+                summary="Not enough identity snapshots are attached to compare across revisions.",
+            )
+        comparison = revision_identity_comparison_service.compare(snapshots[0], snapshots[-1])
+        if comparison["drift_notes"]:
+            return ProductionAcceptanceCheckResult(
+                check_id="identity_continuity_traceable",
+                category="style",
+                severity="warning",
+                title="Visual identity shifted across revisions",
+                summary=comparison["summary"],
+                co_director_note=comparison["drift_notes"][0],
+                evidence=[self._evidence("cinematic_identity_snapshot", comparison.get("summary", ""))],
+            )
+        return ProductionAcceptanceCheckResult(
+            check_id="identity_continuity_traceable",
+            category="style",
+            severity="pass",
+            title="Visual identity holds across revisions",
+            summary=comparison["summary"],
+        )
+
+    def _collect_identity_snapshots(self, context: ProductionAcceptanceContext) -> List[Dict[str, Any]]:
+        ordered: List[tuple[str, Dict[str, Any]]] = []
+        for item in list(context.render_jobs) + list(context.revisions):
+            metadata = _attr(item, "metadata") or {}
+            snapshot = metadata.get("cinematic_identity_snapshot") if isinstance(metadata, dict) else None
+            if isinstance(snapshot, dict):
+                ordered.append((_as_str(_attr(item, "created_at")), snapshot))
+        ordered.sort(key=lambda pair: pair[0])
+        return [snapshot for _, snapshot in ordered]
 
     def _derive_disposition(self, context: ProductionAcceptanceContext, checks: List[ProductionAcceptanceCheckResult]):
         if not context.package:
