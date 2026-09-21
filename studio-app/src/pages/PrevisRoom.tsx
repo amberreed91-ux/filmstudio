@@ -29,6 +29,7 @@ import ProductionDesignIntelligencePanel from '../components/ProductionDesignInt
 import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
 import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
 import CanonicalWorkflowPanel from '../components/CanonicalWorkflowPanel'
+import SceneEmotionalGuidancePanel from '../components/SceneEmotionalGuidancePanel'
 import { useStudio } from '../context/StudioContext'
 import {
   approveStoryboardVersion,
@@ -1958,6 +1959,7 @@ export default function PrevisRoom() {
                   <p className="text-sm leading-relaxed text-zinc-300">{shotRationale.rationale}</p>
                 </div>
               )}
+              <SceneEmotionalGuidancePanel sceneId={selectedSceneId} className="mt-3 border-l-2 border-amber-200/40 py-1 pl-4" />
             </aside>
 
             <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.025] p-4 sm:p-6">

@@ -127,6 +127,9 @@ export default function ProductionAcceptancePanel({
                     {check.title}
                   </div>
                   <div className="mt-1 text-zinc-300">{check.summary}</div>
+                  {check.co_director_note && check.co_director_note !== check.summary ? (
+                    <div className="mt-1 italic text-zinc-300/90">{check.co_director_note}</div>
+                  ) : null}
                   {check.remediation[0] ? <div className="mt-2 text-zinc-400">{check.remediation[0]}</div> : null}
                 </div>
               ))}

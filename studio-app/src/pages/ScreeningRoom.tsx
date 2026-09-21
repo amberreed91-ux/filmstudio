@@ -30,6 +30,7 @@ import ProductionDesignIntelligencePanel from '../components/ProductionDesignInt
 import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
 import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
 import CanonicalWorkflowPanel from '../components/CanonicalWorkflowPanel'
+import SceneEmotionalGuidancePanel from '../components/SceneEmotionalGuidancePanel'
 import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
 import {
@@ -1291,6 +1292,7 @@ export default function ScreeningRoom() {
 
                   <section id="theatre-step-review" aria-label="Review and revise" hidden={activeStep !== 'review'} className="space-y-4">
                     <div className="border-l-2 border-amber-200/50 pl-4"><h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-200/80">Why this shot matters</h3><p className="text-sm leading-relaxed text-zinc-300">{loadingRationale ? 'Loading the scene’s intent…' : shotRationale?.rationale || 'No saved rationale for this scene yet. Compare the footage with the intent you set in Previs.'}</p></div>
+                    <SceneEmotionalGuidancePanel sceneId={activeTake?.sceneId ?? null} className="border-l-2 border-amber-200/40 pl-4 text-sm leading-relaxed text-zinc-300" />
                     <button type="button" onClick={openPrevis} disabled={!activeTake?.sceneId} className={buttonClass}>Revise this shot in Previs<ChevronRight size={15} /></button>
                     <div className="space-y-3 border-t border-white/10 pt-4">
                       <h3 className="flex items-center gap-2 text-sm font-medium text-zinc-200"><Brain size={16} className="text-amber-200/80" />Co-director notes</h3>

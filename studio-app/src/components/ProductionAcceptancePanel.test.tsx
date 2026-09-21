@@ -107,4 +107,28 @@ describe('ProductionAcceptancePanel', () => {
     expect(html).toContain('Stale acceptance')
     expect(html).toContain('Final package was updated after acceptance.')
   })
+
+  it('renders the identity continuity advisory check', () => {
+    const html = renderPanel(report({
+      disposition: 'needs_attention',
+      checks: [
+        {
+          check_id: 'identity_continuity_traceable',
+          check_version: '1.0',
+          category: 'style',
+          severity: 'warning',
+          title: 'Cinematic identity shifted across the revision',
+          summary: 'Lighting and mood tags moved between the original and revised render.',
+          co_director_note: 'The revision is sharper, but it softens the tension carried from the prior cut.',
+          affected_scenes: ['scene_001'],
+          affected_shots: [],
+          evidence: [],
+          remediation: [],
+          metadata: {},
+        },
+      ],
+    }))
+    expect(html).toContain('Cinematic identity shifted across the revision')
+    expect(html).toContain('softens the tension carried from the prior cut')
+  })
 })

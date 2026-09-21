@@ -7123,6 +7123,33 @@ export async function getSceneRationale(
   )
 }
 
+// ── Scene Emotional Guidance ───────────────────────────────────────────────
+
+export type SceneEmotionalGuidanceCallback = {
+  kind: string
+  message: string
+}
+
+export type SceneEmotionalGuidance = {
+  scene_id: string
+  project_id: string
+  rationale: string
+  emotional_work: string
+  guidance: string
+  risk: string
+  callbacks: SceneEmotionalGuidanceCallback[]
+  advisory_only: boolean
+  auto_regeneration_triggered: boolean
+}
+
+export async function getSceneEmotionalGuidance(
+  sceneId: string,
+): Promise<SceneEmotionalGuidance> {
+  return fetchJson<SceneEmotionalGuidance>(
+    `/api/scene-intelligence/${encodeURIComponent(sceneId)}/emotional-guidance`,
+  )
+}
+
 // ── Audio Direction ────────────────────────────────────────────────────────
 
 export type ApplyAudioBriefResponse = {

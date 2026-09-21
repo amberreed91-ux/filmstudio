@@ -823,6 +823,47 @@ describe('getSceneRationale', () => {
   })
 })
 
+describe('getSceneEmotionalGuidance', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('fetches emotional guidance with correct URL', async () => {
+    const mockResponse = {
+      scene_id: 'scene_001',
+      project_id: 'proj-1',
+      rationale: 'A melancholic scene at SHORELINE.',
+      emotional_work: 'The scene holds the film in a melancholic register.',
+      guidance: 'Hold the central tension one beat longer.',
+      risk: '',
+      callbacks: [],
+      advisory_only: true,
+      auto_regeneration_triggered: false,
+    }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(mockResponse), { status: 200 }),
+    )
+
+    const { getSceneEmotionalGuidance } = await import('./studioApi')
+    const result = await getSceneEmotionalGuidance('scene_001')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/scene-intelligence/scene_001/emotional-guidance')
+    expect(result.advisory_only).toBe(true)
+    expect(result.emotional_work).toBe(mockResponse.emotional_work)
+  })
+
+  it('throws on 404', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Scene not found' }), { status: 404 }),
+    )
+
+    const { getSceneEmotionalGuidance } = await import('./studioApi')
+    await expect(getSceneEmotionalGuidance('nonexistent')).rejects.toThrow()
+  })
+})
+
 describe('studio workflow API', () => {
   afterEach(() => {
     vi.restoreAllMocks()
