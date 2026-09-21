@@ -27,6 +27,13 @@ studio-backend/studio.db
 studio-backend/data/studio.db
 studio-backend/data/appearance_core_review_queue.json
 studio-backend/data/*.db.bak*
+studio-backend/data/projects.json
+studio-backend/data/projects.json.*
+studio-backend/data/project_state_store.json.*
+studio-backend/data/studio.db.*
+studio-backend/data/character_documents/
+studio-backend/data/shots/
+studio-backend/data/uploads/
 node_modules/
 .DS_Store
 untitled/
