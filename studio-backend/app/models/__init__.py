@@ -84,6 +84,7 @@ from app.models.performance_intelligence import (
 )
 
 from app.models.scene_intelligence import (
+    SceneEmotionalGuidance,
     SceneIntelligenceImportResult,
     SceneIntelligenceRecord,
 )

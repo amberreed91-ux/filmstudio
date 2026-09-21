@@ -6,6 +6,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.animation_prompt_builder import animation_prompt_builder_service
+from app.services.scene_emotional_guidance_service import (
+    scene_emotional_guidance_service,
+)
 from app.services.scene_intelligence_store import (
     SceneIntelligenceValidationError,
     scene_intelligence_store,
@@ -78,3 +81,89 @@ def link_scene_intelligence_video(scene_id: str, payload: LinkVideoPayload):
     if record is None:
         raise HTTPException(status_code=404, detail="Scene intelligence record not found")
     return record
+
+
+def _locate_scene(scene_id: str):
+    """Find a scene and its project context across all stored projects."""
+    from app.services.project_store import project_store
+
+    for proj in project_store.list_projects():
+        if not isinstance(proj, dict):
+            continue
+        summary = proj.get("execution_summary") if isinstance(proj.get("execution_summary"), dict) else {}
+        scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
+        if not scenes:
+            scenes = proj.get("scenes") if isinstance(proj.get("scenes"), list) else []
+        film_cut = proj.get("film_cut") if isinstance(proj.get("film_cut"), dict) else {}
+        scene_order = film_cut.get("scene_order") or []
+        for scene in scenes:
+            if not isinstance(scene, dict) or scene.get("scene_id") != scene_id:
+                continue
+            position = None
+            if scene_order:
+                try:
+                    position = scene_order.index(scene_id) + 1
+                except ValueError:
+                    position = None
+            return proj, scene, position, (len(scene_order) if scene_order else len(scenes))
+    return None, None, None, None
+
+
+@router.get("/{scene_id}/emotional-guidance")
+def get_scene_emotional_guidance(scene_id: str):
+    """Return advisory emotional guidance for a scene from existing signals.
+
+    Co-director voice — no scores or percentages. Composes the scene
+    rationale with the scene's emotional work and, only when a concrete
+    signal is present, a single actionable risk. Caches the result on the
+    scene intelligence record when one exists.
+    """
+    project, scene, position, total_scenes = _locate_scene(scene_id)
+    record = scene_intelligence_store.get_record(scene_id)
+
+    if scene is None and record is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    scene_data = scene if isinstance(scene, dict) else {}
+    if not scene_data and isinstance(record, dict):
+        scene_data = {
+            "scene_id": scene_id,
+            "heading": record.get("scene_name") or "",
+            "intent": record.get("intent") or "",
+            "director_notes": record.get("director_notes") or "",
+        }
+
+    project_id = ""
+    if isinstance(project, dict):
+        project_id = str(project.get("project_id") or project.get("id") or "")
+
+    continuity_context = None
+    if project_id:
+        try:
+            from app.services.continuity_intelligence_service import (
+                continuity_intelligence_service,
+            )
+
+            continuity_context = continuity_intelligence_service.build_prompt_context(
+                scene_id=scene_id, film_id=project_id
+            )
+        except Exception:  # noqa: BLE001 — guidance stays advisory when continuity is unavailable
+            continuity_context = None
+
+    result = scene_emotional_guidance_service.build_guidance(
+        project_id=project_id,
+        scene_id=scene_id,
+        scene_data=scene_data,
+        continuity_context=continuity_context,
+        scene_intent=record,
+        scene_position=position,
+        total_scenes=total_scenes,
+    )
+
+    if record is not None:
+        try:
+            scene_intelligence_store.cache_emotional_guidance(scene_id, result)
+        except SceneIntelligenceValidationError:
+            pass
+
+    return result

@@ -206,4 +206,25 @@ class SceneIntelligenceStore:
         return updated
 
 
+    def cache_emotional_guidance(
+        self, scene_id: str, guidance: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        clean_scene_id = scene_id.strip() if isinstance(scene_id, str) else ""
+        if not clean_scene_id or not isinstance(guidance, dict):
+            raise SceneIntelligenceValidationError("scene_id and guidance are required")
+        state = self._load()
+        records = state.setdefault("records", {})
+        existing = records.get(clean_scene_id)
+        if not isinstance(existing, dict):
+            return None
+        now = self._now()
+        updated = dict(existing)
+        updated["emotional_guidance"] = guidance
+        updated["updated_at"] = now
+        records[clean_scene_id] = updated
+        state["updated_at"] = now
+        self._save(state)
+        return updated
+
+
 scene_intelligence_store = SceneIntelligenceStore()
