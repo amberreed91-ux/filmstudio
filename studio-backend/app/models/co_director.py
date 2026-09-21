@@ -22,6 +22,12 @@ class SessionMode(str, Enum):
     EXPERIMENTAL = "experimental"
 
 
+# Confidence labels follow AGENTS.md tendency language — never numeric.
+CONFIDENCE_EMERGING = "emerging"
+CONFIDENCE_CONSISTENT = "consistent"
+CONFIDENCE_STRONG = "strong"
+
+
 def _utc_now() -> datetime:
     """Return timezone-aware UTC datetime."""
     return datetime.now(timezone.utc)
@@ -129,9 +135,9 @@ class CoDirectorCritique:
     grounded_signals: List[str]
     heuristic_signals: List[str]
     source_systems: List[CoDirectorCritiqueSource]
-    overall_confidence: float
-    grounded_confidence: float
-    heuristic_confidence: float
+    overall_confidence: str
+    grounded_confidence: str
+    heuristic_confidence: str
     provenance: List[str]
     canonical_sources: Dict[str, bool]
     affected_scene_ids: List[str]
@@ -187,9 +193,9 @@ class CoDirectorProposal:
     grounded_signals: List[str]
     heuristic_signals: List[str]
     source_systems: List[CoDirectorCritiqueSource]
-    overall_confidence: float
-    grounded_confidence: float
-    heuristic_confidence: float
+    overall_confidence: str
+    grounded_confidence: str
+    heuristic_confidence: str
     provenance: List[str]
     canonical_sources: Dict[str, bool]
     affected_scene_ids: List[str]
@@ -241,9 +247,9 @@ class CoDirectorComparison:
     grounded_signals: List[str]
     heuristic_signals: List[str]
     source_systems: List[CoDirectorCritiqueSource]
-    overall_confidence: float
-    grounded_confidence: float
-    heuristic_confidence: float
+    overall_confidence: str
+    grounded_confidence: str
+    heuristic_confidence: str
     dominance_reason: str
     provenance: List[str]
     canonical_sources: Dict[str, bool]
@@ -286,9 +292,9 @@ class CoDirectorIntensityProfile:
     recommended_mode: SessionMode
     grounded_signals: List[str]
     heuristic_signals: List[str]
-    overall_confidence: float
-    grounded_confidence: float
-    heuristic_confidence: float
+    overall_confidence: str
+    grounded_confidence: str
+    heuristic_confidence: str
     created_at: datetime = field(default_factory=_utc_now)
     session_id: Optional[str] = None
     mode: SessionMode = SessionMode.PASSIVE

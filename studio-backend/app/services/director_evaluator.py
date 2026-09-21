@@ -193,19 +193,19 @@ class DirectorEvaluator:
             result["decision"] = Decision.APPROVE
             result["approved"] = True
             result["requires_revision"] = False
-            result["notes"] = f"Scene approved with score {total_score:.2f}"
+            result["notes"] = "Scene approved"
         elif total_score >= self.REVISE_THRESHOLD:
             result["decision"] = Decision.REVISE
             result["approved"] = False
             result["requires_revision"] = True
             result["revision_notes"] = self._generate_revision_notes(scene_data, spine, scores)
-            result["notes"] = f"Scene requires revision (score {total_score:.2f})"
+            result["notes"] = "Scene requires revision"
         else:
             result["decision"] = Decision.REJECT
             result["approved"] = False
             result["requires_revision"] = True
             result["revision_notes"] = self._generate_revision_notes(scene_data, spine, scores)
-            result["notes"] = f"Scene rejected (score {total_score:.2f})"
+            result["notes"] = "Scene rejected"
 
         if result["requires_revision"]:
             for note in cinematic_influence.get("generated_notes", []):
@@ -952,16 +952,5 @@ def build_agent_disagreements(
                 "conflict_with": "memory_pattern",
             }
         )
-
-    if not disagreements:
-        disagreements = [
-            {
-                "agent": "director",
-                "severity": "low",
-                "issue": "Minor tonal softness before escalation",
-                "recommendation": "Add one visual or blocking cue to sharpen intent",
-                "conflict_with": "narrative_flow",
-            }
-        ]
 
     return disagreements

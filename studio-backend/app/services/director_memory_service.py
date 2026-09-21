@@ -179,7 +179,7 @@ class DirectorMemoryService:
                             message=(
                                 f"The {sym} motif "
                                 f"({entry.get('meaning') or 'meaning unset'}) "
-                                f"has not appeared since scene {last_seen}. "
+                                f"has not appeared since {last_seen}. "
                                 f"Reintroducing it here may strengthen the emotional arc."
                             ),
                             scene_id=scene_id,
@@ -282,7 +282,7 @@ class DirectorMemoryService:
                             kind="themes",
                             entry=entry,
                             message=(
-                                f"{theme.capitalize()} last appeared in scene {last_seen} — "
+                                f"{theme.capitalize()} last appeared in {last_seen} — "
                                 f"{gap} scenes ago."
                             ),
                             scene_id=scene_id,

@@ -16,7 +16,12 @@ import os
 # Ensure app module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.director_evaluator import DirectorEvaluator, director_evaluator, Decision
+from app.services.director_evaluator import (
+    DirectorEvaluator,
+    director_evaluator,
+    Decision,
+    build_agent_disagreements,
+)
 
 
 # =============================================================================
@@ -798,6 +803,55 @@ def test_global_instance_exists():
     assert director_evaluator is not None
     assert isinstance(director_evaluator, DirectorEvaluator)
     print("✓ test_global_instance_exists passed")
+
+
+# =============================================================================
+# Test: Agent Disagreements — Evidence Required
+# =============================================================================
+
+def test_agent_disagreements_silent_without_evidence():
+    """No concrete risk signal means no disagreement — never a fabricated fallback."""
+    result = build_agent_disagreements(
+        {"text": "Mara sits quietly by the window.", "heading": "INT. ROOM - DAY"},
+        {},
+        {},
+        {},
+    )
+    assert result == []
+
+
+def test_agent_disagreements_never_fabricate_tonal_softness():
+    """The old placeholder 'Minor tonal softness' must never be invented."""
+    result = build_agent_disagreements({}, {}, {}, {})
+    issues = [d.get("issue") for d in result]
+    assert "Minor tonal softness before escalation" not in issues
+
+
+def test_agent_disagreements_surface_on_narrative_conflict():
+    """A low flow score is a concrete signal and should surface one note."""
+    result = build_agent_disagreements(
+        {"text": "Mara pauses.", "heading": "INT. ROOM - DAY"},
+        {},
+        {"flow_score": 0.5},
+        {},
+    )
+    assert len(result) == 1
+    assert result[0]["agent"] == "director"
+    assert result[0]["severity"] == "high"
+
+
+def test_agent_disagreements_shape_is_valid_when_present():
+    """Every surfaced disagreement carries the full advisory shape."""
+    result = build_agent_disagreements(
+        {"text": "Mara sprints through the chaos.", "heading": "INT. HALL - NIGHT"},
+        {"pacing_patterns": ["slow burn"]},
+        {},
+        {},
+    )
+    assert result
+    for note in result:
+        for key in ("agent", "severity", "issue", "recommendation", "conflict_with"):
+            assert key in note
 
 
 # =============================================================================

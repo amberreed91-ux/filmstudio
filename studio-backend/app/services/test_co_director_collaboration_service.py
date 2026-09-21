@@ -5,6 +5,9 @@ Tests for Co-Director Collaboration Service - Phase 10.8
 from uuid import uuid4
 
 from app.models.co_director import (
+    CONFIDENCE_CONSISTENT,
+    CONFIDENCE_EMERGING,
+    CONFIDENCE_STRONG,
     CoDirectorComparison,
     CoDirectorComparisonCategory,
     CoDirectorComparisonReport,
@@ -22,7 +25,9 @@ from app.models.co_director import (
     CoDirectorSession,
     SessionMode,
 )
-from app.services.co_director_collaboration_service import CoDirectorCollaborationService
+from app.services.co_director_collaboration_service import (
+    CoDirectorCollaborationService,
+)
 
 
 def _session(mode: SessionMode) -> CoDirectorSession:
@@ -40,9 +45,9 @@ def _reports(mode: SessionMode):
         grounded_signals=["g"],
         heuristic_signals=["h"],
         source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
-        overall_confidence=0.9,
-        grounded_confidence=0.92,
-        heuristic_confidence=0.3,
+        overall_confidence=CONFIDENCE_STRONG,
+        grounded_confidence=CONFIDENCE_STRONG,
+        heuristic_confidence=CONFIDENCE_EMERGING,
         provenance=["p"],
         canonical_sources={"a": True},
         affected_scene_ids=["scene_1"],
@@ -60,9 +65,9 @@ def _reports(mode: SessionMode):
         grounded_signals=["g"],
         heuristic_signals=["h"],
         source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
-        overall_confidence=0.86,
-        grounded_confidence=0.9,
-        heuristic_confidence=0.32,
+        overall_confidence=CONFIDENCE_STRONG,
+        grounded_confidence=CONFIDENCE_STRONG,
+        heuristic_confidence=CONFIDENCE_EMERGING,
         provenance=["p"],
         canonical_sources={"a": True},
         affected_scene_ids=["scene_1"],
@@ -80,9 +85,9 @@ def _reports(mode: SessionMode):
         grounded_signals=["g"],
         heuristic_signals=["h"],
         source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
-        overall_confidence=0.84,
-        grounded_confidence=0.9,
-        heuristic_confidence=0.33,
+        overall_confidence=CONFIDENCE_STRONG,
+        grounded_confidence=CONFIDENCE_STRONG,
+        heuristic_confidence=CONFIDENCE_EMERGING,
         dominance_reason="rejection_signals_have_priority_over_other_revisions",
         provenance=["p"],
         canonical_sources={"a": True},
@@ -98,9 +103,9 @@ def _reports(mode: SessionMode):
         recommended_mode=mode,
         grounded_signals=["revision_count:3"],
         heuristic_signals=["sustained_revision_cycle"],
-        overall_confidence=0.79,
-        grounded_confidence=0.88,
-        heuristic_confidence=0.34,
+        overall_confidence=CONFIDENCE_CONSISTENT,
+        grounded_confidence=CONFIDENCE_STRONG,
+        heuristic_confidence=CONFIDENCE_EMERGING,
         mode=mode,
     )
     return (

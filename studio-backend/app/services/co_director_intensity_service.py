@@ -9,6 +9,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from app.models.co_director import (
+    CONFIDENCE_CONSISTENT,
+    CONFIDENCE_EMERGING,
+    CONFIDENCE_STRONG,
     CoDirectorComparisonReport,
     CoDirectorCritiqueReport,
     CoDirectorCritiqueSource,
@@ -70,9 +73,9 @@ class CoDirectorIntensityService:
             recommended_mode=session.current_mode,
             grounded_signals=grounded_signals,
             heuristic_signals=heuristic_signals,
-            overall_confidence=0.79,
-            grounded_confidence=0.88,
-            heuristic_confidence=0.34 if heuristic_signals else 0.0,
+            overall_confidence=CONFIDENCE_CONSISTENT,
+            grounded_confidence=CONFIDENCE_STRONG,
+            heuristic_confidence=CONFIDENCE_EMERGING,
             session_id=str(session.session_id),
             mode=session.current_mode,
         )

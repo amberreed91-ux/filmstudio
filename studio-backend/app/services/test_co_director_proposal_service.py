@@ -7,6 +7,8 @@ Bounded proposal generation from dominant critiques only.
 from uuid import uuid4
 
 from app.models.co_director import (
+    CONFIDENCE_EMERGING,
+    CONFIDENCE_STRONG,
     CoDirectorCritique,
     CoDirectorCritiqueCategory,
     CoDirectorCritiquePriority,
@@ -39,9 +41,9 @@ def _make_critique(category: CoDirectorCritiqueCategory) -> CoDirectorCritique:
         grounded_signals=["signal_a"],
         heuristic_signals=["heuristic_b"],
         source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
-        overall_confidence=0.8,
-        grounded_confidence=0.85,
-        heuristic_confidence=0.3,
+        overall_confidence=CONFIDENCE_STRONG,
+        grounded_confidence=CONFIDENCE_STRONG,
+        heuristic_confidence=CONFIDENCE_EMERGING,
         provenance=["director_result.pillars"],
         canonical_sources={"director_result.pillars": True},
         affected_scene_ids=["scene_77"],

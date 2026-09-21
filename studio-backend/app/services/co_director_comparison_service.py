@@ -10,6 +10,9 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from app.models.co_director import (
+    CONFIDENCE_CONSISTENT,
+    CONFIDENCE_EMERGING,
+    CONFIDENCE_STRONG,
     CoDirectorComparison,
     CoDirectorComparisonCategory,
     CoDirectorComparisonReport,
@@ -144,9 +147,9 @@ class CoDirectorComparisonService:
             grounded_signals=grounded,
             heuristic_signals=heuristic,
             source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
-            overall_confidence=0.84,
-            grounded_confidence=0.9,
-            heuristic_confidence=0.33 if heuristic else 0.0,
+            overall_confidence=CONFIDENCE_STRONG,
+            grounded_confidence=CONFIDENCE_STRONG,
+            heuristic_confidence=CONFIDENCE_EMERGING,
             dominance_reason="rejection_signals_have_priority_over_other_revisions",
             provenance=["critique_report.critique", "proposal_report.proposal", "director_result.score"],
             canonical_sources={
@@ -190,9 +193,9 @@ class CoDirectorComparisonService:
             grounded_signals=grounded,
             heuristic_signals=heuristic,
             source_systems=[CoDirectorCritiqueSource.DIRECTOR_EVALUATOR],
-            overall_confidence=0.78,
-            grounded_confidence=0.84,
-            heuristic_confidence=0.36 if heuristic else 0.0,
+            overall_confidence=CONFIDENCE_CONSISTENT,
+            grounded_confidence=CONFIDENCE_STRONG,
+            heuristic_confidence=CONFIDENCE_EMERGING,
             dominance_reason="lowest_grounded_pillars_define_primary_revision_path",
             provenance=["critique_report.critique", "proposal_report.proposal", "director_result.pillars"],
             canonical_sources={

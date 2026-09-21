@@ -431,12 +431,8 @@ class ProactiveCoDirectorService:
             )
 
         if not observations:
-            # Positive note — cut looks balanced
-            return (
-                f"The current cut has {len(approved_scenes)} approved scenes. "
-                "The tonal arc looks varied and the structure reads clearly. "
-                "Nothing jumps out as a concern — this is a solid foundation to build from."
-            )
+            # No concrete risk signal — silence is stronger than empty praise.
+            return None
 
         # Return the first (most important) observation
         return observations[0]
