@@ -87,9 +87,11 @@ import { adoptShotCount, mergeCameraPlanIntoOverrides, mergeCameraRecIntoOverrid
 import { persistActiveProjectId, resolveActiveProjectId, withProductionContext } from '../lib/projectContext'
 import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
 import { browserPlaybackUrl } from '../lib/studioMedia'
+import ShotIntentRationaleCard from '../components/ShotIntentRationaleCard'
 import ShotSignalsPanel from '../components/ShotSignalsPanel'
 import GenerationReadinessPanel from '../components/GenerationReadinessPanel'
 import AiCameraApproval from '../components/AiCameraApproval'
+import StoryboardImagePromptPanel from '../components/StoryboardImagePromptPanel'
 import { useGenerationPreflightGuard } from '../components/useGenerationPreflightGuard'
 import { getShotSignals, type ShotSignalsEnvelope } from '../lib/shotSignals'
 import {
@@ -690,7 +692,7 @@ export default function PrevisRoom() {
   // ── Seed management ────────────────────────────────────────────────────────
   const [storyboardSeed, setStoryboardSeed] = useState<number | null>(null)
   const [seedLocked, setSeedLocked] = useState(false)
-  const [storyboardProvider, setStoryboardProvider] = useState<StoryboardImageProvider>('qwen-image-max')
+  const [storyboardProvider, setStoryboardProvider] = useState<StoryboardImageProvider>('runway')
   const [storyboardImagesByShot, setStoryboardImagesByShot] = useState<Record<number, string>>({})
   const [storyboardImageStates, setStoryboardImageStates] = useState<Record<number, StoryboardLoadState>>({})
   const [storyboardRetryNonce, setStoryboardRetryNonce] = useState<Record<number, number>>({})
@@ -958,6 +960,17 @@ export default function PrevisRoom() {
     )
     return { ...derived, ...(shotPlanningOverrides[activeShotNumber] || {}) }
   }, [activeShotNumber, genConfig.duration, selectedScene, shotPlanningOverrides, shotRationale?.rationale, totalShots])
+
+  const previsRationaleShot = useMemo(() => {
+    if (!activeBlueprintShot) return null
+    return {
+      intent: activeBlueprintShot.intent,
+      metadata: activeBlueprintShot.metadata,
+      narrative_function: activeBlueprintShot.rationale,
+      prompt: activeBlueprintShot.render_contract?.provider_neutral_prompt,
+      camera: activeShotPlanningDetails.camera,
+    }
+  }, [activeBlueprintShot, activeShotPlanningDetails])
 
   const updateShotPlanningDetail = useCallback((field: keyof ShotPlanningDetails, value: string) => {
     setShotPlanningOverrides((prev) => ({
@@ -2466,6 +2479,7 @@ export default function PrevisRoom() {
                   <p className="text-sm leading-relaxed text-zinc-300">{shotRationale.rationale}</p>
                 </div>
               )}
+              <ShotIntentRationaleCard shot={previsRationaleShot} testId="why-this-shot-matters-previs" />
               <SceneEmotionalGuidancePanel sceneId={selectedSceneId} className="mt-3 border-l-2 border-amber-200/40 py-1 pl-4" />
             </aside>
 
@@ -2590,9 +2604,9 @@ export default function PrevisRoom() {
                     <div><h3 className="text-sm font-medium text-zinc-100">1. Create the frame</h3><p className="mt-1 text-xs leading-relaxed text-zinc-400">Start with the composition you want this shot to follow.</p></div>
                     <button type="button" onClick={() => { setStoryboardStage(null); void handleGenerateStoryboard() }} disabled={loading || !selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-200/35 bg-amber-200/10 px-4 py-2.5 text-xs font-medium text-amber-100 hover:bg-amber-200/15 disabled:opacity-40">{loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}{currentStoryboardImageUrl ? 'Generate a new storyboard frame' : 'Generate storyboard frame'}</button>
                     <details className="border-b border-white/10 pb-3">
-                      <summary className="cursor-pointer text-xs text-zinc-400">Image settings <span className="ml-1 text-zinc-500">· {storyboardProvider === 'qwen-image-max' ? 'Qwen Max' : 'Legacy'}{seedLocked ? ' · seed locked' : ''}</span></summary>
+                      <summary className="cursor-pointer text-xs text-zinc-400">Image settings <span className="ml-1 text-zinc-500">· {storyboardProvider === 'runway' ? 'Runway' : 'Legacy'}{seedLocked ? ' · seed locked' : ''}</span></summary>
                       <div className="mt-3 space-y-3">
-                        <label className="block text-xs text-zinc-300">Image model<select aria-label="Storyboard image model" value={storyboardProvider} onChange={(event) => setStoryboardProvider(event.target.value as StoryboardImageProvider)} className="mt-2 w-full rounded-md border border-white/15 bg-zinc-950 px-3 py-2 text-sm"><option value="qwen-image-max">Qwen Max</option><option value="pollinations">Legacy</option></select></label>
+                        <label className="block text-xs text-zinc-300">Image model<select aria-label="Storyboard image model" value={storyboardProvider} onChange={(event) => setStoryboardProvider(event.target.value as StoryboardImageProvider)} className="mt-2 w-full rounded-md border border-white/15 bg-zinc-950 px-3 py-2 text-sm"><option value="runway">Runway</option><option value="pollinations">Legacy</option></select></label>
                         {storyboardSeed !== null ? <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-xs text-zinc-400">Image seed: {storyboardSeed}</span><button type="button" onClick={handleToggleSeedLock} aria-pressed={seedLocked} className="flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-xs text-zinc-200" title={seedLocked ? 'Unlock storyboard image seed' : 'Lock storyboard image seed; video takes use a separate render seed'}>{seedLocked ? <Lock size={13} /> : <LockOpen size={13} />}{seedLocked ? 'Seed locked' : 'Lock image seed'}</button></div> : <p className="text-xs text-zinc-500">The image seed appears after a storyboard is generated.</p>}
                       </div>
                     </details>
@@ -2603,6 +2617,25 @@ export default function PrevisRoom() {
                     <button type="button" onClick={() => { setStoryboardStage(null); void handleCreateStoryboardBlueprint() }} disabled={!selectedSceneId || blueprintLoading} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-4 py-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40">{blueprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}Build storyboard blueprint</button>
                     <p className="text-xs text-zinc-400">Blueprint: <span className="text-zinc-200">{blueprintLoading ? 'loading' : storyboardBlueprint?.blueprint.status || 'not built'}</span></p>
                     {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}{confirmDeleteKey === `shot:${activeBlueprintShot.storyboard_shot_id}` ? <button type="button" onClick={() => void handleDeleteStoryboardShot()} className="text-[11px] text-rose-300 hover:text-rose-200" aria-label={`Confirm delete shot ${activeBlueprintShot.shot_number}`}>Confirm delete shot {activeBlueprintShot.shot_number}? Takes stay in history.</button> : <button type="button" onClick={() => armDelete(`shot:${activeBlueprintShot.storyboard_shot_id}`)} disabled={(storyboardBlueprint?.shots.length ?? 1) <= 1 || storyboardApproved} title={(storyboardBlueprint?.shots.length ?? 1) <= 1 ? 'A storyboard must keep at least one shot — add another shot first, or generate a new frame to replace this one' : storyboardApproved ? 'Unapprove the storyboard to edit its shots' : `Delete shot ${activeBlueprintShot.shot_number}`} className="text-[11px] text-zinc-500 hover:text-rose-300 disabled:opacity-40" aria-label={`Delete shot ${activeBlueprintShot.shot_number}`}>Delete shot {activeBlueprintShot.shot_number}</button>}</div></details>}
+                    {effectiveProjectId && selectedSceneId && activeBlueprintShot && (
+                      <StoryboardImagePromptPanel
+                        key={`image-prompt:${activeBlueprintShot.storyboard_shot_id}/${activeBlueprintShot.version_id}`}
+                        blueprintId={storyboardBlueprint?.blueprint.blueprint_id ?? activeBlueprintShot.blueprint_id}
+                        shot={activeBlueprintShot}
+                        entry={storyboardBlueprint?.image_prompts?.[activeBlueprintShot.storyboard_shot_id]}
+                        disabled={storyboardApproved}
+                        onChanged={() => {
+                          void (async () => {
+                            try {
+                              const refreshed = await getStoryboardBlueprint(effectiveProjectId, selectedSceneId)
+                              setStoryboardBlueprint(refreshed)
+                            } finally {
+                              bumpPreflightRevision()
+                            }
+                          })()
+                        }}
+                      />
+                    )}
                     {effectiveProjectId && selectedSceneId && activeBlueprintShot && (
                       <div className="space-y-3">
                         <AiCameraApproval

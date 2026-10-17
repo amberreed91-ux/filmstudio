@@ -13,7 +13,7 @@ describe('camera planning API', () => {
   it('sends explicit empty camera edits without dropping them', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ image_url: '/frame.png' })))
     vi.stubGlobal('fetch', fetch)
-    await generateSceneStoryboard('film', 'scene', 'qwen-image-max', 1, { camera: '' })
+    await generateSceneStoryboard('film', 'scene', 'runway', 1, { camera: '' })
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ camera: '' })
   })
   it('loads the server catalog and surfaces failures', async () => {
@@ -26,7 +26,7 @@ describe('camera planning API', () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ image_url: '/frame.png' })))
     vi.stubGlobal('fetch', fetch)
     const plan = { camera: 'Orbit around the seated subject.', framing: 'Medium shot.' }
-    await generateSceneStoryboard('film', 'scene', 'qwen-image-max', 3, plan)
+    await generateSceneStoryboard('film', 'scene', 'runway', 3, plan)
     expect(fetch.mock.calls[0][0]).toContain('shot_number=3')
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(plan)
     expect(fetch.mock.calls[0][1].headers['Content-Type']).toBe('application/json')

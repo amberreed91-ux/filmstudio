@@ -38,9 +38,9 @@ describe('camera grammar API', () => {
   it('sends the visible Previs prompt and take settings to the backend', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ job_id: 'j', status: 'pending', scene_id: 's' })))
     const renderSettings = { prompt: 'Close on her left hand. She keeps the key.', duration_seconds: 8, resolution: '1080p' as const, seed: 0 }
-    await generatePrevisScene('p', 's', { provider: 'openrouter-video', shotNumber: 2, takeNumber: 3, renderSettings })
+    await generatePrevisScene('p', 's', { provider: 'runway', shotNumber: 2, takeNumber: 3, renderSettings })
     const [url, request] = fetchMock.mock.calls[0]
-    expect(String(url)).toContain('provider=openrouter-video')
+    expect(String(url)).toContain('provider=runway')
     expect(String(url)).toContain('take_number=3')
     expect(JSON.parse(String(request?.body))).toEqual(renderSettings)
     expect(new Headers(request?.headers).get('Content-Type')).toBe('application/json')
@@ -168,26 +168,30 @@ describe('generateSceneStoryboard', () => {
     vi.restoreAllMocks()
   })
 
-  it('defaults storyboard generation to Qwen Image Max', async () => {
+  it('defaults storyboard generation to Runway', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({
-          image_url: '/previs-assets/proj-1/scene_001_storyboard_qwen.png',
+          image_url: '/previs-assets/proj-1/scene_001_storyboard_runway.png',
           status: 'complete',
-          provider: 'dashscope',
-          model: 'qwen-image-max',
+          provider: 'runway',
+          model: 'runway',
         }),
         { status: 200 },
       ),
     )
 
-    const result = await generateSceneStoryboard('proj-1', 'scene_001', 'qwen-image-max', 2)
+    const result = await generateSceneStoryboard('proj-1', 'scene_001', 'runway', 2)
 
-    expect(result.model).toBe('qwen-image-max')
+    expect(result.model).toBe('runway')
     const [url, init] = fetchMock.mock.calls[0]
-    expect(String(url)).toContain('/projects/proj-1/scenes/scene_001/storyboard?provider=qwen-image-max')
+    expect(String(url)).toContain('/projects/proj-1/scenes/scene_001/storyboard?provider=runway')
     expect(String(url)).toContain('shot_number=2')
     expect((init?.method || '').toUpperCase()).toBe('POST')
+    // Image-model generation routinely exceeds the 30s default budget.
+    const budgeted = init as { timeoutMs?: number; timeoutLabel?: string } | undefined
+    expect(budgeted?.timeoutMs).toBe(180000)
+    expect(budgeted?.timeoutLabel).toBe('Storyboard')
   })
 
   it('can request the legacy storyboard provider', async () => {
@@ -597,6 +601,7 @@ describe('generateScenePipeline', () => {
           output_url: '/outputs/scene.mp4',
           score_ambient_provider: 'manual_post_render',
           soundtrack_status: 'manual_post_render',
+          prepared_snapshot_id: 'snapshot-response',
         }),
         { status: 200 },
       ),
@@ -604,6 +609,7 @@ describe('generateScenePipeline', () => {
 
     const response = await generateScenePipeline('proj-scene', 'scene_003', {
       provider: 'happyhorse',
+      prepared_snapshot_id: 'snapshot-request',
       overwrite: true,
       score_ambient_provider: 'manual_post_render',
       soundtrack: {
@@ -615,12 +621,14 @@ describe('generateScenePipeline', () => {
     })
 
     expect(response.result?.status).toBe('complete')
+    expect(response.result?.prepared_snapshot_id).toBe('snapshot-response')
     const [url, init] = fetchMock.mock.calls[0]
     expect(String(url)).toContain('/api/f51/studio/projects/proj-scene/scenes/scene_003/pipeline/generate')
     expect(init?.method).toBe('POST')
     const body = JSON.parse(String(init?.body))
     expect(body).toEqual({
       provider: 'happyhorse',
+      prepared_snapshot_id: 'snapshot-request',
       overwrite: true,
       on_audio_overrun: 'freeze_last_frame',
       score_ambient_provider: 'manual_post_render',
@@ -630,6 +638,7 @@ describe('generateScenePipeline', () => {
         local_audio_path: '/tmp/score.wav',
         volume: 0.18,
       },
+      expected_reference_binding_digests: null,
     })
   })
 

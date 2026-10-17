@@ -2147,14 +2147,17 @@ export type SceneScoreAmbientProvider = 'none' | 'manual_post_render' | 'ace_ste
 
 export type ScenePipelineGeneratePayload = {
   provider?: string | null
+  prepared_snapshot_id?: string | null
   overwrite?: boolean
   on_audio_overrun?: 'error' | 'freeze_last_frame' | 'trim_audio'
   score_ambient_provider?: SceneScoreAmbientProvider
   soundtrack?: Partial<SoundtrackConfig>
+  expected_reference_binding_digests?: Record<string, string> | null
 }
 
 export type ScenePipelineGenerateResult = {
   status: string
+  prepared_snapshot_id?: string
   project_id: string
   scene_id: string
   shots: Array<Record<string, unknown>>
@@ -2432,6 +2435,50 @@ export type StoryboardBlueprintDetail = {
   version: StoryboardBlueprintVersion | null
   shots: StoryboardShot[]
   inspection: StoryboardBlueprintInspection
+  image_prompt_gate?: StoryboardImagePromptGate
+  image_prompts?: Record<string, StoryboardImagePromptEntry>
+}
+
+// ── D4: Runway image prompt (separate from the canonical board text) ──
+// Runway gen4_image allows 1000 UTF-16 code units. JS string length counts
+// UTF-16 code units, so `text.length` is the same unit the backend enforces.
+export const RUNWAY_IMAGE_PROMPT_LIMIT = 1000
+
+export function utf16Length(text: string | null | undefined): number {
+  return (text ?? '').length
+}
+
+export type StoryboardImagePromptState =
+  | 'missing'
+  | 'unapproved'
+  | 'stale'
+  | 'over_limit'
+  | 'ready'
+  | string
+
+export type StoryboardImagePromptEntry = {
+  image_prompt?: string | null
+  origin?: string | null
+  status?: string | null
+  compactor_version?: string | null
+  rules_applied_json?: string | null
+  dropped_segments_json?: string | null
+  canonical_utf16?: number | null
+  utf16_length?: number | null
+  chars_removed?: number | null
+  approved_by?: string | null
+  approved_at?: string | null
+  updated_at?: string | null
+  source_prompt_sha256?: string | null
+  render_ready?: boolean
+  state?: StoryboardImagePromptState
+  gate_message?: string
+}
+
+export type StoryboardImagePromptGate = {
+  approved: boolean
+  not_ready: Array<Record<string, unknown>>
+  message: string
 }
 
 export type StoryboardContinuityIssue = {
@@ -2945,10 +2992,12 @@ export async function generateScenePipeline(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: payload.provider ?? null,
+          prepared_snapshot_id: payload.prepared_snapshot_id ?? null,
           overwrite: Boolean(payload.overwrite),
           on_audio_overrun: payload.on_audio_overrun || 'freeze_last_frame',
           score_ambient_provider: payload.score_ambient_provider || 'none',
           soundtrack: payload.soundtrack || {},
+          expected_reference_binding_digests: payload.expected_reference_binding_digests ?? null,
         }),
       },
     )
@@ -2958,6 +3007,139 @@ export async function generateScenePipeline(
       error: error instanceof Error ? error.message : 'Unable to generate scene pipeline',
     }
   }
+}
+
+export interface GenerationPreflightCameraInstruction {
+  dimension?: string
+  value?: string
+  instruction_source?: string
+  source?: string
+  source_version?: string
+  [key: string]: unknown
+}
+
+export interface GenerationPreflightShotEstimate {
+  model?: string
+  duration_seconds?: number
+  estimated_credits?: number | null
+  estimated?: boolean
+}
+
+export interface GenerationPreflightCostEstimate {
+  provider?: string
+  per_shot?: GenerationPreflightShotEstimate[]
+  total_duration_seconds?: number
+  estimated_total_credits?: number | null
+  estimated?: boolean
+  unpriced_shot_count?: number
+}
+
+export interface GenerationPreflightManifestShot {
+  shot_id: string
+  storyboard_shot_id?: string
+  shot_version?: string
+  shot_order?: number
+  shot_duration_seconds?: number
+  shot_prompt?: string
+  camera_instructions?: GenerationPreflightCameraInstruction[]
+  camera_plan?: Record<string, unknown>
+  references?: string[]
+  reference_version?: string
+  generation_context_id?: string
+  parameters?: Record<string, unknown>
+}
+
+export interface GenerationPreflightManifest {
+  manifest_version?: number
+  scene?: { scene_id?: string; scene_version?: string }
+  storyboard?: { storyboard_version?: string }
+  shots?: GenerationPreflightManifestShot[]
+  batch?: {
+    total_duration_seconds?: number
+    shot_count?: number
+  }
+  manifest_fingerprint?: string
+}
+
+export interface GenerationPreflightEntry {
+  shot_id: string
+  storyboard_shot_id?: string
+  shot_order?: number
+  prompt?: string
+  duration_seconds?: number
+  camera_instructions?: GenerationPreflightCameraInstruction[]
+  camera_plan?: Record<string, unknown>
+  references?: string[]
+  reference_version?: string
+  generation_context_id?: string
+  shot_version?: string
+  blockers?: string[]
+  cost_estimate?: GenerationPreflightShotEstimate | null
+  reference_requirements?: {
+    setting_id?: string
+    setting_urls?: string[]
+    character_ids?: string[]
+  } | null
+}
+
+/**
+ * The backend's own generation preflight result (SceneProductionPipeline
+ * batch pre-flight). The frontend NEVER evaluates readiness itself — it
+ * displays exactly this verdict, these blockers, and this plan.
+ */
+export interface BatchAuthorizationShotResult {
+  shot_id: string
+  ok: boolean
+  failure_code?: string | null
+  failure_category?: string | null
+  message?: string | null
+  policy_version?: string | null
+  digest?: string | null
+}
+
+export interface BatchAuthorizationReport {
+  ready: boolean
+  project_id?: string
+  scene_id?: string
+  shot_count?: number
+  passed_count?: number
+  failed_count?: number
+  digest_expectations?: string
+  shots?: BatchAuthorizationShotResult[]
+}
+
+export interface GenerationPreflight {
+  project_id?: string
+  prepared_snapshot_id?: string
+  scene_id?: string
+  ready: boolean
+  blockers: string[]
+  shot_count: number
+  entries: GenerationPreflightEntry[]
+  manifest: GenerationPreflightManifest | null
+  cost_estimate: GenerationPreflightCostEstimate | null
+  authorization?: BatchAuthorizationReport | null
+}
+
+/**
+ * Read-only generation preflight for a scene (multi shot).
+ *
+ * Runs the backend's existing batch pre-flight gate stack. It never creates
+ * a render job, never contacts a provider, and never spends credits — it
+ * answers "is this scene ready to generate, and if not, why?"
+ */
+export async function getGenerationPreflight(
+  projectId: string,
+  sceneId: string,
+  provider?: string,
+): Promise<GenerationPreflight> {
+  const params = new URLSearchParams()
+  if (provider) params.set('provider', provider)
+  const query = params.toString()
+  return fetchJson<GenerationPreflight>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/generation-preflight${query ? `?${query}` : ''}`,
+    { timeoutMs: 60000 },
+  )
 }
 
 export async function createCollaborationSession(
@@ -3260,15 +3442,31 @@ export function studyReferenceUpload(projectId: string, file: File, options?: { 
   })
 }
 
-export type StoryboardImageProvider = 'qwen-image-max' | 'pollinations'
+export type StoryboardImageProvider = 'runway' | 'pollinations'
+
+/**
+ * Explicit camera edits sent with a storyboard generation. Mirrors the
+ * backend's StoryboardCameraPlan (camera/framing; omitted keys stay unset).
+ */
+export interface StoryboardCameraEdits {
+  camera?: string | null
+  framing?: string | null
+}
 
 export function generateSceneStoryboard(
   projectId: string,
   sceneId: string,
-  provider: StoryboardImageProvider = 'qwen-image-max',
+  provider: StoryboardImageProvider = 'runway',
   shotNumber = 1,
+  cameraPlan?: StoryboardCameraEdits | null,
 ) {
   const params = new URLSearchParams({ provider, shot_number: String(Math.max(1, shotNumber)) })
+  // Legacy contract: no body when there is no camera override. With one, send
+  // the plan as JSON so explicit empty edits (e.g. { camera: '' }) are not
+  // silently dropped by the backend's presence check.
+  const cameraPlanInit = cameraPlan !== undefined && cameraPlan !== null
+    ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cameraPlan) }
+    : {}
   return fetchJson<{
     image_url: string
     status: string
@@ -3284,7 +3482,10 @@ export function generateSceneStoryboard(
     job_id?: string
   }>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/storyboard?${params.toString()}`,
-    { method: 'POST', timeoutMs: 30000 },
+    // Storyboard generation calls an image model and routinely takes longer
+    // than the default 30s budget; previsImageApi already allows 180s for
+    // the same class of work. Label the timeout so the banner names the stage.
+    { method: 'POST', ...cameraPlanInit, timeoutMs: 180000, timeoutLabel: 'Storyboard' },
   )
 }
 
@@ -3515,9 +3716,9 @@ export function generatePrevisScene(
     takeNumber?: number
     storyboardShotId?: string | null
     allowApprovedRevision?: boolean
-    // Optional render-provider override. Empty/undefined → the backend uses its
-    // configured default (RENDER_VIDEO_PROVIDER). A concrete id (e.g.
-    // "openrouter-video", "runway", "wan") forces that provider for this render.
+    // Optional video-provider override. Empty/undefined → the backend uses its
+    // configured default; a concrete registered provider id (e.g. "runway")
+    // forces that provider for this render.
     provider?: string
     renderSettings?: {
       prompt?: string
@@ -3525,6 +3726,16 @@ export function generatePrevisScene(
       resolution?: '480p' | '720p' | '1080p'
       seed?: number | null
       shot_planning?: PrevisShotPlanningPayload
+      // Opt-in trained visual identity for this take. Omitted (default) leaves
+      // the render pipeline unchanged; when set the backend resolves this
+      // registered visual model fail-closed and attaches its reference.
+      visual_model_id?: string
+      // Generation model: 'auto' routes over the verified registry; a
+      // specific model id is user-selected and never silently replaced.
+      model?: string
+      // Fresh Render: force a brand-new generation context built from the
+      // current authoritative state instead of reusing an active job.
+      fresh_render?: boolean
     }
   } = {},
 ) {
@@ -3545,6 +3756,42 @@ export function listPrevisImages(projectId: string, sceneId: string) {
   return fetchJson<PrevisImage[]>(
     `/api/f51/studio/projects/${encodeURIComponent(projectId)}/previs/images/${encodeURIComponent(sceneId)}`,
     { timeoutMs: 10000 },
+  )
+}
+
+export type AiCameraApprovalResult = {
+  storyboard_shot_id: string
+  version_id: string
+  approved_camera: Record<string, string>
+  approved_by: string
+}
+
+/**
+ * Explicit creator approval of ONE shot's pending AI camera suggestion.
+ *
+ * The backend creates a new draft board version (approved boards are
+ * immutable) and stamps the decision with the approver's identity. Sending
+ * `expectedVersionId` makes the backend refuse the approval if the shot no
+ * longer belongs to the version the creator was looking at. This never
+ * generates anything and never approves more than this one shot.
+ */
+export function approveAiCamera(
+  projectId: string,
+  sceneId: string,
+  storyboardShotId: string,
+  options?: { approvedBy?: string; expectedVersionId?: string | null },
+) {
+  return fetchJson<AiCameraApprovalResult>(
+    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/scenes/${encodeURIComponent(sceneId)}/camera-approvals/${encodeURIComponent(storyboardShotId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        approved_by: options?.approvedBy ?? 'creator',
+        expected_version_id: options?.expectedVersionId ?? null,
+      }),
+      timeoutMs: 10000,
+    },
   )
 }
 
@@ -3583,6 +3830,9 @@ export function createPrevisProductionPackage(projectId: string, sceneId: string
 
 export type ScreeningOutput = {
   cut_freshness?: { status: 'current' | 'outdated' | 'unverified'; reason: string }
+  accepted?: boolean
+  acceptance_status?: string
+  acceptance_report_id?: string
   screening_output_id: string
   project_id: string
   scene_id?: string | null
@@ -3630,6 +3880,57 @@ export function approveScreeningOutput(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ confirmed: true, approved_by: approvedBy }),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export function getShotImagePrompt(blueprintId: string, storyboardShotId: string) {
+  return fetchJson<{ record: StoryboardImagePromptEntry | null; status: Record<string, unknown> }>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/image-prompt`,
+    { timeoutMs: 10000 },
+  )
+}
+
+export function deriveShotImagePrompt(blueprintId: string, storyboardShotId: string) {
+  return fetchJson<StoryboardImagePromptEntry>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/image-prompt/derive`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+      timeoutMs: 15000,
+    },
+  )
+}
+
+export function editShotImagePrompt(
+  blueprintId: string,
+  storyboardShotId: string,
+  imagePrompt: string,
+) {
+  return fetchJson<StoryboardImagePromptEntry>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/image-prompt`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_prompt: imagePrompt }),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export function approveShotImagePrompt(
+  blueprintId: string,
+  storyboardShotId: string,
+  approvedBy = 'creator',
+) {
+  return fetchJson<StoryboardImagePromptEntry>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/image-prompt/approve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved_by: approvedBy }),
       timeoutMs: 10000,
     },
   )
@@ -4094,6 +4395,12 @@ export type RenderJob = {
         category?: string
       }
     }
+    router_execution?: {
+      payload_normalized?: boolean
+      payload_normalization_warnings?: unknown
+      warnings?: unknown
+      [key: string]: unknown
+    }
   }
   retry_count: number
   continuity_context_injected?: boolean
@@ -4292,6 +4599,56 @@ export function getRenderProviders() {
   return fetchJson<ProviderStatus[]>('/api/f51/studio/render/providers')
 }
 
+// ── Shared provider catalog (single source of truth) ────────────────────────
+//
+// ScriptIngest and PrevisRoom must present the SAME provider list. The backend
+// GET /render/providers route is canonical: it lists every registered provider
+// (cloud and local) with enabled/status/ready metadata, and local providers
+// (local_ltx, minimax_h3_local) never claim readiness the runtime cannot back.
+// These helpers derive the UI-facing catalog from that response so neither page
+// hardcodes its own list again.
+
+/**
+ * Providers the UI presents in a provider picker. Disabled providers are
+ * dropped (not a choice); enabled-but-unconfigured ones stay visible so their
+ * unavailability reason can be shown honestly.
+ */
+export function selectableRenderProviders(providers: ProviderStatus[] | null | undefined): ProviderStatus[] {
+  return (providers || []).filter((p) =>
+    !['openrouter', 'openrouter-video'].includes(p.provider_id.trim().toLowerCase())
+    && (Boolean(p.enabled) || p.is_simulated),
+  )
+}
+
+/**
+ * Enabled providers the UI presents as visible-but-unavailable rows (disabled
+ * providers are excluded entirely).
+ */
+export function visibleUnavailableProviders(providers: ProviderStatus[] | null | undefined): ProviderStatus[] {
+  return (providers || []).filter((p) => !p.is_simulated && Boolean(p.enabled) && !providerIsUsable(p))
+}
+
+/** True when a provider row can actually accept a render right now. */
+export function providerIsUsable(provider: ProviderStatus | null | undefined): boolean {
+  if (!provider) return false
+  if (provider.is_simulated) return true
+  if (provider.provider_mode === 'local') return true
+  return Boolean(provider.ready_for_hosted_generation)
+}
+
+/** Plain-language reason a provider is not selectable/usable (empty if usable). */
+export function providerUnavailableReason(provider: ProviderStatus): string {
+  if (provider.is_simulated) return ''
+  if (provider.provider_mode === 'local') return ''
+  if (provider.ready_for_hosted_generation) return ''
+  if (provider.enabled === false) return 'disabled'
+  if (provider.missing_requirements && provider.missing_requirements.length > 0) {
+    return provider.missing_requirements.join(', ')
+  }
+  if (provider.status && provider.status !== 'available') return provider.status
+  return 'unavailable'
+}
+
 export function getProviderConfig(providerId: string) {
   return fetchJson<ProviderConfig>(`/api/f51/studio/render/providers/${encodeURIComponent(providerId)}`)
 }
@@ -4306,6 +4663,45 @@ export function disableProvider(providerId: string) {
   return fetchJson<ProviderConfig>(`/api/f51/studio/render/providers/${encodeURIComponent(providerId)}/disable`, {
     method: 'POST',
   })
+}
+
+export type GenerationModelInfo = {
+  model_id: string
+  provider: string
+  label: string
+  generation_modes: string[]
+  reference_types: string[]
+  maximum_reference_count: number
+  supported_durations: number[]
+  supported_resolutions: string[]
+  supported_ratios: string[]
+  audio_support: boolean
+  first_frame_support: boolean
+  last_frame_support: boolean
+  image_to_video_support: boolean
+  video_to_video_support: boolean
+  relative_cost: number
+  credits_per_second: number
+  availability_status: string
+  notes: string
+}
+
+export type GenerationModelCatalog = {
+  provider: string
+  models: GenerationModelInfo[]
+}
+
+/**
+ * Registry-backed model catalog (verified capabilities + published credit
+ * rates). Same source the backend router and adapter validate against, so the
+ * picker can only offer models the provider will actually accept.
+ */
+export function getGenerationModels(provider = 'runway') {
+  const params = new URLSearchParams({ provider })
+  return fetchJson<GenerationModelCatalog>(
+    `/api/f51/studio/render/models?${params.toString()}`,
+    { timeoutMs: 10000 },
+  )
 }
 
 export function createRenderJob(payload: {
@@ -4540,6 +4936,9 @@ export type FilmAssemblyResponse = {
   scene_count: number
   total_duration_seconds: number | null
   has_audio: boolean
+  acceptance_status?: 'ready_for_creator_approval' | 'blocked' | 'needs_attention' | 'insufficient_data' | 'unverified' | string
+  acceptance_report_id?: string | null
+  package_id?: string | null
 }
 
 export type AssemblyStatusResponse = {
@@ -4864,6 +5263,7 @@ export type ProductionAcceptanceCheckResult = {
 
 export type ProductionAcceptanceContextSnapshot = {
   project_id: string
+  final_output_asset_fingerprint?: string
   package_id: string
   package_updated_at: string
   final_output_url: string
