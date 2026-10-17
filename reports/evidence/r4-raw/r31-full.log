@@ -1,0 +1,2312 @@
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+.........................................................F.............. [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+.........F.............................................................. [ 37%]
+........................................................................ [ 38%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+.....................................................................F.. [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................F............................................... [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+..............................................FFF....................... [ 69%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+.................sss...s................................................ [ 74%]
+.............................................FFF.FFFF.F................. [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+...............................F..........................FF............ [ 80%]
+...........................F..........................................F. [ 81%]
+..............F......................................................... [ 83%]
+...................................................sss....sss........... [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+.........................................ssFs........................... [ 89%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................F............................... [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+............                                                             [100%]
+=================================== FAILURES ===================================
+____ TestDialogueProviderDispatch.test_auto_uses_piper_when_not_configured _____
+
+self = <app.services.test_dialogue_provider_selection.TestDialogueProviderDispatch object at 0x10ba14990>
+service = <app.services.audio_pipeline_service.AudioPipelineService object at 0x10f833950>
+fake_piper = <function fake_piper.<locals>._fake_piper_sync at 0x10fa9a3e0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10f852f10>
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_auto_uses_piper_when_not_0')
+
+    def test_auto_uses_piper_when_not_configured(
+        self, service, fake_piper, monkeypatch, tmp_path
+    ):
+        monkeypatch.setattr(aps, "ELEVENLABS_API_KEY", "")
+        monkeypatch.setattr(aps, "ELEVENLABS_CONFIGURED", False)
+        out = tmp_path / "out.wav"
+>       service._generate_dialogue_tts_sync("hello", out, provider="auto")
+
+studio-backend/app/services/test_dialogue_provider_selection.py:222: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/app/services/audio_pipeline_service.py:1766: in _generate_dialogue_tts_sync
+    self._generate_cosyvoice_tts_sync(
+studio-backend/app/services/audio_pipeline_service.py:1564: in _generate_cosyvoice_tts_sync
+    service = CosyVoiceTTSService(model=COSYVOICE_MODEL)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+studio-backend/app/services/audio/cosyvoice_tts_service.py:80: in __init__
+    config = get_dashscope_config()
+             ^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @lru_cache(maxsize=1)
+    def get_dashscope_config() -> DashScopeConfig:
+        settings = get_settings()
+        api_key = (settings.dashscope_api_key or "").strip()
+        if not api_key:
+>           raise DashScopeConfigError(
+                "DASHSCOPE_API_KEY is not set. Get one at "
+                "https://www.alibabacloud.com/help/en/model-studio/get-api-key "
+                "-- remember the key is tied to a region (intl vs beijing)."
+            )
+E           app.services.shared.dashscope_client.DashScopeConfigError: DASHSCOPE_API_KEY is not set. Get one at https://www.alibabacloud.com/help/en/model-studio/get-api-key -- remember the key is tied to a region (intl vs beijing).
+
+studio-backend/app/services/shared/dashscope_client.py:66: DashScopeConfigError
+___________ test_creator_selected_capability_rechecked_at_submission ___________
+
+    def test_creator_selected_capability_rechecked_at_submission():
+        import asyncio
+    
+        from app.services.render import RenderService
+    
+        service = RenderService()
+        job = service.create_job(
+            project_id="proj-model-cap",
+            shot_id="scene_001_shot_001",
+            provider="runway",
+            prompt="Maya pauses in a quiet hallway, medium shot, practical light.",
+            parameters={"model": "gen4.5", "duration": 5},
+        )
+        # Mutate the persisted payload after creation: the submit-time recheck
+        # must fail closed against the persisted values, not the creation-time ones.
+        job.input_payload.parameters["duration"] = 30
+        job.input_payload.parameters["model"] = "h3_max"
+        with pytest.raises(ValueError, match="cannot satisfy"):
+>           asyncio.run(service.submit_job(job.id))
+
+studio-backend/app/services/test_model_registry_and_router.py:274: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.render.RenderService object at 0x11018d610>
+job_id = 'job-20261014151329-49b5f424-scene_001_shot_001'
+
+    async def submit_job(self, job_id: str) -> RenderJobModel:
+        """Submit a job to its provider with error handling"""
+        job = self._jobs.get(job_id)
+        if not job:
+            logger.error(f"Job {job_id} not found for submission")
+>           raise ValueError(f"Job {job_id} not found")
+E           ValueError: Job job-20261014151329-49b5f424-scene_001_shot_001 not found
+
+studio-backend/app/services/render.py:4336: ValueError
+
+During handling of the above exception, another exception occurred:
+
+    def test_creator_selected_capability_rechecked_at_submission():
+        import asyncio
+    
+        from app.services.render import RenderService
+    
+        service = RenderService()
+        job = service.create_job(
+            project_id="proj-model-cap",
+            shot_id="scene_001_shot_001",
+            provider="runway",
+            prompt="Maya pauses in a quiet hallway, medium shot, practical light.",
+            parameters={"model": "gen4.5", "duration": 5},
+        )
+        # Mutate the persisted payload after creation: the submit-time recheck
+        # must fail closed against the persisted values, not the creation-time ones.
+        job.input_payload.parameters["duration"] = 30
+        job.input_payload.parameters["model"] = "h3_max"
+>       with pytest.raises(ValueError, match="cannot satisfy"):
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'cannot satisfy'
+E         Actual message: 'Job job-20261014151329-49b5f424-scene_001_shot_001 not found'
+
+studio-backend/app/services/test_model_registry_and_router.py:273: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    studio-render:render.py:4335 Job job-20261014151329-49b5f424-scene_001_shot_001 not found for submission
+______ test_scene_1_to_2_to_3_to_1_payloads_never_retain_stale_references ______
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_scene_1_to_2_to_3_to_1_pa0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1106cc610>
+
+    @pytest.mark.asyncio
+    async def test_scene_1_to_2_to_3_to_1_payloads_never_retain_stale_references(tmp_path, monkeypatch):
+        storage = _storage(tmp_path)
+        monkeypatch.setattr(render_module, "_storage", storage)
+        monkeypatch.setattr(continuity_module.continuity_intelligence_service, "_storage", storage)
+    
+        character_a = storage.save_character("film-transition", "Character A", {"id": "character-a"})
+        character_b = storage.save_character("film-transition", "Character B", {"id": "character-b"})
+        character_a_id = character_a["id"]
+        character_b_id = character_b["id"]
+    
+        scenes = [
+            {
+                "scene_id": "scene_001",
+                "scene_name": "Scene 1",
+                "characters": ["Character A"],
+                "character_ids": [character_a_id],
+                "location_id": "setting-a",
+            },
+            {
+                "scene_id": "scene_002",
+                "scene_name": "Scene 2",
+                "characters": ["Character B"],
+                "character_ids": [character_b_id],
+                "location_id": "setting-b",
+            },
+            {
+                "scene_id": "scene_003",
+                "scene_name": "Scene 3",
+                "characters": ["Character A"],
+                "character_ids": [character_a_id],
+                "location_id": "setting-c",
+            },
+        ]
+        project = {
+            "project_id": "film-transition",
+            "execution_summary": {"scenes": scenes},
+        }
+        monkeypatch.setattr(render_module.project_store, "get_project", lambda _: project)
+    
+        canonical_rows = [
+            _asset("character-a-canonical", "character", character_a_id, "character_face", canonical=True),
+            _asset("character-b-canonical", "character", character_b_id, "character_face", canonical=True),
+            _asset("setting-a-canonical", "setting", "setting-a", "environment", canonical=True),
+            _asset("setting-b-canonical", "setting", "setting-b", "environment", canonical=True),
+            _asset("setting-c-canonical", "setting", "setting-c", "environment", canonical=True),
+        ]
+        supporting_rows = [
+            _asset("character-a-supporting", "character", character_a_id, "character_full", canonical=False),
+            _asset("character-b-supporting", "character", character_b_id, "character_full", canonical=False),
+        ]
+        candidate_rows = [
+            _asset("character-a-candidate", "character", character_a_id, "character_full", canonical=False, approval_state="candidate"),
+            _asset("setting-b-candidate", "setting", "setting-b", "environment", canonical=False, approval_state="candidate"),
+        ]
+        rejected_rows = [
+            _asset("character-b-rejected", "character", character_b_id, "character_full", canonical=False, approval_state="rejected"),
+            _asset("setting-c-rejected", "setting", "setting-c", "environment", canonical=False, approval_state="rejected"),
+        ]
+        for row in canonical_rows + supporting_rows + candidate_rows + rejected_rows:
+            storage.save_reference_asset(row)
+        for character_id, ref_id in ((character_a_id, "character-a-canonical"), (character_b_id, "character-b-canonical")):
+            storage.save_character_reference_lock({
+                "project_id": "film-transition",
+                "character_id": character_id,
+                "character_name": "Character A" if character_id == character_a_id else "Character B",
+                "source_shot_id": "canonical-shot",
+                "image_url": f"https://cdn.example/{ref_id}.png",
+                "lock_status": "locked",
+                "source_status": "approved",
+                "review_status": "approved",
+                "reference_role": "general",
+            })
+    
+        captured: list[dict] = []
+    
+        class CapturingAdapter:
+            async def submit_job(self, job):
+                captured.append({
+                    "scene_id": job.shot_id.split("_shot_", 1)[0],
+                    "payload": job.input_payload,
+                })
+                job.status = "queued"
+                job.provider_job_id = f"provider-{job.id}"
+                return job
+    
+            async def close(self):
+                return None
+    
+        monkeypatch.setattr(render_module, "get_adapter", lambda *_args: CapturingAdapter())
+        service = RenderService()
+    
+        expected = {
+            "scene_001": {
+                "character_id": character_a_id,
+                "character_refs": {f"charlock:{character_a_id}:general", "character-a-supporting"},
+                "setting_id": "setting-a",
+                "setting_refs": {"setting-a-canonical"},
+            },
+            "scene_002": {
+                "character_id": character_b_id,
+                "character_refs": {f"charlock:{character_b_id}:general", "character-b-supporting"},
+                "setting_id": "setting-b",
+                "setting_refs": {"setting-b-canonical"},
+            },
+            "scene_003": {
+                "character_id": character_a_id,
+                "character_refs": {f"charlock:{character_a_id}:general", "character-a-supporting"},
+                "setting_id": "setting-c",
+                "setting_refs": {"setting-c-canonical"},
+            },
+        }
+    
+        for scene_id in ("scene_001", "scene_002", "scene_003", "scene_001"):
+            job = service.create_job(
+                project_id="film-transition",
+                shot_id=f"{scene_id}_shot_001",
+                provider="simulated",
+                prompt=f"A cinematic generation request for {scene_id}.",
+                parameters={"require_canonical_references": True},
+            )
+>           submitted = await service.submit_job(job.id)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/app/services/test_render_scene_reference_transition.py:155: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/app/services/render.py:4635: in submit_job
+    validate_generation_payload(
+studio-backend/app/services/reference_validation.py:1429: in validate_generation_payload
+    requirements = resolve_scene_reference_requirements(
+studio-backend/app/services/reference_validation.py:903: in resolve_scene_reference_requirements
+    setting_id = resolve_canonical_setting_id(
+studio-backend/app/services/reference_validation.py:720: in resolve_canonical_setting_id
+    _verify_setting_identity_provenance(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _verify_setting_identity_provenance(
+        *, storage: Any, project_id: str, scene_id: str | None, setting_id: str,
+        require_approved_anchor: bool = True,
+    ) -> dict[str, Any]:
+        """Fail closed unless a canonical setting entity and approved anchor resolve.
+    
+        Reference-asset ``target_id`` values and production-design environment
+        profiles do not establish setting identity. An exact project-scoped universe
+        location node may resolve identity; an independently approved canonical
+        environment reference is still required as its anchor. This remains
+        read-only and never infers approval or creates setting identity.
+    
+        ``scene_id=None`` validates the entity without binding it to one scene (used
+        by explicit designation, which is scoped to the setting entity rather than
+        to a single scene). Every production resolve path still passes a real scene
+        id, so scene binding is enforced exactly as before.
+        """
+        entity_reader = getattr(storage, "get_setting", None)
+        entity = None
+        if callable(entity_reader):
+            try:
+                entity = entity_reader(setting_id, project_id)
+            except TypeError:
+                try:
+                    entity = entity_reader(project_id=project_id, setting_id=setting_id)
+                except Exception:  # noqa: BLE001 — a broken entity resolver fails closed
+                    entity = None
+            except Exception:  # noqa: BLE001 — a broken entity resolver fails closed
+                entity = None
+        if entity is None:
+            # Existing universe location nodes are project-scoped canonical source
+            # entities (unlike free-form scene location labels or reference target
+            # IDs). Resolve only exact node IDs and location type; do not create or
+            # promote entities or infer approval from their display names.
+            node_reader = getattr(storage, "get_universe_nodes", None)
+            if callable(node_reader):
+                try:
+                    nodes = node_reader(project_id) or []
+                except Exception:  # noqa: BLE001 — a broken entity resolver fails closed
+                    nodes = []
+                matches = [
+                    row for row in nodes
+                    if isinstance(row, dict)
+                    and str(row.get("project_id") or "") == project_id
+                    and str(row.get("node_type") or "") == "location"
+                    and str(row.get("node_id") or "") == setting_id
+                ]
+                if len(matches) == 1:
+                    node = matches[0]
+                    entity = {
+                        "id": node.get("node_id"), "project_id": node.get("project_id"),
+                        "entity_type": node.get("node_type"), "name": node.get("name"),
+                        "first_scene": node.get("first_scene"), "last_scene": node.get("last_scene"),
+                    }
+        if hasattr(entity, "model_dump"):
+            entity = entity.model_dump(mode="json")
+        entity_id = str((entity or {}).get("setting_id") or (entity or {}).get("id") or "") if isinstance(entity, dict) else ""
+        entity_type = str(entity.get("entity_type") or entity.get("node_type") or "") if isinstance(entity, dict) else ""
+        entity_scene = str(entity.get("first_scene") or "") if isinstance(entity, dict) else ""
+        if (
+            not isinstance(entity, dict)
+            or entity_id != setting_id
+            or str(entity.get("project_id") or "") != project_id
+            or (entity.get("canonical") is False)
+            or (entity.get("canonical") is not True and entity_type != "location")
+            or (entity_type and entity_type != "location")
+            or (bool(scene_id) and bool(entity_scene) and entity_scene != scene_id)
+        ):
+>           raise _failure(
+                scene_id=scene_id,
+                target_type="setting",
+                target_id=setting_id,
+                reason="setting identity provenance is missing: no canonical project-scoped setting entity resolves this ID",
+                failure_type="setting_identity_unproven",
+                recovery_action=f"Resolve the canonical setting for Scene {scene_id} before generation; do not infer it from location text or a reference target ID.",
+            )
+E           app.services.stability.ValidationError: Generation blocked: Scene scene_001 for setting setting-a. setting identity provenance is missing: no canonical project-scoped setting entity resolves this ID
+
+studio-backend/app/services/reference_validation.py:612: ValidationError
+------------------------------ Captured log call -------------------------------
+ERROR    studio-render:render.py:4803 Failed to submit job job-20261014151536-3cfecb4f-scene_001_shot_001: Generation blocked: Scene scene_001 for setting setting-a. setting identity provenance is missing: no canonical project-scoped setting entity resolves this ID
+_____ test_screenplay_facts_reach_provider_and_completed_job_is_persisted ______
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_screenplay_facts_reach_pr0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11074eed0>
+
+    @pytest.mark.asyncio
+    async def test_screenplay_facts_reach_provider_and_completed_job_is_persisted(tmp_path, monkeypatch):
+        script = 'INT. WORKSHOP - NIGHT\n\nMAYA\nKeep the door closed.\n\nMaya holds a brass key.'
+        summary = ScriptParser().build_script_breakdown_bundle(script)
+        assert summary['scenes']
+        project_id = 'audit-screenplay-trace'
+        project = {'project_id': project_id, 'title': 'The Key', 'script_text': script, 'execution_summary': summary}
+        render_module.project_store.save_project(project)
+        storage = DatabaseStorage(str(tmp_path / 'db'))
+        storage.save_project(StudioProject(**project))
+        storage.save_character(project_id, 'MAYA', {'visual_prompt_summary': 'Black woman with natural locs and a red coat.'})
+        monkeypatch.setattr(render_module, '_storage', storage)
+        monkeypatch.setattr('app.data.storage.get_storage', lambda *args, **kwargs: storage)
+        for name in ('_run_continuity_review', '_run_render_quality_check', '_run_character_reference_lock', '_notify_update'):
+            monkeypatch.setattr(render_module, name, AsyncMock())
+        captured = []
+        async def request(self, method, path, payload=None):
+            if method == 'POST':
+                captured.append(deepcopy(payload))
+                return {'output': {'task_id': 'test-hosted-task'}}
+            return {'output': {'task_status': 'SUCCEEDED', 'video_url': 'https://example.test/generated.mp4'}}
+        async def download(self, **kwargs):
+            return '/outputs/test-generated.mp4', {'test_double': True}
+        monkeypatch.setattr(HappyHorseAdapter, '_happyhorse_request', request)
+        monkeypatch.setattr(HappyHorseAdapter, '_download_and_strip_audio', download)
+        service = render_module.RenderService()
+        service._provider_configs['happyhorse'].api_key = 'test-only-credential'
+        scene_id = summary['scenes'][0]['scene_id']
+        job = service.create_job(project_id=project_id, shot_id=f'{scene_id}_shot_001', provider='happyhorse', prompt='')
+        assert job.input_payload.prompt.strip()
+>       result = await service.submit_job(job.id)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/app/services/test_screenplay_provider_trace.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/app/services/render.py:4635: in submit_job
+    validate_generation_payload(
+studio-backend/app/services/reference_validation.py:1429: in validate_generation_payload
+    requirements = resolve_scene_reference_requirements(
+studio-backend/app/services/reference_validation.py:903: in resolve_scene_reference_requirements
+    setting_id = resolve_canonical_setting_id(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def resolve_canonical_setting_id(
+        *, project_id: str, scene_id: str, storage: Any, scene: dict[str, Any] | None = None,
+    ) -> str:
+        """Resolve and validate one exact canonical setting entity without requiring an anchor."""
+        if scene is None:
+            scene = _scene(project_id, scene_id)
+        elif not isinstance(scene, dict) or str(scene.get("scene_id") or "") != scene_id:
+            raise _failure(
+                scene_id=scene_id,
+                reason="the supplied scene does not match the requested scene id",
+                failure_type="unknown_scene",
+            )
+        setting_id = _setting_id(scene, scene_id)
+        if not setting_id or setting_id == scene_id:
+            node_reader = getattr(storage, "get_universe_nodes", None)
+            if callable(node_reader):
+                try:
+                    nodes = node_reader(project_id) or []
+                except Exception:  # noqa: BLE001 — a broken resolver fails closed
+                    nodes = []
+                scene_locations = [
+                    row for row in nodes
+                    if isinstance(row, dict)
+                    and str(row.get("project_id") or "") == project_id
+                    and str(row.get("node_type") or "") == "location"
+                    and str(row.get("first_scene") or "") == scene_id
+                    and str(row.get("last_scene") or "") == scene_id
+                    and str(row.get("node_id") or "").strip()
+                ]
+                if len(scene_locations) == 1:
+                    setting_id = str(scene_locations[0]["node_id"]).strip()
+        if not setting_id or setting_id == scene_id:
+>           raise _failure(
+                scene_id=scene_id,
+                target_type="setting",
+                reason="the selected scene has no resolvable canonical setting ID",
+                failure_type="setting_id_missing",
+            )
+E           app.services.stability.ValidationError: Generation blocked: Scene scene_001. the selected scene has no resolvable canonical setting ID
+
+studio-backend/app/services/reference_validation.py:714: ValidationError
+------------------------------ Captured log call -------------------------------
+ERROR    studio-render:render.py:4803 Failed to submit job job-20261014151615-a35af1ae-scene_001_shot_001: Generation blocked: Scene scene_001. the selected scene has no resolvable canonical setting ID
+________________________________ test_corrector ________________________________
+
+    async def test_corrector():
+        """Test the Groq corrector with a simulated failed adherence score."""
+    
+        # Check for GROQ_API_KEY
+        if not os.getenv("GROQ_API_KEY"):
+            raise EnvironmentError(
+                "GROQ_API_KEY not found in environment. "
+                "Please set it before running this script."
+            )
+    
+        # Simulate a failed adherence score (the "red jacket in desert" vs "fishing village" case)
+        current_slots = {
+            "character_state": "woman wearing bright red jacket, blonde hair",
+            "action": "walking through sandy desert dunes",
+            "camera": "wide establishing shot, drone perspective",
+            "lighting": "harsh midday sun, deep shadows",
+            "environment_persistence": "vast empty desert, no vegetation",
+        }
+    
+        # Create mock dimension scores for failed dimensions
+        failed_dimensions = {
+            "character_state": DimensionScore(
+                score=15.0,
+                evidence="Character is wearing dark blue clothing, not red. Hair appears dark, not blonde.",
+                expected="woman wearing bright red jacket, blonde hair",
+                observed="woman in dark blue coat, dark hair, walking along coastal path",
+            ),
+            "action": DimensionScore(
+                score=30.0,
+                evidence="Character is walking along a coastal path, not through desert dunes.",
+                expected="walking through sandy desert dunes",
+                observed="walking along rocky coastal cliffside path",
+            ),
+            "environment_persistence": DimensionScore(
+                score=5.0,
+                evidence="Environment is coastal village with buildings and ocean, completely different from desert.",
+                expected="vast empty desert, no vegetation",
+                observed="coastal fishing village, stone buildings, ocean visible, lush vegetation",
+            ),
+            "lighting": DimensionScore(
+                score=40.0,
+                evidence="Lighting is soft overcast, not harsh midday sun. No deep shadows visible.",
+                expected="harsh midday sun, deep shadows",
+                observed="soft overcast daylight, diffused shadows",
+            ),
+        }
+    
+        # Create mock AdherenceScore
+        mock_score = AdherenceScore(
+            shot_id="test_corrector",
+            attempt_n=1,
+            frames_scored=[0.1, 0.5, 0.9],
+            dimensions={**failed_dimensions, "camera": DimensionScore(
+                score=65.0,  # This one passes
+                evidence="Camera work is reasonably wide, but more handheld than drone",
+                expected="wide establishing shot, drone perspective",
+                observed="wide handheld shot, tracking character",
+            )},
+            temporal_drift={"start_score": 20.0, "end_score": 25.0},
+            adherence_score=28.0,  # Would be "correctable" (between 50-80)
+            verdict="correctable",
+            failed_slots=["character_state", "action", "environment_persistence", "lighting"],
+        )
+    
+        # Print the mock scenario
+        print("=" * 80)
+        print("TESTING CORRECTIVE DIFF GENERATOR")
+        print("=" * 80)
+        print("\nCurrent Slots (Deliberately Wrong for Testing):")
+        for slot, text in current_slots.items():
+            print(f"  {slot}: {text}")
+    
+        print("\nFailed Dimensions:")
+        for slot in mock_score.failed_slots:
+            dim = mock_score.dimensions[slot]
+            print(f"\n  {slot.upper().replace('_', ' ')} (Score: {dim.score:.1f})")
+            print(f"    Expected:  {dim.expected}")
+            print(f"    Observed:  {dim.observed}")
+            print(f"    Evidence:  {dim.evidence}")
+    
+        print("\n" + "=" * 80)
+        print("CALLING GROQ CORRECTOR...")
+        print("=" * 80 + "\n")
+    
+        # Create service and call corrector
+        service = AdherenceService()
+    
+>       diff = await service.generate_corrective_diff(
+            score=mock_score,
+            current_slots=current_slots,
+            chars_remaining=200,
+        )
+
+studio-backend/test_corrector_direct.py:117: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/app/services/adherence_service.py:483: in generate_corrective_diff
+    correction_result = await self._call_groq_corrector(
+studio-backend/app/services/adherence_service.py:1514: in _call_groq_corrector
+    response_text, finish_reason = await self._call_groq_json(
+studio-backend/app/services/adherence_service.py:1002: in _call_groq_json
+    return await asyncio.to_thread(_sync_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+studio-backend/app/services/adherence_service.py:988: in _sync_call
+    response = client.chat.completions.create(
+.venv/lib/python3.11/site-packages/groq/resources/chat/completions.py:462: in create
+    return self._post(
+.venv/lib/python3.11/site-packages/groq/_base_client.py:1284: in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <groq.Groq object at 0x110c00d50>
+cast_to = <class 'groq.types.chat.chat_completion.ChatCompletion'>
+options = FinalRequestOptions(method='post', url='/openai/v1/chat/completions', params={}, headers=NOT_GIVEN, max_retries=NOT_GI...3-70b-versatile', 'max_tokens': 2048, 'response_format': {'type': 'json_object'}, 'temperature': 0.3}, extra_json=None)
+
+    def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_StreamT] | None = None,
+    ) -> ResponseT | _StreamT:
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+    
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+    
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+    
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = self._prepare_options(options)
+    
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            self._prepare_request(request)
+    
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+    
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+    
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+    
+            response = None
+            try:
+                response = self._client.send(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+            except httpx.TimeoutException as err:
+                log.debug("Encountered httpx.TimeoutException", exc_info=True)
+    
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising timeout error")
+                raise APITimeoutError(request=request) from err
+            except Exception as err:
+                log.debug("Encountered Exception", exc_info=True)
+    
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising connection error")
+                raise APIConnectionError(request=request) from err
+    
+            log.debug(
+                'HTTP Response: %s %s "%i %s" %s',
+                request.method,
+                request.url,
+                response.status_code,
+                response.reason_phrase,
+                response.headers,
+            )
+    
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as err:  # thrown on 4xx and 5xx status code
+                log.debug("Encountered httpx.HTTPStatusError", exc_info=True)
+    
+                if remaining_retries > 0 and self._should_retry(err.response):
+                    err.response.close()
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=response,
+                    )
+                    continue
+    
+                # If the response is streamed then we need to explicitly read the response
+                # to completion before attempting to access the response text.
+                if not err.response.is_closed:
+                    err.response.read()
+    
+                log.debug("Re-raising status error")
+>               raise self._make_status_error_from_response(err.response) from None
+E               groq.AuthenticationError: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+
+.venv/lib/python3.11/site-packages/groq/_base_client.py:1071: AuthenticationError
+----------------------------- Captured stdout call -----------------------------
+================================================================================
+TESTING CORRECTIVE DIFF GENERATOR
+================================================================================
+
+Current Slots (Deliberately Wrong for Testing):
+  character_state: woman wearing bright red jacket, blonde hair
+  action: walking through sandy desert dunes
+  camera: wide establishing shot, drone perspective
+  lighting: harsh midday sun, deep shadows
+  environment_persistence: vast empty desert, no vegetation
+
+Failed Dimensions:
+
+  CHARACTER STATE (Score: 15.0)
+    Expected:  woman wearing bright red jacket, blonde hair
+    Observed:  woman in dark blue coat, dark hair, walking along coastal path
+    Evidence:  Character is wearing dark blue clothing, not red. Hair appears dark, not blonde.
+
+  ACTION (Score: 30.0)
+    Expected:  walking through sandy desert dunes
+    Observed:  walking along rocky coastal cliffside path
+    Evidence:  Character is walking along a coastal path, not through desert dunes.
+
+  ENVIRONMENT PERSISTENCE (Score: 5.0)
+    Expected:  vast empty desert, no vegetation
+    Observed:  coastal fishing village, stone buildings, ocean visible, lush vegetation
+    Evidence:  Environment is coastal village with buildings and ocean, completely different from desert.
+
+  LIGHTING (Score: 40.0)
+    Expected:  harsh midday sun, deep shadows
+    Observed:  soft overcast daylight, diffused shadows
+    Evidence:  Lighting is soft overcast, not harsh midday sun. No deep shadows visible.
+
+================================================================================
+CALLING GROQ CORRECTOR...
+================================================================================
+
+------------------------------ Captured log call -------------------------------
+ERROR    adherence_service:adherence_service.py:1586 Groq corrector API call failed: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+______________________________ test_minor_failure ______________________________
+
+    async def test_minor_failure():
+        """Test with minor failures - should see strengthen/prepend_emphasis ops."""
+        print("\n" + "=" * 80)
+        print("TEST CASE 1: MINOR FAILURE (Score ~55)")
+        print("=" * 80)
+    
+        current_slots = {
+            "character_state": "elderly man, weathered face, gray hair",
+            "action": "sitting quietly at wooden table",
+            "camera": "medium closeup, static",
+            "lighting": "soft natural window light",
+            "environment_persistence": "rustic kitchen interior",
+        }
+    
+        # Only lighting is slightly off
+        failed_dimensions = {
+            "lighting": DimensionScore(
+                score=55.0,
+                evidence="Lighting is present but appears slightly cooler/bluer than expected soft warm window light",
+                expected="soft natural window light",
+                observed="soft natural window light with slight blue tint",
+            ),
+        }
+    
+        mock_score = AdherenceScore(
+            shot_id="test_minor",
+            attempt_n=1,
+            frames_scored=[0.1, 0.5, 0.9],
+            dimensions={
+                **failed_dimensions,
+                "character_state": DimensionScore(score=85.0, evidence="Good", expected="", observed=""),
+                "action": DimensionScore(score=80.0, evidence="Good", expected="", observed=""),
+                "camera": DimensionScore(score=75.0, evidence="Good", expected="", observed=""),
+                "environment_persistence": DimensionScore(score=90.0, evidence="Good", expected="", observed=""),
+            },
+            temporal_drift={"start_score": 75.0, "end_score": 78.0},
+            adherence_score=77.0,
+            verdict="correctable",
+            failed_slots=["lighting"],
+        )
+    
+        print("\nFailed Dimension:")
+        for slot in mock_score.failed_slots:
+            dim = mock_score.dimensions[slot]
+            print(f"  {slot}: Score {dim.score:.1f}")
+            print(f"    Expected: {dim.expected}")
+            print(f"    Observed: {dim.observed}")
+    
+        service = AdherenceService()
+>       diff = await service.generate_corrective_diff(mock_score, current_slots, 200)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/test_corrector_variations.py:78: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/app/services/adherence_service.py:483: in generate_corrective_diff
+    correction_result = await self._call_groq_corrector(
+studio-backend/app/services/adherence_service.py:1514: in _call_groq_corrector
+    response_text, finish_reason = await self._call_groq_json(
+studio-backend/app/services/adherence_service.py:1002: in _call_groq_json
+    return await asyncio.to_thread(_sync_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+studio-backend/app/services/adherence_service.py:988: in _sync_call
+    response = client.chat.completions.create(
+.venv/lib/python3.11/site-packages/groq/resources/chat/completions.py:462: in create
+    return self._post(
+.venv/lib/python3.11/site-packages/groq/_base_client.py:1284: in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <groq.Groq object at 0x1115d8d50>
+cast_to = <class 'groq.types.chat.chat_completion.ChatCompletion'>
+options = FinalRequestOptions(method='post', url='/openai/v1/chat/completions', params={}, headers=NOT_GIVEN, max_retries=NOT_GI...3-70b-versatile', 'max_tokens': 2048, 'response_format': {'type': 'json_object'}, 'temperature': 0.3}, extra_json=None)
+
+    def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_StreamT] | None = None,
+    ) -> ResponseT | _StreamT:
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+    
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+    
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+    
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = self._prepare_options(options)
+    
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            self._prepare_request(request)
+    
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+    
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+    
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+    
+            response = None
+            try:
+                response = self._client.send(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+            except httpx.TimeoutException as err:
+                log.debug("Encountered httpx.TimeoutException", exc_info=True)
+    
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising timeout error")
+                raise APITimeoutError(request=request) from err
+            except Exception as err:
+                log.debug("Encountered Exception", exc_info=True)
+    
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising connection error")
+                raise APIConnectionError(request=request) from err
+    
+            log.debug(
+                'HTTP Response: %s %s "%i %s" %s',
+                request.method,
+                request.url,
+                response.status_code,
+                response.reason_phrase,
+                response.headers,
+            )
+    
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as err:  # thrown on 4xx and 5xx status code
+                log.debug("Encountered httpx.HTTPStatusError", exc_info=True)
+    
+                if remaining_retries > 0 and self._should_retry(err.response):
+                    err.response.close()
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=response,
+                    )
+                    continue
+    
+                # If the response is streamed then we need to explicitly read the response
+                # to completion before attempting to access the response text.
+                if not err.response.is_closed:
+                    err.response.read()
+    
+                log.debug("Re-raising status error")
+>               raise self._make_status_error_from_response(err.response) from None
+E               groq.AuthenticationError: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+
+.venv/lib/python3.11/site-packages/groq/_base_client.py:1071: AuthenticationError
+----------------------------- Captured stdout call -----------------------------
+
+================================================================================
+TEST CASE 1: MINOR FAILURE (Score ~55)
+================================================================================
+
+Failed Dimension:
+  lighting: Score 55.0
+    Expected: soft natural window light
+    Observed: soft natural window light with slight blue tint
+------------------------------ Captured log call -------------------------------
+ERROR    adherence_service:adherence_service.py:1586 Groq corrector API call failed: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+____________________________ test_moderate_failure _____________________________
+
+    async def test_moderate_failure():
+        """Test with moderate failure - character exists but details wrong."""
+        print("\n" + "=" * 80)
+        print("TEST CASE 2: MODERATE FAILURE (Score ~35)")
+        print("=" * 80)
+    
+        current_slots = {
+            "character_state": "young woman, red dress, long dark hair",
+            "action": "dancing gracefully in center of room",
+            "camera": "tracking shot, circling subject",
+            "lighting": "dramatic spotlight from above",
+            "environment_persistence": "elegant ballroom",
+        }
+    
+        # Character and action moderately off
+        failed_dimensions = {
+            "character_state": DimensionScore(
+                score=35.0,
+                evidence="Character is female and has long dark hair, but wearing blue dress not red",
+                expected="young woman, red dress, long dark hair",
+                observed="young woman, blue dress, long dark hair",
+            ),
+            "action": DimensionScore(
+                score=40.0,
+                evidence="Character is moving but appears to be walking slowly, not dancing gracefully",
+                expected="dancing gracefully in center of room",
+                observed="walking slowly across the room",
+            ),
+        }
+    
+        mock_score = AdherenceScore(
+            shot_id="test_moderate",
+            attempt_n=1,
+            frames_scored=[0.1, 0.5, 0.9],
+            dimensions={
+                **failed_dimensions,
+                "camera": DimensionScore(score=70.0, evidence="Good", expected="", observed=""),
+                "lighting": DimensionScore(score=65.0, evidence="Good", expected="", observed=""),
+                "environment_persistence": DimensionScore(score=80.0, evidence="Good", expected="", observed=""),
+            },
+            temporal_drift={"start_score": 60.0, "end_score": 58.0},
+            adherence_score=58.0,
+            verdict="correctable",
+            failed_slots=["character_state", "action"],
+        )
+    
+        print("\nFailed Dimensions:")
+        for slot in mock_score.failed_slots:
+            dim = mock_score.dimensions[slot]
+            print(f"  {slot}: Score {dim.score:.1f}")
+            print(f"    Expected: {dim.expected}")
+            print(f"    Observed: {dim.observed}")
+    
+        service = AdherenceService()
+>       diff = await service.generate_corrective_diff(mock_score, current_slots, 200)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/test_corrector_variations.py:143: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/app/services/adherence_service.py:483: in generate_corrective_diff
+    correction_result = await self._call_groq_corrector(
+studio-backend/app/services/adherence_service.py:1514: in _call_groq_corrector
+    response_text, finish_reason = await self._call_groq_json(
+studio-backend/app/services/adherence_service.py:1002: in _call_groq_json
+    return await asyncio.to_thread(_sync_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+studio-backend/app/services/adherence_service.py:988: in _sync_call
+    response = client.chat.completions.create(
+.venv/lib/python3.11/site-packages/groq/resources/chat/completions.py:462: in create
+    return self._post(
+.venv/lib/python3.11/site-packages/groq/_base_client.py:1284: in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <groq.Groq object at 0x1115b7cd0>
+cast_to = <class 'groq.types.chat.chat_completion.ChatCompletion'>
+options = FinalRequestOptions(method='post', url='/openai/v1/chat/completions', params={}, headers=NOT_GIVEN, max_retries=NOT_GI...3-70b-versatile', 'max_tokens': 2048, 'response_format': {'type': 'json_object'}, 'temperature': 0.3}, extra_json=None)
+
+    def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_StreamT] | None = None,
+    ) -> ResponseT | _StreamT:
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+    
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+    
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+    
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = self._prepare_options(options)
+    
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            self._prepare_request(request)
+    
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+    
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+    
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+    
+            response = None
+            try:
+                response = self._client.send(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+            except httpx.TimeoutException as err:
+                log.debug("Encountered httpx.TimeoutException", exc_info=True)
+    
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising timeout error")
+                raise APITimeoutError(request=request) from err
+            except Exception as err:
+                log.debug("Encountered Exception", exc_info=True)
+    
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising connection error")
+                raise APIConnectionError(request=request) from err
+    
+            log.debug(
+                'HTTP Response: %s %s "%i %s" %s',
+                request.method,
+                request.url,
+                response.status_code,
+                response.reason_phrase,
+                response.headers,
+            )
+    
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as err:  # thrown on 4xx and 5xx status code
+                log.debug("Encountered httpx.HTTPStatusError", exc_info=True)
+    
+                if remaining_retries > 0 and self._should_retry(err.response):
+                    err.response.close()
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=response,
+                    )
+                    continue
+    
+                # If the response is streamed then we need to explicitly read the response
+                # to completion before attempting to access the response text.
+                if not err.response.is_closed:
+                    err.response.read()
+    
+                log.debug("Re-raising status error")
+>               raise self._make_status_error_from_response(err.response) from None
+E               groq.AuthenticationError: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+
+.venv/lib/python3.11/site-packages/groq/_base_client.py:1071: AuthenticationError
+----------------------------- Captured stdout call -----------------------------
+
+================================================================================
+TEST CASE 2: MODERATE FAILURE (Score ~35)
+================================================================================
+
+Failed Dimensions:
+  character_state: Score 35.0
+    Expected: young woman, red dress, long dark hair
+    Observed: young woman, blue dress, long dark hair
+  action: Score 40.0
+    Expected: dancing gracefully in center of room
+    Observed: walking slowly across the room
+------------------------------ Captured log call -------------------------------
+ERROR    adherence_service:adherence_service.py:1586 Groq corrector API call failed: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+______ test_complete_canonical_workflow_trace_survives_reload[simulated] _______
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_complete_canonical_workfl0')
+provider = 'simulated'
+
+    @pytest.mark.parametrize("provider", ["simulated", "runway"])
+    def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provider: str) -> None:
+        service, storage, state, renderer = _environment(tmp_path)
+        run = _begin(service)
+        run_id = run["run_id"]
+        identifiers = run["data"]["identifiers"]
+        assert identifiers["project_id"] == "project-thread"
+        assert identifiers["script_id"] == "script-thread-001"
+        assert identifiers["scene_id"] == "scene_001"
+        assert identifiers["sequence_id"] == "sequence_001"
+        assert identifiers["beat_ids"] == ["beat_001", "beat_002"]
+        assert identifiers["storyboard_id"] == run["blueprint_id"]
+        assert identifiers["blueprint_id"] == run["blueprint_id"]
+        assert identifiers["blueprint_version_id"] == run["blueprint_version_id"]
+        assert run["data"]["creative_context"]["emotional_objective"] == "Let dread settle before resolve arrives."
+        assert run["data"]["continuity_context"]["shot_plans"]
+    
+        with pytest.raises(StateError):
+            service.create_production_package(run_id)
+    
+>       run = asyncio.run(service.generate_previs(run_id))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:260: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+studio-backend/app/services/canonical_production_workflow_service.py:280: in generate_previs
+    result = await self.previs.generate_scene(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.previs_service.PrevisService object at 0x1120a4ed0>
+project_id = 'project-thread', scene_id = 'scene_001', shot_number = 1
+take_number = 1
+
+    async def generate_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_number: int = 1,
+        take_number: int = 1,
+        *,
+        storyboard_shot_id: str | None = None,
+        allow_approved_revision: bool = False,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
+    ) -> dict:
+        started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
+        if shot_number < 1 or take_number < 1:
+            raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+    
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+>           raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+E           app.services.stability.ValidationError: Runway video generation requires the canonical scene pipeline's READY frozen contract; the standalone Previs path cannot authorize a mutable request.
+
+studio-backend/app/services/previs_service.py:229: ValidationError
+________ test_complete_canonical_workflow_trace_survives_reload[runway] ________
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_complete_canonical_workfl1')
+provider = 'runway'
+
+    @pytest.mark.parametrize("provider", ["simulated", "runway"])
+    def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provider: str) -> None:
+        service, storage, state, renderer = _environment(tmp_path)
+        run = _begin(service)
+        run_id = run["run_id"]
+        identifiers = run["data"]["identifiers"]
+        assert identifiers["project_id"] == "project-thread"
+        assert identifiers["script_id"] == "script-thread-001"
+        assert identifiers["scene_id"] == "scene_001"
+        assert identifiers["sequence_id"] == "sequence_001"
+        assert identifiers["beat_ids"] == ["beat_001", "beat_002"]
+        assert identifiers["storyboard_id"] == run["blueprint_id"]
+        assert identifiers["blueprint_id"] == run["blueprint_id"]
+        assert identifiers["blueprint_version_id"] == run["blueprint_version_id"]
+        assert run["data"]["creative_context"]["emotional_objective"] == "Let dread settle before resolve arrives."
+        assert run["data"]["continuity_context"]["shot_plans"]
+    
+        with pytest.raises(StateError):
+            service.create_production_package(run_id)
+    
+>       run = asyncio.run(service.generate_previs(run_id))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:260: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+studio-backend/app/services/canonical_production_workflow_service.py:280: in generate_previs
+    result = await self.previs.generate_scene(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.previs_service.PrevisService object at 0x1125a4f50>
+project_id = 'project-thread', scene_id = 'scene_001', shot_number = 1
+take_number = 1
+
+    async def generate_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_number: int = 1,
+        take_number: int = 1,
+        *,
+        storyboard_shot_id: str | None = None,
+        allow_approved_revision: bool = False,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
+    ) -> dict:
+        started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
+        if shot_number < 1 or take_number < 1:
+            raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+    
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+>           raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+E           app.services.stability.ValidationError: Runway video generation requires the canonical scene pipeline's READY frozen contract; the standalone Previs path cannot authorize a mutable request.
+
+studio-backend/app/services/previs_service.py:229: ValidationError
+_ test_render_failure_is_recoverable_without_erasing_upstream_or_creating_memory _
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_render_failure_is_recover0')
+
+    def test_render_failure_is_recoverable_without_erasing_upstream_or_creating_memory(tmp_path: Path) -> None:
+        service, storage, _, renderer = _environment(tmp_path)
+>       run = _through_package(service)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:411: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:230: in _through_package
+    run = asyncio.run(service.generate_previs(run["run_id"]))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+studio-backend/app/services/canonical_production_workflow_service.py:280: in generate_previs
+    result = await self.previs.generate_scene(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.previs_service.PrevisService object at 0x110bd80d0>
+project_id = 'project-thread', scene_id = 'scene_001', shot_number = 1
+take_number = 1
+
+    async def generate_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_number: int = 1,
+        take_number: int = 1,
+        *,
+        storyboard_shot_id: str | None = None,
+        allow_approved_revision: bool = False,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
+    ) -> dict:
+        started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
+        if shot_number < 1 or take_number < 1:
+            raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+    
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+>           raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+E           app.services.stability.ValidationError: Runway video generation requires the canonical scene pipeline's READY frozen contract; the standalone Previs path cannot authorize a mutable request.
+
+studio-backend/app/services/previs_service.py:229: ValidationError
+_ test_package_render_keeps_frozen_settings_and_never_uses_video_as_image[None] _
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_package_render_keeps_froz0')
+provider_override = None
+
+    @pytest.mark.parametrize("provider_override", [None, "runway"])
+    def test_package_render_keeps_frozen_settings_and_never_uses_video_as_image(tmp_path, provider_override):
+        service, storage, state, renderer = _environment(tmp_path)
+        run = _begin(service)
+>       run = asyncio.run(service.generate_previs(run["run_id"]))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:472: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+studio-backend/app/services/canonical_production_workflow_service.py:280: in generate_previs
+    result = await self.previs.generate_scene(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.previs_service.PrevisService object at 0x11049ff90>
+project_id = 'project-thread', scene_id = 'scene_001', shot_number = 1
+take_number = 1
+
+    async def generate_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_number: int = 1,
+        take_number: int = 1,
+        *,
+        storyboard_shot_id: str | None = None,
+        allow_approved_revision: bool = False,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
+    ) -> dict:
+        started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
+        if shot_number < 1 or take_number < 1:
+            raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+    
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+>           raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+E           app.services.stability.ValidationError: Runway video generation requires the canonical scene pipeline's READY frozen contract; the standalone Previs path cannot authorize a mutable request.
+
+studio-backend/app/services/previs_service.py:229: ValidationError
+_ test_package_render_keeps_frozen_settings_and_never_uses_video_as_image[runway] _
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_package_render_keeps_froz1')
+provider_override = 'runway'
+
+    @pytest.mark.parametrize("provider_override", [None, "runway"])
+    def test_package_render_keeps_frozen_settings_and_never_uses_video_as_image(tmp_path, provider_override):
+        service, storage, state, renderer = _environment(tmp_path)
+        run = _begin(service)
+>       run = asyncio.run(service.generate_previs(run["run_id"]))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:472: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+studio-backend/app/services/canonical_production_workflow_service.py:280: in generate_previs
+    result = await self.previs.generate_scene(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.previs_service.PrevisService object at 0x112568dd0>
+project_id = 'project-thread', scene_id = 'scene_001', shot_number = 1
+take_number = 1
+
+    async def generate_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_number: int = 1,
+        take_number: int = 1,
+        *,
+        storyboard_shot_id: str | None = None,
+        allow_approved_revision: bool = False,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
+    ) -> dict:
+        started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
+        if shot_number < 1 or take_number < 1:
+            raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+    
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+>           raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+E           app.services.stability.ValidationError: Runway video generation requires the canonical scene pipeline's READY frozen contract; the standalone Previs path cannot authorize a mutable request.
+
+studio-backend/app/services/previs_service.py:229: ValidationError
+____________ test_package_render_review_stop_does_not_poll_forever _____________
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_package_render_review_sto0')
+
+    def test_package_render_review_stop_does_not_poll_forever(tmp_path):
+        service, storage, state, renderer = _environment(tmp_path)
+>       run = _through_package(service)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:495: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:230: in _through_package
+    run = asyncio.run(service.generate_previs(run["run_id"]))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+studio-backend/app/services/canonical_production_workflow_service.py:280: in generate_previs
+    result = await self.previs.generate_scene(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.previs_service.PrevisService object at 0x10d3e55d0>
+project_id = 'project-thread', scene_id = 'scene_001', shot_number = 1
+take_number = 1
+
+    async def generate_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_number: int = 1,
+        take_number: int = 1,
+        *,
+        storyboard_shot_id: str | None = None,
+        allow_approved_revision: bool = False,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
+    ) -> dict:
+        started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
+        if shot_number < 1 or take_number < 1:
+            raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+    
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+>           raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+E           app.services.stability.ValidationError: Runway video generation requires the canonical scene pipeline's READY frozen contract; the standalone Previs path cannot authorize a mutable request.
+
+studio-backend/app/services/previs_service.py:229: ValidationError
+_____ test_canonical_previs_passes_explicit_provider_to_render_job[runway] _____
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_canonical_previs_passes_e0')
+provider = 'runway'
+
+    @pytest.mark.parametrize("provider", ["runway", "simulated"])
+    def test_canonical_previs_passes_explicit_provider_to_render_job(tmp_path, provider):
+        service, storage, state, renderer = _environment(tmp_path)
+        run = _begin(service)
+>       result = asyncio.run(service.generate_previs(run["run_id"], provider=provider))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:512: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+studio-backend/app/services/canonical_production_workflow_service.py:280: in generate_previs
+    result = await self.previs.generate_scene(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.previs_service.PrevisService object at 0x1125fa950>
+project_id = 'project-thread', scene_id = 'scene_001', shot_number = 1
+take_number = 1
+
+    async def generate_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_number: int = 1,
+        take_number: int = 1,
+        *,
+        storyboard_shot_id: str | None = None,
+        allow_approved_revision: bool = False,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
+    ) -> dict:
+        started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
+        if shot_number < 1 or take_number < 1:
+            raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+    
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+>           raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+E           app.services.stability.ValidationError: Runway video generation requires the canonical scene pipeline's READY frozen contract; the standalone Previs path cannot authorize a mutable request.
+
+studio-backend/app/services/previs_service.py:229: ValidationError
+_________________ test_polling_does_not_change_queued_provider _________________
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_polling_does_not_change_q0')
+
+    def test_polling_does_not_change_queued_provider(tmp_path):
+        service, storage, state, renderer = _environment(tmp_path)
+>       run = _through_package(service)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:520: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py:230: in _through_package
+    run = asyncio.run(service.generate_previs(run["run_id"]))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.11.9/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+studio-backend/app/services/canonical_production_workflow_service.py:280: in generate_previs
+    result = await self.previs.generate_scene(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.previs_service.PrevisService object at 0x112142010>
+project_id = 'project-thread', scene_id = 'scene_001', shot_number = 1
+take_number = 1
+
+    async def generate_scene(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_number: int = 1,
+        take_number: int = 1,
+        *,
+        storyboard_shot_id: str | None = None,
+        allow_approved_revision: bool = False,
+        source_previs_image_id: str | None = None,
+        attempt_number: int = 1,
+        provider: str | None = None,
+        render_settings: PrevisRenderSettings | None = None,
+    ) -> dict:
+        started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
+        if shot_number < 1 or take_number < 1:
+            raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+    
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+>           raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+E           app.services.stability.ValidationError: Runway video generation requires the canonical scene pipeline's READY frozen contract; the standalone Previs path cannot authorize a mutable request.
+
+studio-backend/app/services/previs_service.py:229: ValidationError
+_______ test_generation_preflight_route_reports_backend_blocked_verdict ________
+
+    def test_generation_preflight_route_reports_backend_blocked_verdict() -> None:
+        client = TestClient(app)
+        project_id = "project_preflight_route_blocked"
+        scene_id = "scene_001"
+        _seed_project(project_id, scene_id)
+        approved = _approve_storyboard(project_id, scene_id, shot_count=3)
+    
+        jobs_before = list(render_service.list_jobs(project_id=project_id))
+        scene_before = project_store.get_project(project_id)["execution_summary"]["scenes"][0]
+    
+        response = client.get(
+            f"/api/f51/studio/projects/{project_id}/scenes/{scene_id}/generation-preflight"
+        )
+    
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["project_id"] == project_id
+        assert payload["scene_id"] == scene_id
+    
+        # The verdict is the backend's own fail-closed result, not a UI heuristic.
+        assert payload["ready"] is False
+        assert payload["blockers"], "backend gates must report blockers for an unreferenced scene"
+        assert payload["shot_count"] == 3
+        assert len(payload["entries"]) == 3
+        for entry in payload["entries"]:
+            assert entry["blockers"], "every fresh shot must carry the backend's blockers"
+        assert set(payload["manifest"]["batch"]) == {"total_duration_seconds", "shot_count"}
+        assert "selected_model" not in payload["manifest"]["batch"]
+        assert "estimated_total_credits" not in payload["manifest"]["batch"]
+        assert payload["manifest"]["storyboard"]["storyboard_version"] == approved["version"].version_id
+>       assert payload["cost_estimate"]["estimated"] is True
+E       assert False is True
+
+studio-backend/tests/test_generation_preflight_route.py:98: AssertionError
+____________ test_render_service_discovers_ltx_disabled_by_default _____________
+
+    def test_render_service_discovers_ltx_disabled_by_default() -> None:
+        from app.services.render import RenderService
+    
+        service = RenderService()
+        config = service.get_provider_config(PROVIDER_ID)
+        assert config is not None
+        assert config.provider_id == PROVIDER_ID
+>       assert config.enabled is False
+E       AssertionError: assert True is False
+E        +  where True = ProviderConfig(provider_id='local_ltx', name='Local LTX', enabled=True, is_simulated=False, api_key=None, api_endpoint...', requires=[], capabilities=['video_generation', 'image_to_video'], gpu=None, runtime=None, models=['ltx-2.5-mlx-q4']).enabled
+
+studio-backend/tests/test_local_ltx_provider.py:163: AssertionError
+_________________ test_list_providers_includes_ltx_as_disabled _________________
+
+    def test_list_providers_includes_ltx_as_disabled() -> None:
+        from app.services.render import RenderService
+    
+        statuses = {s.provider_id: s for s in RenderService().list_providers()}
+        ltx = statuses[PROVIDER_ID]
+>       assert ltx.enabled is False
+E       AssertionError: assert True is False
+E        +  where True = ProviderStatus(provider_key='local_ltx', provider_id='local_ltx', name='Local LTX', status='available', is_simulated=F...'video_generation', 'image_to_video'], active_jobs=0, queued_jobs=0, gpu=None, runtime=None, models=['ltx-2.5-mlx-q4']).enabled
+
+studio-backend/tests/test_local_ltx_provider.py:172: AssertionError
+___________________ test_existing_registry_entries_unchanged ___________________
+
+    def test_existing_registry_entries_unchanged() -> None:
+        assert ADAPTER_REGISTRY["runway"] is RunwayAdapter
+        assert ADAPTER_REGISTRY["simulated"] is SimulatedProviderAdapter
+        assert ADAPTER_REGISTRY["generic"] is GenericVideoProviderAdapter
+        # HEAD registry has 10 entries; this branch adds minimax_h3_local and
+        # local_training alongside local_ltx, plus the Runway Model Router provider
+        # (additive execution seam) → 14 non-local_ltx keys expected.
+>       assert len([k for k in ADAPTER_REGISTRY if k not in (PROVIDER_ID,)]) == 14
+E       AssertionError: assert 13 == 14
+E        +  where 13 = len(['simulated', 'local', 'higgsfield', 'runway', 'runway_direct', 'runway_router', ...])
+
+studio-backend/tests/test_local_ltx_provider.py:741: AssertionError
+___________________ test_existing_registry_entries_unchanged ___________________
+
+    def test_existing_registry_entries_unchanged() -> None:
+        assert ADAPTER_REGISTRY["runway"] is RunwayAdapter
+        assert ADAPTER_REGISTRY["simulated"] is SimulatedProviderAdapter
+        assert ADAPTER_REGISTRY["generic"] is GenericVideoProviderAdapter
+        # HEAD registry has 10 entries; besides minimax_h3_local this branch also
+        # adds local_ltx and local_training, plus the Runway Model Router provider
+        # (additive execution seam) → 14 non-H3 keys expected.
+>       assert len([k for k in ADAPTER_REGISTRY if k != PROVIDER_ID]) == 14
+E       AssertionError: assert 13 == 14
+E        +  where 13 = len(['simulated', 'local', 'higgsfield', 'runway', 'runway_direct', 'runway_router', ...])
+
+studio-backend/tests/test_minimax_h3_local_provider.py:352: AssertionError
+_ test_creator_decisions_reach_real_multishot_render_dispatch_and_durable_results _
+
+phase6 = {'backend_root': PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/t... beside the cold furnace.\n\nEXT. CANAL - DAY\nA ferry passes.', 'title': 'The Last Lantern — synthetic fixture'}, ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11142d390>
+
+    @pytest.mark.asyncio
+    async def test_creator_decisions_reach_real_multishot_render_dispatch_and_durable_results(
+        phase6, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from app.services import generation_cost_gate, generation_context_service
+    
+        fixture = phase6
+        storage = fixture["storage"]
+        saved, approved = _prepare_approved_successor(fixture)
+        board = approved["blueprint"]
+        source_version = storage.get_storyboard_blueprint_version(fixture["source_version"])
+        source_shots = storage.list_storyboard_shots(board.blueprint_id, fixture["source_version"])
+        source_prompts = {shot.shot_id: shot.render_contract.provider_neutral_prompt for shot in source_shots}
+    
+        lineage = resolve_scene_lineage(PROJECT_ID, fixture["project"], _scene())
+        assert lineage["status"] == "RESOLVED"
+        assert SCRIPT[lineage["scene_source_start"]:lineage["scene_source_end"]] == BODY
+        assert saved.version_id != fixture["source_version"]
+        assert saved.setting_reference_decision is not None
+        assert saved.setting_reference_decision.canonical_setting_id == "set-glassworks-fixture"
+        assert all(
+            row.status != "UNASSIGNED"
+            for row in saved.coverage_obligations
+        )
+        assert not any("canonical scene content unresolved" in blocker for blocker in saved.coverage_blockers)
+        # Scene Direction's readiness snapshot also reports camera provenance, which
+        # this test resolves in the pipeline's authoritative storyboard path below.
+        assert source_version.status.value == "approved"
+        assert all(shot.render_contract.provider_neutral_prompt == source_prompts[shot.shot_id] for shot in source_shots)
+        assert board.current_version_id == board.approved_version_id == saved.version_id
+    
+        render_svc = render_module.RenderService()
+        monkeypatch.setattr(render_module, "_storage", storage)
+        adapter_calls: list[dict] = []
+        adapter_factory_calls: list[str] = []
+        monkeypatch.setattr(render_module, "get_adapter", lambda provider, _config: (
+            adapter_factory_calls.append(provider) or
+            FakeVideoAdapter(fixture["backend_root"] / "outputs" / "renders", adapter_calls)
+        ))
+        for name in ("_run_continuity_review", "_run_render_quality_check", "_run_character_reference_lock", "_notify_update"):
+            monkeypatch.setattr(render_module, name, AsyncMock())
+        monkeypatch.setattr(generation_cost_gate.generation_cost_gate, "enforce_shot_limit", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(generation_cost_gate.generation_cost_gate, "estimate_batch", lambda **_kwargs: {"estimated": False})
+    
+        audio = FakeAudioService()
+        stitch = FakeStitchingService()
+        pipeline = SceneProductionPipelineService(
+            render_svc=render_svc,
+            audio_svc=audio,
+            stitching_svc=stitch,
+            backend_root=fixture["backend_root"],
+        )
+        preflight = pipeline.prepare_scene_batch(
+            project_id=PROJECT_ID,
+            scene_id=SCENE_ID,
+            project=fixture["project"],
+            provider="simulated",
+        )
+        assert preflight["ready"] is True, preflight["blockers"]
+        assert [shot["shot_id"] for shot in preflight["shots"]] == SHOT_IDS
+        assert [entry["shot_id"] for entry in preflight["entries"]] == SHOT_IDS
+        assert preflight["manifest"]["scene"]["scene_source_identity"] == lineage["scene_source_identity"]
+    
+        # Trace both ordinary multishot contracts through the exact deterministic
+        # Runway Router request reconstruction used at adapter submission. This is
+        # local request validation only: the provider transport remains untouched.
+        from app.services.generation_contract import FrozenGenerationContract
+        from app.services.providers.runway_router_provider import reconstruct_runway_router_video_request
+    
+        expected_reference_ids_by_shot = {
+            SHOT_IDS[0]: ["ref-ivo-face", "ref-glassworks-fixture"],
+            SHOT_IDS[1]: ["ref-neri-face", "ref-glassworks-fixture"],
+        }
+        expected_reference_uris_by_shot = {
+            SHOT_IDS[0]: [
+                "https://fixture.invalid/char-ivo.png",
+                "https://fixture.invalid/glassworks.png",
+            ],
+            SHOT_IDS[1]: [
+                "https://fixture.invalid/char-neri.png",
+                "https://fixture.invalid/glassworks.png",
+            ],
+        }
+        for entry in preflight["entries"]:
+            shot_id = entry["shot_id"]
+            expected_reference_ids = expected_reference_ids_by_shot[shot_id]
+            expected_reference_uris = expected_reference_uris_by_shot[shot_id]
+            assert len(expected_reference_ids) == len(expected_reference_uris)
+    
+            frozen = FrozenGenerationContract.from_record(entry["generation_contract"])
+            frozen_references = [
+                reference for reference in frozen.references
+                if reference.source == "canonical_reference_binding"
+            ]
+            assert [reference.ref_id for reference in frozen_references] == expected_reference_ids
+            assert [reference.uri for reference in frozen_references] == expected_reference_uris
+            assert len(frozen_references) == 2
+>           wire_request = reconstruct_runway_router_video_request(
+                entry["generation_contract"],
+                preflight["manifest"],
+                config_id="offline-multishot-test-router",
+            )
+
+studio-backend/tests/test_multishot_integrity_phase6_e2e.py:459: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+contract_record = {'payload': {'aspect_ratio': '16:9', 'audio': False, 'camera_instructions': [{'dimension': 'camera', 'instruction_sour...n': 'key in the lower third', ...}, ...}, 'sha256': 'cc0b8146129e5b7482bdd5149806e2ef7de7ff67b3ed18f7257434801148fbef'}
+manifest = {'batch': {'shot_count': 2, 'total_duration_seconds': 10}, 'manifest_fingerprint': '484f70fdb06ef2beec95bedbfeade3d68d...sha256': '5dd0d41d7acced890b2175c9a066b8ea6d3065229a1b68a87180eaa93561a88f', 'scene_id': 'scene_lantern_17', ...}, ...}
+
+    def reconstruct_runway_router_video_request(
+        contract_record: Any,
+        manifest: Any,
+        *,
+        config_id: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Deterministically rebuild a routed video body from its immutable proof.
+    
+        This is deliberately the same payload builder used immediately before an
+        adapter submission. The persisted manifest is checked against the frozen
+        contract first; neither mutable RenderJob input nor current project text is
+        consulted here.
+        """
+        from app.services.generation_contract import FrozenGenerationContract
+        from app.services.scene_coverage_contract import verify_scene_coverage_contract
+        from app.services.shot_manifest import recompute_manifest_fingerprint
+    
+        contract = FrozenGenerationContract.from_record(contract_record)
+        payload = contract.payload()
+        if not isinstance(manifest, dict):
+            raise ValueError("Frozen Router reconstruction requires a creative manifest")
+        fingerprint = str(manifest.get("manifest_fingerprint") or "")
+        if (
+            not fingerprint
+            or fingerprint != contract.manifest_fingerprint
+            or recompute_manifest_fingerprint(manifest) != fingerprint
+        ):
+            raise ValueError("Frozen Router reconstruction manifest fingerprint is invalid")
+        scene = manifest.get("scene") if isinstance(manifest.get("scene"), dict) else {}
+        shots = manifest.get("shots")
+        rows = [row for row in shots if isinstance(row, dict) and row.get("shot_id") == contract.shot_id] if isinstance(shots, list) else []
+        if len(rows) != 1:
+            raise ValueError("Frozen Router reconstruction requires exactly one manifest shot")
+        row = rows[0]
+        coverage = verify_scene_coverage_contract(payload.get("scene_coverage"))
+        coverage_shot = payload.get("scene_coverage_shot")
+        if (
+            coverage.get("scene_lineage_status") != "RESOLVED"
+            or coverage.get("project_id") != scene.get("project_id")
+            or coverage.get("scene_id") != scene.get("scene_id")
+            or coverage.get("canonical_script_sha256") != scene.get("canonical_script_sha256")
+            or coverage.get("scene_source_identity") != scene.get("scene_source_identity")
+            or coverage.get("scene_source_start") != scene.get("scene_source_start")
+            or coverage.get("scene_source_end") != scene.get("scene_source_end")
+            or payload.get("camera_target_project_id") != scene.get("project_id")
+            or payload.get("camera_target_scene_id") != scene.get("scene_id")
+            or payload.get("camera_target_shot_id") != contract.shot_id
+        ):
+            raise ValueError("Frozen Router reconstruction scene lineage or identity is inconsistent")
+        coverage_shots = [item for item in coverage.get("shots", []) if item.get("shot_id") == contract.shot_id]
+        if len(coverage_shots) != 1 or coverage_shots[0] != coverage_shot:
+            raise ValueError("Frozen Router reconstruction per-shot coverage is inconsistent")
+    
+        expected_binding = [
+            {
+                "ref_id": ref.get("ref_id"), "uri": ref.get("uri"),
+                "target_type": ref.get("target_type"), "target_id": ref.get("target_id"),
+                "role": ref.get("studio_role"), "category": ref.get("category"),
+                "canonical": ref.get("canonical"), "approval_state": ref.get("approval_state"),
+                "source_kind": ref.get("source_kind"), **({"kind": ref["kind"]} if ref.get("kind") else {}),
+            }
+            for ref in payload["references"]
+        ]
+        expected_values = {
+            "shot_prompt": payload["prompt"],
+            "negative_prompt": payload["negative_prompt"],
+            "generation_contract_digest": contract.creative_digest(),
+            "shot_duration_seconds": payload["duration"] or 0,
+            "audio_intent": payload["audio"],
+            "aspect_ratio": payload["aspect_ratio"],
+            "resolution": payload["resolution"],
+            "seed": payload["seed"],
+            "camera_plan": payload["camera_plan"],
+            "camera_provenance": payload["camera_provenance"],
+            "camera_instructions": payload["camera_instructions"],
+            "camera_source_digest": payload["camera_source_digest"],
+            "camera_source_project_id": payload["camera_source_project_id"],
+            "camera_source_scene_id": payload["camera_source_scene_id"],
+            "camera_source_shot_id": payload["camera_source_shot_id"],
+            "camera_source_storyboard_shot_id": payload["camera_source_storyboard_shot_id"],
+            "camera_target_project_id": payload["camera_target_project_id"],
+            "camera_target_scene_id": payload["camera_target_scene_id"],
+            "camera_target_shot_id": payload["camera_target_shot_id"],
+            "parameters": payload["creative_parameters"],
+            "scene_coverage": coverage,
+            "scene_coverage_shot": coverage_shot,
+            "references": [ref["uri"] for ref in payload["references"]],
+            "reference_roles": [ref["studio_role"] for ref in payload["references"]],
+            "reference_binding": expected_binding,
+            "dialogue_handoff": payload.get("dialogue_handoff", {}),
+        }
+        if any(row.get(key) != value for key, value in expected_values.items()):
+>           raise ValueError("Frozen Router reconstruction manifest values contradict the contract")
+E           ValueError: Frozen Router reconstruction manifest values contradict the contract
+
+studio-backend/app/services/providers/runway_router_provider.py:783: ValueError
+____________ test_http_render_ltx_i2v_fails_closed_no_t2v_fallback _____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1119b0650>
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_http_render_ltx_i2v_fails0')
+
+    @pytest.mark.asyncio
+    async def test_http_render_ltx_i2v_fails_closed_no_t2v_fallback(monkeypatch, tmp_path):
+        """i2v with invalid reference must fail — never silently fall back to t2v."""
+        from main import app
+    
+        client = TestClient(app, raise_server_exceptions=False)
+    
+        # ── 1. Authenticate ──
+        username = f"ltx_i2v_fail_{uuid.uuid4().hex[:8]}"
+        resp = client.post(
+            "/api/f51/studio/auth/register",
+            json={
+                "username": username,
+                "email": f"{username}@example.test",
+                "password": "TestPassword123!",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        session_id = data.get("session_id") or data.get("session", {}).get("session_id")
+        assert session_id
+        headers = {"Authorization": f"Bearer {session_id}"}
+    
+        # ── 2. Enable local_ltx provider via API ──
+        resp = client.post(
+            "/api/f51/studio/render/providers/local_ltx/enable",
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+    
+        # ── 3. Create job with nonexistent reference asset ──
+        bad_path = "/nonexistent/path/to/reference.png"
+        resp = client.post(
+            "/api/f51/studio/render/jobs",
+            params={
+                "project_id": "proj-ltx-i2v-fail",
+                "shot_id": "scene_i2v_fail",
+                "provider": "local_ltx",
+                "prompt": "This should fail.",
+                "reference_assets": json.dumps([bad_path]),
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        job = resp.json()
+        assert job["status"] == "pending"
+        job_id = job["job_id"]
+    
+        # ── 4. Submit — should fail with upload error, NOT queue a t2v job ──
+        resp = client.post(
+            f"/api/f51/studio/render/jobs/{job_id}/submit",
+            headers=headers,
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":{"error_type":"validation_error","message":"Generation blocked: Scene scene_i2v. the project could not be resolved","stage":"reference_validation","metadata":{"failure_type":"project_not_found","scene_id":"scene_i2v","target_type":"","target_id":"","reason":"the project could not be resolved","recovery_action":"Refresh the project and retry generation."}}}
+E       assert 409 == 200
+E        +  where 409 = <Response [409 Conflict]>.status_code
+
+studio-backend/tests/test_render_ltx_i2v_http.py:243: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    studio-render:render.py:4803 Failed to submit job job-20261014151947-a19b0522-scene_i2v_fail: Generation blocked: Scene scene_i2v. the project could not be resolved
+_________ test_scene002_write_surface_is_version_scoped_and_hash_safe __________
+
+tmp_path = PosixPath('/private/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/pytest-of-amberreed/pytest-1335/test_scene002_write_surface_is0')
+
+    @pytest.mark.skipif(not os.path.exists(LIVE_DB), reason="live studio.db byte copy source is absent")
+    def test_scene002_write_surface_is_version_scoped_and_hash_safe(tmp_path):
+        """(9–15, 19, 20 + database safety) against a byte copy of live Scene 002.
+    
+        The only write in this test happens on the throwaway copy. Afterwards only
+        the Scene Direction decision surface may differ: the approved version, its
+        five shot rows, all five prompts and camera plans, the screenplay, the
+        scene projection, and the DRE/MAYA/environment references must hash
+        identically, and coverage must still fail closed.
+        """
+        copy_dir = _live_copy(tmp_path)
+        db_path = copy_dir / "studio.db"
+    
+        # Worksheet scope, read-only, before any write.
+        storage = DatabaseStorage(str(copy_dir))
+        service = SceneDirectionService(storage)
+        data = service.get(LIVE_PROJECT, LIVE_SCENE)
+        # Baseline is taken after the storage layer finished opening/migrating the
+        # copy, so every later diff can only come from the decision write itself.
+        baseline = _live_digests(db_path)
+>       assert data.version_id == LIVE_APPROVED_VERSION
+E       AssertionError: assert 'sbv_9f8ccbbfd288' == 'sbv_a6096cb1fea5'
+E         
+E         - sbv_a6096cb1fea5
+E         + sbv_9f8ccbbfd288
+
+studio-backend/tests/test_scene002_creator_decision_capture.py:715: AssertionError
+=============================== warnings summary ===============================
+test_project_creation_fix.py::test_project_creation
+  /Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/.venv/lib/python3.11/site-packages/_pytest/python.py:170: PytestReturnNotNoneWarning: Test functions should return None, but test_project_creation_fix.py::test_project_creation returned <class 'bool'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED studio-backend/app/services/test_dialogue_provider_selection.py::TestDialogueProviderDispatch::test_auto_uses_piper_when_not_configured
+FAILED studio-backend/app/services/test_model_registry_and_router.py::test_creator_selected_capability_rechecked_at_submission
+FAILED studio-backend/app/services/test_render_scene_reference_transition.py::test_scene_1_to_2_to_3_to_1_payloads_never_retain_stale_references
+FAILED studio-backend/app/services/test_screenplay_provider_trace.py::test_screenplay_facts_reach_provider_and_completed_job_is_persisted
+FAILED studio-backend/test_corrector_direct.py::test_corrector - groq.Authent...
+FAILED studio-backend/test_corrector_variations.py::test_minor_failure - groq...
+FAILED studio-backend/test_corrector_variations.py::test_moderate_failure - g...
+FAILED studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py::test_complete_canonical_workflow_trace_survives_reload[simulated]
+FAILED studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py::test_complete_canonical_workflow_trace_survives_reload[runway]
+FAILED studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py::test_render_failure_is_recoverable_without_erasing_upstream_or_creating_memory
+FAILED studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py::test_package_render_keeps_frozen_settings_and_never_uses_video_as_image[None]
+FAILED studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py::test_package_render_keeps_frozen_settings_and_never_uses_video_as_image[runway]
+FAILED studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py::test_package_render_review_stop_does_not_poll_forever
+FAILED studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py::test_canonical_previs_passes_explicit_provider_to_render_job[runway]
+FAILED studio-backend/tests/test_checkpoint_5_canonical_workflow_thread.py::test_polling_does_not_change_queued_provider
+FAILED studio-backend/tests/test_generation_preflight_route.py::test_generation_preflight_route_reports_backend_blocked_verdict
+FAILED studio-backend/tests/test_local_ltx_provider.py::test_render_service_discovers_ltx_disabled_by_default
+FAILED studio-backend/tests/test_local_ltx_provider.py::test_list_providers_includes_ltx_as_disabled
+FAILED studio-backend/tests/test_local_ltx_provider.py::test_existing_registry_entries_unchanged
+FAILED studio-backend/tests/test_minimax_h3_local_provider.py::test_existing_registry_entries_unchanged
+FAILED studio-backend/tests/test_multishot_integrity_phase6_e2e.py::test_creator_decisions_reach_real_multishot_render_dispatch_and_durable_results
+FAILED studio-backend/tests/test_render_ltx_i2v_http.py::test_http_render_ltx_i2v_fails_closed_no_t2v_fallback
+FAILED studio-backend/tests/test_scene002_creator_decision_capture.py::test_scene002_write_surface_is_version_scoped_and_hash_safe
+23 failed, 4800 passed, 13 skipped, 1 warning in 2149.67s (0:35:49)
+FULL_EXIT:1

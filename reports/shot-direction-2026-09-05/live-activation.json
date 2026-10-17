@@ -1,0 +1,162 @@
+{
+  "ready": {
+    "ready": true,
+    "components": {
+      "database": "ready",
+      "schema": "ready (v62)",
+      "background_tasks": "ready (3 active)"
+    },
+    "timestamp": 1788662567.401966
+  },
+  "previous_render_counts": {
+    "complete": 6,
+    "failed": 42
+  },
+  "pid": 93825,
+  "projects": [
+    {
+      "project_id": "project_ca31687b1ca7",
+      "choices": {
+        "project_id": "project_ca31687b1ca7",
+        "scene_id": "scene_001",
+        "choices": []
+      },
+      "assembly": {
+        "scenes_with_compositions": 0,
+        "scenes_total": 11,
+        "film_assembled": false,
+        "film_url": null,
+        "has_audio": false,
+        "film_outdated": false,
+        "scenes_needing_assembly": [
+          "scene_001",
+          "scene_002",
+          "scene_003",
+          "scene_004",
+          "scene_005",
+          "scene_006",
+          "scene_007",
+          "scene_008",
+          "scene_009",
+          "scene_010",
+          "scene_011"
+        ]
+      }
+    },
+    {
+      "project_id": "project_5907c60cddbc",
+      "choices": {
+        "project_id": "project_5907c60cddbc",
+        "scene_id": "scene_001",
+        "choices": []
+      },
+      "assembly": {
+        "scenes_with_compositions": 1,
+        "scenes_total": 14,
+        "film_assembled": false,
+        "film_url": null,
+        "has_audio": false,
+        "film_outdated": false,
+        "scenes_needing_assembly": [
+          "scene_002",
+          "scene_003",
+          "scene_004",
+          "scene_005",
+          "scene_006",
+          "scene_007",
+          "scene_008",
+          "scene_009",
+          "scene_010",
+          "scene_011",
+          "scene_012",
+          "scene_013",
+          "scene_014"
+        ]
+      }
+    }
+  ],
+  "direction": {
+    "project_id": "project_5907c60cddbc",
+    "scene_id": "scene_001",
+    "version_id": "sbv_33ba18db0a10",
+    "version_status": "approved",
+    "dialogue": [
+      {
+        "line_id": "scene_001_dlg_01",
+        "character": "Narrator",
+        "text": "Narrator carries the beat with restrained subtext.",
+        "shot_id": null,
+        "character_id": "narrator",
+        "emotional_subtext": "restrained subtext",
+        "pacing_tag": "balanced",
+        "voice_style_hint": "Narrator cinematic voice"
+      }
+    ],
+    "unassigned_line_ids": [
+      "scene_001_dlg_01"
+    ],
+    "shots": [
+      {
+        "shot_id": "scene_001_shot_001",
+        "opening_state": "",
+        "action_change": "",
+        "ending_state": "",
+        "shot_number": 1,
+        "locked": false,
+        "frame_url": "/previs-assets/project_5907c60cddbc/scene_001_shot_001_storyboard_qwen.png",
+        "saved_frame_url": null,
+        "frame_changed": false,
+        "previous_ending_state": ""
+      },
+      {
+        "shot_id": "scene_001_shot_002",
+        "opening_state": "",
+        "action_change": "",
+        "ending_state": "",
+        "shot_number": 2,
+        "locked": false,
+        "frame_url": null,
+        "saved_frame_url": null,
+        "frame_changed": false,
+        "previous_ending_state": ""
+      },
+      {
+        "shot_id": "scene_001_shot_003",
+        "opening_state": "",
+        "action_change": "",
+        "ending_state": "",
+        "shot_number": 3,
+        "locked": false,
+        "frame_url": null,
+        "saved_frame_url": null,
+        "frame_changed": false,
+        "previous_ending_state": ""
+      },
+      {
+        "shot_id": "scene_001_shot_004",
+        "opening_state": "",
+        "action_change": "",
+        "ending_state": "",
+        "shot_number": 4,
+        "locked": false,
+        "frame_url": null,
+        "saved_frame_url": null,
+        "frame_changed": false,
+        "previous_ending_state": ""
+      },
+      {
+        "shot_id": "scene_001_shot_005",
+        "opening_state": "",
+        "action_change": "",
+        "ending_state": "",
+        "shot_number": 5,
+        "locked": false,
+        "frame_url": null,
+        "saved_frame_url": null,
+        "frame_changed": false,
+        "previous_ending_state": ""
+      }
+    ],
+    "saved": false
+  }
+}

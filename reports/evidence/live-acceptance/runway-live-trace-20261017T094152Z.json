@@ -1,0 +1,170 @@
+{
+  "branch": "backend-expansion-dependency-slicing",
+  "cost_cap": "exactly one live (dryRun=False) video generation POST; no retries, no batches",
+  "outcome": {
+    "live_generation_calls": 0,
+    "reason": "provider outcome: failed; no retry.",
+    "status": "PROVIDER_TERMINAL"
+  },
+  "probe": "runway-live-single-shot",
+  "secret_handling": "values never logged; only presence lengths recorded",
+  "steps": {
+    "batch_authorization": {
+      "failures": [],
+      "ready": true
+    },
+    "create_job": {
+      "job_id": "job-20261017054153-57129a03-scene_live_probe_01_shot_001",
+      "provider": "runway_router",
+      "shot_id": "scene_live_probe_01_shot_001",
+      "status": "pending"
+    },
+    "credential_check": {
+      "RUNWAYML_API_SECRET": {
+        "length": 132,
+        "present": true
+      },
+      "RUNWAY_API_KEY": {
+        "length": 0,
+        "present": false
+      },
+      "RUNWAY_ROUTER_CONFIG_ID": {
+        "length": 0,
+        "present": false
+      },
+      "dotenv_file": {
+        "exists": true,
+        "mode": "600"
+      }
+    },
+    "fixture": {
+      "project_id": "project_live_acceptance_probe",
+      "reference_urls": {
+        "env": "https://picsum.photos/id/1016/1024/576...",
+        "face": "https://picsum.photos/id/1015/1024/576...",
+        "note": "full URIs in job metadata; domains only here"
+      },
+      "references": [
+        "ref-ivo-face/ref-neri-face",
+        "ref-live-env",
+        "ref-live-env-rejected(rejected)"
+      ],
+      "scene_id": "scene_live_probe_01",
+      "setting_id": "set-live-probe-glassworks",
+      "shots": [
+        "scene_live_probe_01_shot_001",
+        "scene_live_probe_01_shot_002"
+      ]
+    },
+    "isolation": {
+      "production_db_touched": false,
+      "tmpdir": "/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/live-acceptance-o_ebe2am"
+    },
+    "job_metadata_stamp": {
+      "audit_present": true,
+      "authorization_present": true,
+      "batch_authorization_present": true
+    },
+    "live_submission": {
+      "duration_s": 0.29,
+      "error": "Runway router config not found for this account (HTTP 404): {\"error\":\"Router config 'studio-production-router' was not found or is not accessible.\",\"code\":\"router_config_not_found\"}",
+      "estimated_cost": null,
+      "http_calls": [
+        {
+          "api_key_present": true,
+          "at": "2026-10-17T09:41:53.757390+00:00",
+          "dry_run": true,
+          "duration_s": 0.27,
+          "error": "RunwayRouterConfigNotFoundError: Runway router config not found for this account (HTTP 404): {\"error\":\"Router config 'studio-production-router' was not found or is not accessible.\",\"code\":\"router_config_not_found\"}",
+          "http_status": "router_config_not_found",
+          "method": "POST",
+          "payload": {
+            "configId": "studio-production-router",
+            "dryRun": true,
+            "input": {
+              "aspectRatio": "16:9",
+              "audio": false,
+              "duration": 5,
+              "keyframes": [],
+              "negativePrompt": "No text, no subtitles, no additional people.",
+              "promptText": "A brass key rests on a workbench in soft dawn light; still, quiet, restrained.\n\n[SHOT POSITION]\nShot 1 of 2 in scene. Maintain character identity and visual continuity.\n\n[CREATOR CAMERA PLAN \u2014 use for this shot]\naperture: deep focus\nblocking: IVO remains frame left; the key stays on the workbench\ncamera: locked tripod\ncomposition: key in the lower third\nfocal_length: 50 mm\nframing: medium close-up\nlens: normal perspective",
+              "referenceAudio": [],
+              "referenceImages": [
+                {
+                  "role": "reference",
+                  "uri": "https://picsum.photos/id/1015/1024/576"
+                },
+                {
+                  "role": "reference",
+                  "uri": "https://picsum.photos/id/1016/1024/576"
+                }
+              ],
+              "referenceVideos": [],
+              "seed": 1589492733
+            }
+          },
+          "url": "https://api.dev.runwayml.com/v1/generate/video"
+        }
+      ],
+      "job_id": "job-20261017054153-57129a03-scene_live_probe_01_shot_001",
+      "live_generation_posts": 0,
+      "provider_job_id_present": false,
+      "realized_cost": null,
+      "references_forwarded": 0,
+      "resolved_model": null,
+      "router_config_id": "studio-production-router",
+      "router_execution_keys": [
+        "capacity_fallback",
+        "cost_gate",
+        "decision_semantics",
+        "estimated_cost_credits",
+        "estimated_cost_semantics",
+        "generation_context_id",
+        "no_eligible_model",
+        "provider_cost_capabilities",
+        "provider_output_identity",
+        "quote_authorization_supported",
+        "realized_cost_credits",
+        "reference_projection",
+        "references_forwarded",
+        "references_unrepresentable",
+        "resolved_input",
+        "resolved_model",
+        "resolved_settings",
+        "router_config_id",
+        "routing_extra",
+        "routing_mode",
+        "routing_provider",
+        "runway_task_id",
+        "submission_attempted"
+      ],
+      "runway_task_id_present": false,
+      "status": "failed"
+    },
+    "mint": {
+      "note": "generic projection authorization minted; proceeding to single live submission",
+      "status": "PASS"
+    },
+    "preflight_digest": {
+      "audit_present": true,
+      "authorization_policy": "runway_reference_projection_authorization",
+      "authorized_env": "ref-live-env",
+      "binding_sha256": "0b12674c8bc4cfea2d9c3a95a41e163080df506af2f8f1b5fed73deb8c02961f",
+      "confirmation_id_present": true,
+      "prompt_chars": 168,
+      "prompt_preview": "A brass key rests on a workbench in soft dawn light; still, quiet, restrained.\n\n[SHOT POSITION]\nShot 1 of 2 in scene. Maintain character identity and visual con",
+      "rejected_envs": [
+        "ref-live-env-rejected"
+      ],
+      "shot_id": "scene_live_probe_01_shot_001"
+    },
+    "prepare_scene_batch": {
+      "blockers": [],
+      "duration_s": 0.02,
+      "entries": 2,
+      "manifest_fingerprint": "4d8b7c5af5de49669048d969dd6ea2fec4c938028f91f4f23806696c512cde50",
+      "ready": true
+    }
+  },
+  "timestamp_utc": "20261017T094152Z"
+}
