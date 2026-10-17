@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Form, UploadFile, File, Body
+from fastapi import APIRouter, HTTPException, Form, UploadFile, File, Body, Depends
 from fastapi.responses import JSONResponse
 from typing import Optional
 
@@ -14,6 +14,7 @@ from app.services.service_registry import (
     reference_study_service as study_service,
 )
 from app.services.previs_seed_service import previs_seed_service
+from app.models.camera_presets import StoryboardCameraPlan
 from app.models import StudioProject
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,9 @@ def ingest_script(
         parser = ScriptParser()
         project_id = project.project_id if hasattr(project, 'project_id') else project.get('project_id', '')
         if project_id and script_text:
-            summary = parser.build_script_breakdown_bundle(script_text)
+            summary = parser.build_script_breakdown_bundle(
+                {"project_id": str(project_id), "execution_id": f"ingest-script-{project_id}", "script_text": script_text}
+            )
             # Ensure scenes exist in the summary
             scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
             if scenes:
@@ -513,27 +516,37 @@ def get_storyboard_wall(project_id: str):
     return {"project_id": project_id, "storyboard_wall": storyboard, "source": "legacy_project"}
 
 
+def _storyboard_image_service():
+    from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+    return storyboard_blueprint_service
+
+
 @projects_router.post("/projects/{project_id}/scenes/{scene_id}/storyboard")
 def generate_scene_storyboard(
     project_id: str,
     scene_id: str,
-    provider: str = "qwen-image-max",
+    provider: str = "runway",
     shot_number: int = 1,
+    create_revision: bool = False,
+    camera_plan: StoryboardCameraPlan | None = Body(default=None),
+    service=Depends(_storyboard_image_service),
 ):
-    """Generate a storyboard image with Qwen-Image-Max by default.
+    """Generate a storyboard image with Runway (gen4_image) by default.
 
     The old Pollinations.ai URL generator remains available via
-    `?provider=pollinations` as a low-cost fallback.
+    `?provider=pollinations` as a low-cost fallback. Legacy
+    `?provider=qwen-image-max` values route to Runway.
     """
     from app.services.stability import StabilityError
-    from app.services.storyboard_blueprint_service import storyboard_blueprint_service
 
     try:
-        return storyboard_blueprint_service.generate_storyboard_image_for_scene_shot(
+        return service.generate_storyboard_image_for_scene_shot(
             project_id=project_id,
             scene_id=scene_id,
             provider=provider,
             shot_number=shot_number,
+            create_revision=create_revision,
+            camera_plan=camera_plan.model_dump(exclude_none=True) if camera_plan else None,
         )
     except StabilityError as exc:
         if exc.error_type == "validation_error":

@@ -474,8 +474,11 @@ class CoDirectorChatService:
                         },
                     )
         finally:
+            # Provider attribution: the chat chain is Muse-first by contract;
+            # the Qwen-less configured fallback (OpenRouter → Groq) answers
+            # when Muse is unconfigured or fails. Qwen is never in this chain.
             logger.info(
-                "project_id=%s job_id=- provider=qwen "
+                "project_id=%s job_id=- provider=muse_chain "
                 "stage=co_director_chat duration_ms=%d specialist=%s retried=%s",
                 project_id,
                 int((perf_counter() - started) * 1000),

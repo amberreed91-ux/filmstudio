@@ -73,6 +73,15 @@ class ReorderStoryboardShotsRequest(BaseModel):
     ordered_storyboard_shot_ids: list[str]
 
 
+class EditImagePromptRequest(BaseModel):
+    image_prompt: str
+    edited_by: str | None = None
+
+
+class ApproveImagePromptRequest(BaseModel):
+    approved_by: str | None = None
+
+
 def _serialize(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
@@ -349,11 +358,106 @@ async def render_storyboard_shot(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image-prompt/derive")
+def derive_shot_image_prompt(
+    blueprint_id: str,
+    storyboard_shot_id: str,
+) -> dict[str, Any]:
+    """Derive the compactor proposal for one shot (never auto-approves)."""
+    try:
+        from app.services.storyboard_image_prompt_service import (
+            storyboard_image_prompt_service,
+        )
+
+        shot = storyboard_blueprint_service.get_storyboard_shot(storyboard_shot_id)
+        if shot is None or shot.blueprint_id != blueprint_id:
+            raise HTTPException(status_code=404, detail="Storyboard shot not found")
+        storyboard_image_prompt_service.set_storage(storyboard_blueprint_service.storage)
+        return _serialize(storyboard_image_prompt_service.derive_for_shot(shot))
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.put("/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image-prompt")
+def edit_shot_image_prompt(
+    blueprint_id: str,
+    storyboard_shot_id: str,
+    payload: EditImagePromptRequest,
+) -> dict[str, Any]:
+    """Hand-edit the image prompt (origin=human, back to proposed)."""
+    try:
+        from app.services.storyboard_image_prompt_service import (
+            storyboard_image_prompt_service,
+        )
+
+        shot = storyboard_blueprint_service.get_storyboard_shot(storyboard_shot_id)
+        if shot is None or shot.blueprint_id != blueprint_id:
+            raise HTTPException(status_code=404, detail="Storyboard shot not found")
+        storyboard_image_prompt_service.set_storage(storyboard_blueprint_service.storage)
+        return _serialize(
+            storyboard_image_prompt_service.edit_for_shot(
+                shot,
+                image_prompt=payload.image_prompt,
+                edited_by=payload.edited_by or "creator",
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.post("/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image-prompt/approve")
+def approve_shot_image_prompt(
+    blueprint_id: str,
+    storyboard_shot_id: str,
+    payload: ApproveImagePromptRequest = Body(default_factory=ApproveImagePromptRequest),
+) -> dict[str, Any]:
+    """Approve one shot's image prompt (never approves the board)."""
+    try:
+        from app.services.storyboard_image_prompt_service import (
+            storyboard_image_prompt_service,
+        )
+
+        shot = storyboard_blueprint_service.get_storyboard_shot(storyboard_shot_id)
+        if shot is None or shot.blueprint_id != blueprint_id:
+            raise HTTPException(status_code=404, detail="Storyboard shot not found")
+        storyboard_image_prompt_service.set_storage(storyboard_blueprint_service.storage)
+        return _serialize(
+            storyboard_image_prompt_service.approve_for_shot(
+                shot,
+                approved_by=payload.approved_by or "creator",
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.get("/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image-prompt")
+def get_shot_image_prompt(
+    blueprint_id: str,
+    storyboard_shot_id: str,
+) -> dict[str, Any]:
+    """Read one shot's image prompt record + render-readiness status."""
+    try:
+        from app.services.storyboard_image_prompt_service import (
+            storyboard_image_prompt_service,
+        )
+
+        shot = storyboard_blueprint_service.get_storyboard_shot(storyboard_shot_id)
+        if shot is None or shot.blueprint_id != blueprint_id:
+            raise HTTPException(status_code=404, detail="Storyboard shot not found")
+        storyboard_image_prompt_service.set_storage(storyboard_blueprint_service.storage)
+        record = storyboard_blueprint_service.storage.get_storyboard_image_prompt(storyboard_shot_id)
+        status = storyboard_image_prompt_service.status_for_shot(shot, record)
+        return {"record": _serialize(record), "status": _serialize(status)}
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
 @router.post("/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image")
 def generate_storyboard_shot_image(
     blueprint_id: str,
     storyboard_shot_id: str,
-    provider: str = "qwen-image-max",
+    provider: str = "runway",
 ) -> dict[str, Any]:
     try:
         shot = storyboard_blueprint_service.get_storyboard_shot(storyboard_shot_id)

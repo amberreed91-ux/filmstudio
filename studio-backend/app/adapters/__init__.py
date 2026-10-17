@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 import asyncio
 import aiohttp
 import base64
@@ -9,6 +9,7 @@ import mimetypes
 import os
 import subprocess
 import ssl
+import json
 from pathlib import Path
 from app.models import RenderJobModel, RenderJobInput, RenderJobOutput, RenderAsset, ProviderConfig, ProviderStatus
 import certifi
@@ -45,11 +46,28 @@ class RunwayAPIError(Exception):
         self.response_body = response_body
 
 # Allowed Runway model IDs for per-request overrides via
-# input_payload.parameters.model. Sourced from the model strings already
-# referenced in this repo (default RUNWAY_MODEL + tests). The configured
-# RUNWAY_MODEL env default is operator-controlled and is NOT validated here;
-# only caller-supplied per-request overrides are gated by this allowlist.
-ALLOWED_RUNWAY_MODELS = frozenset({"gen4.5", "gemini_omni_flash", "gen6", "gen3"})
+# input_payload.parameters.model. The configured RUNWAY_MODEL env default is
+# operator-controlled and is NOT validated here; only caller-supplied
+# per-request overrides are gated by this allowlist. Resolve lazily to avoid a
+# services-package import cycle while the adapter registry initializes.
+def _allowed_runway_models() -> frozenset[str]:
+    from app.services.model_registry import allowed_runway_model_ids
+
+    return allowed_runway_model_ids()
+
+
+class _RunwayModelAllowlist:
+    def __contains__(self, value: object) -> bool:
+        return value in _allowed_runway_models()
+
+    def __iter__(self):
+        return iter(_allowed_runway_models())
+
+    def __len__(self) -> int:
+        return len(_allowed_runway_models())
+
+
+ALLOWED_RUNWAY_MODELS = _RunwayModelAllowlist()
 
 class RenderProviderAdapter(ABC):
     """Abstract base class for render provider adapters"""
@@ -651,10 +669,18 @@ class RunwayAdapter(RenderProviderAdapter):
 
     @staticmethod
     def _normalize_ratio(raw_ratio: Optional[str], *, image_to_video: bool = False) -> str:
+        # Legacy Gen-3-era pixel ratios retained for backward compatibility;
+        # Gen-4.5's modern pixel-grid mapping is applied later in submit_job.
         supported = {"1280:768", "768:1280"} if image_to_video else {"1280:720", "720:1280"}
         fallback = "1280:768" if image_to_video else "1280:720"
         ratio = str(raw_ratio or "").strip()
         return ratio if ratio in supported else fallback
+
+    def _model_definition(self, model_id: str):
+        """Registry definition for a model, or None for operator-set models."""
+        from app.services.model_registry import model_registry
+
+        return model_registry.get_model(model_id)
 
     @staticmethod
     def _runway_prompt_image_url(raw_url: object) -> str | None:
@@ -771,6 +797,29 @@ class RunwayAdapter(RenderProviderAdapter):
         return "unknown_401" if status_code == 401 else "request_error"
 
     async def submit_job(self, job: RenderJobModel) -> RenderJobModel:
+        """Deny the legacy direct video execution boundary fail-closed.
+
+        Runway production submissions must use RunwayRouterAdapter, where the
+        durable frozen contract and provider response identity are verified.
+        Keep this adapter's status, cancellation, and output methods available
+        for historical jobs, but do not permit direct adapter invocation to
+        skip the service-level routing gate.
+        """
+        job.status = "failed"
+        job.error_message = (
+            "Direct Runway video execution is disabled; submit production work "
+            "through the authorized Runway Model Router path."
+        )
+        job.metadata = dict(job.metadata or {})
+        job.metadata["provider_boundary_failure"] = {
+            "reason": "direct_runway_submission_disabled",
+            "required_provider": "runway_router",
+        }
+        job.updated_at = datetime.now().isoformat()
+        return job
+
+    async def _submit_job(self, job: RenderJobModel) -> RenderJobModel:
+        """Direct endpoint implementation retained for deterministic unit tests only."""
         try:
             test_mode = self._runway_test_mode()
             request_mock_success = self._job_mock_success_requested(job)
@@ -922,6 +971,15 @@ class RunwayAdapter(RenderProviderAdapter):
             params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
             ratio = self._normalize_ratio(params.get("ratio"), image_to_video=bool(prompt_image))
             duration = int(params.get("duration") or params.get("duration_seconds") or 5)
+            # Registry-driven capability gate: a known model must support the
+            # requested duration before any provider call (fail closed, honest
+            # 400s instead of a paid failed task).
+            _model_def = self._model_definition(model)
+            if _model_def is not None and not _model_def.supports_duration(duration):
+                raise ValueError(
+                    f"{model} cannot render {duration}s. Supported durations: "
+                    + ", ".join(str(d) for d in _model_def.supported_durations)
+                )
             if params.get("strict_render_settings") or storyboard_frame:
                 # Gen-4.5 uses modern pixel ratios for image-to-video as well.
                 if model == "gen4.5":
@@ -1358,6 +1416,1546 @@ class RunwayAdapter(RenderProviderAdapter):
                 active_jobs=0,
                 queued_jobs=0,
             )
+
+
+class RunwayDirectAdapter(RunwayAdapter):
+    """Additive direct-model Runway path (provider id ``runway_direct``).
+
+    Concrete-model execution over the same Dev API contract as
+    :class:`RunwayAdapter` — ``POST /v1/image_to_video`` /
+    ``POST /v1/text_to_video`` with ``Authorization: Bearer`` and
+    ``X-Runway-Version: 2024-11-06``, task polling via
+    ``GET /v1/tasks/{task_id}``. Shares the Runway credential resolution
+    (``RUNWAYML_API_SECRET`` → ``RUNWAY_API_KEY`` → ``VIDEO_PROVIDER_API_KEY``).
+
+    Additive by design: the legacy ``runway`` id stays behind its
+    fail-closed ``direct_runway_submission_disabled`` gate in
+    ``RenderService.submit_job`` (exact-match on ``"runway"``), the
+    ``runway_router`` contract path is untouched, and scene-pipeline
+    resolution maps only ``"runway"`` → ``"runway_router"`` so
+    ``"runway_direct"`` passes through unchanged. All Runway behavior is
+    inherited; only the reported provider identity is normalized to the
+    direct id so execution traces stay unambiguous, and ``job.provider``
+    itself is never rewritten (the service fails closed on identity drift).
+    """
+
+    DIRECT_PROVIDER_ID = "runway_direct"
+
+    def _direct_provider_id(self) -> str:
+        return str(getattr(self, "provider_id", "") or self.DIRECT_PROVIDER_ID)
+
+    def _patch_direct_identity(self, job: RenderJobModel) -> RenderJobModel:
+        """Normalize inherited ``runway`` labels to the direct provider id.
+
+        Upstream contract (endpoints, payload schema, polling) is identical;
+        only the reported identity is rewritten so dry-run/mocked traces and
+        persisted ``provider_response_normalized`` records attribute the call
+        to ``runway_direct`` instead of the gated legacy id.
+        """
+        pid = self._direct_provider_id()
+        try:
+            metadata = getattr(job, "metadata", None)
+            if isinstance(metadata, dict):
+                payload_meta = metadata.get("provider_payload_metadata")
+                if isinstance(payload_meta, dict) and payload_meta.get("provider") == "runway":
+                    payload_meta["provider"] = pid
+        except Exception:
+            pass
+        try:
+            output = getattr(job, "output_payload", None)
+            out_meta = getattr(output, "metadata", None)
+            if isinstance(out_meta, dict):
+                normalized = out_meta.get("provider_response_normalized")
+                if isinstance(normalized, dict) and normalized.get("provider") == "runway":
+                    normalized["provider"] = pid
+        except Exception:
+            pass
+        return job
+
+    async def _submit_job(self, job: RenderJobModel) -> RenderJobModel:
+        result = await super()._submit_job(job)
+        return self._patch_direct_identity(result)
+
+    async def get_job_status(self, job: RenderJobModel) -> RenderJobModel:
+        result = await super().get_job_status(job)
+        return self._patch_direct_identity(result)
+
+    async def fetch_outputs(self, job: RenderJobModel) -> list[RenderAsset]:
+        if job.status != "complete" or not job.output_payload:
+            return []
+        pid = self._direct_provider_id()
+        return [RenderAsset(
+            id=f"{pid}-asset-{job.id}",
+            job_id=job.id,
+            project_id=job.project_id,
+            shot_id=job.shot_id,
+            provider=pid,
+            asset_type="video",
+            url=job.output_payload.asset_url or "",
+            thumbnail_url=job.output_payload.thumbnail_url,
+            metadata=job.output_payload.metadata,
+            created_at=job.completed_at or datetime.now().isoformat(),
+        )]
+
+    async def get_status(self) -> ProviderStatus:
+        pid = self._direct_provider_id()
+        try:
+            await self._runway_request("GET", "/v1/organization")
+            return ProviderStatus(
+                provider_id=pid,
+                name="Runway Direct",
+                status="available",
+                is_simulated=False,
+                capabilities=["video_generation", "image_to_video"],
+                active_jobs=0,
+                queued_jobs=0,
+            )
+        except (ValueError, aiohttp.ClientError, asyncio.TimeoutError, RunwayAPIError):
+            return ProviderStatus(
+                provider_id=pid,
+                name="Runway Direct",
+                status="unavailable",
+                is_simulated=False,
+                capabilities=["video_generation", "image_to_video"],
+                active_jobs=0,
+                queued_jobs=0,
+            )
+
+
+class RunwayRouterReferenceIncompatibility(ValueError):
+    """A required Studio reference cannot be represented without loss."""
+
+    def __init__(self, code: str, message: str, **details: Any):
+        super().__init__(message)
+        self.detail = {"code": code, **details}
+
+
+class RunwayRouterAdapter(RenderProviderAdapter):
+    """Runway Model Router adapter — Studio routes by configId, never by model.
+
+    Delegates every Runway-specific concern to
+    ``app/services/providers/runway_router_provider.py`` and adapts it to the
+    generic RenderJobModel contract (submit_job / get_job_status / cancel_job /
+    fetch_outputs / get_status), exactly like RunwayAdapter.
+
+    Execution metadata (routing mode, configId, resolved model, estimated and
+    realized cost) is recorded on job.metadata — it NEVER becomes part of the
+    canonical generation contract, and it never mutates Studio creative state.
+    No concrete model is ever sent: the router selects the eligible model.
+    """
+
+    ROUTER_PROVIDER = "runway_router"
+    ROUTING_MODE = "model_router"
+
+    def _router_aspect_ratio(self, params: dict) -> str:
+        """Canonical Studio aspect_ratio → router's model-agnostic enum.
+
+        Studio canonical values pass through unchanged (16:9, 9:16, 1:1, ...);
+        legacy pixel-ratio values ("1280:720") are translated here at the
+        adapter boundary only. Unknown values fail closed.
+        """
+        from app.services.providers.runway_router_provider import resolve_runway_router_aspect_ratio
+
+        return resolve_runway_router_aspect_ratio(params.get("aspect_ratio") or params.get("ratio"))
+
+    def _router_reference_assets(self, job: RenderJobModel) -> tuple[Optional[str], list[Any]]:
+        """Split job references into first-frame + approved context refs.
+
+        Only an explicitly designated storyboard frame receives the 'first'
+        role. Required character, setting, and other references remain in
+        canonical order and are sent as generic 'reference' assets. Nothing is
+        filtered, sorted, or downgraded to first-frame conditioning.
+        """
+        params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
+        has_storyboard_frame = "storyboard_frame_url" in params
+        raw_storyboard_frame = params.get("storyboard_frame_url")
+        if has_storyboard_frame and not isinstance(raw_storyboard_frame, str):
+            raise RunwayRouterReferenceIncompatibility(
+                "invalid_reference_value", "The required storyboard frame URI is not a string.",
+                source="storyboard_frame_url",
+            )
+        storyboard_frame = str(raw_storyboard_frame or "").strip()
+        if has_storyboard_frame and not storyboard_frame:
+            raise RunwayRouterReferenceIncompatibility(
+                "missing_uri", "The required storyboard frame has no usable URI.",
+                source="storyboard_frame_url",
+            )
+        if storyboard_frame and storyboard_frame != raw_storyboard_frame:
+            raise RunwayRouterReferenceIncompatibility(
+                "malformed_uri", "The required storyboard frame URI contains surrounding whitespace.",
+                source="storyboard_frame_url",
+            )
+
+        refs: list[Any] = []
+        for index, raw_ref in enumerate(job.input_payload.referenceAssets or []):
+            if not isinstance(raw_ref, str) or not raw_ref.strip():
+                raise RunwayRouterReferenceIncompatibility(
+                    "missing_uri", f"Required reference at index {index} has no usable URI.",
+                    source="referenceAssets", index=index,
+                )
+            if raw_ref != raw_ref.strip():
+                raise RunwayRouterReferenceIncompatibility(
+                    "malformed_uri", f"Required reference at index {index} contains surrounding whitespace.",
+                    source="referenceAssets", index=index,
+                )
+            refs.append(raw_ref)
+
+        consistency = getattr(job.input_payload, "consistency_payload", None)
+        if consistency is not None:
+            try:
+                from app.models.consistency import ConsistencyPayload as _CP
+
+                cp = consistency if isinstance(consistency, _CP) else _CP(**consistency)
+            except Exception as exc:  # noqa: BLE001 — invalid required refs fail closed
+                raise RunwayRouterReferenceIncompatibility(
+                    "invalid_consistency_payload",
+                    f"Consistency payload references are unusable: {exc}",
+                    source="consistency_payload",
+                ) from exc
+            # Keep canonical order. Do not sort by weights or omit assets that
+            # cannot be converted; weights are not permission to lose identity.
+            for index, ref in enumerate(cp.refs):
+                raw_image_url = getattr(ref, "image_url", "")
+                image_url = str(raw_image_url or "").strip()
+                if not image_url:
+                    raise RunwayRouterReferenceIncompatibility(
+                        "missing_uri",
+                        f"Required consistency reference '{ref.ref_id}' has no usable URI.",
+                        source="consistency_payload", ref_id=ref.ref_id,
+                        kind=ref.kind, index=index,
+                    )
+                if not isinstance(raw_image_url, str) or raw_image_url != image_url:
+                    raise RunwayRouterReferenceIncompatibility(
+                        "malformed_uri",
+                        f"Required consistency reference '{ref.ref_id}' has a malformed URI.",
+                        source="consistency_payload", ref_id=ref.ref_id,
+                        kind=ref.kind, index=index,
+                    )
+                refs.append({"image_url": image_url, "ref_id": ref.ref_id, "kind": ref.kind})
+
+        first_frame = storyboard_frame or None
+        remaining = refs
+        for index, reference in enumerate(([first_frame] if first_frame else []) + remaining):
+            uri = reference.get("image_url") if isinstance(reference, dict) else reference
+            uri = str(uri or "")
+            if not uri:
+                raise RunwayRouterReferenceIncompatibility(
+                    "missing_uri", f"Required reference at routed index {index} has no usable URI.",
+                    source="routed_references", index=index,
+                )
+            if uri != uri.strip():
+                raise RunwayRouterReferenceIncompatibility(
+                    "malformed_uri",
+                    f"Required reference at routed index {index} contains surrounding whitespace.",
+                    source="routed_references", index=index,
+                )
+            if len(uri) > 2048:
+                raise RunwayRouterReferenceIncompatibility(
+                    "uri_too_long", f"Required reference at routed index {index} exceeds Runway's URI limit.",
+                    source="routed_references", index=index, maximum=2048,
+                )
+            if not uri.startswith(("https://", "runway://", "data:image/")):
+                raise RunwayRouterReferenceIncompatibility(
+                    "unsupported_uri_scheme",
+                    f"Required reference at routed index {index} uses an unsupported URI scheme.",
+                    source="routed_references", index=index,
+                    scheme=uri.split(":", 1)[0][:24] if ":" in uri else "",
+                )
+
+        routed_count = (1 if first_frame else 0) + len(remaining)
+        if routed_count > 4:
+            raise RunwayRouterReferenceIncompatibility(
+                "reference_limit_exceeded",
+                "Runway Model Router video requests support at most four image "
+                f"references; Studio has {routed_count} required references. "
+                "Refusing to discard any canonical reference.",
+                reference_count=routed_count, maximum=4,
+            )
+        return (first_frame, remaining)
+
+    def _normalize_production_router_request(
+        self, job: RenderJobModel, request_payload: dict, *, record_metadata: bool = True
+    ) -> tuple[dict, list]:
+        """Pre-submission normalizer for the verified production-router shape.
+
+        Checks the wire body against the LIVE_VERIFIED routing shape
+        (1 primary reference image, prompt string, 16:9, 5s) for
+        ``studio-production-router``. Secondary references and unsupported
+        flags produce an explicit routing warning (stage-logged with
+        project/job identity) instead of failing closed at the provider
+        dryRun gate — legal values are always preserved (approved references
+        are never dropped). Only fail-closed violations are sanitized
+        (concrete ``model`` flags, over-capacity reference lists). The frozen
+        contract is never mutated. Non-production configs pass through
+        untouched.
+        """
+        from datetime import datetime as _dt
+
+        from app.services.providers.runway_router_provider import (
+            PRODUCTION_ROUTER_CONFIG_SLUG,
+            normalize_production_router_wire_payload,
+        )
+
+        started = _dt.now()
+        config_id = str((request_payload or {}).get("configId") or "")
+        if config_id != PRODUCTION_ROUTER_CONFIG_SLUG:
+            return request_payload, []
+        normalized, warnings = normalize_production_router_wire_payload(
+            request_payload, config_id=config_id
+        )
+        duration_ms = int((_dt.now() - started).total_seconds() * 1000)
+        for warning in warnings:
+            logger.warning(
+                "ROUTER_PAYLOAD_NORMALIZED | project_id=%s | job_id=%s | provider=%s | stage=pre_submission_normalize | duration_ms=%s | warning=%s",
+                getattr(job, "project_id", ""),
+                getattr(job, "id", ""),
+                self.ROUTER_PROVIDER,
+                duration_ms,
+                warning,
+            )
+        # Metadata is recorded only when the caller allows it: _run_sync runs
+        # twice per submit (dry-run preflight then live) on the same object,
+        # and the live pass re-verifies last-mile identity against durable
+        # storage — a dry-run metadata write would break that check. The call
+        # site passes record_metadata=(not dry_run).
+        if warnings and record_metadata:
+            job.metadata = dict(job.metadata or {})
+            execution = dict(job.metadata.get("router_execution") or {})
+            prior = list(execution.get("payload_normalization_warnings") or [])
+            execution["payload_normalization_warnings"] = prior + list(warnings)
+            execution["payload_normalized"] = True
+            job.metadata["router_execution"] = execution
+        return normalized, warnings
+
+    def _fail_reference_incompatibility(
+        self, job: RenderJobModel, error: RunwayRouterReferenceIncompatibility, router_config_id: str
+    ) -> RenderJobModel:
+        """Persist a structured pre-submit reference failure."""
+        detail = dict(error.detail)
+        job.status = "failed"
+        job.error_message = str(error)
+        job.metadata = dict(job.metadata or {})
+        job.metadata["router_execution"] = {
+            "routing_mode": self.ROUTING_MODE,
+            "router_config_id": router_config_id,
+            "references_forwarded": 0,
+            "reference_incompatibility": detail,
+            "reason": "required_reference_incompatible",
+        }
+        job.output_payload = RenderJobOutput(
+            asset_url="",
+            thumbnail_url="",
+            metadata={"provider_response_normalized": {
+                "provider": self.ROUTER_PROVIDER,
+                "task": "video_generation",
+                "status": "failed",
+                "output": {"video_url": None, "status": "failed"},
+                "metadata": {
+                    "reason": "required_reference_incompatible",
+                    "reference_incompatibility": detail,
+                    "error": job.error_message,
+                },
+            }},
+        )
+        job.updated_at = datetime.now().isoformat()
+        return job
+
+    def _declared_reference_projection(
+        self,
+        *,
+        metadata: dict[str, Any],
+        contract_record: Any,
+        manifest_record: Any,
+        router_config_id: str,
+        context_refs: list[Any],
+        reference_storage: Any = None,
+    ) -> tuple[str, str, list[Any], Optional[dict[str, Any]], dict[str, Any]]:
+        """Rebuild the routed request through the existing projection policy.
+
+        When the job declares no reference projection this is a strict no-op:
+        the caller's ``context_refs`` are returned unchanged and no projection
+        code runs. When a projection is declared — a persisted projection
+        record (``metadata[PROJECTION_METADATA_KEY]``) or a creator
+        authorization (``metadata[AUTHORIZATION_METADATA_KEY]``) — the wire
+        request is rebuilt EXCLUSIVELY through ``runway_reference_projection``.
+        The frozen contract's prompt, camera plan, dialogue, cast, setting and
+        timing are read from the frozen proof and never rewritten; a rejected
+        environment identity can never reach the provider.
+
+        Returns ``(failure_code, failure_message, context_refs, request_payload, execution_record)``.
+        A non-empty failure code means the job must fail closed before any
+        credential use or provider contact.
+        """
+        from app.services import runway_reference_projection as projection
+
+        projection_record = metadata.get(projection.PROJECTION_METADATA_KEY)
+        authorization = metadata.get(projection.AUTHORIZATION_METADATA_KEY)
+        if projection_record is None and authorization is None:
+            return "", "", context_refs, None, {}
+
+        backend_root = Path(__file__).resolve().parents[2]
+        try:
+            canonical_rows = projection.canonical_bindings_from_contract(contract_record)
+            if projection_record is None:
+                if not isinstance(authorization, dict) or not str(authorization.get("authorized_environment_ref_id") or "").strip():
+                    raise projection.RunwayReferenceProjectionError(
+                        "missing_reference_authority",
+                        "A declared reference projection requires its creator authorization record and selected environment identity.",
+                    )
+                binding = metadata.get("frozen_reference_binding")
+                from app.services.reference_validation import reference_binding_digest
+                from app.services.shot_manifest import recompute_manifest_fingerprint
+                from app.services.generation_contract import FrozenGenerationContract
+                frozen_contract = FrozenGenerationContract.from_record(contract_record)
+                manifest_scene = manifest_record.get("scene") if isinstance(manifest_record, dict) else {}
+                manifest_scene_id = str((manifest_scene or {}).get("scene_id") or "")
+                auth_digest = reference_binding_digest(binding) if isinstance(binding, list) else ""
+                version_identity = authorization.get("storyboard_version_id")
+                approved_binding = authorization.get("frozen_reference_binding")
+                if not isinstance(approved_binding, list) or approved_binding != binding:
+                    raise projection.RunwayReferenceProjectionError("reference_authorization_mismatch", "Authorization does not carry the exact persisted frozen binding.")
+                if (
+                    not isinstance(binding, list)
+                    or not auth_digest
+                    or authorization.get("frozen_reference_binding_sha256") != auth_digest
+                    or authorization.get("project_id") != str(metadata.get("creative_generation_identity", {}).get("project_id") or "")
+                    or authorization.get("scene_id") != manifest_scene_id
+                    or authorization.get("setting_id") != str(next((row.get("target_id") for row in canonical_rows if row.get("target_type") == "setting"), ""))
+                    or authorization.get("current_version_id") != version_identity
+                    or authorization.get("approved_version_id") != version_identity
+                    or authorization.get("storyboard_version_id") != version_identity
+                    or authorization.get("scene_id") != str(manifest_record.get("storyboard", {}).get("storyboard_version_scene_id") or authorization.get("scene_id"))
+                ):
+                    raise projection.RunwayReferenceProjectionError("reference_authorization_mismatch", "Authorization identities do not match the persisted contract, manifest, or frozen binding.")
+                if manifest_record.get("manifest_fingerprint") != frozen_contract.manifest_fingerprint or recompute_manifest_fingerprint(manifest_record) != frozen_contract.manifest_fingerprint:
+                    raise projection.RunwayReferenceProjectionError("reference_authorization_mismatch", "Authorization manifest version is stale or mismatched.")
+                authorization_fingerprint = str(authorization.get("source_fingerprint") or "")
+                expected_environment = next((row for row in canonical_rows if row.get("ref_id") == authorization.get("authorized_environment_ref_id")), None)
+                if not isinstance(expected_environment, dict) or not authorization_fingerprint:
+                    raise projection.RunwayReferenceProjectionError("reference_authorization_mismatch", "Authorization source fingerprint is missing.")
+                projection_record = projection.project_authorized_environment(
+                    canonical_rows,
+                    policy_version=projection.policy_version_for_canonical_rows(canonical_rows),
+                    authorization=authorization,
+                    project_id=str(metadata.get("creative_generation_identity", {}).get("project_id") or ""),
+                    scene_id=manifest_scene_id,
+                    setting_id=str(expected_environment.get("target_id") or ""),
+                    current_version_id=str(version_identity or ""),
+                    approved_version_id=str(version_identity or ""),
+                    storyboard_version_id=str(version_identity or ""),
+                    frozen_reference_binding_sha256=auth_digest,
+                    frozen_binding=binding,
+                    backend_root=backend_root,
+                    expected_binding=canonical_rows,
+                )
+                if projection_record.get("authorization_binding_sha256") != authorization.get("frozen_reference_binding_sha256"):
+                    raise projection.RunwayReferenceProjectionError("reference_authorization_mismatch", "Projection authorization does not match the signed frozen binding.")
+                # Decision A1: the record's rejected enumeration must exactly
+                # equal the live rejected set for this setting (either
+                # direction fails closed). Empty equals empty, so
+                # single-environment scenes pass; any drift (new, removed, or
+                # flipped rows) refuses before provider contact.
+                _record_rejected = [
+                    str(ref_id).strip()
+                    for ref_id in (authorization.get("rejected_environment_ref_ids") or [])
+                    if str(ref_id).strip()
+                ]
+                # Production always supplies reference_storage (render submit
+                # passes the validation store); without it there is no live
+                # set to compare, so the check is skipped rather than guessed.
+                _reader = getattr(reference_storage, "list_reference_assets", None) if reference_storage is not None else None
+                if callable(_reader):
+                    try:
+                        _live_setting_rows = [
+                            row for row in (
+                                _reader(
+                                    project_id=str(authorization.get("project_id") or ""),
+                                    target_type="setting",
+                                    target_id=str(authorization.get("setting_id") or ""),
+                                    limit=50,
+                                ) or []
+                            )
+                            if isinstance(row, dict)
+                        ]
+                    except TypeError:
+                        _live_setting_rows = []
+                    _live_rejected = sorted({
+                        str(row.get("ref_id") or "").strip()
+                        for row in _live_setting_rows
+                        if str(row.get("kind") or "") == "environment"
+                        and str(row.get("approval_state") or "") == "rejected"
+                        and str(row.get("ref_id") or "").strip()
+                    })
+                    if sorted(_record_rejected) != _live_rejected:
+                        raise projection.RunwayReferenceProjectionError(
+                            "unlisted_environment_authority",
+                            "The authorization's rejected environment enumeration does not exactly match the live rejected set; refusing to project.",
+                        )
+                local_selected_ids = [
+                    ref_id for ref_id in projection_record["selected_ref_ids"]
+                    if not str(projection_record["provider_uris"].get(ref_id) or "").lower().startswith(("https://", "runway://", "data:image/"))
+                ]
+                if any(ref_id != authorization.get("authorized_environment_ref_id") for ref_id in local_selected_ids):
+                    raise projection.RunwayReferenceProjectionError("reference_authorization_mismatch", "Only the creator-authorized environment may be materialized from local source bytes.")
+                materialized_provider_uris: dict[str, str] = {}
+                if local_selected_ids:
+                    from app.services.runway_ephemeral_upload import materialize_selected_ephemeral
+                    by_id = {str(row.get("ref_id") or ""): row for row in canonical_rows}
+                    materialization = materialize_selected_ephemeral(
+                        by_id,
+                        local_selected_ids,
+                        source_fingerprints={key: projection_record["source_uri_fingerprints"][key] for key in local_selected_ids},
+                        backend_root=backend_root,
+                        projection_digest=projection_record["projection_digest"],
+                        canonical_ref_ids=list(projection_record["canonical_ref_ids"]),
+                        omitted_ref_ids=list(projection_record["omitted_ref_ids"]),
+                        omission_reason_codes=list(projection_record["omission_reason_codes"]),
+                        studio_role_map=dict(projection_record["studio_role_map"]),
+                        provider_role_map=dict(projection_record["provider_role_map"]),
+                    )
+                    materialized_provider_uris = dict(materialization["provider_uris"])
+            else:
+                materialized_provider_uris = {}
+            rebuilt = projection.reconstruct_projected_request(
+                contract_record,
+                manifest_record,
+                projection_record,
+                backend_root=backend_root,
+                config_id=router_config_id,
+                materialized_provider_uris=materialized_provider_uris,
+            )
+        except (projection.RunwayReferenceProjectionError, ValueError) as exc:
+            code = str(getattr(exc, "code", "") or "reference_projection_failed")
+            return code, str(exc), context_refs, None, {}
+
+        replayed = rebuilt["projection"]
+        projected_refs = [
+            {
+                "image_url": replayed["provider_uris"][ref_id],
+                "role": "reference",
+                "ref_id": ref_id,
+                "kind": replayed["studio_role_map"].get(ref_id, "reference"),
+            }
+            for ref_id in replayed["selected_ref_ids"]
+        ]
+        request_references = (rebuilt["runway_request"].get("input") or {}).get("referenceImages") or []
+        expected_references = [
+            {"uri": item["image_url"], "role": item["role"]}
+            for item in projected_refs
+        ]
+        if request_references != expected_references:
+            raise projection.RunwayReferenceProjectionError(
+                "frozen_contract_or_binding_mismatch",
+                "Projected Router wire references do not match the selected reference identities.",
+            )
+        return (
+            "",
+            "",
+            projected_refs,
+            rebuilt["runway_request"],
+            projection.router_execution_metadata(replayed),
+        )
+
+    def _resolve_production_authority(self, job: RenderJobModel, authority_storage: Any = None):
+        """Resolve durable storage and re-evaluate owner-approved storyboard authority.
+
+        Shared by the adapter entry gate and the provider execution boundary so
+        a direct call to ``_submit_job_after_authorization`` cannot bypass the
+        required checks. Returns ``(authorization, authority_storage,
+        error_reason)``; ``error_reason`` is non-empty when execution must fail
+        closed before any provider request.
+        """
+        from app.services.production_authorization_service import authorize_runway_submission
+
+        authorization = None
+        authorization_error = ""
+        try:
+            if authority_storage is None:
+                from app.data.storage import get_storage
+
+                authority_storage = get_storage("sqlite")
+            authorization = authorize_runway_submission(job, storage=authority_storage)
+            if not authorization.allowed:
+                authorization_error = authorization.reason
+            else:
+                durable_job = authority_storage.get_job(job.id)
+                if durable_job is None:
+                    authorization_error = "durable_render_job_identity_mismatch"
+                else:
+                    durable_decision = authorize_runway_submission(durable_job, storage=authority_storage)
+                    if not durable_decision.allowed:
+                        authorization_error = durable_decision.reason
+        except Exception:
+            authorization_error = "production_authority_lookup_failed"
+        return authorization, authority_storage, authorization_error
+
+    def _deny_for_production_authority(self, job: RenderJobModel, reason: str, started) -> RenderJobModel:
+        job.status = "failed"
+        job.error_message = f"Runway production authorization denied: {reason}"
+        job.metadata = dict(job.metadata or {})
+        job.metadata["production_authorization"] = {
+            "allowed": False,
+            "reason": reason,
+            "project_id": job.project_id,
+            "job_id": job.id,
+        }
+        job.updated_at = datetime.now().isoformat()
+        logger.info(
+            "PRODUCTION_AUTHORIZATION | project_id=%s | job_id=%s | provider=%s | stage=provider_submission | duration_ms=%s | allowed=false | reason=%s",
+            job.project_id,
+            job.id,
+            job.provider,
+            int((datetime.now() - started).total_seconds() * 1000),
+            reason,
+        )
+        return job
+
+    async def submit_job(
+        self,
+        job: RenderJobModel,
+        *,
+        reference_storage: Any = None,
+    ) -> RenderJobModel:
+        """Enforce persisted owner approval before any Runway Router request."""
+        from app.services.scene002_contract_only import is_contract_only
+
+        authority_storage = None
+        if not is_contract_only(job):
+            started = datetime.now()
+            authorization, authority_storage, authorization_error = self._resolve_production_authority(job)
+
+            if authorization is None or authorization_error:
+                return self._deny_for_production_authority(
+                    job, authorization_error or "production_authority_lookup_failed", started
+                )
+
+            job.metadata = dict(job.metadata or {})
+            job.metadata["production_authorization"] = {
+                "allowed": True,
+                "reason": authorization.reason,
+                "project_id": authorization.project_id,
+                "job_id": authorization.job_id,
+                "actor_id": authorization.actor_id,
+            }
+            logger.info(
+                "PRODUCTION_AUTHORIZATION | project_id=%s | job_id=%s | provider=%s | stage=provider_submission | duration_ms=%s | allowed=true | reason=%s",
+                job.project_id,
+                job.id,
+                job.provider,
+                int((datetime.now() - started).total_seconds() * 1000),
+                authorization.reason,
+            )
+
+        if reference_storage is None:
+            return await self._submit_job_after_authorization(
+                job,
+                authority_storage=authority_storage,
+            )
+        return await self._submit_job_after_authorization(
+            job,
+            authority_storage=authority_storage,
+            reference_storage=reference_storage,
+        )
+
+    async def _submit_job_after_authorization(
+        self,
+        job: RenderJobModel,
+        *,
+        authority_storage: Any = None,
+        reference_storage: Any = None,
+    ) -> RenderJobModel:
+        import asyncio as _asyncio
+
+        from app.services.providers.runway_router_provider import (
+            ROUTING_MODE_MODEL_ROUTER,
+            RUNWAY_ROUTER_ERROR_CODE,
+            RUNWAY_ROUTER_MISSING_KEY_CODE,
+            RUNWAY_ROUTER_NO_ELIGIBLE_MODEL_CODE,
+            get_router_config_id,
+            get_runway_router_api_key,
+            reconstruct_runway_router_video_request,
+            submit_runway_router_video_render,
+        )
+
+        from app.services.generation_contract import FrozenGenerationContract, GenerationContractError
+        from app.services.generation_cost_gate import (
+            ADVISORY_ESTIMATE,
+            QUOTE_AUTHORIZATION,
+            runway_router_cost_capabilities,
+            generation_cost_gate,
+        )
+        from app.services.shot_manifest import recompute_manifest_fingerprint
+
+        cost_gate = generation_cost_gate
+        from app.services.scene002_contract_only import is_contract_only, verify_submission_boundary
+
+        protected_scene002 = is_contract_only(job)
+        if protected_scene002 and job.provider != self.ROUTER_PROVIDER:
+            job.status = "failed"
+            job.error_message = "Scene 002 contract-only execution is restricted to the Runway Model Router"
+            job.updated_at = datetime.now().isoformat()
+            return job
+        if not protected_scene002:
+            # Provider execution boundary: a direct call to this method must
+            # satisfy the same owner-approved storyboard authority as the
+            # adapter entry gate. Fail closed before any provider request and
+            # resolve durable storage so the last-mile recheck below applies.
+            _boundary_started = datetime.now()
+            _authorization, authority_storage, _authorization_error = self._resolve_production_authority(
+                job, authority_storage
+            )
+            if _authorization is None or _authorization_error:
+                return self._deny_for_production_authority(
+                    job, _authorization_error or "production_authority_lookup_failed", _boundary_started
+                )
+            job.metadata = dict(job.metadata or {})
+            job.metadata["production_authorization"] = {
+                "allowed": True,
+                "reason": _authorization.reason,
+                "project_id": _authorization.project_id,
+                "job_id": _authorization.job_id,
+                "actor_id": _authorization.actor_id,
+            }
+        import math
+        import numbers
+
+        metadata = job.metadata if isinstance(job.metadata, dict) else {}
+        contract_record = metadata.get("creative_generation_contract")
+        params = job.input_payload.parameters if job.input_payload and isinstance(job.input_payload.parameters, dict) else {}
+
+        def fail_contract(reason: str, message: str) -> RenderJobModel:
+            job.status = "failed"
+            job.error_message = message
+            job.metadata = dict(metadata)
+            job.metadata["router_execution"] = {
+                "routing_mode": self.ROUTING_MODE,
+                "router_config_id": get_router_config_id(),
+                "reason": reason,
+            }
+            if protected_scene002:
+                job.metadata["scene002_contract_failure"] = {"reason": reason, "message": message}
+                job.metadata.pop("router_execution", None)
+                job.metadata["provider_failure"] = {"reason": reason, "message": message}
+            job.updated_at = datetime.now().isoformat()
+            return job
+
+        if protected_scene002:
+            try:
+                from app.data.storage import get_storage
+                from app.services.project_persistence_service import project_persistence_service
+                protected_storage = get_storage("sqlite")
+                project = project_persistence_service.load_readonly_existing(job.project_id)
+                verify_submission_boundary(
+                    job,
+                    storage=protected_storage,
+                    project=project,
+                    router_config_id=get_router_config_id(),
+                    backend_root=Path(__file__).resolve().parents[2],
+                )
+                durable_job = protected_storage.get_job(job.id) if protected_storage is not None else None
+                if durable_job is None or durable_job.metadata != job.metadata:
+                    raise ValueError("Durable protected execution changed at the provider boundary")
+                verify_submission_boundary(
+                    durable_job,
+                    storage=protected_storage,
+                    project=project,
+                    router_config_id=get_router_config_id(),
+                    backend_root=Path(__file__).resolve().parents[2],
+                )
+                job = durable_job
+                metadata = job.metadata
+                contract_record = metadata.get("creative_generation_contract")
+                params = job.input_payload.parameters if job.input_payload and isinstance(job.input_payload.parameters, dict) else {}
+            except Exception as exc:
+                return fail_contract("scene002_submission_proof_invalid", f"Scene 002 durable boundary rejected submission: {exc}")
+
+        if not isinstance(contract_record, dict):
+            return fail_contract(
+                "frozen_generation_contract_missing",
+                "Runway Router requires a persisted frozen generation contract",
+            )
+        contract_payload = contract_record.get("payload")
+        if not isinstance(contract_payload, dict) or "camera_plan" not in contract_payload:
+            return fail_contract(
+                "frozen_camera_plan_missing",
+                "Runway Router requires the camera_plan field in the frozen generation contract",
+            )
+        requested_model = str(params.get("model") or "").strip()
+        if requested_model:
+            job.status = "failed"
+            job.error_message = (
+                f"The Runway Model Router selects the model; concrete model "
+                f"override '{requested_model}' is not allowed."
+            )
+            job.metadata = dict(metadata)
+            job.metadata["router_execution"] = {
+                "routing_mode": self.ROUTING_MODE,
+                "router_config_id": get_router_config_id(),
+                "model_override_rejected": requested_model,
+                "reason": "model_rejected_on_router_path",
+            }
+            job.updated_at = datetime.now().isoformat()
+            return job
+        try:
+            contract = FrozenGenerationContract.from_record(contract_record)
+        except GenerationContractError as exc:
+            return fail_contract("frozen_generation_contract_invalid", str(exc))
+
+        if job.provider != self.ROUTER_PROVIDER:
+            return fail_contract(
+                "frozen_contract_provider_mismatch",
+                "Frozen Runway Router contract cannot execute under a different provider",
+            )
+        if contract.shot_id != job.shot_id:
+            return fail_contract(
+                "frozen_contract_shot_identity_mismatch",
+                "Frozen generation contract shot identity does not match RenderJobModel",
+            )
+        from app.services.scene_coverage_contract import verify_scene_coverage_contract
+        try:
+            approved_coverage = verify_scene_coverage_contract(contract.payload().get("scene_coverage"))
+        except (TypeError, ValueError) as exc:
+            return fail_contract("frozen_scene_coverage_invalid", f"Persisted scene coverage is invalid: {exc}")
+        identity = metadata.get("creative_generation_identity")
+        if not isinstance(identity, dict) or any(
+            identity.get(key) != expected
+            for key, expected in (
+                ("job_id", job.id),
+                ("project_id", job.project_id),
+                ("shot_id", job.shot_id),
+                ("provider", self.ROUTER_PROVIDER),
+            )
+        ):
+            return fail_contract(
+                "frozen_contract_job_identity_mismatch",
+                "Persisted creative generation identity does not match the render job",
+            )
+
+        manifest_fingerprint = metadata.get("creative_manifest_fingerprint")
+        contract_digest = metadata.get("creative_contract_digest")
+        manifest_record = metadata.get("creative_generation_manifest")
+        if not isinstance(manifest_record, dict):
+            return fail_contract("frozen_contract_manifest_missing", "Persisted Router creative manifest is missing")
+        if not isinstance(manifest_fingerprint, str) or not manifest_fingerprint:
+            return fail_contract("frozen_contract_manifest_fingerprint_missing", "Persisted Router manifest fingerprint is missing")
+        try:
+            recomputed_fingerprint = recompute_manifest_fingerprint(manifest_record)
+        except (KeyError, TypeError, ValueError) as exc:
+            return fail_contract("frozen_contract_manifest_invalid", f"Persisted Router manifest is invalid: {exc}")
+        if (
+            recomputed_fingerprint != manifest_fingerprint
+            or manifest_record.get("manifest_fingerprint") != manifest_fingerprint
+            or contract.manifest_fingerprint != manifest_fingerprint
+        ):
+            return fail_contract("frozen_contract_manifest_fingerprint_mismatch", "Persisted Router manifest fingerprint verification failed")
+
+        manifest_shots = manifest_record.get("shots")
+        matching_entries = [
+            row for row in manifest_shots
+            if isinstance(row, dict) and row.get("shot_id") == job.shot_id
+        ] if isinstance(manifest_shots, list) else []
+        if len(matching_entries) != 1:
+            return fail_contract("frozen_contract_manifest_shot_mismatch", "Persisted Router manifest does not contain exactly one matching shot")
+        manifest_entry = matching_entries[0]
+        manifest_scene = manifest_record.get("scene") if isinstance(manifest_record.get("scene"), dict) else {}
+        if (
+            contract.camera_target_project_id != job.project_id
+            or contract.camera_target_scene_id != str(manifest_scene.get("scene_id") or "")
+            or contract.camera_target_shot_id != job.shot_id
+            or approved_coverage.get("project_id") != job.project_id
+            or approved_coverage.get("scene_id") != str(manifest_scene.get("scene_id") or "")
+            or approved_coverage.get("scene_lineage_status") != "RESOLVED"
+            or approved_coverage.get("canonical_script_sha256") != manifest_scene.get("canonical_script_sha256")
+            or approved_coverage.get("scene_source_identity") != manifest_scene.get("scene_source_identity")
+            or approved_coverage.get("scene_source_start") != manifest_scene.get("scene_source_start")
+            or approved_coverage.get("scene_source_end") != manifest_scene.get("scene_source_end")
+        ):
+            return fail_contract(
+                "frozen_camera_target_identity_mismatch",
+                "Frozen camera target identity does not match the render job and manifest",
+            )
+        if manifest_entry.get("generation_contract_digest") != contract.creative_digest():
+            return fail_contract("frozen_contract_digest_mismatch", "Frozen contract creative digest does not match persisted Router manifest")
+        if not isinstance(contract_record.get("sha256"), str):
+            return fail_contract("frozen_contract_record_hash_missing", "Persisted Router contract record hash is missing")
+        if isinstance(contract_record.get("payload"), dict) and contract_record["payload"].get("shot_id") != job.shot_id:
+            return fail_contract("frozen_contract_shot_identity_mismatch", "Frozen generation contract shot identity does not match RenderJobModel")
+        if (
+            not isinstance(contract_record.get("sha256"), str)
+            or not contract_record.get("sha256")
+            or not isinstance(contract_digest, str)
+            or not contract_digest
+            or contract.creative_digest() != contract_digest
+            or manifest_entry.get("generation_contract_digest") != contract.creative_digest()
+        ):
+            return fail_contract("frozen_contract_digest_mismatch", "Frozen contract creative digest does not match persisted Router metadata and manifest")
+        expected_reference_uris = [reference.uri for reference in contract.references]
+        expected_reference_roles = [reference.studio_role for reference in contract.references]
+        if (
+            manifest_entry.get("shot_prompt") != contract.prompt
+            or manifest_entry.get("negative_prompt", "") != contract.negative_prompt
+            or manifest_entry.get("generation_contract_digest") != contract.creative_digest()
+            or manifest_entry.get("shot_duration_seconds") != (contract.duration or 0)
+            or manifest_entry.get("audio_intent") is not contract.audio
+            or manifest_entry.get("aspect_ratio") != contract.aspect_ratio
+            or manifest_entry.get("resolution") != contract.resolution
+            or manifest_entry.get("seed") != contract.seed
+            or manifest_entry.get("camera_plan") != json.loads(contract.camera_plan_json)
+            or manifest_entry.get("camera_provenance") != contract.camera_provenance
+            or manifest_entry.get("camera_instructions") != json.loads(contract.camera_instructions_json)
+            or manifest_entry.get("camera_source_digest") != contract.camera_source_digest
+            or manifest_entry.get("camera_source_project_id") != contract.camera_source_project_id
+            or manifest_entry.get("camera_source_scene_id") != contract.camera_source_scene_id
+            or manifest_entry.get("camera_source_shot_id") != contract.camera_source_shot_id
+            or manifest_entry.get("camera_source_storyboard_shot_id") != contract.camera_source_storyboard_shot_id
+            or manifest_entry.get("camera_target_project_id") != contract.camera_target_project_id
+            or manifest_entry.get("camera_target_scene_id") != contract.camera_target_scene_id
+            or manifest_entry.get("camera_target_shot_id") != contract.camera_target_shot_id
+            or manifest_entry.get("parameters") != json.loads(contract.creative_parameters_json)
+            or manifest_entry.get("scene_coverage") != approved_coverage
+            or manifest_entry.get("scene_coverage_shot") != contract.payload().get("scene_coverage_shot")
+            or manifest_entry.get("references") != expected_reference_uris
+            or manifest_entry.get("reference_roles") != expected_reference_roles
+        ):
+            return fail_contract("frozen_contract_manifest_creative_mismatch", "Persisted Router manifest creative values do not match the frozen contract")
+
+        if (
+            job.input_payload.prompt != contract.prompt
+            or list(job.input_payload.referenceAssets or []) != expected_reference_uris
+            or params.get("scene_coverage") != approved_coverage
+            or params.get("scene_coverage_shot") != contract.payload().get("scene_coverage_shot")
+            or params.get("dialogue_handoff") != contract.payload().get("dialogue_handoff")
+        ):
+            return fail_contract(
+                "mutable_render_input_mismatch",
+                "Runway Router RenderJob inputs do not match the frozen approved contract",
+            )
+
+        # Reference projection: when the job declares the Scene 002 reference
+        # projection, the wire request is rebuilt through the existing
+        # runway_reference_projection/v1 policy. Projection or authorization
+        # failure fails the job before any credential use or provider contact.
+        (
+            projection_failure,
+            projection_message,
+            projected_refs,
+            declared_projection_request,
+            reference_projection_execution,
+        ) = (
+            self._declared_reference_projection(
+                metadata=metadata,
+                contract_record=contract_record,
+                manifest_record=manifest_record,
+                router_config_id=get_router_config_id(),
+                context_refs=[],
+                reference_storage=reference_storage,
+            )
+        )
+        if projection_failure:
+            return fail_contract(projection_failure, projection_message)
+        if declared_projection_request is not None:
+            context_refs = projected_refs
+        else:
+            if metadata.get("frozen_reference_binding") is not None:
+                return fail_contract(
+                    "reference_projection_declaration_missing",
+                    "A canonical Runway reference binding cannot reach the Router without its declared, authorized projection.",
+                )
+
+        # The Router request is projected only from the persisted frozen contract.
+        # RenderJobInput is checked for identity but never used to reconstruct creative values.
+        #
+        # A declared runway_reference_projection/v1 selection is verified FIRST:
+        # the canonical Scene 002 five legitimately exceeds the Router reference
+        # capacity and carries canonical identity roles that the projection
+        # normalizes to the provider `reference` role. When a projection is
+        # declared, the projection's own validation (policy identity, capacity,
+        # role normalization, fingerprints, selection, digest) is authoritative,
+        # so these unprojected gates do not apply.
+        if declared_projection_request is None:
+            try:
+                creative_parameters = __import__("json").loads(contract.creative_parameters_json)
+                if creative_parameters:
+                    raise RunwayRouterReferenceIncompatibility(
+                        "unsupported_creative_parameters",
+                        "Runway Router cannot represent approved Studio video parameters without loss.",
+                        parameters=sorted(creative_parameters),
+                    )
+                from app.services.runway_reference_projection import normalize_studio_role
+                unsupported_roles = []
+                for ref in contract.references:
+                    try:
+                        normalize_studio_role(ref.studio_role)
+                    except ValueError:
+                        unsupported_roles.append(ref)
+                if unsupported_roles:
+                    ref = unsupported_roles[0]
+                    raise RunwayRouterReferenceIncompatibility(
+                        "unsupported_reference_semantics",
+                        f"Runway video reference schema cannot represent approved Studio role '{ref.studio_role}'.",
+                        studio_role=ref.studio_role,
+                        category=ref.category,
+                        ref_id=ref.ref_id,
+                        source=ref.source,
+                    )
+                refs = []
+                for ref in contract.references:
+                    if not ref.uri or ref.uri != ref.uri.strip():
+                        raise RunwayRouterReferenceIncompatibility(
+                            "invalid_reference_value", "Frozen contract contains a blank or malformed reference URI.",
+                            source=ref.source, ref_id=ref.ref_id,
+                        )
+                    if ref.role not in {"first", "last", "reference"}:
+                        raise RunwayRouterReferenceIncompatibility(
+                            "unsupported_reference_role",
+                            f"Frozen contract reference role '{ref.role}' cannot be represented by Runway.",
+                            role=ref.role, studio_role=ref.studio_role, source=ref.source, ref_id=ref.ref_id,
+                        )
+                    refs.append({"image_url": ref.uri, "role": ref.role, "ref_id": ref.ref_id, "kind": ref.category})
+
+                if len(contract.references) > 4:
+                    raise RunwayRouterReferenceIncompatibility(
+                        "reference_limit_exceeded",
+                        f"Runway Model Router video requests support at most four approved references; contract contains {len(contract.references)}.",
+                        reference_count=len(contract.references), maximum=4,
+                    )
+                context_refs = refs
+            except RunwayRouterReferenceIncompatibility as exc:
+                return self._fail_reference_incompatibility(job, exc, get_router_config_id())
+
+        if not self.config.api_key and not get_runway_router_api_key():
+            job.status = "failed"
+            job.error_message = "Missing Runway API key"
+            job.metadata = dict(job.metadata or {})
+            job.metadata["router_execution"] = {
+                "routing_mode": self.ROUTING_MODE,
+                "router_config_id": get_router_config_id(),
+                "reason": RUNWAY_ROUTER_MISSING_KEY_CODE,
+            }
+            job.updated_at = datetime.now().isoformat()
+            return job
+
+        try:
+            aspect_ratio = self._router_aspect_ratio({"aspect_ratio": contract.aspect_ratio})
+        except ValueError as exc:
+            job.status = "failed"
+            job.error_message = str(exc)
+            job.updated_at = datetime.now().isoformat()
+            return job
+
+        duration = contract.duration
+        seed_val = contract.seed
+        negative_prompt = contract.negative_prompt or None
+        camera_plan = json.loads(contract.camera_plan_json)
+        if not camera_plan:
+            return fail_contract(
+                "frozen_camera_plan_missing",
+                "Runway Router requires a non-empty frozen camera plan",
+            )
+        from app.services.providers.runway_router_provider import project_frozen_camera_plan_prompt
+
+        try:
+            router_prompt = project_frozen_camera_plan_prompt(contract.prompt, camera_plan)
+        except ValueError as exc:
+            return fail_contract("frozen_camera_plan_invalid", str(exc))
+
+        router_config_id = get_router_config_id()
+        if declared_projection_request is not None:
+            # The projection already revalidated the frozen contract, policy
+            # identity, capacity, fingerprints, selection, role normalization and
+            # digest, and built the wire body. Only selected, materialized
+            # references reach the provider; omitted and rejected identities
+            # never appear in it.
+            live_request_payload = declared_projection_request
+        else:
+            try:
+                live_request_payload = reconstruct_runway_router_video_request(
+                    contract_record,
+                    manifest_record,
+                    config_id=router_config_id,
+                )
+            except (TypeError, ValueError) as exc:
+                return fail_contract("frozen_router_request_unreconstructable", str(exc))
+
+        def _run_sync(*, dry_run: bool = False) -> dict:
+            if protected_scene002:
+                verify_submission_boundary(
+                    job,
+                    storage=protected_storage,
+                    project=project,
+                    router_config_id=get_router_config_id(),
+                    backend_root=Path(__file__).resolve().parents[2],
+                )
+                durable_before_send = protected_storage.get_job(job.id)
+                if (
+                    durable_before_send is None
+                    or durable_before_send.metadata != job.metadata
+                    or durable_before_send.input_payload.model_dump(mode="json") != job.input_payload.model_dump(mode="json")
+                ):
+                    raise ValueError("Durable protected render changed at the last-mile provider boundary")
+            elif authority_storage is not None:
+                from app.services.production_authorization_service import authorize_runway_submission
+
+                durable_before_send = authority_storage.get_job(job.id)
+                if durable_before_send is None:
+                    raise ValueError("Runway production authority disappeared before provider submission")
+                latest_decision = authorize_runway_submission(durable_before_send, storage=authority_storage)
+                if not latest_decision.allowed:
+                    raise ValueError(
+                        f"Runway production authorization changed before provider submission: {latest_decision.reason}"
+                    )
+                if (
+                    durable_before_send.project_id != job.project_id
+                    or durable_before_send.shot_id != job.shot_id
+                    or durable_before_send.provider != job.provider
+                    or durable_before_send.input_payload.model_dump(mode="json") != job.input_payload.model_dump(mode="json")
+                    or not isinstance(durable_before_send.metadata, dict)
+                    or {key: value for key, value in durable_before_send.metadata.items() if key != "production_authorization"}
+                    != {key: value for key, value in job.metadata.items() if key != "production_authorization"}
+                ):
+                    raise ValueError("Runway render identity or frozen contract changed at the last-mile provider boundary")
+            if not protected_scene002:
+                contract_references = (
+                    contract_record.get("payload", {}).get("references", [])
+                    if isinstance(contract_record, dict)
+                    and isinstance(contract_record.get("payload"), dict)
+                    else []
+                )
+                if metadata.get("frozen_reference_binding") is not None:
+                    from app.services.reference_validation import validate_frozen_reference_binding_current
+
+                    validate_frozen_reference_binding_current(
+                        job=durable_before_send,
+                        storage=reference_storage if reference_storage is not None else authority_storage,
+                    )
+
+            request_payload = dict(live_request_payload)
+            if dry_run:
+                request_payload["dryRun"] = True
+            request_input = request_payload.get("input") if isinstance(request_payload.get("input"), dict) else {}
+            expected_wire_references = [
+                {
+                    "uri": str(reference.get("image_url") or reference.get("uri") or ""),
+                    "role": str(reference.get("role") or "reference"),
+                }
+                if isinstance(reference, dict)
+                else {"uri": str(reference), "role": "reference"}
+                for reference in context_refs
+            ]
+            actual_wire_references = list(request_input.get("referenceImages") or [])
+            if actual_wire_references != expected_wire_references:
+                raise ValueError("Runway request references differ from the authorized projected reference selection")
+            request_payload, _production_warnings = self._normalize_production_router_request(
+                job, request_payload, record_metadata=(not dry_run)
+            )
+            _submit_result = submit_runway_router_video_render(
+                router_prompt,
+                aspect_ratio=aspect_ratio,
+                duration=duration,
+                resolution=contract.resolution,
+                negative_prompt=negative_prompt,
+                generate_audio=contract.audio,
+                seed=seed_val,
+                references=context_refs,
+            reference_videos=__import__("json").loads(contract.reference_videos_json),
+            reference_audio=__import__("json").loads(contract.reference_audio_json),
+            keyframes=__import__("json").loads(contract.keyframes_json),
+            content_moderation=contract.content_moderation,
+                dry_run=dry_run,
+                config_id=router_config_id,
+                request_payload=request_payload,
+                api_key=self.config.api_key,
+            )
+            if _production_warnings:
+                _submit_meta = dict(_submit_result.get("meta") or {})
+                _submit_meta["payload_normalization_warnings"] = list(_production_warnings)
+                _submit_meta["payload_normalized"] = True
+                _submit_result = dict(_submit_result, meta=_submit_meta)
+            return _submit_result
+
+        cost_control_metadata: dict[str, Any] = {}
+        if protected_scene002:
+            # Contract-only cost approval is sealed in the authority. Never
+            # issue a provider dry-run or other network request before the final
+            # last-mile proof; in this mode this adapter submits only the frozen
+            # live request once it reaches the explicitly authorized boundary.
+            try:
+                result = _run_sync()
+            except Exception as exc:  # noqa: BLE001 — normalized into a result-only failure
+                result = {
+                    "status": "failed",
+                    "url": None,
+                    "file_path": None,
+                    "error": f"Runway router submission failed: {exc}",
+                    "meta": {"reason": getattr(exc, "stage", None) or RUNWAY_ROUTER_ERROR_CODE,
+                             "cost_gate": getattr(exc, "metadata", None)},
+                }
+        else:
+            try:
+                # Runway dry-run is advisory, not authorization for the later live
+                # request; the API documents no reusable binding between the two.
+                # Studio applies local controls to the estimate, while Runway
+                # independently applies any configured provider price ceiling.
+                try:
+                    _asyncio.get_running_loop()
+                    preflight = await _asyncio.to_thread(_run_sync, dry_run=True)
+                except RuntimeError:
+                    preflight = _run_sync(dry_run=True)
+                preflight_meta = preflight.get("meta") if isinstance(preflight.get("meta"), dict) else {}
+                if preflight.get("status") != "dry_run":
+                    result = preflight
+                else:
+                    estimated_cost = preflight_meta.get("estimated_cost_credits")
+                    resolved_settings = preflight_meta.get("resolved_settings")
+                    provider_ceiling_configured = (
+                        isinstance(resolved_settings, dict)
+                        and resolved_settings.get("priceCeiling") is not None
+                    )
+                    provider_ceiling_supported = (
+                        isinstance(resolved_settings, dict)
+                        and "priceCeiling" in resolved_settings
+                    )
+                    provider_cost_capabilities = runway_router_cost_capabilities(
+                        provider_ceiling_configured=provider_ceiling_configured,
+                        provider_ceiling_supported=provider_ceiling_supported,
+                    )
+                    cost_control_metadata = {
+                        "estimated_cost_credits": estimated_cost,
+                        "estimated_cost_semantics": ADVISORY_ESTIMATE,
+                        "quote_authorization_supported": provider_cost_capabilities[QUOTE_AUTHORIZATION],
+                        "provider_cost_capabilities": provider_cost_capabilities,
+                        "decision_semantics": "Advisory estimate only; Studio local gate has not yet approved submission.",
+                    }
+                    if (
+                        isinstance(estimated_cost, bool)
+                        or not isinstance(estimated_cost, numbers.Real)
+                        or not math.isfinite(float(estimated_cost))
+                        or float(estimated_cost) < 0
+                    ):
+                        cost_status = "unknown" if estimated_cost is None else "invalid"
+                        result = {
+                            "status": "failed",
+                            "url": None,
+                            "file_path": None,
+                            "error": f"Runway Router returned an {cost_status} advisory estimate; generation is blocked.",
+                            "meta": {
+                                **preflight_meta,
+                                **cost_control_metadata,
+                                "reason": f"cost_estimate_{cost_status}",
+                                "cost_gate": {"cost_status": cost_status, **cost_control_metadata},
+                            },
+                        }
+                    else:
+                        local_cost_gate = cost_gate.enforce_shot_limit(
+                            job.project_id,
+                            self.ROUTER_PROVIDER,
+                            {"duration": duration},
+                            router_estimated_cost=float(estimated_cost),
+                            router_cost_known=True,
+                            router_provider_ceiling_configured=provider_ceiling_configured,
+                            router_provider_ceiling_supported=provider_ceiling_supported,
+                        )
+                        cost_control_metadata["local_cost_gate"] = local_cost_gate
+                        cost_control_metadata["decision_semantics"] = (
+                            f"Runway dry-run estimated this request at approximately {estimated_cost:g} credits; "
+                            "Studio policy permits submission under configured local controls; "
+                            "Runway independently applies its provider-side limits."
+                        )
+                        cost_control_metadata["provider_cost_capabilities"] = {
+                            **provider_cost_capabilities,
+                            "PROVIDER_ENFORCED_MAXIMUM": provider_ceiling_supported and provider_ceiling_configured,
+                        }
+                        try:
+                            _asyncio.get_running_loop()
+                            result = await _asyncio.to_thread(_run_sync)
+                        except RuntimeError:
+                            result = _run_sync()
+            except Exception as exc:  # noqa: BLE001 — normalized into the job below
+                result = {
+                    "status": "failed",
+                    "url": None,
+                    "file_path": None,
+                    "error": f"Runway router submission failed: {exc}",
+                    "meta": {"reason": getattr(exc, "stage", None) or RUNWAY_ROUTER_ERROR_CODE,
+                             "cost_gate": getattr(exc, "metadata", None)},
+                }
+
+        meta = result.get("meta") if isinstance(result.get("meta"), dict) else {}
+        if cost_control_metadata:
+            meta.update(cost_control_metadata)
+            meta.setdefault("cost_gate", cost_control_metadata)
+        job.metadata = dict(job.metadata or {})
+        provider_output_identity = meta.get("output_identity")
+        provider_output_identity = provider_output_identity if isinstance(provider_output_identity, dict) else {}
+        job.metadata["router_execution"] = {
+            "routing_mode": self.ROUTING_MODE,
+            "router_config_id": meta.get("router_config_id") or get_router_config_id(),
+
+            "resolved_model": meta.get("resolved_model"),
+            "routing_provider": meta.get("routing_provider"),
+            "resolved_settings": meta.get("resolved_settings"),
+            "resolved_input": meta.get("resolved_input"),
+            "estimated_cost_credits": meta.get("estimated_cost_credits"),
+            "estimated_cost_semantics": meta.get("estimated_cost_semantics"),
+            "quote_authorization_supported": meta.get("quote_authorization_supported", False),
+            "provider_cost_capabilities": meta.get("provider_cost_capabilities"),
+            "decision_semantics": meta.get("decision_semantics"),
+            "realized_cost_credits": meta.get("realized_cost_credits"),
+            "references_forwarded": meta.get("references_forwarded", 0),
+            "generation_context_id": (
+                ((job.metadata or {}).get("generation_context") or {}).get("generation_context_id")
+                if isinstance((job.metadata or {}).get("generation_context"), dict)
+                else None
+            ),
+            "references_unrepresentable": meta.get("references_unrepresentable", []),
+            "cost_gate": meta.get("cost_gate"),
+            "capacity_fallback": meta.get("capacity_fallback"),
+            "routing_extra": meta.get("routing_extra"),
+            "no_eligible_model": meta.get("no_eligible_model"),
+            "runway_task_id": meta.get("runway_task_id"),
+            "reference_projection": reference_projection_execution or None,
+            "payload_normalization_warnings": meta.get("payload_normalization_warnings", []),
+            "payload_normalized": meta.get("payload_normalized", False),
+            "provider_output_identity": provider_output_identity,
+            # Whether a live POST may have reached the provider. Retry gates
+            # use it to distinguish conclusive pre-send failures (absent) from
+            # ambiguous outcomes (True) that require reconciliation first.
+            "submission_attempted": meta.get("submission_attempted"),
+        }
+        job.metadata["provider_payload_metadata"] = {
+            "provider": self.ROUTER_PROVIDER,
+            "routing_mode": self.ROUTING_MODE,
+            "router_config_id": meta.get("router_config_id") or get_router_config_id(),
+            "endpoint": "/v1/generate/video",
+            "model": "<router-selected>",
+            "resolved_model": meta.get("resolved_model"),
+            "prompt_length": len(router_prompt),
+            "camera_plan_projected": True,
+            "reference_count": len(contract.references),
+            "references_injected": bool(contract.references),
+            "conditioning_mode": (
+                "first_frame" if any(ref.role == "first" for ref in contract.references)
+                else "reference" if contract.references else "text"
+            ),
+            "duration": duration,
+            "aspect_ratio": aspect_ratio,
+            "resolution": contract.resolution,
+            "seed_present": seed_val is not None,
+            "audio": contract.audio,
+        }
+        if result.get("status") == "dry_run":
+            # The router provider never returns dry_run for a live submit; kept
+            # for defense in depth (no task created, nothing billable).
+            job.status = "failed"
+            job.error_message = "Routed submission unexpectedly returned a dry-run decision"
+            job.updated_at = datetime.now().isoformat()
+            return job
+        runway_task_id = meta.get("runway_task_id")
+        provider_output_identity = meta.get("output_identity")
+        provider_output_identity = provider_output_identity if isinstance(provider_output_identity, dict) else {}
+        job.provider_job_id = runway_task_id.strip() if isinstance(runway_task_id, str) and runway_task_id.strip() else None
+        if result.get("status") == "success" and (
+            not job.provider_job_id
+            or not isinstance(result.get("url"), str)
+            or not result.get("url").strip()
+        ):
+            result = {
+                **result,
+                "status": "failed",
+                "url": None,
+                "error": "Runway Router success did not carry both a task identity and output URL",
+                "meta": {
+                    **meta,
+                    "reason": "provider_output_identity_missing",
+                    "runway_task_id": job.provider_job_id,
+                },
+            }
+            meta = result["meta"]
+        elif result.get("status") == "success" and not provider_output_identity:
+            result = {
+                **result,
+                "status": "failed",
+                "url": None,
+                "error": "Runway Router success did not carry a provider output association",
+                "meta": {
+                    **meta,
+                    "reason": "provider_output_identity_missing",
+                    "runway_task_id": job.provider_job_id,
+                },
+            }
+            meta = result["meta"]
+        elif result.get("status") == "success" and (
+            provider_output_identity.get("provider_task_id") != job.provider_job_id
+            or provider_output_identity.get("output_url") != result.get("url")
+            or provider_output_identity.get("association_source") != "runway_router_polled_task"
+        ):
+            result = {
+                **result,
+                "status": "failed",
+                "url": None,
+                "error": "Runway Router output identity did not match the submitted provider task",
+                "meta": {
+                    **meta,
+                    "reason": "provider_output_identity_mismatch",
+                    "runway_task_id": job.provider_job_id,
+                },
+            }
+            meta = result["meta"]
+        if result.get("status") != "success":
+            job.status = "failed"
+            job.error_message = str(result.get("error") or "Runway router submission failed")
+            if meta.get("reason") == RUNWAY_ROUTER_NO_ELIGIBLE_MODEL_CODE:
+                job.error_message = (
+                    f"No eligible routed model: {job.error_message} "
+                    f"(emptiedBy={meta.get('no_eligible_model', {}).get('emptied_by')})"
+                )
+            job.output_payload = RenderJobOutput(
+                asset_url="",
+                thumbnail_url="",
+                metadata={
+                    "provider_response_normalized": {
+                        "provider": self.ROUTER_PROVIDER,
+                        "task": "video_generation",
+                        "status": "failed",
+                        "output": {"video_url": None, "status": "failed"},
+                        "metadata": {
+                            "task_id": job.provider_job_id,
+                            "render_job_id": job.id,
+                            "router_config_id": meta.get("router_config_id"),
+                            "resolved_model": meta.get("resolved_model"),
+                            "provider_mode": "model_router",
+                            "generation_context_id": (
+                                ((job.metadata or {}).get("generation_context") or {}).get("generation_context_id")
+                                if isinstance((job.metadata or {}).get("generation_context"), dict)
+                                else None
+                            ),
+                            "reason": meta.get("reason"),
+                            "no_eligible_model": meta.get("no_eligible_model"),
+                            "error": job.error_message,
+                        },
+                    }
+                },
+            )
+            job.updated_at = datetime.now().isoformat()
+            return job
+
+        # _run_sync polls to a terminal status synchronously; success carries the
+        # output URL. provider_job_id records Runway's task id for audit.
+        job.metadata["router_execution"]["runway_task_id"] = job.provider_job_id
+        output_url = result["url"].strip()
+        output_identity = {
+            "render_job_id": job.id,
+            "provider_task_id": job.provider_job_id,
+            "output_url": output_url,
+            "association_source": provider_output_identity.get("association_source"),
+        }
+        job.metadata["router_execution"]["output_identity"] = output_identity
+        job.status = "complete"
+        job.progress = 100
+        job.error_message = None
+        job.updated_at = datetime.now().isoformat()
+        job.completed_at = datetime.now().isoformat()
+        normalized = {
+            "provider": self.ROUTER_PROVIDER,
+            "task": "video_generation",
+            "status": "completed",
+            "output": {"video_url": result.get("url"), "status": "completed"},
+            "metadata": {
+                "task_id": job.provider_job_id,
+                "render_job_id": job.id,
+                "runway_output_identity": output_identity,
+                "router_config_id": meta.get("router_config_id"),
+                "resolved_model": meta.get("resolved_model"),
+                "routing_provider": meta.get("routing_provider"),
+                "provider_mode": "model_router",
+                "generation_context_id": (
+                    ((job.metadata or {}).get("generation_context") or {}).get("generation_context_id")
+                    if isinstance((job.metadata or {}).get("generation_context"), dict)
+                    else None
+                ),
+                "estimated_cost_credits": meta.get("estimated_cost_credits"),
+                "realized_cost_credits": meta.get("realized_cost_credits"),
+            },
+        }
+        job.output_payload = RenderJobOutput(
+            asset_url=output_url,
+            thumbnail_url=None,
+            metadata={
+                "provider_response_normalized": normalized,
+                "reference_projection": reference_projection_execution or None,
+            },
+        )
+        return job
+
+    async def get_job_status(self, job: RenderJobModel) -> RenderJobModel:
+        # The routed submit path polls to a terminal status inside submit_job, so
+        # a job here is already terminal or was submitted by an older code path.
+        return job
+
+    async def cancel_job(self, job: RenderJobModel) -> bool:
+        return False
+
+    async def fetch_outputs(self, job: RenderJobModel) -> list[RenderAsset]:
+        if job.status != "complete" or not job.output_payload or not job.provider_job_id:
+            return []
+        payload_metadata = job.output_payload.metadata if isinstance(job.output_payload.metadata, dict) else {}
+        normalized = payload_metadata.get("provider_response_normalized")
+        normalized = normalized if isinstance(normalized, dict) else {}
+        normalized_metadata = normalized.get("metadata")
+        normalized_metadata = normalized_metadata if isinstance(normalized_metadata, dict) else {}
+        execution = job.metadata.get("router_execution") if isinstance(job.metadata, dict) else {}
+        execution = execution if isinstance(execution, dict) else {}
+        output_identity = normalized_metadata.get("runway_output_identity")
+        normalized_output = normalized.get("output")
+        normalized_output = normalized_output if isinstance(normalized_output, dict) else {}
+        output_url = str(job.output_payload.asset_url or "").strip()
+        if (
+            job.provider != self.ROUTER_PROVIDER
+            or execution.get("runway_task_id") != job.provider_job_id
+            or normalized.get("provider") != self.ROUTER_PROVIDER
+            or normalized_metadata.get("task_id") != job.provider_job_id
+            or normalized_metadata.get("render_job_id") != job.id
+            or not isinstance(output_identity, dict)
+            or output_identity.get("render_job_id") != job.id
+            or output_identity.get("provider_task_id") != job.provider_job_id
+            or output_identity.get("output_url") != output_url
+            or output_identity.get("association_source") not in (
+                "runway_router_polled_task",
+                "runway_router_reconciled_task",
+            )
+            or execution.get("output_identity") != output_identity
+            or normalized_output.get("video_url") != output_url
+            or not output_url
+        ):
+            return []
+        return [
+            RenderAsset(
+                id=f"runway-router-asset-{job.id}",
+                job_id=job.id,
+                project_id=job.project_id,
+                shot_id=job.shot_id,
+                provider=self.ROUTER_PROVIDER,
+                asset_type="video",
+                url=job.output_payload.asset_url or "",
+                thumbnail_url=job.output_payload.thumbnail_url,
+                metadata=job.output_payload.metadata,
+                created_at=job.completed_at or datetime.now().isoformat(),
+            )
+        ]
+
+    async def get_status(self) -> ProviderStatus:
+        from app.services.providers.runway_router_provider import get_runway_router_api_key
+
+        available = bool(self.config.api_key or get_runway_router_api_key())
+        return ProviderStatus(
+            provider_id=self.ROUTER_PROVIDER,
+            name="Runway Model Router",
+            status="available" if available else "unavailable",
+            is_simulated=False,
+            capabilities=["model_routing", "video_generation", "image_generation"],
+            active_jobs=0,
+            queued_jobs=0,
+        )
 
 
 class HappyHorseAdapter(RenderProviderAdapter):
@@ -2080,286 +3678,81 @@ class WanTextToVideoAdapter(HappyHorseAdapter):
         }
 
 
-class OpenRouterVideoAdapter(HappyHorseR2VAdapter):
-    """Video render via OpenRouter's unified /videos API.
-
-    Purpose: route renders off DashScope (in billing arrears) onto OpenRouter's
-    prepaid credits WITHOUT changing the model. `alibaba/happyhorse-1.1` is
-    available on OpenRouter, so the reference-to-video behaviour this project is
-    tuned for is preserved. Reference frames are sent as data: URLs — confirmed
-    accepted by a live probe on 2026-08-25 (job 0sJdBrWaDxvp24eRVgFP, cost
-    $0.494), which is why this reuses HappyHorseR2VAdapter._provider_reference_url
-    (local path -> base64 data URL) unchanged.
-
-    OpenRouter's video API has NO negative_prompt field. The negative-prompt
-    channel built for HappyHorse is dropped here rather than folded into the
-    positive prompt (which would reintroduce the summon-by-naming failure it was
-    built to avoid). The drop is recorded in job metadata so it is visible.
-
-    Contract (verified live, not from docs):
-      POST {BASE}/videos  -> {"id","polling_url","status":"pending"}  (HTTP 202)
-      GET  polling_url     -> {"status": ...}; terminal: completed|failed|
-                              cancelled|expired (also accepts succeeded/canceled)
-      completed carries unsigned_urls[0] and usage.cost; the bytes are fetched
-      from GET {BASE}/videos/{id}/content?index=0 with the bearer key.
-    """
-
-    OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-    MODEL_NAME = "alibaba/happyhorse-1.1"
-    PROVIDER_LABEL = "OpenRouter"
-    ASSET_ID_PREFIX = "openrouter"
-    POLL_INTERVAL_SECONDS = 15.0
-    TIMEOUT_SECONDS = 1200
-
-    def _openrouter_key(self) -> str:
-        key = str(getattr(self.config, "api_key", "") or "").strip()
-        if key:
-            return key
-        try:
-            from app.config import get_settings
-            return str(getattr(get_settings(), "openrouter_api_key", "") or "").strip()
-        except Exception:
-            return ""
-
-    def _openrouter_model(self) -> str:
-        return (os.getenv("OPENROUTER_VIDEO_MODEL", "") or self.MODEL_NAME).strip()
-
-    @staticmethod
-    def _openrouter_resolution(resolution: object) -> str:
-        return "1080p" if str(resolution or "").upper().startswith("1080") else "720p"
-
-    def _build_input_references(self, job: RenderJobModel) -> list[dict]:
-        consistency_data = getattr(job.input_payload, "consistency_payload", None)
-        from app.models.consistency import ConsistencyPayload
-
-        cp = (
-            ConsistencyPayload(**consistency_data)
-            if isinstance(consistency_data, dict) else consistency_data
-        )
-        refs = [
-            ref.image_url for ref in (cp.refs if cp else [])
-            if ref.kind in {"character_face", "character_full"} and ref.image_url
-        ]
-        frame = (job.input_payload.parameters or {}).get("storyboard_frame_url")
-        references: list[dict] = []
-        seen: set[str] = {frame} if frame else set()
-        for url in [*job.input_payload.referenceAssets, *refs]:
-            if not url or url in seen:
-                continue
-            seen.add(url)
-            references.append({
-                "type": "image_url",
-                "image_url": {"url": self._provider_reference_url(url)},
-            })
-        if len(references) > 9:
-            raise ValueError("OpenRouter supports at most nine reference images; choose the required references")
-        return references
-
-    def _build_openrouter_body(
-        self, job: RenderJobModel, *, resolution, duration, ratio, seed
-    ) -> dict:
-        _validate_requested_video_settings(job.input_payload.parameters or {}, duration=int(duration), resolution=self._openrouter_resolution(resolution), ratio=str(ratio))
-        body: dict = {
-            "model": self._openrouter_model(),
-            "prompt": str(job.input_payload.prompt or "").strip(),
-            "duration": int(duration),
-            "resolution": self._openrouter_resolution(resolution),
-            "aspect_ratio": str(ratio) if ":" in str(ratio) else "16:9",
-            "generate_audio": bool(
-                (job.input_payload.parameters or {}).get("generate_audio", False)
-            ),
-        }
-        references = self._build_input_references(job)
-        if references:
-            body["input_references"] = references
-        frame = (job.input_payload.parameters or {}).get("storyboard_frame_url")
-        if frame:
-            body["frame_images"] = [{
-                "type": "image_url", "image_url": {"url": self._provider_reference_url(frame)},
-                "frame_type": "first_frame",
-            }]
-        if seed is not None:
-            try:
-                body["seed"] = int(seed)
-            except (TypeError, ValueError):
-                pass
-        from app.services.prompt_budget_service import validate_provider_text
-        validate_provider_text(job, body["prompt"], body["model"])
-        return body
+# Retired adapter name retained only to fail clearly for legacy imports.
+# It deliberately inherits the generic boundary, not another provider's code.
+class OpenRouterVideoAdapter(RenderProviderAdapter):
+    _RETIRED_MESSAGE = "OpenRouter is retired as a Studio video provider"
 
     async def submit_job(self, job: RenderJobModel) -> RenderJobModel:
-        try:
-            key = self._openrouter_key()
-            if not key:
-                return self._failure_output(job, "Missing OpenRouter API key", "missing_api_key")
-
-            params = job.input_payload.parameters if isinstance(job.input_payload.parameters, dict) else {}
-            resolution = self._normalize_resolution(params.get("resolution"))
-            duration = self._normalize_duration(
-                params.get("duration") or params.get("duration_seconds") or 4
-            )
-            ratio = self._normalize_ratio(params.get("ratio"))
-            seed = params.get("seed")
-            body = self._build_openrouter_body(
-                job, resolution=resolution, duration=duration, ratio=ratio, seed=seed
-            )
-
-            job.metadata = dict(job.metadata or {})
-            job.metadata["provider_payload_metadata"] = {
-                "provider": self.provider_id,
-                "endpoint": "/videos",
-                "model": body["model"],
-                "prompt_length": len(body["prompt"]),
-                "reference_count": len(body.get("input_references") or []),
-                "references_injected": bool(body.get("input_references") or body.get("frame_images")),
-                "frame_count": len(body.get("frame_images") or []),
-                "conditioning_mode": "first_frame" if body.get("frame_images") else "reference" if body.get("input_references") else "text",
-                "negative_prompt_supported": False,
-                "duration": duration,
-                "aspect_ratio": body["aspect_ratio"],
-                "resolution": body["resolution"],
-                "seed_present": seed is not None,
-            }
-
-            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-            timeout = aiohttp.ClientTimeout(total=self.TIMEOUT_SECONDS)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    f"{self.OPENROUTER_BASE}/videos", headers=headers, json=body
-                ) as resp:
-                    if resp.status >= 400:
-                        detail = (await resp.text())[:400]
-                        return self._failure_output(
-                            job, f"OpenRouter submit HTTP {resp.status}: {detail}", "submit_failed"
-                        )
-                    submit = await resp.json(content_type=None)
-
-                job_id = submit.get("id")
-                if not job_id:
-                    return self._failure_output(
-                        job, "OpenRouter submit missing job id", "missing_task_id", submit
-                    )
-                poll_url = submit.get("polling_url") or f"{self.OPENROUTER_BASE}/videos/{job_id}"
-                job.provider_job_id = str(job_id)
-                job.status = "rendering"
-                job.progress = 10
-                job.updated_at = datetime.now().isoformat()
-
-                started = asyncio.get_running_loop().time()
-                final: dict = {}
-                status = "pending"
-                while True:
-                    await asyncio.sleep(self.POLL_INTERVAL_SECONDS)
-                    async with session.get(poll_url, headers=headers) as poll:
-                        if poll.status >= 400:
-                            if asyncio.get_running_loop().time() - started >= self.TIMEOUT_SECONDS:
-                                return self._failure_output(
-                                    job, f"OpenRouter poll HTTP {poll.status}", "timeout"
-                                )
-                            continue
-                        final = await poll.json(content_type=None)
-                    status = str(final.get("status", "")).strip().lower()
-                    logger.info(
-                        "OPENROUTER_VIDEO_POLL | job=%s | provider_job=%s | status=%s",
-                        job.id, job_id, status,
-                    )
-                    if status in {"completed", "succeeded", "failed", "cancelled", "canceled", "expired"}:
-                        break
-                    if asyncio.get_running_loop().time() - started >= self.TIMEOUT_SECONDS:
-                        return self._failure_output(
-                            job, f"OpenRouter render timed out after {self.TIMEOUT_SECONDS}s", "timeout", final
-                        )
-
-                if status not in {"completed", "succeeded"}:
-                    return self._failure_output(
-                        job, f"OpenRouter render {status or 'failed'}", "task_failed", final
-                    )
-
-                unsigned = final.get("unsigned_urls") or []
-                content_url = (
-                    unsigned[0] if unsigned
-                    else f"{self.OPENROUTER_BASE}/videos/{job_id}/content?index=0"
-                )
-                local_url = await self._download_openrouter_output(session, headers, content_url, job)
-                cost = (final.get("usage") or {}).get("cost")
-
-                job.status = "complete"
-                job.progress = 100
-                job.error_message = None
-                job.updated_at = datetime.now().isoformat()
-                job.completed_at = datetime.now().isoformat()
-                job.output_payload = RenderJobOutput(
-                    asset_url=local_url or content_url,
-                    thumbnail_url=None,
-                    metadata={
-                        "provider_response_normalized": {
-                            "provider": self.provider_id,
-                            "task": "video_generation",
-                            "status": "completed",
-                            "output": {"video_url": local_url or content_url, "status": "completed"},
-                            "metadata": {
-                                "model": body["model"],
-                                "generation_id": final.get("generation_id"),
-                                "cost": cost,
-                                "content_url": content_url,
-                            },
-                        }
-                    },
-                )
-                job.metadata["openrouter_cost"] = cost
-                job.metadata["openrouter_generation_id"] = final.get("generation_id")
-                return job
-        except Exception as exc:
-            return self._failure_output(job, f"OpenRouter API error: {exc}", "request_error")
-
-    async def _download_openrouter_output(self, session, headers, content_url, job) -> Optional[str]:
-        try:
-            root = self._outputs_root() / "renders" / str(job.project_id)
-            root.mkdir(parents=True, exist_ok=True)
-            dest = root / f"{job.id}_openrouter.mp4"
-            async with session.get(content_url, headers=headers) as resp:
-                if resp.status >= 400:
-                    logger.warning("OPENROUTER_VIDEO_DOWNLOAD_FAILED | job=%s | http=%s", job.id, resp.status)
-                    return None
-                data = await resp.read()
-            dest.write_bytes(data)
-            return f"/outputs/renders/{job.project_id}/{dest.name}"
-        except Exception as exc:
-            logger.warning("OPENROUTER_VIDEO_DOWNLOAD_ERROR | job=%s | %s", job.id, exc)
-            return None
+        raise ValueError(self._RETIRED_MESSAGE)
 
     async def get_job_status(self, job: RenderJobModel) -> RenderJobModel:
-        # submit_job blocks through completion (same shape as HappyHorse), so the
-        # job is already terminal by the time anything asks for status.
-        return job
+        raise ValueError(self._RETIRED_MESSAGE)
 
     async def cancel_job(self, job: RenderJobModel) -> bool:
-        return False
+        raise ValueError(self._RETIRED_MESSAGE)
 
     async def fetch_outputs(self, job: RenderJobModel) -> list[RenderAsset]:
-        assets: list[RenderAsset] = []
-        if job.output_payload and job.output_payload.asset_url:
-            assets.append(RenderAsset(
-                id=f"{self.ASSET_ID_PREFIX}-{job.id}",
-                job_id=job.id,
-                project_id=str(job.project_id),
-                shot_id=str(job.shot_id),
-                provider=self.provider_id,
-                asset_type="video",
-                url=job.output_payload.asset_url,
-            ))
-        return assets
+        raise ValueError(self._RETIRED_MESSAGE)
 
     async def get_status(self) -> ProviderStatus:
-        return ProviderStatus(
-            provider_id=self.provider_id,
-            name=self.config.name or self.PROVIDER_LABEL,
-            status="available" if self._openrouter_key() else "unavailable",
-            is_simulated=False,
-            capabilities=self.config.capabilities or ["video_generation", "reference_to_video"],
-            active_jobs=0,
-            queued_jobs=0,
+        raise ValueError(self._RETIRED_MESSAGE)
+
+
+class VisualTrainingAdapter(RenderProviderAdapter):
+    """Provider boundary for visual-model training.
+
+    Mirrors the render boundary: domain logic in VisualTrainingService talks to
+    this abstract contract, never to a hardcoded provider. Adapters that CANNOT
+    train simply do not subclass this — `get_training_adapter` then fails closed
+    with a clear error instead of silently falling back to a non-training path.
+    """
+
+    async def submit_training_job(
+        self,
+        job: Any,
+        training_config: dict,
+    ) -> dict:
+        """Submit a training job to the provider.
+
+        Must return a normalized dict with at least:
+          - "ok": bool
+          - "error": Optional[str] (populated when ok is False)
+          - "configuration": dict (provider-specific merged config)
+        """
+        raise NotImplementedError
+
+    async def cancel_training_job(self, job: Any) -> bool:
+        """Cancel a training job on the provider. Must be async."""
+        raise NotImplementedError
+
+
+def get_training_adapter(provider_id: str, config: ProviderConfig) -> VisualTrainingAdapter:
+    """Factory for a training-capable provider adapter.
+
+    Raises ValueError when the provider is not registered or its adapter does
+    not implement the VisualTrainingAdapter boundary — never a silent fallback
+    to an untrained or unrelated provider.
+    """
+    adapter = get_adapter(provider_id, config)
+    if not isinstance(adapter, VisualTrainingAdapter):
+        raise ValueError(  # noqa: TRY004 — provider capability mismatch, not a type error
+            f"Provider adapter {provider_id!r} does not support visual training"
         )
+    return adapter
+
+
+# Local MiniMax H3 pipeline scaffold. Imported here (after the adapter
+# classes above) to avoid a circular import: the module subclasses
+# RenderProviderAdapter. It lives in its own file so the scaffold can be
+# removed without touching the adapters above.
+from app.adapters.minimax_h3_local import MinimaxH3LocalAdapter  # noqa: E402
+# Local LTX via Phosphene (additive sibling of the H3 scaffold above).
+from app.adapters.local_ltx import LocalLTXAdapter  # noqa: E402
+# Local visual-model training (subclasses VisualTrainingAdapter defined above).
+from app.adapters.local_visual_training import LocalVisualTrainingAdapter  # noqa: E402
+# Real Phosphene trainer (subclasses VisualTrainingAdapter defined above).
+from app.adapters.phosphene_training import PhospheneTrainingAdapter  # noqa: E402
 
 
 # Provider registry
@@ -2368,18 +3761,24 @@ ADAPTER_REGISTRY: dict[str, type[RenderProviderAdapter]] = {
     "local": SimulatedProviderAdapter,
     "higgsfield": HiggsfieldAdapter,
     "runway": RunwayAdapter,
+    "runway_direct": RunwayDirectAdapter,
+    "runway_router": RunwayRouterAdapter,
     "happyhorse": HappyHorseAdapter,
     "happyhorse-r2v": HappyHorseR2VAdapter,
     "wan": WanTextToVideoAdapter,
-    "openrouter": OpenRouterVideoAdapter,
-    "openrouter-video": OpenRouterVideoAdapter,
     "generic": GenericVideoProviderAdapter,
+    "minimax_h3_local": MinimaxH3LocalAdapter,
+    "local_ltx": LocalLTXAdapter,
+    "local_training": LocalVisualTrainingAdapter,
+    "phosphene_training": PhospheneTrainingAdapter,
 }
 
 
 def get_adapter(provider_id: str, config: ProviderConfig) -> RenderProviderAdapter:
-    """Factory function to get provider adapter"""
+    """Factory function to get an authorized provider adapter."""
     adapter_class = ADAPTER_REGISTRY.get(provider_id)
     if not adapter_class:
         raise ValueError(f"Unknown provider adapter {provider_id!r}")
+    if not config.enabled:
+        raise ValueError(f"Provider '{provider_id}' is disabled and cannot execute generation requests.")
     return adapter_class(config)

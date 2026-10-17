@@ -5,7 +5,7 @@ import random
 import urllib.parse
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from app.data.storage import get_storage
@@ -111,6 +111,7 @@ class StoryboardBlueprintService:
             requested_shot_count=shot_count,
         )
         self._persist_version_bundle(blueprint=blueprint, version=version, shots=shots)
+        self._derive_image_prompt_proposals(shots)
         self._sync_scene_memory(project_id, scene_id, shots, approved=False)
 
         logger.info(
@@ -121,24 +122,73 @@ class StoryboardBlueprintService:
         )
         return {"blueprint": blueprint, "version": version, "shots": shots, "inspection": inspection}
 
-    def get_blueprint_detail(self, *, project_id: str, scene_id: str) -> dict[str, Any]:
+    # Version selection rule: creator and editing surfaces resolve the working
+    # draft (current); frozen and consumption surfaces (inspection, previs,
+    # render authorization) opt into the approved version explicitly. Calls
+    # that omit the selector keep working-draft behavior.
+    def get_blueprint_detail(
+        self,
+        *,
+        project_id: str,
+        scene_id: str,
+        version_selection: Literal["current", "approved"] = "current",
+    ) -> dict[str, Any]:
         self._validate_ids(project_id, scene_id)
         blueprint = self.storage.get_storyboard_blueprint(project_id, scene_id)
         if blueprint is None:
             raise StateError("Storyboard blueprint not found", stage="storyboard_blueprint_get")
+        if version_selection == "approved":
+            version_id = blueprint.approved_version_id
+            if not version_id:
+                raise StateError("No approved storyboard version", stage="storyboard_blueprint_get")
+        elif version_selection == "current":
+            version_id = blueprint.current_version_id
+        else:
+            raise StateError(f"Unknown version selection: {version_selection}", stage="storyboard_blueprint_get")
         version = (
-            self.storage.get_storyboard_blueprint_version(blueprint.current_version_id)
-            if blueprint.current_version_id
+            self.storage.get_storyboard_blueprint_version(version_id)
+            if version_id
             else None
         )
         if version is None or version.blueprint_id != blueprint.blueprint_id:
+            if version_selection == "approved":
+                raise StateError("Approved storyboard version not found", stage="storyboard_blueprint_get")
             raise StateError("Current storyboard version not found", stage="storyboard_blueprint_get")
         shots = self.storage.list_storyboard_shots(
             blueprint.blueprint_id,
-            blueprint.current_version_id,
+            version_id,
         )
         inspection = self._inspect(blueprint, version, shots)
-        return {"blueprint": blueprint, "version": version, "shots": shots, "inspection": inspection}
+        # D4: non-blocking length advisory + per-shot render-readiness for the
+        # UI and generation-preflight. Never blocks retrieval.
+        image_gate: dict[str, Any] = {"approved": True, "not_ready": [], "message": ""}
+        image_records: dict[str, Any] = {}
+        try:
+            prompt_service = self._image_prompt_service()
+            image_gate = prompt_service.gate_for_version(shots)
+            for shot in shots:
+                record = self.storage.get_storyboard_image_prompt(shot.storyboard_shot_id)
+                status = prompt_service.status_for_shot(shot, record)
+                entry = dict(record) if record else {}
+                entry["render_ready"] = status.get("render_ready", False)
+                entry["state"] = status.get("state")
+                entry["gate_message"] = status.get("message", "")
+                entry["canonical_utf16"] = status.get("canonical_utf16")
+                image_records[shot.storyboard_shot_id] = entry
+            for item in image_gate.get("not_ready", []):
+                warning = str(item.get("message") or "").strip()
+                if warning and warning not in inspection.warnings:
+                    inspection.warnings.append(warning)
+        except Exception:
+            pass
+        return {
+            "blueprint": blueprint,
+            "version": version,
+            "shots": shots,
+            "inspection": inspection,
+            "image_prompt_gate": image_gate,
+            "image_prompts": image_records,
+        }
 
     def list_versions(self, blueprint_id: str) -> list[StoryboardBlueprintVersion]:
         self._require_blueprint(blueprint_id)
@@ -257,6 +307,7 @@ class StoryboardBlueprintService:
             shots=shots,
             superseded_version=superseded_version,
         )
+        self._derive_image_prompt_proposals(shots)
         self._sync_scene_memory(blueprint.project_id, blueprint.scene_id, shots, approved=False)
         return self.get_blueprint_detail(project_id=blueprint.project_id, scene_id=blueprint.scene_id)
 
@@ -358,7 +409,14 @@ class StoryboardBlueprintService:
             "existing": existing,
         }
 
-    def approve_version(self, *, blueprint_id: str, version_id: str, approved_by: str = "creator") -> dict[str, Any]:
+    def approve_version(
+        self,
+        *,
+        blueprint_id: str,
+        version_id: str,
+        approved_by: str = "creator",
+        approval_actor_authenticated: bool = False,
+    ) -> dict[str, Any]:
         blueprint = self.storage.get_storyboard_blueprint_by_id(blueprint_id)
         if blueprint is None:
             raise StateError("Storyboard blueprint not found", stage="storyboard_blueprint_approve")
@@ -386,11 +444,26 @@ class StoryboardBlueprintService:
                 stage="storyboard_blueprint_approve",
                 metadata={"blueprint_id": blueprint_id, "version_id": version_id},
             )
+        # D4 length gate: BLOCK board approval while any shot's image prompt
+        # is missing, stale, unapproved, or over the Runway limit. The
+        # canonical prompt's length never blocks approval.
+        image_gate = self._image_prompt_service().gate_for_version(shots)
+        if not image_gate["approved"]:
+            raise ValidationError(
+                image_gate["message"],
+                stage="storyboard_blueprint_approve",
+                metadata={"not_ready": image_gate["not_ready"]},
+            )
 
         now = utc_now_iso()
         version.status = StoryboardBlueprintStatus.APPROVED
         version.approved_at = now
         version.approved_by = approved_by
+        version.metadata = dict(version.metadata or {})
+        version.metadata["production_approval"] = {
+            "actor_id": approved_by,
+            "actor_authenticated": bool(approval_actor_authenticated),
+        }
         blueprint.status = StoryboardBlueprintStatus.APPROVED
         blueprint.approved_version_id = version.version_id
         blueprint.current_version_id = version.version_id
@@ -649,10 +722,27 @@ class StoryboardBlueprintService:
         *,
         project_id: str,
         scene_id: str,
-        provider: str = "qwen-image-max",
+        provider: str = "runway",
         shot_number: int = 1,
         storyboard_shot_id: str | None = None,
+        create_revision: bool = False,
+        camera_plan: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        started = perf_counter()
+        normalized_provider = (provider or "runway").strip().lower()
+        # Legacy DashScope/Qwen values route to the canonical Runway engine.
+        if normalized_provider in {"qwen", "qwen-image-max", "dashscope", "wanx"}:
+            normalized_provider = "runway"
+        if normalized_provider not in {"runway", "gen4_image", "runway_router", "pollinations", "pollinations.ai", "legacy"}:
+            raise ValidationError("provider must be one of: runway, pollinations", stage="storyboard_image_generation")
+        edits = {}
+        if camera_plan is not None:
+            from app.models.camera_presets import StoryboardCameraPlan
+            from pydantic import ValidationError as ModelValidationError
+            try:
+                edits = StoryboardCameraPlan.model_validate(camera_plan).model_dump(exclude_none=True)
+            except ModelValidationError as exc:
+                raise ValidationError("Invalid storyboard camera plan", stage="storyboard_image_generation") from exc
         detail = self.get_or_create_blueprint(project_id=project_id, scene_id=scene_id)
         shots = detail["shots"]
         safe_shot_number = max(1, int(shot_number or 1))
@@ -663,40 +753,140 @@ class StoryboardBlueprintService:
         )
         if shot is None:
             raise StateError("Storyboard shot not found", stage="storyboard_image_generation")
+        if create_revision and detail["version"].status == StoryboardBlueprintStatus.APPROVED:
+            if shot.locked:
+                raise StateError("Storyboard shot is locked", stage="storyboard_image_generation")
+            source_shot_id = shot.shot_id
+            detail = self.create_version(
+                blueprint_id=shot.blueprint_id,
+                change_reason="storyboard_frame_revision",
+                preserve_locked_shots=True,
+            )
+            shot = next(item for item in detail["shots"] if item.shot_id == source_shot_id)
         _, _, shot = self._require_current_editable_shot(
             shot.blueprint_id,
             shot.storyboard_shot_id,
             stage="storyboard_image_generation",
         )
 
+        # Work on a copy so a provider failure cannot persist a half-applied plan.
+        shot = shot.model_copy(deep=True)
+        try:
+            _gen_scene = self._get_scene(project_id, scene_id)
+        except Exception:
+            _gen_scene = None
+        _locked_block = self._locked_block_for_scene(project_id, _gen_scene)
+        if edits:
+            base_prompt = shot.metadata.get("camera_plan_base_prompt")
+            if base_prompt is None:
+                base_prompt = shot.render_contract.provider_neutral_prompt or self._prompt_from_shot(shot, _locked_block)
+            base_prompt = self._refresh_prompt_with_locked_characters(base_prompt, project_id, _gen_scene)
+            if "camera" in edits:
+                shot.visual_plan.camera_movement = edits["camera"].strip()
+            if "framing" in edits:
+                shot.visual_plan.framing = edits["framing"].strip()
+            if "lens" in edits:
+                shot.visual_plan.lens_language = edits["lens"].strip()
+            if "focal_length" in edits:
+                raw = str(edits["focal_length"]).strip()
+                if raw.endswith("mm"):
+                    raw = raw[:-2].strip()
+                shot.visual_plan.focal_length_mm = int(raw)
+            if "aperture" in edits:
+                shot.visual_plan.aperture = edits["aperture"].strip()
+            saved_plan = {
+                "camera": shot.visual_plan.camera_movement,
+                "framing": shot.visual_plan.framing,
+                "lens": shot.visual_plan.lens_language,
+                "focal_length": f"{shot.visual_plan.focal_length_mm}mm" if shot.visual_plan.focal_length_mm else "",
+                "aperture": shot.visual_plan.aperture,
+            }
+            saved_plan = {key: value for key, value in saved_plan.items() if value}
+            notes = "\n".join(f"{key}: {value}" for key, value in saved_plan.items())
+            shot.render_contract.provider_neutral_prompt = base_prompt + ("\n\n[CREATOR CAMERA PLAN — use for this shot]\n" + notes if notes else "")
+            shot.render_contract.structured_parameters["camera_plan"] = saved_plan
+            shot.render_contract.structured_parameters["shot_planning"] = {
+                **(shot.render_contract.structured_parameters.get("shot_planning") or {}),
+                **saved_plan,
+            }
+            shot.metadata["camera_plan_base_prompt"] = base_prompt
+
         existing_seed = self.storage.get_scene_previs_seed(project_id, scene_id)
         seed = existing_seed if existing_seed is not None else random.randint(1, 999999)
-        prompt = shot.render_contract.provider_neutral_prompt or self._prompt_from_shot(shot)
-        normalized_provider = (provider or "qwen-image-max").strip().lower()
-        provider_used = "pollinations"
-        model_used = "pollinations.ai"
+        # Refresh with current locked looks: a lock approved after blueprint
+        # creation must still reach the image prompt. Persist back so the
+        # contract stays consistent for future renders.
+        prompt = self._refresh_prompt_with_locked_characters(
+            shot.render_contract.provider_neutral_prompt
+            or self._prompt_from_shot(shot, _locked_block),
+            project_id,
+            _gen_scene,
+        )
+        shot.render_contract.provider_neutral_prompt = prompt
+        # Persist lock anchors so the approved-board → final-render handoff
+        # carries face/body refs even for text-only storyboard providers.
+        try:
+            _lock_refs = self._locked_reference_images_for_scene(project_id, _gen_scene)
+        except Exception:
+            _lock_refs = []
+        if _lock_refs:
+            existing_refs = list(shot.render_contract.reference_assets or [])
+            for _ref in _lock_refs:
+                if _ref not in existing_refs:
+                    existing_refs.append(_ref)
+            shot.render_contract.reference_assets = existing_refs[:9]
+        normalized_provider = (provider or "runway").strip().lower()
+        if normalized_provider in {"qwen", "qwen-image-max", "dashscope", "wanx"}:
+            normalized_provider = "runway"
+        provider_used = "runway"
+        model_used = "gen4_image"
 
+        # D4: the Runway promptText is ALWAYS the approved image prompt, never
+        # the canonical text. Fail closed BEFORE any provider call. Legacy
+        # Pollinations path keeps its previous behavior.
+        render_prompt = prompt
+        if normalized_provider in {"runway", "gen4_image", "runway_router"}:
+            try:
+                render_prompt = self._image_prompt_service().approved_prompt_for_shot(shot)
+            except (StateError, ValidationError) as exc:
+                logger.info(
+                    "project_id=%s job_id=%s provider=runway stage=storyboard_image_generation duration_ms=%d",
+                    project_id,
+                    f"storyboard_{shot.shot_id}_runway",
+                    int((perf_counter() - started) * 1000),
+                )
+                raise StateError(
+                    str(getattr(exc, "message", str(exc))),
+                    stage="storyboard_image_generation",
+                ) from exc
         if normalized_provider in {"pollinations", "pollinations.ai", "legacy"}:
             encoded = urllib.parse.quote(prompt)
             image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=768&height=432&nologo=true&seed={seed}"
+            provider_used = "pollinations"
+            model_used = "pollinations.ai"
             fallback = True
-        elif normalized_provider in {"qwen", "qwen-image-max", "dashscope"}:
+            reference_images_attached = False
+        elif normalized_provider in {"runway", "gen4_image", "runway_router"}:
             from app.services.storyboard_image_service import storyboard_image_service
 
             output_root = Path(__file__).resolve().parents[2] / "outputs" / "previs"
-            result = storyboard_image_service.generate_qwen_image(
+            result = storyboard_image_service.generate_runway_image(
                 project_id=project_id,
                 scene_id=shot.shot_id,
-                prompt=prompt,
+                prompt=render_prompt,
                 output_root=output_root,
+                reference_image_urls=_lock_refs,
+                aspect_ratio="16:9",
+                seed=seed,
             )
             image_url = result.image_url
             provider_used = result.provider
             model_used = result.model
             fallback = False
+            reference_images_attached = bool(_lock_refs)
         else:
             raise ValidationError(
-                "provider must be one of: qwen-image-max, pollinations",
+                "provider must be one of: runway, pollinations",
                 stage="storyboard_image_generation",
             )
 
@@ -724,6 +914,14 @@ class StoryboardBlueprintService:
         from app.services.storyboard_image_service import storyboard_image_service
 
         image_state = storyboard_image_service.classify_image_url(image_url)
+        logger.info(
+            "project_id=%s job_id=%s provider=%s stage=storyboard_image_generation duration_ms=%d",
+            project_id, job_id, provider_used, int((perf_counter() - started) * 1000),
+        )
+        try:
+            readiness = self.get_consistency_readiness(project_id, scene_id)
+        except Exception:
+            readiness = {"locked": [], "unlocked": [], "missing_face_reference": [], "scene_cast": [], "warnings": []}
         return {
             "image_url": image_url,
             "status": "complete",
@@ -740,6 +938,10 @@ class StoryboardBlueprintService:
             "blueprint_id": shot.blueprint_id,
             "storyboard_shot_id": shot.storyboard_shot_id,
             "version_id": shot.version_id,
+            "reference_images_used": _lock_refs,
+            "reference_images_attached": reference_images_attached if "reference_images_attached" in locals() else False,
+            "locked_characters_used": readiness.get("locked", []),
+            "consistency_warnings": readiness.get("warnings", []),
         }
 
     def build_render_contract(self, *, blueprint_id: str, storyboard_shot_id: str) -> StoryboardShotRenderContract:
@@ -801,6 +1003,7 @@ class StoryboardBlueprintService:
             inputs = storyboard_render_inputs(shot)
             inputs["parameters"]["storyboard"] = {**self._storyboard_metadata_for_shot(shot), "link_type": "scene_pipeline_render"}
             result.append({**inputs, "scene_id": shot.scene_id, "shot_id": shot.shot_id,
+                           "character_focus": list(shot.intent.character_focus or []),
                            "duration_seconds": shot.render_contract.duration_seconds,
                            "shot_number": shot.shot_number, "storyboard_shot_id": shot.storyboard_shot_id})
         return result
@@ -963,9 +1166,25 @@ class StoryboardBlueprintService:
                 shot_id = f"{scene_id}_shot_{index:03d}"
             rationale_payload = self.shot_rationale_service.get_rationale(project_id, scene_id, scene)
             rationale = str(rationale_payload.get("rationale") or "")
+            # Candidate ids are edit grammar ("match_cut", "bridge_action"),
+            # not camera moves and not provider-readable framing. Map to
+            # human-readable plan language so the image prompt carries the
+            # actual shot recommendation instead of raw ids the model ignores.
+            _framing_map = {
+                "establishing_shot": "Wide establishing shot. Camera far back. Full environment visible.",
+                "medium_shot": "Medium shot. Characters from waist up. Action and dialogue beginning.",
+                "close_up": "Medium close-up. Character faces and upper body. Emotional beats.",
+                "transition_shot": "Dynamic medium shot showing the story transition in motion.",
+                "emotional_detail_shot": "Close-up detail shot. Eyes, hands, specific objects. Intimate beat.",
+            }
+            _raw_framing = str(candidate.get("shot_type") or "").strip()
+            _raw_camera = str(candidate.get("transition_hint") or "").strip()
+            # transition_hint describes edit continuity, never a camera move —
+            # sending "match_cut" as camera actively misdirects the provider.
+            _camera_move = _raw_camera if " " in _raw_camera and len(_raw_camera) > 12 else ""
             visual_plan = StoryboardShotVisualPlan(
-                framing=str(candidate.get("shot_type") or ""),
-                camera_movement=str(candidate.get("transition_hint") or ""),
+                framing=_framing_map.get(_raw_framing, _raw_framing),
+                camera_movement=_camera_move,
                 environment=str(scene.get("location") or scene.get("heading") or ""),
                 lighting=" ".join(
                     part
@@ -1066,15 +1285,33 @@ class StoryboardBlueprintService:
             )
         except Exception:
             prompt = ""
-        parts = [
-            prompt,
-            visual_plan.framing,
-            visual_plan.environment,
-            visual_plan.lighting,
-            f"Shot {shot_number} of {shot_count}.",
-            rationale,
-        ]
+        # Plan grammar leads: providers weight early tokens, so framing /
+        # camera / shot position come before action and character detail.
+        # The locked-appearance tail is re-ensured after the join.
+        plan_head = ". ".join(
+            part.strip().strip(".")
+            for part in [
+                visual_plan.framing,
+                visual_plan.camera_movement,
+                visual_plan.environment,
+                visual_plan.lighting,
+                f"Shot {shot_number} of {shot_count}.",
+            ]
+            if str(part or "").strip()
+        )
+        parts = [plan_head, prompt, rationale]
         text = ". ".join(part.strip().strip(".") for part in parts if str(part or "").strip())
+        # build_shot_aware_prompt already appends the locked block, but the join
+        # above can bury it mid-prompt; ensure the enforcement tail is present
+        # exactly once so it is never truncated away.
+        try:
+            from app.services.shot_prompt_builder import ensure_locked_appearance_in_prompt
+
+            text = ensure_locked_appearance_in_prompt(
+                text, self._project_characters_for_prompt(project_id), scene
+            )
+        except Exception:
+            pass
         return text
 
     def _build_provenance(self, project_id: str, scene_id: str, scene: dict[str, Any]) -> StoryboardBlueprintProvenance:
@@ -1403,7 +1640,7 @@ class StoryboardBlueprintService:
         self.project_store.update_project(project_id, {"execution_summary": summary})
 
     def _storyboard_metadata_for_shot(self, shot: StoryboardShot) -> dict[str, Any]:
-        return {
+        metadata = {
             "blueprint_id": shot.blueprint_id,
             "version_id": shot.version_id,
             "storyboard_shot_id": shot.storyboard_shot_id,
@@ -1412,9 +1649,23 @@ class StoryboardBlueprintService:
             "shot_id": shot.shot_id,
             "shot_number": shot.shot_number,
         }
+        # D4: pin the approved image prompt digest alongside the canonical
+        # prompt metadata (same chain, existing pattern). Absent when no
+        # approved image prompt exists, so existing digests are unchanged.
+        try:
+            from app.services.storyboard_image_prompt_service import (
+                storyboard_image_prompt_service,
+            )
 
-    def _prompt_from_shot(self, shot: StoryboardShot) -> str:
-        return ". ".join(
+            digest = storyboard_image_prompt_service.approved_digest_for_shot(shot)
+            if digest:
+                metadata["image_prompt_sha256"] = digest
+        except Exception:
+            pass
+        return metadata
+
+    def _prompt_from_shot(self, shot: StoryboardShot, locked_block: str = "") -> str:
+        base = ". ".join(
             part
             for part in [
                 shot.visual_plan.framing,
@@ -1424,6 +1675,16 @@ class StoryboardBlueprintService:
             ]
             if part
         )
+        block = str(locked_block or "").strip()
+        if block and "Locked appearance" not in base:
+            base = f"{base.rstrip('. ')}. {block}." if base else f"{block}."
+        # Character focus is the last structured signal before free text; keep
+        # it in the fallback so a blank contract never goes out character-blind.
+        focus = [name for name in (shot.intent.character_focus or []) if str(name).strip()]
+        if focus and not any(str(name).lower() in base.lower() for name in focus):
+            cast = ", ".join(focus[:3])
+            base = f"{base.rstrip('. ')}. Characters: {cast}." if base else f"Characters: {cast}."
+        return base
 
     def _list_project_scene_ids(self, project_id: str) -> list[str]:
         seen: set[str] = set()
@@ -1518,6 +1779,143 @@ class StoryboardBlueprintService:
                 metadata={"cause": type(exc).__name__},
             ) from exc
         return [character for character in characters if isinstance(character, dict)]
+
+    def _locked_block_for_scene(
+        self, project_id: str, scene: dict[str, Any] | None
+    ) -> str:
+        """Fresh locked-appearance block so post-lock approvals still apply."""
+        try:
+            from app.services.shot_prompt_builder import build_locked_appearance_block
+
+            characters = self._project_characters_for_prompt(project_id)
+            return build_locked_appearance_block(characters, scene) or ""
+        except Exception:
+            return ""
+
+    def _locked_reference_images_for_scene(
+        self, project_id: str, scene: dict[str, Any] | None
+    ) -> list[str]:
+        """Face-first lock anchors for this scene, fresh from storage."""
+        try:
+            from app.services.shot_prompt_builder import locked_appearance_characters
+            from app.utils.character_appearance import appearance_approval
+
+            characters = self._project_characters_for_prompt(project_id)
+            locked = locked_appearance_characters(characters)
+            if isinstance(scene, dict):
+                try:
+                    from app.services.shot_prompt_builder import _scene_character_names
+
+                    names = _scene_character_names(scene)
+                except Exception:
+                    names = set()
+                if names:
+                    scoped = [
+                        c for c in locked
+                        if str(c.get("name") or "").strip().lower() in names
+                    ]
+                    if scoped:
+                        locked = scoped
+            refs: list[str] = []
+            # Face first: strongest identity signal, then full-body.
+            for field in ("face_image_url", "body_image_url"):
+                for char in locked[:3]:
+                    try:
+                        url = str(appearance_approval(char).get(field) or "").strip()
+                    except Exception:
+                        url = ""
+                    if url and url not in refs:
+                        refs.append(url)
+                    if len(refs) >= 3:
+                        break
+                if len(refs) >= 3:
+                    break
+            return refs
+        except Exception:
+            return []
+
+    def get_consistency_readiness(self, project_id: str, scene_id: str) -> dict[str, Any]:
+        """Advisory workflow check: lock + face-ref + cast coverage.
+
+        Never blocks generation (creator authority owns the call); surfaces
+        what will be text-only vs image-anchored so the fix is obvious.
+        """
+        try:
+            characters = self._project_characters_for_prompt(project_id)
+        except Exception:
+            characters = []
+        scene: dict[str, Any] | None = None
+        try:
+            scene = self._get_scene(project_id, scene_id)
+        except Exception:
+            scene = None
+        try:
+            from app.services.shot_prompt_builder import (
+                _scene_character_names,
+                locked_appearance_characters,
+            )
+            from app.utils.character_appearance import appearance_approval
+
+            locked = locked_appearance_characters(characters)
+            locked_names = {str(c.get("name") or "").strip() for c in locked if str(c.get("name") or "").strip()}
+            unlocked = [
+                str(c.get("name") or "").strip() or "unnamed"
+                for c in characters
+                if isinstance(c, dict) and c not in locked
+            ]
+            missing_face = []
+            for char in locked:
+                try:
+                    has_face = bool(str(appearance_approval(char).get("face_image_url") or "").strip())
+                except Exception:
+                    has_face = False
+                if not has_face:
+                    missing_face.append(str(char.get("name") or "").strip() or "unnamed")
+            scene_names = set()
+            if isinstance(scene, dict):
+                try:
+                    scene_names = set(_scene_character_names(scene) or set())
+                except Exception:
+                    scene_names = set()
+            warnings: list[str] = []
+            if unlocked:
+                warnings.append(
+                    "Unlocked characters render text-only: "
+                    + ", ".join(unlocked[:4])
+                    + ". Approve their look to lock race/face."
+                )
+            if missing_face:
+                warnings.append(
+                    "Locked but no face reference (image-anchor missing): "
+                    + ", ".join(missing_face[:4])
+                    + ". Upload a portrait on the look screen, then re-Generate."
+                )
+            if isinstance(scene, dict) and not scene_names and locked_names:
+                warnings.append(
+                    "Scene cast list is empty, so final video resolves cast by name "
+                    "match only. Add characters to the scene to guarantee face refs attach."
+                )
+            return {
+                "locked": sorted(locked_names),
+                "unlocked": unlocked[:8],
+                "missing_face_reference": missing_face,
+                "scene_cast": sorted(scene_names),
+                "warnings": warnings,
+            }
+        except Exception:
+            return {"locked": [], "unlocked": [], "missing_face_reference": [], "scene_cast": [], "warnings": []}
+
+    def _refresh_prompt_with_locked_characters(
+        self, base_prompt: str | None, project_id: str, scene: dict[str, Any] | None
+    ) -> str:
+        """Re-attach current locked looks to a possibly stale stored prompt."""
+        base = str(base_prompt or "").strip()
+        block = self._locked_block_for_scene(project_id, scene)
+        if not block or "Locked appearance" in base:
+            return base
+        if not base:
+            return f"{block}."
+        return f"{base.rstrip('. ')}. {block}."
 
     def _require_blueprint(self, blueprint_id: str) -> StoryboardBlueprint:
         blueprint = self.storage.get_storyboard_blueprint_by_id(blueprint_id)
@@ -1644,6 +2042,50 @@ class StoryboardBlueprintService:
 
     def get_storyboard_shot(self, storyboard_shot_id: str):
         return self.storage.get_storyboard_shot(storyboard_shot_id)
+
+    def _image_prompt_service(self):
+        from app.services.storyboard_image_prompt_service import (
+            storyboard_image_prompt_service,
+        )
+
+        storyboard_image_prompt_service.set_storage(self.storage)
+        return storyboard_image_prompt_service
+
+    def derive_and_approve_image_prompts_for_version(
+        self,
+        *,
+        version_id: str,
+        approved_by: str = "creator",
+    ) -> list[dict]:
+        """D4 convenience: derive (if missing/stale) and human-approve every shot's
+        image prompt for a version. A bulk human gesture — never automatic."""
+        service = self._image_prompt_service()
+        version = self.storage.get_storyboard_blueprint_version(version_id)
+        shots = self.storage.list_storyboard_shots(version.blueprint_id, version_id)
+        results = []
+        for shot in shots:
+            record = service.derive_for_shot(shot)
+            if record["status"] != "approved":
+                record = service.approve_for_shot(
+                    shot, approved_by=approved_by
+                )
+            results.append(record)
+        return results
+
+    def _derive_image_prompt_proposals(self, shots):
+        proposals = []
+        service = self._image_prompt_service()
+        for shot in shots:
+            try:
+                proposals.append(service.derive_for_shot(shot))
+            except Exception as exc:
+                logger.warning(
+                    "project_id=%s job_id=%s provider=runway stage=image_prompt_derive_failed duration_ms=%d",
+                    shot.project_id,
+                    shot.storyboard_shot_id,
+                    0,
+                )
+        return proposals
 
 
 storyboard_blueprint_service = StoryboardBlueprintService()

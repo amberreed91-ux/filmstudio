@@ -60,10 +60,20 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     google_api_key: str | None = None
     elevenlabs_api_key: str | None = None
+    # Legacy DashScope credential — retained only so transitional LLM/vision/TTS
+    # paths keep loading; the image/storyboard/previs engine no longer reads it.
+    # Canonical image engine is Runway (see default_image_provider below).
     dashscope_api_key: str | None = None
     dashscope_region: str = "intl"
     dashscope_workspace_id: str | None = None
     qwen_llm_model: str = "qwen3.7-max"
+    # Canonical image generation engine. Hardcoded to runway: storyboard,
+    # casting, and previs tasks route exclusively through Runway gen4_image.
+    default_image_provider: str = "runway"
+    runway_api_enabled: bool = True
+    # Socket-isolation flag for the R43K test plugin (legacy no-op in
+    # test runs; declared so the .env key is accepted by pydantic-settings).
+    r43k_socket_only: str = "1"
     # OpenRouter is the fallback LLM provider when Qwen/DashScope is blocked or slow.
     # Free-tier models are rate-limited, so keep this path for interactive single-shot calls.
     openrouter_llm_model: str = "google/gemma-4-26b-a4b-it:free"
@@ -77,8 +87,9 @@ class Settings(BaseSettings):
     qwen_internal_timeout_seconds: float = 12.0
     # Adherence vision scoring provider selection. Declared here so
     # pydantic-settings (which forbids unknown .env keys) accepts them;
-    # adherence_service reads these to choose qwen / gemini / openrouter.
-    adherence_vision_provider: str = "qwen"
+    # adherence_service reads these to choose openrouter / gemini.
+    # Canonical default is openrouter (DashScope/Qwen removed from new paths).
+    adherence_vision_provider: str = "openrouter"
     adherence_vision_model: str = ""
 
     # Muse Glimmer 30B — advisory chat/intelligence model (Co-Director chat).

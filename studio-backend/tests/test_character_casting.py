@@ -36,7 +36,7 @@ def cast(tmp_path):
     storage = DatabaseStorage(str(tmp_path / "database"))
     character = storage.save_character("film", "Maya", {"age": "32", "look": "brown skin, short black curls, narrow face", "visual_prompt_summary": "slender frame", "energy": "calm"})
     looks = CharacterLookService(storage, tmp_path / "outputs")
-    adapter = Mock(provider="dashscope", model="qwen-image-max")
+    adapter = Mock(provider="runway", model="gen4_image")
     adapter.generate.return_value = portrait()
     service = CharacterCastingService(looks, adapter)
     return storage, character, looks, adapter, service
@@ -239,21 +239,22 @@ def test_generation_route_is_typed_and_background_service_owned(cast):
 
 def test_adapter_sends_explicit_traits_without_rewriting_and_persists_download_bytes(monkeypatch):
     import app.adapters.casting_image_adapter as module
-    monkeypatch.setattr(module, "get_dashscope_config", lambda: Mock(api_key="test-key", native_api_base_url="https://configured.example/api/v1"))
-    post = Mock(return_value=Mock(status_code=200, json=lambda: {"output": {"choices": [{"message": {"content": [{"image": "https://dashscope-result.oss-cn-shanghai.aliyuncs.com/portrait.png"}]}}]}}))
+    import app.services.providers.runway_image_provider as runway_module
+    submit = Mock(return_value={"status": "success", "url": "https://runway-result.example/portrait.png", "file_path": None, "error": None, "meta": {"reason": "runway_image_generated"}})
+    monkeypatch.setattr(runway_module, "submit_runway_image_render", submit)
+    monkeypatch.setattr(module.CastingImageAdapter, "check_configured", lambda self: None)
     download = Mock(status_code=200)
     download.iter_content.return_value = [portrait()]
     context = Mock()
     context.__enter__ = Mock(return_value=download)
     context.__exit__ = Mock(return_value=False)
     get = Mock(return_value=context)
-    monkeypatch.setattr(module.requests, "post", post)
     monkeypatch.setattr(module.requests, "get", get)
     assert CastingImageAdapter().generate("precise saved physical traits", 19) == portrait()
-    parameters = post.call_args.kwargs["json"]["parameters"]
-    assert parameters["prompt_extend"] is False and parameters["seed"] == 19 and parameters["n"] == 1
-    assert parameters["size"] == "1104*1472"
-    assert post.call_args.kwargs["timeout"] == (10, 150)
+    assert submit.call_count == 1
+    assert submit.call_args.args[0].startswith("precise saved physical traits")
+    assert submit.call_args.kwargs["seed"] == 19
+    assert submit.call_args.kwargs["aspect_ratio"] == "9:16"
     assert get.call_args.kwargs["allow_redirects"] is False
     assert "Authorization" not in get.call_args.kwargs
 
@@ -261,15 +262,19 @@ def test_adapter_sends_explicit_traits_without_rewriting_and_persists_download_b
 @pytest.mark.parametrize("failure", ["timeout", "403", "missing", "foreign-url"])
 def test_adapter_failures_are_structured_and_never_retried(monkeypatch, failure):
     import app.adapters.casting_image_adapter as module
-    monkeypatch.setattr(module, "get_dashscope_config", lambda: Mock(api_key="secret", native_api_base_url="https://configured.example"))
-    post = Mock()
+    import app.services.providers.runway_image_provider as runway_module
+    submit = Mock()
     if failure == "timeout":
-        post.side_effect = module.requests.Timeout("credential-bearing raw error")
+        submit.side_effect = module.requests.Timeout("credential-bearing raw error")
+    elif failure == "403":
+        submit.return_value = {"status": "failed", "url": None, "file_path": None, "error": "Runway image request failed with HTTP 403", "meta": {"reason": "runway_image_provider_failed"}}
+    elif failure == "missing":
+        submit.return_value = {"status": "failed", "url": None, "file_path": None, "error": "secret should never surface", "meta": {"reason": "runway_image_provider_failed"}}
     else:
-        url = "http://127.0.0.1/private" if failure == "foreign-url" else None
-        post.return_value = Mock(status_code=403 if failure == "403" else 200, json=lambda: {"output": {"choices": [{"message": {"content": [{"image": url}]}}]}})
-    monkeypatch.setattr(module.requests, "post", post)
+        submit.return_value = {"status": "success", "url": "http://127.0.0.1/private", "file_path": None, "error": None, "meta": {}}
+    monkeypatch.setattr(runway_module, "submit_runway_image_render", submit)
+    monkeypatch.setattr(module.CastingImageAdapter, "check_configured", lambda self: None)
     with pytest.raises(ProviderError) as error:
         CastingImageAdapter().generate("portrait", 1)
-    assert post.call_count == 1
+    assert submit.call_count == 1
     assert "secret" not in error.value.message and "credential-bearing" not in error.value.message

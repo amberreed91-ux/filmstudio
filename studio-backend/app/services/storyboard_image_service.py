@@ -7,15 +7,18 @@ from time import perf_counter
 from typing import Any
 from urllib.parse import urlparse
 
-import dashscope
 import requests
-from dashscope import MultiModalConversation
 
-from app.services.shared.dashscope_client import get_dashscope_config
 from app.services.stability import ProviderError
 
 
 logger = logging.getLogger("storyboard-image-service")
+
+# Canonical image generation engine: Runway only. DashScope/Qwen (qwen-image-max)
+# has been permanently removed from this service. All storyboard rendering
+# routes through the Runway gen4_image provider seam — no fallback calls.
+CANONICAL_IMAGE_PROVIDER = "runway"
+CANONICAL_IMAGE_MODEL = "gen4_image"
 
 
 @dataclass(frozen=True)
@@ -35,9 +38,12 @@ class StoryboardImageState:
 
 
 class StoryboardImageService:
-    """Generate durable storyboard images from text prompts."""
+    """Generate durable storyboard images from text prompts via Runway."""
 
-    model = "qwen-image-max"
+    model = CANONICAL_IMAGE_MODEL
+    provider_name = CANONICAL_IMAGE_PROVIDER
+    # Legacy size label retained for download-filename compatibility only;
+    # the Runway request uses aspect_ratio, not pixel sizes.
     size = "1664*928"
 
     def classify_image_url(self, image_url: str | None) -> StoryboardImageState:
@@ -78,68 +84,49 @@ class StoryboardImageService:
             message="The storyboard image URL is malformed.",
         )
 
-    def generate_qwen_image(
+    def generate_runway_image(
         self,
         *,
         project_id: str,
         scene_id: str,
         prompt: str,
         output_root: Path,
+        reference_image_urls: list[str] | None = None,
+        aspect_ratio: str = "16:9",
+        seed: int | None = None,
     ) -> StoryboardImageResult:
-        config = get_dashscope_config()
-        dashscope.base_http_api_url = config.native_api_base_url
+        """Generate one storyboard frame through the Runway client.
+
+        Maps directly to the active Runway configuration
+        (RUNWAY_API_KEY / RUNWAYML_API_SECRET) with Runway-specific error
+        handling. No fallback provider is ever invoked.
+        """
+        from app.services.providers.runway_image_provider import submit_runway_image_render
 
         started = perf_counter()
+        references = self._to_runway_references(reference_image_urls or [])
         try:
-            response = MultiModalConversation.call(
-                api_key=config.api_key,
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [{"text": prompt}],
-                    }
-                ],
-                result_format="message",
-                stream=False,
-                watermark=False,
-                prompt_extend=True,
-                negative_prompt=(
-                    "low quality, blurry, distorted faces, extra limbs, "
-                    "oversaturated, unreadable composition"
-                ),
-                size=self.size,
+            result = submit_runway_image_render(
+                prompt,
+                aspect_ratio=aspect_ratio,
+                seed=seed,
+                references=references or None,
             )
-
-            status_code = int(getattr(response, "status_code", 0) or 0)
-            if status_code != 200:
+            if result.get("status") != "success" or not result.get("url"):
                 raise ProviderError(
-                    "Qwen storyboard generation failed",
+                    "Runway storyboard generation failed",
                     stage="storyboard_image_generation",
                     metadata={
                         "project_id": project_id,
                         "scene_id": scene_id,
-                        "provider": "dashscope",
+                        "provider": CANONICAL_IMAGE_PROVIDER,
                         "model": self.model,
-                        "status_code": status_code,
-                        "code": str(getattr(response, "code", "") or ""),
-                        "message": str(getattr(response, "message", "") or ""),
+                        "error": str(result.get("error") or "")[:500],
+                        "reason": str((result.get("meta") or {}).get("reason") or ""),
                     },
                 )
 
-            remote_url = self._extract_image_url(response)
-            if not remote_url:
-                raise ProviderError(
-                    "Qwen storyboard response did not contain an image URL",
-                    stage="storyboard_image_generation",
-                    metadata={
-                        "project_id": project_id,
-                        "scene_id": scene_id,
-                        "provider": "dashscope",
-                        "model": self.model,
-                    },
-                )
-
+            remote_url = str(result.get("url") or "").strip()
             stored_url = self._download_image(
                 remote_url,
                 output_root=output_root,
@@ -150,7 +137,7 @@ class StoryboardImageService:
             return StoryboardImageResult(
                 image_url=stored_url or remote_url,
                 stored_image_path=stored_url,
-                provider="dashscope",
+                provider=CANONICAL_IMAGE_PROVIDER,
                 model=self.model,
                 prompt_used=prompt,
             )
@@ -158,25 +145,53 @@ class StoryboardImageService:
             raise
         except Exception as exc:
             raise ProviderError(
-                "Qwen storyboard provider failed",
+                "Runway storyboard provider failed",
                 stage="storyboard_image_generation",
                 metadata={
                     "project_id": project_id,
                     "scene_id": scene_id,
-                    "provider": "dashscope",
+                    "provider": CANONICAL_IMAGE_PROVIDER,
                     "model": self.model,
                     "cause": type(exc).__name__,
                 },
             ) from exc
         finally:
             logger.info(
-                "project_id=%s job_id=storyboard_%s provider=dashscope "
+                "project_id=%s job_id=storyboard_%s provider=runway "
                 "stage=storyboard_image_generation duration_ms=%d model=%s",
                 project_id,
                 scene_id,
                 int((perf_counter() - started) * 1000),
                 self.model,
             )
+
+    def generate_qwen_image(
+        self,
+        *,
+        project_id: str,
+        scene_id: str,
+        prompt: str,
+        output_root: Path,
+        reference_image_urls: list[str] | None = None,
+    ) -> StoryboardImageResult:
+        """Legacy entry point — now routes exclusively through Runway.
+
+        Kept so existing callers keep working without hitting 404 model
+        errors; the DashScope/Qwen provider is never contacted.
+        """
+        logger.warning(
+            "project_id=%s job_id=storyboard_%s provider=runway "
+            "stage=storyboard_image_generation msg=legacy_qwen_entry_routed_to_runway",
+            project_id,
+            scene_id,
+        )
+        return self.generate_runway_image(
+            project_id=project_id,
+            scene_id=scene_id,
+            prompt=prompt,
+            output_root=output_root,
+            reference_image_urls=reference_image_urls,
+        )
 
     @staticmethod
     def _as_dict(value: Any) -> dict[str, Any]:
@@ -186,14 +201,88 @@ class StoryboardImageService:
             return dict(value.__dict__)
         return {}
 
+    @staticmethod
+    def _to_runway_references(image_urls: list[str]) -> list[dict[str, Any]]:
+        """Convert stored lock URLs to Runway referenceImages items.
+
+        Only HTTPS URLs and data URIs travel verbatim; local studio assets
+        (/outputs/..., /previs-assets/...) are inlined as data URIs so the
+        provider can fetch them. Best-effort: a missing local file never
+        fails the generation, text alone still renders. Capped at 3 per the
+        gen4_image contract.
+        """
+        parts: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for raw in image_urls or []:
+            url = str(raw or "").strip()
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            if url.startswith(("https://", "data:image/")):
+                parts.append({"url": url})
+                continue
+            if url.startswith("http://"):
+                # Runway requires HTTPS or data URIs — reportable skip.
+                continue
+            # Local studio assets are not reachable by the provider, so
+            # inline them as data URIs.
+            data_url = StoryboardImageService._local_path_to_data_url(url)
+            if data_url:
+                parts.append({"url": data_url})
+            if len(parts) >= 3:
+                break
+        return parts
+
+    @staticmethod
+    def _to_provider_image_parts(image_urls: list[str]) -> list[dict[str, Any]]:
+        """Legacy DashScope image-parts helper — retained for test compat.
+
+        Returns the Runway-equivalent reference list in the legacy
+        ``{"image": url}`` shape; new code should use _to_runway_references.
+        """
+        return [
+            {"image": item["url"]}
+            for item in StoryboardImageService._to_runway_references(image_urls)
+            if item.get("url")
+        ]
+
+    @staticmethod
+    def _local_path_to_data_url(url: str) -> str | None:
+        import base64
+
+        raw = str(url or "").strip()
+        if not raw or raw.startswith(("http://", "https://", "data:")):
+            return None
+        backend_root = Path(__file__).resolve().parents[2]
+        if raw.startswith("/previs-assets/"):
+            candidate = backend_root / "outputs" / "previs" / raw.removeprefix("/previs-assets/")
+        elif raw.startswith("/outputs/"):
+            candidate = backend_root / raw.lstrip("/")
+        else:
+            candidate = Path(raw).expanduser()
+        try:
+            if not candidate.is_file():
+                return None
+            suffix = candidate.suffix.lower().lstrip(".") or "png"
+            if suffix == "jpg":
+                suffix = "jpeg"
+            encoded = base64.b64encode(candidate.read_bytes()).decode("ascii")
+            return f"data:image/{suffix};base64,{encoded}"
+        except OSError:
+            return None
+
     def _extract_image_url(self, response: Any) -> str:
+        # Legacy DashScope response parser — retained for test compat.
+        # The Runway path returns the URL directly; this never runs live.
         root = self._as_dict(response)
         output = root.get("output")
         output_dict = self._as_dict(output)
         choices = output_dict.get("choices")
         if not isinstance(choices, list):
+            # Also accept the Runway task shape {output: [url, ...]}.
+            if isinstance(output, list) and output and isinstance(output[0], str):
+                return output[0].strip()
             return ""
-
         for choice in choices:
             choice_dict = self._as_dict(choice)
             message = self._as_dict(choice_dict.get("message"))
@@ -222,8 +311,32 @@ class StoryboardImageService:
 
         project_dir = output_root / project_id
         project_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{scene_id}_storyboard_qwen{suffix}"
+        filename = f"{scene_id}_storyboard_runway{suffix}"
         output_path = project_dir / filename
+
+        # Data URIs (inlined local refs echoed back) are decoded directly;
+        # remote URLs are downloaded with a bounded timeout.
+        if remote_url.startswith("data:image/"):
+            import base64
+
+            header, _, payload = remote_url.partition(",")
+            output_path.write_bytes(base64.b64decode(payload))
+            return f"/previs-assets/{project_id}/{filename}"
+
+        # Local-block: only HTTPS provider URLs are fetched. The Runway
+        # contract returns HTTPS output URLs; anything else fails closed
+        # instead of hitting local schemes.
+        if not remote_url.startswith("https://"):
+            raise ProviderError(
+                "Runway storyboard response did not contain an image URL",
+                stage="storyboard_image_generation",
+                metadata={
+                    "project_id": project_id,
+                    "scene_id": scene_id,
+                    "provider": CANONICAL_IMAGE_PROVIDER,
+                    "model": self.model,
+                },
+            )
 
         response = requests.get(remote_url, timeout=30)
         response.raise_for_status()
