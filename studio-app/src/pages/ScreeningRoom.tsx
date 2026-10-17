@@ -772,13 +772,14 @@ export default function ScreeningRoom() {
     const takes = shotTakes[activeShotNumber]
     const job = takes?.[activeShotTakeIndex]
     if (isFullFilm) {
+      const currentFinalOutput = screeningManifest?.current_final_output
       const delivery = screeningManifest?.outputs.find(output => output.source_type === 'film_delivery' && output.metadata?.film_url === assembledFilmUrl && output.media_status === 'available')
-      return [delivery?.playback_url, assembledFilmUrl, screeningManifest?.current_final_output?.playback_url].map(browserPlaybackUrl).find(Boolean) || ''
+      return [currentFinalOutput?.playback_url, delivery?.playback_url].map(browserPlaybackUrl).find(Boolean) || ''
     }
     if (previewScope === 'shot' && job) {
       return browserPlaybackUrl(activeRegisteredOutput?.playback_url || job.output_payload?.asset_url || '')
     }
-    return [sceneComposition?.composed_url, activeScenePipelineAssembly?.output_url, activeRegisteredOutput?.playback_url, activeTake?.videoUrl].map(browserPlaybackUrl).find(Boolean) || ''
+    return [activeRegisteredOutput?.playback_url, sceneComposition?.composed_url, activeScenePipelineAssembly?.output_url, activeTake?.videoUrl].map(browserPlaybackUrl).find(Boolean) || ''
 
   }, [isFullFilm, screeningManifest, assembledFilmUrl, activeRegisteredOutput, activeScenePipelineAssembly, sceneComposition, shotTakes, activeShotNumber, activeShotTakeIndex, activeTake, previewScope])
 

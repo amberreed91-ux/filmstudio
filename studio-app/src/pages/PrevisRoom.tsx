@@ -1,4 +1,4 @@
-import { SceneDirectionPanel } from '../components/SceneDirectionPanel'
+import { CreatorDecisionWorkspace } from '../components/CreatorDecisionWorkspace'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
@@ -23,6 +23,8 @@ import StudioShell from '../components/StudioShell'
 import StageScenePanel from '../components/StageScenePanel'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
+import CameraPresetPicker from '../components/CameraPresetPicker'
+import { recommendCamerasForScene, type CameraSceneRecommendations, type CameraShotRecommendation } from '../lib/cameraPresetApi'
 import CinematographerIntelligencePanel from '../components/CinematographerIntelligencePanel'
 import PerformanceAudioPanel from '../components/PerformanceAudioPanel'
 import ProductionDesignIntelligencePanel from '../components/ProductionDesignIntelligencePanel'
@@ -30,21 +32,31 @@ import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
 import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
 import CanonicalWorkflowPanel from '../components/CanonicalWorkflowPanel'
 import SceneEmotionalGuidancePanel from '../components/SceneEmotionalGuidancePanel'
+import SceneSettingTraining from '../components/SceneSettingTraining'
+import TrainedIdentityPicker from '../components/TrainedIdentityPicker'
 import { useStudio } from '../context/StudioContext'
 import {
   approveStoryboardVersion,
+  cancelRenderJob,
   checkBackendHealth,
   composeScene,
   createStoryboardBlueprint,
   deleteRenderJob,
+  deleteStoryboardShot,
   enhancePrevisPrompt,
   generatePrevisScene,
   generatePrevisDirectorNotes,
   generateScenePipeline,
+  getGenerationPreflight,
   generateSceneStoryboard,
+  getRenderProviders,
+  getGenerationModels,
   getStoryboardBlueprint,
   getSceneRationale,
   listRenderJobs,
+  providerUnavailableReason,
+  selectableRenderProviders,
+  type ProviderStatus,
   listScenes,
   recommendGenerationSettings,
   recommendShotCount,
@@ -63,12 +75,22 @@ import {
   type SceneRationaleResponse,
   type ShotCountResponse,
   type GenerationSettingsResponse,
+  type GenerationModelInfo,
 } from '../lib/studioApi'
 import { normalizeJobStatus } from '../lib/jobStatus'
+import { isLegacyPrevisRunwayPicker, resolveLegacyPrevisProvider } from '../lib/legacyPrevisProvider'
+import { planPrevisFocus } from './previsFocusPlan'
+import { isBindingConfirmationRejection, readDeskConfirmedBindings, type ConfirmedReferenceBindingMap } from '../lib/confirmedBindingHandoff'
+import { friendlyRefusalError } from '../lib/sceneMintRefusals'
+import { listSceneReferenceConfirmations, type SceneReferenceConfirmations } from '../lib/visualTrainingApi'
+import { adoptShotCount, mergeCameraPlanIntoOverrides, mergeCameraRecIntoOverrides, normalizeShotCount } from './previsPlanning'
 import { persistActiveProjectId, resolveActiveProjectId, withProductionContext } from '../lib/projectContext'
 import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
 import { browserPlaybackUrl } from '../lib/studioMedia'
 import ShotSignalsPanel from '../components/ShotSignalsPanel'
+import GenerationReadinessPanel from '../components/GenerationReadinessPanel'
+import AiCameraApproval from '../components/AiCameraApproval'
+import { useGenerationPreflightGuard } from '../components/useGenerationPreflightGuard'
 import { getShotSignals, type ShotSignalsEnvelope } from '../lib/shotSignals'
 import {
   buildPrevisScenePipelinePayload,
@@ -208,6 +230,7 @@ function derivePromptFromScene(scene: Scene, shotNumber: number = 1, takeNumber:
   const location = (scene.location || '').trim()
   const timeOfDay = (scene.time_of_day || '').trim()
   const emotionalTone = (scene.emotional_tone || '').trim()
+  const heading = (scene.heading || '').trim()
 
   // Segment scene text by shot
   const segments = segmentSceneText(sceneText, totalShots)
@@ -221,9 +244,13 @@ function derivePromptFromScene(scene: Scene, shotNumber: number = 1, takeNumber:
   // 1. Shot type description
   parts.push(shotTypeDesc)
 
-  // 2. Location and time of day
-  if (location && timeOfDay) {
+  // 2. Scene heading/location and time of day
+  if (heading && timeOfDay) {
+    parts.push(`${heading} — ${timeOfDay}`)
+  } else if (location && timeOfDay) {
     parts.push(`${location}, ${timeOfDay}`)
+  } else if (heading) {
+    parts.push(heading)
   } else if (location) {
     parts.push(location)
   }
@@ -238,6 +265,9 @@ function derivePromptFromScene(scene: Scene, shotNumber: number = 1, takeNumber:
       })
     const actionText = actionLines.join(' ')
     if (actionText) parts.push(actionText)
+    else if (scene.description?.trim()) parts.push(scene.description.trim())
+  } else if (scene.description?.trim()) {
+    parts.push(scene.description.trim())
   }
 
   // 4. Mood
@@ -341,6 +371,9 @@ type ShotPlanningDetails = {
   atmosphere: string
   production: string
   continuity: string
+  lens: string
+  focal_length: string
+  aperture: string
   sound: string
   transition: string
   plannedDuration: string
@@ -352,16 +385,35 @@ type ShotPlanningDetails = {
 const DURATIONS: DurationOption[] = [4, 8, 12, 16, 20]
 const RESOLUTIONS: ResolutionOption[] = ['480p', '720p', '1080p']
 
-// Real render providers the RENDER ENGINE dropdown can force for a render.
+// Fallback render providers for the RENDER ENGINE dropdown, used only when the
+// backend provider catalog (GET /render/providers) cannot be reached. The live
+// catalog is the source of truth (shared with ScriptIngest via studioApi), so
+// Local LTX and MiniMax H3 Local appear exactly when the backend lists them,
+// with their real availability — never faked here.
 // value '' = use the server's configured default (RENDER_VIDEO_PROVIDER); every
 // other value is a provider id the backend registers in its adapter registry.
-const RENDER_PROVIDERS: { label: string; value: string }[] = [
+const FALLBACK_RENDER_PROVIDERS: { label: string; value: string }[] = [
   { label: 'Auto (Server Default)', value: '' },
-  { label: 'OpenRouter · HappyHorse', value: 'openrouter-video' },
   { label: 'Runway', value: 'runway' },
   { label: 'Wan 2.2', value: 'wan' },
   { label: 'HappyHorse · DashScope', value: 'happyhorse-r2v' },
 ]
+
+const AUTO_PROVIDER_OPTION = { label: 'Auto (Server Default)', value: '' }
+
+function buildRenderProviderOptions(providers: ProviderStatus[]): { label: string; value: string }[] {
+  // Only providers Studio can actually use become selectable options; enabled
+  // but unavailable ones stay visible with their reason so the dropdown tells
+  // the truth instead of hiding configuration the filmmaker may need to fix.
+  const selectable = selectableRenderProviders(providers)
+  const options = selectable.map((provider) => {
+    const reason = providerUnavailableReason(provider)
+    const suffix = reason ? ` — unavailable (${reason})` : ''
+    const modeTag = provider.provider_mode === 'local' ? ' · Local' : ''
+    return { label: `${provider.name}${modeTag}${suffix}`, value: provider.provider_id }
+  })
+  return [AUTO_PROVIDER_OPTION, ...options]
+}
 
 function generateSeed(): number {
   return Math.floor(Math.random() * 10_000_000)
@@ -419,6 +471,9 @@ function buildShotPlanningDetails(
     transition: shotNumber === 1 ? 'Enter from the prior scene with enough orientation to land the new space.' : 'Cut in on the pressure point and leave before the beat explains itself twice.',
     plannedDuration: `${duration}`,
     rationale: rationale || 'This shot matters when it changes what the audience understands, feels, or anticipates.',
+    lens: '',
+    focal_length: '',
+    aperture: '',
   }
 }
 
@@ -451,6 +506,43 @@ export default function PrevisRoom() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  // Desk-confirmed reference bindings carried in route state by the
+  // Production Desk handoff (location.state, same carrier as focus_scene_id).
+  // Attached to the scene-pipeline generation request; the server
+  // re-verifies every digest before any job is created.
+  const [deskConfirmedBindings, setDeskConfirmedBindings] = useState<ConfirmedReferenceBindingMap | null>(null)
+  // A generation rejection the server attributed to a missing or stale
+  // confirmation — rendered distinctly from every other failure so the
+  // filmmaker knows to resolve and confirm again on the Desk.
+  const [bindingRejection, setBindingRejection] = useState('')
+  // Durable shot confirmations (R4.2): server-side records revalidated
+  // against current bindings. Recovered on every scene selection so
+  // confirmations survive reloads and navigation; only server-confirmed
+  // digests are attached to the submission below. Null while loading or
+  // when the endpoint is unavailable — never a confirmation.
+  const [serverConfirmations, setServerConfirmations] = useState<SceneReferenceConfirmations | null>(null)
+  // Server-confirmed digests for this scene: the only confirmation evidence
+  // the submission may carry. Frontend state never establishes authorization.
+  const serverConfirmedDigestMap: ConfirmedReferenceBindingMap | null = useMemo(() => {
+    const rows = serverConfirmations?.confirmations || []
+    const map: ConfirmedReferenceBindingMap = {}
+    for (const row of rows) {
+      if (row && row.status === 'confirmed' && row.shot_id && row.confirmed_digest) map[row.shot_id] = row.confirmed_digest
+    }
+    return Object.keys(map).length > 0 ? map : null
+  }, [serverConfirmations])
+  // Generate stays disabled while confirmation is stale, missing, or
+  // unknown. Carried route-state digests count only once the server
+  // confirms the same digest; scenes with nothing carried and nothing
+  // stale keep their existing behavior (the server still fails closed).
+  const confirmationGate = useMemo(() => {
+    const rows = serverConfirmations?.confirmations || []
+    if (rows.some((row) => row && (row.status === 'stale' || row.status === 'unverifiable'))) return false
+    const carried = deskConfirmedBindings ? Object.keys(deskConfirmedBindings) : []
+    if (carried.length === 0) return true
+    if (!serverConfirmations) return false
+    return carried.every((shotId) => serverConfirmedDigestMap?.[shotId] === deskConfirmedBindings?.[shotId])
+  }, [serverConfirmations, deskConfirmedBindings, serverConfirmedDigestMap])
 
   // ── Generation config ─────────────────────────────────────────────────────
   const [genConfig, setGenConfig] = useState<GenerationConfig>({
@@ -465,6 +557,46 @@ export default function PrevisRoom() {
   // provider for the next render. Kept separate from genConfig.model, which the
   // generation-settings recommendation owns.
   const [renderProvider, setRenderProvider] = useState<string>('')
+  // Generation model control: 'auto' lets the backend router choose from the
+  // verified registry; a concrete id is user-selected and authoritative.
+  const [genModel, setGenModel] = useState<string>('auto')
+  const [freshRender, setFreshRender] = useState(false)
+  const [modelCatalog, setModelCatalog] = useState<GenerationModelInfo[]>([])
+  const selectedModelInfo = modelCatalog.find((m) => m.model_id === genModel)
+  // Fetch the registry-backed catalog only when Runway is the active engine.
+  useEffect(() => {
+    if (renderProvider !== 'runway') {
+      setModelCatalog([])
+      return
+    }
+    let cancelled = false
+    getGenerationModels('runway')
+      .then((catalog) => {
+        if (!cancelled) setModelCatalog(catalog.models)
+      })
+      .catch(() => {
+        if (!cancelled) setModelCatalog([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [renderProvider])
+  // Live provider catalog from the backend — the same source ScriptIngest uses,
+  // so both pages always agree on which providers exist and their availability.
+  const [providers, setProviders] = useState<ProviderStatus[]>([])
+  useEffect(() => {
+    let cancelled = false
+    getRenderProviders()
+      .then((data) => {
+        if (!cancelled) setProviders(Array.isArray(data) ? data : [])
+      })
+      .catch(() => {
+        // Catalog unavailable: fall back to the static list below.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [audioConfig, setAudioConfig] = useState<AudioConfig>({
     voiceEnabled: false,
     voiceLine: '',
@@ -477,6 +609,11 @@ export default function PrevisRoom() {
 
   // ── Prompt + Preview ──────────────────────────────────────────────────────
   const [promptText, setPromptText] = useState('')
+  // Tracks whether the prompt box holds an explicit creator edit. Auto-derived
+  // or blueprint-synced text is NOT an edit: sending it as an override would
+  // discard the planned board (framing/camera/locks) at render time, so the
+  // render omits `prompt` unless the creator typed, enhanced, or loaded text.
+  const promptDirtyRef = useRef(false)
   const [originalPrompt, setOriginalPrompt] = useState('')
   const [selectedSceneId, setSelectedSceneId] = useState('')
   const directionScope = `${effectiveProjectId}/${selectedSceneId}`
@@ -507,13 +644,24 @@ export default function PrevisRoom() {
     if (!selectedSceneId || searchParams.get('scene') === selectedSceneId) return
     const next = new URLSearchParams(searchParams)
     next.set('scene', selectedSceneId)
-    setSearchParams(next, { replace: true })
-  }, [selectedSceneId, searchParams, setSearchParams])
+    // Preserve route state across the replace: a bare replace drops
+    // location.state, which would strand the Production Desk's carried
+    // confirmation (and any focus payload) the moment the scene syncs.
+    setSearchParams(next, { replace: true, state: location.state })
+  }, [selectedSceneId, searchParams, setSearchParams, location.state])
   const [coDirectorNoteApplied, setCoDirectorNoteApplied] = useState(false)
   const [, setFocusedSceneId] = useState<string | null>(null)
   const [, setEnhancingPrompt] = useState(false)
   const [rendering, setRendering] = useState(false)
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  // Opt-in trained visual identity for the next take. Null (default) leaves the
+  // render pipeline unchanged — nothing is injected silently.
+  const [shotVisualModelId, setShotVisualModelId] = useState<string | null>(null)
+  // A trained identity is chosen per scene; never carry it across scenes.
+  useEffect(() => { setShotVisualModelId(null) }, [selectedSceneId])
+  // Bumped when a setting identity is trained in this session so the opt-in
+  // picker refetches available identities without a page reload.
+  const [identitiesRefreshKey, setIdentitiesRefreshKey] = useState(0)
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({
     loop1: 'pending',
     loop2: 'pending',
@@ -555,6 +703,13 @@ export default function PrevisRoom() {
   const [settingsRecommendation, setSettingsRecommendation] = useState<GenerationSettingsResponse | null>(null)
   const [durationDraft, setDurationDraft] = useState('4')
   const [shotPlanningOverrides, setShotPlanningOverrides] = useState<Record<number, Partial<ShotPlanningDetails>>>({})
+
+  // ── Generation preflight (backend-owned readiness) ───────────────────────
+  // Bumped whenever canonical state mutates in this UI (board re-approval,
+  // shot edits, render-completion) so the preflight re-runs. The verdict
+  // itself is ALWAYS the backend's — the frontend never decides readiness.
+  const [preflightRevision, setPreflightRevision] = useState(0)
+  const bumpPreflightRevision = useCallback(() => setPreflightRevision((prev) => prev + 1), [])
 
   useEffect(() => {
     if (!selectedSceneId || !effectiveProjectId) {
@@ -600,11 +755,36 @@ export default function PrevisRoom() {
   const [activeShotNumber, setActiveShotNumber] = useState(1)
   const [totalShots, setTotalShots] = useState(1)
   const [shotCountRec, setShotCountRec] = useState<ShotCountResponse | null>(null)
+  // Adopt recommendations through adoptShotCount (previsPlanning.ts, with
+  // tests): the shot strip, camera planner, and render step must agree on
+  // the count — and a manual count is never shrunk by a new recommendation.
   const [, setLoadingShotCount] = useState(false)
+  // Adopts the recommended count so the shot strip, camera planner, and render
+  // step all agree with it instead of the UI saying "3 shots recommended" while
+  // planning cameras for only the one shot that exists so far.
+  const appliedShotCountRec = useRef<number | null>(null)
+  useEffect(() => {
+    if (!shotCountRec || !selectedSceneId) return
+    if (appliedShotCountRec.current === shotCountRec.recommended_shot_count) return
+    appliedShotCountRec.current = shotCountRec.recommended_shot_count
+    setTotalShots((prev) => adoptShotCount(prev, shotCountRec.recommended_shot_count))
+  }, [shotCountRec, selectedSceneId])
   const [recommendingSettings, setRecommendingSettings] = useState(false)
+  const [cameraRecommendation, setCameraRecommendation] = useState<CameraShotRecommendation | null>(null)
+  const [sceneCameraPlan, setSceneCameraPlan] = useState<CameraSceneRecommendations | null>(null)
+  const [recommendingSceneCameras, setRecommendingSceneCameras] = useState(false)
   const [enhancedPrompt, setEnhancedPrompt] = useState(false)
   const [selectedTakeByShot, setSelectedTakeByShot] = useState<Record<number, number>>({})
   const [shotVideoUrls, setShotVideoUrls] = useState<Record<number, string>>({})
+
+  // Single-shot preflight guard for the active shot (backend-owned verdict).
+  const preflightGuard = useGenerationPreflightGuard(
+    effectiveProjectId,
+    selectedSceneId || '',
+    activeShotNumber,
+    renderProvider || undefined,
+    preflightRevision,
+  )
 
   const shotNumbers = useMemo(() => {
     const shotNums = new Set<number>()
@@ -612,7 +792,7 @@ export default function PrevisRoom() {
       if (normalizeJobStatus(job.status) !== 'complete') continue
       const sceneId = job.shot_id?.split('_shot_')[0] || ''
       if (sceneId !== selectedSceneId) continue
-      const shotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
+      const shotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
       if (shotNumMatch) {
         shotNums.add(parseInt(shotNumMatch[1], 10))
       }
@@ -630,7 +810,7 @@ export default function PrevisRoom() {
         return sceneId === selectedSceneId && normalizeJobStatus(job.status) === 'complete'
       })
       .map((job) => {
-        const shotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
+        const shotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
         const shotNumber = shotNumMatch ? parseInt(shotNumMatch[1], 10) : 1
         const parameters = job.input_payload?.parameters || {}
         const duration = typeof parameters.duration_seconds === 'number'
@@ -830,6 +1010,12 @@ export default function PrevisRoom() {
     return firstWithUrl?.take_number ?? null
   }, [selectedTakeByShot, activeShotNumber, takes])
 
+  const previewTakeJobId = useMemo(() => {
+    if (activeTakeNumber == null || activeStep === 'storyboard' || !currentVideoUrl) return null
+    const take = takes.find(t => t.take_number === activeTakeNumber && t.videoUrl === currentVideoUrl)
+    return take?.jobId ?? null
+  }, [takes, activeTakeNumber, activeStep, currentVideoUrl])
+
   const shotRecommendation = useMemo(() =>
     shotCountRec ? `${shotCountRec.recommended_shot_count} shots recommended — ${shotCountRec.reasoning}` : null,
     [shotCountRec],
@@ -851,6 +1037,8 @@ export default function PrevisRoom() {
   const handleSelectShot = useCallback((shotNum: number) => {
     setActiveShotNumber(shotNum)
     setSettingsRecommendation(null)
+    setCameraRecommendation(null)
+    setSceneCameraPlan(null)
   }, [])
 
   // ── Compose button check ──────────────────────────────────────────────────
@@ -861,7 +1049,7 @@ export default function PrevisRoom() {
       if (normalizeJobStatus(job.status) !== 'complete') continue
       const sceneId = job.shot_id?.split('_shot_')[0] || ''
       if (sceneId !== selectedSceneId) continue
-      const shotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
+      const shotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
       if (!shotNumMatch) continue
       const shotNum = parseInt(shotNumMatch[1], 10)
       const url = job.output_payload?.asset_url
@@ -893,30 +1081,61 @@ export default function PrevisRoom() {
 
   const handleGenerateScenePipeline = useCallback(async () => {
     if (!selectedSceneId || !effectiveProjectId || scenePipelineRunning) return
+    // Durable-confirmation gate (R4.2): never submit while confirmation is
+    // stale, missing, or unverified. The backend re-checks everything at
+    // submission; this keeps the room from spending a request it must refuse.
+    if (!confirmationGate) {
+      bumpPreflightRevision()
+      setPipelineStatus((prev) => ({ ...prev, compose: 'failed', mp4: 'failed' }))
+      setBindingRejection('The durable reference-binding confirmation is stale, missing, or unverified; resolve the shot again and confirm on the Production Desk before submitting.')
+      return
+    }
     setScenePipelineRunning(true)
     setScenePipelineResult(null)
     setError('')
+    setBindingRejection('')
     setPipelineStatus((prev) => ({ ...prev, compose: 'running', mp4: 'running' }))
     try {
+      // FINAL backend preflight before spending anything — never trust the
+      // panel's earlier result: the scene may have changed since "Check".
+      const finalPreflight = await getGenerationPreflight(effectiveProjectId, selectedSceneId, renderProvider || undefined)
+      if (!finalPreflight.ready || finalPreflight.authorization?.ready === false) {
+        bumpPreflightRevision()
+        setPipelineStatus((prev) => ({ ...prev, compose: 'failed', mp4: 'failed' }))
+        setError('Generation blocked by preflight: the scene cannot render until all required shots pass.')
+        return
+      }
       const response = await generateScenePipeline(
         effectiveProjectId,
         selectedSceneId,
-        buildPrevisScenePipelinePayload(sceneScoreMode, manualScorePath),
+        {
+          ...buildPrevisScenePipelinePayload(sceneScoreMode, manualScorePath),
+          prepared_snapshot_id: finalPreflight.prepared_snapshot_id,
+          expected_reference_binding_digests: serverConfirmedDigestMap,
+        },
       )
       if (response.error || !response.result) {
         throw new Error(response.error || 'Scene generation failed')
       }
+      setBindingRejection('')
       setScenePipelineResult(response.result)
       setComposedUrl(response.result.output_url || response.result.stitch?.output_url || null)
       setPipelineStatus((prev) => ({ ...prev, compose: 'done', mp4: 'done' }))
       setSuccess(`Scene pipeline complete — ${response.result.stitch?.clip_count ?? response.result.shots.length} shot${(response.result.stitch?.clip_count ?? response.result.shots.length) === 1 ? '' : 's'} assembled`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scene pipeline failed')
+      const message = err instanceof Error ? err.message : 'Scene pipeline failed'
+      // Scene-mint refusals render as creator guidance; all other failures
+      // pass through verbatim.
+      setError(friendlyRefusalError(err, message))
+      setBindingRejection(isBindingConfirmationRejection(message) ? message : '')
       setPipelineStatus((prev) => ({ ...prev, compose: 'failed', mp4: 'failed' }))
+      // The backend may have rejected the batch at its gates — refresh the
+      // displayed blockers from the backend instead of guessing.
+      bumpPreflightRevision()
     } finally {
       setScenePipelineRunning(false)
     }
-  }, [selectedSceneId, effectiveProjectId, scenePipelineRunning, manualScorePath, sceneScoreMode])
+  }, [selectedSceneId, effectiveProjectId, scenePipelineRunning, manualScorePath, sceneScoreMode, renderProvider, bumpPreflightRevision, confirmationGate, serverConfirmedDigestMap])
 
   // ── Polling ref ───────────────────────────────────────────────────────────
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -950,31 +1169,91 @@ export default function PrevisRoom() {
   }, [loadScenes])
 
   // ── Pre-populate from route state / URL param when navigated from other rooms ─
+  // Runs ONCE PER NAVIGATION: location.key changes on every router navigation,
+  // while useSearchParams hands back a fresh object identity on every render, so
+  // a searchParams dep made this effect re-run after every state change — and a
+  // re-run landing between the scene→URL sync write and the router commit
+  // re-asserted the previous scene, ping-ponging the two effects in a
+  // synchronous update loop (observed as ~1800 re-renders/s under test). The ref
+  // marks each navigation applied once the scene list can resolve a focus target.
+  const appliedFocusNavRef = useRef('')
   useEffect(() => {
-    const state = (location.state as { focus_scene_id?: string; scene_index?: number } | null)
-    const focusSceneId = state?.focus_scene_id || searchParams.get('scene') || ''
-    const shotParam = searchParams.get('shot')
-    const codirectorNoteParam = searchParams.get('codirector_note')
-    if (!focusSceneId || scenes.length === 0) return
-    const scene = scenes.find((s) => s.scene_id === focusSceneId)
+    if (scenes.length === 0) return
+    if (appliedFocusNavRef.current === location.key) return
+    appliedFocusNavRef.current = location.key
+    const plan = planPrevisFocus({
+      searchParams,
+      locationState: location.state as { focus_scene_id?: string; scene_index?: number } | null,
+      sceneIds: scenes.map((s) => s.scene_id),
+    })
+    if (!plan) return
+    const scene = scenes.find((s) => s.scene_id === plan.sceneId)
     if (!scene) return
     setFocusedSceneId(scene.scene_id)
     setSelectedSceneId(scene.scene_id)
-    setOriginalPrompt('')
-    const derived = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
-    setPromptText(derived)
+    const derived = derivePromptFromScene(scene, plan.shotNumber ?? activeShotNumber, 1, totalShots)
+    // Only seed the prompt when the filmmaker has not already edited it:
+    // consuming the codirector_note param re-runs this effect, and clobbering
+    // here would erase the note this same effect just applied.
+    if (!promptDirtyRef.current) {
+      setOriginalPrompt('')
+      setPromptText(derived)
+      promptDirtyRef.current = false
+    }
     // Apply co-director note from URL (from APPLY TO SHOT in Screening Room)
-    if (codirectorNoteParam) {
-      const note = decodeURIComponent(codirectorNoteParam)
-      setPromptText(derived + '\n\nCo-Director: ' + note.slice(0, 200))
+    if (plan.codirectorNote !== null) {
+      setPromptText(derived + '\n\nCo-Director: ' + plan.codirectorNote)
+      promptDirtyRef.current = true
       setCoDirectorNoteApplied(true)
     }
-    // Apply shot number from URL
-    if (shotParam) {
-      const shotNum = parseInt(shotParam, 10)
-      if (!isNaN(shotNum) && shotNum > 0) setActiveShotNumber(shotNum)
+    if (plan.consumeCodirectorNote) {
+      // Consume the note: leaving it in the URL would keep the scene-reset
+      // and auto-populate effects skipped forever (every later scene switch
+      // would look like "nothing happens" until a manual reload).
+      // (Decision logic lives in previsFocusPlan.ts, with regression tests.)
+      const consumed = new URLSearchParams(searchParams)
+      consumed.delete('codirector_note')
+      setSearchParams(consumed, { replace: true })
     }
-  }, [location.state, searchParams, scenes, activeShotNumber, totalShots])
+    // Apply shot number from URL
+    if (plan.shotNumber !== null) setActiveShotNumber(plan.shotNumber)
+    // searchParams is read in the body (plan decision + note consumption) but
+    // deliberately excluded: the object churns identity every render, and this
+    // effect is keyed to location.key — one application per navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key, location.state, scenes, activeShotNumber, totalShots])
+
+  // ── Desk-confirmed reference bindings (Production Desk handoff) ──────────
+  // Adopts the route-state carrier once per navigation, gated on the active
+  // project: a confirmation from another project is never attached here.
+  // Lost on reload or fresh entry — confirming again on the Desk restores
+  // it. Kept separate from the focus effect above, which owns prompt
+  // seeding and carries its own once-per-navigation guard.
+  useEffect(() => {
+    setDeskConfirmedBindings(readDeskConfirmedBindings(location.state, effectiveProjectId))
+  }, [location.key, location.state, effectiveProjectId])
+
+  // Recover durable confirmations for the selected scene (read-only).
+  // Loading the room stays safe-open: this fetch never scans, confirms,
+  // or generates — it only restores already-recorded state.
+  useEffect(() => {
+    if (!effectiveProjectId || !selectedSceneId) {
+      setServerConfirmations(null)
+      return
+    }
+    let cancelled = false
+    setServerConfirmations(null)
+    void (async () => {
+      try {
+        const result = await listSceneReferenceConfirmations(effectiveProjectId, selectedSceneId)
+        if (!cancelled) setServerConfirmations(result ?? null)
+      } catch {
+        // Unavailable endpoint: stay unknown (null) — never a confirmation.
+        if (!cancelled) setServerConfirmations(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [effectiveProjectId, selectedSceneId])
 
   // ── Load render jobs ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -1139,24 +1418,43 @@ export default function PrevisRoom() {
   }, [currentJobId, rendering, effectiveProjectId, genConfig.duration, genConfig.model, genConfig.resolution, promptText, activeShotNumber, selectedSceneId, visibleRenderHistory])
 
   // ── Reset scene-local state on scene switch ────────────────────────────────
+  // Runs on scene IDENTITY changes only. A searchParams dep here made the reset
+  // re-run after the note-consumption URL write (useSearchParams hands back a
+  // new object per navigation), wiping the just-applied co-director note — and
+  // it never cleared action success banners, so a scene switch left "Suggested
+  // cameras…" on screen. coDirectorNoteApplied protects the arrival window:
+  // the reset that fires when the note-selected scene mounts must not clobber
+  // the note the same navigation just applied.
   useEffect(() => {
     if (!selectedSceneId) return
-    // Skip reset when navigating from Co-Director (APPLY TO SHOT in Screening Room)
-    if (searchParams.get('codirector_note')) return
+    // Skip reset while a freshly applied co-director note is on the prompt —
+    // the select handler clears this flag when the filmmaker switches scenes.
+    if (coDirectorNoteApplied) return
     setActiveShotNumber(1)
     setPromptText('')
+    promptDirtyRef.current = false
     setOriginalPrompt('')
     setShotCountRec(null)
+    appliedShotCountRec.current = null
     setSettingsRecommendation(null)
+    setCameraRecommendation(null)
+    setSceneCameraPlan(null)
     setSelectedTakeByShot({})
     setTotalShots(1)
-  }, [selectedSceneId, searchParams])
+    setSuccess('')
+  }, [selectedSceneId, coDirectorNoteApplied])
 
   // ── Auto-populate prompt when scene is selected (fixes race condition) ─────
+  // Keyed to the scene IDENTITY (string dep), not the churning searchParams
+  // object: the object dep made this re-run after every state change, and a
+  // re-run landing in the window before a freshly applied co-director note had
+  // painted replaced the note with derived scene text (both states say
+  // "prompt non-empty", so the non-empty guard cannot arbitrate between them).
+  const lastAutoPopulateSceneRef = useRef('')
   useEffect(() => {
     if (!selectedSceneId || scenes.length === 0) return
-    // Skip if navigating from another room (already handled by location.state effect)
-    if (searchParams.get('codirector_note')) return
+    if (lastAutoPopulateSceneRef.current === selectedSceneId) return
+    lastAutoPopulateSceneRef.current = selectedSceneId
     const scene = scenes.find((s) => s.scene_id === selectedSceneId)
     if (!scene) return
     // Only auto-populate if prompt is currently empty (avoid overwriting user input)
@@ -1164,21 +1462,44 @@ export default function PrevisRoom() {
       if (currentPrompt.trim()) return currentPrompt
       return derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
     })
-  }, [selectedSceneId, scenes, searchParams, activeShotNumber, totalShots])
+    // searchParams excluded: identity churns every render; the note window is
+    // handled by the per-scene key above and the reset effect's flag guard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSceneId, scenes, activeShotNumber, totalShots])
 
   // ── Update prompt when shot number changes ─────────────────────────────────
+  // Bounded to the shot-number TRANSITION and to non-explicit prompts: an
+  // arrival via APPLY TO SHOT (?shot=2) sets shotNumber=2 in the same flush the
+  // note is applied, and an unconditional regeneration here erased the note
+  // before it ever painted. promptDirtyRef marks explicit content (creator
+  // edits, applied notes, loaded history) — regeneration must respect it.
+  const lastShotPromptKeyRef = useRef('')
   useEffect(() => {
     if (!selectedSceneId || scenes.length === 0) return
+    const promptKey = `${effectiveProjectId}/${selectedSceneId}/${activeShotNumber}`
+    if (lastShotPromptKeyRef.current === promptKey) return
+    if (promptDirtyRef.current) {
+      lastShotPromptKeyRef.current = promptKey
+      return
+    }
+    lastShotPromptKeyRef.current = promptKey
     const scene = scenes.find((s) => s.scene_id === selectedSceneId)
     if (!scene) return
     // Regenerate prompt for new shot
     const newPrompt = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
     setPromptText(newPrompt)
-  }, [activeShotNumber, selectedSceneId, scenes, totalShots])
+    promptDirtyRef.current = false
+    setCameraRecommendation(null)
+    setSceneCameraPlan(null)
+    // searchParams excluded: identity churns every render and the effect is
+    // bounded by the project/scene/shot key above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeShotNumber, selectedSceneId, scenes, totalShots, effectiveProjectId])
 
   useEffect(() => {
     if (!activeBlueprintShot) return
     setPromptText(activeBlueprintShot.render_contract.provider_neutral_prompt)
+    promptDirtyRef.current = false
     setGenConfig((previous) => ({
       ...previous,
       duration: activeBlueprintShot.render_contract.duration_seconds,
@@ -1200,7 +1521,7 @@ export default function PrevisRoom() {
     const completed = sceneJobs.slice(0, 5).map((job) => {
       const scene = scenes.find((s) => s.scene_id === selectedSceneId)
       const historyVideoUrl = browserPlaybackUrl(job.output_payload?.asset_url || job.output_url) || undefined
-      const shotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
+      const shotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
       const shot_number = shotNumMatch ? parseInt(shotNumMatch[1], 10) : 1
       return {
         jobId: job.id,
@@ -1218,7 +1539,7 @@ export default function PrevisRoom() {
     // Build shotVideoUrls for the current scene
     const urlMap: Record<number, string> = {}
     for (const job of sceneJobs) {
-      const shotNumMatch = job.shot_id?.match(/_shot_(\d+)$/)
+      const shotNumMatch = job.shot_id?.match(/_shot_(\d+)/)
       if (shotNumMatch) {
         const shotNum = parseInt(shotNumMatch[1], 10)
         const url = browserPlaybackUrl(job.output_payload?.asset_url || job.output_url)
@@ -1255,6 +1576,7 @@ export default function PrevisRoom() {
         return
       }
       setPromptText(result.enhanced_prompt)
+      promptDirtyRef.current = true
       setEnhancedPrompt(true)
       const memoryLabel = result.study_memories_used === 1 ? 'memory' : 'memories'
       const contextParts = [
@@ -1284,6 +1606,13 @@ export default function PrevisRoom() {
       setError('Enter a prompt before rendering')
       return
     }
+    // Only send an explicit prompt override when the creator actually edited
+    // the box. Auto-derived/synced text is stale by design (no locks, no
+    // camera plan); sending it would discard the planned board. Omitting it
+    // lets the backend render from the planned prompt with current locks.
+    const promptEdited = promptDirtyRef.current
+      && Boolean(promptText.trim())
+      && promptText.trim() !== storyboardPrompt
 
     setRendering(true)
     setError('')
@@ -1291,6 +1620,21 @@ export default function PrevisRoom() {
     setPipelineStatus({ loop1: 'running', loop2: 'pending', compose: 'pending', mp4: 'pending' })
 
     try {
+      // FINAL backend preflight before spending anything. The backend's
+      // fresh verdict — never an earlier frontend check — authorizes this
+      // render. A blocked shot stops here with its actual blockers shown.
+      const finalCheck = await preflightGuard.authorizeFinal()
+      if (!finalCheck.authorized) {
+        setRendering(false)
+        setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
+        setError(
+          finalCheck.blockers.length > 0
+            ? `Generation blocked by preflight: ${finalCheck.blockers.join(' ')} `
+            : 'Generation blocked by preflight. Refresh the readiness panel for the backend\'s reasons.',
+        )
+        return
+      }
+
       // Calculate take number for this shot
       const existingTakes = visibleRenderHistory.filter((t) => t.shot_number === activeShotNumber)
       const takeNumber = existingTakes.length + 1
@@ -1300,18 +1644,31 @@ export default function PrevisRoom() {
         activeBlueprintShot
         && storyboardBlueprint?.blueprint.approved_version_id === activeBlueprintShot.version_id
       ) ? activeBlueprintShot.storyboard_shot_id : undefined
+      // R4.3L (Policy A): the legacy previs call never forwards a Runway-family
+      // picker value; it sends simulated instead. Production render and
+      // revision controls keep using renderProvider unchanged.
+      const legacyPrevisProvider = resolveLegacyPrevisProvider(renderProvider)
       const generated = await generatePrevisScene(effectiveProjectId, selectedSceneId || '', {
         shotNumber: activeShotNumber,
         takeNumber,
         storyboardShotId,
         allowApprovedRevision: true,
-        provider: renderProvider || undefined,
+        provider: legacyPrevisProvider,
         renderSettings: {
-          prompt: renderPrompt,
+          prompt: promptEdited ? renderPrompt : undefined,
           duration_seconds: genConfig.duration,
           resolution: genConfig.resolution,
           seed: genConfig.seed,
           shot_planning: shotPlanningOverrides[activeShotNumber],
+          // Only sent when the filmmaker explicitly opted into a trained
+          // identity; omitting it leaves the render path exactly as before.
+          visual_model_id: shotVisualModelId || undefined,
+          // Generation model: 'auto' routes by shot requirements; a specific
+          // model is user-selected and never replaced.
+          model: genModel !== 'auto' ? genModel : undefined,
+          // Fresh Render: force a brand-new generation context from current
+          // authoritative state instead of reusing an active job.
+          fresh_render: freshRender || undefined,
         },
       })
       if (generated.status === 'needs_review') {
@@ -1361,31 +1718,99 @@ export default function PrevisRoom() {
       setRendering(false)
       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
     }
-  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, renderProvider, selectedSceneId, activeShotNumber, visibleRenderHistory, shotPlanningOverrides])
+  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, renderProvider, selectedSceneId, activeShotNumber, visibleRenderHistory, shotPlanningOverrides, shotVisualModelId, genModel, freshRender, preflightGuard])
+
+  // ── Inline delete confirms (no native dialogs — blocked popups silently
+  // abort deletion, which reads as "nothing happens") ───────────────────────
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null)
+  const confirmDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const armDelete = useCallback((key: string) => {
+    if (confirmDeleteTimer.current) clearTimeout(confirmDeleteTimer.current)
+    setConfirmDeleteKey(key)
+    confirmDeleteTimer.current = setTimeout(() => setConfirmDeleteKey(null), 8000)
+  }, [])
+  const disarmDelete = useCallback(() => {
+    if (confirmDeleteTimer.current) clearTimeout(confirmDeleteTimer.current)
+    setConfirmDeleteKey(null)
+  }, [])
 
   // ── Delete render job ────────────────────────────────────────────────────
+  const removeTakeFromState = useCallback((jobId: string) => {
+    setRenderHistory((prev) => {
+      const deletedEntry = prev.find(e => e.jobId === jobId)
+      if (deletedEntry) {
+        setSelectedTakeByShot(prevState => {
+          const rest = Object.fromEntries(
+            Object.entries(prevState).filter(([key]) => key !== String(deletedEntry.shot_number))
+          )
+          return rest
+        })
+      }
+      return prev.filter((e) => e.jobId !== jobId)
+    })
+    setRenderJobs((prev) => prev.filter((job) => job.id !== jobId))
+  }, [])
+
   const handleDeleteRender = useCallback(async (jobId: string) => {
-    if (!window.confirm('Delete this take?')) return
     try {
       await deleteRenderJob(jobId)
-      setRenderHistory((prev) => {
-        const deletedEntry = prev.find(e => e.jobId === jobId)
-        if (deletedEntry) {
-          setSelectedTakeByShot(prevState => {
-            const rest = Object.fromEntries(
-              Object.entries(prevState).filter(([key]) => key !== String(deletedEntry.shot_number))
-            )
-            return rest
-          })
-        }
-        return prev.filter((e) => e.jobId !== jobId)
-      })
-      setRenderJobs((prev) => prev.filter((job) => job.id !== jobId))
+      removeTakeFromState(jobId)
+      disarmDelete()
       setSuccess('Take deleted')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete take'
+      // Active renders refuse deletion until cancelled — arm a combined
+      // cancel-and-delete action instead of stranding the take.
+      if (/cancel/i.test(message)) {
+        armDelete(`cancel:${jobId}`)
+        setError('This take is still rendering — press again to cancel it and delete.')
+        return
+      }
+      setError(message)
+    }
+  }, [removeTakeFromState, armDelete, disarmDelete])
+
+  const handleCancelAndDeleteRender = useCallback(async (jobId: string) => {
+    try {
+      await cancelRenderJob(jobId)
+      await deleteRenderJob(jobId)
+      removeTakeFromState(jobId)
+      disarmDelete()
+      setSuccess('Take cancelled and deleted')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete take')
     }
-  }, [])
+  }, [removeTakeFromState, disarmDelete])
+
+  // ── Delete storyboard shot ───────────────────────────────────────────────
+  const handleDeleteStoryboardShot = useCallback(async () => {
+    if (!effectiveProjectId || !selectedSceneId) {
+      setError('Select a scene first')
+      return
+    }
+    const shot = activeBlueprintShot
+    if (!shot) return
+    const remaining = (storyboardBlueprint?.shots.length ?? 1) - 1
+    if (remaining < 1) {
+      setError('A storyboard must keep at least one shot')
+      return
+    }
+    setError('')
+    try {
+      await deleteStoryboardShot(shot.blueprint_id, shot.storyboard_shot_id)
+      const result = await getStoryboardBlueprint(effectiveProjectId, selectedSceneId)
+      if (directionScopeRef.current === directionScope) {
+        setStoryboardBlueprint(result)
+        const count = result?.shots.length ?? remaining
+        setActiveShotNumber((prev) => Math.max(1, Math.min(prev, Math.max(1, count))))
+        disarmDelete()
+        setSuccess(`Shot ${shot.shot_number} deleted`)
+        bumpPreflightRevision()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete shot')
+    }
+  }, [effectiveProjectId, selectedSceneId, activeBlueprintShot, storyboardBlueprint?.shots.length, directionScope, disarmDelete, bumpPreflightRevision])
 
   const handleAdherenceRetry = useCallback(async (jobId: string) => {
     if (adherenceRetryingJobId) return
@@ -1415,6 +1840,7 @@ export default function PrevisRoom() {
     (entry: HistoryEntry) => {
       if (entry.prompt) {
         setPromptText(entry.prompt)
+        promptDirtyRef.current = true
         setSuccess(`Loaded prompt from ${entry.sceneName}`)
       }
     },
@@ -1434,7 +1860,6 @@ export default function PrevisRoom() {
         scene_id: selectedSceneId,
       })
       setShotCountRec(result)
-      setSuccess(`Recommended ${result.recommended_shot_count} shots for this scene`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Shot count recommendation failed')
     } finally {
@@ -1502,6 +1927,67 @@ export default function PrevisRoom() {
     applyRecommendedSettings(next)
   }, [applyRecommendedSettings, durationDraft, genConfig.duration])
 
+  // ── Camera Setting Recommendation (advisory — never auto-applied) ────────
+  // Per-shot suggestions come from the whole-scene plan (one entry per shot),
+  // so a single source of truth drives the Shot-N label on every suggestion.
+  const selectSceneCameraSuggestion = useCallback((shotNum: number, rec: CameraShotRecommendation) => {
+    setActiveShotNumber(shotNum)
+    setCameraRecommendation(rec)
+  }, [])
+
+  const applyCameraRecommendation = useCallback(() => {
+    if (!cameraRecommendation) return
+    updateShotPlanningDetail('camera', cameraRecommendation.camera)
+    updateShotPlanningDetail('framing', cameraRecommendation.framing)
+    updateShotPlanningDetail('lens', cameraRecommendation.lens_language)
+    updateShotPlanningDetail('focal_length', cameraRecommendation.focal_length)
+    updateShotPlanningDetail('aperture', cameraRecommendation.aperture)
+    setSuccess(`Camera set for Shot ${activeShotNumber}: ${cameraRecommendation.preset_label}`)
+  }, [cameraRecommendation, updateShotPlanningDetail, activeShotNumber])
+
+  // ── Camera Settings for All Shots (advisory — never auto-applied) ─────────
+  const handleRecommendSceneCameras = useCallback(async () => {
+    if (!selectedSceneId) {
+      setError('Select a scene first')
+      return
+    }
+    const scene = scenes.find((s) => s.scene_id === selectedSceneId)
+    if (!scene) {
+      setError('Select a scene first')
+      return
+    }
+    setRecommendingSceneCameras(true)
+    setError('')
+    try {
+      const result = await recommendCamerasForScene(
+        scene as unknown as Record<string, unknown>,
+        totalShots,
+      )
+      setSceneCameraPlan(result)
+      setTotalShots((prev) => adoptShotCount(prev, result.total_shots))
+      setSuccess(`Suggested cameras for ${result.total_shots} shots — apply per shot or all at once`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Scene camera recommendations failed')
+    } finally {
+      setRecommendingSceneCameras(false)
+    }
+  }, [selectedSceneId, scenes, totalShots])
+
+  const applySceneCameraForShot = useCallback((rec: CameraShotRecommendation, shotNum: number) => {
+    setShotPlanningOverrides((prev) => mergeCameraRecIntoOverrides(prev, rec, shotNum))
+  }, [])
+
+  const applySceneCamera = useCallback((rec: CameraShotRecommendation, shotNum: number) => {
+    applySceneCameraForShot(rec, shotNum)
+    setSuccess(`Camera set for Shot ${shotNum}: ${rec.preset_label}`)
+  }, [applySceneCameraForShot])
+
+  const applyAllSceneCameras = useCallback(() => {
+    if (!sceneCameraPlan) return
+    setShotPlanningOverrides((prev) => mergeCameraPlanIntoOverrides(prev, sceneCameraPlan.recommendations))
+    setSuccess(`Cameras set for all ${sceneCameraPlan.total_shots} shots`)
+  }, [sceneCameraPlan])
+
   // ── UI Elements ───────────────────────────────────────────────────────
 
   const handleCreateStoryboardBlueprint = useCallback(async () => {
@@ -1513,18 +1999,19 @@ export default function PrevisRoom() {
     setError('')
     try {
       const result = await createStoryboardBlueprint(effectiveProjectId, selectedSceneId, {
-        shot_count: Math.max(1, totalShots),
+        shot_count: normalizeShotCount(totalShots),
         regeneration_reason: 'previs_room_create',
       })
       setStoryboardBlueprint(result)
-      setTotalShots(Math.max(totalShots, result.shots.length || 1))
+      setTotalShots((prev) => adoptShotCount(prev, result.shots.length))
       setSuccess('Storyboard blueprint ready')
+      bumpPreflightRevision()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Storyboard blueprint creation failed')
     } finally {
       setBlueprintLoading(false)
     }
-  }, [effectiveProjectId, selectedSceneId, totalShots])
+  }, [effectiveProjectId, selectedSceneId, totalShots, bumpPreflightRevision])
 
   // ── Handle Generate Storyboard ─────────────────────────────────────────────
   const handleGenerateStoryboardForShot = useCallback(async (shotNumber: number) => {
@@ -1704,6 +2191,7 @@ export default function PrevisRoom() {
         render_contract: renderContract,
         change_reason: action === 'ignore' ? 'continuity_issue_acknowledged' : 'continuity_issue_action_applied',
       })
+      bumpPreflightRevision()
       setStoryboardBlueprint((prev) => prev
         ? { ...prev, shots: prev.shots.map((shot) => shot.storyboard_shot_id === updatedShot.storyboard_shot_id ? updatedShot : shot) }
         : prev)
@@ -1747,12 +2235,13 @@ export default function PrevisRoom() {
       const result = await approveStoryboardVersion(blueprint.blueprint_id, version.version_id)
       setStoryboardBlueprint(result)
       setSuccess('Storyboard approved for production')
+      bumpPreflightRevision()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Storyboard approval failed')
     } finally {
       setBlueprintApproving(false)
     }
-  }, [continuityReviewComplete, storyboardBlueprint])
+  }, [continuityReviewComplete, storyboardBlueprint, bumpPreflightRevision])
 
   // ── Handle Toggle Seed Lock ────────────────────────────────────────────────
   const handleToggleSeedLock = useCallback(async () => {
@@ -1771,7 +2260,13 @@ export default function PrevisRoom() {
 
   // Navigation changes presentation only; production state and panels remain mounted.
   const currentStep = PREVIS_STEPS.find((step) => step.id === activeStep) || PREVIS_STEPS[0]
-  const selectedProviderLabel = RENDER_PROVIDERS.find((option) => option.value === renderProvider)?.label || 'Auto (server default)'
+  // Derived dropdown options: live backend catalog when reachable, static
+  // fallback otherwise. Auto (server default) always sorts first.
+  const renderProviderOptions = useMemo(
+    () => (providers.length > 0 ? buildRenderProviderOptions(providers) : FALLBACK_RENDER_PROVIDERS),
+    [providers],
+  )
+  const selectedProviderLabel = renderProviderOptions.find((option) => option.value === renderProvider)?.label || 'Auto (server default)'
   const nextStep = PREVIS_STEPS[PREVIS_STEPS.findIndex((step) => step.id === activeStep) + 1]
   const advanceToStep = (step: typeof PREVIS_STEPS[number]['id']) => {
     setActiveStep(step)
@@ -1821,20 +2316,25 @@ export default function PrevisRoom() {
                     id="previs-scene-selector"
                     aria-label="Choose scene"
                     value={selectedSceneId}
-                    onChange={(e) => {
-                      const sceneId = e.target.value
-                      if (sceneId) {
-                        const scene = scenes.find((s) => s.scene_id === sceneId)
-                        if (scene) {
-                          setOriginalPrompt('')
-                          const derived = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
-                          setPromptText(derived)
-                        }
-                      }
+                onChange={(e) => {
+                  const sceneId = e.target.value
+                  if (sceneId) {
+                    const scene = scenes.find((s) => s.scene_id === sceneId)
+                    if (scene) {
+                      setOriginalPrompt('')
+                      const derived = derivePromptFromScene(scene, activeShotNumber, 1, totalShots)
+                      setPromptText(derived)
+                      promptDirtyRef.current = false
+                    }
+                  }
                       setSelectedSceneId(sceneId)
                       // Fresh scene, fresh slate — clear any stale error banner
-                      // left over from a previous scene's action.
+                      // left over from a previous scene's action, and retire the
+                      // co-director note (it belongs to the scene it was applied to;
+                      // switching scenes means the filmmaker moved on).
                       setError('')
+                      setBindingRejection('')
+                      setCoDirectorNoteApplied(false)
                     }}
                     className="min-w-0 w-full rounded-lg border border-white/15 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-amber-300"
                     style={{ color: 'var(--color-on-surface-variant)' }}
@@ -1876,7 +2376,14 @@ export default function PrevisRoom() {
             <aside className="min-w-0 space-y-3 xl:sticky xl:top-5" aria-label="Current shot preview">
               <div className="flex items-center justify-between gap-3 text-xs text-zinc-400">
                 <span>Shot {activeShotNumber} <span className="mx-1 text-zinc-600">/</span> {activeStep === 'storyboard' || !currentVideoUrl ? 'Storyboard frame' : activeTakeNumber ? `Take ${activeTakeNumber}` : 'Scene preview'}</span>
-                <span>{activeBlueprintShot?.render_contract.aspect_ratio || '16:9'}</span>
+                <span className="flex items-center gap-2">
+                  <span>{activeBlueprintShot?.render_contract.aspect_ratio || '16:9'}</span>
+                  {previewTakeJobId && (confirmDeleteKey === `take:${previewTakeJobId}`
+                    ? <button type="button" onClick={() => void handleDeleteRender(previewTakeJobId)} className="text-[11px] text-rose-300 hover:text-rose-200" aria-label={`Confirm delete take ${activeTakeNumber}`}>Confirm delete?</button>
+                    : confirmDeleteKey === `cancel:${previewTakeJobId}`
+                    ? <button type="button" onClick={() => void handleCancelAndDeleteRender(previewTakeJobId)} className="text-[11px] text-amber-200 hover:text-amber-100" aria-label="Cancel rendering and delete take">Cancel & delete?</button>
+                    : <button type="button" onClick={() => armDelete(`take:${previewTakeJobId}`)} className="text-[11px] text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${activeTakeNumber}`}>Delete take</button>)}
+                </span>
               </div>
                             {/* ── PREVIEW PANEL ─────────────────────────────────────────── */}
               <div className="glass-panel relative aspect-video w-full overflow-hidden rounded-xl" style={{ background: 'var(--color-surface-container-lowest)' }}>
@@ -1975,6 +2482,25 @@ export default function PrevisRoom() {
                   <div className="space-y-4">
                     <div><h3 className="text-xs font-medium text-zinc-400">Story intention</h3><p className="mt-1 text-sm leading-relaxed text-zinc-200">{activeShotPlanningDetails.purpose}</p></div>
                     <div><h3 className="text-xs font-medium text-zinc-400">Framing and action</h3><p className="mt-1 text-sm leading-relaxed text-zinc-200">{activeShotPlanningDetails.framing}</p><p className="mt-2 text-sm leading-relaxed text-zinc-400">{activeShotPlanningDetails.blocking}</p></div>
+                    {selectedSceneId && (
+                      <CameraPresetPicker
+                        key={`${selectedSceneId}/${activeShotNumber}`}
+                        current={{
+                          camera: activeShotPlanningDetails.camera,
+                          framing: activeShotPlanningDetails.framing,
+                          lens: activeShotPlanningDetails.lens,
+                          focal_length: activeShotPlanningDetails.focal_length,
+                          aperture: activeShotPlanningDetails.aperture,
+                        }}
+                        onApply={(plan) => {
+                          updateShotPlanningDetail('camera', plan.camera)
+                          updateShotPlanningDetail('framing', plan.framing)
+                          updateShotPlanningDetail('lens', plan.lens ?? '')
+                          updateShotPlanningDetail('focal_length', plan.focal_length ?? '')
+                          updateShotPlanningDetail('aperture', plan.aperture ?? '')
+                        }}
+                      />
+                    )}
                   </div>
                 ) : <p className="rounded-md border border-dashed border-white/15 px-4 py-5 text-sm leading-relaxed text-zinc-400">Choose a scene above to see its story intention and plan the first shot.</p>}
                             {selectedSceneId && (
@@ -1998,7 +2524,7 @@ export default function PrevisRoom() {
                       ['transition', 'Transition in and out'],
                       ['plannedDuration', 'Editable planned duration'],
                       ['rationale', 'Why this shot matters'],
-                    ] as Array<[keyof ShotPlanningDetails, string]>).map(([field, label]) => (
+                    ] as Array<[Exclude<keyof ShotPlanningDetails, 'lens' | 'focal_length' | 'aperture'>, string]>).map(([field, label]) => (
                       <label key={field} className={field === 'rationale' ? 'xl:col-span-2' : ''}>
                         <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
                           {label}
@@ -2024,7 +2550,31 @@ export default function PrevisRoom() {
                     <p className="text-xs leading-relaxed text-zinc-400">Get a suggested shot count or stage the scene, then decide which suggestions to use.</p>
                     <button type="button" onClick={handleRecommendShotCount} disabled={!selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Camera size={14} /> Recommend shot count</button>
                     {shotRecommendation && <p className="rounded-md bg-white/5 p-3 text-xs leading-relaxed text-zinc-300">{shotRecommendation}</p>}
+                    <button type="button" onClick={handleRecommendSceneCameras} disabled={!selectedSceneId || recommendingSceneCameras} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Camera size={14} /> {recommendingSceneCameras ? 'Planning…' : `Suggest cameras for all ${totalShots} shot${totalShots === 1 ? '' : 's'}`}</button>
+                    {cameraRecommendation && (
+                      <div className="space-y-2 rounded-md bg-white/5 p-3">
+                        <p className="text-xs font-medium text-zinc-200">Shot {activeShotNumber} · {cameraRecommendation.preset_label} · {cameraRecommendation.framing} · {cameraRecommendation.focal_length} · {cameraRecommendation.aperture}</p>
+                        <p className="text-xs leading-relaxed text-zinc-300">{cameraRecommendation.why}</p>
+                        <button type="button" onClick={applyCameraRecommendation} className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-200/40 px-3 py-2 text-xs text-amber-100 hover:bg-amber-200/10">Use this camera for Shot {activeShotNumber}</button>
+                      </div>
+                    )}
+                    {sceneCameraPlan && (
+                      <div className="space-y-2 rounded-md bg-white/5 p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">Suggested coverage — one suggestion per shot</p>
+                        {sceneCameraPlan.recommendations.map((rec, index) => (
+                          <div key={index} className="space-y-1 rounded-md border border-white/10 p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <button type="button" onClick={() => selectSceneCameraSuggestion(index + 1, rec)} title="Select this shot in the room" className="min-w-0 text-left text-xs font-medium text-zinc-200 hover:text-amber-100">Shot {index + 1} · {rec.preset_label} · {rec.framing} · {rec.focal_length} · {rec.aperture}</button>
+                              <button type="button" onClick={() => applySceneCamera(rec, index + 1)} className="shrink-0 rounded-md border border-white/20 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/5">Use for Shot {index + 1}</button>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-zinc-400">{rec.why}</p>
+                          </div>
+                        ))}
+                        <button type="button" onClick={applyAllSceneCameras} className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-200/40 px-3 py-2 text-xs text-amber-100 hover:bg-amber-200/10">Use all {sceneCameraPlan.total_shots} camera{sceneCameraPlan.total_shots === 1 ? '' : 's'}</button>
+                      </div>
+                    )}
                     {selectedSceneId && effectiveProjectId && <StageScenePanel projectId={effectiveProjectId} sceneId={selectedSceneId} />}
+                    {selectedScene && effectiveProjectId && <div className="mt-3"><SceneSettingTraining projectId={effectiveProjectId} scene={selectedScene} refreshSignal={preflightRevision} onIdentityTrained={() => setIdentitiesRefreshKey((k) => k + 1)} /></div>}
                   </div>
                 </details>
                 <button type="button" onClick={() => advanceToStep('storyboard')} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200">Continue to storyboard <ChevronRight size={16} /></button>
@@ -2052,7 +2602,31 @@ export default function PrevisRoom() {
                     <div><h3 className="text-sm font-medium text-zinc-100">2. Build the scene blueprint</h3><p className="mt-1 text-xs leading-relaxed text-zinc-400">Collect the scene’s shots into the plan you will review and approve.</p></div>
                     <button type="button" onClick={() => { setStoryboardStage(null); void handleCreateStoryboardBlueprint() }} disabled={!selectedSceneId || blueprintLoading} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-4 py-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40">{blueprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}Build storyboard blueprint</button>
                     <p className="text-xs text-zinc-400">Blueprint: <span className="text-zinc-200">{blueprintLoading ? 'loading' : storyboardBlueprint?.blueprint.status || 'not built'}</span></p>
-                    {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}</div></details>}
+                    {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}{confirmDeleteKey === `shot:${activeBlueprintShot.storyboard_shot_id}` ? <button type="button" onClick={() => void handleDeleteStoryboardShot()} className="text-[11px] text-rose-300 hover:text-rose-200" aria-label={`Confirm delete shot ${activeBlueprintShot.shot_number}`}>Confirm delete shot {activeBlueprintShot.shot_number}? Takes stay in history.</button> : <button type="button" onClick={() => armDelete(`shot:${activeBlueprintShot.storyboard_shot_id}`)} disabled={(storyboardBlueprint?.shots.length ?? 1) <= 1 || storyboardApproved} title={(storyboardBlueprint?.shots.length ?? 1) <= 1 ? 'A storyboard must keep at least one shot — add another shot first, or generate a new frame to replace this one' : storyboardApproved ? 'Unapprove the storyboard to edit its shots' : `Delete shot ${activeBlueprintShot.shot_number}`} className="text-[11px] text-zinc-500 hover:text-rose-300 disabled:opacity-40" aria-label={`Delete shot ${activeBlueprintShot.shot_number}`}>Delete shot {activeBlueprintShot.shot_number}</button>}</div></details>}
+                    {effectiveProjectId && selectedSceneId && activeBlueprintShot && (
+                      <div className="space-y-3">
+                        <AiCameraApproval
+                          key={`${activeBlueprintShot.storyboard_shot_id}/${activeBlueprintShot.version_id}`}
+                          projectId={effectiveProjectId}
+                          sceneId={selectedSceneId}
+                          shot={activeBlueprintShot}
+                          onApproved={async () => {
+                            try {
+                              const refreshed = await getStoryboardBlueprint(effectiveProjectId, selectedSceneId)
+                              setStoryboardBlueprint(refreshed)
+                              // The approved shot may sit on the new draft version —
+                              // keep the active selection pointed at the same shot.
+                              if (refreshed?.shots.length) {
+                                setActiveShotNumber((prev) => Math.min(prev, refreshed.shots.length))
+                              }
+                            } finally {
+                              bumpPreflightRevision()
+                            }
+                          }}
+                        />
+                        <p className="text-[11px] leading-relaxed text-zinc-500">Each camera decision is approved one shot at a time. Approving one shot never approves the others.</p>
+                      </div>
+                    )}
                     {storyboardBlueprint?.version && <button type="button" onClick={() => setStoryboardStage('continuity')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-3 py-2 text-sm font-medium text-zinc-950">Continue to continuity <ChevronRight size={15} /></button>}
                   </li>
                   <li hidden={currentStoryboardStage !== 'continuity'}><h3 className="mb-3 text-sm font-medium text-zinc-100">3. Review continuity</h3>                <div className="rounded-lg border p-2.5 space-y-2" style={{ borderColor: continuityReviewComplete ? 'rgba(52,211,153,0.18)' : 'rgba(255,209,101,0.18)', background: 'rgba(255,255,255,0.025)' }}>
@@ -2143,10 +2717,11 @@ export default function PrevisRoom() {
                     {storyboardApproved && <button type="button" onClick={() => advanceToStep('render')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100">Continue to rendering <ChevronRight size={15} /></button>}
                   </li>
                 </ol>
-                {storyboardBlueprint?.version && effectiveProjectId && selectedSceneId && <SceneDirectionPanel key={`${effectiveProjectId}/${selectedSceneId}/${storyboardBlueprint.version.version_id}`} projectId={effectiveProjectId} sceneId={selectedSceneId} versionId={storyboardBlueprint.version.version_id} activeShotNumber={activeShotNumber} onSaved={() => {
+                {effectiveProjectId && <CreatorDecisionWorkspace projectId={effectiveProjectId} sceneId={selectedSceneId} versionId={storyboardBlueprint?.version?.version_id ?? null} activeShotNumber={activeShotNumber} onSaved={() => {
                   setStoryboardBlueprint(null)
                   setStoryboardStage('continuity')
                   setSuccess('Scene direction saved as a new draft. Review continuity and approve it before rendering.')
+                  bumpPreflightRevision()
                   void getStoryboardBlueprint(effectiveProjectId, selectedSceneId).then(result => { if (directionScopeRef.current === directionScope) setStoryboardBlueprint(result) }).catch(error => { if (directionScopeRef.current === directionScope) setError(error instanceof Error ? error.message : 'Could not refresh the storyboard') })
                 }} />}
                 <p className="text-xs leading-relaxed text-zinc-400">{activeBlueprintShot?.storyboard_image_url ? 'The blueprint image will guide the first frame when this version is approved.' : 'This shot has no image attached to its blueprint yet. Check the frame before rendering.'}</p>
@@ -2173,7 +2748,7 @@ export default function PrevisRoom() {
                 className="w-full bg-black/30 border border-white/10 rounded
                            text-white/80 text-sm p-2 min-h-[80px] resize-y"
                 value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
+                onChange={(e) => { setPromptText(e.target.value); promptDirtyRef.current = true }}
                 placeholder="Describe this shot..."
               />
               {originalPrompt && (
@@ -2308,13 +2883,61 @@ export default function PrevisRoom() {
                   className="glass-panel w-full rounded-lg px-3 py-2 text-xs outline-none"
                   style={{ color: 'var(--color-on-surface)' }}
                 >
-                  {RENDER_PROVIDERS.map((opt) => (
+                  {renderProviderOptions.map((opt) => (
                     <option key={opt.value || 'auto'} value={opt.value} className="bg-zinc-900">
                       {opt.label}
                     </option>
                   ))}
                 </select>
               </div>
+
+                                  {/* 2. Generation Model (registry-backed) */}
+              {renderProvider === 'runway' && (
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  GENERATION MODEL
+                </label>
+                <select
+                  aria-label="Generation model"
+                  value={genModel}
+                  onChange={(e) => setGenModel(e.target.value)}
+                  className="glass-panel w-full rounded-lg px-3 py-2 text-xs outline-none"
+                  style={{ color: 'var(--color-on-surface)' }}
+                >
+                  <option value="auto" className="bg-zinc-900">Auto (Studio recommends by shot requirements)</option>
+                  {modelCatalog.map((m) => (
+                    <option key={m.model_id} value={m.model_id} className="bg-zinc-900">
+                      {m.label} — {m.credits_per_second} credits/s
+                    </option>
+                  ))}
+                </select>
+                {genModel === 'auto' && selectedModelInfo && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                    Estimated cost: {genConfig.duration * selectedModelInfo.credits_per_second} credits for {genConfig.duration}s
+                  </p>
+                )}
+                {genModel !== 'auto' && selectedModelInfo && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                    Your selection is authoritative — Studio will not replace it. Estimated cost: {genConfig.duration * selectedModelInfo.credits_per_second} credits for {genConfig.duration}s.
+                  </p>
+                )}
+              </div>
+              )}
+
+              <label className="flex items-start gap-2 rounded-lg border border-white/10 p-3" data-testid="fresh-render-toggle">
+                <input
+                  type="checkbox"
+                  checked={freshRender}
+                  onChange={(e) => setFreshRender(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-xs leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
+                  <span className="font-medium">Fresh Render</span>
+                  <span className="mt-1 block text-zinc-400">
+                    Rebuild this take from the current authoritative scene, storyboard, references, and camera plan. An active render for this shot is superseded (it stays in the project history).
+                  </span>
+                </span>
+              </label>
 
 
                                   {/* 3. Frame Rate */}
@@ -2485,9 +3108,42 @@ export default function PrevisRoom() {
                     <div className="border-t border-white/10 pt-4"><p className="mb-2 text-xs leading-relaxed text-zinc-400">Prompt assistance can rewrite your direction. Review the result before rendering.</p><button type="button" onClick={handleEnhancePrompt} disabled={!selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Sparkles size={13} /> AI enhance prompt</button></div>
                   </div>
                 </details>
+                {effectiveProjectId && <TrainedIdentityPicker projectId={effectiveProjectId} scene={selectedScene} selectedModelId={shotVisualModelId} onSelect={setShotVisualModelId} disabled={rendering} refreshKey={identitiesRefreshKey} />}
                 <div className="border-t border-white/10 pt-4">
                   <div className="mb-3 flex flex-wrap justify-between gap-2 text-xs text-zinc-400"><span>Shot {activeShotNumber} · {genConfig.duration} seconds</span><span>Creates a new take</span></div>
-                  <button type="button" onClick={handleInitializeRender} disabled={rendering || !selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">{rendering ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}{rendering ? 'Rendering take…' : 'Render take'}</button>
+                  {effectiveProjectId && selectedSceneId && (
+                    <GenerationReadinessPanel
+                      projectId={effectiveProjectId}
+                      sceneId={selectedSceneId}
+                      provider={renderProvider || undefined}
+                      mode="single-shot"
+                      revision={preflightRevision}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    data-testid="render-take-button"
+                    onClick={handleInitializeRender}
+                    disabled={
+                      rendering
+                      || !selectedSceneId
+                      || preflightGuard.status === 'blocked'
+                      || preflightGuard.status === 'error'
+                      || preflightGuard.status === 'stale'
+                    }
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500"
+                  >
+                    {rendering ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                    {rendering ? 'Rendering take…' : 'Render take'}
+                  </button>
+                  {isLegacyPrevisRunwayPicker(renderProvider) && (
+                    <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400" data-testid="legacy-previs-simulated-note">
+                      Simulated previs: instant, no cost
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500" data-testid="render-take-gate-note">
+                    Render runs a final backend preflight for this shot and stops before spending anything if the shot is blocked.
+                  </p>
                   {storyboardBlueprint && storyboardBlueprint.blueprint.status !== 'approved' && <p className="mt-2 text-xs text-amber-200/80">Your storyboard is still a draft. Return to step 2 to review and approve it.</p>}
                 </div>
               </section>
@@ -2502,7 +3158,11 @@ export default function PrevisRoom() {
                         <div className="aspect-video bg-black/30">{take.videoUrl ? <video src={take.videoUrl} className="h-full w-full object-contain" muted playsInline /> : <div className="flex h-full items-center justify-center"><Camera size={16} className="text-zinc-600" /></div>}</div>
                         <span className="flex flex-wrap items-center justify-between gap-1 px-2 py-2 text-xs text-zinc-200">Take {take.take_number}{activeTakeNumber === take.take_number && <span className="text-[10px] text-amber-200">Previewing</span>}</span>
                       </button>
-                      {take.jobId && <button type="button" onClick={() => handleDeleteRender(take.jobId!)} className="text-[11px] text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${take.take_number}`}>Delete take</button>}
+                      {take.jobId && (confirmDeleteKey === `cancel:${take.jobId}`
+                        ? <button type="button" onClick={() => void handleCancelAndDeleteRender(take.jobId!)} className="text-[11px] text-amber-200 hover:text-amber-100" aria-label="Cancel rendering and delete take">Rendering — cancel & delete?</button>
+                        : confirmDeleteKey === `take:${take.jobId}`
+                        ? <button type="button" onClick={() => void handleDeleteRender(take.jobId!)} className="text-[11px] text-rose-300 hover:text-rose-200" aria-label={`Confirm delete take ${take.take_number}`}>Confirm delete?</button>
+                        : <button type="button" onClick={() => armDelete(`take:${take.jobId!}`)} className="text-[11px] text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${take.take_number}`}>Delete take</button>)}
                     </div>)}
                   </div> : <div className="mt-3 rounded-md border border-dashed border-white/15 p-4 text-xs leading-relaxed text-zinc-400">No takes for this shot yet. Render a take in step 3, then return here to review it.</div>}
                 </div>
@@ -2569,13 +3229,22 @@ export default function PrevisRoom() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeleteRender(entry.jobId)}
+                        onClick={() => armDelete(`hist:${entry.jobId}`)}
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-rose-400 hover:bg-white/5 transition-all"
                         aria-label={`Delete render ${entry.sceneName}`}
                         title="Delete this render"
                       >
                         <X size={12} />
                       </button>
+                      {(confirmDeleteKey === `hist:${entry.jobId}` || confirmDeleteKey === `take:${entry.jobId}` || confirmDeleteKey === `cancel:${entry.jobId}`) && (
+                        <button
+                          type="button"
+                          onClick={() => confirmDeleteKey === `cancel:${entry.jobId}` ? void handleCancelAndDeleteRender(entry.jobId) : void handleDeleteRender(entry.jobId)}
+                          className="mt-1 flex w-full items-center justify-center rounded border border-rose-400/40 px-2 py-1 text-[10px] text-rose-300 hover:bg-rose-500/10"
+                        >
+                          {confirmDeleteKey === `cancel:${entry.jobId}` ? 'Rendering — cancel & delete?' : `Confirm delete ${entry.sceneName}?`}
+                        </button>
+                      )}
                       {entry.status === 'complete' && entry.hasPromptSlots && (
                         <button
                           type="button"
@@ -2628,25 +3297,40 @@ export default function PrevisRoom() {
                     style={{ color: 'var(--color-on-surface)' }}
                   />
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => void handleGenerateScenePipeline()}
-                  disabled={
-                    !selectedSceneId
-                    || !effectiveProjectId
-                    || scenePipelineRunning
-                    || !canGeneratePrevisScenePipeline(sceneScoreMode, manualScorePath)
-                  }
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{
-                    borderColor: 'rgba(34,211,238,0.35)',
-                    color: 'var(--color-primary)',
-                    background: 'rgba(34,211,238,0.08)',
-                  }}
-                >
-                  {scenePipelineRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                  {scenePipelineRunning ? 'Generating' : 'Generate new scene footage'}
-                </button>
+                {deskConfirmedBindings && Object.keys(deskConfirmedBindings).length > 0 && (
+                  <p data-testid="desk-confirmed-bindings" role="status" className="rounded-md border border-emerald-300/25 bg-emerald-500/5 px-3 py-2 text-[11px] leading-relaxed text-emerald-200">
+                    Desk-confirmed reference binding{Object.keys(deskConfirmedBindings).length === 1 ? '' : 's'} carried for {Object.keys(deskConfirmedBindings).join(', ')} — the server re-verifies {Object.keys(deskConfirmedBindings).length === 1 ? 'it' : 'them'} at submission. If references changed since confirmation, generation is rejected and nothing renders.
+                  </p>
+                )}
+                {serverConfirmedDigestMap && Object.keys(serverConfirmedDigestMap).length > 0 && (
+                  <p data-testid="server-binding-confirmations" role="status" className="rounded-md border border-emerald-300/25 bg-emerald-500/5 px-3 py-2 text-[11px] leading-relaxed text-emerald-200">
+                    Durable confirmation{Object.keys(serverConfirmedDigestMap).length === 1 ? '' : 's'} recovered for {Object.keys(serverConfirmedDigestMap).join(', ')} — revalidated against current bindings and restored after reload.
+                  </p>
+                )}
+                {!confirmationGate && (
+                  <p data-testid="server-confirmation-warning" role="alert" className="rounded-md border border-amber-300/30 bg-amber-300/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
+                    The durable reference-binding confirmation cannot be verified right now. Generation stays disabled until the confirmation is recovered and current — resolve and confirm again on the Production Desk if needed.
+                  </p>
+                )}
+                {bindingRejection && (
+                  <div data-testid="binding-confirmation-rejection" role="alert" className="rounded-md border border-amber-300/30 bg-amber-300/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
+                    <p className="font-medium text-amber-200">Generation stopped: the confirmed reference binding is stale or missing.</p>
+                    <p className="mt-1 break-words text-amber-200/80">{bindingRejection}</p>
+                    <Link className="mt-1 inline-block text-cyan-200" to={withProductionContext('/studio/production-desk', { projectId: effectiveProjectId })}>Resolve and confirm again on the Production Desk</Link>
+                  </div>
+                )}
+                {effectiveProjectId && selectedSceneId && (
+                  <GenerationReadinessPanel
+                    projectId={effectiveProjectId}
+                    sceneId={selectedSceneId}
+                    provider={renderProvider || undefined}
+                    renderProviderLabel={renderProviderOptions.find((option) => option.value === renderProvider)?.label}
+                    onGenerate={() => void handleGenerateScenePipeline()}
+                    generateBusy={scenePipelineRunning}
+                    extraGenerateGate={canGeneratePrevisScenePipeline(sceneScoreMode, manualScorePath) && confirmationGate}
+                    revision={preflightRevision}
+                  />
+                )}
                 {scenePipelineResult || latestScenePipelineAssembly ? (
                   <div className="space-y-1 text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
                     <div>Status: {scenePipelineResult?.status || latestScenePipelineAssembly?.status || 'saved'}</div>
@@ -2684,7 +3368,7 @@ export default function PrevisRoom() {
             sceneContext={canonicalSceneContext}
             surface="previs"
             renderProvider={renderProvider || undefined}
-            renderProviderLabel={RENDER_PROVIDERS.find((option) => option.value === renderProvider)?.label}
+            renderProviderLabel={renderProviderOptions.find((option) => option.value === renderProvider)?.label}
           />
         ) : null}
 

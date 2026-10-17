@@ -29,6 +29,7 @@ import VoicePicker from '../components/VoicePicker'
 import { useStudio } from '../context/StudioContext'
 import { resolveActiveProjectId, withProductionContext } from '../lib/projectContext'
 import { createSceneDraftBuffer } from '../lib/sceneDrafts'
+import { decideRoomHandoff, decideSceneSwitch, shouldFollowSceneLink } from './sceneSwitchGuard'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
 import WritersDebateModal from '../components/WritersDebateModal'
 import { PageScene } from '../rooms/ThePage'
@@ -112,7 +113,7 @@ export default function WritersRoom() {
   const [searchParams, setSearchParams] = useSearchParams()
   const queryProjectId = searchParams.get('project_id') || ''
   const querySceneId = searchParams.get('scene') || searchParams.get('scene_id') || ''
-  const { activeProjectId, activeProject, loadProject } = useStudio()
+  const { activeProjectId, activeProject, loadProject, createJob, submitJob } = useStudio()
   const effectiveProjectId = resolveActiveProjectId({ queryProjectId, routeProjectId: projectId, contextProjectId: activeProjectId })
   const currentProjectRef = useRef(effectiveProjectId)
   const [editorProjectId, setEditorProjectId] = useState('')
@@ -124,9 +125,12 @@ export default function WritersRoom() {
   const [success, setSuccess] = useState('')
   const [backendHealthy, setBackendHealthy] = useState(true)
   const [healthCheckLoading, setHealthCheckLoading] = useState(false)
+  const [generationLoading, setGenerationLoading] = useState(false)
 
   // ── Editor state ──────────────────────────────────────────────────────────
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null)
+  const activeSceneIdRef = useRef<string | null>(null)
+  const lastObservedQuerySceneIdRef = useRef('')
   const [scriptText, setScriptText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
@@ -231,6 +235,7 @@ export default function WritersRoom() {
   useEffect(() => {
     currentProjectRef.current = effectiveProjectId
     setScenes([])
+    activeSceneIdRef.current = null
     setActiveSceneId(null)
     setScriptText('')
     setEditorProjectId('')
@@ -285,14 +290,21 @@ export default function WritersRoom() {
         setError(result.error)
       } else {
         setScenes(result.scenes)
-        const selected = result.scenes.find((scene) => scene.scene_id === (querySceneId || activeSceneId))
-          || (!querySceneId ? result.scenes[0] : undefined)
+        // Prefer the current URL/state selection over the first row. The
+        // loader can finish after a user click (or run again during a data
+        // refresh), so its closure must not reapply the initial scene.
+        const currentSelectedSceneId = activeSceneIdRef.current
+        const requestedSceneId = currentSelectedSceneId || querySceneId || activeSceneId
+        const selected = result.scenes.find((scene) => scene.scene_id === requestedSceneId)
+          || (!currentSelectedSceneId && !requestedSceneId ? result.scenes[0] : undefined)
         if (querySceneId && !selected) {
+          activeSceneIdRef.current = null
           setActiveSceneId(null)
           setScriptText('')
           setError('The linked scene is not available in this film. Select a scene to continue.')
-        } else if (selected && (editorProjectId !== effectiveProjectId || !activeSceneId || activeSceneId !== selected.scene_id || !isDirty)) {
+        } else if (selected && (editorProjectId !== effectiveProjectId || !currentSelectedSceneId || currentSelectedSceneId !== selected.scene_id || !isDirty)) {
           const draft = scriptDrafts.read(effectiveProjectId, selected.scene_id)
+          activeSceneIdRef.current = selected.scene_id
           setActiveSceneId(selected.scene_id)
           setEditorProjectId(effectiveProjectId)
           setScriptText(draft ?? selected.text ?? selected.description ?? '')
@@ -425,27 +437,49 @@ export default function WritersRoom() {
   }, [])
 
   const prepareRoomHandoff = useCallback(async (): Promise<boolean> => {
-    if (characterLooks.busy) {
-      setError('Your character look is still saving. Wait for it to finish before leaving The Page.')
-      return false
-    }
-    if (Object.keys(editDrafts).length > 0) {
-      setError('Save your character profile changes before leaving The Page. Your drafts are still here.')
+    const handoff = decideRoomHandoff({
+      characterLooksBusy: characterLooks.busy,
+      profileDraftCount: Object.keys(editDrafts).length,
+    })
+    if (!handoff.ok) {
+      setError(handoff.message)
       return false
     }
     return saveCurrentScene()
   }, [editDrafts, saveCurrentScene, characterLooks.busy])
 
   const handleSelectScene = useCallback(async (sceneId: string) => {
-    if (sceneId === activeSceneId || isSaving) return
+    const draft = latestEditor.current
+    const pendingScene = draft.dirty && isSaving ? draft.sceneId : ''
     const scene = scenes.find((candidate) => candidate.scene_id === sceneId)
-    if (!scene || !(await saveCurrentScene())) return
+    // An in-flight autosave must never strand the scene selector on the old
+    // scene: when the pending save targets the scene we are leaving, switch
+    // first and let the save finish in the background (the draft buffer is
+    // per-scene, so the right text still lands on the right scene). A save
+    // racing for a different scene keeps the previous guard.
+    // (Decision logic lives in sceneSwitchGuard.ts, with regression tests.)
+    if (!scene || decideSceneSwitch({
+      activeSceneId: activeSceneId ?? '',
+      requestedSceneId: sceneId,
+      isSaving,
+      pendingSaveSceneId: pendingScene,
+      sceneExists: scene !== undefined,
+    }) !== 'switch') return
+    if (!pendingScene && !(await saveCurrentScene())) return
+    if (pendingScene) {
+      // The guard approved this switch because the in-flight save targets
+      // the scene we are leaving. Awaiting saveCurrentScene() here would
+      // dedupe onto that save's promise and silently delay the switch until
+      // it settles — the selector would look dead in the meantime. Switch
+      // now; the per-scene draft buffer lands the text in the background.
+    }
     if (currentProjectRef.current !== effectiveProjectId) return
-    const draft = scriptDrafts.read(effectiveProjectId, sceneId)
+    const sceneDraft = scriptDrafts.read(effectiveProjectId, sceneId)
     setEditorProjectId(effectiveProjectId)
+    activeSceneIdRef.current = sceneId
     setActiveSceneId(sceneId)
-    setScriptText(draft ?? scene.text ?? scene.description ?? '')
-    setIsDirty(draft !== undefined)
+    setScriptText(sceneDraft ?? scene.text ?? scene.description ?? '')
+    setIsDirty(sceneDraft !== undefined)
     setLastSavedAt(null)
     setUndoStack([])
     setRedoStack([])
@@ -458,8 +492,23 @@ export default function WritersRoom() {
   }, [activeSceneId, isSaving, scenes, saveCurrentScene, effectiveProjectId, setSearchParams])
 
   // Read incoming same-room scene links too (including legacy Production Board links).
+  // (Decision logic lives in sceneSwitchGuard.ts, with regression tests.)
   useEffect(() => {
-    if (querySceneId && querySceneId !== activeSceneId && editorProjectId === effectiveProjectId && !isDirty && !isSaving) {
+    const previousQuerySceneId = lastObservedQuerySceneIdRef.current
+    lastObservedQuerySceneIdRef.current = querySceneId
+    // setSearchParams is asynchronous. During the render between a user
+    // selection and the URL update, querySceneId can still contain the old
+    // scene. Treat that unchanged value as stale rather than switching the
+    // editor back to it.
+    if (querySceneId === previousQuerySceneId && activeSceneIdRef.current && querySceneId !== activeSceneIdRef.current) return
+    if (shouldFollowSceneLink({
+      querySceneId,
+      activeSceneId,
+      editorProjectId,
+      effectiveProjectId,
+      isDirty,
+      isSaving,
+    })) {
       void handleSelectScene(querySceneId)
     }
   }, [querySceneId, activeSceneId, editorProjectId, effectiveProjectId, isDirty, isSaving, handleSelectScene])
@@ -540,6 +589,47 @@ export default function WritersRoom() {
     },
     [scriptText],
   )
+
+  // ── Export the current screenplay draft ─────────────────────────────────
+  const handleGenerateScene = useCallback(async () => {
+    if (!effectiveProjectId || !activeSceneId || generationLoading) return
+    setGenerationLoading(true)
+    setError('')
+    setSuccess('')
+    try {
+      const job = await createJob(
+        `${activeSceneId}_shot_001`,
+        undefined,
+        undefined,
+        scriptText,
+        undefined,
+        { require_canonical_references: true },
+      )
+      await submitJob(job.id)
+      setSuccess(`Generation started for ${activeScene?.scene_name || activeSceneId}.`)
+    } catch (caught) {
+      const raw = caught instanceof Error ? caught.message : String(caught)
+      let message = raw
+      try {
+        const structured = JSON.parse(raw) as {
+          message?: unknown
+          metadata?: { recovery_action?: unknown }
+        }
+        if (structured && typeof structured === 'object' && typeof structured.message === 'string') {
+          message = structured.message
+          if (typeof structured.metadata?.recovery_action === 'string' && structured.metadata.recovery_action.trim()) {
+            message += ` ${structured.metadata.recovery_action}`
+          }
+        }
+      } catch {
+        // The API may return a normal provider/network message; keep that
+        // message visible without exposing an implementation stack trace.
+      }
+      setError(message.replace(/\\n?at .*/s, '').trim())
+    } finally {
+      setGenerationLoading(false)
+    }
+  }, [activeScene, activeSceneId, createJob, effectiveProjectId, generationLoading, scriptText, submitJob])
 
   // ── Export the current screenplay draft ─────────────────────────────────
   const handleExport = useCallback(async (format: ExportFormat) => {
@@ -906,6 +996,7 @@ export default function WritersRoom() {
                       </span>
                     )}
                     <button type="button" onClick={() => void saveCurrentScene()} disabled={isSaving || !isDirty} className="inline-flex items-center gap-2 rounded-md border border-amber-200/30 bg-amber-200/5 px-3 py-2 text-xs text-amber-100 disabled:opacity-40"><Save size={13} />{isSaving ? 'Saving…' : 'Save script'}</button>
+                    <button type="button" onClick={() => void handleGenerateScene()} disabled={generationLoading || !activeSceneId || !scriptText.trim()} className="inline-flex items-center gap-2 rounded-md border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-100 disabled:opacity-40">{generationLoading ? 'Generating…' : 'Generate selected scene'}</button>
                     {/* Autosave indicator */}
                     <span
                       className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em]"
