@@ -30,6 +30,12 @@ const WritersRoom = lazy(() => import('./pages/WritersRoom'))
 // eslint-disable-next-line react-refresh/only-export-components
 const ProductionBoard = lazy(() => import('./pages/ProductionBoard'))
 // eslint-disable-next-line react-refresh/only-export-components
+const ProductionDesk = lazy(() => import('./pages/ProductionDesk'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ProductionIntegrityEngine = lazy(() => import('./pages/ProductionIntegrityEngine'))
+// eslint-disable-next-line react-refresh/only-export-components
+const ReferenceSpace = lazy(() => import('./pages/ReferenceSpace'))
+// eslint-disable-next-line react-refresh/only-export-components
 const ScreeningRoom = lazy(() => import('./pages/ScreeningRoom'))
 // eslint-disable-next-line react-refresh/only-export-components
 const ArchiveRoom = lazy(() => import('./pages/ArchiveRoom'))
@@ -41,6 +47,8 @@ const ShareProject = lazy(() => import('./pages/ShareProject'))
 const UniverseGraphPage = lazy(() => import('./pages/UniverseGraphPage'))
 // eslint-disable-next-line react-refresh/only-export-components
 const ThreeTest = lazy(() => import('./pages/ThreeTest').then(m => ({ default: m.ThreeTest })))
+// eslint-disable-next-line react-refresh/only-export-components
+const Lobby3DPage = lazy(() => import('./pages/Lobby3DPage'))
 
 // Loading skeleton for route transitions
 // eslint-disable-next-line react-refresh/only-export-components
@@ -175,6 +183,51 @@ export const APP_ROUTES: AppRoute[] = [
     ],
     icon: <Clapperboard size={14} />,
     element: <LazyRoute><ProductionBoard /></LazyRoute>,
+  },
+  {
+    path: '/studio/production-desk',
+    label: 'Production Desk',
+    title: 'Production Desk',
+    purpose: 'Project-scoped production status, readiness blockers, delivery and acceptance evidence.',
+    placement: 'primary',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Production Desk' }],
+    contextualLinks: [
+      { to: '/studio/production-board', label: 'Open Scenes' },
+      { to: '/studio/screening-room', label: 'Open Screening' },
+      { to: '/studio/universe-graph', label: 'Open Universe' },
+    ],
+    icon: <Clapperboard size={14} />,
+    element: <LazyRoute><ProductionDesk /></LazyRoute>,
+  },
+  {
+    path: '/studio/integrity',
+    label: 'Integrity',
+    title: 'Production Integrity Engine',
+    purpose: 'Read-only verification console for integrity checks, dependencies, provenance, and blockers.',
+    placement: 'primary',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Production Integrity Engine' }],
+    contextualLinks: [
+      { to: '/studio/production-desk', label: 'Open Production Desk' },
+      { to: '/studio/production-board', label: 'Open Scenes' },
+      { to: '/studio/screening-room', label: 'Open Screening' },
+    ],
+    icon: <Clapperboard size={14} />,
+    element: <LazyRoute><ProductionIntegrityEngine /></LazyRoute>,
+  },
+  {
+    path: '/studio/reference-space',
+    label: 'Reference Space',
+    title: 'Reference Space',
+    purpose: 'Visual development workshop for canonical character and setting references.',
+    placement: 'primary',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Reference Space' }],
+    contextualLinks: [
+      { to: '/studio/production-board', label: 'Open Scenes' },
+      { to: '/studio/screening-room', label: 'Open Screening' },
+      { to: '/studio/archive', label: 'Open the Vault' },
+    ],
+    icon: <Clapperboard size={14} />,
+    element: <LazyRoute><ReferenceSpace /></LazyRoute>,
   },
   {
     path: '/studio/screening-room',
@@ -337,6 +390,21 @@ export const APP_ROUTES: AppRoute[] = [
     purpose: 'Isolated test to verify R3F Canvas rendering.',
     placement: 'hidden-system',
     element: <LazyRoute><ThreeTest /></LazyRoute>,
+  },
+  {
+    path: '/studio/lobby-3d',
+    label: '3D Lobby',
+    title: '3D Studio Lobby',
+    purpose: 'Atmospheric spatial hub routing into the existing 2D studio rooms.',
+    placement: 'hidden-system',
+    breadcrumbs: [{ label: 'Studio', to: '/studio' }, { label: '3D Lobby' }],
+    contextualLinks: [
+      { to: '/studio/lobby', label: 'Open Home' },
+      { to: '/studio/production-desk', label: 'Open Production Desk' },
+      { to: '/studio/previs', label: 'Open Previs Bay' },
+    ],
+    icon: <Home size={14} />,
+    element: <LazyRoute><Lobby3DPage /></LazyRoute>,
   },
   {
     path: '/studio/dashboard',

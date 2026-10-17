@@ -2,7 +2,7 @@ import StudioShell from '../components/StudioShell'
 import { lazyLoad } from '../components/LazyLoad'
 import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Plus, Film, Trash2, X } from 'lucide-react'
+import { Plus, Film, Trash2, X, Box } from 'lucide-react'
 import { useStudio } from '../context/StudioContext'
 import { createProject, deleteProject, listProjects, type PersistedProjectState } from '../lib/studioApi'
 
@@ -273,12 +273,25 @@ export default function StudioLobby() {
 
           {/* Room Directory */}
           <section className="cinematic-panel p-6">
-            <h2 className="text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100 mb-4">
-              Room Directory
-            </h2>
-            <p className="text-sm text-zinc-400 mb-6">
-              Navigate to different areas of the studio
-            </p>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold uppercase tracking-[0.14em] text-zinc-100">
+                  Room Directory
+                </h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Navigate to different areas of the studio
+                </p>
+              </div>
+              <Link
+                to="/studio/lobby-3d"
+                data-testid="enter-3d-lobby"
+                className="inline-flex items-center gap-2 rounded-full border border-amber-200/30 bg-amber-400/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-100 no-underline shadow-[0_0_18px_rgba(214,169,92,0.18)] backdrop-blur-md transition-all duration-200 hover:border-amber-200/60 hover:bg-amber-400/20 hover:shadow-[0_0_26px_rgba(214,169,92,0.32)]"
+              >
+                <Box size={14} />
+                3D Studio Lobby
+              </Link>
+            </div>
+            <div className="mb-6" />
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {[
                 { title: "Writer's Room", desc: 'Draft and manage your script', to: '/studio/writers-room', color: 'cyan' },
