@@ -802,6 +802,20 @@ def get_generation_preflight(
         shot_manifest=batch.get("manifest"),
         expected_digests=None,
     )
+    # D4: storyboard image-prompt render-readiness (read-only, advisory).
+    # Shows which shots are not render-ready for Runway images and why.
+    try:
+        from app.services.storyboard_blueprint_service import (
+            storyboard_blueprint_service,
+        )
+
+        _detail = storyboard_blueprint_service.get_blueprint_detail(
+            project_id=batch.get("project_id") or project_id,
+            scene_id=batch.get("scene_id") or scene_id,
+        )
+        image_prompt_readiness = _detail.get("image_prompt_gate") or {}
+    except Exception:
+        image_prompt_readiness = {"approved": False, "not_ready": [], "message": "", "available": False}
     return {
         "project_id": batch.get("project_id"),
         "scene_id": batch.get("scene_id"),
@@ -813,6 +827,7 @@ def get_generation_preflight(
         "cost_estimate": batch.get("cost_estimate"),
         "prepared_snapshot_id": batch.get("prepared_snapshot_id"),
         "authorization": authorization,
+        "image_prompt_readiness": image_prompt_readiness,
     }
 
 

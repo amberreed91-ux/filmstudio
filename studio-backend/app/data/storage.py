@@ -3748,6 +3748,45 @@ class DatabaseStorage:
                 CREATE INDEX IF NOT EXISTS idx_shot_confirmations_project_scene
                     ON shot_reference_confirmations(project_id, scene_id);
             """),
+            (69, "D4: per-shot Runway image prompts beside canonical prompts", """
+                CREATE TABLE IF NOT EXISTS storyboard_image_prompts (
+                    storyboard_shot_id TEXT PRIMARY KEY,
+                    blueprint_id TEXT NOT NULL,
+                    version_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL,
+                    shot_id TEXT NOT NULL,
+                    source_prompt_sha256 TEXT NOT NULL,
+                    image_prompt TEXT NOT NULL,
+                    image_prompt_sha256 TEXT NOT NULL,
+                    origin TEXT NOT NULL DEFAULT 'compactor'
+                        CHECK (origin IN ('compactor', 'human')),
+                    compactor_version TEXT NOT NULL DEFAULT '',
+                    rules_applied_json TEXT NOT NULL DEFAULT '[]',
+                    dropped_segments_json TEXT NOT NULL DEFAULT '[]',
+                    canonical_utf16 INTEGER NOT NULL DEFAULT 0,
+                    utf16_length INTEGER NOT NULL DEFAULT 0,
+                    chars_removed INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'proposed'
+                        CHECK (status IN ('proposed', 'approved')),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    approved_at TEXT,
+                    approved_by TEXT NOT NULL DEFAULT '',
+                    CHECK (storyboard_shot_id != ''),
+                    CHECK (blueprint_id != ''),
+                    CHECK (version_id != ''),
+                    CHECK (project_id != ''),
+                    CHECK (scene_id != ''),
+                    CHECK (shot_id != '')
+                );
+                CREATE INDEX IF NOT EXISTS idx_image_prompts_blueprint
+                    ON storyboard_image_prompts(blueprint_id);
+                CREATE INDEX IF NOT EXISTS idx_image_prompts_version
+                    ON storyboard_image_prompts(version_id);
+                CREATE INDEX IF NOT EXISTS idx_image_prompts_project_scene
+                    ON storyboard_image_prompts(project_id, scene_id);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -11106,6 +11145,127 @@ class DatabaseStorage:
             cursor.execute("SELECT * FROM storyboard_shots WHERE storyboard_shot_id = ?", (storyboard_shot_id,))
             row = cursor.fetchone()
             return self._row_to_storyboard_shot(row) if row else None
+
+    # ------------------------------------------------------------------
+    # D4: per-shot Runway image prompts (additive; board rows untouched)
+    # ------------------------------------------------------------------
+
+    def _ensure_image_prompts_table(self, cursor: Any) -> None:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS storyboard_image_prompts (
+                storyboard_shot_id TEXT PRIMARY KEY,
+                blueprint_id TEXT NOT NULL,
+                version_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                scene_id TEXT NOT NULL,
+                shot_id TEXT NOT NULL,
+                source_prompt_sha256 TEXT NOT NULL,
+                image_prompt TEXT NOT NULL,
+                image_prompt_sha256 TEXT NOT NULL,
+                origin TEXT NOT NULL DEFAULT 'compactor',
+                compactor_version TEXT NOT NULL DEFAULT '',
+                rules_applied_json TEXT NOT NULL DEFAULT '[]',
+                dropped_segments_json TEXT NOT NULL DEFAULT '[]',
+                canonical_utf16 INTEGER NOT NULL DEFAULT 0,
+                utf16_length INTEGER NOT NULL DEFAULT 0,
+                chars_removed INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'proposed',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                approved_at TEXT,
+                approved_by TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+
+    def save_storyboard_image_prompt(self, record: dict[str, Any]) -> dict[str, Any]:
+        from datetime import datetime
+
+        def _write() -> None:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                self._ensure_image_prompts_table(cursor)
+                now = datetime.now().isoformat()
+                cursor.execute(
+                    """
+                    INSERT INTO storyboard_image_prompts (
+                        storyboard_shot_id, blueprint_id, version_id, project_id, scene_id,
+                        shot_id, source_prompt_sha256, image_prompt, image_prompt_sha256,
+                        origin, compactor_version, rules_applied_json, dropped_segments_json,
+                        canonical_utf16, utf16_length, chars_removed, status,
+                        created_at, updated_at, approved_at, approved_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(storyboard_shot_id) DO UPDATE SET
+                        blueprint_id = excluded.blueprint_id,
+                        version_id = excluded.version_id,
+                        project_id = excluded.project_id,
+                        scene_id = excluded.scene_id,
+                        shot_id = excluded.shot_id,
+                        source_prompt_sha256 = excluded.source_prompt_sha256,
+                        image_prompt = excluded.image_prompt,
+                        image_prompt_sha256 = excluded.image_prompt_sha256,
+                        origin = excluded.origin,
+                        compactor_version = excluded.compactor_version,
+                        rules_applied_json = excluded.rules_applied_json,
+                        dropped_segments_json = excluded.dropped_segments_json,
+                        canonical_utf16 = excluded.canonical_utf16,
+                        utf16_length = excluded.utf16_length,
+                        chars_removed = excluded.chars_removed,
+                        status = excluded.status,
+                        updated_at = excluded.updated_at,
+                        approved_at = excluded.approved_at,
+                        approved_by = excluded.approved_by
+                    """,
+                    (
+                        record["storyboard_shot_id"],
+                        record["blueprint_id"],
+                        record["version_id"],
+                        record["project_id"],
+                        record["scene_id"],
+                        record["shot_id"],
+                        record["source_prompt_sha256"],
+                        record["image_prompt"],
+                        record["image_prompt_sha256"],
+                        record.get("origin", "compactor"),
+                        record.get("compactor_version", ""),
+                        record.get("rules_applied_json", "[]"),
+                        record.get("dropped_segments_json", "[]"),
+                        int(record.get("canonical_utf16", 0)),
+                        int(record.get("utf16_length", 0)),
+                        int(record.get("chars_removed", 0)),
+                        record.get("status", "proposed"),
+                        record.get("created_at") or now,
+                        record.get("updated_at") or now,
+                        record.get("approved_at"),
+                        record.get("approved_by", ""),
+                    ),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_storyboard_image_prompt", _write)
+        return record
+
+    def get_storyboard_image_prompt(self, storyboard_shot_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            self._ensure_image_prompts_table(cursor)
+            cursor.execute(
+                "SELECT * FROM storyboard_image_prompts WHERE storyboard_shot_id = ?",
+                (storyboard_shot_id,),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def list_storyboard_image_prompts(self, blueprint_id: str, version_id: str) -> list[dict[str, Any]]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            self._ensure_image_prompts_table(cursor)
+            cursor.execute(
+                "SELECT * FROM storyboard_image_prompts WHERE blueprint_id = ? AND version_id = ?",
+                (blueprint_id, version_id),
+            )
+            return [dict(row) for row in cursor.fetchall()]
 
     def get_shot_visual_plan(self, project_id: str, shot_id: str) -> dict:
         """Return a shot's reviewed visual-plan staging as a plain dict.
