@@ -127,6 +127,7 @@ class ProductionQueueItem(BaseModel):
     lease_owner: str | None = None
     lease_acquired_at: str | None = None
     lease_expires_at: str | None = None
+    lease_generation: int = 0
     next_run_at: str | None = None
     next_poll_at: str | None = None
     created_at: str = Field(default_factory=utc_now_iso)
@@ -140,6 +141,7 @@ class ProductionQueueAttempt(BaseModel):
     queue_item_id: str
     attempt_number: int
     lease_owner: str
+    lease_generation: int = 0
     status: str
     started_at: str = Field(default_factory=utc_now_iso)
     completed_at: str | None = None

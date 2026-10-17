@@ -290,9 +290,14 @@ def _resolve_scene_text(project_id: str, scene_id: str) -> str:
 
 
 def _is_placeholder_dialogue_line(text: str) -> bool:
-    """Detect scaffold dialogue rows that should not override screenplay text."""
-    normalized = " ".join(str(text or "").strip().lower().split())
-    return normalized.endswith("carries the beat with restrained subtext.")
+    """Detect scaffold dialogue rows that should not override screenplay text.
+
+    Delegates to the shared dialogue-authority detector so every consumer
+    applies the same rule (single dialogue authority, no divergent heuristics).
+    """
+    from app.services.dialogue_authority import is_placeholder_dialogue
+
+    return is_placeholder_dialogue(text)
 
 
 def _resolve_scene_dialogue_lines(project_id: str, scene_id: str) -> list[dict[str, str]] | None:
@@ -304,30 +309,31 @@ def _resolve_scene_dialogue_lines(project_id: str, scene_id: str) -> list[dict[s
         if not project or not isinstance(project, dict):
             return None
         summary = project.get("execution_summary") or {}
-        raw_lines = summary.get("dialogue_lines")
-        if not isinstance(raw_lines, list):
-            return None
+        scene = next(
+            (
+                row for row in (summary.get("scenes") or project.get("scenes") or [])
+                if isinstance(row, dict) and str(row.get("scene_id") or "") == scene_id
+            ),
+            None,
+        )
+        from app.services.dialogue_authority import canonical_scene_dialogue_for_audio
 
+        canonical_lines = canonical_scene_dialogue_for_audio(
+            project,
+            scene,
+            scene_id,
+            characters=(scene.get("characters") if isinstance(scene, dict) and isinstance(scene.get("characters"), list) else None),
+        ) or []
         resolved: list[dict[str, str]] = []
-        for line in raw_lines:
-            if not isinstance(line, dict) or line.get("scene_id") != scene_id:
-                continue
-            text = str(line.get("text") or "").strip()
+        for line in canonical_lines:
+            text = str(line.get("text") or line.get("line_text") or line.get("dialogue") or "").strip()
             if not text:
                 continue
-            if _is_placeholder_dialogue_line(text):
-                continue
-            character = str(
-                line.get("character_name")
-                or line.get("character")
-                or line.get("character_id")
-                or "Narrator"
-            ).strip()
             resolved_line = {
-                "character": character,
+                "character": str(line.get("character_name") or line.get("character") or line.get("character_id") or "Narrator").strip(),
                 "text": text,
             }
-            for key in ("line_id", "emotional_subtext", "pacing_tag", "voice_style_hint"):
+            for key in ("line_id", "emotional_subtext", "pacing_tag", "voice_style_hint", "ssml_text"):
                 if line.get(key):
                     resolved_line[key] = str(line[key])
             resolved.append(resolved_line)
@@ -417,7 +423,14 @@ async def generate_scene_audio_pipeline(
     # Resolve sound advisory from scene storage, then apply overrides
     advisory = _resolve_sound_advisory(project_id, scene_id)
     scene_text = _resolve_scene_text(project_id, scene_id)
-    dialogue_lines = _resolve_scene_dialogue_lines(project_id, scene_id)
+    dialogue_lines = _resolve_scene_dialogue_lines(project_id, scene_id) or []
+    from app.services.generation_contract import freeze_dialogue_handoff
+
+    dialogue_handoff = freeze_dialogue_handoff(
+        scene_id=scene_id,
+        shot_id=scene_id,
+        lines=dialogue_lines,
+    )
     characters = scene.get("characters") if isinstance(scene.get("characters"), list) else None
     dialogue_context = _resolve_scene_dialogue_context(scene)
     
@@ -447,6 +460,22 @@ async def generate_scene_audio_pipeline(
                 project_id, scene_id,
             )
     
+    if scene_text.strip() and not dialogue_handoff["payload"]["silence"]:
+        from app.services.dialogue_authority import canonical_dialogue_lines
+
+        canonical_text_lines = canonical_dialogue_lines(
+            scene,
+            scene_id=scene_id,
+            characters=characters,
+        )
+        if canonical_text_lines and canonical_text_lines != dialogue_handoff["payload"]["lines"]:
+            dialogue_handoff = freeze_dialogue_handoff(
+                scene_id=scene_id,
+                shot_id=scene_id,
+                lines=canonical_text_lines,
+            )
+            dialogue_lines = dialogue_handoff["payload"]["lines"]
+
     logger.info(
         "AUDIO_PIPELINE_GENERATE | project=%s scene=%s mock=%s merge=%s",
         project_id, scene_id, service.capabilities()["mock_mode"], body.merge_onto_video,
@@ -456,7 +485,7 @@ async def generate_scene_audio_pipeline(
         result = await service.generate_full_pipeline(
             scene_id=scene_id,
             project_id=project_id,
-            scene_text=scene_text,
+            scene_text=scene_text if dialogue_handoff["payload"]["lines"] else "",
             mood=mood,
             score_notes=score_notes,
             ambient_notes=ambient_notes,
@@ -467,6 +496,10 @@ async def generate_scene_audio_pipeline(
             estimated_duration_seconds=estimated_duration,
             characters=characters,
             dialogue_lines=dialogue_lines,
+            dialogue_handoff=dialogue_handoff,
+            narrative_audio=True,
+            dialogue_scene_id=scene_id,
+            dialogue_shot_id=scene_id,
             scene_context=dialogue_context,
         )
         

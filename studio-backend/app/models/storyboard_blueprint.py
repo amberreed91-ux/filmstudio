@@ -81,6 +81,8 @@ class StoryboardShotVisualPlan(BaseModel):
     camera_angle: str = ""
     camera_movement: str = ""
     lens_language: str = ""
+    focal_length_mm: int | None = None
+    aperture: str = ""
     blocking: str = ""
     composition: str = ""
     lighting: str = ""

@@ -161,9 +161,18 @@ class ChatResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _get_llm_callable():
-    """Import through the compatibility seam so route tests can patch it."""
-    from app.routes.co_director_chat import _call_llm as _llm
-    return _llm
+    """Import through the compatibility seam so route tests can patch it.
+
+    The Co-Director intelligence chain is resolved through the existing chat
+    provider abstraction: Muse Glimmer 30B (advisory intelligence model in the
+    centralized model registry) is the primary chat model when its credential
+    is configured; the pre-existing configured client stays the fallback. The
+    returned callable is still an ``LLMCallable``, so service-level and route
+    tests keep every existing patch point.
+    """
+    from app.routes.co_director_chat import _get_co_director_llm_callable
+
+    return _get_co_director_llm_callable()
 
 
 # ---------------------------------------------------------------------------

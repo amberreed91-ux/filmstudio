@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Body, HTTPException, File, Form, UploadFile
+from fastapi import APIRouter, Body, HTTPException, File, Form, UploadFile, Depends
 from pydantic import BaseModel, Field
 
 from app.services.project_store import project_store
@@ -63,6 +63,7 @@ from app.services.stability import (
 )
 from app.services.project_route_dependencies import configure_project_route_dependencies
 from app.services.character_profile_service import (
+    CharacterProfileService,
     CharacterDescriptorProviderError,
     VALID_CASTING_VOICE_PROVIDERS,
     character_profile_service,
@@ -244,6 +245,10 @@ class GenerateScenePipelinePayload(StitchScenePayload):
     provider: Optional[str] = None
     on_audio_overrun: str = "freeze_last_frame"
     score_ambient_provider: Optional[str] = None
+    prepared_snapshot_id: Optional[str] = None
+    execution_mode: Optional[str] = None
+    source_authority_id: Optional[str] = None
+    expected_reference_binding_digests: Optional[Dict[str, str]] = None
 
 
 class CollaborationSessionPayload(BaseModel):
@@ -377,7 +382,9 @@ def generate_scenes(project_id: str, payload: GenerateScenesPayload):
         raise HTTPException(status_code=404, detail="Project not found")
 
     parser = ScriptParser()
-    summary = parser.build_script_breakdown_bundle(payload.script_text or "")
+    summary = parser.build_script_breakdown_bundle(
+        {"project_id": project_id, "execution_id": f"generate-scenes-{uuid4().hex}", "script_text": payload.script_text or ""}
+    )
     summary = _ensure_scene_fallback(summary, payload.script_text or "")
 
     # Log each scene that was parsed
@@ -641,7 +648,18 @@ def stitch_scene(project_id: str, scene_id: str, payload: StitchScenePayload):
 @router.post("/projects/{project_id}/scenes/{scene_id}/pipeline/generate")
 async def generate_scene_pipeline(project_id: str, scene_id: str, payload: GenerateScenePipelinePayload):
     timer = start_timer()
-    current = _load_project_from_store(project_id)
+    protected_mode = payload.execution_mode == "SCENE_002_CONTRACT_ONLY"
+    if payload.execution_mode not in (None, "SCENE_002_CONTRACT_ONLY"):
+        raise HTTPException(status_code=422, detail="Unsupported scene execution mode")
+    if protected_mode and (scene_id != "scene_002" or not payload.prepared_snapshot_id or not payload.source_authority_id):
+        raise HTTPException(status_code=422, detail="Scene 002 contract-only execution requires an authority and prepared snapshot")
+    try:
+        current = (
+            project_persistence_service.load_readonly_existing(project_id)
+            if protected_mode else _load_project_from_store(project_id)
+        )
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
     if current is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -671,6 +689,16 @@ async def generate_scene_pipeline(project_id: str, scene_id: str, payload: Gener
             project=current,
             provider=payload.provider,
             overwrite=bool(payload.overwrite),
+            prepared_snapshot_id=payload.prepared_snapshot_id,
+            execution_mode=payload.execution_mode,
+            source_authority_id=payload.source_authority_id,
+            expected_reference_binding_digests=payload.expected_reference_binding_digests,
+            # R4.2: the submission entrypoint requires a durable,
+            # project-scoped confirmation per reference-bound shot, revalidated
+            # against current bindings inside the batch preflight. Missing,
+            # stale, mismatched, or unverifiable confirmations fail closed
+            # with zero jobs for the whole batch.
+            require_persisted_confirmation=True,
             on_audio_overrun=payload.on_audio_overrun,
             score_ambient_provider=payload.score_ambient_provider,
             soundtrack_config=SoundtrackConfig(
@@ -684,17 +712,18 @@ async def generate_scene_pipeline(project_id: str, scene_id: str, payload: Gener
                 loop_to_duration=bool(soundtrack_raw.get("loop_to_duration", True)),
                 style_label=str(soundtrack_raw.get("style_label") or ""),
             ),
-            save_project=lambda updated: _update_project_persisted(
+            save_project=(None if payload.execution_mode == "SCENE_002_CONTRACT_ONLY" else lambda updated: _update_project_persisted(
                 project_id,
                 {"execution_summary": updated.get("execution_summary", {})},
-            ),
+            )),
         )
     except StabilityError as exc:
         raise HTTPException(status_code=400, detail=exc.to_dict())
 
-    updated = _load_project_from_store(project_id)
-    if isinstance(updated, dict):
-        _sync_project_to_canonical_store(updated)
+    if payload.execution_mode != "SCENE_002_CONTRACT_ONLY":
+        updated = _load_project_from_store(project_id)
+        if isinstance(updated, dict):
+            _sync_project_to_canonical_store(updated)
 
     log_stage_event(
         project_id=project_id,
@@ -705,6 +734,86 @@ async def generate_scene_pipeline(project_id: str, scene_id: str, payload: Gener
         extra={"scene_id": scene_id, "overwrite": bool(payload.overwrite)},
     )
     return result
+
+
+@router.get("/projects/{project_id}/scenes/{scene_id}/generation-preflight")
+def get_generation_preflight(
+    project_id: str,
+    scene_id: str,
+    provider: Optional[str] = None,
+    execution_mode: Optional[str] = None,
+    source_authority_id: Optional[str] = None,
+):
+    """Read-only generation preflight for the Studio UI.
+
+    Runs the EXISTING batch pre-flight (SceneProductionPipelineService
+    .prepare_scene_batch) — the same readiness/reference/camera/prompt/cost
+    gate stack the batch generation itself uses — and returns its verdict,
+    per-shot blockers, cost estimate, and deterministic shot manifest.
+
+    This endpoint NEVER creates a render job, never touches a provider, never
+    consumes credits, and never mutates canonical creative state. It answers
+    exactly one question: "Is this scene currently ready to generate, and if
+    not, why?" The backend remains the single source of truth; the UI only
+    displays this result.
+    """
+    timer = start_timer()
+    protected_mode = execution_mode == "SCENE_002_CONTRACT_ONLY"
+    if execution_mode not in (None, "SCENE_002_CONTRACT_ONLY"):
+        raise HTTPException(status_code=422, detail="Unsupported scene execution mode")
+    if protected_mode and (scene_id != "scene_002" or not source_authority_id or provider != "runway_router"):
+        raise HTTPException(status_code=422, detail="Protected Scene 002 preparation requires explicit authority and runway_router")
+    try:
+        current = (
+            project_persistence_service.load_readonly_existing(project_id)
+            if protected_mode else _load_project_from_store(project_id)
+        )
+        if current is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        batch = scene_production_pipeline_service.prepare_scene_batch(
+            project_id=project_id,
+            scene_id=scene_id,
+            project=current,
+            provider=provider,
+            execution_mode=execution_mode,
+            source_authority_id=source_authority_id,
+        )
+    except HTTPException:
+        raise
+    except StabilityError as exc:
+        status_code = 404 if isinstance(exc, StateError) else 400
+        raise HTTPException(status_code=status_code, detail=exc.to_dict())
+    log_stage_event(
+        project_id=project_id,
+        job_id=None,
+        provider=provider,
+        stage="generation_preflight",
+        duration_ms=elapsed_ms(timer),
+        extra={"scene_id": scene_id, "ready": bool(batch.get("ready"))},
+    )
+    # Batch authorization preflight (R4.1A): the same all-or-nothing gate
+    # generate_scene enforces before job creation, evaluated read-only here
+    # without digest expectations (the Desk supplies those at submit time).
+    # Still read-only: no jobs, no providers, no state changes.
+    authorization = scene_production_pipeline_service.preflight_batch_authorization(
+        project_id=batch.get("project_id") or project_id,
+        scene_id=batch.get("scene_id") or scene_id,
+        entries=batch.get("entries") or [],
+        shot_manifest=batch.get("manifest"),
+        expected_digests=None,
+    )
+    return {
+        "project_id": batch.get("project_id"),
+        "scene_id": batch.get("scene_id"),
+        "ready": bool(batch.get("ready")),
+        "blockers": batch.get("blockers") or [],
+        "shot_count": len(batch.get("entries") or []),
+        "entries": batch.get("entries") or [],
+        "manifest": batch.get("manifest"),
+        "cost_estimate": batch.get("cost_estimate"),
+        "prepared_snapshot_id": batch.get("prepared_snapshot_id"),
+        "authorization": authorization,
+    }
 
 
 @router.post("/projects/{project_id}/collaboration/session")
@@ -2354,12 +2463,37 @@ def update_final_short_film_package_status(package_id: str, payload: UpdatePacka
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _dev_routes_enabled() -> bool:
+    """Environment gate for /dev/ routes: explicit opt-in only.
+
+    Production (and any environment without the flag) refuses dev seeding
+    with 403; local demos/tests set STUDIO_ALLOW_DEV_ROUTES=1."""
+    return os.environ.get("STUDIO_ALLOW_DEV_ROUTES", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
 @router.post("/dev/seed-demo-project")
 def seed_demo_project(
     payload: SeedDemoProjectPayload = Body(default_factory=SeedDemoProjectPayload),
 ):
     """Dev-only deterministic studio project seed for product demos."""
-    return demo_seed_service.seed_demo_project(project_id=payload.project_id)
+    if not _dev_routes_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_type": "authorization_error",
+                "message": "Dev routes are disabled in this environment. Set STUDIO_ALLOW_DEV_ROUTES=1 to enable demo seeding.",
+                "stage": "dev_route_gate",
+            },
+        )
+    try:
+        return demo_seed_service.seed_demo_project(project_id=payload.project_id)
+    except StabilityError as exc:
+        raise HTTPException(
+            status_code={"state_error": 409, "validation_error": 400}.get(exc.error_type, 503),
+            detail=exc.to_dict(),
+        ) from exc
 
 
 # ── Character Descriptions ────────────────────────────────────────────────────
@@ -2402,6 +2536,69 @@ def create_character_skeleton(project_id: str, payload: CharacterSkeletonPayload
         }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+from app.models.character_profile import CharacterProfileImportResponse, CharacterDiscoveryResponse, CharacterReconciliationResponse, CharacterDocumentLibraryResponse
+
+
+def get_character_profile_service() -> CharacterProfileService:
+    return character_profile_service
+
+
+@router.post("/projects/{project_id}/character-reconciliation", response_model=CharacterReconciliationResponse)
+async def reconcile_project_characters(
+    project_id: str,
+    service: CharacterProfileService = Depends(get_character_profile_service),
+):
+    try:
+        return CharacterReconciliationResponse(**service.reconcile_script_cast(project_id))
+    except StabilityError as exc:
+        raise HTTPException(status_code={"state_error": 409, "validation_error": 422}.get(exc.error_type, 503), detail=exc.to_dict()) from exc
+
+
+@router.get("/projects/{project_id}/character-documents/{document_id}/source")
+async def download_character_document(
+    project_id: str, document_id: str,
+    service: CharacterProfileService = Depends(get_character_profile_service),
+):
+    from fastapi.responses import FileResponse
+    try:
+        path, filename = service.character_document_source(project_id, document_id)
+        return FileResponse(path, filename=filename)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/character-documents", response_model=CharacterDocumentLibraryResponse)
+async def get_project_character_documents(
+    project_id: str,
+    service: CharacterProfileService = Depends(get_character_profile_service),
+):
+    return service.character_documents(project_id)
+
+
+@router.get("/projects/{project_id}/character-discovery", response_model=CharacterDiscoveryResponse)
+async def discover_project_characters(
+    project_id: str,
+    service: CharacterProfileService = Depends(get_character_profile_service),
+):
+    return CharacterDiscoveryResponse(**service.discover_characters(project_id))
+
+
+@router.post("/projects/{project_id}/characters/import-profile", response_model=CharacterProfileImportResponse)
+async def import_character_profile(
+    project_id: str,
+    file: UploadFile = File(...),
+    service: CharacterProfileService = Depends(get_character_profile_service),
+):
+    contents = await file.read(2 * 1024 * 1024 + 1)
+    try:
+        characters = await service.import_profile_file(project_id, file.filename or "", contents, multiple=True)
+        return CharacterProfileImportResponse(character=characters[0] if characters else {}, characters=characters)
+    except CharacterDescriptorProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except StabilityError as exc:
+        raise HTTPException(status_code={"state_error": 409, "validation_error": 422}.get(exc.error_type, 503), detail=exc.to_dict()) from exc
 
 
 @router.post("/projects/{project_id}/characters/{character_id}/upload-descriptor")

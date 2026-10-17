@@ -95,3 +95,47 @@ class CharacterProfile(BaseModel):
     movement_style: str = ""
     emotional_behavior: str = ""
     speech_rhythm: str = ""
+
+
+class ImportedCharacterFields(BaseModel):
+    """Editable profile fields accepted from a creator's uploaded document."""
+
+    name: str = Field(min_length=1, max_length=200)
+    age: str = ""
+    look: str = ""
+    energy: str = ""
+    core_wound: str = ""
+    core_desire: str = ""
+    relationship_notes: str = ""
+    visual_prompt_summary: str = ""
+
+
+class CharacterProfileImportResponse(BaseModel):
+    character: dict[str, Any]
+    characters: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CharacterDiscoveryResponse(BaseModel):
+    characters: list[str] = Field(default_factory=list)
+    missing_characters: list[str] = Field(default_factory=list)
+
+
+class CharacterReconciliationResponse(BaseModel):
+    created: int
+    renamed: int
+    duplicates_removed: int
+    needs_review: list[str] = Field(default_factory=list)
+
+
+class CharacterDocumentSource(BaseModel):
+    filename: str
+    sha256: str
+    kind: str
+    entries: int
+
+
+class CharacterDocumentLibraryResponse(BaseModel):
+    profiles: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
+    reference_profiles: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    sources: list[CharacterDocumentSource] = Field(default_factory=list)

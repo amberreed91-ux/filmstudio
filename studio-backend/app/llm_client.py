@@ -259,6 +259,56 @@ async def get_llm_completion_with_fallback(
         )
 
 
+async def get_llm_completion_qwenless_fallback(
+    system_prompt: str,
+    message: str,
+    *,
+    max_tokens: int = 1024,
+) -> tuple[str, str]:
+    """Fallback chain WITHOUT the Qwen/DashScope primary leg.
+
+    The Co-Director chat path uses this: Qwen has been removed from that
+    chain's provider selection, so fallback flows OpenRouter → Groq exactly as
+    ``get_llm_completion_with_fallback`` does after its primary leg fails.
+    Unrelated Studio systems (prompt enhancement, character profiling, emotion
+    analysis, adherence) keep the original Qwen-primary helper unchanged.
+
+    Returns ``(completion_text, provider_used)`` where ``provider_used`` is
+    ``"openrouter"`` or ``"groq"``. Raises ``ProviderError`` when every
+    configured fallback is missing or fails.
+    """
+    settings = get_settings()
+    fallback_errors: dict[str, str] = {}
+    try:
+        if (settings.openrouter_api_key or "").strip():
+            result = await call_openrouter(system_prompt, message, max_tokens=max_tokens)
+            return result, "openrouter"
+        fallback_errors["openrouter"] = "OPENROUTER_API_KEY missing"
+    except Exception as openrouter_exc:
+        fallback_errors["openrouter"] = (
+            f"{type(openrouter_exc).__name__}: {str(openrouter_exc)[:200]}"
+        )
+
+    try:
+        if (settings.groq_api_key or "").strip():
+            result = await call_groq(system_prompt, message, max_tokens=max_tokens)
+            return result, "groq"
+        fallback_errors["groq"] = "GROQ_API_KEY missing"
+    except Exception as groq_exc:
+        fallback_errors["groq"] = f"{type(groq_exc).__name__}: {str(groq_exc)[:200]}"
+
+    raise ProviderError(
+        "All configured LLM providers failed",
+        stage="llm_fallback",
+        metadata={
+            "qwen_error": "disabled_for_co_director",
+            "openrouter_error": fallback_errors.get("openrouter", ""),
+            "groq_error": fallback_errors.get("groq", ""),
+            "fallback_errors": fallback_errors,
+        },
+    )
+
+
 async def call_llm_with_fallback(
     system_prompt: str,
     message: str,

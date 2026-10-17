@@ -9,7 +9,7 @@ import shutil
 logger = logging.getLogger(__name__)
 
 from app.services import render_service
-from app.services.stability import ProviderError
+from app.services.stability import ProviderError, ValidationError
 from app.services.render_maintenance_service import render_maintenance_service
 from app.services.project_store import project_store
 from app.models import ProviderConfig, RenderJobModel
@@ -37,6 +37,7 @@ class AdherenceRetryRequest(BaseModel):
     """Explicit active adherence retry request."""
     max_attempts: int = Field(default=3, ge=1, le=5)
     submission_strategy: str = "combined_reorder_and_fresh_seeds"
+    provider_override: Optional[str] = None
 
 
 class QueueRenderJobRequest(BaseModel):
@@ -198,6 +199,35 @@ def _zero_touch_status_summary(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # Provider management
+@router.get("/models")
+def list_generation_models(provider: Optional[str] = "runway"):
+    """Registry-backed model catalog for the generation UI.
+
+    Returns verified model metadata (capabilities, durations, reference
+    support, published credit rates) — the same source the router and the
+    adapter validate against, so the picker can only offer models that will
+    actually be accepted.
+    """
+    from app.services.model_registry import MODALITY_VIDEO, model_registry
+
+    normalized = (provider or "runway").strip().lower()
+    # Video-generation catalog: scoped to video-modality models so image models
+    # of the same provider (e.g. runway gen4_image, served through the image
+    # provider seam) are never offered as video-generation model choices.
+    # Behavior-preserving for every model registered before the cross-modality
+    # extension (all video models carry modality="video").
+    models = [
+        model.to_dict()
+        for model in model_registry.models_for_provider(normalized)
+        if model.modality == MODALITY_VIDEO
+    ]
+    models.sort(key=lambda m: (m["relative_cost"], m["model_id"]))
+    return {
+        "provider": normalized,
+        "models": models,
+    }
+
+
 @router.get("/providers")
 def list_providers():
     """List all available render providers with status"""
@@ -324,6 +354,8 @@ async def submit_render_job(job_id: str):
     """Submit a render job to the provider"""
     try:
         job = await render_service.submit_job(job_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=409, detail=exc.to_dict()) from exc
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=exc.to_dict()) from exc
     return _job_payload(job)
@@ -348,7 +380,11 @@ async def get_render_job_status(job_id: str):
 @router.delete("/jobs/{job_id}")
 async def delete_render_job(job_id: str):
     """Delete a render job"""
-    result = render_service.delete_job(job_id)
+    from app.services.stability import StabilityError
+    try:
+        result = render_service.delete_job(job_id)
+    except StabilityError as exc:
+        raise HTTPException(status_code=409 if exc.error_type == "state_error" else 503, detail=exc.to_dict()) from exc
     if not result:
         raise HTTPException(status_code=404, detail="Job not found")
     return {"status": "deleted"}
@@ -366,7 +402,10 @@ async def cancel_render_job(job_id: str):
 @router.post("/jobs/{job_id}/retry")
 async def retry_render_job(job_id: str):
     """Retry a failed render job"""
-    job = await render_service.retry_job(job_id)
+    try:
+        job = await render_service.retry_job(job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _job_payload(job)
 
 
@@ -379,6 +418,9 @@ async def retry_render_job_for_adherence(
     job = render_service.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    from app.services.scene002_contract_only import is_contract_only
+    if is_contract_only(job):
+        raise HTTPException(status_code=409, detail="Altered adherence retries are prohibited for Scene 002 contract-only jobs")
     if job.status != "complete":
         raise HTTPException(
             status_code=409,
@@ -403,6 +445,7 @@ async def retry_render_job_for_adherence(
             max_attempts=payload.max_attempts,
             submission_strategy=payload.submission_strategy,
             source_job_id=job.id,
+            provider_override=payload.provider_override,
         )
     except HTTPException:
         raise

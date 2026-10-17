@@ -15,12 +15,21 @@ import shutil
 import os
 
 from app.services.previs_service import previs_service
-from app.models.previs_render import PrevisRenderSettings
+from app.models.previs_render import PrevisRenderSettings, PrevisDurationOptions
 from app.services.stability import PersistenceError, ProviderError, StabilityError, StateError, ValidationError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/previs/duration-options", response_model=PrevisDurationOptions)
+async def get_previs_duration_options(provider: str = "") -> PrevisDurationOptions:
+    try:
+        return previs_service.duration_options(provider)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.to_dict()) from exc
+
 
 # Check FFmpeg availability
 FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
@@ -72,6 +81,36 @@ class ApprovePrevisRequest(BaseModel):
     approved_by: str = "creator"
 
 
+class ApproveAiCameraRequest(BaseModel):
+    """Body for the explicit AI-camera approval action.
+
+    ``approved_by`` records who made the decision (the access middleware has
+    already authenticated them and verified project ownership).
+    ``expected_version_id`` binds the decision to the exact board version the
+    creator saw — a mismatch refuses the operation instead of applying it to
+    another version.
+    """
+    approved_by: str = "creator"
+    expected_version_id: Optional[str] = None
+
+
+# R4.3L (Policy A): the legacy non-canonical previs path rejects Runway-family
+# providers before any job exists. Mirrors the canonical guard structure
+# (_validate_previs_provider in canonical_workflow.py) but scoped to this
+# route only; every other provider value behaves exactly as before.
+LEGACY_PREVIS_RUNWAY_PROVIDERS = frozenset({"runway", "runway_router", "runway_direct"})
+LEGACY_PREVIS_RUNWAY_REJECTION = (
+    "Runway is not used for previs; use simulated previs (instant, no cost). "
+    "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+    "the standalone Previs path cannot authorize a mutable request."
+)
+
+
+def _validate_legacy_previs_provider(provider: str | None) -> None:
+    if provider is not None and str(provider).strip().lower() in LEGACY_PREVIS_RUNWAY_PROVIDERS:
+        raise HTTPException(status_code=422, detail=LEGACY_PREVIS_RUNWAY_REJECTION)
+
+
 def _raise_previs_http(exc: StabilityError) -> None:
     if isinstance(exc, ValidationError):
         status_code = 422
@@ -115,6 +154,10 @@ async def generate_scene_previs(
         shot_number: Shot number within scene (1-based, default 1)
         take_number: Take number for this shot (1-based, default 1)
     """
+    # R4.3L: route-level refusal before any job exists. Placed before the try
+    # so the HTTPException keeps its 422 status (the generic handler below
+    # would otherwise convert it to 500).
+    _validate_legacy_previs_provider(provider)
     try:
         generation_kwargs = {
             "storyboard_shot_id": storyboard_shot_id,
@@ -175,6 +218,44 @@ async def approve_previs_image(
 async def cancel_previs_image(project_id: str, image_id: str) -> PrevisImageResponse:
     try:
         return PrevisImageResponse(**await previs_service.cancel_image(project_id, image_id))
+    except StabilityError as exc:
+        _raise_previs_http(exc)
+
+
+@router.post("/projects/{project_id}/scenes/{scene_id}/camera-approvals/{storyboard_shot_id}")
+def approve_ai_camera_decision(
+    project_id: str,
+    scene_id: str,
+    storyboard_shot_id: str,
+    body: ApproveAiCameraRequest,
+) -> dict:
+    """Creator approval of ONE shot's pending AI camera suggestion.
+
+    Exposes the existing service-level workflow (``PrevisService.approve_ai_camera``
+    — the only AI_SUGGESTED → renderable camera path) over HTTP. Semantics are
+    unchanged by this route; it adds no creative decisions of its own:
+
+    - exactly the one named storyboard shot is touched — never a batch;
+    - the request-scoped project/scene binding is enforced by the service
+      (a shot from another scene or project is not found, not approved);
+    - ``expected_version_id`` (when sent) makes the approval refuse a shot
+      whose board version no longer matches what the creator was shown;
+    - an approved board is immutable, so the approval lands on a NEW draft
+      version — the approved version's shots are never modified;
+    - the decision is stamped with the approver's identity for audit.
+
+    This endpoint never generates images or video, never contacts a provider,
+    and never spends credits. Project-ownership authorization is enforced
+    ahead of the route by the project access middleware (fail-closed).
+    """
+    try:
+        return previs_service.approve_ai_camera(
+            project_id,
+            scene_id,
+            storyboard_shot_id,
+            approved_by=body.approved_by,
+            expected_version_id=body.expected_version_id,
+        )
     except StabilityError as exc:
         _raise_previs_http(exc)
 

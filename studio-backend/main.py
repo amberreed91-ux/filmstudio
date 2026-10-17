@@ -4,6 +4,9 @@ import json
 import time
 import os
 import subprocess
+import sqlite3
+import sys
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,7 +15,33 @@ from dotenv import load_dotenv
 # Ensure .env values are available before importing modules that construct runtime singletons.
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response
+# Raise the soft file-descriptor ceiling before application modules construct
+# their SQLite connection pools. Server processes on macOS can inherit a
+# 256-fd soft limit; once pooled SQLite connections consume it, uvicorn's
+# accept() fails with EMFILE and every incoming request is reset before it
+# can reach ASGI (surfacing to clients as proxy 502 / ECONNRESET).
+try:
+    import resource
+
+    _soft_fd_limit, _hard_fd_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+    _target_fd_limit = (
+        4096
+        if _hard_fd_limit == resource.RLIM_INFINITY
+        else min(4096, _hard_fd_limit)
+    )
+    if _soft_fd_limit < _target_fd_limit:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (_target_fd_limit, _hard_fd_limit))
+        print(
+            f"[FD_LIMIT] soft file-descriptor limit raised {_soft_fd_limit} -> {_target_fd_limit}",
+            flush=True,
+        )
+except Exception:  # noqa: BLE001 — a limit raise must never block startup
+    pass
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.routing import APIRoute
+from pydantic import ValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -48,6 +77,7 @@ from app.routes.audio import router as audio_router
 from app.routes.stitching import router as stitching_router
 from app.routes.export import router as final_export_router
 from app.routes.proactive import router as proactive_router
+from app.routes.visual_training import router as visual_training_router
 from app.routes.compose import router as compose_router
 from app.routes.assembly import router as assembly_router
 from app.routes.emotion_analysis import router as emotion_analysis_router
@@ -145,6 +175,48 @@ async def lifespan(app: FastAPI):
     if settings.backup_enabled:
         task_registry.register("daily-backup", backup.schedule_daily(settings.backup_interval_hours))
 
+    # Recovery lineage guard (added after the 2026-09-27 hard-reset incident):
+    # 1) before ANY startup that follows a detected replace/restore event, pin an
+    #    immutable snapshot of the outgoing database trio;
+    # 2) register the database identity renders will later be verified against.
+    try:
+        from app.services.recovery_lineage_guard import (
+            capture_recovery_snapshot,
+            write_lineage_registration,
+        )
+
+        _db_file = Path(str(storage.db_path))
+        _prev = _db_file.parent / "database_lineage.json"
+        if _prev.exists():
+            try:
+                _prev_reg = json.loads(_prev.read_text())
+                _prev_size = _prev_reg.get("bytes")
+                _prev_hash = _prev_reg.get("sha256_first1m", "")
+                import hashlib as _hashlib
+
+                _h = _hashlib.sha256()
+                with open(_db_file, "rb") as _f:
+                    _h.update(_f.read(1 << 20))
+                _changed = (
+                    _prev_size != _db_file.stat().st_size
+                    or (_prev_hash and _h.hexdigest()[:16] != _prev_hash)
+                )
+                if _changed:
+                    capture_recovery_snapshot(
+                        _db_file,
+                        reason="startup-database-changed-since-registration",
+                    )
+                    logger.warning(
+                        "Database changed since last registration — pre-change "
+                        "snapshot captured before serving traffic"
+                    )
+            except Exception:  # noqa: BLE001 — snapshot failure is logged, not fatal at startup
+                logger.exception("Recovery snapshot capture failed at startup")
+        write_lineage_registration(_db_file)
+        logger.info("Recovery lineage guard: database identity registered")
+    except Exception:  # noqa: BLE001 — guard failure must never block startup
+        logger.exception("Recovery lineage guard initialization failed")
+
     # Initialize render service with storage
     from app.services.render import render_service
 
@@ -197,6 +269,35 @@ async def lifespan(app: FastAPI):
     director_commentary_service._semantic_memory_service = semantic_memory_service
     semantic_search_service._storage = storage
     semantic_search_service._semantic_memory_service = semantic_memory_service
+
+    # Initialize visual training service with storage and the shared provider
+    # configurations. Training adapters opt in via the VisualTrainingAdapter
+    # boundary; non-training providers fail closed at get_training_adapter.
+    from app.services.visual_training_service import visual_training_service
+    visual_training_service._storage = storage
+    for _provider_config in render_service._provider_configs.values():
+        visual_training_service.register_provider_config(_provider_config)
+    # Local visual-model training is available as its own provider so the
+    # workflow can run end-to-end on this machine without a hosted trainer.
+    from app.adapters.local_visual_training import build_default_config
+    visual_training_service.register_provider_config(build_default_config())
+    # Real Phosphene trainer: submits to the running Phosphene service's
+    # training API (/train/upload → /train/start → /status → /characters).
+    from app.adapters.phosphene_training import build_default_config as build_phosphene_training_config
+    visual_training_service.register_provider_config(build_phosphene_training_config())
+    # Restart recovery: re-poll any training job that was queued/training when
+    # the backend last stopped. No background loop — one honest sweep here,
+    # further refreshes ride the existing status mechanism (API reads).
+    try:
+        recovered = await visual_training_service.refresh_running_training_jobs()
+        if recovered:
+            logger.info(
+                "Visual training restart recovery refreshed %d job(s)",
+                len(recovered),
+            )
+    except Exception:  # noqa: BLE001 — recovery must never block startup
+        logger.exception("Visual training restart recovery failed")
+    logger.info("Visual training service initialized with storage and provider configs")
 
     # Initialize render retry / adherence quality loop with runtime services.
     from app.services.render_retry_service import render_retry_service
@@ -262,6 +363,25 @@ async def lifespan(app: FastAPI):
     task_registry.register("render-polling", render_service.poll_active_runway_jobs())
     logger.info("Started background Runway job polling task")
 
+    # Recovery lineage guard: verify the restored/registered database still
+    # holds the creative estate it held before any prior destructive operation.
+    try:
+        from app.services.recovery_lineage_guard import verify_restore_invariants
+
+        _baseline_path = Path(str(storage.db_path)).parent / "recovery-snapshots" / "baseline-creative-counts.json"
+        if _baseline_path.exists():
+            _baseline = json.loads(_baseline_path.read_text())
+            _report = verify_restore_invariants(str(storage.db_path), _baseline)
+            if _report["ok"]:
+                logger.info("Restore invariant verification passed (%d projects)", len(_baseline))
+            else:  # fail closed: surface loudly, do not heal silently
+                logger.error(
+                    "RESTORE INVARIANT FAILURE — creative estate regressed: %s",
+                    _report["failures"][:10],
+                )
+    except Exception:  # noqa: BLE001
+        logger.exception("Restore invariant verification failed to run")
+
     yield
 
     # --- Graceful Shutdown ---
@@ -305,7 +425,7 @@ if settings.log_format == "json":
     app.add_middleware(StructuredLoggingMiddleware)
 
 # 3. Rate limiting
-app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.rate_limit_per_minute)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.rate_limit_per_minute, read_requests_per_minute=max(600, settings.rate_limit_per_minute))
 
 from app.middleware.project_access import ProjectAccessMiddleware
 app.add_middleware(ProjectAccessMiddleware, storage=storage, schema=app.openapi)
@@ -368,11 +488,16 @@ app.include_router(audio_router)
 app.include_router(stitching_router)
 app.include_router(proactive_router)
 app.include_router(compose_router)
+app.include_router(visual_training_router, prefix="/api/f51/studio/visual-training")
 app.include_router(assembly_router)
 from app.routes.take_selection import router as take_selection_router
 app.include_router(take_selection_router)
 from app.routes.scene_direction import router as scene_direction_router
 app.include_router(scene_direction_router)
+from app.routes.camera_presets import router as camera_presets_router
+app.include_router(camera_presets_router)
+from app.routes.take_camera_review import router as take_camera_review_router
+app.include_router(take_camera_review_router)
 app.include_router(emotion_analysis_router)
 app.include_router(writers_intelligence_router)
 app.include_router(admin_router)
@@ -700,6 +825,123 @@ def approval_snapshot():
             "rejected": 0
         }
     }
+
+# Temporary, observational instrumentation for one authentication session route.
+_STUDIO_SESSION_DIAGNOSTIC_PATH = "/api/f51/studio/auth/session"
+_STUDIO_SESSION_DIAGNOSTIC_PREFIX = "[STUDIO_SESSION_ASGI_DIAGNOSTIC]"
+_STUDIO_SESSION_DIAGNOSTIC_STAGES = frozenset({
+    "asgi_entry",
+    "handler_entry",
+    "response_start",
+    "handler_exception",
+})
+
+
+def _emit_studio_session_diagnostic(
+    stage: str,
+    *,
+    status: int | None = None,
+    error: str | None = None,
+) -> None:
+    """Emit fixed, allowlisted fields; diagnostics must never affect requests."""
+    try:
+        if stage not in _STUDIO_SESSION_DIAGNOSTIC_STAGES:
+            return
+        record = [
+            f"utc={datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')}",
+            f"stage={stage}",
+        ]
+        if stage == "response_start" and isinstance(status, int) and not isinstance(status, bool):
+            record.append(f"status={status}")
+        if stage == "handler_exception" and error in {
+            "HTTP_EXCEPTION",
+            "VALIDATION_ERROR",
+            "STORAGE_ERROR",
+            "UNKNOWN_EXCEPTION",
+        }:
+            record.append(f"error={error}")
+        sys.stdout.write(f"{_STUDIO_SESSION_DIAGNOSTIC_PREFIX} {' '.join(record)}\n")
+        sys.stdout.flush()
+    except BaseException:
+        # Diagnostic failures must not alter request processing.
+        pass
+
+
+def _studio_session_exception_category(error: Exception) -> str:
+    if isinstance(error, HTTPException):
+        return "HTTP_EXCEPTION"
+    if isinstance(error, (RequestValidationError, ValidationError)):
+        return "VALIDATION_ERROR"
+    if isinstance(error, sqlite3.Error):
+        return "STORAGE_ERROR"
+    return "UNKNOWN_EXCEPTION"
+
+
+class _StudioSessionASGIDiagnosticMiddleware:
+    """Observe only the exact session request before existing middleware."""
+
+    def __init__(self, wrapped_app):
+        self.wrapped_app = wrapped_app
+
+    async def __call__(self, scope, receive, send):
+        if not (
+            scope.get("type") == "http"
+            and scope.get("method") == "GET"
+            and scope.get("path") == _STUDIO_SESSION_DIAGNOSTIC_PATH
+        ):
+            await self.wrapped_app(scope, receive, send)
+            return
+
+        _emit_studio_session_diagnostic("asgi_entry")
+
+        async def observed_send(message):
+            if message.get("type") == "http.response.start":
+                _emit_studio_session_diagnostic(
+                    "response_start",
+                    status=message.get("status"),
+                )
+            await send(message)
+
+        await self.wrapped_app(scope, receive, observed_send)
+
+
+def _install_studio_session_diagnostics() -> None:
+    """Add a transparent outer observer and wrap only the exact APIRoute."""
+    for route in app.router.routes:
+        if (
+            isinstance(route, APIRoute)
+            and route.path == _STUDIO_SESSION_DIAGNOSTIC_PATH
+            and "GET" in (route.methods or set())
+        ):
+            original_handler = route.dependant.call
+            if original_handler is None:
+                continue
+
+            async def observed_handler(*args, _original=original_handler, **kwargs):
+                _emit_studio_session_diagnostic("handler_entry")
+                try:
+                    return await _original(*args, **kwargs)
+                except Exception as error:
+                    try:
+                        _emit_studio_session_diagnostic(
+                            "handler_exception",
+                            error=_studio_session_exception_category(error),
+                        )
+                    except BaseException:
+                        pass
+                    raise
+
+            route.dependant.call = observed_handler
+            break
+
+    # Wrap the already-built stack so its existing middleware ordering is intact.
+    app.middleware_stack = _StudioSessionASGIDiagnosticMiddleware(
+        app.build_middleware_stack()
+    )
+
+
+_install_studio_session_diagnostics()
+
 
 if __name__ == "__main__":
     import uvicorn

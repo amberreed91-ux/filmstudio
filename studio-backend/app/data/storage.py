@@ -5,7 +5,7 @@ import sys
 import logging
 from pathlib import Path
 from typing import Optional, Any, List, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import contextmanager
 from queue import Queue
 import threading
@@ -15,6 +15,20 @@ from uuid import uuid4
 from app.models import StudioProject, StudioOverview, BuildInfo, RenderJobModel
 
 logger = logging.getLogger("studio-storage")
+
+# Runtime-only render job states mapped to their canonical persisted equivalents.
+# The runtime state machine treats "queued" (provider accepted, not yet rendering)
+# as a transient alias of "pending"; render_jobs has never allowed it as a stored
+# value. Keep this map to canonical statuses only — adding an alias here does not
+# widen what the database accepts, it keeps runtime states from failing the
+# status CHECK while preserving the on-disk state vocabulary.
+_RENDER_STATUS_PERSIST_ALIASES: Dict[str, str] = {
+    "queued": "pending",
+    "submitted": "pending",
+    "processing": "rendering",
+    "running": "rendering",
+    "in_progress": "rendering",
+}
 
 
 class StorageInterface:
@@ -3664,6 +3678,76 @@ class DatabaseStorage:
                     PRIMARY KEY (project_id, scope)
                 );
             """),
+            (63, "Add visual_models table for visual training artifacts", """
+                CREATE TABLE IF NOT EXISTS visual_models (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    target_type TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    training_id TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    base_model TEXT NOT NULL,
+                    model_version TEXT NOT NULL,
+                    trigger TEXT NOT NULL,
+                    dataset_reference TEXT,
+                    output_reference TEXT,
+                    status TEXT NOT NULL,
+                    configuration JSON,
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    error TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_visual_models_project ON visual_models(project_id);
+                CREATE INDEX IF NOT EXISTS idx_visual_models_target_type ON visual_models(target_type);
+                CREATE INDEX IF NOT EXISTS idx_visual_models_target_id ON visual_models(target_id);
+                CREATE INDEX IF NOT EXISTS idx_visual_models_status ON visual_models(status);
+            """),
+            (64, "Add updated_at to visual_models for provenance tracking", """
+                ALTER TABLE visual_models ADD COLUMN updated_at TEXT;
+            """),
+            (65, "Add scoped visual reference library metadata", """
+                ALTER TABLE reference_assets ADD COLUMN target_type TEXT;
+                ALTER TABLE reference_assets ADD COLUMN target_id TEXT;
+                ALTER TABLE reference_assets ADD COLUMN category TEXT;
+                ALTER TABLE reference_assets ADD COLUMN approval_state TEXT NOT NULL DEFAULT 'approved';
+                ALTER TABLE reference_assets ADD COLUMN canonical INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE reference_assets ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'confirmed';
+                CREATE INDEX IF NOT EXISTS idx_reference_assets_target
+                    ON reference_assets(project_id, target_type, target_id);
+            """),
+            (66, "Persist signed prospective Scene 002 render authorities", """
+                CREATE TABLE IF NOT EXISTS scene002_render_authorities (
+                    authority_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL CHECK (scene_id = 'scene_002'),
+                    authority_decision_id TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(project_id, authority_decision_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_scene002_authority_project
+                    ON scene002_render_authorities(project_id, scene_id);
+            """),
+            (67, "Fence production queue worker leases", """
+                ALTER TABLE production_queue_items ADD COLUMN lease_generation INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE production_queue_attempts ADD COLUMN lease_generation INTEGER NOT NULL DEFAULT 0;
+            """),
+            (68, "Persist durable shot reference-binding confirmations", """
+                CREATE TABLE IF NOT EXISTS shot_reference_confirmations (
+                    confirmation_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    scene_id TEXT NOT NULL,
+                    shot_id TEXT NOT NULL,
+                    confirmed_digest TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'confirmed',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(project_id, shot_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_shot_confirmations_project_scene
+                    ON shot_reference_confirmations(project_id, scene_id);
+            """),
         ]
 
         cursor.execute("SELECT MAX(version) FROM schema_migrations")
@@ -3690,6 +3774,165 @@ class DatabaseStorage:
 
         conn.commit()
         conn.close()
+
+    # ------------------------------------------------------------------
+    # Visual model persistence
+    # ------------------------------------------------------------------
+
+    def upsert_visual_model(
+        self,
+        id: str,
+        project_id: str,
+        target_type: str,
+        target_id: str,
+        training_id: str,
+        provider: str,
+        base_model: str,
+        model_version: str,
+        trigger: str,
+        dataset_reference: str | None,
+        output_reference: str,
+        status: str,
+        configuration: dict[str, Any],
+        created_at: str,
+        completed_at: str | None,
+        error: str | None,
+    ) -> None:
+        """Upsert a visual model record into the visual_models table."""
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT INTO visual_models
+                    (id, project_id, target_type, target_id, training_id, provider,
+                     base_model, model_version, trigger, dataset_reference,
+                     output_reference, status, configuration, created_at,
+                     completed_at, error, updated_at)
+                 VALUES
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(id) DO UPDATE SET
+                    project_id = excluded.project_id,
+                    target_type = excluded.target_type,
+                    target_id = excluded.target_id,
+                    training_id = excluded.training_id,
+                    provider = excluded.provider,
+                    base_model = excluded.base_model,
+                    model_version = excluded.model_version,
+                    trigger = excluded.trigger,
+                    dataset_reference = excluded.dataset_reference,
+                    output_reference = excluded.output_reference,
+                    status = excluded.status,
+                    configuration = excluded.configuration,
+                    completed_at = excluded.completed_at,
+                    error = excluded.error,
+                    updated_at = COALESCE(excluded.updated_at, (SELECT updated_at FROM visual_models WHERE id = excluded.id), ?)
+                """,
+                (
+                    id,
+                    project_id,
+                    target_type,
+                    target_id,
+                    training_id,
+                    provider,
+                    base_model,
+                    model_version,
+                    trigger,
+                    dataset_reference,
+                    output_reference,
+                    status,
+                    json.dumps(configuration) if configuration else None,
+                    created_at,
+                    completed_at,
+                    error,
+                    created_at,
+                    created_at,
+                ),
+            )
+            conn.commit()
+
+    def get_visual_model(self, model_id: str) -> dict | None:
+        """Get a single visual model by ID."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM visual_models WHERE id = ?", (model_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            columns = [desc[0] for desc in cursor.description]
+            model = dict(zip(columns, row))
+            # Parse JSON configuration
+            if model.get("configuration"):
+                try:
+                    model["configuration"] = json.loads(model["configuration"])
+                except (ValueError, TypeError):
+                    model["configuration"] = {}
+            return model
+
+    def list_visual_models(
+        self,
+        project_id: str | None = None,
+        target_type: str | None = None,
+        status: str | None = None,
+    ) -> list[dict]:
+        """List visual models, optionally filtered by project, target type, or status."""
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            query = "SELECT * FROM visual_models WHERE 1=1"
+            params: list[Any] = []
+
+            if project_id:
+                query += " AND project_id = ?"
+                params.append(project_id)
+            if target_type:
+                query += " AND target_type = ?"
+                params.append(target_type)
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+
+            query += " ORDER BY created_at DESC"
+            cursor.execute(query, params)
+
+            columns = [desc[0] for desc in cursor.description]
+            models = []
+            for row in cursor.fetchall():
+                model = dict(zip(columns, row))
+                # Parse JSON configuration
+                if model.get("configuration"):
+                    try:
+                        model["configuration"] = json.loads(model["configuration"])
+                    except (ValueError, TypeError):
+                        model["configuration"] = {}
+                models.append(model)
+            return models
+
+    def get_visual_training_job(self, job_id: str) -> dict | None:
+        """Get a visual training job by its training/job ID.
+
+        Training job state is persisted in the visual_models table (migration
+        63); the training_id column stores the job ID, so this lookup resolves
+        the corresponding visual_models row.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM visual_models WHERE training_id = ?",
+                (job_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            columns = [desc[0] for desc in cursor.description]
+            job = dict(zip(columns, row))
+            # Parse JSON configuration
+            if job.get("configuration"):
+                try:
+                    job["configuration"] = json.loads(job["configuration"])
+                except (ValueError, TypeError):
+                    job["configuration"] = {}
+            return job
 
     def _ensure_initial_data(self):
         """Ensure initial demo project exists"""
@@ -3824,9 +4067,29 @@ class DatabaseStorage:
                         # Smart merge: preserve existing non-empty values
                         merged_data = _smart_merge(existing_data, new_data)
                     except (json.JSONDecodeError, TypeError):
+                        existing_data = None
                         merged_data = new_data
                 else:
+                    existing_data = None
                     merged_data = new_data
+
+                if existing_data is not None:
+                    metadata_column = {column[1] for column in cursor.execute("PRAGMA table_info(render_jobs)")}
+                    has_protected_job = False
+                    if "metadata_json" in metadata_column:
+                        for job_row in cursor.execute(
+                            "SELECT metadata_json FROM render_jobs WHERE project_id = ?", (project.project_id,)
+                        ).fetchall():
+                            try:
+                                job_metadata = json.loads(job_row[0] or "{}")
+                            except (json.JSONDecodeError, TypeError):
+                                job_metadata = {}
+                            if isinstance(job_metadata, dict) and job_metadata.get("execution_mode") == "SCENE_002_CONTRACT_ONLY":
+                                has_protected_job = True
+                                break
+                    if has_protected_job:
+                        from app.services.scene002_contract_only import assert_no_protected_project_mutation
+                        assert_no_protected_project_mutation(existing_data, merged_data)
 
                 payload = json.dumps(merged_data)
 
@@ -5911,23 +6174,169 @@ class DatabaseStorage:
             cursor.execute("SELECT DISTINCT project_id FROM universe_nodes")
             return [row["project_id"] for row in cursor.fetchall()]
 
+    # Render-scoped authority and result persistence
+    def save_scene002_render_authority(self, authority: dict[str, Any]) -> dict[str, Any]:
+        """Insert a signed authority record; never update or synthesize approval."""
+        from app.services.scene002_contract_only import validate_authority_record
+
+        validated = validate_authority_record(authority)
+        payload = json.dumps(validated, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        with self._get_connection() as conn:
+            conn.execute(
+                """INSERT INTO scene002_render_authorities
+                   (authority_id, project_id, scene_id, authority_decision_id, payload_json, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (validated["authority_id"], validated["project_id"], validated["scene_id"],
+                 validated["authority_decision_id"], payload, validated["approved_at"]),
+            )
+            conn.commit()
+        return validated
+
+    def get_scene002_render_authority(self, authority_id: str, project_id: str) -> dict[str, Any] | None:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT payload_json FROM scene002_render_authorities WHERE authority_id = ? AND project_id = ? AND scene_id = 'scene_002'",
+                (authority_id, project_id),
+            ).fetchone()
+        if not row:
+            return None
+        try:
+            authority = json.loads(row[0])
+            from app.services.scene002_contract_only import validate_authority_record
+            return validate_authority_record(authority)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Persisted Scene 002 source authority is invalid") from exc
+
     # Render Job Persistence
-    def save_job(self, job: RenderJobModel) -> RenderJobModel:
+    def save_job(
+        self,
+        job: RenderJobModel,
+        *,
+        queue_lease_fence: dict[str, Any] | None = None,
+    ) -> RenderJobModel:
+        # Runtime-only job states projected onto their canonical persisted
+        # equivalents. The runtime state machine (RenderJobModel.can_transition_to)
+        # treats "queued" as a transient sub-state of "pending" — accepted by the
+        # provider, not yet rendering — but the render_jobs CHECK constraint has
+        # only ever allowed ('pending', 'rendering', 'complete', 'failed',
+        # 'cancelled', 'needs_review', 'skipped'). Persisting the runtime alias
+        # verbatim fails the CHECK at insert time. Normalizing here — the single
+        # choke point for every render_jobs write — keeps runtime and persistence
+        # in agreement without widening the database's allowed status list, and
+        # genuinely invalid statuses still fail the CHECK loudly.
+        persisted_status = _RENDER_STATUS_PERSIST_ALIASES.get(str(job.status or ""), str(job.status or ""))
+        persisted_metadata = dict(job.metadata or {})
+        is_protected = persisted_metadata.get("execution_mode") == "SCENE_002_CONTRACT_ONLY"
+        if is_protected:
+            from app.services.scene002_contract_only import validate_result_only_metadata, verify_job_contract
+            validate_result_only_metadata(persisted_metadata)
+            verify_job_contract(job, require_project=False)
+        elif persisted_metadata.get("scene002_execution_contract") is not None or persisted_metadata.get("source_authority_id") is not None:
+            raise ValueError("Scene 002 contract proof cannot be persisted without its protected execution mode")
+        if persisted_status != job.status:
+            persisted_metadata.setdefault("runtime_status", job.status)
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            if queue_lease_fence is not None:
+                fence_is_current = cursor.execute(
+                    """SELECT 1 FROM production_queue_items
+                       WHERE queue_item_id = ? AND lease_owner = ? AND lease_generation = ?
+                         AND status IN ('leased', 'running')                           AND lease_expires_at IS NOT NULL AND lease_expires_at > ?""",
+
+                    (
+                        queue_lease_fence["queue_item_id"],
+                        queue_lease_fence["lease_owner"],
+                        queue_lease_fence["lease_generation"],
+                        datetime.now().isoformat(),
+                    ),
+                ).fetchone()
+                if fence_is_current is None:
+                    conn.rollback()
+                    raise RuntimeError("Queue lease fencing token is expired or superseded")
+            existing_row = cursor.execute("SELECT * FROM render_jobs WHERE id = ?", (job.id,)).fetchone()
+            if existing_row is not None:
+                existing_job = self._row_to_job(existing_row)
+                existing_metadata = existing_job.metadata if isinstance(existing_job.metadata, dict) else {}
+                existing_protected = existing_metadata.get("execution_mode") == "SCENE_002_CONTRACT_ONLY"
+                if existing_protected != is_protected:
+                    raise ValueError("A protected render job cannot be downgraded or replaced by an ordinary job")
+                if existing_protected:
+                    from app.services.scene002_contract_only import (
+                        protected_input_payload_identity,
+                        validate_protected_job_transition,
+                        validate_result_only_metadata,
+                        verify_job_contract,
+                    )
+                    validate_result_only_metadata(persisted_metadata, previous=existing_metadata)
+                    verify_job_contract(job, require_project=False)
+                    validate_protected_job_transition(existing_job, job)
+                    if (
+                        existing_job.project_id != job.project_id
+                        or existing_job.shot_id != job.shot_id
+                        or existing_job.provider != job.provider
+                        or protected_input_payload_identity(existing_job.input_payload)
+                        != protected_input_payload_identity(job.input_payload)
+                    ):
+                        raise ValueError("Protected render persistence rejects changes to its immutable creative input")
+
+                    # Protected jobs are result records, not a project recovery
+                    # mechanism. Reject accidental compatibility saves from any
+                    # protected execution path, including an FK-recovery retry.
+                    if job.status not in {"pending", "rendering", "complete", "failed", "cancelled", "needs_review", "skipped"}:
+                        raise ValueError("Protected render persistence received an unsupported result state")
+                elif is_protected:
+                    raise ValueError("Protected render job cannot be persisted without an existing durable contract")
+
+            # A Scene 002 protected job must never create or reconstruct a
+            # project row as a side effect of job persistence. This check is
+            # performed before INSERT so FK failures remain visible as job
+            # persistence failures rather than triggering project recovery.
+            if is_protected and existing_row is None:
+                project_row = cursor.execute(
+                    "SELECT 1 FROM projects WHERE project_id = ?", (job.project_id,)
+                ).fetchone()
+                if project_row is None:
+                    raise ValueError("Protected render requires an existing project; FK project recovery is prohibited")
+            if existing_row is None and is_protected:
+                from app.services.scene002_contract_only import verify_job_contract
+                verify_job_contract(job, require_project=False)
+            if existing_row is not None and not is_protected and existing_protected:
+                raise ValueError("A protected render job cannot be downgraded or replaced by an ordinary job")
             columns = ['id', 'project_id', 'shot_id', 'provider', 'provider_job_id', 'status', 'progress',
                        'input_payload', 'output_payload', 'error_message', 'retry_count', 'created_at', 'updated_at', 'completed_at']
-            values = [job.id, job.project_id, job.shot_id, job.provider, job.provider_job_id, job.status, job.progress,
+            values = [job.id, job.project_id, job.shot_id, job.provider, job.provider_job_id, persisted_status, job.progress,
                       json.dumps(job.input_payload.model_dump()) if job.input_payload else None,
                       json.dumps(job.output_payload.model_dump()) if job.output_payload else None,
                       job.error_message, job.retry_count, job.created_at, job.updated_at, job.completed_at]
-            # Extensions may supply a stricter legacy table. Preserve its native
-            # constraints instead of masking them with an unknown-column error.
-            if 'metadata_json' in {row[1] for row in cursor.execute('PRAGMA table_info(render_jobs)')}:
+            # Router contracts are submit authority, so silently omitting their
+            # metadata would turn durable jobs into mutable-input candidates.
+            # The supported schema has metadata_json (migration 61); fail closed
+            # on any extension/legacy schema that cannot store it.
+            has_metadata = 'metadata_json' in {row[1] for row in cursor.execute('PRAGMA table_info(render_jobs)')}
+            if job.provider == "runway_router":
+                if not has_metadata:
+                    raise RuntimeError("render_jobs.metadata_json is required to persist Runway Router contracts")
+                required_contract_metadata = {
+                    "creative_generation_contract": dict,
+                    "creative_generation_manifest": dict,
+                    "creative_manifest_fingerprint": str,
+                    "creative_contract_digest": str,
+                    "creative_generation_identity": dict,
+                }
+                if any(
+                    not isinstance(persisted_metadata.get(key), expected_type)
+                    or (expected_type is str and not persisted_metadata[key])
+                    for key, expected_type in required_contract_metadata.items()
+                ):
+                    raise RuntimeError("Runway Router jobs require complete frozen contract metadata")
+            if has_metadata:
                 columns.append('metadata_json')
-                values.append(json.dumps(job.metadata or {}))
+                values.append(json.dumps(persisted_metadata))
+            update_columns = [column for column in columns if column != "id"]
             cursor.execute(
-                f"INSERT OR REPLACE INTO render_jobs ({', '.join(columns)}) VALUES ({', '.join('?' for _ in values)})",
+                f"INSERT INTO render_jobs ({', '.join(columns)}) VALUES ({', '.join('?' for _ in values)}) "
+                f"ON CONFLICT(id) DO UPDATE SET {', '.join(f'{column}=excluded.{column}' for column in update_columns)}",
                 values,
             )
             conn.commit()
@@ -6015,8 +6424,12 @@ class DatabaseStorage:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM render_jobs WHERE id = ?", (job_id,))
+            deleted = cursor.rowcount > 0
+            # Take projections otherwise survive the job and reappear in Previs.
+            # Media files stay available to cuts that already reference them.
+            cursor.execute("DELETE FROM previs_images WHERE job_id = ?", (job_id,))
             conn.commit()
-            return cursor.rowcount > 0
+            return deleted
 
     def _row_to_job(self, row: sqlite3.Row) -> RenderJobModel:
         from app.models import RenderJobInput, RenderJobOutput
@@ -6081,6 +6494,7 @@ class DatabaseStorage:
             lease_owner=row["lease_owner"],
             lease_acquired_at=row["lease_acquired_at"],
             lease_expires_at=row["lease_expires_at"],
+            lease_generation=row["lease_generation"] if "lease_generation" in row.keys() else 0,
             next_run_at=row["next_run_at"],
             next_poll_at=row["next_poll_at"],
             created_at=row["created_at"],
@@ -6128,9 +6542,9 @@ class DatabaseStorage:
                         canonical_type, canonical_id, provider, status, priority,
                         idempotency_key, dependency_policy, payload_json, result_json,
                         failure_json, reason, attempt_count, max_attempts, lease_owner,
-                        lease_acquired_at, lease_expires_at, next_run_at, next_poll_at,
+                        lease_acquired_at, lease_expires_at, lease_generation, next_run_at, next_poll_at,
                         created_at, updated_at, started_at, completed_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         item.queue_item_id,
                         item.project_id,
@@ -6153,6 +6567,7 @@ class DatabaseStorage:
                         item.lease_owner,
                         item.lease_acquired_at,
                         item.lease_expires_at,
+                        item.lease_generation,
                         item.next_run_at,
                         item.next_poll_at,
                         item.created_at,
@@ -6263,20 +6678,25 @@ class DatabaseStorage:
             ).fetchall()
         return [self._row_to_queue_item(row) for row in rows]
 
-    def update_queue_item(self, item):
+    def update_queue_item(self, item, *, expected_lease: tuple[str, int] | None = None):
         def _write():
             with self._get_connection() as conn:
                 cursor = conn.cursor()
+                where_clause = "queue_item_id = ?"
+                where_values: tuple[Any, ...] = (item.queue_item_id,)
+                if expected_lease is not None:
+                    where_clause += " AND lease_owner = ? AND lease_generation = ?"
+                    where_values += expected_lease
                 cursor.execute(
-                    """UPDATE production_queue_items
+                    f"""UPDATE production_queue_items
                        SET scene_id = ?, shot_id = ?, canonical_id = ?, provider = ?,
                            status = ?, priority = ?, dependency_policy = ?,
                            payload_json = ?, result_json = ?, failure_json = ?,
                            reason = ?, attempt_count = ?, max_attempts = ?,
-                           lease_owner = ?, lease_acquired_at = ?, lease_expires_at = ?,
+                           lease_owner = ?, lease_acquired_at = ?, lease_expires_at = ?, lease_generation = ?,
                            next_run_at = ?, next_poll_at = ?, updated_at = ?,
                            started_at = ?, completed_at = ?
-                       WHERE queue_item_id = ?""",
+                       WHERE {where_clause}""",
                     (
                         item.scene_id,
                         item.shot_id,
@@ -6294,17 +6714,78 @@ class DatabaseStorage:
                         item.lease_owner,
                         item.lease_acquired_at,
                         item.lease_expires_at,
+                        item.lease_generation,
                         item.next_run_at,
                         item.next_poll_at,
                         item.updated_at,
                         item.started_at,
                         item.completed_at,
-                        item.queue_item_id,
+                        *where_values,
                     ),
                 )
+                changed = cursor.rowcount == 1
                 conn.commit()
-        self._execute_write_with_retry("update_queue_item", _write)
+                return changed
+        changed = self._execute_write_with_retry("update_queue_item", _write)
+        if expected_lease is not None and not changed:
+            return None
         return item
+
+    def cancel_queue_item(
+        self,
+        item,
+        *,
+        expected_status: str,
+        expected_owner: str | None,
+        expected_generation: int,
+    ) -> bool:
+        """Cancel only the exact non-terminal snapshot the caller inspected."""
+        expected_status = expected_status.value if hasattr(expected_status, "value") else expected_status
+        now = datetime.now().isoformat()
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("BEGIN IMMEDIATE")
+                cursor.execute(
+                    """UPDATE production_queue_items
+                       SET status = 'cancelled', reason = ?, failure_json = ?,
+                           lease_owner = NULL, lease_acquired_at = NULL, lease_expires_at = NULL,
+                           completed_at = ?, updated_at = ?, lease_generation = lease_generation + 1
+                       WHERE queue_item_id = ? AND status = ? AND lease_generation = ?
+                         AND ((lease_owner = ?) OR (lease_owner IS NULL AND ? IS NULL))
+                         AND status NOT IN ('complete', 'failed', 'cancelled', 'dead_lettered')""",
+                    (
+                        item.reason or "Cancelled by user.",
+                        json.dumps(item.failure or {}),
+                        item.completed_at or now,
+                        now,
+                        item.queue_item_id,
+                        expected_status,
+                        expected_generation,
+                        expected_owner,
+                        expected_owner,
+                    ),
+                )
+                changed = cursor.rowcount == 1
+                if changed and expected_owner is not None:
+                    cursor.execute(
+                        """UPDATE production_queue_attempts
+                           SET status = 'cancelled', completed_at = ?,
+                               error_type = 'cancelled', error_message = ?
+                           WHERE queue_item_id = ? AND lease_generation = ?
+                             AND lease_owner = ? AND status = 'running'""",
+                        (
+                            item.completed_at or now,
+                            item.reason or "Cancelled by user.",
+                            item.queue_item_id,
+                            expected_generation,
+                            expected_owner,
+                        ),
+                    )
+                conn.commit()
+                return changed
+        return bool(self._execute_write_with_retry("cancel_queue_item", _write))
 
     def update_queue_item_status(
         self,
@@ -6408,6 +6889,7 @@ class DatabaseStorage:
                            lease_owner = ?,
                            lease_acquired_at = ?,
                            lease_expires_at = ?,
+                           lease_generation = lease_generation + 1,
                            attempt_count = attempt_count + 1,
                            updated_at = ?,
                            started_at = COALESCE(started_at, ?)
@@ -6445,6 +6927,7 @@ class DatabaseStorage:
                            lease_owner = ?,
                            lease_acquired_at = ?,
                            lease_expires_at = ?,
+                           lease_generation = lease_generation + 1,
                            attempt_count = attempt_count + 1,
                            updated_at = ?,
                            started_at = COALESCE(started_at, ?)
@@ -6459,24 +6942,193 @@ class DatabaseStorage:
             conn.commit()
         return None
 
-    def renew_queue_lease(self, queue_item_id: str, owner_id: str, lease_expires_at: str) -> bool:
+    def queue_lease_is_current(self, queue_item_id: str, owner_id: str, lease_generation: int) -> bool:
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            row = conn.execute(
+                """SELECT 1 FROM production_queue_items
+                   WHERE queue_item_id = ? AND lease_owner = ? AND lease_generation = ?
+                     AND status IN ('leased', 'running')
+                     AND lease_expires_at IS NOT NULL AND lease_expires_at > ?""",
+                (queue_item_id, owner_id, lease_generation, now),
+            ).fetchone()
+        return row is not None
+
+    def renew_queue_lease(
+        self,
+        queue_item_id: str,
+        owner_id: str,
+        lease_generation: int,
+        lease_expires_at: str,
+    ) -> bool:
+        now = datetime.now().isoformat()
+        if lease_expires_at <= now:
+            return False
+
         def _write():
             with self._get_connection() as conn:
                 cursor = conn.cursor()
+                cursor.execute("BEGIN IMMEDIATE")
                 cursor.execute(
                     """UPDATE production_queue_items
-                       SET lease_expires_at = ?, updated_at = ?
-                       WHERE queue_item_id = ? AND lease_owner = ?""",
-                    (lease_expires_at, datetime.now().isoformat(), queue_item_id, owner_id),
+                       SET status = 'running',
+                           lease_expires_at = CASE
+                               WHEN lease_expires_at > ? THEN lease_expires_at
+                               ELSE ?
+                           END,
+                           updated_at = ?
+                       WHERE queue_item_id = ?
+                         AND lease_owner = ?
+                         AND lease_generation = ?
+                         AND status IN ('leased', 'running')
+                         AND lease_expires_at IS NOT NULL
+                         AND lease_expires_at > ?""",
+                    (lease_expires_at, lease_expires_at, now, queue_item_id, owner_id, lease_generation, now),
                 )
                 conn.commit()
                 return cursor.rowcount > 0
         return bool(self._execute_write_with_retry("renew_queue_lease", _write))
 
+    def finalize_queue_lease(
+        self,
+        item,
+        lease_owner: str,
+        lease_generation: int,
+        attempt=None,
+    ) -> bool:
+        """Commit a worker result only while its exact, unexpired fencing token owns the lease."""
+        now = datetime.now().isoformat()
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """UPDATE production_queue_items
+                       SET scene_id = ?, shot_id = ?, canonical_id = ?, provider = ?,
+                           status = ?, priority = ?, dependency_policy = ?,
+                           payload_json = ?, result_json = ?, failure_json = ?,
+                           reason = ?, attempt_count = ?, max_attempts = ?,
+                           lease_owner = NULL, lease_acquired_at = NULL, lease_expires_at = NULL,
+                           lease_generation = ?, next_run_at = ?, next_poll_at = ?, updated_at = ?,
+                           started_at = ?, completed_at = ?
+                       WHERE queue_item_id = ? AND lease_owner = ? AND lease_generation = ?
+                         AND status IN ('leased', 'running')
+                         AND lease_expires_at IS NOT NULL AND lease_expires_at > ?""",
+
+                    (
+                        item.scene_id, item.shot_id, item.canonical_id, item.provider,
+                        item.status.value if hasattr(item.status, "value") else item.status,
+                        item.priority, item.dependency_policy,
+                        json.dumps(item.payload or {}), json.dumps(item.result or {}),
+                        json.dumps(item.failure or {}), item.reason or "", item.attempt_count,
+                        item.max_attempts, lease_generation, item.next_run_at, item.next_poll_at,
+                        now, item.started_at, item.completed_at, item.queue_item_id, lease_owner,
+                        lease_generation, now,
+                    ),
+                )
+                changed = cursor.rowcount == 1
+                if changed and attempt is not None:
+                    cursor.execute(
+                        """INSERT OR REPLACE INTO production_queue_attempts (
+                            attempt_id, queue_item_id, attempt_number, lease_generation, lease_owner, status,
+                            started_at, completed_at, duration_ms, error_type, error_message,
+                            result_json, metadata_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            attempt.attempt_id, attempt.queue_item_id, attempt.attempt_number,
+                            lease_generation, attempt.lease_owner, attempt.status,
+                            attempt.started_at, attempt.completed_at, attempt.duration_ms,
+                            attempt.error_type, attempt.error_message,
+                            json.dumps(attempt.result or {}), json.dumps(attempt.metadata or {}),
+                        ),
+                    )
+                conn.commit()
+                return changed
+        return bool(self._execute_write_with_retry("finalize_queue_lease", _write))
+
+    def record_queue_attempt_fenced(self, attempt, lease_generation: int, *, final: bool = False) -> bool:
+        """Record attempt progress/current-token completion without accepting stale generations."""
+        now = datetime.now().isoformat()
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("BEGIN IMMEDIATE")
+                owner_match = "lease_owner = ?" if not final else "(lease_owner = ? OR lease_owner IS NULL)"
+                status_match = (
+                    "status IN ('leased', 'running') AND lease_expires_at IS NOT NULL AND lease_expires_at > ?"
+                    if not final
+                    else "status IN ('leased', 'running', 'complete', 'failed', 'cancelled', 'dead_lettered')"
+                )
+                current = cursor.execute(
+                    f"SELECT 1 FROM production_queue_items WHERE queue_item_id = ? "
+                    f"AND lease_generation = ? AND {owner_match} AND {status_match}",
+                    (attempt.queue_item_id, lease_generation, attempt.lease_owner, *((now,) if not final else ())),
+                ).fetchone()
+                if current is None:
+                    conn.rollback()
+                    return False
+                if final:
+                    # Finalization is an update to the running attempt created at
+                    # dispatch, never a replacement row. Expiry/cancellation may
+                    # already have terminalized that row and must win the race.
+                    cursor.execute(
+                        """UPDATE production_queue_attempts
+                           SET status = ?, completed_at = ?, duration_ms = ?,
+                               error_type = ?, error_message = ?, result_json = ?, metadata_json = ?
+                           WHERE attempt_id = ? AND queue_item_id = ? AND attempt_number = ?
+                             AND lease_generation = ? AND lease_owner = ? AND status = 'running'""",
+                        (
+                            attempt.status, attempt.completed_at, attempt.duration_ms,
+                            attempt.error_type, attempt.error_message,
+                            json.dumps(attempt.result or {}), json.dumps(attempt.metadata or {}),
+                            attempt.attempt_id, attempt.queue_item_id, attempt.attempt_number,
+                            lease_generation, attempt.lease_owner,
+                        ),
+                    )
+                    changed = cursor.rowcount == 1
+                    conn.commit()
+                    return changed
+                cursor.execute(
+                    """INSERT OR REPLACE INTO production_queue_attempts (
+                        attempt_id, queue_item_id, attempt_number, lease_generation, lease_owner, status,
+                        started_at, completed_at, duration_ms, error_type, error_message,
+                        result_json, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        attempt.attempt_id, attempt.queue_item_id, attempt.attempt_number,
+                        lease_generation, attempt.lease_owner, attempt.status, attempt.started_at,
+                        attempt.completed_at, attempt.duration_ms, attempt.error_type,
+                        attempt.error_message, json.dumps(attempt.result or {}),
+                        json.dumps(attempt.metadata or {}),
+                    ),
+                )
+                conn.commit()
+                return True
+        return bool(self._execute_write_with_retry("record_queue_attempt_fenced", _write))
+
+    def acquire_queue_lease_snapshot(self, queue_item_id: str, owner_id: str, now: str, lease_expires_at: str):
+        """Atomic single-row claim returning both item contents and the new fencing generation."""
+        item = self.acquire_queue_lease_for_item(
+            queue_item_id=queue_item_id,
+            owner_id=owner_id,
+            now=now,
+            lease_expires_at=lease_expires_at,
+        )
+        return item
+
+
     def expire_stale_queue_leases(self, now: str) -> int:
         def _write():
             with self._get_connection() as conn:
                 cursor = conn.cursor()
+                cursor.execute("BEGIN IMMEDIATE")
+                expired = cursor.execute(
+                    """SELECT queue_item_id, lease_generation FROM production_queue_items
+                       WHERE status IN ('leased', 'running')
+                         AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?""",
+                    (now,),
+                ).fetchall()
                 cursor.execute(
                     """UPDATE production_queue_items
                        SET status = CASE
@@ -6497,6 +7149,14 @@ class DatabaseStorage:
                     (now, now),
                 )
                 count = cursor.rowcount
+                for row in expired:
+                    cursor.execute(
+                        """UPDATE production_queue_attempts
+                           SET status = 'lease_lost', completed_at = ?,
+                               error_type = 'lease_lost', error_message = 'Worker lease expired during execution'
+                           WHERE queue_item_id = ? AND lease_generation = ? AND status = 'running'""",
+                        (now, row["queue_item_id"], row["lease_generation"]),
+                    )
                 conn.commit()
                 return count
         return int(self._execute_write_with_retry("expire_stale_queue_leases", _write) or 0)
@@ -6507,14 +7167,15 @@ class DatabaseStorage:
                 cursor = conn.cursor()
                 cursor.execute(
                     """INSERT OR REPLACE INTO production_queue_attempts (
-                        attempt_id, queue_item_id, attempt_number, lease_owner, status,
+                        attempt_id, queue_item_id, attempt_number, lease_generation, lease_owner, status,
                         started_at, completed_at, duration_ms, error_type, error_message,
                         result_json, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         attempt.attempt_id,
                         attempt.queue_item_id,
                         attempt.attempt_number,
+                        attempt.lease_generation,
                         attempt.lease_owner,
                         attempt.status,
                         attempt.started_at,
@@ -6529,6 +7190,37 @@ class DatabaseStorage:
                 conn.commit()
         self._execute_write_with_retry("save_queue_attempt", _write)
         return attempt
+
+    def list_queue_attempts(self, queue_item_id: str, limit: int = 100):
+        safe_limit = max(1, min(int(limit or 100), 500))
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT * FROM production_queue_attempts
+                   WHERE queue_item_id = ?
+                   ORDER BY attempt_number ASC, started_at ASC
+                   LIMIT ?""",
+                (queue_item_id, safe_limit),
+            ).fetchall()
+        from app.models.production_queue import ProductionQueueAttempt
+
+        return [
+            ProductionQueueAttempt(
+                attempt_id=row["attempt_id"],
+                queue_item_id=row["queue_item_id"],
+                attempt_number=row["attempt_number"],
+                lease_generation=row["lease_generation"] if "lease_generation" in row.keys() else 0,
+                lease_owner=row["lease_owner"],
+                status=row["status"],
+                started_at=row["started_at"],
+                completed_at=row["completed_at"],
+                duration_ms=row["duration_ms"],
+                error_type=row["error_type"],
+                error_message=row["error_message"],
+                result=self._json_dict(row["result_json"]),
+                metadata=self._json_dict(row["metadata_json"]),
+            )
+            for row in rows
+        ]
 
     def save_queue_event(self, event):
         def _write():
@@ -6805,6 +7497,16 @@ class DatabaseStorage:
                 return result
             return None
 
+    def clear_film_delivery(self, project_id: str) -> None:
+        """Remove only the current full-film pointer and manifest during rollback."""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM films WHERE project_id = ?", (project_id,))
+            conn.execute(
+                "DELETE FROM delivery_manifests WHERE project_id = ? AND scope = ?",
+                (project_id, "__film__"),
+            )
+            conn.commit()
+
     # Session management
     def access_get_user(self, *, username=None, user_id=None):
         with self._get_connection() as conn:
@@ -6835,7 +7537,15 @@ class DatabaseStorage:
             return {row[0] for row in conn.execute(
                 "SELECT project_id FROM project_owners WHERE user_id = ?", (user_id,))}
 
+    def access_project_owner(self, project_id):
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT user_id FROM project_owners WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            return str(row[0]) if row else None
+
     def access_resource_projects(self, identifier):
+
         """Resolve opaque identifiers through schema-owned columns, never URL guesses.
 
         SQL identifiers come exclusively from SQLite metadata. Values are bound.
@@ -6940,6 +7650,8 @@ class DatabaseStorage:
 
     def save_shot_seed(self, project_id: str, shot_id: str, seed: int, seed_locked: bool = False) -> dict:
         """Upsert a seed record for a shot."""
+        from app.services.scene002_contract_only import assert_protected_seed_unchanged
+        assert_protected_seed_unchanged(self, project_id, shot_id)
         now = datetime.now().isoformat()
         lock_val = 1 if seed_locked else 0
 
@@ -6961,6 +7673,8 @@ class DatabaseStorage:
 
     def update_shot_seed_lock(self, project_id: str, shot_id: str, seed: Optional[int] = None, seed_locked: Optional[bool] = None) -> bool:
         """Update seed and/or lock status for a shot record."""
+        from app.services.scene002_contract_only import assert_protected_seed_unchanged
+        assert_protected_seed_unchanged(self, project_id, shot_id)
         now = datetime.now().isoformat()
         updates = ["updated_at = ?"]
         params = [now]
@@ -12121,6 +12835,18 @@ class DatabaseStorage:
             conn.commit()
         return self._screening_row_to_dict(updated)
 
+    def clear_current_screening_final(self, project_id: str) -> None:
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            conn.execute(
+                """UPDATE screening_project_state
+                   SET current_final_output_id = NULL, completion_status = 'in_progress',
+                       completed_at = NULL, updated_at = ?
+                   WHERE project_id = ?""",
+                (now, project_id),
+            )
+            conn.commit()
+
     def get_screening_project_state(self, project_id: str) -> dict[str, Any]:
         with self._get_connection() as conn:
             row = conn.execute(
@@ -12564,7 +13290,7 @@ class DatabaseStorage:
     # Character Descriptions
     # ------------------------------------------------------------------
 
-    def save_character(self, project_id: str, name: str, data: dict) -> dict:
+    def save_character(self, project_id: str, name: str, data: dict, *, create_only: bool = False) -> dict:
         """Upsert a character record. Matches on (project_id, name).
 
         Handles the Phase 1 dual-read columns (appearance_core, appearance_notes,
@@ -12584,6 +13310,8 @@ class DatabaseStorage:
                     (project_id, name),
                 )
                 existing = cursor.fetchone()
+                if existing and create_only:
+                    raise ValueError("Character already exists")
                 if existing:
                     char_id = existing["id"]
                     cursor.execute(
@@ -12828,6 +13556,34 @@ class DatabaseStorage:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def delete_unused_character_skeleton(self, project_id: str, character_id: str, expected_updated_at: str) -> bool:
+        """Remove an unchanged empty duplicate only when no persisted row references it."""
+        def quoted(identifier: str) -> str:
+            return '"' + identifier.replace('"', '""') + '"'
+
+        with self._get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM characters WHERE project_id = ? AND id = ? AND updated_at = ?",
+                               (project_id, character_id, expected_updated_at)).fetchone()
+            if not row:
+                return False
+            ignored = {"id", "project_id", "name", "created_at", "updated_at", "description_status"}
+            if row["description_status"] not in (None, "", "legacy") or any(value not in (None, "") for key, value in dict(row).items() if key not in ignored):
+                return False
+            # Include embedded JSON references, not just foreign-key columns.
+            tables = conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").fetchall()
+            for table in tables:
+                if table[0] == "characters":
+                    continue
+                table_name = quoted(table[0])
+                columns = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+                conditions = " OR ".join(f"instr(CAST({quoted(column[1])} AS TEXT), ?) > 0" for column in columns)
+                if conditions and conn.execute(f"SELECT 1 FROM {table_name} WHERE {conditions} LIMIT 1", [character_id] * len(columns)).fetchone():
+                    return False
+            conn.execute("DELETE FROM characters WHERE project_id = ? AND id = ?", (project_id, character_id))
+            conn.commit()
+            return True
+
     def delete_character(self, character_id: str, project_id: str) -> bool:
         """Delete a character record."""
         with self._get_connection() as conn:
@@ -12952,8 +13708,18 @@ class DatabaseStorage:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    # Storage-level guard: demo seeding may only ever touch the dedicated
+    # demo project (mirrors DEMO_PROJECT_ID in demo_seed_service; kept local
+    # to avoid a service-layer import cycle).
+    _DEMO_SEED_PROJECT_IDS = ("demo_studio_cinematic_001",)
+
     def seed_demo_characters(self, project_id: str) -> int:
         """Seed character descriptions for the demo project. Idempotent."""
+        if str(project_id or "") not in self._DEMO_SEED_PROJECT_IDS:
+            raise ValueError(
+                f"Demo character seeding is limited to {self._DEMO_SEED_PROJECT_IDS}; "
+                f"refused for project '{project_id}'."
+            )
         existing = self.get_characters(project_id)
         if existing:
             return 0
@@ -13234,6 +14000,11 @@ class DatabaseStorage:
         if isinstance(embedding, list):
             embedding = json.dumps(embedding)
 
+        # The registry owns creation timestamps: callers that do not supply one
+        # (confirm, uploads, URL adds) receive a server-side default instead of
+        # violating the NOT NULL constraint.
+        created_at = asset.get("created_at") or datetime.now(timezone.utc).isoformat()
+
         def _write():
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -13241,8 +14012,9 @@ class DatabaseStorage:
                     """
                     INSERT OR REPLACE INTO reference_assets
                     (ref_id, project_id, kind, image_url, embedding,
-                     source_shot_id, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                     source_shot_id, created_at, target_type, target_id, category,
+                     approval_state, canonical, source_kind)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         ref_id,
@@ -13251,7 +14023,13 @@ class DatabaseStorage:
                         asset.get("image_url", ""),
                         embedding,
                         asset.get("source_shot_id"),
-                        asset.get("created_at"),
+                        created_at,
+                        asset.get("target_type"),
+                        asset.get("target_id"),
+                        asset.get("category"),
+                        asset.get("approval_state", "approved"),
+                        1 if asset.get("canonical") else 0,
+                        asset.get("source_kind", "confirmed"),
                     ),
                 )
                 conn.commit()
@@ -13259,12 +14037,188 @@ class DatabaseStorage:
         self._execute_write_with_retry("save_reference_asset", _write)
         return True
 
+    def create_reference_asset(self, asset: dict) -> bool:
+        """Insert a confirmed asset without replacing an existing reference ID."""
+        ref_id = str(asset.get("ref_id") or "")
+        if not ref_id:
+            raise ValueError("ref_id is required")
+        embedding = asset.get("embedding")
+        if isinstance(embedding, list):
+            embedding = json.dumps(embedding)
+
+        created_at = asset.get("created_at") or datetime.now(timezone.utc).isoformat()
+
+        def _write():
+            with self._get_connection() as conn:
+                conn.execute(
+                    """INSERT INTO reference_assets
+                       (ref_id, project_id, kind, image_url, embedding, source_shot_id,
+                        created_at, target_type, target_id, category, approval_state,
+                        canonical, source_kind)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        ref_id, asset.get("project_id", ""), asset.get("kind", "character_full"),
+                        asset.get("image_url", ""), embedding, asset.get("source_shot_id"),
+                        created_at, asset.get("target_type"), asset.get("target_id"),
+                        asset.get("category"), asset.get("approval_state", "approved"),
+                        1 if asset.get("canonical") else 0, asset.get("source_kind", "confirmed"),
+                    ),
+                )
+                conn.commit()
+                return True
+
+        return bool(self._execute_write_with_retry("create_reference_asset", _write))
+
+    def create_scene002_setting_reference(
+        self, *, ref_id: str, project_id: str, image_url: str, created_at: str, category: str | None = None,
+    ) -> bool:
+        """Create the exact Scene 002 setting candidate without any upsert path."""
+        if (not ref_id.startswith("ref_set_") or project_id != "project_5907c60cddbc"
+                or not image_url):
+            raise ValueError("A fresh ref_set_ ID, exact project_id, and image_url are required")
+
+        def _write():
+            with self._get_connection() as conn:
+                conn.execute(
+                    """INSERT INTO reference_assets
+                       (ref_id, project_id, kind, image_url, embedding, source_shot_id,
+                        created_at, target_type, target_id, category, approval_state,
+                        canonical, source_kind)
+                       VALUES (?, ?, 'environment', ?, NULL, NULL, ?, 'setting',
+                               'loc-c8f88b9c', ?, 'candidate', 0, 'confirmed')""",
+                    (ref_id, project_id, image_url, created_at, category),
+                )
+                conn.commit()
+                return True
+
+        return bool(self._execute_write_with_retry("create_scene002_setting_reference", _write))
+
+    def approve_scene002_setting_reference(self, *, ref_id: str, project_id: str) -> bool:
+        """Approve only a candidate exact-target environment row."""
+        if project_id != "project_5907c60cddbc":
+            return False
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """UPDATE reference_assets SET approval_state = 'approved'
+                       WHERE ref_id = ? AND ref_id != 'ref_env_6b726885ed67ae4d'
+                         AND project_id = ? AND target_type = 'setting'
+                         AND target_id = 'loc-c8f88b9c' AND kind = 'environment'
+                         AND approval_state = 'candidate' AND canonical = 0""",
+                    (ref_id, project_id),
+                )
+                conn.commit()
+                return cursor.rowcount == 1
+
+        return bool(self._execute_write_with_retry("approve_scene002_setting_reference", _write))
+
+    def set_scene002_setting_reference_canonical(
+        self, *, ref_id: str, project_id: str, canonical: bool,
+    ) -> bool:
+        """Change only canonical state on approved exact-target environment rows."""
+        if project_id != "project_5907c60cddbc":
+            return False
+
+        def _write():
+            with self._get_connection() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                selected = conn.execute(
+                    """SELECT 1 FROM reference_assets
+                       WHERE ref_id = ? AND ref_id != 'ref_env_6b726885ed67ae4d'
+                         AND project_id = ? AND target_type = 'setting'
+                         AND target_id = 'loc-c8f88b9c' AND kind = 'environment'
+                         AND approval_state = 'approved'""",
+                    (ref_id, project_id),
+                ).fetchone()
+                if not selected:
+                    conn.rollback()
+                    return False
+                # Canonical designation is an explicit per-reference action.
+                # Do not silently rewrite any competing or same-URI reference;
+                # the creator's chosen ref_id remains the sole row changed here.
+                cursor = conn.execute(
+                    """UPDATE reference_assets SET canonical = ?
+                       WHERE ref_id = ? AND ref_id != 'ref_env_6b726885ed67ae4d'
+                         AND project_id = ? AND target_type = 'setting'
+                         AND target_id = 'loc-c8f88b9c' AND kind = 'environment'
+                         AND approval_state = 'approved'""",
+                    (1 if canonical else 0, ref_id, project_id),
+                )
+                conn.commit()
+                return cursor.rowcount == 1
+
+        return bool(self._execute_write_with_retry("set_scene002_setting_reference_canonical", _write))
+
+    def set_setting_reference_canonical(
+        self, *, ref_id: str, project_id: str, setting_id: str, canonical: bool,
+    ) -> bool:
+        """Explicitly designate one approved environment reference as canonical.
+
+        Generic sibling of ``set_scene002_setting_reference_canonical``: the
+        same eligibility predicate (exact project + setting target, kind
+        ``environment``, ``approval_state='approved'``) with no hard-coded
+        project or setting identity. There are no global singletons or
+        production projects baked in here.
+
+        Designation is exclusive within the (project, setting) scope: setting
+        ``canonical=True`` clears the flag on any *other* environment row for
+        the same scope inside one transaction, so competing canonical anchors
+        cannot coexist and production authority stays unambiguous. Only the
+        ``canonical`` flag of the selected row is written — no identity field
+        (target, URI, kind, approval state, provenance) is ever retargeted or
+        rewritten. An ineligible or missing row writes nothing and returns
+        False; a False return therefore leaves existing canonical authority
+        exactly as it was.
+        """
+        clean_ref = str(ref_id or "").strip()
+        clean_project = str(project_id or "").strip()
+        clean_setting = str(setting_id or "").strip()
+        if not clean_ref or not clean_project or not clean_setting:
+            return False
+
+        def _write():
+            with self._get_connection() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                selected = conn.execute(
+                    """SELECT 1 FROM reference_assets
+                       WHERE ref_id = ? AND project_id = ?
+                         AND target_type = 'setting' AND target_id = ?
+                         AND kind = 'environment' AND approval_state = 'approved'""",
+                    (clean_ref, clean_project, clean_setting),
+                ).fetchone()
+                if not selected:
+                    conn.rollback()
+                    return False
+                if canonical:
+                    conn.execute(
+                        """UPDATE reference_assets SET canonical = 0
+                           WHERE project_id = ? AND target_type = 'setting'
+                             AND target_id = ? AND kind = 'environment'
+                             AND ref_id != ? AND canonical != 0""",
+                        (clean_project, clean_setting, clean_ref),
+                    )
+                cursor = conn.execute(
+                    """UPDATE reference_assets SET canonical = ?
+                       WHERE ref_id = ? AND project_id = ?
+                         AND target_type = 'setting' AND target_id = ?
+                         AND kind = 'environment' AND approval_state = 'approved'""",
+                    (1 if canonical else 0, clean_ref, clean_project, clean_setting),
+                )
+                conn.commit()
+                return cursor.rowcount == 1
+
+        return bool(self._execute_write_with_retry("set_setting_reference_canonical", _write))
+
     def list_reference_assets(
         self,
         project_id: str,
         kind: str | None = None,
         source_shot_id: str | None = None,
         limit: int = 50,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        approval_state: str | None = None,
     ) -> list[dict]:
         """List confirmed reference assets for a project, optionally filtered."""
         with self._get_connection() as conn:
@@ -13278,8 +14232,17 @@ class DatabaseStorage:
             if source_shot_id:
                 query += " AND source_shot_id = ?"
                 params.append(source_shot_id)
+            if target_type:
+                query += " AND target_type = ?"
+                params.append(target_type)
+            if target_id:
+                query += " AND target_id = ?"
+                params.append(target_id)
+            if approval_state:
+                query += " AND approval_state = ?"
+                params.append(approval_state)
 
-            query += " ORDER BY created_at DESC LIMIT ?"
+            query += " ORDER BY canonical DESC, created_at DESC LIMIT ?"
             params.append(limit)
 
             cursor.execute(query, params)
@@ -13296,6 +14259,69 @@ class DatabaseStorage:
                 assets.append(asset)
 
             return assets
+
+    def reject_scene002_setting_reference(self, *, ref_id: str, project_id: str, setting_id: str) -> bool:
+        """Durably reject one exact setting reference without changing its peers or canonical flag."""
+        if project_id != "project_5907c60cddbc" or setting_id != "loc-c8f88b9c":
+            return False
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """UPDATE reference_assets SET approval_state = 'rejected'
+                       WHERE ref_id = ? AND project_id = ? AND target_type = 'setting'
+                         AND target_id = ? AND kind = 'environment'
+                         AND approval_state IN ('candidate', 'approved')""",
+                    (ref_id, project_id, setting_id),
+                )
+                conn.commit()
+                return cursor.rowcount == 1
+
+        return bool(self._execute_write_with_retry("reject_scene002_setting_reference", _write))
+
+    def update_reference_asset_state(self, ref_id: str, project_id: str, approval_state: str) -> bool:
+        """Change review state without changing canonical ownership or image data."""
+        if ref_id == "ref_env_6b726885ed67ae4d" and project_id == "project_5907c60cddbc":
+            return False
+        if approval_state not in {"candidate", "approved", "rejected"}:
+            return False
+        if approval_state == "approved":
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT approval_state FROM reference_assets WHERE ref_id = ? AND project_id = ?",
+                    (ref_id, project_id),
+                ).fetchone()
+                if row is not None and row["approval_state"] == "rejected":
+                    return False
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """UPDATE reference_assets SET approval_state = ?
+                       WHERE ref_id = ? AND project_id = ?
+                         AND (approval_state != 'rejected' OR ? != 'approved')""",
+                    (approval_state, ref_id, project_id, approval_state),
+                )
+                conn.commit()
+                return cursor.rowcount == 1
+        return bool(self._execute_write_with_retry("update_reference_asset_state", _write))
+
+    def delete_reference_asset(self, ref_id: str, project_id: str) -> bool:
+        """Delete one supporting reference; canonical rows are protected by the service."""
+        if ref_id == "ref_env_6b726885ed67ae4d" and project_id == "project_5907c60cddbc":
+            return False
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM reference_assets WHERE ref_id = ? AND project_id = ?",
+                    (ref_id, project_id),
+                )
+                conn.commit()
+                return cursor.rowcount == 1
+        return bool(self._execute_write_with_retry("delete_reference_asset", _write))
 
     def get_reference_asset(self, ref_id: str) -> dict | None:
         """Get a single reference asset by ID."""
@@ -13316,6 +14342,87 @@ class DatabaseStorage:
                 except (json.JSONDecodeError, TypeError):
                     pass
             return asset
+
+    # ── Shot Reference-Binding Confirmations (R4.2) ─────────────────────────
+
+    def save_shot_reference_confirmation(self, record: dict) -> dict | None:
+        """Upsert one durable shot confirmation, scoped to (project_id, shot_id).
+
+        The ONLY storage path for confirmation rows. Callers must have
+        explicitly confirmed the binding through the service layer — this
+        method performs no authorization itself. Re-confirming the same shot
+        replaces the previous row (one durable record per shot).
+        """
+        project_id = str(record.get("project_id") or "").strip()
+        shot_id = str(record.get("shot_id") or "").strip()
+        if not project_id or not shot_id:
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        confirmation_id = str(record.get("confirmation_id") or "").strip() or f"shotconf_{uuid4().hex[:12]}"
+
+        def _write():
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO shot_reference_confirmations
+                    (confirmation_id, project_id, scene_id, shot_id,
+                     confirmed_digest, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(project_id, shot_id) DO UPDATE SET
+                        confirmation_id = excluded.confirmation_id,
+                        scene_id = excluded.scene_id,
+                        confirmed_digest = excluded.confirmed_digest,
+                        status = excluded.status,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        confirmation_id,
+                        project_id,
+                        str(record.get("scene_id") or ""),
+                        shot_id,
+                        str(record.get("confirmed_digest") or ""),
+                        str(record.get("status") or "confirmed"),
+                        str(record.get("created_at") or now),
+                        str(record.get("updated_at") or now),
+                    ),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_shot_reference_confirmation", _write)
+        return self.get_shot_reference_confirmation(project_id, shot_id)
+
+    def get_shot_reference_confirmation(self, project_id: str, shot_id: str) -> dict | None:
+        """Return one durable confirmation row scoped to its project and shot.
+
+        A row stored under another project or shot is never returned here —
+        cross-scope reuse surfaces as "no confirmation" for the requested
+        scope, which fails closed downstream.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM shot_reference_confirmations WHERE project_id = ? AND shot_id = ?",
+                (str(project_id or ""), str(shot_id or "")),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            columns = [desc[0] for desc in cursor.description]
+            return dict(zip(columns, row))
+
+    def list_shot_reference_confirmations_for_scene(
+        self, project_id: str, scene_id: str
+    ) -> list[dict]:
+        """Return every durable confirmation row for one project scene."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM shot_reference_confirmations WHERE project_id = ? AND scene_id = ? ORDER BY shot_id",
+                (str(project_id or ""), str(scene_id or "")),
+            )
+            columns = [desc[0] for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     # ── Character Reference Locks ───────────────────────────────────────────
 

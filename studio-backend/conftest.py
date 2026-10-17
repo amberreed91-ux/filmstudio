@@ -39,11 +39,56 @@ def test_render_provider_default_isolation(monkeypatch) -> Generator[None, None,
     """
     original_provider = settings.render_video_provider
     monkeypatch.delenv("RENDER_VIDEO_PROVIDER", raising=False)
-    settings.render_video_provider = "happyhorse"
+    settings.render_video_provider = "runway"
     try:
         yield
     finally:
         settings.render_video_provider = original_provider
+
+
+# R4.5-Phase2 (#1, #17, #18 + reconciliation pollution): credential/flag keys
+# whose presence in os.environ must never influence test outcomes. The
+# developer .env (loaded process-wide by main.py at import) sets several of
+# these; without isolation any test importing main permanently changes
+# dispatch and provider defaults for every later test in the process.
+# Tests that need keys set them explicitly in-body (which runs after this).
+_HERMETIC_CREDENTIAL_ENV_KEYS = (
+    "DASHSCOPE_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "FISH_AUDIO_API_KEY",
+    "RUNWAYML_API_SECRET",
+    "RUNWAY_API_KEY",
+    "VIDEO_PROVIDER_API_KEY",
+    "GROQ_API_KEY",
+    "OPENROUTER_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "NVIDIA_API_KEY",
+    "MUSE_API_KEY",
+    "LOCAL_LTX_ENABLED",
+    "LOCAL_LTX_URL",
+)
+
+
+@pytest.fixture(scope="function", autouse=True)
+def hermetic_credential_isolation(monkeypatch) -> Generator[None, None, None]:
+    """
+    Scrub real credentials/flags from os.environ for every test and re-sync
+    import-time provider snapshots, so dotenv loaded via main.py cannot leak
+    into test state (order-dependent #1/#17/#18/pollution). Runs before
+    explicit fixtures (e.g. services constructed in fixtures bake clean env).
+    """
+    for _key in _HERMETIC_CREDENTIAL_ENV_KEYS:
+        monkeypatch.delenv(_key, raising=False)
+    try:
+        from app.services import audio_pipeline_service as _aps
+    except ImportError:
+        _aps = None  # type: ignore[assignment]
+    if _aps is not None:
+        for _flag in ("COSYVOICE_CONFIGURED", "ELEVENLABS_CONFIGURED", "FISH_AUDIO_CONFIGURED"):
+            if hasattr(_aps, _flag):
+                monkeypatch.setattr(_aps, _flag, False)
+    yield
 
 
 @pytest.fixture(scope="function", autouse=True)

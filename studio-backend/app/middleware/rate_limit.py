@@ -11,9 +11,10 @@ _BYPASS_PATHS = frozenset({"/health", "/ready", "/build-info", "/docs", "/openap
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Sliding-window rate limiter per client IP."""
 
-    def __init__(self, app, requests_per_minute: int = 120):
+    def __init__(self, app, requests_per_minute: int = 120, read_requests_per_minute: int | None = None):
         super().__init__(app)
         self.rpm = requests_per_minute
+        self.read_rpm = read_requests_per_minute or requests_per_minute
         self._buckets: dict[str, collections.deque] = {}
         self._last_cleanup = time.time()
 
@@ -25,21 +26,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if client_ip == "testclient" and getattr(request.app.state, "disable_rate_limit_for_testclient", False):
             return await call_next(request)
 
+        # Polling/room loads must not consume the budget for creator actions.
+        bucket_key = f"{client_ip}:{'read' if request.method in {'GET', 'HEAD'} else 'write'}"
         now = time.time()
 
         if now - self._last_cleanup > 60:
             self._cleanup_stale_buckets(now)
             self._last_cleanup = now
 
-        if client_ip not in self._buckets:
-            self._buckets[client_ip] = collections.deque()
+        if bucket_key not in self._buckets:
+            self._buckets[bucket_key] = collections.deque()
 
-        bucket = self._buckets[client_ip]
+        bucket = self._buckets[bucket_key]
 
         while bucket and bucket[0] < now - 60:
             bucket.popleft()
 
-        if len(bucket) >= self.rpm:
+        limit = self.read_rpm if request.method in {"GET", "HEAD"} else self.rpm
+        if len(bucket) >= limit:
             retry_after = int(bucket[0] + 60 - now) + 1
             return JSONResponse(
                 status_code=429,
@@ -49,8 +53,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         bucket.append(now)
         response = await call_next(request)
-        remaining = self.rpm - len(bucket)
-        response.headers["X-RateLimit-Limit"] = str(self.rpm)
+        remaining = limit - len(bucket)
+        response.headers["X-RateLimit-Limit"] = str(limit)
         response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
         return response
 

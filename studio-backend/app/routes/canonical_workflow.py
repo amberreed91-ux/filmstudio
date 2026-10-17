@@ -43,6 +43,25 @@ def _response(run_id: str) -> CanonicalWorkflowResponse:
     )
 
 
+def _validate_video_provider(provider: str | None) -> None:
+    if provider and provider.strip().lower() in {"openrouter", "openrouter-video"}:
+        raise HTTPException(
+            status_code=422,
+            detail="OpenRouter is retired as a Studio video provider",
+        )
+
+
+def _validate_previs_provider(provider: str | None) -> None:
+    # Checkpoint 5 Previs is simulated-only: reject any non-simulated provider
+    # at the route so POST .../previs/generate {"provider": "runway"} fails
+    # closed with a 4xx before reaching the workflow service.
+    if provider not in (None, "simulated"):
+        raise HTTPException(
+            status_code=422,
+            detail="Checkpoint 5 Previs is simulated-only; provider applies to production renders / revisions only",
+        )
+
+
 @router.get(
     "/projects/{project_id}/production-threads",
     response_model=CanonicalWorkflowListResponse,
@@ -104,6 +123,8 @@ def get_production_thread(run_id: str) -> CanonicalWorkflowResponse:
 @router.post("/production-threads/{run_id}/previs/generate", response_model=CanonicalWorkflowResponse)
 async def generate_thread_previs(run_id: str, payload: WorkflowProviderRequest | None = None) -> CanonicalWorkflowResponse:
     try:
+        _validate_video_provider(payload.provider if payload else None)
+        _validate_previs_provider(payload.provider if payload else None)
         await canonical_production_workflow_service.generate_previs(run_id, provider=payload.provider if payload else None)
         return _response(run_id)
     except StabilityError as exc:
@@ -136,6 +157,7 @@ def create_thread_production_package(run_id: str) -> CanonicalWorkflowResponse:
 @router.post("/production-threads/{run_id}/renders", response_model=CanonicalWorkflowResponse)
 async def render_thread_package(run_id: str, payload: RenderWorkflowRequest) -> CanonicalWorkflowResponse:
     try:
+        _validate_video_provider(payload.provider)
         await canonical_production_workflow_service.render_production_package(
             run_id,
             provider=payload.provider,
@@ -242,6 +264,7 @@ async def render_thread_revision(
     payload: RevisionRenderWorkflowRequest,
 ) -> CanonicalWorkflowResponse:
     try:
+        _validate_video_provider(payload.provider)
         await canonical_production_workflow_service.render_revision(run_id, provider=payload.provider)
         return _response(run_id)
     except StabilityError as exc:

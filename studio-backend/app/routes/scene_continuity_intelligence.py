@@ -319,33 +319,35 @@ async def create_render_batch(
     scene_id: str,
     payload: RenderBatchRequest,
 ) -> Dict[str, Any]:
-    """
-    Create a coordinated render batch for all shots in a scene.
-
-    Builds shared visual context once and applies it to every shot,
-    with position notes (opening / continuation / closing).
-    Jobs are submitted in parallel.
-
-    Returns the batch dict including batch_id, job_ids, and shared_context.
-    """
+    """Retired (R4.3G): direct scene-batch rendering created jobs without
+    the batch authorization preflight. Always refuses; see ``detail``."""
     if project_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if not payload.shots:
         raise HTTPException(status_code=400, detail="shots list cannot be empty")
 
-    try:
-        batch = await render_service.create_scene_batch(
-            film_id=project_id,
-            scene_id=scene_id,
-            scene_data={},
-            shots=payload.shots,
-            provider=payload.provider,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    return batch
+    # R4.3G: fail closed at the route layer only. This endpoint created one
+    # job per shot with no preflight_batch_authorization call, no
+    # confirmation-digest revalidation, and no capacity check — a mid-batch
+    # invalid shot left a partial batch behind. No job is created here; the
+    # service method itself is untouched. Use the preflighted scene pipeline.
+    raise HTTPException(
+        status_code=410,
+        detail={
+            "code": "render_batch_retired",
+            "message": (
+                "Direct scene-batch rendering is retired: it creates render "
+                "jobs without the batch authorization preflight. Use the "
+                "preflighted scene pipeline instead: POST "
+                f"/api/f51/studio/projects/{project_id}/scenes/{scene_id}/"
+                "pipeline/generate, which authorizes every shot before "
+                "creating any job."
+            ),
+            "route": f"/projects/{project_id}/scenes/{scene_id}/render-batch",
+            "replacement": f"/projects/{project_id}/scenes/{scene_id}/pipeline/generate",
+        },
+    )
 
 
 @router.get("/projects/{project_id}/render-batch/{batch_id}")
@@ -390,6 +392,10 @@ async def retry_render_job_with_context(
     job = render_service.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Render job not found")
+
+    from app.services.scene002_contract_only import is_contract_only
+    if is_contract_only(job):
+        raise HTTPException(status_code=409, detail="Altered continuity retries are prohibited for Scene 002 contract-only jobs")
 
     # Derive scene_id from shot_id if not obvious.
     shot_id = job.shot_id or ""

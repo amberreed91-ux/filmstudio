@@ -60,6 +60,7 @@ class ProductionAcceptanceContextSnapshot(BaseModel):
     package_updated_at: str = ""
     final_output_url: str = ""
     final_output_fingerprint: str = ""
+    final_output_asset_fingerprint: str = ""
     review_id: str = ""
     review_decision: str = ""
     render_job_ids: List[str] = Field(default_factory=list)

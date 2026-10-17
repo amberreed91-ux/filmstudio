@@ -18,6 +18,10 @@ class AssembleFilmResponse(BaseModel):
     scene_count: int
     total_duration_seconds: float | None
     has_audio: bool
+    acceptance_status: str = "unverified"
+    acceptance_report_id: str | None = None
+    package_id: str | None = None
+    screening_output_id: str | None = None
 
 
 class CutFreshness(BaseModel):

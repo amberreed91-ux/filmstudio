@@ -63,7 +63,7 @@ class ApprovalRequest(BaseModel):
 
 
 class WorkflowProviderRequest(BaseModel):
-    # Omission preserves the approved provider, or uses the server default for Previs.
+    # Previs ignores provider; Checkpoint 5 previs is simulated-only. Provider applies to production renders / revisions only.
     provider: str | None = Field(default=None, min_length=1, pattern=r"^\S+$")
 
 

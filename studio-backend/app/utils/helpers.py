@@ -9,14 +9,16 @@ from typing import Any, Dict, List
 #   * Old (manual):     scene_002_shot_001
 #   * New (auto-split): shot_scene_002_001
 _SCENE_ID_RE = re.compile(r"scene_\d+")
+_SCENE_PREFIXED_SHOT_RE = re.compile(r"^(scene_.+)_shot_\d+$")
 _SHOT_NUMBER_RE = re.compile(r"_(\d+)$")
 
 
 def derive_scene_id_from_shot_id(shot_id: str) -> str:
     """Derive a ``scene_id`` from a ``shot_id``.
 
-    Supports both shot_id formats produced by the pipeline:
+    Supports shot IDs produced by the pipeline:
       * Old (manual):       scene_002_shot_001  -> scene_002
+      * Scene slug:         scene_lantern_17_shot_001 -> scene_lantern_17
       * New (auto-split):   shot_scene_002_001  -> scene_002
 
     The ``scene_<digits>`` token is located *anywhere* inside the shot_id so
@@ -29,6 +31,9 @@ def derive_scene_id_from_shot_id(shot_id: str) -> str:
     match = _SCENE_ID_RE.search(shot_id)
     if match:
         return match.group(0)
+    prefixed_match = _SCENE_PREFIXED_SHOT_RE.fullmatch(shot_id)
+    if prefixed_match:
+        return prefixed_match.group(1)
     return "_".join(shot_id.split("_")[:2]) if "_" in shot_id else shot_id
 
 

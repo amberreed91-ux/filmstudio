@@ -50,6 +50,9 @@ venv*/
 # Environment files
 .env
 .env.local
+# Credential backup env files are never tracked
+.env.buffie-backup
+.env.*.backup
 
 # Databases
 *.db
@@ -70,3 +73,9 @@ models/piper/*.onnx
 models/piper/*.onnx.json
 studio-backend/models/piper/*.onnx
 studio-backend/models/piper/*.onnx.json
+
+# ── 2026-09-27 recovery incident: protect evidentiary artifacts from git clean ──
+studio-backend/.validation/
+studio-backend/data/quarantine_stale_wal_20260927/
+studio-backend/data/recovery_artifacts_20260927/
+studio-backend/data/recovery-snapshots/

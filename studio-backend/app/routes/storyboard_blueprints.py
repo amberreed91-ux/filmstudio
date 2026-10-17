@@ -5,6 +5,8 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 
+from app.access_context import access_user_id
+
 from app.services.stability import StabilityError
 from app.services.storyboard_blueprint_service import storyboard_blueprint_service
 
@@ -22,7 +24,7 @@ class CreateStoryboardBlueprintRequest(BaseModel):
 
 
 class ApproveStoryboardVersionRequest(BaseModel):
-    approved_by: str = "creator"
+    approved_by: str | None = None
     acknowledged_warnings: list[str] = Field(default_factory=list)
 
 
@@ -157,12 +159,17 @@ def approve_storyboard_version(
     version_id: str,
     payload: ApproveStoryboardVersionRequest = Body(default_factory=ApproveStoryboardVersionRequest),
 ) -> dict[str, Any]:
+    actor_id = access_user_id.get()
+    if actor_id and payload.approved_by is not None and payload.approved_by != actor_id:
+        raise HTTPException(status_code=403, detail="Storyboard approver identity is server-assigned")
+    approver_id = actor_id or payload.approved_by or "creator"
     try:
         return _serialize(
             storyboard_blueprint_service.approve_version(
                 blueprint_id=blueprint_id,
                 version_id=version_id,
-                approved_by=payload.approved_by,
+                approved_by=approver_id,
+                approval_actor_authenticated=bool(actor_id),
             )
         )
     except StabilityError as exc:

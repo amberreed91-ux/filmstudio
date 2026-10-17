@@ -26,7 +26,7 @@ class LoginResponse(BaseModel):
 
 
 @router.post("/register", response_model=LoginResponse)
-async def register(request: RegisterRequest, response: Response):
+async def register(request: RegisterRequest, response: Response, http_request: Request):
     """Register new user with password validation"""
     result, error = auth_service.register(
         username=request.username,
@@ -41,15 +41,18 @@ async def register(request: RegisterRequest, response: Response):
     if error:
         raise HTTPException(status_code=401, detail=error)
     # Set session cookie
+    # Secure only over HTTPS: a Secure flag on plain-http loopback hosts
+    # (notably 127.0.0.1 in strict browsers) makes the browser silently drop
+    # the cookie, which reads as a permanent "Authentication required" loop.
     response.set_cookie(
         key="session_id",
         value=result["session"]["session_id"],
         httponly=True,
         samesite="lax",
         max_age=86400,
-        secure=True  # In production, set to True with HTTPS
+        secure=http_request.url.scheme == "https",
     )
-    
+
     return LoginResponse(
         user=result["user"],
         session_id=result["session"]["session_id"]
@@ -69,14 +72,14 @@ async def login(request: LoginRequest, response: Response, http_request: Request
     if error:
         raise HTTPException(status_code=401, detail=error)
     
-    # Set session cookie
+    # Set session cookie (Secure only over HTTPS — see register above).
     response.set_cookie(
         key="session_id",
         value=result["session"]["session_id"],
         httponly=True,
         samesite="lax",
         max_age=86400,
-        secure=True
+        secure=http_request.url.scheme == "https",
     )
     
     return LoginResponse(

@@ -11,6 +11,24 @@ class ReferenceAsset(BaseModel):
     embedding: list[float] | None = None
     source_shot_id: str | None = None
     project_id: str
+    # Optional library provenance. Legacy confirmed assets remain valid and
+    # continue to behave as project-level references when these are absent.
+    target_type: Literal["character", "setting"] | None = None
+    target_id: str | None = None
+    category: str | None = None
+    approval_state: Literal["candidate", "approved", "rejected"] = "approved"
+    canonical: bool = False
+    source_kind: Literal["confirmed", "uploaded", "generated"] = "confirmed"
+    # Snapshot provenance carried from existing character look locks. These
+    # fields are trace-only; provider projection never writes them back.
+    reference_role: str | None = None
+    look_id: str | None = None
+    lock_status: str | None = None
+    source_status: str | None = None
+    review_status: str | None = None
+    capture_method: str | None = None
+    reliability: str | None = None
+    reference_created_at: str | None = None
 
 
 class CharacterReferenceLock(BaseModel):
@@ -55,6 +73,10 @@ class ConsistencyPayload(BaseModel):
     weights: dict[str, float] = {}
     mode: Literal["identity_lock", "style_transfer", "environment_lock"]
     fallback_text: dict[str, str] = {}
+    # Internal, deterministic selection audit (why each reference was chosen,
+    # why others were excluded). For debugging and reproducibility in job
+    # metadata/logs — never surfaced to filmmakers and never sent to providers.
+    selection_audit: list[dict[str, Any]] | None = None
 
 
 class ConsistencyIsolationError(ValueError):

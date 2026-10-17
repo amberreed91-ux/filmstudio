@@ -26,7 +26,12 @@ class Settings(BaseSettings):
     # Render settings
     simulated_provider_enabled: bool = True
     max_concurrent_jobs: int = 50
-    render_video_provider: str = "happyhorse"
+    render_video_provider: str = "runway"
+
+    # Local LTX via Phosphene (Pinokio-managed, Apple Silicon/MLX). Declared so
+    # the .env keys are accepted; the adapter reads these values itself.
+    local_ltx_enabled: bool = False
+    local_ltx_url: str = "http://127.0.0.1:8198"
 
     # Production queue settings
     production_queue_enabled: bool = True
@@ -75,9 +80,33 @@ class Settings(BaseSettings):
     # adherence_service reads these to choose qwen / gemini / openrouter.
     adherence_vision_provider: str = "qwen"
     adherence_vision_model: str = ""
-    # Video render model on OpenRouter (default alibaba/happyhorse-1.1, the
-    # same model as DashScope). Set to e.g. bytedance/seedance-2.5 to switch.
-    openrouter_video_model: str = "alibaba/happyhorse-1.1"
+
+    # Muse Glimmer 30B — advisory chat/intelligence model (Co-Director chat).
+    # Credential is read only from the environment; never hardcoded or logged.
+    muse_api_key: str | None = None
+    muse_api_base_url: str = "https://api.muse.example.com/v1"
+    muse_timeout_seconds: float = 20.0
+
+    # NVIDIA hosted image generation (FLUX.2 Klein 4B, model id
+    # flux.2-klein-4b on NVIDIA's OpenAI-compatible image provider seam).
+    # Credential is read only from the environment; never hardcoded or logged.
+    nvidia_api_key: str | None = None
+    nvidia_image_api_base_url: str = "https://ai.api.nvidia.com"
+    nvidia_image_timeout_seconds: float = 120.0
+
+    # Image provider seam selection (providers/image_provider.py). The seam is
+    # config-gated: FLUX.2 Klein 4B via NVIDIA is only used when the operator
+    # sets IMAGE_PROVIDER_ENABLED=true and IMAGE_PROVIDER_NAME=nvidia. Defaults
+    # keep the legacy behavior (seam disabled → local fallback) unchanged.
+    image_provider_enabled: bool = False
+    image_provider_name: str = ""
+
+    # Runway image provider (gen4_image) — additive; credential is read by the
+    # provider module's own environment reader (RUNWAY_API_KEY, with the
+    # established RUNWAYML_API_SECRET fallback). Never hardcoded or logged.
+    runway_api_key: str | None = None
+    runway_image_api_base_url: str = "https://api.dev.runwayml.com"
+    runway_image_timeout_seconds: float = 180.0
 
     # CORS settings
     cors_origins: str = ""  # Comma-separated production origins. Empty = same-origin only.
