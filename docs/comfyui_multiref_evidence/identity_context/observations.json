@@ -1,0 +1,120 @@
+{
+  "workstream": "Phantom identity and context conditioning validation",
+  "date": "2026-09-24",
+  "method": "Manual visual inspection of exported frames (contact sheets in ./contact/) plus pixel differentials in ./differential_verdict.json. No numerical identity scores, no percentages, no ranking.",
+  "inspection_constraint": "At the tested configuration (448x448, medium close-up, 9 frames) the subject's face occupies a small part of the frame and several arms fail structurally, so fine facial structure (iris detail, nostril shape, lip line) is NOT resolvable in most frames. Observations are therefore restricted to what is actually visible: coarse facial structure where intact, apparent skin tone, hair length/texture/colour, wardrobe, silhouette, background, and frame-to-frame consistency.",
+  "approved_reference_roles": {
+    "REF1_maya_face": {
+      "file": "reference_inputs/icp_maya_face.png",
+      "ref_id": "ref_look_e46ec07463f33414",
+      "authority": "characters.continuity_state_json.appearance_approval.face_image_url, status=locked, version=1, character chr_3c9e91741ef3 (MAYA), project_5907c60cddbc; also an approved reference_assets row (kind=character_face)",
+      "observed_content": "Portrait, 1104x1472: a dark-skinned woman with long dark locs, an earth-toned layered canvas jacket, holding a crumpled piece of paper, against a dark city skyline with a lit tower."
+    },
+    "REF2_maya_alt_angle": {
+      "file": "reference_inputs/icp_maya_alt_angle.jpg",
+      "ref_id": "charlock_c452e7d94c88",
+      "authority": "character_reference_locks, reference_role=alternate_angle, lock_status=locked, source_status=approved, review_status=approved, character chr_3c9e91741ef3 (MAYA)",
+      "observed_content": "Landscape, 1286x716: a sunset waterfront/pier with distant figures and an empty foreground. NO character portrait and no identifiable character is visible. It is a scene frame for scene_001_shot_001.",
+      "metadata_vs_content": "The row's reference_role says 'alternate_angle' (a character view). The pixels are a scene frame. This mismatch is the central metadata finding of this workstream."
+    },
+    "REF3_environment": {
+      "file": "reference_inputs/icp_env_scene002.png",
+      "ref_id": "ref_env_6b726885ed67ae4d",
+      "authority": "reference_assets, kind=environment, approval_state=approved, source_shot_id=scene_002_shot_001, no target_id",
+      "observed_content": "Landscape, 1664x928: a ruined, overgrown city street under a pale sky, with two small distant figures."
+    },
+    "REF2b_maya_look_02": {
+      "file": "reference_inputs/icp_maya_look_02.png",
+      "ref_id": null,
+      "authority": "characters.continuity_state_json.appearance_casting_jobs[0].images[1] for MAYA; NOT an approved reference_assets row (approval is inherited from the locked+approved MAYA appearance record, not explicit per-image)",
+      "observed_content": "Portrait, 1104x1472: the same dark-skinned woman with long dark locs in a layered jacket, night city skyline, city lights."
+    }
+  },
+  "arm_observations": {
+    "ICA_identity_only": {
+      "refs": ["REF1"],
+      "frames_inspected": 9,
+      "render_state": "Structurally broken at every sampled frame: the mouth reads as a solid black horizontal slot; the eyes appear as bright blue glowing discs; strong magenta/cyan banding and a blown highlight down the centre of the face.",
+      "facial_structure": "A face is present but malformed; eye/nose/mouth/jaw structure is not resolvable.",
+      "skin_and_hair": "Apparent skin tone medium-dark; hair dark and long.",
+      "wardrobe": "Dark with bright chromatic patches; a pale jacket front is visible.",
+      "identity_consistency_across_frames": "The same corruption appears in every frame - temporally stable, but consistently broken.",
+      "background": "Dark with warm red/green vertical elements; no resolvable setting."
+    },
+    "ICB_identity_support": {
+      "refs": ["REF1", "REF2"],
+      "frames_inspected": 9,
+      "render_state": "Clean and stable across every sampled frame, with a slow lighting change from warm key to greenish side light.",
+      "facial_structure": "Resolvable and internally consistent across frames: nose, mouth and jaw are normally formed.",
+      "eyes": "Rendered as blank pale sclera with no visible iris detail.",
+      "skin_and_hair": "Apparent skin tone markedly LIGHTER than REF1; shoulder-length light-brown hair, NOT locs.",
+      "wardrobe": "Pale and light-toned, not the earth-toned canvas jacket of REF1.",
+      "identity_vs_REF1": "The subject does not resemble the approved MAYA appearance; skin tone, hair and wardrobe all differ from the canonical portrait.",
+      "background": "Warm neutral gradient; the REF2 pier/sunset setting does not appear."
+    },
+    "ICC_identity_env": {
+      "refs": ["REF1", "REF3"],
+      "frames_inspected": 9,
+      "render_state": "Frame 0 is a plausible render; frames 1-8 collapse progressively into a blue/violet amorphous smear and the face is lost by frame 2 without recovering.",
+      "facial_structure": "Resolvable only in frame 0.",
+      "skin_and_hair": "Frame 0: dark-skinned woman, short dark hair, warm rim light on the left.",
+      "identity_vs_REF1": "Frame 0 is the most MAYA-plausible frame of the whole experiment at the coarse level (dark skin, dark hair, warm practical wardrobe). No facial structure is resolvable, so no stronger claim is made.",
+      "environment": "NO recognizable setting at any frame. The approved ruined-city reference does not appear as architecture, street, ruins or matching lighting.",
+      "identity_consistency_across_frames": "Fails after frame 1."
+    },
+    "ICD_identity_support_env": {
+      "refs": ["REF1", "REF2", "REF3"],
+      "frames_inspected": 9,
+      "render_state": "Frames 0-4 are the highest-fidelity renders produced by any arm: sharp, sharp-edged, stable portrait. Frames 5-8 degrade progressively into ghost/double exposures, dark patches over the eyes and a rainbow ring fringe.",
+      "facial_structure": "Resolvable and consistent across frames 0-4.",
+      "skin_and_hair": "Light-skinned woman with long, straight, dark-blonde hair. NOT locs.",
+      "wardrobe": "Pale, plain shoulder-baring top.",
+      "identity_vs_REF1": "Does not resemble the approved MAYA appearance; identity is effectively replaced.",
+      "environment": "A flat, featureless neutral grey/olive backdrop. The approved ruined-city reference does not appear; if anything the background carries LESS structure than in arms without REF3.",
+      "identity_consistency_across_frames": "Holds while the render holds (frames 0-4), then fails with the render."
+    },
+    "ICE_order_swapped": {
+      "refs": ["REF2", "REF1"],
+      "frames_inspected": 9,
+      "render_state": "Clean and stable across all 9 frames, with a persistent magenta band across the forehead.",
+      "facial_structure": "Resolvable and consistent across frames: nose, mouth and jaw normally formed.",
+      "eyes": "Dark sockets; iris detail not resolvable.",
+      "skin_and_hair": "Dark-skinned woman with long dark wavy hair. Darker than ICB/ICD, closer to REF1's palette, but the hair reads as long loose waves rather than locs.",
+      "wardrobe": "Dark muted layers; the REF1 crumpled paper and canvas jacket are not reproduced.",
+      "environment": "Warm-lit interior-like background with a window-like glow; the REF2 pier setting does not appear.",
+      "ordering_effect": "Swapping REF1 and REF2 (same two references, same everything else) changed the apparent subject from a light-skinned light-haired woman (ICB) to a dark-skinned dark-haired woman (ICE). Reference ORDER therefore carries a strong semantic effect on apparent identity."
+    },
+    "ICG_identity_second_look": {
+      "refs": ["REF1", "REF2b"],
+      "frames_inspected": 9,
+      "render_state": "Unstable. Frame 0 is a soft ghosted/doubled face; frame 4 contains several overlapping faces/figures within one frame; frame 8 shows a diagonal dark streak across the face.",
+      "facial_structure": "Not resolvable; composition does not hold.",
+      "identity_vs_REF1": "Not assessable. Two portraits of the same character did not converge on a single stable subject.",
+      "environment": "Warm, ambiguous."
+    },
+    "ICF_repeat_identity": {
+      "refs": ["REF1 (byte-identical copy under a new filename)"],
+      "frames_inspected": 9,
+      "result": "Pixel-identical to ICA on all 9 frames (max per-frame mean absolute difference 0.0).",
+      "note": "The output FILE sha256 differs from ICA even though the pixels are identical, because ComfyUI embeds the submitted workflow JSON (which contains the reference filename) in the artifact metadata. See determinism_probe reports."
+    },
+    "ICZ_png_probe": {
+      "refs": ["REF1, lossless PNG output"],
+      "frames_inspected": 9,
+      "result": "Visually the same corrupted render as ICA. Max per-frame mean absolute difference vs the lossy animated-WebP arm is 6.24.",
+      "conclusion": "The heavy banding and chromatic fringing are present in the lossless PNG as well, so they originate at the model/VAE level, not in the WebP encoder. The lossy animated-WebP encoding adds a further chroma-subsampling error of a few grey levels on top."
+    }
+  },
+  "cross_arm_summary": {
+    "reported_not_scored": true,
+    "observations": [
+      "Every arm's output changed when the reference set changed: all seven comparably-configured arm pairs differ in pixels (max per-frame mean absolute differences 35.5 to 90.6).",
+      "Apparent identity (skin tone, hair colour and texture) changed with the reference set, and the change was not in the direction of preserving REF1's approved appearance in most arms.",
+      "Reference ORDER changed apparent identity: ICB [REF1,REF2] rendered a light-skinned light-haired subject while ICE [REF2,REF1] rendered a dark-skinned dark-haired subject with the same two references.",
+      "Adding the approved ENVIRONMENT reference did not produce the environment: no arm containing REF3 shows the ruined city, its architecture, or its lighting.",
+      "Adding the Studio-designated supporting character reference (REF2) correlates with CLEANER renders in this sample (ICB, ICE clean; ICA, ICC, ICG broken), but that reference is a scene frame, not a character view, so it cannot be said to contribute character information.",
+      "Two portraits of the same character (ICG) did not stabilise identity; that arm was the least coherent of the set.",
+      "Frame-to-frame stability is arm-dependent and not monotonic in reference count: 1 ref (ICA) stably broken, 2 refs either clean (ICB, ICE) or collapsing (ICC, ICG), 3 refs clean for 5 frames then degrading (ICD)."
+    ]
+  }
+}

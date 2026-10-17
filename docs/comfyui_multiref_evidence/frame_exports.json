@@ -1,0 +1,106 @@
+{
+  "A1_face_only": {
+    "source": "cmr_00001_.webp",
+    "frames": 9,
+    "size": [
+      448,
+      448
+    ],
+    "exported": {
+      "first": "docs/comfyui_multiref_evidence/A1_face_only/frames/first.png",
+      "middle": "docs/comfyui_multiref_evidence/A1_face_only/frames/middle.png",
+      "last": "docs/comfyui_multiref_evidence/A1_face_only/frames/last.png"
+    }
+  },
+  "B1_face_wardrobe": {
+    "source": "cmr_00002_.webp",
+    "frames": 9,
+    "size": [
+      448,
+      448
+    ],
+    "exported": {
+      "first": "docs/comfyui_multiref_evidence/B1_face_wardrobe/frames/first.png",
+      "middle": "docs/comfyui_multiref_evidence/B1_face_wardrobe/frames/middle.png",
+      "last": "docs/comfyui_multiref_evidence/B1_face_wardrobe/frames/last.png"
+    }
+  },
+  "B1_repeat": {
+    "source": "cmr_00003_.webp",
+    "frames": 9,
+    "size": [
+      448,
+      448
+    ],
+    "exported": {
+      "first": "docs/comfyui_multiref_evidence/B1_repeat/frames/first.png",
+      "middle": "docs/comfyui_multiref_evidence/B1_repeat/frames/middle.png",
+      "last": "docs/comfyui_multiref_evidence/B1_repeat/frames/last.png"
+    }
+  },
+  "B2_face_env": {
+    "source": "cmr_00008_.webp",
+    "frames": 9,
+    "size": [
+      448,
+      448
+    ],
+    "exported": {
+      "first": "docs/comfyui_multiref_evidence/B2_face_env/frames/first.png",
+      "middle": "docs/comfyui_multiref_evidence/B2_face_env/frames/middle.png",
+      "last": "docs/comfyui_multiref_evidence/B2_face_env/frames/last.png"
+    }
+  },
+  "D1_env_single": {
+    "source": "cmr_00004_.webp",
+    "frames": 9,
+    "size": [
+      448,
+      448
+    ],
+    "exported": {
+      "first": "docs/comfyui_multiref_evidence/D1_env_single/frames/first.png",
+      "middle": "docs/comfyui_multiref_evidence/D1_env_single/frames/middle.png",
+      "last": "docs/comfyui_multiref_evidence/D1_env_single/frames/last.png"
+    }
+  },
+  "R1_real_maya": {
+    "source": "cmr_00005_.webp",
+    "frames": 9,
+    "size": [
+      448,
+      448
+    ],
+    "exported": {
+      "first": "docs/comfyui_multiref_evidence/R1_real_maya/frames/first.png",
+      "middle": "docs/comfyui_multiref_evidence/R1_real_maya/frames/middle.png",
+      "last": "docs/comfyui_multiref_evidence/R1_real_maya/frames/last.png"
+    }
+  },
+  "R2_real_maya_angle": {
+    "source": "cmr_00006_.webp",
+    "frames": 9,
+    "size": [
+      448,
+      448
+    ],
+    "exported": {
+      "first": "docs/comfyui_multiref_evidence/R2_real_maya_angle/frames/first.png",
+      "middle": "docs/comfyui_multiref_evidence/R2_real_maya_angle/frames/middle.png",
+      "last": "docs/comfyui_multiref_evidence/R2_real_maya_angle/frames/last.png"
+    }
+  },
+  "R3_real_maya_other_char": {
+    "source": "cmr_00007_.webp",
+    "frames": 9,
+    "size": [
+      448,
+      448
+    ],
+    "exported": {
+      "first": "docs/comfyui_multiref_evidence/R3_real_maya_other_char/frames/first.png",
+      "middle": "docs/comfyui_multiref_evidence/R3_real_maya_other_char/frames/middle.png",
+      "last": "docs/comfyui_multiref_evidence/R3_real_maya_other_char/frames/last.png"
+    }
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "title": "All 9 frames \u2014 environment-relevant arms",
+  "meta": "Background/setting inspection: does the environment reference (REF3 = approved ruined-city storyboard) appear as the setting? Compare ICC and ICD (have REF3) against ICE (no REF3).",
+  "columns": 5,
+  "thumb_width": 400,
+  "groups": [
+    {
+      "heading": "ICC [REF1 face + REF3 environment]",
+      "items": [
+        {
+          "path": "ICC_identity_env/frames/frame_00.png",
+          "caption": "frame_00"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_01.png",
+          "caption": "frame_01"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_02.png",
+          "caption": "frame_02"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_03.png",
+          "caption": "frame_03"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_04.png",
+          "caption": "frame_04"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_05.png",
+          "caption": "frame_05"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_06.png",
+          "caption": "frame_06"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_07.png",
+          "caption": "frame_07"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_08.png",
+          "caption": "frame_08"
+        }
+      ]
+    },
+    {
+      "heading": "ICD [REF1 face + REF2 alt_angle + REF3 environment]",
+      "items": [
+        {
+          "path": "ICD_identity_support_env/frames/frame_00.png",
+          "caption": "frame_00"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_01.png",
+          "caption": "frame_01"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_02.png",
+          "caption": "frame_02"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_03.png",
+          "caption": "frame_03"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_04.png",
+          "caption": "frame_04"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_05.png",
+          "caption": "frame_05"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_06.png",
+          "caption": "frame_06"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_07.png",
+          "caption": "frame_07"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_08.png",
+          "caption": "frame_08"
+        }
+      ]
+    },
+    {
+      "heading": "ICE [REF2 alt_angle, REF1 face]",
+      "items": [
+        {
+          "path": "ICE_order_swapped/frames/frame_00.png",
+          "caption": "frame_00"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_01.png",
+          "caption": "frame_01"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_02.png",
+          "caption": "frame_02"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_03.png",
+          "caption": "frame_03"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_04.png",
+          "caption": "frame_04"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_05.png",
+          "caption": "frame_05"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_06.png",
+          "caption": "frame_06"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_07.png",
+          "caption": "frame_07"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_08.png",
+          "caption": "frame_08"
+        }
+      ]
+    }
+  ]
+}

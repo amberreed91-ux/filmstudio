@@ -1,0 +1,24 @@
+{
+  "title": "Approved reference_assets — kind=character_face (ref_look_*, source_kind=confirmed)",
+  "meta": "All 6 resolving approved character_face rows in studio-backend/data/studio.db (read-only). Files under studio-backend/outputs/references/character-looks/54f20532b4dd2ea190563995/. These rows carry no target_id, so no character binding is recorded in the Reference Library.",
+  "columns": 3,
+  "thumb_width": 470,
+  "groups": [
+    {
+      "heading": "ref_look_f98ad9ab5d1c48b79ad948c514ff64ea / 080c6d15af524af1b9c67072c4cfb8bd / b8e9254004f842f9a5b0a417631342ac",
+      "items": [
+        {"path": "character_looks/fcde27491523ffc80907ff1d/f98ad9ab5d1c48b79ad948c514ff64ea.png", "caption": "ref_look_005f852638f5d162"},
+        {"path": "character_looks/7f7c004cdc5aca8c96c9a002/080c6d15af524af1b9c67072c4cfb8bd.png", "caption": "ref_look_5992ae85d7ebddc0"},
+        {"path": "character_looks/0570e9a816defe3f420d8be8/b8e9254004f842f9a5b0a417631342ac.png", "caption": "ref_look_87b04afe81963373"}
+      ]
+    },
+    {
+      "heading": "ref_look_73dfd149a1f44658818d10689fef1d69 / 128cc1ba90c240e5b8b25dc06efffec3 / 4721e10e92054918936b3bc79d971749",
+      "items": [
+        {"path": "character_looks/eaf2c1cb03f2e4f7fd740916/73dfd149a1f44658818d10689fef1d69.png", "caption": "ref_look_cfe3f6ce97b0f870"},
+        {"path": "character_looks/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png", "caption": "ref_look_e46ec07463f33414"},
+        {"path": "character_looks/62f4a1efc6509685f2d042fc/4721e10e92054918936b3bc79d971749.png", "caption": "ref_look_e6326bc566c1e716"}
+      ]
+    }
+  ]
+}

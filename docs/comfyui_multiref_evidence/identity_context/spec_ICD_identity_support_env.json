@@ -1,0 +1,71 @@
+{
+  "title": "Arm D - identity + supporting + environment  [ICD_identity_support_env]",
+  "meta": "Arm D: can identity + supporting + environment coexist? | status=success runtime=148.4s encoder=SaveAnimatedWEBP (lossy, quality 90, fps 16) | seed 870124 448x448 9 frames 10 steps CFG 6.0 uni_pc/simple shift 8.0 | min free mem 2.64 GiB",
+  "columns": 4,
+  "thumb_width": 460,
+  "groups": [
+    {
+      "heading": "Reference set used (in order)",
+      "items": [
+        {
+          "path": "reference_inputs/icp_maya_face.png",
+          "caption": "REF1 maya_face (approved+locked MAYA face portrait)"
+        },
+        {
+          "path": "reference_inputs/icp_maya_alt_angle.jpg",
+          "caption": "REF2 maya_alt_angle (locked/approved MAYA alternate_angle lock)"
+        },
+        {
+          "path": "reference_inputs/icp_env_scene002.png",
+          "caption": "REF3 environment (approved ref_env_6b726885ed67ae4d)"
+        }
+      ]
+    },
+    {
+      "heading": "Generated frames 0-4 (of 9)",
+      "items": [
+        {
+          "path": "ICD_identity_support_env/frames/frame_00.png",
+          "caption": "frame_00"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_01.png",
+          "caption": "frame_01"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_02.png",
+          "caption": "frame_02"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_03.png",
+          "caption": "frame_03"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_04.png",
+          "caption": "frame_04"
+        }
+      ]
+    },
+    {
+      "heading": "Generated frames 5-8",
+      "items": [
+        {
+          "path": "ICD_identity_support_env/frames/frame_05.png",
+          "caption": "frame_05"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_06.png",
+          "caption": "frame_06"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_07.png",
+          "caption": "frame_07"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_08.png",
+          "caption": "frame_08"
+        }
+      ]
+    }
+  ]
+}

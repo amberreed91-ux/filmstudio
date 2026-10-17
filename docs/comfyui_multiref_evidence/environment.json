@@ -1,0 +1,190 @@
+{
+  "experiment_id": "cmr-phantom-1_3B-2026-09-24",
+  "server": "http://127.0.0.1:8190",
+  "comfyui": {
+    "os": "darwin",
+    "ram_total": 17179869184,
+    "ram_free": 7960969216,
+    "comfyui_version": "0.37.2",
+    "required_frontend_version": "1.52.7",
+    "installed_templates_version": "0.11.69",
+    "required_templates_version": "0.11.69",
+    "comfy_package_versions": [
+      {
+        "name": "comfyui-frontend-package",
+        "installed": "1.52.7",
+        "required": "1.52.7"
+      },
+      {
+        "name": "comfyui-workflow-templates",
+        "installed": "0.11.69",
+        "required": "0.11.69"
+      },
+      {
+        "name": "comfyui-embedded-docs",
+        "installed": "0.5.12",
+        "required": "0.5.12"
+      },
+      {
+        "name": "comfy-kitchen",
+        "installed": "0.2.35",
+        "required": "0.2.35"
+      },
+      {
+        "name": "comfy-aimdo",
+        "installed": "0.5.5",
+        "required": "0.5.5"
+      }
+    ],
+    "python_version": "3.13.12 (main, Feb 12 2026, 01:06:02) [Clang 21.1.4 ]",
+    "pytorch_version": "2.12.1",
+    "embedded_python": false,
+    "deploy_environment": "local-desktop2-standalone",
+    "argv": [
+      "ComfyUI/main.py",
+      "--feature-flag",
+      "show_signin_button=true",
+      "--feature-flag",
+      "enable_telemetry=true",
+      "--enable-manager",
+      "--extra-model-paths-config",
+      "/Users/amberreed/Library/Application Support/Comfy Desktop/instance-model-paths/inst-1790243545529.yaml",
+      "--input-directory",
+      "/Users/amberreed/ComfyUI-Shared/input",
+      "--output-directory",
+      "/Users/amberreed/ComfyUI-Shared/output",
+      "--port",
+      "8190"
+    ]
+  },
+  "devices": [
+    {
+      "name": "mps",
+      "type": "mps",
+      "index": null,
+      "vram_total": 17179869184,
+      "vram_free": 7961001984,
+      "torch_vram_total": 17179869184,
+      "torch_vram_free": 7961001984
+    }
+  ],
+  "host": "Apple M1 Pro",
+  "host_memory_bytes": 17179869184,
+  "macos": "26.7",
+  "comfy_processes": [
+    {
+      "pid": 31261,
+      "cmd": "/Users/amberreed/ComfyUI-Installs/ComfyUI (2)/ComfyUI/.venv/bin/python3 -s ComfyUI/main.py --feature-flag show_signin_button=true --feature-flag enable_telemetry=true --enable-manager --extra-model-paths-config /Users/amberreed/Library/Application Support/Comfy Desktop/instance-model-paths/inst-1790243545529.yaml --input-directory /Users/amberreed/ComfyUI-Shared/input --output-directory /Users/amberreed/ComfyUI-Shared/output --port 8190"
+    },
+    {
+      "pid": 32330,
+      "cmd": "/Users/amberreed/ComfyUI-Installs/ComfyUI (3)/ComfyUI/.venv/bin/python3 -s ComfyUI/main.py --feature-flag show_signin_button=true --feature-flag enable_telemetry=true --enable-manager --extra-model-paths-config /Users/amberreed/Library/Application Support/Comfy Desktop/instance-model-paths/inst-1790243939029.yaml --input-directory /Users/amberreed/ComfyUI-Shared/input --output-directory /Users/amberreed/ComfyUI-Shared/output --port 8191"
+    }
+  ],
+  "local_backend_pid": null,
+  "model": {
+    "file": "Phantom-Wan-1_3B_fp16.safetensors",
+    "bytes": 2874796408,
+    "sha256_prefix": "a12df8ce62cf8e5ad7820d97579be463",
+    "sha256_prefix_note": "sha256 of first 8 MiB only (full-file hashing is out of budget)",
+    "tensor_count": 825,
+    "block_count": 30,
+    "patch_embedding_weight_shape": [
+      1536,
+      16,
+      1,
+      2,
+      2
+    ],
+    "metadata": {
+      "format": "pt"
+    }
+  },
+  "vae": 253815318,
+  "text_encoder": 6735906897,
+  "seed": 870124,
+  "steps": 10,
+  "cfg": 6.0,
+  "shift": 8.0,
+  "sampler": "uni_pc",
+  "scheduler": "simple",
+  "resolution": "448x448",
+  "frames": 9,
+  "fps": 16,
+  "negative_conditioning_output": 2,
+  "positive_prompt": "a woman with dark hair in practical layered neutrals walks through a warm brick loft interior, cinematic natural light, steady camera",
+  "negative_prompt": "low quality, blurry, distorted, text, watermark",
+  "reference_files": {
+    "face": "cmr_face_maya.jpg",
+    "fullbody": "cmr_fullbody_maya.jpg",
+    "env": "cmr_env_canonical.jpg",
+    "real_maya_general": "cmr_real_maya_general.jpg",
+    "real_maya_angle": "cmr_real_maya_angle.jpg",
+    "real_mom_general": "cmr_real_mom_general.jpg",
+    "real_env": "cmr_real_env.png",
+    "fullbody_copy": "cmr_fullbody_maya_copy.jpg"
+  },
+  "reference_provenance": {
+    "face": {
+      "comfy_input_file": "cmr_face_maya.jpg",
+      "source_path": "/Users/amberreed/ComfyUI-Shared/input/cmr_face_maya.jpg",
+      "sha256": "628ed92f4868714f98f22debff9c973af76f564ae04491b2ab6ee5729619b7a1",
+      "bytes": 21557,
+      "role": "synthetic character face reference (consumption test)"
+    },
+    "fullbody": {
+      "comfy_input_file": "cmr_fullbody_maya.jpg",
+      "source_path": "/Users/amberreed/ComfyUI-Shared/input/cmr_fullbody_maya.jpg",
+      "sha256": "8ee7b06e422e78dc2cf5069c687a09e41e4f38bdc041a4891716a3b9fca1fe9c",
+      "bytes": 22024,
+      "role": "synthetic character full-body reference (consumption test)"
+    },
+    "env": {
+      "comfy_input_file": "cmr_env_canonical.jpg",
+      "source_path": "/Users/amberreed/ComfyUI-Shared/input/cmr_env_canonical.jpg",
+      "sha256": "cca180e76facf782c1be4402be0b2803bf585cebb4b3b4bac1b6118283a630ff",
+      "bytes": 23737,
+      "role": "synthetic environment reference (consumption test)"
+    },
+    "real_maya_general": {
+      "comfy_input_file": "cmr_real_maya_general.jpg",
+      "source_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/references/project_5907c60cddbc/job-20260905135041-9e3dc24c-scene_001_shot_001_scene_001_shot_001_reference.jpg",
+      "sha256": "1fb9427b1087dd468eab62d935922b24cf4f2e1e85b64a568cbef1faf98d87ae",
+      "bytes": 197545,
+      "role": "character_reference_locks charlock_bfec79ba3679 MAYA general locked/approved (high reliability)"
+    },
+    "real_maya_angle": {
+      "comfy_input_file": "cmr_real_maya_angle.jpg",
+      "source_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/references/project_5907c60cddbc/job-20260905135041-9e3dc24c-scene_001_shot_001_scene_001_shot_001_reference_3.jpg",
+      "sha256": "ccee12b36e5821c8ed6b69636ab0671dce135f1baba0454de2952a4aeedc4be7",
+      "bytes": 115708,
+      "role": "character_reference_locks charlock_c452e7d94c88 MAYA alternate_angle locked/approved"
+    },
+    "real_mom_general": {
+      "comfy_input_file": "cmr_real_mom_general.jpg",
+      "source_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/references/project_5907c60cddbc/job-20260905135241-4ee841a8-scene_001_shot_002_scene_001_shot_002_reference.jpg",
+      "sha256": "db52672f8c833d8e5c27cabc1569ed1adadbd9e8fb9611829ee1b77f985836a5",
+      "bytes": 88501,
+      "role": "character_reference_locks charlock_344bea5a21b1 MOM general locked/approved (high reliability)"
+    },
+    "real_env": {
+      "comfy_input_file": "cmr_real_env.png",
+      "source_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/outputs/previs/project_5907c60cddbc/scene_002_shot_001_storyboard_qwen.png",
+      "sha256": "7af0843e8b26cb29c824816777e74fdf89bd4108947b18cb70fad92323de1552",
+      "bytes": 2644340,
+      "role": "reference_assets ref_env_6b726885ed67ae4d kind=environment approved"
+    },
+    "fullbody_copy": {
+      "comfy_input_file": "cmr_fullbody_maya_copy.jpg",
+      "source_path": "/Users/amberreed/ComfyUI-Shared/input/cmr_fullbody_maya.jpg",
+      "sha256": "8ee7b06e422e78dc2cf5069c687a09e41e4f38bdc041a4891716a3b9fca1fe9c",
+      "bytes": 22024,
+      "role": "byte-identical copy of synthetic full-body reference (cache-bypass determinism control)"
+    }
+  },
+  "reference_roles": {
+    "face": "Studio character face reference (validation asset)",
+    "fullbody": "Studio character full-body reference (validation asset)",
+    "env": "environment/setting reference (validation asset)"
+  }
+}

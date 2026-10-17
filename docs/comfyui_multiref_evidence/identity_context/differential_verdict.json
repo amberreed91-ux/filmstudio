@@ -1,0 +1,167 @@
+{
+  "method": "All differentials are decided on decoded pixels. Raw output file sha256 is recorded for traceability but is NOT a valid discriminator here: ComfyUI embeds the workflow/prompt JSON in the artifact metadata, so hashes differ even when pixels are identical (proved by the determinism probe).",
+  "output_file_sha256": {
+    "ICA_identity_only": "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb",
+    "ICB_identity_support": "df391b113e7828b3ec71b49e8a27e728daa1a83ce9272c5f1d30183fefec3af9",
+    "ICC_identity_env": "2097ba55615495975e469555054dbddab4be4583459f88c6f75a0ab81782fffc",
+    "ICD_identity_support_env": "7a1c08c8c65273320c19a7fadc0acc9379dfb25982df437b171157c06e344cc7",
+    "ICG_identity_second_look": "6d14c1a74ba8c4824db8ee2147e9d1ae9c5c116d44d88c012e1912c1a6884d92",
+    "ICE_order_swapped": "b34f8cc8d73c72bfe82c979d625784b5b828f4b196a728cee4de142f5c4d860f",
+    "ICF_repeat_identity": "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+    "ICH_probe_copy3": null,
+    "ICZ_png_probe": "9e935f1fd43154d8367fc0918de5d3a3366fb8f2db99186937317de5213f6953"
+  },
+  "pixels_identical": {
+    "ICA_vs_ICB": false,
+    "ICA_vs_ICC": false,
+    "ICA_vs_ICG": false,
+    "ICC_vs_ICD": false,
+    "ICB_vs_ICD": false,
+    "ICB_vs_ICE": false,
+    "ICA_vs_ICF": true,
+    "ICA_vs_ICZ_encoder": false
+  },
+  "frame_diffs": {
+    "ICA_vs_ICB": {
+      "compared": true,
+      "frames_compared": 9,
+      "mean_abs_diff_per_frame": [
+        60.2952,
+        53.7009,
+        49.9742,
+        48.3066,
+        48.8561,
+        34.8017,
+        48.8111,
+        35.3587,
+        27.2468
+      ],
+      "max_frame_diff": 60.2952,
+      "pixels_identical": false
+    },
+    "ICA_vs_ICC": {
+      "compared": true,
+      "frames_compared": 9,
+      "mean_abs_diff_per_frame": [
+        32.1952,
+        30.6429,
+        35.5513,
+        37.6794,
+        39.8495,
+        31.4106,
+        33.3766,
+        40.7564,
+        39.67
+      ],
+      "max_frame_diff": 40.7564,
+      "pixels_identical": false
+    },
+    "ICA_vs_ICG": {
+      "compared": true,
+      "frames_compared": 9,
+      "mean_abs_diff_per_frame": [
+        31.1968,
+        29.3596,
+        35.1303,
+        34.7522,
+        35.5042,
+        26.7141,
+        27.5344,
+        28.4602,
+        26.406
+      ],
+      "max_frame_diff": 35.5042,
+      "pixels_identical": false
+    },
+    "ICC_vs_ICD": {
+      "compared": true,
+      "frames_compared": 9,
+      "mean_abs_diff_per_frame": [
+        70.3118,
+        67.7902,
+        57.1294,
+        52.6839,
+        52.7693,
+        66.4751,
+        53.7073,
+        61.9867,
+        69.3615
+      ],
+      "max_frame_diff": 70.3118,
+      "pixels_identical": false
+    },
+    "ICB_vs_ICD": {
+      "compared": true,
+      "frames_compared": 9,
+      "mean_abs_diff_per_frame": [
+        52.2647,
+        50.3007,
+        46.967,
+        46.8427,
+        48.1935,
+        63.2325,
+        53.0724,
+        74.9837,
+        90.6453
+      ],
+      "max_frame_diff": 90.6453,
+      "pixels_identical": false
+    },
+    "ICB_vs_ICE": {
+      "compared": true,
+      "frames_compared": 9,
+      "mean_abs_diff_per_frame": [
+        53.822,
+        47.6142,
+        44.5394,
+        42.703,
+        43.8918,
+        32.4842,
+        43.6559,
+        33.2612,
+        26.3117
+      ],
+      "max_frame_diff": 53.822,
+      "pixels_identical": false
+    },
+    "ICA_vs_ICF": {
+      "compared": true,
+      "frames_compared": 9,
+      "mean_abs_diff_per_frame": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max_frame_diff": 0.0,
+      "pixels_identical": true
+    },
+    "ICA_vs_ICZ_encoder": {
+      "compared": true,
+      "frames_compared": 9,
+      "mean_abs_diff_per_frame": [
+        5.7768,
+        5.7697,
+        6.004,
+        5.9937,
+        6.2426,
+        5.217,
+        4.9757,
+        5.0005,
+        4.8293
+      ],
+      "max_frame_diff": 6.2426,
+      "pixels_identical": false
+    }
+  },
+  "ordering_changes_pixels_ICB_vs_ICE": true,
+  "deterministic_ICA_vs_ICF_same_pixels": true,
+  "environment_changes_pixels_ICA_vs_ICC": true,
+  "support_reference_changes_pixels_ICA_vs_ICB": true,
+  "note": "pixels_identical=False with a recomputed sampler means the reference changed the generation; it does NOT by itself mean the reference had a useful semantic effect. Semantic observations are in the report."
+}

@@ -42,6 +42,20 @@ start_backend() {
   submit_job "$BACKEND_LABEL" "cd '$BACKEND_DIR' && set -a && source .env && set +a && STUDIO_ACCESS_MODE=local RATE_LIMIT_PER_MINUTE=600 '$python' -m uvicorn main:app --host 127.0.0.1 --port $BACKEND_PORT > '$LOG_DIR/backend.log' 2>&1"
 }
 
+wait_for_backend_ready() {
+  local attempts=30
+  local status
+
+  for _ in $(seq 1 "$attempts"); do
+    status="$(curl --silent --output /dev/null --write-out '%{http_code}' --connect-timeout 1 --max-time 2 'http://127.0.0.1:8010/ready' || true)"
+    if [[ "$status" == "200" ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 start_frontend() {
   if port_is_listening "$FRONTEND_PORT"; then
     return
@@ -73,6 +87,12 @@ wait_for_port() {
 }
 
 start_backend
+
+if ! wait_for_backend_ready; then
+  printf 'AI Film Studio backend failed to become ready at http://127.0.0.1:8010/ready after 30 attempts.\n' >&2
+  exit 1
+fi
+
 start_frontend
 
 if ! wait_for_port "$FRONTEND_PORT" 30; then

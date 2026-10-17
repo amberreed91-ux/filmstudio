@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Film Studio — Live Demo Walkthrough</title>
+<style>
+  :root {
+    --bg: #09090b;
+    --panel: #101013;
+    --line: #27272a;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --warm: #d3c5ac;
+    --amber: #fde68a;
+    --amber-deep: #f59e0b;
+    --cyan: #4cd7f6;
+    --ok: #86efac;
+    --ok-deep: #14532d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 70% -10%, rgba(245,158,11,0.07), transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, rgba(76,215,246,0.05), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .deck { height: 100vh; width: 100vw; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 5vh 5vw 8.5vh;
+  }
+  .slide.active { display: flex; animation: fadeIn 420ms ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .kicker {
+    font-size: 12px; letter-spacing: 0.35em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .kicker .num { color: var(--muted); }
+  .kicker .live {
+    font-size: 10px; color: var(--ok);
+    display: inline-flex; align-items: center; gap: 6px; letter-spacing: 0.2em;
+  }
+  .kicker .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+
+  h1 { font-size: clamp(28px, 4.2vw, 56px); font-weight: 650; letter-spacing: 0.01em; }
+  h2 { font-size: clamp(22px, 3vw, 40px); font-weight: 620; letter-spacing: -0.01em; }
+  h2 small { color: var(--muted); font-weight: 500; font-size: 0.55em; letter-spacing: 0.02em; }
+
+  .sub { color: var(--muted); margin-top: 12px; font-size: clamp(14px, 1.4vw, 18px); max-width: 60ch; line-height: 1.6; }
+
+  .body { flex: 1; display: flex; gap: 2.6vw; align-items: center; min-height: 0; margin-top: 2vh; }
+  .body.column { flex-direction: column; justify-content: center; gap: 3vh; }
+
+  .shot {
+    flex: 1.65; min-width: 0; max-height: 62vh; align-self: stretch;
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+    background: #000;
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .shot img { width: 100%; height: 100%; object-fit: contain; object-position: top center; display: block; }
+  .shot .tag {
+    position: absolute; top: 12px; left: 12px;
+    font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase;
+    background: rgba(9,9,11,0.72); border: 1px solid var(--line);
+    color: var(--warm); padding: 5px 10px; border-radius: 999px;
+    backdrop-filter: blur(6px);
+  }
+
+  .notes { flex: 1; min-width: 300px; max-width: 42ch; }
+  .notes .label {
+    font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--cyan); margin-bottom: 12px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .notes .label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); }
+
+  .notes p { color: var(--warm); line-height: 1.7; font-size: clamp(13px, 1.28vw, 16.5px); margin-bottom: 16px; }
+  .notes p b { color: var(--amber); font-weight: 600; }
+  .notes p .code { font-family: "JetBrains Mono", monospace; font-size: 0.92em; color: var(--text); }
+
+  .quote {
+    border-left: 2px solid var(--amber-deep);
+    padding: 2px 0 2px 16px; color: #e4e4e7; font-style: italic;
+    line-height: 1.7; font-size: clamp(15px, 1.5vw, 19px); max-width: 56ch;
+  }
+
+  .specs { margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .spec-chip {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.06em;
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 12px; color: var(--muted);
+  }
+  .spec-chip.ok { color: var(--ok); border-color: var(--ok-deep); background: rgba(22,101,52,0.18); }
+  .spec-chip.amber { color: var(--amber); border-color: rgba(245,158,11,0.35); }
+  .spec-chip.cyan { color: var(--cyan); border-color: rgba(76,215,246,0.3); }
+
+  .meta { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 3vh; align-items: center; }
+  .chip {
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 15px; font-size: 12.5px; color: var(--muted);
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip.amber-border { border-color: rgba(245,158,11,0.4); }
+  .chip.amber-border b { color: var(--amber); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid #14532d; background: #052e16; color: #86efac;
+    border-radius: 999px; padding: 6px 14px; font-size: 12.5px; letter-spacing: 0.1em;
+  }
+  .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+
+  /* Title slide */
+  .title-slide { justify-content: center; align-items: flex-start; padding-top: 0; }
+  .title-slide .rule { width: 64px; height: 2px; background: var(--amber-deep); margin: 26px 0; }
+  .title-slide .sub { max-width: 66ch; }
+  .title-slide .rooms {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4vh; max-width: 60ch;
+  }
+  .room-chip {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; color: var(--warm); background: var(--panel);
+  }
+  .room-chip.hl { color: var(--amber); border-color: rgba(245,158,11,0.4); }
+
+  .matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 2vh; max-width: 88ch; }
+  .matrix-row {
+    display: flex; gap: 12px; align-items: flex-start;
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; background: var(--panel);
+  }
+  .matrix-row .k {
+    font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.2em;
+    color: var(--amber); min-width: 130px; padding-top: 3px;
+  }
+  .matrix-row .v { color: var(--warm); font-size: 14px; line-height: 1.55; }
+
+  .footer {
+    position: fixed; left: 5vw; right: 5vw; bottom: 2.5vh;
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 50;
+  }
+  .nav { display: flex; gap: 10px; }
+  .nav button {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 18px; font-size: 13px; cursor: pointer;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+  .nav button:hover { border-color: var(--amber-deep); }
+  .dots { display: flex; gap: 8px; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #3f3f46; cursor: pointer; border: none; padding: 0;
+    transition: all 200ms ease;
+  }
+  .dot.active { background: var(--amber); transform: scale(1.3); }
+  .keys { opacity: 0.65; font-size: 12px; }
+
+  /* Step progress rail */
+  .progress { position: fixed; left: 5vw; right: 5vw; top: 0; height: 2px; z-index: 50; background: var(--line); }
+  .progress .fill { height: 100%; background: linear-gradient(90deg, var(--amber-deep), var(--amber)); transition: width 320ms ease; }
+
+  @media (max-width: 1000px) {
+    .body { flex-direction: column; align-items: stretch; }
+    .shot { max-height: 40vh; }
+    .notes { max-width: none; }
+    .slide { overflow-y: auto; }
+    .matrix { grid-template-columns: 1fr; }
+    .notes p { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="progress"><div class="fill" id="progressFill"></div></div>
+<div class="deck" id="deck">
+
+  <!-- 0 · Title -->
+  <section class="slide title-slide active">
+    <div class="kicker">Live demo walkthrough <span class="num">— captured from the running app</span></div>
+    <h1>AI Film Studio</h1>
+    <div class="rule"></div>
+    <p class="sub">Most AI video tools can generate clips. Very few can direct a film.
+      Studio is a cinematic operating system that carries creative intent from first evidence to final package —
+      room-based, memory-aware, and honest about what it knows.</p>
+    <div class="rooms">
+      <span class="room-chip hl">The Gate</span>
+      <span class="room-chip">The Study</span>
+      <span class="room-chip">The Previs Bay</span>
+      <span class="room-chip">The Board</span>
+      <span class="room-chip">The Theater</span>
+      <span class="room-chip">Crew Ops</span>
+    </div>
+    <div class="meta">
+      <span class="chip">Captured · <b>September 2026</b></span>
+      <span class="chip">Seeded project · <b>Demo Studio Cinematic 001</b></span>
+      <span class="badge">Decision gate · Ready</span>
+    </div>
+  </section>
+
+  <!-- 1 · The Gate -->
+  <section class="slide">
+    <div class="kicker">01 · <span class="num">The Gate</span> <span class="live">Backend LIVE</span></div>
+    <h2>Resume the film, not the interface</h2>
+    <div class="body">
+      <div class="shot"><span class="tag">The Gate</span><img src="screenshots/00-landing.png" alt="The Gate — Studio Landing" /></div>
+      <div class="notes">
+        <div class="label">Demo beat — one tap back into the production</div>
+        <p>The Gate is the front door, lit like a projection booth. One click on <b>CONTINUE FILM</b> drops you straight into the Screening Room — with the backend, render queue, and last render stats already in view.</p>
+        <p>The <b>AI crew</b> is present before you even enter the building: Director, Writer, Cinematographer, Editor, Composer — each with a <span class="code">ACTIVE / IDLE</span> state and a trail of last activity.</p>
+        <div class="specs">
+          <span class="spec-chip amber">Continue Film</span>
+          <span class="spec-chip cyan">Switch Project</span>
+          <span class="spec-chip ok">Backend ONLINE</span>
+          <span class="spec-chip">Queue n jobs</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · Studio Lobby -->
+  <section class="slide">
+    <div class="kicker">02 · <span class="num">Studio Home</span></div>
+    <h2>One front door for the whole film</h2>
+    <div class="body">
+      <div class="shot"><span class="tag">Studio Home</span><img src="screenshots/01-lobby.png" alt="Studio Lobby" /></div>
+      <div class="notes">
+        <div class="label">Demo beat — momentum</div>
+        <p>The lobby is where a film <b>resumes</b> instead of restarting. Seeded films — <span class="code">I was reborn</span>, <span class="code">SIX</span>, <span class="code">THE LAST TIDE</span> — sit in a continue grid, each carrying its scene count, last-edit time, and status so you know exactly what's waiting.</p>
+        <p>The Route Directory makes the mental model visible: <b>The Page, The Previs Bay, The Board, The Theater, The Study, The Vault</b> — one continuous state, six rooms.</p>
+        <div class="specs">
+          <span class="spec-chip amber">Start a new film</span>
+          <span class="spec-chip">14 scenes · reborn</span>
+          <span class="spec-chip">In progress</span>
+          <span class="spec-chip">Creative crew standby</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · Study Room -->
+  <section class="slide">
+    <div class="kicker">03 · <span class="num">The Study</span></div>
+    <h2>The Permanent Studio Brain</h2>
+    <div class="body">
+      <div class="shot"><span class="tag">The Study</span><img src="screenshots/02-study-room.png" alt="Study Room" /></div>
+      <div class="notes">
+        <div class="label">Demo beat — understanding before advice</div>
+        <p>The Study stocks the film's rules: a reference library organized by craft — <b>cinematography, editing, sound, narrative, visual, character, world</b> — attached into the <span class="code">PERMANENT STUDIO BRAIN</span> with one click.</p>
+        <p>Director memory is here too. Every saved decision is <b>explicit, editable, and forgettable</b> — the studio learns the direction you believe in, and never claims a preference you didn't save.</p>
+        <div class="specs">
+          <span class="spec-chip amber">Add selected → Brain</span>
+          <span class="spec-chip">Category filters</span>
+          <span class="spec-chip cyan">Director memory</span>
+          <span class="spec-chip ok">Project-scoped</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · Previs Bay -->
+  <section class="slide">
+    <div class="kicker">04 · <span class="num">The Previs Bay</span> <span class="live">Backend ONLINE</span></div>
+    <h2>Bring shots to life with intent</h2>
+    <div class="body">
+      <div class="shot"><span class="tag">The Previs Bay</span><img src="screenshots/03-previs.png" alt="Previs Bay" /></div>
+      <div class="notes">
+        <div class="label">Demo beat — intent into shot direction</div>
+        <p>Previs is where a script beat becomes a directable visual plan: storyboard blueprint → continuity review → render contract. Each shot carries a <b>camera preset, framing, seed, and the cinematic reasoning</b> behind it.</p>
+        <p>The render stage is explicit — <span class="code">Prepare → Generate → Compose → Video ready</span> — so the pipeline reads like a craft pipeline, not a black box.</p>
+        <div class="specs">
+          <span class="spec-chip amber">Continue to continuity</span>
+          <span class="spec-chip cyan">Camera presets</span>
+          <span class="spec-chip">Seed locked</span>
+          <span class="spec-chip ok">Storyboard approved</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · Production Board -->
+  <section class="slide">
+    <div class="kicker">05 · <span class="num">The Board</span></div>
+    <h2>The whole film in sequence</h2>
+    <div class="body">
+      <div class="shot"><span class="tag">The Board</span><img src="screenshots/04-production-board.png" alt="Production Board" /></div>
+      <div class="notes">
+        <div class="label">Demo beat — execution with context</div>
+        <p>The Board stands the film up as a wall of frames: scenes in order, storyboard state stamped on each card, queue health in one strip, and render activity streaming beneath.</p>
+        <p>Switch between <b>Scene wall / Production / Creative advice</b> to see the film as sequence, as pipeline, or through the crew's eyes — the five department advisers follow the footage wherever it goes.</p>
+        <div class="specs">
+          <span class="spec-chip amber">Scene wall</span>
+          <span class="spec-chip amber">Production</span>
+          <span class="spec-chip amber">Creative advice</span>
+          <span class="spec-chip cyan">Live render queue</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · Screening Room -->
+  <section class="slide">
+    <div class="kicker">06 · <span class="num">The Theater</span></div>
+    <h2>Watch. Review. Approve. Deliver.</h2>
+    <div class="body">
+      <div class="shot"><span class="tag">The Theater</span><img src="screenshots/05-screening-room.png" alt="Screening Room" /></div>
+      <div class="notes">
+        <div class="label">Demo beat — the film comes first</div>
+        <p>The Theater paces like a real viewing. The player carries the take; <span class="code">Scene → Shot → Take</span> selectors keep the full history one click away, in a room that breathes like a cinema.</p>
+        <p>The intelligence here is honest, not cosmetic: <b>why this shot matters</b>, co-director notes on request, audience perspective, and editorial/audio/design specialist review — then an approval gate that hands the film to production.</p>
+        <div class="specs">
+          <span class="spec-chip amber">Why this shot matters</span>
+          <span class="spec-chip cyan">Co-director notes</span>
+          <span class="spec-chip">Audience lens</span>
+          <span class="spec-chip ok">Approve → Deliver</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · Crew Ops -->
+  <section class="slide">
+    <div class="kicker">07 · <span class="num">Crew Ops</span></div>
+    <h2>The live pulse of production</h2>
+    <div class="body">
+      <div class="shot"><span class="tag">Crew Ops</span><img src="screenshots/06-crew-ops.png" alt="Crew Ops" /></div>
+      <div class="notes">
+        <div class="label">Demo beat — confidence it can ship</div>
+        <p>Crew Ops reports operational truth in plain language: the decision gate reads <b>READY — approved cut can be packaged</b>, and every department signs in — Study, Previs, Production, Screening.</p>
+        <p>Renders, reviews, and packages are counted in the open, with retry and reconcile recovery for failed jobs — the engine room stays connected to the same creative context as every other room.</p>
+        <div class="specs">
+          <span class="spec-chip ok">Gate READY</span>
+          <span class="spec-chip">Live render jobs</span>
+          <span class="spec-chip">Provider status</span>
+          <span class="spec-chip amber">Recovery · Retry</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · Close -->
+  <section class="slide title-slide">
+    <div class="kicker">Closing</div>
+    <h1>From first evidence to final cut</h1>
+    <div class="rule"></div>
+    <p class="quote" style="font-size: clamp(17px, 2vw, 24px);">"Studio is not another AI video wrapper. It is a cinematic operating system that keeps creative memory alive from first evidence to final cut — and it only ever remembers what you choose to teach it."</p>
+    <div class="meta">
+      <span class="chip">6 rooms · one continuous project state</span>
+      <span class="chip amber-border">Explicit memory · editable · forgettable</span>
+      <span class="badge">Gate · Ready to package</span>
+    </div>
+  </section>
+
+</div>
+
+<div class="footer">
+  <div class="nav">
+    <button id="prev">← Prev</button>
+    <button id="next">Next →</button>
+  </div>
+  <div class="dots" id="dots"></div>
+  <div class="keys">Arrow keys navigate · <span id="pos">1 / 9</span></div>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const dotsEl = document.getElementById('dots');
+  const fill = document.getElementById('progressFill');
+  const posEl = document.getElementById('pos');
+  let index = 0;
+
+  slides.forEach((_, i) => {
+    const d = document.createElement('button');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+    d.addEventListener('click', () => go(i));
+    dotsEl.appendChild(d);
+  });
+  const dots = Array.from(dotsEl.children);
+
+  function go(i) {
+    index = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach((s, k) => s.classList.toggle('active', k === index));
+    dots.forEach((d, k) => d.classList.toggle('active', k === index));
+    fill.style.width = ((index + 1) / slides.length * 100) + '%';
+    posEl.textContent = (index + 1) + ' / ' + slides.length;
+  }
+  document.getElementById('prev').addEventListener('click', () => go(index - 1));
+  document.getElementById('next').addEventListener('click', () => go(index + 1));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(index + 1); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(index - 1); }
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+  });
+  go(0);
+</script>
+</body>
+</html>

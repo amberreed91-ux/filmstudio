@@ -1,0 +1,27 @@
+{
+  "project": "REPLACE WITH YOUR PROJECT TITLE",
+  "source": "REPLACE WITH GOVERNING SCREENPLAY DRAFT",
+  "purpose": "Master cast list for casting and character asset planning",
+  "category_rules": {
+    "principal": "Core leads; plan persistent references and approve looks in the app.",
+    "supporting": "Major story-driving roles.",
+    "recurring": "Returning characters across scenes or periods.",
+    "featured": "Named limited-screen-time roles.",
+    "day_players": "Brief roles; specify scene context.",
+    "background_groups": "Crowds and atmosphere; do not infer individual permanent identities."
+  },
+  "principal": [
+    {
+      "script_name": "REPLACE WITH CHARACTER NAME",
+      "age_timeline": "REPLACE WITH AGES AND STORY YEARS",
+      "function": "REPLACE WITH STORY FUNCTION",
+      "asset": "Persistent character reference required; approval pending"
+    }
+  ],
+  "supporting": [],
+  "recurring": [],
+  "featured": [],
+  "day_players": [],
+  "background_groups": [],
+  "referenced_or_archival_only": []
+}

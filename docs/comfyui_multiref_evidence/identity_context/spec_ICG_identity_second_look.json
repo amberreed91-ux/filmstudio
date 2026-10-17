@@ -1,0 +1,67 @@
+{
+  "title": "Supplementary - identity + second portrait of the same character  [ICG_identity_second_look]",
+  "meta": "Supplementary: does a second genuine portrait of the same character reinforce identity? | status=success runtime=120.3s encoder=SaveAnimatedWEBP (lossy, quality 90, fps 16) | seed 870124 448x448 9 frames 10 steps CFG 6.0 uni_pc/simple shift 8.0 | min free mem 4.36 GiB",
+  "columns": 4,
+  "thumb_width": 460,
+  "groups": [
+    {
+      "heading": "Reference set used (in order)",
+      "items": [
+        {
+          "path": "reference_inputs/icp_maya_face.png",
+          "caption": "REF1 maya_face (approved+locked MAYA face portrait)"
+        },
+        {
+          "path": "reference_inputs/icp_maya_look_02.png",
+          "caption": "REF2b maya_look_02 (2nd casting image, same locked MAYA look)"
+        }
+      ]
+    },
+    {
+      "heading": "Generated frames 0-4 (of 9)",
+      "items": [
+        {
+          "path": "ICG_identity_second_look/frames/frame_00.png",
+          "caption": "frame_00"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_01.png",
+          "caption": "frame_01"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_02.png",
+          "caption": "frame_02"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_03.png",
+          "caption": "frame_03"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_04.png",
+          "caption": "frame_04"
+        }
+      ]
+    },
+    {
+      "heading": "Generated frames 5-8",
+      "items": [
+        {
+          "path": "ICG_identity_second_look/frames/frame_05.png",
+          "caption": "frame_05"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_06.png",
+          "caption": "frame_06"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_07.png",
+          "caption": "frame_07"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_08.png",
+          "caption": "frame_08"
+        }
+      ]
+    }
+  ]
+}

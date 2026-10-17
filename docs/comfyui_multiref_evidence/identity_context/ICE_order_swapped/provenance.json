@@ -1,0 +1,516 @@
+{
+  "arm": "ICE_order_swapped",
+  "question": "Ordering: does swapping reference 1 and 2 change the output?",
+  "prompt_id": "bb1c0c38-9bca-429f-a817-8c5392c572f5",
+  "status": "success",
+  "completed": true,
+  "runtime_seconds": 120.3,
+  "reference_order": [
+    "maya_alt_angle",
+    "maya_face"
+  ],
+  "reference_files_in_order": [
+    "icp_maya_alt_angle.jpg",
+    "icp_maya_face.png"
+  ],
+  "reference_source_paths_in_order": [
+    "studio-backend/outputs/references/project_5907c60cddbc/job-20260905135041-9e3dc24c-scene_001_shot_001_scene_001_shot_001_reference_3.jpg",
+    "studio-backend/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png"
+  ],
+  "reference_roles_in_order": [
+    "body/alternate angle per metadata; observed pixels are a scene frame (no character visible)",
+    "identity (authoritative approved face for MAYA)"
+  ],
+  "reference_sha256": {
+    "icp_maya_alt_angle.jpg": "ccee12b36e5821c8ed6b69636ab0671dce135f1baba0454de2952a4aeedc4be7",
+    "icp_maya_face.png": "06a9c8a4da66cd98ef3769a9ef48d0da3ca27d5d8fe1263be85fc56bdc264238"
+  },
+  "workflow_json": {
+    "1": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "type": "wan",
+        "device": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "1",
+          0
+        ],
+        "text": "a woman, neutral expression, cinematic natural light, medium close-up, steady camera"
+      }
+    },
+    "3": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "1",
+          0
+        ],
+        "text": "low quality, blurry, distorted, text, watermark"
+      }
+    },
+    "4": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "Phantom-Wan-1_3B_fp16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "5": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan_2.1_vae.safetensors"
+      }
+    },
+    "6": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "10": {
+      "class_type": "WanPhantomSubjectToVideo",
+      "inputs": {
+        "positive": [
+          "2",
+          0
+        ],
+        "negative": [
+          "3",
+          0
+        ],
+        "vae": [
+          "5",
+          0
+        ],
+        "width": 448,
+        "height": 448,
+        "length": 9,
+        "batch_size": 1,
+        "images": [
+          "26",
+          0
+        ]
+      }
+    },
+    "30": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "seed": 870124,
+        "steps": 10,
+        "cfg": 6.0,
+        "sampler_name": "uni_pc",
+        "scheduler": "simple",
+        "positive": [
+          "10",
+          0
+        ],
+        "negative": [
+          "10",
+          2
+        ],
+        "latent_image": [
+          "10",
+          3
+        ],
+        "denoise": 1.0
+      }
+    },
+    "40": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "30",
+          0
+        ],
+        "vae": [
+          "5",
+          0
+        ]
+      }
+    },
+    "50": {
+      "class_type": "SaveAnimatedWEBP",
+      "inputs": {
+        "images": [
+          "40",
+          0
+        ],
+        "filename_prefix": "icp",
+        "fps": 16,
+        "lossless": false,
+        "quality": 90,
+        "method": "default"
+      }
+    },
+    "20": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "icp_maya_alt_angle.jpg"
+      }
+    },
+    "60": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "image": [
+          "20",
+          0
+        ],
+        "upscale_method": "bilinear",
+        "width": 448,
+        "height": 448,
+        "crop": "center"
+      }
+    },
+    "21": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "icp_maya_face.png"
+      }
+    },
+    "61": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "image": [
+          "21",
+          0
+        ],
+        "upscale_method": "bilinear",
+        "width": 448,
+        "height": 448,
+        "crop": "center"
+      }
+    },
+    "26": {
+      "class_type": "ImageBatch",
+      "inputs": {
+        "image1": [
+          "60",
+          0
+        ],
+        "image2": [
+          "61",
+          0
+        ]
+      }
+    }
+  },
+  "workflow_sha256": "d433d883902f38493b37107e21c779511189a2c2528eaff504daeec9ee583293",
+  "graph_map": {
+    "node_ids": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "10",
+      "20",
+      "21",
+      "26",
+      "30",
+      "40",
+      "50",
+      "60",
+      "61"
+    ],
+    "load_image_nodes": {
+      "20": "icp_maya_alt_angle.jpg",
+      "21": "icp_maya_face.png"
+    },
+    "image_scale_nodes": {
+      "60": "448x448 bilinear center",
+      "61": "448x448 bilinear center"
+    },
+    "image_batch_chain": [
+      {
+        "node": "26",
+        "image1": "previous",
+        "image2": "ImageScale[61]"
+      }
+    ],
+    "phantom_node": {
+      "id": "10",
+      "class_type": "WanPhantomSubjectToVideo",
+      "images_port": "ImageBatch[26]"
+    },
+    "sampler_negative_source": {
+      "node": "30",
+      "port_index": 2,
+      "meaning": "negative_img_text (reference time_dim_concat zeroed)"
+    }
+  },
+  "output_encoder": "SaveAnimatedWEBP (lossy, quality 90, fps 16)",
+  "seed": 870124,
+  "steps": 10,
+  "cfg": 6.0,
+  "shift": 8.0,
+  "sampler_name": "uni_pc",
+  "scheduler": "simple",
+  "model": "Phantom-Wan-1_3B_fp16.safetensors",
+  "vae": "wan_2.1_vae.safetensors",
+  "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+  "resolution": "448x448",
+  "frames": 9,
+  "fps": 16,
+  "status_messages": [
+    [
+      "execution_start",
+      {
+        "prompt_id": "bb1c0c38-9bca-429f-a817-8c5392c572f5",
+        "timestamp": 1790267136728
+      }
+    ],
+    [
+      "execution_cached",
+      {
+        "nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        "prompt_id": "bb1c0c38-9bca-429f-a817-8c5392c572f5",
+        "timestamp": 1790267136733
+      }
+    ],
+    [
+      "execution_success",
+      {
+        "prompt_id": "bb1c0c38-9bca-429f-a817-8c5392c572f5",
+        "timestamp": 1790267256580
+      }
+    ]
+  ],
+  "cache": {
+    "cached_nodes": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
+    "recomputed_nodes": [
+      "10",
+      "30",
+      "40",
+      "50"
+    ],
+    "sampler_recomputed": true,
+    "wall_ms_from_history": 119852
+  },
+  "memory_before": {
+    "available_bytes_approx": 3866017792,
+    "swap_used_mb": 2418.88
+  },
+  "memory_after": {
+    "available_bytes_approx": 4946722816,
+    "swap_used_mb": 2858.62
+  },
+  "memory_during": {
+    "samples": 40,
+    "min_available_bytes": 3455008768,
+    "max_comfy_rss_kb": null,
+    "swap_start_mb": 2418.88,
+    "swap_peak_mb": 2874.62,
+    "series": [
+      {
+        "available_bytes_approx": 3864788992,
+        "swap_used_mb": 2418.88
+      },
+      {
+        "available_bytes_approx": 3655319552,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3891019776,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3867869184,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3885531136,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 4020011008,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3897262080,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3541450752,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3645652992,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3539714048,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3589914624,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3669868544,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3535388672,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3609837568,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3639361536,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3559014400,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3640197120,
+        "swap_used_mb": 2874.62
+      },
+      {
+        "available_bytes_approx": 3680124928,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3511631872,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3570335744,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3633217536,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3456614400,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3516416000,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3570778112,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3468902400,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3520331776,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3548758016,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3455008768,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3459858432,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3563307008,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3467935744,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3500752896,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 5669126144,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 4655087616,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 4593483776,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3626844160,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3633381376,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 3921657856,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 4212375552,
+        "swap_used_mb": 2866.62
+      },
+      {
+        "available_bytes_approx": 4217536512,
+        "swap_used_mb": 2866.62
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "filename": "icp_00020_.webp",
+      "node": null,
+      "bytes": 214596,
+      "sha256": "b34f8cc8d73c72bfe82c979d625784b5b828f4b196a728cee4de142f5c4d860f"
+    }
+  ],
+  "output_sha256": "b34f8cc8d73c72bfe82c979d625784b5b828f4b196a728cee4de142f5c4d860f",
+  "output_sha256_note": "single artifact",
+  "frames_exported": [
+    "frame_00.png",
+    "frame_01.png",
+    "frame_02.png",
+    "frame_03.png",
+    "frame_04.png",
+    "frame_05.png",
+    "frame_06.png",
+    "frame_07.png",
+    "frame_08.png"
+  ]
+}

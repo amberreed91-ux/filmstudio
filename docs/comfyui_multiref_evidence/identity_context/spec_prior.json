@@ -1,0 +1,34 @@
+{
+  "title": "Prior audit arms (same graph, same seed, same settings) — for artifact-level comparison",
+  "meta": "A1/B1/B2/D1 used synthetic validation references; R1/R2/R3 used the locked MAYA/MOM character locks (which are scene frames). Same seed 870124, 448x448, 9 frames, 10 steps, CFG 6.0, uni_pc/simple, shift 8.0. If these show the same chromatic/banding artifacting as the new identity/context arms, the artifacting is a property of the configuration, not of the approved character portrait.",
+  "columns": 4,
+  "thumb_width": 460,
+  "groups": [
+    {
+      "heading": "First frame of each prior arm",
+      "items": [
+        {"path": "../R1_real_maya/frames/first.png", "caption": "R1 first"},
+        {"path": "../R2_real_maya_angle/frames/first.png", "caption": "R2 first"},
+        {"path": "../R3_real_maya_other_char/frames/first.png", "caption": "R3 first"},
+        {"path": "../A1_face_only/frames/first.png", "caption": "A1 first"}
+      ]
+    },
+    {
+      "heading": "First frame of each prior arm (continued)",
+      "items": [
+        {"path": "../B1_face_wardrobe/frames/first.png", "caption": "B1 first"},
+        {"path": "../B2_face_env/frames/first.png", "caption": "B2 first"},
+        {"path": "../D1_env_single/frames/first.png", "caption": "D1 first"}
+      ]
+    },
+    {
+      "heading": "Middle frame of each prior arm",
+      "items": [
+        {"path": "../R1_real_maya/frames/middle.png", "caption": "R1 middle"},
+        {"path": "../R2_real_maya_angle/frames/middle.png", "caption": "R2 middle"},
+        {"path": "../R3_real_maya_other_char/frames/middle.png", "caption": "R3 middle"},
+        {"path": "../B1_face_wardrobe/frames/middle.png", "caption": "B1 middle"}
+      ]
+    }
+  ]
+}

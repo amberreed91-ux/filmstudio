@@ -1,0 +1,368 @@
+{
+  "arm": "D1_env_single",
+  "prompt_id": "854063d8-fdce-4889-8951-7f055a7d582b",
+  "status": "success",
+  "completed": true,
+  "runtime_seconds": 96.1,
+  "reference_roles_in_order": [
+    "synthetic environment reference (consumption test)"
+  ],
+  "reference_files_in_order": [
+    "cmr_env_canonical.jpg"
+  ],
+  "reference_source_paths_in_order": [
+    "/Users/amberreed/ComfyUI-Shared/input/cmr_env_canonical.jpg"
+  ],
+  "reference_sha256": {
+    "cmr_env_canonical.jpg": "cca180e76facf782c1be4402be0b2803bf585cebb4b3b4bac1b6118283a630ff"
+  },
+  "workflow_json": {
+    "1": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "type": "wan",
+        "device": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "1",
+          0
+        ],
+        "text": "a woman with dark hair in practical layered neutrals walks through a warm brick loft interior, cinematic natural light, steady camera"
+      }
+    },
+    "3": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "1",
+          0
+        ],
+        "text": "low quality, blurry, distorted, text, watermark"
+      }
+    },
+    "4": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "Phantom-Wan-1_3B_fp16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "5": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan_2.1_vae.safetensors"
+      }
+    },
+    "6": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "10": {
+      "class_type": "WanPhantomSubjectToVideo",
+      "inputs": {
+        "positive": [
+          "2",
+          0
+        ],
+        "negative": [
+          "3",
+          0
+        ],
+        "vae": [
+          "5",
+          0
+        ],
+        "width": 448,
+        "height": 448,
+        "length": 9,
+        "batch_size": 1,
+        "images": [
+          "60",
+          0
+        ]
+      }
+    },
+    "30": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "seed": 870124,
+        "steps": 10,
+        "cfg": 6.0,
+        "sampler_name": "uni_pc",
+        "scheduler": "simple",
+        "positive": [
+          "10",
+          0
+        ],
+        "negative": [
+          "10",
+          2
+        ],
+        "latent_image": [
+          "10",
+          3
+        ],
+        "denoise": 1.0
+      }
+    },
+    "40": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "30",
+          0
+        ],
+        "vae": [
+          "5",
+          0
+        ]
+      }
+    },
+    "50": {
+      "class_type": "SaveAnimatedWEBP",
+      "inputs": {
+        "images": [
+          "40",
+          0
+        ],
+        "filename_prefix": "cmr",
+        "fps": 16,
+        "lossless": false,
+        "quality": 90,
+        "method": "default"
+      }
+    },
+    "20": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "cmr_env_canonical.jpg"
+      }
+    },
+    "60": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "image": [
+          "20",
+          0
+        ],
+        "upscale_method": "bilinear",
+        "width": 448,
+        "height": 448,
+        "crop": "center"
+      }
+    }
+  },
+  "workflow_sha256": "959f793e96691f167ab41de36f30d876f99166992d5d42837fe9259e71ee5298",
+  "seed": 870124,
+  "steps": 10,
+  "cfg": 6.0,
+  "shift": 8.0,
+  "sampler_name": "uni_pc",
+  "scheduler": "simple",
+  "model": "Phantom-Wan-1_3B_fp16.safetensors",
+  "vae": "wan_2.1_vae.safetensors",
+  "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+  "resolution": "448x448",
+  "frames": 9,
+  "fps": 16,
+  "status_messages": [
+    [
+      "execution_start",
+      {
+        "prompt_id": "854063d8-fdce-4889-8951-7f055a7d582b",
+        "timestamp": 1790261246654
+      }
+    ],
+    [
+      "execution_cached",
+      {
+        "nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        "prompt_id": "854063d8-fdce-4889-8951-7f055a7d582b",
+        "timestamp": 1790261246658
+      }
+    ],
+    [
+      "execution_success",
+      {
+        "prompt_id": "854063d8-fdce-4889-8951-7f055a7d582b",
+        "timestamp": 1790261340802
+      }
+    ]
+  ],
+  "memory_before": {
+    "available_bytes_approx": 7951597568,
+    "swap_used_mb": 3361.62
+  },
+  "memory_after": {
+    "available_bytes_approx": 7923613696,
+    "swap_used_mb": 3361.62
+  },
+  "memory_during": {
+    "samples": 32,
+    "min_available_bytes": 3313532928,
+    "max_comfy_rss_kb": null,
+    "swap_start_mb": 3361.62,
+    "swap_peak_mb": 3361.62,
+    "series": [
+      {
+        "available_bytes_approx": 7956774912,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3607691264,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3494150144,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3398287360,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3467788288,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3313532928,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3486973952,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3374104576,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3513827328,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3509174272,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3560898560,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3505766400,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3435528192,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3506929664,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3337895936,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3521052672,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3338469376,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3558178816,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3533537280,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3622993920,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3523575808,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3469574144,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3533225984,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 5344968704,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 5988089856,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 5005328384,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 5112922112,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3819634688,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 3888562176,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 4138303488,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 4207149056,
+        "swap_used_mb": 3361.62
+      },
+      {
+        "available_bytes_approx": 4444094464,
+        "swap_used_mb": 3361.62
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "filename": "cmr_00004_.webp",
+      "node": null,
+      "bytes": 114862,
+      "sha256": "d53724fef8b01611cfae53398037ba55da054d0c38ff973522c993b2c1021201"
+    }
+  ],
+  "output_sha256": "d53724fef8b01611cfae53398037ba55da054d0c38ff973522c993b2c1021201"
+}

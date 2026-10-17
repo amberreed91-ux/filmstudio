@@ -1,0 +1,284 @@
+{
+  "note": "Read-only copies of approved Studio Reference Library assets. No row, approval state, canonical flag or lock status was modified.",
+  "project_id": "project_5907c60cddbc",
+  "references": {
+    "maya_face": {
+      "comfy_input_file": "icp_maya_face.png",
+      "source_path": "studio-backend/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png",
+      "sha256": "06a9c8a4da66cd98ef3769a9ef48d0da3ca27d5d8fe1263be85fc56bdc264238",
+      "bytes": 2409604,
+      "ref_id": "ref_look_e46ec07463f33414",
+      "category": "character_face",
+      "binding": "characters.continuity_state_json.appearance_approval.face_image_url (chr_3c9e91741ef3 / MAYA)",
+      "approval": "approved (reference_assets.approval_state) AND appearance_approval.status='locked'",
+      "owner": "MAYA (chr_3c9e91741ef3, project_5907c60cddbc)",
+      "scene": null,
+      "source_shot": null,
+      "conveys": "identity (authoritative approved face for MAYA)"
+    },
+    "maya_alt_angle": {
+      "comfy_input_file": "icp_maya_alt_angle.jpg",
+      "source_path": "studio-backend/outputs/references/project_5907c60cddbc/job-20260905135041-9e3dc24c-scene_001_shot_001_scene_001_shot_001_reference_3.jpg",
+      "sha256": "ccee12b36e5821c8ed6b69636ab0671dce135f1baba0454de2952a4aeedc4be7",
+      "bytes": 115708,
+      "ref_id": "charlock_c452e7d94c88",
+      "category": "character_reference_lock.reference_role=alternate_angle",
+      "binding": "character_reference_locks (character_id chr_3c9e91741ef3 / MAYA)",
+      "approval": "lock_status=locked, source_status=approved, review_status=approved",
+      "owner": "MAYA (chr_3c9e91741ef3, project_5907c60cddbc)",
+      "scene": "scene_001_shot_001",
+      "source_shot": "scene_001_shot_001",
+      "conveys": "body/alternate angle per metadata; observed pixels are a scene frame (no character visible)"
+    },
+    "env_scene002": {
+      "comfy_input_file": "icp_env_scene002.png",
+      "source_path": "studio-backend/outputs/previs/project_5907c60cddbc/scene_002_shot_001_storyboard_qwen.png",
+      "sha256": "7af0843e8b26cb29c824816777e74fdf89bd4108947b18cb70fad92323de1552",
+      "bytes": 2644340,
+      "ref_id": "ref_env_6b726885ed67ae4d",
+      "category": "environment",
+      "binding": "reference_assets (no target_id)",
+      "approval": "approved (reference_assets.approval_state)",
+      "owner": "project_5907c60cddbc (setting; no character owner)",
+      "scene": "scene_002_shot_001",
+      "source_shot": "scene_002_shot_001",
+      "conveys": "environment / setting"
+    },
+    "maya_look_02": {
+      "comfy_input_file": "icp_maya_look_02.png",
+      "source_path": "studio-backend/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/a75edd7da35040babf542f92f40ea1a5.png",
+      "sha256": "078e439516bc3eaa10cbf0ef71071d796ca54574b9f6994f8e79a2f333dee3f4",
+      "bytes": 2434452,
+      "ref_id": null,
+      "category": "character_face (casting output, same locked look)",
+      "binding": "characters.continuity_state_json.appearance_casting_jobs[0].images[1] (chr_3c9e91741ef3 / MAYA)",
+      "approval": "NOT an approved reference_assets row; member of the locked+approved MAYA look casting set",
+      "owner": "MAYA (chr_3c9e91741ef3, project_5907c60cddbc)",
+      "scene": null,
+      "source_shot": null,
+      "conveys": "identity (supplementary second portrait of the same character)"
+    },
+    "maya_face_copy3": {
+      "comfy_input_file": "icp_maya_face_copy3.png",
+      "source_path": "studio-backend/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png",
+      "sha256": "06a9c8a4da66cd98ef3769a9ef48d0da3ca27d5d8fe1263be85fc56bdc264238",
+      "bytes": 2409604,
+      "ref_id": "ref_look_e46ec07463f33414",
+      "category": "character_face",
+      "binding": "byte-identical copy of maya_face (filename-discriminator probe)",
+      "approval": "n/a (control; pixels identical to maya_face)",
+      "owner": "MAYA (chr_3c9e91741ef3, project_5907c60cddbc)",
+      "scene": null,
+      "source_shot": null,
+      "conveys": "identity (byte-identical third copy for the filename discriminator)"
+    },
+    "maya_face_copy": {
+      "comfy_input_file": "icp_maya_face_copy.png",
+      "source_path": "studio-backend/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png",
+      "sha256": "06a9c8a4da66cd98ef3769a9ef48d0da3ca27d5d8fe1263be85fc56bdc264238",
+      "bytes": 2409604,
+      "ref_id": "ref_look_e46ec07463f33414",
+      "category": "character_face",
+      "binding": "byte-identical copy of maya_face (determinism control)",
+      "approval": "n/a (control; pixels identical to maya_face)",
+      "owner": "MAYA (chr_3c9e91741ef3, project_5907c60cddbc)",
+      "scene": null,
+      "source_shot": null,
+      "conveys": "identity (byte-identical duplicate for cache-bypassing determinism control)"
+    }
+  },
+  "studio_db_provenance": {
+    "db_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/data/studio.db",
+    "db_sha256": "17a8b8de6d64214bf831b219c04c6132ab9707885abf36d9657bdb4a38ef8e18",
+    "access": "read-only (sqlite3 URI mode=ro)",
+    "reference_assets_rows_used": [
+      {
+        "ref_id": "ref_env_6b726885ed67ae4d",
+        "project_id": "project_5907c60cddbc",
+        "kind": "environment",
+        "approval_state": "approved",
+        "canonical": 0,
+        "source_kind": "confirmed",
+        "target_type": null,
+        "target_id": null,
+        "source_shot_id": "scene_002_shot_001",
+        "image_url": "/previs-assets/project_5907c60cddbc/scene_002_shot_001_storyboard_qwen.png"
+      },
+      {
+        "ref_id": "ref_look_e46ec07463f33414",
+        "project_id": "project_5907c60cddbc",
+        "kind": "character_face",
+        "approval_state": "approved",
+        "canonical": 0,
+        "source_kind": "confirmed",
+        "target_type": null,
+        "target_id": null,
+        "source_shot_id": "character-look-approval",
+        "image_url": "/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png"
+      }
+    ],
+    "character_reference_locks_project_5907c60cddbc": [
+      {
+        "lock_id": "charlock_edfb077d045f",
+        "project_id": "project_5907c60cddbc",
+        "character_id": "chr_3c9e91741ef3",
+        "character_name": "MAYA",
+        "reference_role": "general",
+        "look_id": "default",
+        "lock_status": "superseded",
+        "reliability": "medium",
+        "source_status": "provisional",
+        "review_status": "unreviewed",
+        "frame_score": 0.0,
+        "source_shot_id": "scene_001_shot_001",
+        "image_url": "/previs-assets/project_5907c60cddbc/scene_001_shot_001_storyboard_qwen.png"
+      },
+      {
+        "lock_id": "charlock_bfec79ba3679",
+        "project_id": "project_5907c60cddbc",
+        "character_id": "chr_3c9e91741ef3",
+        "character_name": "MAYA",
+        "reference_role": "general",
+        "look_id": "default",
+        "lock_status": "locked",
+        "reliability": "high",
+        "source_status": "approved",
+        "review_status": "approved",
+        "frame_score": 43.10679297881811,
+        "source_shot_id": "scene_001_shot_001",
+        "image_url": "/outputs/references/project_5907c60cddbc/job-20260905135041-9e3dc24c-scene_001_shot_001_scene_001_shot_001_reference.jpg"
+      },
+      {
+        "lock_id": "charlock_c452e7d94c88",
+        "project_id": "project_5907c60cddbc",
+        "character_id": "chr_3c9e91741ef3",
+        "character_name": "MAYA",
+        "reference_role": "alternate_angle",
+        "look_id": "default",
+        "lock_status": "locked",
+        "reliability": "medium",
+        "source_status": "approved",
+        "review_status": "approved",
+        "frame_score": 23.457146250848307,
+        "source_shot_id": "scene_001_shot_001",
+        "image_url": "/outputs/references/project_5907c60cddbc/job-20260905135041-9e3dc24c-scene_001_shot_001_scene_001_shot_001_reference_3.jpg"
+      },
+      {
+        "lock_id": "charlock_a4eb1ffa5ec9",
+        "project_id": "project_5907c60cddbc",
+        "character_id": "chr_4c77bbd9be1e",
+        "character_name": "MOM",
+        "reference_role": "general",
+        "look_id": "default",
+        "lock_status": "superseded",
+        "reliability": "medium",
+        "source_status": "provisional",
+        "review_status": "unreviewed",
+        "frame_score": 0.0,
+        "source_shot_id": "scene_001_shot_001",
+        "image_url": "/previs-assets/project_5907c60cddbc/scene_001_shot_001_storyboard_qwen.png"
+      },
+      {
+        "lock_id": "charlock_344bea5a21b1",
+        "project_id": "project_5907c60cddbc",
+        "character_id": "chr_4c77bbd9be1e",
+        "character_name": "MOM",
+        "reference_role": "general",
+        "look_id": "default",
+        "lock_status": "locked",
+        "reliability": "high",
+        "source_status": "approved",
+        "review_status": "approved",
+        "frame_score": 14.648387044388253,
+        "source_shot_id": "scene_001_shot_002",
+        "image_url": "/outputs/references/project_5907c60cddbc/job-20260905135241-4ee841a8-scene_001_shot_002_scene_001_shot_002_reference.jpg"
+      },
+      {
+        "lock_id": "charlock_b1b80e46a21e",
+        "project_id": "project_5907c60cddbc",
+        "character_id": "chr_4c77bbd9be1e",
+        "character_name": "MOM",
+        "reference_role": "alternate_angle",
+        "look_id": "default",
+        "lock_status": "locked",
+        "reliability": "medium",
+        "source_status": "approved",
+        "review_status": "approved",
+        "frame_score": 11.93327931691187,
+        "source_shot_id": "scene_001_shot_002",
+        "image_url": "/outputs/references/project_5907c60cddbc/job-20260905135241-4ee841a8-scene_001_shot_002_scene_001_shot_002_reference_3.jpg"
+      },
+      {
+        "lock_id": "charlock_df3781262c1b",
+        "project_id": "project_5907c60cddbc",
+        "character_id": "chr_f1425498cb68",
+        "character_name": "DRE",
+        "reference_role": "general",
+        "look_id": "default",
+        "lock_status": "provisional",
+        "reliability": "medium",
+        "source_status": "provisional",
+        "review_status": "unreviewed",
+        "frame_score": 0.0,
+        "source_shot_id": "scene_002_shot_001",
+        "image_url": "/previs-assets/project_5907c60cddbc/scene_002_shot_001_storyboard_qwen.png"
+      }
+    ],
+    "characters_project_5907c60cddbc": [
+      {
+        "id": "chr_f1425498cb68",
+        "name": "DRE",
+        "appearance_approval_status": "locked",
+        "appearance_approval_version": 1,
+        "face_image_url": "/outputs/references/character-looks/54f20532b4dd2ea190563995/fcde27491523ffc80907ff1d/f98ad9ab5d1c48b79ad948c514ff64ea.png",
+        "body_image_url": null
+      },
+      {
+        "id": "chr_d3b00f4d3460",
+        "name": "ELENA",
+        "appearance_approval_status": "locked",
+        "appearance_approval_version": 1,
+        "face_image_url": "/outputs/references/character-looks/54f20532b4dd2ea190563995/eaf2c1cb03f2e4f7fd740916/73dfd149a1f44658818d10689fef1d69.png",
+        "body_image_url": null
+      },
+      {
+        "id": "chr_ce2b04d72a51",
+        "name": "JAY",
+        "appearance_approval_status": "locked",
+        "appearance_approval_version": 1,
+        "face_image_url": "/outputs/references/character-looks/54f20532b4dd2ea190563995/0570e9a816defe3f420d8be8/b8e9254004f842f9a5b0a417631342ac.png",
+        "body_image_url": null
+      },
+      {
+        "id": "chr_3c9e91741ef3",
+        "name": "MAYA",
+        "appearance_approval_status": "locked",
+        "appearance_approval_version": 1,
+        "face_image_url": "/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png",
+        "body_image_url": null
+      },
+      {
+        "id": "chr_4c77bbd9be1e",
+        "name": "MOM",
+        "appearance_approval_status": "locked",
+        "appearance_approval_version": 1,
+        "face_image_url": "/outputs/references/character-looks/54f20532b4dd2ea190563995/7f7c004cdc5aca8c96c9a002/080c6d15af524af1b9c67072c4cfb8bd.png",
+        "body_image_url": null
+      },
+      {
+        "id": "chr_fe48553696be",
+        "name": "SIMONE",
+        "appearance_approval_status": "locked",
+        "appearance_approval_version": 1,
+        "face_image_url": "/outputs/references/character-looks/54f20532b4dd2ea190563995/62f4a1efc6509685f2d042fc/4721e10e92054918936b3bc79d971749.png",
+        "body_image_url": null
+      }
+    ],
+    "counts": {
+      "reference_assets_total": 12,
+      "reference_assets_approved": 12,
+      "reference_assets_canonical": 0,
+      "character_reference_locks_total": 7
+    }
+  }
+}

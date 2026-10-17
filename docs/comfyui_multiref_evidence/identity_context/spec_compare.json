@@ -1,0 +1,66 @@
+{
+  "title": "First frame of every identity/context arm, same seed and settings",
+  "meta": "Identical prompt, seed 870124, 448x448, 9 frames, 10 steps, CFG 6.0, uni_pc/simple, ModelSamplingSD3 shift 8.0, same model/VAE/text encoder. Only the reference set (and for ICZ the output encoder) differs.",
+  "columns": 4,
+  "thumb_width": 460,
+  "groups": [
+    {
+      "heading": "The four approved references used in this experiment",
+      "items": [
+        {
+          "path": "reference_inputs/icp_maya_face.png",
+          "caption": "REF1 maya_face (approved+locked MAYA face portrait)"
+        },
+        {
+          "path": "reference_inputs/icp_maya_alt_angle.jpg",
+          "caption": "REF2 maya_alt_angle (locked/approved MAYA alternate_angle lock"
+        },
+        {
+          "path": "reference_inputs/icp_env_scene002.png",
+          "caption": "REF3 environment (approved ref_env_6b726885ed67ae4d"
+        },
+        {
+          "path": "reference_inputs/icp_maya_look_02.png",
+          "caption": "REF2b maya_look_02 (2nd casting image, same locked MAYA look"
+        }
+      ]
+    },
+    {
+      "heading": "First frame per arm",
+      "items": [
+        {
+          "path": "ICA_identity_only/frames/frame_00.png",
+          "caption": "ICA_identity_only - first frame | refs: icp_maya_face.png"
+        },
+        {
+          "path": "ICB_identity_support/frames/frame_00.png",
+          "caption": "ICB_identity_support - first frame | refs: icp_maya_face.png, icp_maya_alt_angle.jpg"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_00.png",
+          "caption": "ICC_identity_env - first frame | refs: icp_maya_face.png, icp_env_scene002.png"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_00.png",
+          "caption": "ICD_identity_support_env - first frame | refs: icp_maya_face.png, icp_maya_alt_angle.jpg, icp_env_scene002.png"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_00.png",
+          "caption": "ICE_order_swapped - first frame | refs: icp_maya_alt_angle.jpg, icp_maya_face.png"
+        },
+        {
+          "path": "ICF_repeat_identity/frames/frame_00.png",
+          "caption": "ICF_repeat_identity - first frame | refs: icp_maya_face_copy.png"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_00.png",
+          "caption": "ICG_identity_second_look - first frame | refs: icp_maya_face.png, icp_maya_look_02.png"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_00.png",
+          "caption": "ICZ_png_probe - first frame | refs: icp_maya_face.png"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,611 @@
+{
+  "arm": "ICD_identity_support_env",
+  "question": "Arm D: can identity + supporting + environment coexist?",
+  "prompt_id": "b7ee368a-223c-4f72-b74f-2f4c65f341f3",
+  "status": "success",
+  "completed": true,
+  "runtime_seconds": 148.4,
+  "reference_order": [
+    "maya_face",
+    "maya_alt_angle",
+    "env_scene002"
+  ],
+  "reference_files_in_order": [
+    "icp_maya_face.png",
+    "icp_maya_alt_angle.jpg",
+    "icp_env_scene002.png"
+  ],
+  "reference_source_paths_in_order": [
+    "studio-backend/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png",
+    "studio-backend/outputs/references/project_5907c60cddbc/job-20260905135041-9e3dc24c-scene_001_shot_001_scene_001_shot_001_reference_3.jpg",
+    "studio-backend/outputs/previs/project_5907c60cddbc/scene_002_shot_001_storyboard_qwen.png"
+  ],
+  "reference_roles_in_order": [
+    "identity (authoritative approved face for MAYA)",
+    "body/alternate angle per metadata; observed pixels are a scene frame (no character visible)",
+    "environment / setting"
+  ],
+  "reference_sha256": {
+    "icp_maya_face.png": "06a9c8a4da66cd98ef3769a9ef48d0da3ca27d5d8fe1263be85fc56bdc264238",
+    "icp_maya_alt_angle.jpg": "ccee12b36e5821c8ed6b69636ab0671dce135f1baba0454de2952a4aeedc4be7",
+    "icp_env_scene002.png": "7af0843e8b26cb29c824816777e74fdf89bd4108947b18cb70fad92323de1552"
+  },
+  "workflow_json": {
+    "1": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "type": "wan",
+        "device": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "1",
+          0
+        ],
+        "text": "a woman, neutral expression, cinematic natural light, medium close-up, steady camera"
+      }
+    },
+    "3": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "1",
+          0
+        ],
+        "text": "low quality, blurry, distorted, text, watermark"
+      }
+    },
+    "4": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "Phantom-Wan-1_3B_fp16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "5": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan_2.1_vae.safetensors"
+      }
+    },
+    "6": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "10": {
+      "class_type": "WanPhantomSubjectToVideo",
+      "inputs": {
+        "positive": [
+          "2",
+          0
+        ],
+        "negative": [
+          "3",
+          0
+        ],
+        "vae": [
+          "5",
+          0
+        ],
+        "width": 448,
+        "height": 448,
+        "length": 9,
+        "batch_size": 1,
+        "images": [
+          "27",
+          0
+        ]
+      }
+    },
+    "30": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "seed": 870124,
+        "steps": 10,
+        "cfg": 6.0,
+        "sampler_name": "uni_pc",
+        "scheduler": "simple",
+        "positive": [
+          "10",
+          0
+        ],
+        "negative": [
+          "10",
+          2
+        ],
+        "latent_image": [
+          "10",
+          3
+        ],
+        "denoise": 1.0
+      }
+    },
+    "40": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "30",
+          0
+        ],
+        "vae": [
+          "5",
+          0
+        ]
+      }
+    },
+    "50": {
+      "class_type": "SaveAnimatedWEBP",
+      "inputs": {
+        "images": [
+          "40",
+          0
+        ],
+        "filename_prefix": "icp",
+        "fps": 16,
+        "lossless": false,
+        "quality": 90,
+        "method": "default"
+      }
+    },
+    "20": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "icp_maya_face.png"
+      }
+    },
+    "60": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "image": [
+          "20",
+          0
+        ],
+        "upscale_method": "bilinear",
+        "width": 448,
+        "height": 448,
+        "crop": "center"
+      }
+    },
+    "21": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "icp_maya_alt_angle.jpg"
+      }
+    },
+    "61": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "image": [
+          "21",
+          0
+        ],
+        "upscale_method": "bilinear",
+        "width": 448,
+        "height": 448,
+        "crop": "center"
+      }
+    },
+    "22": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "icp_env_scene002.png"
+      }
+    },
+    "62": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "image": [
+          "22",
+          0
+        ],
+        "upscale_method": "bilinear",
+        "width": 448,
+        "height": 448,
+        "crop": "center"
+      }
+    },
+    "26": {
+      "class_type": "ImageBatch",
+      "inputs": {
+        "image1": [
+          "60",
+          0
+        ],
+        "image2": [
+          "61",
+          0
+        ]
+      }
+    },
+    "27": {
+      "class_type": "ImageBatch",
+      "inputs": {
+        "image1": [
+          "26",
+          0
+        ],
+        "image2": [
+          "62",
+          0
+        ]
+      }
+    }
+  },
+  "workflow_sha256": "b2004a996cf71956a885a1f099b46613034b320225713e4d82e27b96e8effc20",
+  "graph_map": {
+    "node_ids": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "10",
+      "20",
+      "21",
+      "22",
+      "26",
+      "27",
+      "30",
+      "40",
+      "50",
+      "60",
+      "61",
+      "62"
+    ],
+    "load_image_nodes": {
+      "20": "icp_maya_face.png",
+      "21": "icp_maya_alt_angle.jpg",
+      "22": "icp_env_scene002.png"
+    },
+    "image_scale_nodes": {
+      "60": "448x448 bilinear center",
+      "61": "448x448 bilinear center",
+      "62": "448x448 bilinear center"
+    },
+    "image_batch_chain": [
+      {
+        "node": "26",
+        "image1": "previous",
+        "image2": "ImageScale[61]"
+      },
+      {
+        "node": "27",
+        "image1": "previous",
+        "image2": "ImageScale[62]"
+      }
+    ],
+    "phantom_node": {
+      "id": "10",
+      "class_type": "WanPhantomSubjectToVideo",
+      "images_port": "ImageBatch[27]"
+    },
+    "sampler_negative_source": {
+      "node": "30",
+      "port_index": 2,
+      "meaning": "negative_img_text (reference time_dim_concat zeroed)"
+    }
+  },
+  "output_encoder": "SaveAnimatedWEBP (lossy, quality 90, fps 16)",
+  "seed": 870124,
+  "steps": 10,
+  "cfg": 6.0,
+  "shift": 8.0,
+  "sampler_name": "uni_pc",
+  "scheduler": "simple",
+  "model": "Phantom-Wan-1_3B_fp16.safetensors",
+  "vae": "wan_2.1_vae.safetensors",
+  "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+  "resolution": "448x448",
+  "frames": 9,
+  "fps": 16,
+  "status_messages": [
+    [
+      "execution_start",
+      {
+        "prompt_id": "b7ee368a-223c-4f72-b74f-2f4c65f341f3",
+        "timestamp": 1790265078717
+      }
+    ],
+    [
+      "execution_cached",
+      {
+        "nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "20",
+          "60",
+          "22",
+          "62"
+        ],
+        "prompt_id": "b7ee368a-223c-4f72-b74f-2f4c65f341f3",
+        "timestamp": 1790265078723
+      }
+    ],
+    [
+      "execution_success",
+      {
+        "prompt_id": "b7ee368a-223c-4f72-b74f-2f4c65f341f3",
+        "timestamp": 1790265223286
+      }
+    ]
+  ],
+  "cache": {
+    "cached_nodes": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "20",
+      "60",
+      "22",
+      "62"
+    ],
+    "recomputed_nodes": [
+      "10",
+      "30",
+      "40",
+      "50"
+    ],
+    "sampler_recomputed": true,
+    "wall_ms_from_history": 144569
+  },
+  "memory_before": {
+    "available_bytes_approx": 4995760128,
+    "swap_used_mb": 3877.94
+  },
+  "memory_after": {
+    "available_bytes_approx": 9103556608,
+    "swap_used_mb": 3877.94
+  },
+  "memory_during": {
+    "samples": 50,
+    "min_available_bytes": 2837594112,
+    "max_comfy_rss_kb": null,
+    "swap_start_mb": 3877.94,
+    "swap_peak_mb": 3877.94,
+    "series": [
+      {
+        "available_bytes_approx": 5001068544,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 7376371712,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3491692544,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3493855232,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3486728192,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3428466688,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3602251776,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3470082048,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3697901568,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3384016896,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3644751872,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3489710080,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3491332096,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3501834240,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3695656960,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3504881664,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3576348672,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3537158144,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3886186496,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3499245568,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3928227840,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3529850880,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3508781056,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3639885824,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3955982336,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3537092608,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3497951232,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3630055424,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3238936576,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3464495104,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3449241600,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3499540480,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3230416896,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3563880448,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3478405120,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3476848640,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 2837594112,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 3321315328,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 2968715264,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 2958934016,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 6451036160,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 5419188224,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 5396611072,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 5419450368,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 4814848000,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 4850827264,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 4924375040,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 4937695232,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 8923119616,
+        "swap_used_mb": 3877.94
+      },
+      {
+        "available_bytes_approx": 9096757248,
+        "swap_used_mb": 3877.94
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "filename": "icp_00006_.webp",
+      "node": null,
+      "bytes": 171472,
+      "sha256": "7a1c08c8c65273320c19a7fadc0acc9379dfb25982df437b171157c06e344cc7"
+    }
+  ],
+  "output_sha256": "7a1c08c8c65273320c19a7fadc0acc9379dfb25982df437b171157c06e344cc7",
+  "output_sha256_note": "single artifact",
+  "frames_exported": [
+    "frame_00.png",
+    "frame_01.png",
+    "frame_02.png",
+    "frame_03.png",
+    "frame_04.png",
+    "frame_05.png",
+    "frame_06.png",
+    "frame_07.png",
+    "frame_08.png"
+  ]
+}

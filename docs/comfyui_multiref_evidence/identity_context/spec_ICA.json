@@ -1,0 +1,33 @@
+{
+  "title": "Arm A — ICA_identity_only (MAYA approved face portrait as the only reference)",
+  "meta": "Seed 870124, 448x448, 9 frames, 10 steps, CFG 6.0, uni_pc/simple, ModelSamplingSD3 shift 8.0. Prompt: 'a woman with locs in layered practical clothing walks forward, cinematic natural light, medium shot, steady camera'. Reference row shows the exact input; frames are the decoded output.",
+  "columns": 5,
+  "thumb_width": 500,
+  "groups": [
+    {
+      "heading": "Reference input (what the model was conditioned on)",
+      "items": [
+        {"path": "refs/ic_maya_face_128cc1ba.png", "caption": "REF1 maya_face = approved+locked MAYA appearance_approval face portrait (also ref_look_e46ec07463f33414)"}
+      ]
+    },
+    {
+      "heading": "Generated frames 0-4",
+      "items": [
+        {"path": "ICA_identity_only/frames/frame_00.png", "caption": "f0"},
+        {"path": "ICA_identity_only/frames/frame_01.png", "caption": "f1"},
+        {"path": "ICA_identity_only/frames/frame_02.png", "caption": "f2"},
+        {"path": "ICA_identity_only/frames/frame_03.png", "caption": "f3"},
+        {"path": "ICA_identity_only/frames/frame_04.png", "caption": "f4"}
+      ]
+    },
+    {
+      "heading": "Generated frames 5-8",
+      "items": [
+        {"path": "ICA_identity_only/frames/frame_05.png", "caption": "f5"},
+        {"path": "ICA_identity_only/frames/frame_06.png", "caption": "f6"},
+        {"path": "ICA_identity_only/frames/frame_07.png", "caption": "f7"},
+        {"path": "ICA_identity_only/frames/frame_08.png", "caption": "f8"}
+      ]
+    }
+  ]
+}

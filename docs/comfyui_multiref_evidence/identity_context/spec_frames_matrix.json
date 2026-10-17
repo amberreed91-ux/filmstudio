@@ -1,0 +1,144 @@
+{
+  "title": "Identity across frames \u2014 frames 0 / 4 / 8 of every arm",
+  "meta": "Same prompt ('a woman, neutral expression, cinematic natural light, medium close-up, steady camera'), seed 870124, 448x448, 9 frames, 10 steps, CFG 6.0, uni_pc/simple, shift 8.0. Reference set is the only variable.",
+  "columns": 3,
+  "thumb_width": 430,
+  "groups": [
+    {
+      "heading": "ICA_identity_only  [REF1]",
+      "items": [
+        {
+          "path": "ICA_identity_only/frames/frame_00.png",
+          "caption": "frame 0"
+        },
+        {
+          "path": "ICA_identity_only/frames/frame_04.png",
+          "caption": "frame 4"
+        },
+        {
+          "path": "ICA_identity_only/frames/frame_08.png",
+          "caption": "frame 8"
+        }
+      ]
+    },
+    {
+      "heading": "ICB_identity_support  [REF1+REF2]",
+      "items": [
+        {
+          "path": "ICB_identity_support/frames/frame_00.png",
+          "caption": "frame 0"
+        },
+        {
+          "path": "ICB_identity_support/frames/frame_04.png",
+          "caption": "frame 4"
+        },
+        {
+          "path": "ICB_identity_support/frames/frame_08.png",
+          "caption": "frame 8"
+        }
+      ]
+    },
+    {
+      "heading": "ICC_identity_env  [REF1+REF3]",
+      "items": [
+        {
+          "path": "ICC_identity_env/frames/frame_00.png",
+          "caption": "frame 0"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_04.png",
+          "caption": "frame 4"
+        },
+        {
+          "path": "ICC_identity_env/frames/frame_08.png",
+          "caption": "frame 8"
+        }
+      ]
+    },
+    {
+      "heading": "ICD_identity_support_env  [REF1+REF2+REF3]",
+      "items": [
+        {
+          "path": "ICD_identity_support_env/frames/frame_00.png",
+          "caption": "frame 0"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_04.png",
+          "caption": "frame 4"
+        },
+        {
+          "path": "ICD_identity_support_env/frames/frame_08.png",
+          "caption": "frame 8"
+        }
+      ]
+    },
+    {
+      "heading": "ICE_order_swapped  [REF2,REF1 (swapped)]",
+      "items": [
+        {
+          "path": "ICE_order_swapped/frames/frame_00.png",
+          "caption": "frame 0"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_04.png",
+          "caption": "frame 4"
+        },
+        {
+          "path": "ICE_order_swapped/frames/frame_08.png",
+          "caption": "frame 8"
+        }
+      ]
+    },
+    {
+      "heading": "ICG_identity_second_look  [REF1+REF2b]",
+      "items": [
+        {
+          "path": "ICG_identity_second_look/frames/frame_00.png",
+          "caption": "frame 0"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_04.png",
+          "caption": "frame 4"
+        },
+        {
+          "path": "ICG_identity_second_look/frames/frame_08.png",
+          "caption": "frame 8"
+        }
+      ]
+    },
+    {
+      "heading": "ICF_repeat_identity  [REF1' (identical pixels)]",
+      "items": [
+        {
+          "path": "ICF_repeat_identity/frames/frame_00.png",
+          "caption": "frame 0"
+        },
+        {
+          "path": "ICF_repeat_identity/frames/frame_04.png",
+          "caption": "frame 4"
+        },
+        {
+          "path": "ICF_repeat_identity/frames/frame_08.png",
+          "caption": "frame 8"
+        }
+      ]
+    },
+    {
+      "heading": "ICZ_png_probe  [REF1 (PNG encoder)]",
+      "items": [
+        {
+          "path": "ICZ_png_probe/frames/frame_00.png",
+          "caption": "frame 0"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_04.png",
+          "caption": "frame 4"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_08.png",
+          "caption": "frame 8"
+        }
+      ]
+    }
+  ]
+}

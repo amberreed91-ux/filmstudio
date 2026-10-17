@@ -1,0 +1,63 @@
+{
+  "title": "Diagnostic - Arm A reference set with lossless PNG output  [ICZ_png_probe]",
+  "meta": "Diagnostic: is the observed artifacting model-level or a lossy-animated-WebP encoder artifact? | status=success runtime=96.1s encoder=SaveImage (lossless PNG, one file per frame) | seed 870124 448x448 9 frames 10 steps CFG 6.0 uni_pc/simple shift 8.0 | min free mem 1.92 GiB",
+  "columns": 4,
+  "thumb_width": 460,
+  "groups": [
+    {
+      "heading": "Reference set used (in order)",
+      "items": [
+        {
+          "path": "reference_inputs/icp_maya_face.png",
+          "caption": "REF1 maya_face (approved+locked MAYA face portrait)"
+        }
+      ]
+    },
+    {
+      "heading": "Generated frames 0-4 (of 9)",
+      "items": [
+        {
+          "path": "ICZ_png_probe/frames/frame_00.png",
+          "caption": "frame_00"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_01.png",
+          "caption": "frame_01"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_02.png",
+          "caption": "frame_02"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_03.png",
+          "caption": "frame_03"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_04.png",
+          "caption": "frame_04"
+        }
+      ]
+    },
+    {
+      "heading": "Generated frames 5-8",
+      "items": [
+        {
+          "path": "ICZ_png_probe/frames/frame_05.png",
+          "caption": "frame_05"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_06.png",
+          "caption": "frame_06"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_07.png",
+          "caption": "frame_07"
+        },
+        {
+          "path": "ICZ_png_probe/frames/frame_08.png",
+          "caption": "frame_08"
+        }
+      ]
+    }
+  ]
+}

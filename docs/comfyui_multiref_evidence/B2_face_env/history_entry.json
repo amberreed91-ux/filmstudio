@@ -1,0 +1,253 @@
+{
+  "prompt": [
+    11,
+    "ebf07d5e-04e3-41d5-87a3-c3d347d2abb9",
+    {
+      "1": {
+        "class_type": "CLIPLoader",
+        "inputs": {
+          "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "type": "wan",
+          "device": "default"
+        }
+      },
+      "2": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+          "clip": [
+            "1",
+            0
+          ],
+          "text": "a woman with dark hair in practical layered neutrals walks through a warm brick loft interior, cinematic natural light, steady camera"
+        }
+      },
+      "3": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+          "clip": [
+            "1",
+            0
+          ],
+          "text": "low quality, blurry, distorted, text, watermark"
+        }
+      },
+      "4": {
+        "class_type": "UNETLoader",
+        "inputs": {
+          "unet_name": "Phantom-Wan-1_3B_fp16.safetensors",
+          "weight_dtype": "default"
+        }
+      },
+      "5": {
+        "class_type": "VAELoader",
+        "inputs": {
+          "vae_name": "wan_2.1_vae.safetensors"
+        }
+      },
+      "6": {
+        "class_type": "ModelSamplingSD3",
+        "inputs": {
+          "model": [
+            "4",
+            0
+          ],
+          "shift": 8.0
+        }
+      },
+      "10": {
+        "class_type": "WanPhantomSubjectToVideo",
+        "inputs": {
+          "positive": [
+            "2",
+            0
+          ],
+          "negative": [
+            "3",
+            0
+          ],
+          "vae": [
+            "5",
+            0
+          ],
+          "width": 448,
+          "height": 448,
+          "length": 9,
+          "batch_size": 1,
+          "images": [
+            "26",
+            0
+          ]
+        }
+      },
+      "30": {
+        "class_type": "KSampler",
+        "inputs": {
+          "model": [
+            "6",
+            0
+          ],
+          "seed": 870124,
+          "steps": 10,
+          "cfg": 6.0,
+          "sampler_name": "uni_pc",
+          "scheduler": "simple",
+          "positive": [
+            "10",
+            0
+          ],
+          "negative": [
+            "10",
+            2
+          ],
+          "latent_image": [
+            "10",
+            3
+          ],
+          "denoise": 1.0
+        }
+      },
+      "40": {
+        "class_type": "VAEDecode",
+        "inputs": {
+          "samples": [
+            "30",
+            0
+          ],
+          "vae": [
+            "5",
+            0
+          ]
+        }
+      },
+      "50": {
+        "class_type": "SaveAnimatedWEBP",
+        "inputs": {
+          "images": [
+            "40",
+            0
+          ],
+          "filename_prefix": "cmr",
+          "fps": 16.0,
+          "lossless": false,
+          "quality": 90,
+          "method": "default"
+        }
+      },
+      "20": {
+        "class_type": "LoadImage",
+        "inputs": {
+          "image": "cmr_face_maya.jpg"
+        }
+      },
+      "60": {
+        "class_type": "ImageScale",
+        "inputs": {
+          "image": [
+            "20",
+            0
+          ],
+          "upscale_method": "bilinear",
+          "width": 448,
+          "height": 448,
+          "crop": "center"
+        }
+      },
+      "21": {
+        "class_type": "LoadImage",
+        "inputs": {
+          "image": "cmr_env_canonical.jpg"
+        }
+      },
+      "61": {
+        "class_type": "ImageScale",
+        "inputs": {
+          "image": [
+            "21",
+            0
+          ],
+          "upscale_method": "bilinear",
+          "width": 448,
+          "height": 448,
+          "crop": "center"
+        }
+      },
+      "26": {
+        "class_type": "ImageBatch",
+        "inputs": {
+          "image1": [
+            "60",
+            0
+          ],
+          "image2": [
+            "61",
+            0
+          ]
+        }
+      }
+    },
+    {
+      "client_id": "cmr-experiment",
+      "create_time": 1790261722043
+    },
+    [
+      "50"
+    ]
+  ],
+  "outputs": {
+    "50": {
+      "images": [
+        {
+          "filename": "cmr_00008_.webp",
+          "subfolder": "",
+          "type": "output"
+        }
+      ],
+      "animated": [
+        true
+      ]
+    }
+  },
+  "status": {
+    "status_str": "success",
+    "completed": true,
+    "messages": [
+      [
+        "execution_start",
+        {
+          "prompt_id": "ebf07d5e-04e3-41d5-87a3-c3d347d2abb9",
+          "timestamp": 1790261722044
+        }
+      ],
+      [
+        "execution_cached",
+        {
+          "nodes": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+          ],
+          "prompt_id": "ebf07d5e-04e3-41d5-87a3-c3d347d2abb9",
+          "timestamp": 1790261722047
+        }
+      ],
+      [
+        "execution_success",
+        {
+          "prompt_id": "ebf07d5e-04e3-41d5-87a3-c3d347d2abb9",
+          "timestamp": 1790261842426
+        }
+      ]
+    ]
+  },
+  "meta": {
+    "50": {
+      "node_id": "50",
+      "display_node": "50",
+      "parent_node": null,
+      "real_node_id": "50"
+    }
+  }
+}

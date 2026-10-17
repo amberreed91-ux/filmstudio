@@ -1,0 +1,5 @@
+{
+  "prompt_id": "d563f46a-edf4-4e22-b497-465e1c865c84",
+  "cancel_route": "POST /api/jobs/{id}/cancel",
+  "observed": "cancelled"
+}

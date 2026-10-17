@@ -1,0 +1,9 @@
+{
+  "name": "studio-demo-walkthrough",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Live demo walkthrough deck for AI Film Studio, built from screenshots captured in the running app.",
+  "scripts": {
+    "dev": "node ../studio-app/node_modules/vite/bin/vite.js --host 127.0.0.1 --strictPort"
+  }
+}

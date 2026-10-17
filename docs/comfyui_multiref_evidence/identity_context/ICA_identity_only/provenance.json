@@ -1,0 +1,323 @@
+{
+  "arm": "ICA_identity_only",
+  "question": "Baseline: does the approved face reference alone carry identity? (Arm A)",
+  "prompt_id": "74375559-8671-4d7a-8e64-e826cb6d4ee7",
+  "status": "success",
+  "completed": true,
+  "runtime_seconds": 4.0,
+  "reference_order": [
+    "maya_face"
+  ],
+  "reference_files_in_order": [
+    "icp_maya_face.png"
+  ],
+  "reference_source_paths_in_order": [
+    "studio-backend/outputs/references/character-looks/54f20532b4dd2ea190563995/950cd32fcf2d8247bdc26818/128cc1ba90c240e5b8b25dc06efffec3.png"
+  ],
+  "reference_roles_in_order": [
+    "identity (authoritative approved face for MAYA)"
+  ],
+  "reference_sha256": {
+    "icp_maya_face.png": "06a9c8a4da66cd98ef3769a9ef48d0da3ca27d5d8fe1263be85fc56bdc264238"
+  },
+  "workflow_json": {
+    "1": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "type": "wan",
+        "device": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "1",
+          0
+        ],
+        "text": "a woman, neutral expression, cinematic natural light, medium close-up, steady camera"
+      }
+    },
+    "3": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "1",
+          0
+        ],
+        "text": "low quality, blurry, distorted, text, watermark"
+      }
+    },
+    "4": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "Phantom-Wan-1_3B_fp16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "5": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan_2.1_vae.safetensors"
+      }
+    },
+    "6": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "10": {
+      "class_type": "WanPhantomSubjectToVideo",
+      "inputs": {
+        "positive": [
+          "2",
+          0
+        ],
+        "negative": [
+          "3",
+          0
+        ],
+        "vae": [
+          "5",
+          0
+        ],
+        "width": 448,
+        "height": 448,
+        "length": 9,
+        "batch_size": 1,
+        "images": [
+          "60",
+          0
+        ]
+      }
+    },
+    "30": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "seed": 870124,
+        "steps": 10,
+        "cfg": 6.0,
+        "sampler_name": "uni_pc",
+        "scheduler": "simple",
+        "positive": [
+          "10",
+          0
+        ],
+        "negative": [
+          "10",
+          2
+        ],
+        "latent_image": [
+          "10",
+          3
+        ],
+        "denoise": 1.0
+      }
+    },
+    "40": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "30",
+          0
+        ],
+        "vae": [
+          "5",
+          0
+        ]
+      }
+    },
+    "50": {
+      "class_type": "SaveAnimatedWEBP",
+      "inputs": {
+        "images": [
+          "40",
+          0
+        ],
+        "filename_prefix": "icp",
+        "fps": 16,
+        "lossless": false,
+        "quality": 90,
+        "method": "default"
+      }
+    },
+    "20": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "icp_maya_face.png"
+      }
+    },
+    "60": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "image": [
+          "20",
+          0
+        ],
+        "upscale_method": "bilinear",
+        "width": 448,
+        "height": 448,
+        "crop": "center"
+      }
+    }
+  },
+  "workflow_sha256": "49eb3960fe2fc02e0e56a49fcbde3b11ffd95c847e41817138616f669c106505",
+  "graph_map": {
+    "node_ids": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "10",
+      "20",
+      "30",
+      "40",
+      "50",
+      "60"
+    ],
+    "load_image_nodes": {
+      "20": "icp_maya_face.png"
+    },
+    "image_scale_nodes": {
+      "60": "448x448 bilinear center"
+    },
+    "image_batch_chain": [],
+    "phantom_node": {
+      "id": "10",
+      "class_type": "WanPhantomSubjectToVideo",
+      "images_port": "ImageScale[60]"
+    },
+    "sampler_negative_source": {
+      "node": "30",
+      "port_index": 2,
+      "meaning": "negative_img_text (reference time_dim_concat zeroed)"
+    }
+  },
+  "output_encoder": "SaveAnimatedWEBP (lossy, quality 90, fps 16)",
+  "seed": 870124,
+  "steps": 10,
+  "cfg": 6.0,
+  "shift": 8.0,
+  "sampler_name": "uni_pc",
+  "scheduler": "simple",
+  "model": "Phantom-Wan-1_3B_fp16.safetensors",
+  "vae": "wan_2.1_vae.safetensors",
+  "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+  "resolution": "448x448",
+  "frames": 9,
+  "fps": 16,
+  "status_messages": [
+    [
+      "execution_start",
+      {
+        "prompt_id": "74375559-8671-4d7a-8e64-e826cb6d4ee7",
+        "timestamp": 1790264790409
+      }
+    ],
+    [
+      "execution_cached",
+      {
+        "nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "10",
+          "30",
+          "40",
+          "50",
+          "20",
+          "60"
+        ],
+        "prompt_id": "74375559-8671-4d7a-8e64-e826cb6d4ee7",
+        "timestamp": 1790264790413
+      }
+    ],
+    [
+      "execution_success",
+      {
+        "prompt_id": "74375559-8671-4d7a-8e64-e826cb6d4ee7",
+        "timestamp": 1790264790413
+      }
+    ]
+  ],
+  "cache": {
+    "cached_nodes": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "10",
+      "30",
+      "40",
+      "50",
+      "20",
+      "60"
+    ],
+    "recomputed_nodes": [],
+    "sampler_recomputed": false,
+    "wall_ms_from_history": 4
+  },
+  "memory_before": {
+    "available_bytes_approx": 4090396672,
+    "swap_used_mb": 3488.62
+  },
+  "memory_after": {
+    "available_bytes_approx": 4026908672,
+    "swap_used_mb": 3488.62
+  },
+  "memory_during": {
+    "samples": 2,
+    "min_available_bytes": 4022059008,
+    "max_comfy_rss_kb": null,
+    "swap_start_mb": 3488.62,
+    "swap_peak_mb": 3488.62,
+    "series": [
+      {
+        "available_bytes_approx": 4091396096,
+        "swap_used_mb": 3488.62
+      },
+      {
+        "available_bytes_approx": 4022059008,
+        "swap_used_mb": 3488.62
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "filename": "icp_00003_.webp",
+      "node": null,
+      "bytes": 273658,
+      "sha256": "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb"
+    }
+  ],
+  "output_sha256": "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb",
+  "output_sha256_note": "single artifact",
+  "frames_exported": [
+    "frame_00.png",
+    "frame_01.png",
+    "frame_02.png",
+    "frame_03.png",
+    "frame_04.png",
+    "frame_05.png",
+    "frame_06.png",
+    "frame_07.png",
+    "frame_08.png"
+  ]
+}

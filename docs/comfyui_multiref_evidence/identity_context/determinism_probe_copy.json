@@ -1,0 +1,178 @@
+{
+  "arm": "ICF_repeat_identity",
+  "reference_files_in_order": [
+    "icp_maya_face_copy.png"
+  ],
+  "reference_sha256": {
+    "icp_maya_face_copy.png": "06a9c8a4da66cd98ef3769a9ef48d0da3ca27d5d8fe1263be85fc56bdc264238"
+  },
+  "graph_sha256": "cb2955c950a0069f92d0c2284ee1dbc60e9ee3c4109b1df4f9ed65b608afe6ce",
+  "iterations": [
+    {
+      "iteration": 1,
+      "prompt_id": "135350ec-a26d-4ed7-a7d6-e947d4899b30",
+      "runtime_seconds": 120.3,
+      "status": "success",
+      "reference_files_in_graph": [
+        "icp_maya_face_copy.png"
+      ],
+      "sha256": "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+      "outputs": [
+        {
+          "path": "determinism_probe_copy/iter1_icp_00013_.webp",
+          "sha256": "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+          "bytes": 273664
+        }
+      ],
+      "cache": {
+        "cached_nodes": [],
+        "recomputed_nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "10",
+          "30",
+          "40",
+          "50"
+        ],
+        "sampler_recomputed": true,
+        "wall_ms_from_history": 118528
+      }
+    },
+    {
+      "iteration": 2,
+      "prompt_id": "c2d73530-ee93-4875-83af-3fbb0cdd3323",
+      "runtime_seconds": 128.3,
+      "status": "success",
+      "reference_files_in_graph": [
+        "icp_maya_face_copy.png"
+      ],
+      "sha256": "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+      "outputs": [
+        {
+          "path": "determinism_probe_copy/iter2_icp_00014_.webp",
+          "sha256": "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+          "bytes": 273664
+        }
+      ],
+      "cache": {
+        "cached_nodes": [],
+        "recomputed_nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "10",
+          "30",
+          "40",
+          "50"
+        ],
+        "sampler_recomputed": true,
+        "wall_ms_from_history": 125561
+      }
+    },
+    {
+      "iteration": 3,
+      "prompt_id": "419aab66-0493-4b74-a66c-c2f86147f45f",
+      "runtime_seconds": 120.3,
+      "status": "success",
+      "reference_files_in_graph": [
+        "icp_maya_face_copy.png"
+      ],
+      "sha256": "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+      "outputs": [
+        {
+          "path": "determinism_probe_copy/iter3_icp_00015_.webp",
+          "sha256": "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+          "bytes": 273664
+        }
+      ],
+      "cache": {
+        "cached_nodes": [],
+        "recomputed_nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "10",
+          "30",
+          "40",
+          "50"
+        ],
+        "sampler_recomputed": true,
+        "wall_ms_from_history": 118729
+      }
+    }
+  ],
+  "genuine_recompute_count": 3,
+  "genuine_recompute_all_identical": true,
+  "genuine_recompute_sha256": [
+    "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+    "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d",
+    "d85ea148c54dc9db763c043d2e57aa11be50df187a32336c090b2aa3143daa9d"
+  ],
+  "frame_diffs_between_genuine_runs": {
+    "genuine1_vs_genuine2": {
+      "decoded": true,
+      "frames_a": 9,
+      "frames_b": 9,
+      "mean_abs_diff_per_frame": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max_frame_diff": 0.0,
+      "any_frame_differed": false
+    },
+    "genuine1_vs_genuine3": {
+      "decoded": true,
+      "frames_a": 9,
+      "frames_b": 9,
+      "mean_abs_diff_per_frame": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max_frame_diff": 0.0,
+      "any_frame_differed": false
+    },
+    "genuine2_vs_genuine3": {
+      "decoded": true,
+      "frames_a": 9,
+      "frames_b": 9,
+      "mean_abs_diff_per_frame": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max_frame_diff": 0.0,
+      "any_frame_differed": false
+    }
+  },
+  "interpretation": "genuine_recompute_all_identical=true means several uncached recomputations of the same graph produced byte-identical output and the pipeline is deterministic at this configuration. false means the generation is not reproducible run-to-run."
+}

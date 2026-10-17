@@ -1,0 +1,24 @@
+{
+  "title": "Locked character_reference_locks images at full inspection size",
+  "meta": "These are the rows that carry character binding (character_id/character_name/reference_role). Note source_shot_id: each is a scene frame for scene_001_shot_001 / scene_001_shot_002, not a studio character-look portrait.",
+  "columns": 1,
+  "thumb_width": 1180,
+  "groups": [
+    {
+      "heading": "MAYA general (charlock_bfec79ba3679) — scene_001_shot_001",
+      "items": [{"path": "refs/ic_maya_general.jpg", "caption": "reference.jpg"}]
+    },
+    {
+      "heading": "MAYA alternate_angle (charlock_c452e7d94c88) — scene_001_shot_001",
+      "items": [{"path": "refs/ic_maya_alternate_angle.jpg", "caption": "reference_3.jpg"}]
+    },
+    {
+      "heading": "MOM general (charlock_344bea5a21b1) — scene_001_shot_002",
+      "items": [{"path": "refs/ic_mom_general.jpg", "caption": "reference.jpg"}]
+    },
+    {
+      "heading": "Environment ref_env_6b726885ed67ae4d — scene_002_shot_001 storyboard",
+      "items": [{"path": "refs/ic_env_scene_002_shot_001.png", "caption": "storyboard_qwen.png"}]
+    }
+  ]
+}

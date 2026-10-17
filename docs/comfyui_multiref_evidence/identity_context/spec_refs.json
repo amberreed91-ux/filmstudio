@@ -1,0 +1,32 @@
+{
+  "title": "Phantom identity/context validation — approved Studio reference set",
+  "meta": "Read-only copies of approved Studio Reference Library assets (no row mutated). project_5907c60cddbc. Thumbnails are downscaled for inspection only; sha256 of each full-size original is recorded in reference_manifest.json.",
+  "columns": 3,
+  "thumb_width": 460,
+  "groups": [
+    {
+      "heading": "REF 1 — canonical character identity anchor",
+      "items": [
+        {"path": "refs/ic_maya_general.jpg", "caption": "MAYA general (charlock_bfec79ba3679, locked, reliability=high, source_status=approved, review_status=approved, frame_score=43.1)"}
+      ]
+    },
+    {
+      "heading": "REF 2 — approved supporting character reference",
+      "items": [
+        {"path": "refs/ic_maya_alternate_angle.jpg", "caption": "MAYA alternate_angle (charlock_c452e7d94c88, locked, reliability=medium, approved, frame_score=23.5)"}
+      ]
+    },
+    {
+      "heading": "REF 3 — approved environment / setting reference",
+      "items": [
+        {"path": "refs/ic_env_scene_002_shot_001.png", "caption": "ref_env_6b726885ed67ae4d (kind=environment, approved, source_shot=scene_002_shot_001)"}
+      ]
+    },
+    {
+      "heading": "Control — a different approved character (not used as a reference in any arm)",
+      "items": [
+        {"path": "refs/ic_mom_general.jpg", "caption": "MOM general (charlock_344bea5a21b1, locked, approved) — different character_id chr_4c77bbd9be1e"}
+      ]
+    }
+  ]
+}

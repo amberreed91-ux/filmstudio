@@ -1,0 +1,199 @@
+{
+  "experiment_id": "icp-phantom-1_3B-2026-09-24",
+  "server": "http://127.0.0.1:8190",
+  "comfyui": {
+    "os": "darwin",
+    "ram_total": 17179869184,
+    "ram_free": 5631590400,
+    "comfyui_version": "0.37.2",
+    "required_frontend_version": "1.52.7",
+    "installed_templates_version": "0.11.69",
+    "required_templates_version": "0.11.69",
+    "comfy_package_versions": [
+      {
+        "name": "comfyui-frontend-package",
+        "installed": "1.52.7",
+        "required": "1.52.7"
+      },
+      {
+        "name": "comfyui-workflow-templates",
+        "installed": "0.11.69",
+        "required": "0.11.69"
+      },
+      {
+        "name": "comfyui-embedded-docs",
+        "installed": "0.5.12",
+        "required": "0.5.12"
+      },
+      {
+        "name": "comfy-kitchen",
+        "installed": "0.2.35",
+        "required": "0.2.35"
+      },
+      {
+        "name": "comfy-aimdo",
+        "installed": "0.5.5",
+        "required": "0.5.5"
+      }
+    ],
+    "python_version": "3.13.12 (main, Feb 12 2026, 01:06:02) [Clang 21.1.4 ]",
+    "pytorch_version": "2.12.1",
+    "embedded_python": false,
+    "deploy_environment": "local-desktop2-standalone",
+    "argv": [
+      "ComfyUI/main.py",
+      "--feature-flag",
+      "show_signin_button=true",
+      "--feature-flag",
+      "enable_telemetry=true",
+      "--enable-manager",
+      "--extra-model-paths-config",
+      "/Users/amberreed/Library/Application Support/Comfy Desktop/instance-model-paths/inst-1790243545529.yaml",
+      "--input-directory",
+      "/Users/amberreed/ComfyUI-Shared/input",
+      "--output-directory",
+      "/Users/amberreed/ComfyUI-Shared/output",
+      "--port",
+      "8190"
+    ]
+  },
+  "devices": [
+    {
+      "name": "mps",
+      "type": "mps",
+      "index": null,
+      "vram_total": 17179869184,
+      "vram_free": 5631836160,
+      "torch_vram_total": 17179869184,
+      "torch_vram_free": 5631836160
+    }
+  ],
+  "host": "Apple M1 Pro",
+  "host_memory_bytes": 17179869184,
+  "macos": "26.7",
+  "comfy_processes": [
+    {
+      "pid": 31261,
+      "cmd": "/Users/amberreed/ComfyUI-Installs/ComfyUI (2)/ComfyUI/.venv/bin/python3 -s ComfyUI/main.py --feature-flag show_signin_button=true --feature-flag enable_telemetry=true --enable-manager --extra-model-paths-config /Users/amberreed/Library/Application Support/Comfy Desktop/instance-model-paths/inst-1790243545529.yaml --input-directory /Users/amberreed/ComfyUI-Shared/input --output-directory /Users/amberreed/ComfyUI-Shared/output --port 8190"
+    },
+    {
+      "pid": 32330,
+      "cmd": "/Users/amberreed/ComfyUI-Installs/ComfyUI (3)/ComfyUI/.venv/bin/python3 -s ComfyUI/main.py --feature-flag show_signin_button=true --feature-flag enable_telemetry=true --enable-manager --extra-model-paths-config /Users/amberreed/Library/Application Support/Comfy Desktop/instance-model-paths/inst-1790243939029.yaml --input-directory /Users/amberreed/ComfyUI-Shared/input --output-directory /Users/amberreed/ComfyUI-Shared/output --port 8191"
+    }
+  ],
+  "local_backend_pid": null,
+  "model": {
+    "file": "Phantom-Wan-1_3B_fp16.safetensors",
+    "bytes": 2874796408,
+    "sha256_prefix": "a12df8ce62cf8e5ad7820d97579be463",
+    "sha256_prefix_note": "sha256 of first 8 MiB only",
+    "tensor_count": 825,
+    "block_count": 30,
+    "patch_embedding_weight_shape": [
+      1536,
+      16,
+      1,
+      2,
+      2
+    ],
+    "metadata": {
+      "format": "pt"
+    }
+  },
+  "vae_bytes": 253815318,
+  "text_encoder_bytes": 6735906897,
+  "seed": 870124,
+  "steps": 10,
+  "cfg": 6.0,
+  "shift": 8.0,
+  "sampler": "uni_pc",
+  "scheduler": "simple",
+  "resolution": "448x448",
+  "frames": 9,
+  "fps": 16,
+  "negative_conditioning_output": 2,
+  "positive_prompt": "a woman, neutral expression, cinematic natural light, medium close-up, steady camera",
+  "negative_prompt": "low quality, blurry, distorted, text, watermark",
+  "prompt_design_note": "The prompt names no identity trait and no setting on purpose, so that any character or environment content in the output is attributable to a reference rather than to the text.",
+  "reference_files": {
+    "maya_face": "icp_maya_face.png",
+    "maya_alt_angle": "icp_maya_alt_angle.jpg",
+    "env_scene002": "icp_env_scene002.png",
+    "maya_look_02": "icp_maya_look_02.png",
+    "maya_face_copy3": "icp_maya_face_copy3.png",
+    "maya_face_copy": "icp_maya_face_copy.png"
+  },
+  "arm_questions": {
+    "ICA_identity_only": "Baseline: does the approved face reference alone carry identity? (Arm A)",
+    "ICB_identity_support": "Arm B: what does the Studio-designated supporting character reference add or damage?",
+    "ICC_identity_env": "Arm C: does the approved environment reference contribute setting while identity holds?",
+    "ICD_identity_support_env": "Arm D: can identity + supporting + environment coexist?",
+    "ICG_identity_second_look": "Supplementary: does a second genuine portrait of the same character reinforce identity?",
+    "ICE_order_swapped": "Ordering: does swapping reference 1 and 2 change the output?",
+    "ICF_repeat_identity": "Determinism: uncached recompute of identical pixels -> identical output?",
+    "ICZ_png_probe": "Diagnostic: is the observed artifacting model-level or a lossy-animated-WebP encoder artifact?",
+    "ICH_probe_copy3": "Diagnostic: does a third byte-identical reference filename change the output?"
+  },
+  "arm_specs": {
+    "ICA_identity_only": {
+      "refs": [
+        "maya_face"
+      ],
+      "save": "webp"
+    },
+    "ICB_identity_support": {
+      "refs": [
+        "maya_face",
+        "maya_alt_angle"
+      ],
+      "save": "webp"
+    },
+    "ICC_identity_env": {
+      "refs": [
+        "maya_face",
+        "env_scene002"
+      ],
+      "save": "webp"
+    },
+    "ICD_identity_support_env": {
+      "refs": [
+        "maya_face",
+        "maya_alt_angle",
+        "env_scene002"
+      ],
+      "save": "webp"
+    },
+    "ICG_identity_second_look": {
+      "refs": [
+        "maya_face",
+        "maya_look_02"
+      ],
+      "save": "webp"
+    },
+    "ICE_order_swapped": {
+      "refs": [
+        "maya_alt_angle",
+        "maya_face"
+      ],
+      "save": "webp"
+    },
+    "ICF_repeat_identity": {
+      "refs": [
+        "maya_face_copy"
+      ],
+      "save": "webp"
+    },
+    "ICH_probe_copy3": {
+      "refs": [
+        "maya_face_copy3"
+      ],
+      "save": "webp"
+    },
+    "ICZ_png_probe": {
+      "refs": [
+        "maya_face"
+      ],
+      "save": "png"
+    }
+  }
+}

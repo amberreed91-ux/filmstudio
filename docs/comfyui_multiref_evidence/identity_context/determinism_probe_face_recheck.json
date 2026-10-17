@@ -1,0 +1,107 @@
+{
+  "arm": "ICA_identity_only",
+  "reference_files_in_order": [
+    "icp_maya_face.png"
+  ],
+  "reference_sha256": {
+    "icp_maya_face.png": "06a9c8a4da66cd98ef3769a9ef48d0da3ca27d5d8fe1263be85fc56bdc264238"
+  },
+  "graph_sha256": "49eb3960fe2fc02e0e56a49fcbde3b11ffd95c847e41817138616f669c106505",
+  "iterations": [
+    {
+      "iteration": 1,
+      "prompt_id": "e7038709-1da7-4f82-8bb1-63bdf9407b6b",
+      "runtime_seconds": 128.3,
+      "status": "success",
+      "reference_files_in_graph": [
+        "icp_maya_face.png"
+      ],
+      "sha256": "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb",
+      "outputs": [
+        {
+          "path": "determinism_probe_face_recheck/iter1_icp_00016_.webp",
+          "sha256": "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb",
+          "bytes": 273658
+        }
+      ],
+      "cache": {
+        "cached_nodes": [],
+        "recomputed_nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "10",
+          "30",
+          "40",
+          "50"
+        ],
+        "sampler_recomputed": true,
+        "wall_ms_from_history": 125973
+      }
+    },
+    {
+      "iteration": 2,
+      "prompt_id": "1b2f2482-a62f-4288-b8ad-1345763897d3",
+      "runtime_seconds": 120.3,
+      "status": "success",
+      "reference_files_in_graph": [
+        "icp_maya_face.png"
+      ],
+      "sha256": "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb",
+      "outputs": [
+        {
+          "path": "determinism_probe_face_recheck/iter2_icp_00017_.webp",
+          "sha256": "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb",
+          "bytes": 273658
+        }
+      ],
+      "cache": {
+        "cached_nodes": [],
+        "recomputed_nodes": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "10",
+          "30",
+          "40",
+          "50"
+        ],
+        "sampler_recomputed": true,
+        "wall_ms_from_history": 119029
+      }
+    }
+  ],
+  "genuine_recompute_count": 2,
+  "genuine_recompute_all_identical": true,
+  "genuine_recompute_sha256": [
+    "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb",
+    "3a7a5b21f668696a9d24256963d059cb32e79e0ec164c07b9deb7d261d8b58bb"
+  ],
+  "frame_diffs_between_genuine_runs": {
+    "genuine1_vs_genuine2": {
+      "decoded": true,
+      "frames_a": 9,
+      "frames_b": 9,
+      "mean_abs_diff_per_frame": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max_frame_diff": 0.0,
+      "any_frame_differed": false
+    }
+  },
+  "interpretation": "genuine_recompute_all_identical=true means several uncached recomputations of the same graph produced byte-identical output and the pipeline is deterministic at this configuration. false means the generation is not reproducible run-to-run."
+}
