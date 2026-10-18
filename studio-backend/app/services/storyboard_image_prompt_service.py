@@ -254,6 +254,107 @@ class StoryboardImagePromptService:
         )
         return record
 
+    # -- hash-gated carry-forward (design item C) -----------------------------
+    def carry_forward_for_clones(self, clones: list[Any]) -> dict[str, Any]:
+        """Inherit approved rows onto a new version when the hash is unchanged.
+
+        For each clone (which carries ``metadata.source_storyboard_shot_id``
+        from ``_clone_shot_for_version``): when the source row exists, is
+        ``approved``, and its ``source_prompt_sha256`` equals the clone's live
+        canonical hash, copy the row onto the clone's new primary key with
+        ``version_id`` updated, text/approval preserved, and a
+        ``carried_from:<source_sbs>`` marker appended to
+        ``rules_applied_json``. Anything else — changed hash, non-approved
+        source, missing source, empty/over-limit text — carries nothing, so a
+        ``proposed`` row is never upgraded and the D4 gate still blocks until
+        a human approves. Never touches the canonical prompt.
+        """
+        storage = self._storage_or_raise()
+        carried: list[str] = []
+        skipped_changed: list[str] = []
+        skipped_unapproved: list[str] = []
+        for clone in clones:
+            try:
+                new_sbs = str(getattr(clone, "storyboard_shot_id", "") or "")
+                meta = getattr(clone, "metadata", None) or {}
+                if isinstance(meta, dict):
+                    source_sbs = str(meta.get("source_storyboard_shot_id") or "")
+                else:
+                    source_sbs = str(getattr(meta, "source_storyboard_shot_id", "") or "")
+                if not new_sbs or not source_sbs:
+                    continue
+                if new_sbs == source_sbs:
+                    continue
+                existing = storage.get_storyboard_image_prompt(new_sbs)
+                canonical = str(
+                    getattr(getattr(clone, "render_contract", None), "provider_neutral_prompt", "") or ""
+                )
+                current_sha = canonical_sha256(canonical)
+                if (
+                    existing
+                    and str(existing.get("status") or "") == "approved"
+                    and str(existing.get("source_prompt_sha256") or "") == current_sha
+                ):
+                    continue  # already carried
+                source = storage.get_storyboard_image_prompt(source_sbs)
+                if not source or str(source.get("status") or "") != "approved":
+                    skipped_unapproved.append(new_sbs)
+                    continue
+                if str(source.get("source_prompt_sha256") or "") != current_sha:
+                    skipped_changed.append(new_sbs)
+                    continue
+                text = str(source.get("image_prompt") or "").strip()
+                if not text or utf16_length(text) > RUNWAY_IMAGE_MAX_PROMPT_UTF16:
+                    skipped_unapproved.append(new_sbs)
+                    continue
+                try:
+                    rules = json.loads(str(source.get("rules_applied_json") or "[]"))
+                    if not isinstance(rules, list):
+                        rules = []
+                except Exception:
+                    rules = []
+                marker = f"carried_from:{source_sbs}"
+                if marker not in [str(item) for item in rules]:
+                    rules = [*rules, marker]
+                now = _now()
+                record: ImagePromptRecord = {
+                    **dict(source),
+                    "storyboard_shot_id": new_sbs,
+                    "blueprint_id": str(getattr(clone, "blueprint_id", "") or source.get("blueprint_id")),
+                    "version_id": str(getattr(clone, "version_id", "") or source.get("version_id")),
+                    "project_id": str(getattr(clone, "project_id", "") or source.get("project_id")),
+                    "scene_id": str(getattr(clone, "scene_id", "") or source.get("scene_id")),
+                    "shot_id": str(getattr(clone, "shot_id", "") or source.get("shot_id")),
+                    "source_prompt_sha256": current_sha,
+                    "rules_applied_json": json.dumps(rules),
+                    "canonical_utf16": utf16_length(canonical),
+                    "updated_at": now,
+                    "carried_from": source_sbs,
+                    "carried_at": now,
+                }
+                storage.save_storyboard_image_prompt(record)
+                carried.append(new_sbs)
+            except Exception:
+                logger.warning(
+                    "project_id=%s job_id=%s provider=runway stage=image_prompt_carry_failed duration_ms=%d",
+                    getattr(clone, "project_id", ""),
+                    getattr(clone, "storyboard_shot_id", ""),
+                    0,
+                )
+        try:
+            project_id = str(getattr(clones[0], "project_id", "") if clones else "")
+        except Exception:
+            project_id = ""
+        logger.info(
+            "project_id=%s job_id=%s provider=runway stage=image_prompt_carry_forward duration_ms=%d",
+            project_id, f"carried={len(carried)}", 0,
+        )
+        return {
+            "carried": carried,
+            "skipped_changed": skipped_changed,
+            "skipped_unapproved": skipped_unapproved,
+        }
+
     # -- status / gate ----------------------------------------------------
     def status_for_shot(self, shot: Any, record: ImagePromptRecord | None = None) -> dict[str, Any]:
         storage = self._storage_or_raise()

@@ -459,6 +459,13 @@ class SceneDirectionService:
             raise StateError('The storyboard changed. Reload before saving your direction.', stage='scene_direction') from exc
         except Exception as exc:
             raise PersistenceError('Could not save scene direction. The prior version is preserved.', stage='scene_direction') from exc
+        # Hash-gated carry-forward (design item C): Scene Direction and
+        # coverage saves mint a version with new shot IDs, so approved rows
+        # carry when the canonical hash is unchanged; the rest get proposals.
+        try:
+            self.blueprints._carry_forward_and_derive(clones)
+        except Exception:
+            pass
         log_stage_event(project_id=project_id, job_id=None, provider=None, stage='scene_direction',
                         duration_ms=elapsed_ms(timer), extra={'scene_id': scene_id, 'version_id': version_id})
         return self.get(project_id, scene_id)

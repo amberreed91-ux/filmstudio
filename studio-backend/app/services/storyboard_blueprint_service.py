@@ -313,7 +313,7 @@ class StoryboardBlueprintService:
             shots=shots,
             superseded_version=superseded_version,
         )
-        self._derive_image_prompt_proposals(shots)
+        self._carry_forward_and_derive(shots)
         self._sync_scene_memory(blueprint.project_id, blueprint.scene_id, shots, approved=False)
         return self.get_blueprint_detail(project_id=blueprint.project_id, scene_id=blueprint.scene_id)
 
@@ -2270,11 +2270,42 @@ class StoryboardBlueprintService:
             results.append(record)
         return results
 
+    def _carry_forward_and_derive(self, shots) -> dict[str, Any]:
+        """Hash-gated carry-forward (design item C) then derive missing proposals.
+
+        Runs on every ``create_version`` path — explicit regenerate and the
+        camera-approval mint (``previs_service.approve_ai_camera`` calls
+        ``create_version``). Scene Direction / coverage saves call the same
+        helper via ``SceneDirectionService.save``. Carried approved rows keep
+        their text/approval; derive only proposes for shots without a fresh
+        approved row, so it can never downgrade a carried approval."""
+        service = self._image_prompt_service()
+        summary: dict[str, Any] = {"carried": [], "skipped_changed": [], "skipped_unapproved": []}
+        try:
+            summary = service.carry_forward_for_clones(shots)
+        except Exception:
+            logger.warning(
+                "project_id=%s job_id=%s provider=runway stage=image_prompt_carry_failed duration_ms=%d",
+                getattr(shots[0], "project_id", "") if shots else "",
+                "create_version",
+                0,
+            )
+        self._derive_image_prompt_proposals(shots)
+        return summary
+
     def _derive_image_prompt_proposals(self, shots):
         proposals = []
         service = self._image_prompt_service()
         for shot in shots:
             try:
+                existing = self.storage.get_storyboard_image_prompt(shot.storyboard_shot_id)
+                if existing and str(existing.get("status") or "") == "approved":
+                    from app.services.runway_image_prompt_compactor import canonical_sha256 as _canonical_sha256
+
+                    if str(existing.get("source_prompt_sha256") or "") == _canonical_sha256(
+                        str(shot.render_contract.provider_neutral_prompt or "")
+                    ):
+                        continue  # carried approval stands; never derive over it
                 proposals.append(service.derive_for_shot(shot))
             except Exception as exc:
                 logger.warning(
