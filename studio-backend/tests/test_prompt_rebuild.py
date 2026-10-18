@@ -279,6 +279,11 @@ def test_rebuild_confirmed_legacy_shots_updates_draft_in_place(tmp_path):
         assert shot.metadata["builder_output_sha256"]
         assert shot.metadata["prompt_rebuild"]["confirmed"] is True
         assert shot.metadata["prompt_rebuild"]["machine_built_prior"] is False
+        # Both sides of the canonical diff persist for the re-approve action.
+        assert shot.metadata["prompt_rebuild"]["after_prompt"] == str(
+            shot.render_contract.provider_neutral_prompt or ""
+        )
+        assert shot.metadata["prompt_rebuild"]["before_prompt"]
 
 
 def test_rebuild_machine_built_shots_need_no_confirm(tmp_path):

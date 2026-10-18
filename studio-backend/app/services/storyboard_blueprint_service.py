@@ -862,6 +862,11 @@ class StoryboardBlueprintService:
                     "prior_sha256": current_sha,
                     "machine_built_prior": machine_built,
                     "confirmed": (not machine_built),
+                    # The re-approve action must show the canonical diff, so
+                    # both sides are kept on the shot (hashes alone cannot
+                    # render a diff).
+                    "before_prompt": current_prompt,
+                    "after_prompt": new_text,
                 },
             }
             shot.status = StoryboardShotStatus.READY

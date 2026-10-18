@@ -106,6 +106,12 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
   // Re-approval is offered only when the prompt was already human-approved
   // and went stale solely because a Rebuild changed the canonical text.
   const canReapprove = state === 'stale' && entry?.status === 'approved'
+  const rebuildRecord = (shot.metadata as Record<string, unknown> | undefined)?.prompt_rebuild as
+    | { before_prompt?: unknown; after_prompt?: unknown }
+    | undefined
+  const rebuildBefore = typeof rebuildRecord?.before_prompt === 'string' ? rebuildRecord.before_prompt : ''
+  const rebuildAfter = typeof rebuildRecord?.after_prompt === 'string' ? rebuildRecord.after_prompt : ''
+  const showRebuildDiff = canReapprove && Boolean(rebuildBefore || rebuildAfter)
 
   const stateBadge = state === 'ready'
     ? (
@@ -139,6 +145,21 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
           {entry.status === 'approved' ? ` · approved${entry.approved_by ? ` by ${entry.approved_by}` : ''}` : ' · awaiting approval'}
           {entry.reapproved_at ? ` · re-approved against rebuilt text${entry.reapproved_by ? ` by ${entry.reapproved_by}` : ''}` : ''}
         </p>
+      )}
+      {showRebuildDiff && (
+        <div className="space-y-1 rounded-md border border-sky-400/25 bg-sky-500/5 p-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-200/80">Board text changed by Rebuild</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Before</p>
+              <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300" data-testid={`image-prompt-rebuild-before-${shot.shot_number}`}>{rebuildBefore}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">After</p>
+              <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300" data-testid={`image-prompt-rebuild-after-${shot.shot_number}`}>{rebuildAfter}</p>
+            </div>
+          </div>
+        </div>
       )}
       {canReapprove && (
         <label className="flex cursor-pointer items-start gap-2 rounded-md border border-sky-400/25 bg-sky-500/5 px-3 py-2 text-[11px] leading-relaxed text-sky-100">

@@ -246,6 +246,19 @@ describe('re-approve against rebuilt text', () => {
     expect(screen.queryByTestId('image-prompt-reapprove-1')).not.toBeInTheDocument()
   })
 
+  it('shows the canonical before/after diff from the rebuild record', () => {
+    render(
+      <StoryboardImagePromptPanel
+        blueprintId="sbp_test"
+        shot={shot({ metadata: { prompt_rebuild: { before_prompt: 'Old board text.', after_prompt: 'New board text.' } } })}
+        entry={staleApproved()}
+        onChanged={() => {}}
+      />,
+    )
+    expect(screen.getByTestId('image-prompt-rebuild-before-1')).toHaveTextContent('Old board text.')
+    expect(screen.getByTestId('image-prompt-rebuild-after-1')).toHaveTextContent('New board text.')
+  })
+
   it('keeps the button disabled until the per-shot confirm is ticked', async () => {
     const onChanged = vi.fn()
     mockReapprove.mockResolvedValue({ status: 'approved' })
