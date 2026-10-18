@@ -16,6 +16,7 @@ from app.services.reference_selection_service import (
     select_character_references,
     scene_categories_for_prompt,
 )
+from app.services.storyboard_image_service import CANONICAL_IMAGE_PROVIDER
 from app.utils.helpers import derive_scene_id_from_shot_id
 from app.utils.character_appearance import appearance_approval, approved_reference_rows
 
@@ -769,7 +770,9 @@ class CharacterVisualReferenceService:
                 source_shot_id=shot_id,
                 image_url=storyboard,
                 lock_status="provisional",
-                provider="qwen-image-max",
+                # Storyboard images are produced by the canonical Runway
+                # gen4_image engine; historical rows keep the old label.
+                provider=CANONICAL_IMAGE_PROVIDER,
                 capture_method="storyboard",
                 reference_role="general",
                 reliability="medium",
