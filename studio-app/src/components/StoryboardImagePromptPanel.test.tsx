@@ -4,11 +4,12 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import StoryboardImagePromptPanel, { removedSummary } from './StoryboardImagePromptPanel'
+import StoryboardImagePromptPanel, { removedSummary, stateLabel } from './StoryboardImagePromptPanel'
 import {
   approveShotImagePrompt,
   deriveShotImagePrompt,
   editShotImagePrompt,
+  reapproveShotImagePrompt,
   utf16Length,
   type StoryboardShot,
 } from '../lib/studioApi'
@@ -20,12 +21,14 @@ vi.mock('../lib/studioApi', async (importOriginal) => {
     deriveShotImagePrompt: vi.fn(),
     editShotImagePrompt: vi.fn(),
     approveShotImagePrompt: vi.fn(),
+    reapproveShotImagePrompt: vi.fn(),
   }
 })
 
 const mockDerive = vi.mocked(deriveShotImagePrompt)
 const mockEdit = vi.mocked(editShotImagePrompt)
 const mockApprove = vi.mocked(approveShotImagePrompt)
+const mockReapprove = vi.mocked(reapproveShotImagePrompt)
 
 afterEach(() => {
   cleanup()
@@ -184,5 +187,84 @@ describe('StoryboardImagePromptPanel', () => {
       />,
     )
     expect(screen.getByText('render-ready')).toBeInTheDocument()
+  })
+})
+
+describe('stateLabel (honest box)', () => {
+  it('names the situation and the next step instead of echoing state words', () => {
+    expect(stateLabel('missing')).toMatch(/No image prompt yet/)
+    expect(stateLabel('unapproved')).toMatch(/saving is not approving/)
+    expect(stateLabel('stale')).toMatch(/Board text changed/)
+    expect(stateLabel('over_limit')).toMatch(/Over the Runway limit/)
+    expect(stateLabel('ready')).toBe('render-ready')
+  })
+
+  it('renders the honest label in the badge', () => {
+    render(
+      <StoryboardImagePromptPanel
+        blueprintId="sbp_test"
+        shot={shot()}
+        entry={{ image_prompt: 'A look.', state: 'stale', status: 'approved', origin: 'human' }}
+        onChanged={() => {}}
+      />,
+    )
+    expect(screen.getByText(/Board text changed/)).toBeInTheDocument()
+  })
+})
+
+describe('re-approve against rebuilt text', () => {
+  function staleApproved() {
+    return {
+      image_prompt: 'A look.',
+      state: 'stale',
+      status: 'approved',
+      origin: 'human',
+      approved_by: 'creator',
+    } as const
+  }
+
+  it('offers re-approval only for stale previously-approved prompts', () => {
+    const { unmount } = render(
+      <StoryboardImagePromptPanel
+        blueprintId="sbp_test"
+        shot={shot()}
+        entry={staleApproved()}
+        onChanged={() => {}}
+      />,
+    )
+    expect(screen.getByTestId('image-prompt-reapprove-1')).toBeInTheDocument()
+    expect(screen.getByTestId('image-prompt-reapprove-confirm-1')).not.toBeChecked()
+    unmount()
+    render(
+      <StoryboardImagePromptPanel
+        blueprintId="sbp_test"
+        shot={shot()}
+        entry={{ image_prompt: 'A look.', state: 'unapproved', status: 'proposed', origin: 'compactor' }}
+        onChanged={() => {}}
+      />,
+    )
+    expect(screen.queryByTestId('image-prompt-reapprove-1')).not.toBeInTheDocument()
+  })
+
+  it('keeps the button disabled until the per-shot confirm is ticked', async () => {
+    const onChanged = vi.fn()
+    mockReapprove.mockResolvedValue({ status: 'approved' })
+    render(
+      <StoryboardImagePromptPanel
+        blueprintId="sbp_test"
+        shot={shot()}
+        entry={staleApproved()}
+        onChanged={onChanged}
+      />,
+    )
+    const button = screen.getByTestId('image-prompt-reapprove-1')
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    expect(mockReapprove).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId('image-prompt-reapprove-confirm-1'))
+    expect(button).not.toBeDisabled()
+    fireEvent.click(button)
+    await waitFor(() => expect(mockReapprove).toHaveBeenCalledWith('sbp_test', 'sbs_test_001', true))
+    await waitFor(() => expect(onChanged).toHaveBeenCalled())
   })
 })

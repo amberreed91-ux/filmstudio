@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 import urllib.parse
@@ -33,6 +34,11 @@ from app.services.stability import PersistenceError, StateError, ValidationError
 from app.utils.helpers import derive_scene_id_from_shot_id
 
 logger = logging.getLogger("storyboard-blueprint-service")
+
+
+def _prompt_sha256(text: str) -> str:
+    """Content hash proving a canonical prompt is machine builder output."""
+    return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
 
 
 class StoryboardBlueprintService:
@@ -710,12 +716,185 @@ class StoryboardBlueprintService:
             shot.continuity_plan = shot.continuity_plan.model_copy(update=continuity_plan)
         if render_contract:
             shot.render_contract = shot.render_contract.model_copy(update=render_contract)
+            if "provider_neutral_prompt" in render_contract:
+                shot.metadata = {
+                    **(shot.metadata or {}),
+                    "canonical_hand_edited_at": utc_now_iso(),
+                }
         shot.metadata = {**(shot.metadata or {}), "last_change_reason": change_reason}
         shot.status = StoryboardShotStatus.READY
         shot.updated_at = utc_now_iso()
         self.storage.save_storyboard_shot(shot)
         self._sync_scene_memory(shot.project_id, shot.scene_id, [shot], approved=False)
         return shot
+
+    def rebuild_shot_prompts(
+        self,
+        *,
+        blueprint_id: str,
+        version_id: str,
+        confirmed_shot_ids: list[str] | None = None,
+        rebuilt_by: str = "creator",
+    ) -> dict[str, Any]:
+        """Rebuild canonical prompts with the current prompt builder (explicit only).
+
+        - Approved version: clones to exactly ONE new draft; the approved
+          version is never touched.
+        - Current draft version: updates shots in place (no new version).
+        - Non-current versions are refused.
+        - Hand-edited shots (``canonical_hand_edited_at`` marker) are skipped.
+        - Shots whose stored text cannot be proven machine-built
+          (``builder_output_sha256`` missing or mismatched) require an
+          explicit per-shot confirm (``confirmed_shot_ids``, by ``shot_id``).
+        - Shots whose scoped locked block resolves empty are refused loudly
+          and never written.
+        Only ``provider_neutral_prompt`` (plus rebuild bookkeeping in
+        ``metadata``) changes; cameras, coverage, and structured parameters
+        are preserved by construction.
+        """
+        from app.services.shot_prompt_builder import locked_appearance_characters
+
+        blueprint = self._require_blueprint(blueprint_id)
+        if blueprint.locked:
+            raise StateError("Storyboard blueprint is locked", stage="storyboard_prompt_rebuild")
+        version = self.storage.get_storyboard_blueprint_version(version_id)
+        if version is None or version.blueprint_id != blueprint.blueprint_id:
+            raise StateError("Storyboard version not found", stage="storyboard_prompt_rebuild")
+        if blueprint.current_version_id != version.version_id:
+            raise StateError(
+                "Prompt rebuild runs only on the current version", stage="storyboard_prompt_rebuild"
+            )
+        confirmed = {str(item or "").strip() for item in (confirmed_shot_ids or []) if str(item or "").strip()}
+        target_version_id = version.version_id
+        cloned_from_version_id: str | None = None
+        if version.status == StoryboardBlueprintStatus.APPROVED:
+            created = self.create_version(blueprint_id=blueprint.blueprint_id, change_reason="prompt_rebuild")
+            target_version_id = str(created["version"].version_id)
+            cloned_from_version_id = version.version_id
+            version = self.storage.get_storyboard_blueprint_version(target_version_id)
+        scene = self._get_scene(blueprint.project_id, blueprint.scene_id)
+        if scene is None:
+            raise StateError("Scene not found", stage="storyboard_prompt_rebuild")
+        shots = sorted(
+            self.storage.list_storyboard_shots(blueprint.blueprint_id, target_version_id),
+            key=lambda item: (item.shot_number, item.shot_id),
+        )
+        characters = self._project_characters_for_prompt(blueprint.project_id)
+        locked = locked_appearance_characters(characters)
+        try:
+            reference_locks = self.storage.list_character_reference_locks(
+                blueprint.project_id, lock_status=None, limit=200
+            )
+        except Exception:
+            reference_locks = []
+        reference_lock_info = [
+            {
+                "character_name": str(row.get("character_name") or ""),
+                "lock_status": str(row.get("lock_status") or ""),
+                "review_status": str(row.get("review_status") or ""),
+                "reference_role": str(row.get("reference_role") or ""),
+                "source_shot_id": str(row.get("source_shot_id") or ""),
+            }
+            for row in reference_locks
+            if isinstance(row, dict)
+        ]
+        rebuilt: list[dict[str, Any]] = []
+        skipped_hand_edited: list[str] = []
+        refused_empty_block: list[str] = []
+        confirm_required: list[dict[str, Any]] = []
+        for shot in shots:
+            current_prompt = str(shot.render_contract.provider_neutral_prompt or "")
+            current_sha = _prompt_sha256(current_prompt)
+            if (shot.metadata or {}).get("canonical_hand_edited_at"):
+                logger.info(
+                    "PROMPT_REBUILD_SKIPPED | reason=hand_edited | shot=%s",
+                    shot.shot_id,
+                )
+                skipped_hand_edited.append(shot.shot_id)
+                continue
+            stored_hash = str((shot.metadata or {}).get("builder_output_sha256") or "")
+            machine_built = bool(stored_hash) and stored_hash == current_sha
+            new_text = self._build_provider_neutral_prompt(
+                blueprint.project_id,
+                scene,
+                shot.shot_id,
+                shot.shot_number,
+                len(shots),
+                shot.visual_plan,
+                shot.rationale,
+            )
+            if locked and "Locked appearance" not in new_text:
+                logger.warning(
+                    "PROMPT_REBUILD_REFUSED | reason=empty_locked_block | shot=%s",
+                    shot.shot_id,
+                )
+                refused_empty_block.append(shot.shot_id)
+                continue
+            if not machine_built and shot.shot_id not in confirmed:
+                confirm_required.append(
+                    {
+                        "shot_id": shot.shot_id,
+                        "storyboard_shot_id": shot.storyboard_shot_id,
+                        "before_sha256": current_sha,
+                        "after_sha256": _prompt_sha256(new_text),
+                        "before": current_prompt,
+                        "after": new_text,
+                    }
+                )
+                continue
+            tail = new_text.split("Locked appearance", 1)[1] if "Locked appearance" in new_text else ""
+            tail_lower = tail.lower()
+            block_characters = sorted(
+                {
+                    str(char.get("name") or "").strip()
+                    for char in locked
+                    if str(char.get("name") or "").strip()
+                    and str(char.get("name") or "").strip().lower() in tail_lower
+                }
+            )
+            shot.render_contract.provider_neutral_prompt = new_text
+            shot.metadata = {
+                **(shot.metadata or {}),
+                "builder_output_sha256": _prompt_sha256(new_text),
+                "prompt_rebuild": {
+                    "rebuilt_at": utc_now_iso(),
+                    "rebuilt_by": rebuilt_by,
+                    "prior_sha256": current_sha,
+                    "machine_built_prior": machine_built,
+                    "confirmed": (not machine_built),
+                },
+            }
+            shot.status = StoryboardShotStatus.READY
+            shot.updated_at = utc_now_iso()
+            self.storage.save_storyboard_shot(shot)
+            logger.info(
+                "PROMPT_REBUILT | shot=%s | block_characters=%s",
+                shot.shot_id,
+                block_characters,
+            )
+            rebuilt.append(
+                {
+                    "shot_id": shot.shot_id,
+                    "storyboard_shot_id": shot.storyboard_shot_id,
+                    "before_sha256": current_sha,
+                    "after_sha256": _prompt_sha256(new_text),
+                    "block_characters": block_characters,
+                }
+            )
+        summary = {
+            "blueprint_id": blueprint.blueprint_id,
+            "version_id": target_version_id,
+            "cloned_from_version_id": cloned_from_version_id,
+            "rebuilt": rebuilt,
+            "skipped_hand_edited": skipped_hand_edited,
+            "refused_empty_block": refused_empty_block,
+            "confirm_required": confirm_required,
+            "reference_lock_info": reference_lock_info,
+            "rebuilt_by": rebuilt_by,
+        }
+        version.metadata = {**(version.metadata or {}), "prompt_rebuild": summary}
+        self.storage.save_storyboard_blueprint_version(version)
+        return summary
 
     def generate_storyboard_image_for_scene_shot(
         self,
@@ -1255,6 +1434,7 @@ class StoryboardBlueprintService:
                     storyboard_image_url=previs.get("image_path") or None,
                     previs_image_id=previs.get("id") or None,
                     rationale=rationale,
+                    metadata={"builder_output_sha256": _prompt_sha256(prompt)},
                 )
             )
         return shots
@@ -1991,8 +2171,21 @@ class StoryboardBlueprintService:
             "version_id": version_id,
             "shot_id": clone.shot_id,
         }
+        carried = dict(clone.metadata or {})
+        # Provenance from a prior version's rebuild belongs to that version.
+        carried.pop("prompt_rebuild", None)
+        # Re-stamp the builder hash at clone time only when the text is still
+        # provably machine-built. Hand-edited text stays marked hand-edited
+        # (Rebuild keeps skipping it) and must not gain a fresh hash that
+        # would falsely certify it as builder output.
+        if carried.get("canonical_hand_edited_at"):
+            carried.pop("builder_output_sha256", None)
+        else:
+            carried["builder_output_sha256"] = _prompt_sha256(
+                str(clone.render_contract.provider_neutral_prompt or "")
+            )
         clone.metadata = {
-            **(clone.metadata or {}),
+            **carried,
             "source_storyboard_shot_id": source.storyboard_shot_id,
             "source_version_id": source.version_id,
         }

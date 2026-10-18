@@ -82,6 +82,16 @@ class ApproveImagePromptRequest(BaseModel):
     approved_by: str | None = None
 
 
+class RebuildShotPromptsRequest(BaseModel):
+    confirmed_shot_ids: list[str] = Field(default_factory=list)
+    rebuilt_by: str | None = None
+
+
+class ReapproveImagePromptRequest(BaseModel):
+    confirmed: bool = False
+    approved_by: str | None = None
+
+
 def _serialize(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
@@ -424,6 +434,58 @@ def approve_shot_image_prompt(
         return _serialize(
             storyboard_image_prompt_service.approve_for_shot(
                 shot,
+                approved_by=payload.approved_by or "creator",
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.post("/storyboard-blueprints/{blueprint_id}/versions/{version_id}/rebuild-prompts")
+def rebuild_version_shot_prompts(
+    blueprint_id: str,
+    version_id: str,
+    payload: RebuildShotPromptsRequest = Body(default_factory=RebuildShotPromptsRequest),
+) -> dict[str, Any]:
+    """Rebuild canonical prompts with the current builder (explicit only).
+
+    Approved versions clone to exactly one new draft; current drafts update
+    in place. Hand-edited shots are skipped; unprovenanced shots need an
+    explicit per-shot confirm; empty locked blocks refuse loudly.
+    """
+    try:
+        return _serialize(
+            storyboard_blueprint_service.rebuild_shot_prompts(
+                blueprint_id=blueprint_id,
+                version_id=version_id,
+                confirmed_shot_ids=payload.confirmed_shot_ids,
+                rebuilt_by=payload.rebuilt_by or "creator",
+            )
+        )
+    except StabilityError as exc:
+        raise _handle_stability(exc) from exc
+
+
+@router.post("/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image-prompt/reapprove")
+def reapprove_shot_image_prompt(
+    blueprint_id: str,
+    storyboard_shot_id: str,
+    payload: ReapproveImagePromptRequest = Body(default_factory=ReapproveImagePromptRequest),
+) -> dict[str, Any]:
+    """Re-anchor an approved image prompt to rebuilt canonical text (explicit only)."""
+    try:
+        from app.services.storyboard_image_prompt_service import (
+            storyboard_image_prompt_service,
+        )
+
+        shot = storyboard_blueprint_service.get_storyboard_shot(storyboard_shot_id)
+        if shot is None or shot.blueprint_id != blueprint_id:
+            raise HTTPException(status_code=404, detail="Storyboard shot not found")
+        storyboard_image_prompt_service.set_storage(storyboard_blueprint_service.storage)
+        return _serialize(
+            storyboard_image_prompt_service.reapprove_after_rebuild(
+                shot,
+                confirmed=payload.confirmed,
                 approved_by=payload.approved_by or "creator",
             )
         )

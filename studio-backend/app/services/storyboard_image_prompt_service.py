@@ -191,6 +191,69 @@ class StoryboardImagePromptService:
         )
         return record
 
+    # -- re-approve after rebuild -------------------------------------------
+    def reapprove_after_rebuild(
+        self, shot: Any, *, confirmed: bool, approved_by: str = "creator"
+    ) -> ImagePromptRecord:
+        """Re-anchor a human approval to rebuilt canonical text (explicit only).
+
+        Applies only when the record was human-approved and went stale solely
+        because a prompt Rebuild changed the canonical text: the image prompt
+        itself is untouched and still within limit. Never automatic —
+        ``confirmed`` must be an explicit True (the UI renders it unticked).
+        Records who re-approved, when, and the old/new canonical hashes; the
+        original ``approved_at``/``approved_by`` are preserved.
+        """
+        storage = self._storage_or_raise()
+        if not confirmed:
+            raise ValidationError(
+                "Re-approval requires an explicit per-shot confirmation",
+                stage="storyboard_image_prompt_reapprove",
+            )
+        record = storage.get_storyboard_image_prompt(shot.storyboard_shot_id)
+        if not record:
+            raise ValidationError(
+                f"Shot {shot.shot_id}: no image prompt yet. Derive or write one first.",
+                stage="storyboard_image_prompt_reapprove",
+            )
+        if str(record.get("status") or "") != "approved":
+            raise ValidationError(
+                "Only a previously approved image prompt can be re-approved "
+                "against rebuilt text; review and approve this proposal normally.",
+                stage="storyboard_image_prompt_reapprove",
+                metadata={"state": self.status_for_shot(shot, record).get("state")},
+            )
+        canonical = str(shot.render_contract.provider_neutral_prompt or "")
+        current_sha = canonical_sha256(canonical)
+        prior_sha = str(record.get("source_prompt_sha256") or "")
+        if prior_sha == current_sha:
+            return dict(record)
+        text = str(record.get("image_prompt") or "").strip()
+        if not text:
+            raise ValidationError(
+                f"Shot {shot.shot_id}: approved image prompt is empty",
+                stage="storyboard_image_prompt_reapprove",
+            )
+        if utf16_length(text) > RUNWAY_IMAGE_MAX_PROMPT_UTF16:
+            raise ValidationError(
+                f"Shot {shot.shot_id}: image prompt exceeds the "
+                f"{RUNWAY_IMAGE_MAX_PROMPT_UTF16} UTF-16 unit limit; shorten and re-approve.",
+                stage="storyboard_image_prompt_reapprove",
+            )
+        now = _now()
+        record = dict(record)
+        record["source_prompt_sha256"] = current_sha
+        record["reapproved_by"] = approved_by or "creator"
+        record["reapproved_at"] = now
+        record["prior_source_prompt_sha256"] = prior_sha
+        record["updated_at"] = now
+        storage.save_storyboard_image_prompt(record)
+        logger.info(
+            "project_id=%s job_id=%s provider=runway stage=image_prompt_reapprove duration_ms=%d",
+            shot.project_id, shot.storyboard_shot_id, 0,
+        )
+        return record
+
     # -- status / gate ----------------------------------------------------
     def status_for_shot(self, shot: Any, record: ImagePromptRecord | None = None) -> dict[str, Any]:
         storage = self._storage_or_raise()

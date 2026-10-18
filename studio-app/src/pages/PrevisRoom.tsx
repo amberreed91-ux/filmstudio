@@ -92,6 +92,7 @@ import ShotSignalsPanel from '../components/ShotSignalsPanel'
 import GenerationReadinessPanel from '../components/GenerationReadinessPanel'
 import AiCameraApproval from '../components/AiCameraApproval'
 import StoryboardImagePromptPanel from '../components/StoryboardImagePromptPanel'
+import PromptRebuildPanel from '../components/PromptRebuildPanel'
 import { useGenerationPreflightGuard } from '../components/useGenerationPreflightGuard'
 import { getShotSignals, type ShotSignalsEnvelope } from '../lib/shotSignals'
 import {
@@ -2617,6 +2618,25 @@ export default function PrevisRoom() {
                     <button type="button" onClick={() => { setStoryboardStage(null); void handleCreateStoryboardBlueprint() }} disabled={!selectedSceneId || blueprintLoading} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-4 py-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40">{blueprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}Build storyboard blueprint</button>
                     <p className="text-xs text-zinc-400">Blueprint: <span className="text-zinc-200">{blueprintLoading ? 'loading' : storyboardBlueprint?.blueprint.status || 'not built'}</span></p>
                     {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}{confirmDeleteKey === `shot:${activeBlueprintShot.storyboard_shot_id}` ? <button type="button" onClick={() => void handleDeleteStoryboardShot()} className="text-[11px] text-rose-300 hover:text-rose-200" aria-label={`Confirm delete shot ${activeBlueprintShot.shot_number}`}>Confirm delete shot {activeBlueprintShot.shot_number}? Takes stay in history.</button> : <button type="button" onClick={() => armDelete(`shot:${activeBlueprintShot.storyboard_shot_id}`)} disabled={(storyboardBlueprint?.shots.length ?? 1) <= 1 || storyboardApproved} title={(storyboardBlueprint?.shots.length ?? 1) <= 1 ? 'A storyboard must keep at least one shot — add another shot first, or generate a new frame to replace this one' : storyboardApproved ? 'Unapprove the storyboard to edit its shots' : `Delete shot ${activeBlueprintShot.shot_number}`} className="text-[11px] text-zinc-500 hover:text-rose-300 disabled:opacity-40" aria-label={`Delete shot ${activeBlueprintShot.shot_number}`}>Delete shot {activeBlueprintShot.shot_number}</button>}</div></details>}
+                    {storyboardBlueprint?.blueprint && storyboardBlueprint?.version && effectiveProjectId && selectedSceneId && (
+                      <PromptRebuildPanel
+                        blueprintId={storyboardBlueprint.blueprint.blueprint_id}
+                        versionId={storyboardBlueprint.version.version_id}
+                        versionStatus={storyboardBlueprint.version.status}
+                        shots={storyboardBlueprint.shots}
+                        disabled={storyboardApproved}
+                        onChanged={() => {
+                          void (async () => {
+                            try {
+                              const refreshed = await getStoryboardBlueprint(effectiveProjectId, selectedSceneId)
+                              setStoryboardBlueprint(refreshed)
+                            } finally {
+                              bumpPreflightRevision()
+                            }
+                          })()
+                        }}
+                      />
+                    )}
                     {effectiveProjectId && selectedSceneId && activeBlueprintShot && (
                       <StoryboardImagePromptPanel
                         key={`image-prompt:${activeBlueprintShot.storyboard_shot_id}/${activeBlueprintShot.version_id}`}

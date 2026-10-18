@@ -2468,6 +2468,9 @@ export type StoryboardImagePromptEntry = {
   chars_removed?: number | null
   approved_by?: string | null
   approved_at?: string | null
+  reapproved_by?: string | null
+  reapproved_at?: string | null
+  prior_source_prompt_sha256?: string | null
   updated_at?: string | null
   source_prompt_sha256?: string | null
   render_ready?: boolean
@@ -3932,6 +3935,69 @@ export function approveShotImagePrompt(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approved_by: approvedBy }),
       timeoutMs: 10000,
+    },
+  )
+}
+
+export function reapproveShotImagePrompt(
+  blueprintId: string,
+  storyboardShotId: string,
+  confirmed: boolean,
+  approvedBy = 'creator',
+) {
+  return fetchJson<StoryboardImagePromptEntry>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/shots/${encodeURIComponent(storyboardShotId)}/image-prompt/reapprove`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmed, approved_by: approvedBy }),
+      timeoutMs: 10000,
+    },
+  )
+}
+
+export type PromptRebuildShotResult = {
+  shot_id: string
+  storyboard_shot_id: string
+  before_sha256: string
+  after_sha256: string
+  block_characters: string[]
+}
+
+export type PromptRebuildConfirmItem = {
+  shot_id: string
+  storyboard_shot_id: string
+  before_sha256: string
+  after_sha256: string
+  before: string
+  after: string
+}
+
+export type PromptRebuildSummary = {
+  blueprint_id: string
+  version_id: string
+  cloned_from_version_id: string | null
+  rebuilt: PromptRebuildShotResult[]
+  skipped_hand_edited: string[]
+  refused_empty_block: string[]
+  confirm_required: PromptRebuildConfirmItem[]
+  reference_lock_info: Array<Record<string, string>>
+  rebuilt_by: string
+}
+
+export function rebuildShotPrompts(
+  blueprintId: string,
+  versionId: string,
+  confirmedShotIds: string[] = [],
+  rebuiltBy = 'creator',
+) {
+  return fetchJson<PromptRebuildSummary>(
+    `/api/f51/studio/storyboard-blueprints/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/rebuild-prompts`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmed_shot_ids: confirmedShotIds, rebuilt_by: rebuiltBy }),
+      timeoutMs: 30000,
     },
   )
 }
