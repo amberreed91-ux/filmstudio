@@ -1,0 +1,51 @@
+# CI: every push and pull request runs the full backend suite (socket
+# isolated, temp DBs, no provider calls) plus the frontend typecheck and
+# unit tests — all in a clean checkout, which is exactly the configuration
+# the release-hardening gate requires to stay green.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      R43K_SOCKET_ONLY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f studio-backend/requirements.txt ]; then pip install -r studio-backend/requirements.txt; fi
+          pip install pytest
+      - name: Backend suite
+        run: |
+          cd studio-backend
+          python -m pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: studio-app/package-lock.json
+      - name: Install frontend dependencies
+        run: |
+          cd studio-app
+          npm ci
+      - name: Typecheck
+        run: |
+          cd studio-app
+          npx tsc --noEmit
+      - name: Unit tests
+        run: |
+          cd studio-app
+          npm test -- --run

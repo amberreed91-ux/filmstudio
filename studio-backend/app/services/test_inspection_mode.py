@@ -49,8 +49,24 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_inspection_import_skips_normal_lifecycle_singletons_and_creates_no_data(tmp_path):
-    copy = _copied_db(tmp_path, LIVE_DB)
+@pytest.fixture
+def live_db_path() -> Path:
+    """Gate the forensic-copy tests on the live database being present.
+
+    studio.db is local machine state, excluded from git by design, so a
+    clean checkout has no file to copy. These tests assert against the
+    live database's real content (approved version, five approved prompts,
+    coverage counts), which a synthetic temp DB cannot provide without
+    weakening the assertions — so they skip when the file is absent and
+    run unchanged when it is present.
+    """
+    if not LIVE_DB.is_file():
+        pytest.skip(f"live database not present (clean checkout): {LIVE_DB}")
+    return LIVE_DB
+
+
+def test_inspection_import_skips_normal_lifecycle_singletons_and_creates_no_data(tmp_path, live_db_path):
+    copy = _copied_db(tmp_path, live_db_path)
     report = _inspect_in_subprocess(copy)
     assert report["version_id"] == APPROVED_VERSION_ID
     assert report["inspection_port"] is None
@@ -71,19 +87,19 @@ def test_inspection_import_skips_normal_lifecycle_singletons_and_creates_no_data
     assert not (copy.parent / "isolated-project-state.json").exists()
 
 
-def test_inspection_uses_immutable_readonly_copy_and_never_live_path(tmp_path):
-    copy = _copied_db(tmp_path, LIVE_DB)
+def test_inspection_uses_immutable_readonly_copy_and_never_live_path(tmp_path, live_db_path):
+    copy = _copied_db(tmp_path, live_db_path)
     before = {suffix: _sha256(Path(str(copy) + suffix)) if Path(str(copy) + suffix).exists() else None
               for suffix in ("", "-wal", "-shm")}
-    before_live = _sha256(LIVE_DB)
+    before_live = _sha256(live_db_path)
     storage = ReadOnlySceneStorage(copy)
     report = _inspect_in_subprocess(copy)
     after = {suffix: _sha256(Path(str(copy) + suffix)) if Path(str(copy) + suffix).exists() else None
              for suffix in ("", "-wal", "-shm")}
-    assert storage.db_path != LIVE_DB.resolve()
-    assert not os.path.samefile(storage.db_path, LIVE_DB)
+    assert storage.db_path != live_db_path.resolve()
+    assert not os.path.samefile(storage.db_path, live_db_path)
     assert before == after
-    assert before_live == _sha256(LIVE_DB)
+    assert before_live == _sha256(live_db_path)
     assert report["version_id"] == APPROVED_VERSION_ID
     assert report["runtime_database_is_live_database"] is False
     assert report["schema_mutation_possible"] is False
@@ -116,8 +132,8 @@ def test_inspection_uses_immutable_readonly_copy_and_never_live_path(tmp_path):
     assert report["demo_seed_called"] is False
 
 
-def test_service_read_calls_are_bounded_and_no_write_or_job_methods_are_used(tmp_path):
-    copy = _copied_db(tmp_path, LIVE_DB)
+def test_service_read_calls_are_bounded_and_no_write_or_job_methods_are_used(tmp_path, live_db_path):
+    copy = _copied_db(tmp_path, live_db_path)
     storage = ReadOnlySceneStorage(copy)
     with pytest.raises(sqlite3.OperationalError):
         with storage._connect() as connection:
@@ -167,8 +183,8 @@ def test_service_read_calls_are_bounded_and_no_write_or_job_methods_are_used(tmp
     assert result["demo_seed_called"] is False
 
 
-def test_inspection_runtime_keeps_all_five_approved_prompts_camera_and_references_identical(tmp_path):
-    copy = _copied_db(tmp_path, LIVE_DB)
+def test_inspection_runtime_keeps_all_five_approved_prompts_camera_and_references_identical(tmp_path, live_db_path):
+    copy = _copied_db(tmp_path, live_db_path)
     storage = ReadOnlySceneStorage(copy)
     before = _semantic_snapshot(storage, PROJECT_ID, SCENE_ID)
     report = _inspect_in_subprocess(copy)
@@ -209,9 +225,9 @@ def test_inspection_runtime_keeps_all_five_approved_prompts_camera_and_reference
     assert report["runtime_guards"]["worker_thread_start_attempts"] == 0
 
 
-def test_inspection_rejects_the_live_database_path(tmp_path):
+def test_inspection_rejects_the_live_database_path(tmp_path, live_db_path):
     with pytest.raises(RuntimeError, match="live DB"):
-        ReadOnlySceneStorage(LIVE_DB)
+        ReadOnlySceneStorage(live_db_path)
 
 
 def _decision_gate_direction(*, saved, decision_statuses, obligation_statuses):

@@ -142,6 +142,69 @@ def _resolve_git_commit() -> str | None:
 BUILD_COMMIT = _resolve_git_commit()
 _start_time = time.time()
 
+# Release hardening: storyboard image generation is Runway-only. These are
+# the legacy provider aliases that must always normalize to Runway; the
+# startup check below refuses to boot if any storyboard path can resolve
+# to DashScope/Qwen (stale-code tripwire for AUDIT_2026-10-17 H1).
+_LEGACY_IMAGE_PROVIDER_ALIASES = frozenset({"qwen", "qwen-image-max", "dashscope", "wanx"})
+_STORYBOARD_PROVIDER_MODULES = (
+    "app/services/storyboard_image_service.py",
+    "app/services/storyboard_blueprint_service.py",
+    "app/services/providers/runway_image_provider.py",
+    "app/services/storyboard_image_prompt_service.py",
+)
+
+
+def _resolve_image_provider() -> str:
+    """Resolved storyboard image provider: env override normalized to Runway."""
+    try:
+        from app.services.storyboard_image_service import CANONICAL_IMAGE_PROVIDER
+    except Exception:
+        CANONICAL_IMAGE_PROVIDER = "runway"
+    raw = (os.getenv("DEFAULT_IMAGE_PROVIDER") or "").strip().lower()
+    if not raw or raw in _LEGACY_IMAGE_PROVIDER_ALIASES:
+        return CANONICAL_IMAGE_PROVIDER
+    return raw
+
+
+def _assert_storyboard_runway_only() -> str:
+    """Startup tripwire: refuse to boot if any storyboard path resolves to DashScope/Qwen.
+
+    Checks the canonical constant and scans the storyboard render-path
+    modules for live DashScope imports or client calls (comments, string
+    literals and legacy-normalization sets are not bindings). Raises
+    RuntimeError — the lifespan handler does not catch it, so uvicorn
+    exits instead of serving stale provider code.
+    """
+    from app.services.storyboard_image_service import CANONICAL_IMAGE_PROVIDER
+
+    if CANONICAL_IMAGE_PROVIDER != "runway":
+        raise RuntimeError(
+            f"refusing to boot: CANONICAL_IMAGE_PROVIDER={CANONICAL_IMAGE_PROVIDER!r}, expected 'runway'"
+        )
+    backend_root = Path(__file__).resolve().parent
+    violations: list[str] = []
+    for rel in _STORYBOARD_PROVIDER_MODULES:
+        try:
+            text = (backend_root / rel).read_text()
+        except OSError:
+            continue
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith(("#", '"""', "'''")):
+                continue
+            lowered = line.lower()
+            if "import dashscope" in lowered or "from dashscope" in lowered:
+                violations.append(f"{rel}:{lineno}: dashscope import")
+            if "multimodalconversation" in lowered and ("(" in line or ".call" in lowered or "import" in lowered):
+                violations.append(f"{rel}:{lineno}: MultiModalConversation use")
+    if violations:
+        raise RuntimeError(
+            "refusing to boot: storyboard path resolves to DashScope/Qwen: "
+            + "; ".join(violations)
+        )
+    return CANONICAL_IMAGE_PROVIDER
+
 # Storage instance
 storage = get_storage("sqlite")
 
@@ -157,6 +220,10 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     logger.info("Starting Studio API")
     logger.info("Studio API build commit: %s", BUILD_COMMIT or "unknown")
+    # Fail-closed provider tripwire: never serve a tree whose storyboard
+    # path can reach DashScope/Qwen (deliberately uncaught — boot stops).
+    _assert_storyboard_runway_only()
+    logger.info("Storyboard image provider: %s", _resolve_image_provider())
     runway_key = os.getenv("RUNWAYML_API_SECRET", "").strip() or os.getenv("RUNWAY_API_KEY", "").strip()
     logger.info("Runway API configured: %s", bool(runway_key))
 
@@ -740,6 +807,8 @@ def health_check():
         "status": overall_status,
         "version": app.version,
         "git_commit": BUILD_COMMIT,
+        "process_start_time": datetime.fromtimestamp(_start_time, tz=timezone.utc).isoformat(),
+        "image_provider": _resolve_image_provider(),
         "uptime_seconds": round(time.time() - _start_time, 1),
         "timestamp": time.time(),
         "components": {
