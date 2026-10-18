@@ -234,10 +234,75 @@ def locked_appearance_characters(all_characters: list[dict] | None) -> list[dict
     return locked
 
 
+def _match_locked_by_name(names: list[str] | None, locked: list[dict]) -> list[dict]:
+    """Intersect an explicit name list with the locked characters.
+
+    Matching is case-insensitive on the stored name. Order follows the input
+    name list (shot relevance), never storage order, and duplicates collapse.
+    """
+    by_name: dict[str, dict] = {}
+    for char in locked:
+        if not isinstance(char, dict):
+            continue
+        key = str(char.get("name") or "").strip().lower()
+        if key and key not in by_name:
+            by_name[key] = char
+    selected: list[dict] = []
+    seen: set[str] = set()
+    for raw in names or []:
+        key = str(raw or "").strip().lower()
+        if key in by_name and key not in seen:
+            seen.add(key)
+            selected.append(by_name[key])
+    return selected
+
+
+def _appearance_only_text(char: dict) -> str:
+    """Render one block entry from appearance fields only, never staging.
+
+    The locked approval description joins age + look + the reference-image
+    prompt (visual_prompt_summary), whose staging sentences (a rooftop, a
+    garden, an auto shop) contradict the shot's own scene. The block only
+    needs the drift guard tokens — age, race/skin-tone, hair — which live in
+    the look. Falls back to the full description only when no look exists.
+    """
+    name = str(char.get("name") or "").strip() or "character"
+    age = str(char.get("age") or "").strip()
+    look = str(char.get("look") or char.get("appearance_core") or "").strip()
+    if not look:
+        try:
+            profile = appearance_approval(char).get("profile")
+        except Exception:
+            profile = None
+        if isinstance(profile, dict):
+            look = str(profile.get("look") or "").strip()
+    if not look:
+        try:
+            look = str(appearance_description(char) or "").strip()
+        except Exception:
+            look = str(char.get("visual_prompt_summary") or "").strip()
+    if look and age:
+        return f"{name} ({age}): {look}"
+    if look:
+        return f"{name}: {look}"
+    return name
+
+
+def _scene_id_for_log(scene_data: dict | None) -> str:
+    try:
+        return str((scene_data or {}).get("scene_id") or "")
+    except Exception:
+        return ""
+
+
 def build_locked_appearance_block(
     all_characters: list[dict] | None,
     scene_data: dict | None = None,
-    max_characters: int = 3,
+    max_characters: int | None = None,
+    *,
+    shot_characters: list[str] | None = None,
+    shot_text: str | None = None,
+    scene_shot_texts: list[str] | None = None,
 ) -> str:
     """Build a non-truncatable enforcement block for locked character looks.
 
@@ -247,14 +312,33 @@ def build_locked_appearance_block(
     This block lists locked looks explicitly with a do-not-change directive
     so the image provider always receives race/skin-tone/age/gender tokens.
     Returns "" when nothing is locked.
+
+    Selection precedence (first non-empty scope wins):
+      1. shot_characters — names assigned to this shot (e.g. intent focus).
+      2. the scene's declared cast (scene_data characters).
+      3. locked characters named in shot_text.
+      4. locked characters named in ANY shot of the scene (scene_shot_texts
+         union) — a stage-log note records that this fallback fired.
+      5. empty block plus a warning log. An empty block is preferable to the
+         wrong characters: other scenes' locked faces must never leak in.
+
+    There is deliberately no alphabetical truncation: every in-scope locked
+    character is included. max_characters is honored only when explicitly
+    passed (legacy callers); the default selects the whole scope.
     """
     locked = locked_appearance_characters(all_characters)
     if not locked:
         return ""
-    # Prefer scene-scoped characters when the scene declares a cast, so other
-    # scenes' locked faces don't leak into this shot. Fall back to all locked
-    # when the scene declares no cast.
-    if isinstance(scene_data, dict):
+    scene_id = _scene_id_for_log(scene_data)
+    selected: list[dict] = []
+    scope = "none"
+    # 1. Shot-assigned characters.
+    if shot_characters:
+        selected = _match_locked_by_name(list(shot_characters), locked)
+        if selected:
+            scope = "shot"
+    # 2. Scene-declared cast.
+    if not selected and isinstance(scene_data, dict):
         try:
             names = _scene_character_names(scene_data)
         except Exception:
@@ -265,23 +349,57 @@ def build_locked_appearance_block(
                 if str(c.get("name") or "").strip().lower() in names
             ]
             if scoped:
-                locked = scoped
-    parts: list[str] = []
-    for char in locked[:max(1, max_characters)]:
-        name = str(char.get("name") or "").strip() or "character"
+                selected = scoped
+                scope = "scene_cast"
+    # 3. Locked characters named in this shot's text.
+    if not selected and shot_text:
         try:
-            visual = str(appearance_description(char) or "").strip()
+            extracted = _extract_characters_from_segment(str(shot_text), locked)
         except Exception:
-            visual = str(char.get("visual_prompt_summary") or "").strip()
-        age = str(char.get("age") or "").strip()
-        if visual and age:
-            parts.append(f"{name} ({age}): {visual}")
-        elif visual:
-            parts.append(f"{name}: {visual}")
-        else:
-            parts.append(name)
+            extracted = []
+        matched = _match_locked_by_name(
+            [str(item.get("name") or "") for item in extracted], locked
+        )
+        if matched:
+            selected = matched
+            scope = "shot_text"
+    # 4. Scene-level union: locked characters named in any shot of the scene.
+    if not selected and scene_shot_texts:
+        union_names: list[str] = []
+        for text in scene_shot_texts:
+            try:
+                extracted = _extract_characters_from_segment(str(text or ""), locked)
+            except Exception:
+                continue
+            union_names.extend(str(item.get("name") or "") for item in extracted)
+        matched = _match_locked_by_name(union_names, locked)
+        if matched:
+            selected = matched
+            scope = "scene_union"
+            logger.info(
+                "LOCKED_APPEARANCE_SCOPE | scope=scene_union | characters=%s | scene=%s",
+                [str(c.get("name")) for c in selected],
+                scene_id or "unknown",
+            )
+    if not selected:
+        logger.warning(
+            "LOCKED_APPEARANCE_EMPTY | no shot, cast, or text source named a locked character | scene=%s",
+            scene_id or "unknown",
+        )
+        return ""
+    if max_characters is not None:
+        selected = selected[:max(1, max_characters)]
+    parts = [_appearance_only_text(char) for char in selected if isinstance(char, dict)]
+    parts = [part for part in parts if part]
     if not parts:
         return ""
+    if scope in ("shot", "shot_text", "scene_cast", "scene_union"):
+        logger.info(
+            "LOCKED_APPEARANCE_SCOPE | scope=%s | characters=%s | scene=%s",
+            scope,
+            [str(c.get("name")) for c in selected],
+            scene_id or "unknown",
+        )
     joined = "; ".join(parts)
     return (
         "Locked appearance - maintain exact look, do not change race, "
@@ -293,10 +411,24 @@ def ensure_locked_appearance_in_prompt(
     prompt: str | None,
     all_characters: list[dict] | None,
     scene_data: dict | None = None,
+    *,
+    shot_characters: list[str] | None = None,
+    shot_text: str | None = None,
+    scene_shot_texts: list[str] | None = None,
 ) -> str:
     """Append the locked-appearance block when missing. Never truncates."""
     base = str(prompt or "").strip()
-    block = build_locked_appearance_block(all_characters, scene_data)
+    if shot_characters is None and shot_text is None:
+        # Scope from the text being ensured: its Characters line and prose
+        # name this shot's cast more reliably than the project-wide list.
+        shot_text = base
+    block = build_locked_appearance_block(
+        all_characters,
+        scene_data,
+        shot_characters=shot_characters,
+        shot_text=shot_text,
+        scene_shot_texts=scene_shot_texts,
+    )
     if not block or "Locked appearance" in base:
         return base
     if not base:
@@ -525,9 +657,19 @@ def build_shot_aware_prompt(
     # Locked looks are non-truncatable: append after assembly so race /
     # skin-tone tokens survive even when the scene text is long. No-op when
     # nothing is locked or the Characters line already carried the block.
+    # The block is scoped to this shot's segment cast (falling back to the
+    # scene-wide shot union), never the project-wide alphabetical list.
     try:
         base_prompt = ensure_locked_appearance_in_prompt(
-            base_prompt, all_characters, scene_data
+            base_prompt,
+            all_characters,
+            scene_data,
+            shot_characters=[
+                str(char.get("name") or "")
+                for char in (segment_characters or [])
+                if str(char.get("name") or "").strip()
+            ],
+            scene_shot_texts=segments,
         )
     except Exception:
         pass
