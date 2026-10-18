@@ -147,7 +147,16 @@ def test_render_production_package_runway_still_production_capable(tmp_path: Pat
         renderer=recorder,
     )
     run = _through_package(service)
-    result = asyncio.run(service.render_production_package(run["run_id"], provider="runway"))
+    # D5: whole-package renders carry the explicit flag (estimator sealed).
+    service._estimate_shot_credits = lambda *args, **kwargs: None  # type: ignore[method-assign]
+    result = asyncio.run(
+        service.render_production_package(
+            run["run_id"],
+            provider="runway",
+            allow_full_package=True,
+            acknowledge_unknown_cost=True,
+        )
+    )
     assert result["status"] == "render_completed"
     render_jobs = [recorder.get_job(row["render_job_id"]) for row in result["data"]["artifacts"]["render_jobs"]]
     assert render_jobs

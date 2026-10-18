@@ -165,6 +165,55 @@ def test_previs_non_simulated_provider_rejected_before_workflow_action(monkeypat
     assert calls == []
 
 
+def test_single_shot_flags_reach_service(monkeypatch):
+    # D5: the guarded single-shot filter and spend flags are service-mediated.
+    fake = RouteWorkflowService()
+    calls = []
+    async def operation(run_id, **kwargs):
+        calls.append((run_id, kwargs))
+        return fake.run
+    setattr(fake, "render_production_package", operation)
+    monkeypatch.setattr(workflow_routes, "canonical_production_workflow_service", fake)
+    response = TestClient(app).post(
+        "/api/f51/studio/production-threads/workflow-route-001/renders",
+        json={
+            "provider": "runway",
+            "storyboard_shot_ids": ["sbs-002"],
+            "allow_full_package": False,
+            "acknowledge_unknown_cost": True,
+            "duration_seconds": 5,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert calls[0][1]["storyboard_shot_ids"] == ["sbs-002"]
+    assert calls[0][1]["allow_full_package"] is False
+    assert calls[0][1]["acknowledge_unknown_cost"] is True
+    assert calls[0][1]["duration_seconds"] == 5
+
+
+def test_estimate_route_probes_without_rendering(monkeypatch):
+    # D5 Check cost: the route returns advisories and never renders.
+    fake = RouteWorkflowService()
+    calls = []
+    def estimate(run_id, **kwargs):
+        calls.append((run_id, kwargs))
+        return {
+            "run_id": run_id,
+            "ceiling_credits": 300,
+            "ceiling_env_var": "RUNWAY_RENDER_MAX_CREDITS",
+            "estimates": [],
+        }
+    setattr(fake, "estimate_render_cost", estimate)
+    monkeypatch.setattr(workflow_routes, "canonical_production_workflow_service", fake)
+    response = TestClient(app).post(
+        "/api/f51/studio/production-threads/workflow-route-001/renders/estimate",
+        json={"storyboard_shot_ids": ["sbs-002"], "duration_seconds": 5},
+    )
+    assert response.status_code == 200, response.text
+    assert calls[0][1]["storyboard_shot_ids"] == ["sbs-002"]
+    assert response.json()["ceiling_credits"] == 300
+
+
 @pytest.mark.parametrize("provider", ["", "   ", "runway video"])
 def test_invalid_provider_rejected_before_workflow_action(provider):
     response = TestClient(app).post("/api/f51/studio/production-threads/workflow-route-001/renders", json={"provider": provider})

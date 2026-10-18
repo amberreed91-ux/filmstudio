@@ -90,7 +90,83 @@ stays on; all provider HTTP is a recording fake.
 
 ## Open approval questions for the owner
 
-- Is per-shot filtering allowed on the approved version only (yes, per §2), or
-  should drafts also render single shots (not recommended — drafts refuse today)?
+- Is per-shot filtering allowed on the approved version only (yes, per §2),
+  or should drafts also render single shots (not recommended — drafts refuse
+  today)? [Answered by D5: approved version only; the filter applies after
+  the package freeze, drafts still refuse, unchanged.]
 - Should the filtered render reuse the package's render-job group for history,
   or mint standalone jobs (recommend standalone with a `filtered_from` link)?
+  [Answered by D5 implementation: jobs are minted in the run's render-job
+  group with `canonical_workflow.selection = {storyboard_shot_ids,
+  allow_full_package, filtered_from: "full_package"}` in parameters.]
+
+## What shipped for D5 (Phase A, this branch)
+
+Backend (`studio-backend/`):
+
+- `app/models/canonical_workflow.py` — `RenderWorkflowRequest` gains additive
+  `storyboard_shot_ids`, `allow_full_package`, `acknowledge_unknown_cost`,
+  `duration_seconds`; new `RenderEstimateRequest/Response` for the cost probe.
+- `app/services/canonical_production_workflow_service.py` —
+  `render_production_package` honors the filter in its job-creation loop
+  (package build untouched, whole-scene). Guards, all server-side: missing /
+  empty filter refused without `allow_full_package`; unknown ids, duplicates,
+  and off-package ids refused naming each; >1 shot needs the flag; a shot
+  with a live job (pending/queued/submitted/rendering/processing/complete) is
+  skipped with its existing row and never submitted twice; per-request credit
+  ceiling from `RUNWAY_RENDER_MAX_CREDITS` (default 300) enforced against
+  Runway's dry-run estimate with refusal before submit, and unknown cost
+  needs `acknowledge_unknown_cost`. `_estimate_shot_credits` is sealed for
+  tests; production attempts a Depth-1 dry-run (dryRun:true, no task, no
+  polling, never the adapter submit path) and treats any failure as unknown.
+  New `estimate_render_cost` + `dry_run_estimate_for_shot` power Check cost.
+- `app/routes/canonical_workflow.py` — renders route forwards the new fields;
+  new `POST .../renders/estimate` returns advisories, creates no jobs.
+
+Frontend (`studio-app/`): `canonicalWorkflowApi.ts` gains `renderCanonicalShots`
+and `estimateCanonicalRenders` (estimate called only from the Check-cost
+click, never on load/open); `CanonicalWorkflowPanel` at the render step shows
+“Render one shot…” (picker with nothing preselected; confirm shows shot,
+duration, “1 Runway submission”, the first 600 chars of the exact prompt, the
+ALL-CAPS names in it, Check cost, the ceiling, and the required “I understand
+this spends Runway credits” checkbox plus an unknown-cost checkbox when no
+estimate is available) and a separate “Queue whole package…” control that
+sends `allow_full_package`.
+
+Tests: `studio-backend/tests/test_single_shot_render_filter.py` (11 tests,
+fake renderer, temp DBs: 1 POST for one shot, 5 only with the flag, all
+refusals, no-double-submit, ceiling/ack, byte-identical frozen payload,
+duration rules, estimate probe); route pass-through + estimate route tests;
+`SingleShotRenderDialog.test.tsx` (5 interaction tests incl. no-fetch-on-open
+and dry-run-only-on-click) + 3 API serialization tests.
+
+Owner click path for ONE shot (shot 2), verified against this code:
+
+1. PrevisRoom → Review step → “Production handoff · Canonical Production
+   Thread” → CanonicalWorkflowPanel, through “Start approved production
+   thread” → “Generate approved Previs” → “Approve exact Previs set” →
+   “Build production package” (all free; confirm generation readiness first:
+   camera approved for shots 3 and 4, shot 5 coverage assigned, board
+   approved, Maya-only text rebuilt, image prompts approved).
+2. Click “Render one shot…” (no network happens on open). Pick shot 2
+   (nothing is preselected). Keep or edit the duration (planned value shown;
+   Router accepts 2–30; model-specific mismatches still fail closed).
+3. Read the “Exact prompt text” box (first 600 chars of the frozen prompt)
+   and the ALL-CAPS names. Click “Check cost (may contact Runway)” — the
+   ONLY call that contacts Runway before spend — and read the estimate vs
+   the ceiling.
+4. Tick “I understand this spends Runway credits” (and the unknown-cost box
+   if no estimate is available), then “Confirm: render this one shot”.
+   THAT click is the first spend. “Queue whole package…” is a separate
+   control and is NOT part of D5.
+
+## Decision D5 (owner, recorded Oct 18, 2026)
+
+One real Runway video of a SINGLE scene_001 shot (planned: shot 2, shortest
+duration offered) is authorized as a pipeline proof, only through the guarded
+single-shot path built here, only after generation readiness passes, and only
+after the cost estimate is shown. D3 (Checkpoint 5 previs is simulated-only)
+is otherwise unchanged. Any whole-package submission needs a separate,
+explicit owner decision. The OWNER clicks the spend; the agent NEVER submits,
+queues or approves anything that reaches a provider, and never calls the live
+Runway API.

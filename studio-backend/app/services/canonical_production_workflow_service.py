@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
+import os
 from time import perf_counter
 from typing import Any
 from uuid import uuid4
@@ -26,6 +27,29 @@ from app.services.stability import (
     ValidationError,
     log_stage_event,
 )
+
+# D5 guarded single-shot render: server-side spend guards for the
+# render-production-package path. Whole-package submits need an explicit
+# allow_full_package flag; per-request credit ceiling comes from
+# RUNWAY_RENDER_MAX_CREDITS (default 300). Estimates are Runway-returned
+# dry-run advisories only — Studio never invents a price.
+_RENDER_CREDIT_CEILING_ENV_VAR = "RUNWAY_RENDER_MAX_CREDITS"
+_RENDER_CREDIT_CEILING_DEFAULT = 300
+# Router-accepted video duration range (runway_router_provider
+# _ROUTER_VIDEO_DURATIONS). Model-specific support is enforced downstream by
+# the adapter fail-closed (a 16s request against a 15s-max model is refused,
+# never rounded); this range check only rejects what the Router itself refuses.
+_ROUTER_VIDEO_MIN_DURATION = 2
+_ROUTER_VIDEO_MAX_DURATION = 30
+# A shot holding a job in any of these states is never submitted twice.
+_SINGLE_SHOT_ACTIVE_STATUSES = {
+    "pending",
+    "queued",
+    "submitted",
+    "rendering",
+    "processing",
+    "complete",
+}
 
 _STATUS_ORDER = {
     "blueprint_approved": 0,
@@ -402,6 +426,10 @@ class CanonicalProductionWorkflowService:
         *,
         provider: str | None = None,
         retry_confirmed: bool = False,
+        storyboard_shot_ids: list[str] | None = None,
+        allow_full_package: bool = False,
+        acknowledge_unknown_cost: bool = False,
+        duration_seconds: int | None = None,
     ) -> dict[str, Any]:
         started = perf_counter()
         run = self.get(run_id)
@@ -423,12 +451,35 @@ class CanonicalProductionWorkflowService:
             return await self._reconcile_renders(run, provider=provider, started=started, submit=True)
         self._require_status(run, {"package_ready"}, stage="workflow_render")
         package = self._package(run)
+        # D5: the filter applies AFTER the package freeze. Package build stays
+        # whole-scene; the selected shots reuse their frozen package payloads
+        # byte-for-byte (same approved version, same frozen prompt, same
+        # parameters) — no re-derivation, so the submit-time byte-equality gate
+        # downstream sees the identical body the whole-package path would send.
+        selected_shots = self._select_package_shots(
+            package,
+            storyboard_shot_ids,
+            allow_full_package=allow_full_package,
+        )
+        self._enforce_spend_guards(
+            selected_shots,
+            provider=provider,
+            duration_seconds=duration_seconds,
+            acknowledge_unknown_cost=acknowledge_unknown_cost,
+        )
         data = deepcopy(run["data"])
         render_rows: list[dict[str, Any]] = []
         try:
-            for package_shot in package["payload"]["shots"]:
+            for package_shot in selected_shots:
                 storyboard_shot_id = _text(package_shot.get("storyboard_shot_id"))
+                # Never submit a shot twice: reuse the existing job row when
+                # this run already holds a live job for the shot.
+                existing_row = self._existing_render_row(data, storyboard_shot_id)
+                if existing_row is not None:
+                    render_rows.append(existing_row)
+                    continue
                 shot_context = self._workflow_shot(run, storyboard_shot_id)
+                effective_duration = self._effective_shot_duration(package_shot, duration_seconds)
                 parameters = {
                     **dict(package_shot.get("parameters") or {}),
                     "idempotency_key": f"{run_id}:package:{package['package_id']}:shot:{storyboard_shot_id}",
@@ -441,6 +492,13 @@ class CanonicalProductionWorkflowService:
                         "storyboard_shot_id": storyboard_shot_id,
                         "previs_image_id": package_shot["previs_image_id"],
                         "context_hash": run["context_hash"],
+                        "selection": {
+                            "storyboard_shot_ids": [
+                                _text(row.get("storyboard_shot_id")) for row in selected_shots
+                            ],
+                            "allow_full_package": allow_full_package,
+                            "filtered_from": "full_package",
+                        },
                     },
                     "creative_intent": shot_context["intent"],
                     "camera_and_staging": {
@@ -450,6 +508,12 @@ class CanonicalProductionWorkflowService:
                     "continuity": package_shot.get("continuity") or {},
                     "approved_references": list(package_shot.get("reference_assets") or []),
                 }
+                if effective_duration is not None:
+                    planned = self._planned_shot_duration(package_shot)
+                    if planned is not None:
+                        parameters["planned_duration_seconds"] = planned
+                    parameters["duration"] = effective_duration
+                    parameters["duration_seconds"] = effective_duration
                 references = list(dict.fromkeys([
                     *[str(value) for value in package_shot.get("reference_assets") or [] if str(value).strip()],
                 ]))
@@ -482,6 +546,298 @@ class CanonicalProductionWorkflowService:
             payload={"render_job_ids": [row["render_job_id"] for row in render_rows]},
         )
         return await self._reconcile_renders(queued, provider=provider, started=started, submit=True)
+
+    def _select_package_shots(
+        self,
+        package: dict[str, Any],
+        storyboard_shot_ids: list[str] | None,
+        *,
+        allow_full_package: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Apply the D5 shot filter AFTER the package freeze (server-side).
+
+        Package build stays whole-scene; this only narrows which frozen shots
+        are turned into render jobs. Refuses empty/missing filters without
+        allow_full_package, unknown ids, duplicates, ids outside the package,
+        and multi-shot selections without allow_full_package — naming each id.
+        """
+        available = package.get("payload", {}).get("shots") or []
+        available_ids = [_text(row.get("storyboard_shot_id")) for row in available]
+        if not storyboard_shot_ids:
+            if not allow_full_package:
+                raise ValidationError(
+                    "A shot filter is required: name storyboard_shot_ids, or pass "
+                    "allow_full_package=true for the whole package",
+                    stage="workflow_render_request",
+                )
+            return list(available)
+        cleaned = [_text(value) for value in storyboard_shot_ids]
+        if any(not value for value in cleaned):
+            raise ValidationError(
+                "Shot filter contains an empty storyboard_shot_id",
+                stage="workflow_render_request",
+            )
+        seen: set[str] = set()
+        duplicates = sorted({value for value in cleaned if value in seen or seen.add(value)})  # noqa: B020
+        if duplicates:
+            raise ValidationError(
+                f"Shot filter names duplicates: {', '.join(duplicates)}",
+                stage="workflow_render_request",
+                metadata={"duplicate_storyboard_shot_ids": duplicates},
+            )
+        unknown = [value for value in cleaned if value not in set(available_ids)]
+        if unknown:
+            raise ValidationError(
+                f"Shot filter names shots outside this package: {', '.join(unknown)}",
+                stage="workflow_render_request",
+                metadata={"unknown_storyboard_shot_ids": unknown},
+            )
+        if len(cleaned) > 1 and not allow_full_package:
+            raise ValidationError(
+                "Rendering more than one shot requires allow_full_package=true; "
+                "a single shot needs no flag",
+                stage="workflow_render_request",
+                metadata={"requested_storyboard_shot_ids": cleaned},
+            )
+        by_id = {shot_id: row for shot_id, row in zip(available_ids, available)}
+        return [by_id[shot_id] for shot_id in cleaned]
+
+    @staticmethod
+    def _planned_shot_duration(package_shot: dict[str, Any]) -> int | None:
+        parameters = package_shot.get("parameters") or {}
+        for key in ("duration_seconds", "duration"):
+            try:
+                value = int(parameters.get(key))
+            except (TypeError, ValueError):
+                continue
+            return value
+        return None
+
+    def _effective_shot_duration(
+        self,
+        package_shot: dict[str, Any],
+        duration_seconds: int | None,
+    ) -> int | None:
+        """Validate the requested duration (server-side).
+
+        None keeps the shot's planned duration. A supplied value must be an
+        integer inside the Router range 2–30s; model-specific support (e.g. a
+        16s request against a 15s-max model) is enforced downstream by the
+        adapter fail-closed — Studio never rounds or downgrades to fit.
+        """
+        if duration_seconds is None:
+            return self._planned_shot_duration(package_shot)
+        try:
+            chosen = int(duration_seconds)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(
+                "duration_seconds must be an integer number of seconds",
+                stage="workflow_render_request",
+            ) from exc
+        if isinstance(duration_seconds, bool) or chosen != duration_seconds:
+            raise ValidationError(
+                "duration_seconds must be an integer number of seconds",
+                stage="workflow_render_request",
+            )
+        if not _ROUTER_VIDEO_MIN_DURATION <= chosen <= _ROUTER_VIDEO_MAX_DURATION:
+            raise ValidationError(
+                f"Routed video duration must be between {_ROUTER_VIDEO_MIN_DURATION} "
+                f"and {_ROUTER_VIDEO_MAX_DURATION} seconds; got {chosen}",
+                stage="workflow_render_request",
+            )
+        return chosen
+
+    @staticmethod
+    def _render_credit_ceiling() -> float:
+        raw = os.getenv(_RENDER_CREDIT_CEILING_ENV_VAR, str(_RENDER_CREDIT_CEILING_DEFAULT))
+        try:
+            ceiling = float(str(raw).strip())
+        except (TypeError, ValueError):
+            ceiling = float(_RENDER_CREDIT_CEILING_DEFAULT)
+        if ceiling != ceiling or ceiling <= 0:  # NaN or non-positive disables nothing; fall back
+            return float(_RENDER_CREDIT_CEILING_DEFAULT)
+        return ceiling
+
+    def _estimate_shot_credits(
+        self,
+        package_shot: dict[str, Any],
+        *,
+        provider: str | None,
+        duration_seconds: int | None,
+    ) -> float | None:
+        """Return Runway's dry-run credit estimate, or None when unavailable.
+
+        Sealed for tests via monkeypatch. Production attempts a Depth-1
+        dry-run (dryRun:true, no task, no polling — never the adapter submit
+        path); any failure yields None so the caller demands explicit
+        acknowledgement instead of inventing a price.
+        """
+        try:
+            estimated, _ = self.dry_run_estimate_for_shot(
+                package_shot, provider=provider, duration_seconds=duration_seconds
+            )
+        except Exception:  # noqa: BLE001 — unknown cost must fail open to acknowledgement, never crash submit
+            return None
+        return estimated
+
+    def dry_run_estimate_for_shot(
+        self,
+        package_shot: dict[str, Any],
+        *,
+        provider: str | None,
+        duration_seconds: int | None,
+    ) -> tuple[float | None, str | None]:
+        """Depth-1 Runway dry-run for one frozen package shot.
+
+        Contacts Runway with dryRun:true and returns
+        (estimated_cost_credits, resolved_model). Per
+        runway_router_provider.submit_runway_router_video_render, a dry run
+        returns before polling: "Dry run: routing decision only. No task, no
+        output, no billing." In-repo evidence agrees (FINAL_REPORT_20260928:
+        "dry-run 404s create no task; account creditBalance unchanged";
+        R4.3B §5–6: "without creating a task, generating, or billing").
+        Billing on THIS account is unverified — the UI labels the call as
+        one that may contact Runway. Never routes through the adapter submit
+        path (which can materialize references and live-submit).
+        """
+        from app.services.providers.runway_router_provider import submit_runway_router_video_render
+
+        resolved = str(provider or "").strip().lower()
+        if resolved in {"", "simulated", "simulated provider"}:
+            return None, None
+        parameters = dict(package_shot.get("parameters") or {})
+        effective = self._effective_shot_duration(package_shot, duration_seconds)
+        result = submit_runway_router_video_render(
+            str(package_shot.get("prompt") or ""),
+            dry_run=True,
+            aspect_ratio=str(parameters.get("ratio") or "16:9"),
+            duration=effective,
+            references=None,
+        )
+        if not isinstance(result, dict) or result.get("status") != "dry_run":
+            return None, None
+        meta = result.get("meta") or {}
+        estimated = meta.get("estimated_cost_credits")
+        try:
+            credits = float(estimated) if estimated is not None else None
+        except (TypeError, ValueError):
+            credits = None
+        resolved_model = meta.get("resolved_model")
+        return credits, (str(resolved_model) if resolved_model else None)
+
+    def _enforce_spend_guards(
+        self,
+        selected_shots: list[dict[str, Any]],
+        *,
+        provider: str | None,
+        duration_seconds: int | None,
+        acknowledge_unknown_cost: bool,
+    ) -> None:
+        """Server-side spend guards, enforced before any job is created."""
+        ceiling = self._render_credit_ceiling()
+        for package_shot in selected_shots:
+            shot_id = _text(package_shot.get("storyboard_shot_id"))
+            resolved = str(provider or package_shot.get("render_provider") or "").strip().lower()
+            if resolved in {"", "simulated", "simulated provider"}:
+                continue
+            estimated = self._estimate_shot_credits(
+                package_shot, provider=provider, duration_seconds=duration_seconds
+            )
+            if estimated is not None and estimated > ceiling:
+                raise ValidationError(
+                    f"Shot {shot_id or '?'} estimate ({estimated:g} credits) exceeds "
+                    f"the per-request ceiling ({ceiling:g} credits, "
+                    f"{_RENDER_CREDIT_CEILING_ENV_VAR})",
+                    stage="workflow_render_request",
+                    metadata={
+                        "storyboard_shot_id": shot_id,
+                        "estimated_credits": estimated,
+                        "ceiling_credits": ceiling,
+                    },
+                )
+            if estimated is None and not acknowledge_unknown_cost:
+                raise ValidationError(
+                    f"Shot {shot_id or '?'} has no Runway cost estimate; pass "
+                    "acknowledge_unknown_cost=true to proceed without one",
+                    stage="workflow_render_request",
+                    metadata={"storyboard_shot_id": shot_id},
+                )
+
+    def _existing_render_row(
+        self,
+        data: dict[str, Any],
+        storyboard_shot_id: str,
+    ) -> dict[str, Any] | None:
+        for row in data.get("artifacts", {}).get("render_jobs") or []:
+            if _text(row.get("storyboard_shot_id")) != storyboard_shot_id:
+                continue
+            try:
+                job = self.renderer.get_job(_text(row.get("render_job_id")))
+            except Exception:  # noqa: BLE001 — a lookup failure must not mask the no-double-submit rule
+                job = None
+            status = str(getattr(job, "status", "") or "").strip().lower() if job is not None else ""
+            if job is not None and status in _SINGLE_SHOT_ACTIVE_STATUSES:
+                return dict(row)
+        return None
+
+    def estimate_render_cost(
+        self,
+        run_id: str,
+        *,
+        storyboard_shot_ids: list[str] | None = None,
+        duration_seconds: int | None = None,
+        provider: str | None = None,
+    ) -> dict[str, Any]:
+        """Read-only cost probe: dry-run estimates without creating jobs.
+
+        Never creates render jobs, never submits, never polls. Each selected
+        shot gets one Depth-1 dry-run call (dryRun:true). Called only from the
+        explicit Check-cost route, never on page load or dialog open.
+        """
+        run = self.get(run_id)
+        package = self._package(run)
+        available = package.get("payload", {}).get("shots") or []
+        available_ids = {_text(row.get("storyboard_shot_id")) for row in available}
+        cleaned = [_text(value) for value in storyboard_shot_ids or []]
+        if not cleaned or any(not value for value in cleaned):
+            raise ValidationError(
+                "Check cost needs at least one storyboard_shot_id",
+                stage="workflow_render_estimate",
+            )
+        unknown = [value for value in cleaned if value not in available_ids]
+        if unknown:
+            raise ValidationError(
+                f"Unknown storyboard_shot_ids: {', '.join(unknown)}",
+                stage="workflow_render_estimate",
+                metadata={"unknown_storyboard_shot_ids": unknown},
+            )
+        by_id = {_text(row.get("storyboard_shot_id")): row for row in available}
+        estimates: list[dict[str, Any]] = []
+        for shot_id in cleaned:
+            package_shot = by_id[shot_id]
+            planned = self._planned_shot_duration(package_shot)
+            effective = self._effective_shot_duration(package_shot, duration_seconds)
+            try:
+                estimated, resolved_model = self.dry_run_estimate_for_shot(
+                    package_shot, provider=provider, duration_seconds=duration_seconds
+                )
+            except Exception:  # noqa: BLE001 — probe failures surface as unavailable, never as errors
+                estimated, resolved_model = None, None
+            estimates.append({
+                "storyboard_shot_id": shot_id,
+                "shot_id": _text(package_shot.get("shot_id") or ""),
+                "planned_duration_seconds": planned,
+                "effective_duration_seconds": effective,
+                "estimated_credits": estimated,
+                "resolved_model": resolved_model,
+                "estimate_available": estimated is not None,
+            })
+        return {
+            "run_id": run_id,
+            "ceiling_credits": self._render_credit_ceiling(),
+            "ceiling_env_var": _RENDER_CREDIT_CEILING_ENV_VAR,
+            "estimates": estimates,
+        }
 
     async def sync_screening(self, run_id: str) -> dict[str, Any]:
         started = perf_counter()

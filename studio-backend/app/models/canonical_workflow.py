@@ -69,6 +69,39 @@ class WorkflowProviderRequest(BaseModel):
 
 class RenderWorkflowRequest(WorkflowProviderRequest):
     retry_confirmed: bool = False
+    # D5 guarded single-shot render (additive; whole-package callers omit these).
+    # When storyboard_shot_ids is present it must name EXACTLY the package shots
+    # to render; more than one shot, or an omitted filter, additionally requires
+    # allow_full_package=True. acknowledge_unknown_cost=True is required when no
+    # Runway estimate is available for a selected shot.
+    storyboard_shot_ids: list[str] | None = None
+    allow_full_package: bool = False
+    acknowledge_unknown_cost: bool = False
+    duration_seconds: int | None = None
+
+
+class RenderEstimateRequest(BaseModel):
+    # Dry-run cost probe. Never creates jobs and never submits; contacts Runway
+    # with dryRun:true only when called (the UI calls it solely from Check cost).
+    storyboard_shot_ids: list[str] | None = None
+    duration_seconds: int | None = None
+
+
+class RenderEstimateShot(BaseModel):
+    storyboard_shot_id: str
+    shot_id: str = ""
+    planned_duration_seconds: int | None = None
+    effective_duration_seconds: int | None = None
+    estimated_credits: float | None = None
+    resolved_model: str | None = None
+    estimate_available: bool = False
+
+
+class RenderEstimateResponse(BaseModel):
+    run_id: str
+    ceiling_credits: float
+    ceiling_env_var: str = "RUNWAY_RENDER_MAX_CREDITS"
+    estimates: list[RenderEstimateShot] = Field(default_factory=list)
 
 
 class EditorialWorkflowRequest(BaseModel):

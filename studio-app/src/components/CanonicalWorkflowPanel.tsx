@@ -9,14 +9,17 @@ import {
   beginCanonicalWorkflow,
   createCanonicalProductionPackage,
   createCanonicalRevision,
+  estimateCanonicalRenders,
   generateCanonicalPrevis,
   renderCanonicalProductionPackage,
   renderCanonicalRevision,
+  renderCanonicalShots,
   saveCanonicalMemory,
   syncCanonicalScreening,
   updateCanonicalFilmCut,
   type CanonicalWorkflowResponse,
   type CanonicalWorkflowRun,
+  type RenderEstimateResponse,
 } from '../lib/canonicalWorkflowApi'
 import {
   isRevisionSubmitted,
@@ -60,6 +63,52 @@ function statusLabel(status: string): string {
   return status.replace(/_/g, ' ')
 }
 
+// D5 guarded single-shot render: dialog state only. Nothing here contacts a
+// provider on render or on dialog open — Check cost is the sole network call
+// and it fires only from its own click (dryRun:true, no task, no billing per
+// provider code comments; billing on this account is unverified).
+type PackageShot = {
+  storyboard_shot_id: string
+  shot_id: string
+  prompt: string
+  parameters: Record<string, unknown>
+  previs_image_id: string
+}
+
+function packageShots(run: CanonicalWorkflowRun | null): PackageShot[] {
+  const artifacts = record(run?.data.artifacts)
+  const payload = record(record(artifacts?.production_package)?.payload)
+  const shots = payload?.shots
+  if (!Array.isArray(shots)) return []
+  const rows: PackageShot[] = []
+  for (const entry of shots) {
+    const shot = record(entry)
+    const storyboardShotId = text(shot?.storyboard_shot_id)
+    if (!storyboardShotId) continue
+    rows.push({
+      storyboard_shot_id: storyboardShotId,
+      shot_id: text(shot?.shot_id),
+      prompt: typeof shot?.prompt === 'string' ? shot.prompt : '',
+      parameters: record(shot?.parameters) ?? {},
+      previs_image_id: text(shot?.previs_image_id),
+    })
+  }
+  return rows
+}
+
+function plannedDurationOf(shot: PackageShot): number | null {
+  for (const key of ['duration_seconds', 'duration']) {
+    const value = shot.parameters[key]
+    if (typeof value === 'number' && Number.isInteger(value)) return value
+  }
+  return null
+}
+
+function capsNames(prompt: string): string[] {
+  const hits = prompt.match(/\b[A-Z][A-Z'\u2019-]{2,}\b/g) || []
+  return [...new Set(hits)].slice(0, 12)
+}
+
 export default function CanonicalWorkflowPanel({
   projectId,
   sceneId,
@@ -74,6 +123,17 @@ export default function CanonicalWorkflowPanel({
   const [revisionReason, setRevisionReason] = useState('')
   const [changedFields, setChangedFields] = useState('timing, performance_guidance')
   const [memorySummary, setMemorySummary] = useState('')
+  const [singleShotOpen, setSingleShotOpen] = useState(false)
+  const [wholePackageOpen, setWholePackageOpen] = useState(false)
+  const [selectedShotId, setSelectedShotId] = useState('')
+  const [durationInput, setDurationInput] = useState('')
+  const [spendConfirmed, setSpendConfirmed] = useState(false)
+  const [unknownCostConfirmed, setUnknownCostConfirmed] = useState(false)
+  const [wholeSpendConfirmed, setWholeSpendConfirmed] = useState(false)
+  const [wholeUnknownCostConfirmed, setWholeUnknownCostConfirmed] = useState(false)
+  const [estimate, setEstimate] = useState<RenderEstimateResponse | null>(null)
+  const [estimateLoading, setEstimateLoading] = useState(false)
+  const [estimateError, setEstimateError] = useState('')
   const run = controller.run
   const stale = Boolean(
     run
@@ -86,9 +146,35 @@ export default function CanonicalWorkflowPanel({
     run ? isRevisionSubmitted(run) : false,
   )
   const decisions = useMemo(() => decisionRows(run), [run])
+  const shots = useMemo(() => packageShots(run), [run])
+  const busy = Boolean(controller.action) || controller.polling
+  const selectedShot = shots.find((shot) => shot.storyboard_shot_id === selectedShotId) ?? null
+  const plannedDuration = selectedShot ? plannedDurationOf(selectedShot) : null
+  const parsedDuration = durationInput.trim() ? Number(durationInput) : null
+  const effectiveDuration = parsedDuration ?? plannedDuration
+  const durationValid = effectiveDuration !== null
+    && Number.isInteger(effectiveDuration)
+    && effectiveDuration >= 2
+    && effectiveDuration <= 30
+  const estimateRow = estimate?.estimates.find((row) => row.storyboard_shot_id === selectedShotId) ?? null
+  const estimateAvailable = Boolean(estimateRow?.estimate_available)
+  const overCeiling = Boolean(
+    estimate
+    && estimateRow?.estimated_credits != null
+    && estimateRow.estimated_credits > estimate.ceiling_credits,
+  )
+  const needsUnknownAck = !estimateAvailable
+  const canConfirmSingle = Boolean(
+    run
+    && selectedShot
+    && durationValid
+    && spendConfirmed
+    && (!needsUnknownAck || unknownCostConfirmed)
+    && !overCeiling
+    && !busy,
+  )
   const memorySaved = Boolean(text(run?.data.identifiers.memory_record_id))
   const failure = run?.data.failures?.[run.data.failures.length - 1]
-  const busy = Boolean(controller.action) || controller.polling
   const providerLabel = renderProvider ? (renderProviderLabel || renderProvider) : 'Approved Previs provider'
 
   const apply = (
@@ -102,6 +188,27 @@ export default function CanonicalWorkflowPanel({
     operation: () => Promise<CanonicalWorkflowResponse>,
   ) => {
     if (window.confirm(prompt)) apply(label, operation)
+  }
+
+  const selectShot = (id: string) => {
+    setSelectedShotId(id)
+    setEstimate(null)
+    setEstimateError('')
+    setSpendConfirmed(false)
+    setUnknownCostConfirmed(false)
+  }
+
+  const checkCost = () => {
+    if (!run || !selectedShot) return
+    setEstimateLoading(true)
+    setEstimateError('')
+    estimateCanonicalRenders(run.run_id, {
+      storyboardShotIds: [selectedShot.storyboard_shot_id],
+      durationSeconds: parsedDuration ?? undefined,
+    })
+      .then((res) => setEstimate(res))
+      .catch((err: unknown) => setEstimateError(err instanceof Error ? err.message : 'Cost check failed'))
+      .finally(() => setEstimateLoading(false))
   }
 
   const screeningUrl = withProductionContext('/studio/screening-room', {
@@ -248,14 +355,23 @@ export default function CanonicalWorkflowPanel({
             <button
               type="button"
               disabled={busy}
-              onClick={() => confirmAction(
-                `Queue the exact approved package with ${providerLabel}?`,
-                'Queuing render',
-                () => renderCanonicalProductionPackage(run!.run_id, false, renderProvider),
-              )}
+              onClick={() => { setSingleShotOpen((open) => !open); setWholePackageOpen(false) }}
               className="btn-ghost px-3 py-2 text-[10px]"
+              data-testid="single-shot-render-toggle"
             >
-              Queue approved render
+              Render one shot…
+            </button>
+          ) : null}
+
+          {nextAction === 'render' ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => { setWholePackageOpen((open) => !open); setSingleShotOpen(false) }}
+              className="rounded-lg border border-rose-400/40 px-3 py-2 text-[10px] font-bold uppercase text-rose-100"
+              data-testid="whole-package-render-toggle"
+            >
+              Queue whole package…
             </button>
           ) : null}
 
@@ -355,6 +471,179 @@ export default function CanonicalWorkflowPanel({
               Return to Previs context
             </a>
           ) : null}
+        </div>
+      ) : null}
+
+      {nextAction === 'render' && singleShotOpen && !stale ? (
+        <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3" data-testid="single-shot-render-dialog">
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-200">
+            Render one shot with {providerLabel}
+          </div>
+          <p className="mt-1 text-[10px] text-zinc-500">
+            Nothing is preselected. Pick exactly one shot; confirming spends Runway credits for 1 submission.
+          </p>
+          <div className="mt-2 space-y-1" role="radiogroup" aria-label="Package shots">
+            {shots.map((shot) => (
+              <label key={shot.storyboard_shot_id} className="flex items-center gap-2 text-xs text-zinc-200">
+                <input
+                  type="radio"
+                  name="single-shot-choice"
+                  value={shot.storyboard_shot_id}
+                  checked={selectedShotId === shot.storyboard_shot_id}
+                  onChange={() => selectShot(shot.storyboard_shot_id)}
+                />
+                <span>{shot.shot_id || shot.storyboard_shot_id}</span>
+                <span className="text-[10px] text-zinc-500">{shot.storyboard_shot_id}</span>
+              </label>
+            ))}
+            {shots.length === 0 ? (
+              <p className="text-[10px] text-amber-200">No package shots are available yet — build the production package first.</p>
+            ) : null}
+          </div>
+
+          {selectedShot ? (
+            <div className="mt-3 space-y-2 border-t border-white/10 pt-3" data-testid="single-shot-confirm">
+              <div className="text-xs text-zinc-200">
+                Shot {selectedShot.shot_id || selectedShot.storyboard_shot_id} · 1 Runway submission
+              </div>
+              <label className="block text-[10px] text-zinc-400">
+                Duration in seconds (planned: {plannedDuration ?? 'unknown'}; Router accepts 2–30)
+                <input
+                  value={durationInput}
+                  onChange={(event) => { setDurationInput(event.target.value); setEstimate(null) }}
+                  placeholder={plannedDuration !== null ? String(plannedDuration) : 'e.g. 5'}
+                  inputMode="numeric"
+                  aria-label="Render duration in seconds"
+                  className="cyber-input mt-1 w-24 rounded p-1.5 text-xs"
+                />
+              </label>
+              {!durationValid ? (
+                <p className="text-[10px] text-rose-200">Duration must be a whole number of seconds between 2 and 30.</p>
+              ) : null}
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-500">
+                  Exact prompt text that will be sent (first 600 characters)
+                </div>
+                <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-black/40 p-2 text-[10px] leading-relaxed text-zinc-300">
+                  {selectedShot.prompt.slice(0, 600) || '(empty prompt — submission will fail closed)'}
+                </pre>
+                <div className="mt-1 text-[10px] text-zinc-500">
+                  ALL-CAPS names in prompt: {capsNames(selectedShot.prompt).join(', ') || 'none'}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy || estimateLoading || !durationValid}
+                  onClick={checkCost}
+                  className="btn-ghost px-3 py-2 text-[10px]"
+                  data-testid="single-shot-check-cost"
+                  title="Calls Runway with dryRun:true for this shot only. Creates no task; prior reports observed no billing change, unverified on this account."
+                >
+                  {estimateLoading ? 'Checking cost…' : 'Check cost (may contact Runway)'}
+                </button>
+                {estimateRow ? (
+                  <span className="text-[10px] text-zinc-300" data-testid="single-shot-estimate">
+                    {estimateAvailable
+                      ? `Estimate: ${estimateRow.estimated_credits} credits${estimateRow.resolved_model ? ` · ${estimateRow.resolved_model}` : ''} · ceiling ${estimate?.ceiling_credits} (${estimate?.ceiling_env_var})`
+                      : `Estimate unavailable · ceiling ${estimate?.ceiling_credits} (${estimate?.ceiling_env_var})`}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-zinc-500">
+                    Ceiling 300 credits (RUNWAY_RENDER_MAX_CREDITS) until checked.
+                  </span>
+                )}
+              </div>
+              {estimateError ? <p className="text-[10px] text-rose-200">{estimateError}</p> : null}
+              {overCeiling ? (
+                <p className="text-[10px] text-rose-200">
+                  The estimate exceeds the ceiling — this shot cannot be submitted at the current ceiling.
+                </p>
+              ) : null}
+              <label className="flex items-start gap-2 text-xs text-zinc-200">
+                <input
+                  type="checkbox"
+                  checked={spendConfirmed}
+                  onChange={(event) => setSpendConfirmed(event.target.checked)}
+                  className="mt-0.5"
+                />
+                I understand this spends Runway credits
+              </label>
+              {needsUnknownAck ? (
+                <label className="flex items-start gap-2 text-xs text-zinc-200">
+                  <input
+                    type="checkbox"
+                    checked={unknownCostConfirmed}
+                    onChange={(event) => setUnknownCostConfirmed(event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  No cost estimate is available — proceed anyway and accept the unknown cost
+                </label>
+              ) : null}
+              <button
+                type="button"
+                disabled={!canConfirmSingle}
+                onClick={() => run && selectedShot && effectiveDuration !== null && apply(
+                  'Queuing single-shot render',
+                  () => renderCanonicalShots(run.run_id, {
+                    provider: renderProvider,
+                    storyboardShotIds: [selectedShot.storyboard_shot_id],
+                    durationSeconds: effectiveDuration,
+                    acknowledgeUnknownCost: unknownCostConfirmed,
+                  }),
+                )}
+                className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 disabled:opacity-40"
+                data-testid="single-shot-confirm-button"
+              >
+                Confirm: render this one shot
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {nextAction === 'render' && wholePackageOpen && !stale ? (
+        <div className="mt-3 rounded-lg border border-rose-400/30 bg-rose-500/5 p-3" data-testid="whole-package-render-dialog">
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-rose-100">
+            Queue the whole package ({shots.length} shots, {shots.length} Runway submissions)
+          </div>
+          <p className="mt-1 text-[10px] text-zinc-400">
+            This submits every package shot and needs a separate owner decision. No per-shot estimate is shown here.
+          </p>
+          <label className="mt-2 flex items-start gap-2 text-xs text-zinc-200">
+            <input
+              type="checkbox"
+              checked={wholeSpendConfirmed}
+              onChange={(event) => setWholeSpendConfirmed(event.target.checked)}
+              className="mt-0.5"
+            />
+            I understand this spends Runway credits for all {shots.length} shots
+          </label>
+          <label className="mt-1 flex items-start gap-2 text-xs text-zinc-200">
+            <input
+              type="checkbox"
+              checked={wholeUnknownCostConfirmed}
+              onChange={(event) => setWholeUnknownCostConfirmed(event.target.checked)}
+              className="mt-0.5"
+            />
+            No cost estimate is shown — proceed anyway and accept the unknown cost
+          </label>
+          <button
+            type="button"
+            disabled={!run || busy || !wholeSpendConfirmed || !wholeUnknownCostConfirmed}
+            onClick={() => run && apply(
+              'Queuing whole package',
+              () => renderCanonicalShots(run.run_id, {
+                provider: renderProvider,
+                allowFullPackage: true,
+                acknowledgeUnknownCost: wholeUnknownCostConfirmed,
+              }),
+            )}
+            className="mt-2 rounded-lg border border-rose-400/40 px-3 py-2 text-[10px] font-bold uppercase text-rose-100 disabled:opacity-40"
+            data-testid="whole-package-confirm"
+          >
+            Confirm: queue all {shots.length} shots
+          </button>
         </div>
       ) : null}
 

@@ -147,10 +147,69 @@ export function createCanonicalProductionPackage(runId: string) {
   return fetchJson<CanonicalWorkflowResponse>(workflowPath(runId, '/production-package'), jsonPost({}))
 }
 
+export type RenderProductionPackageInput = {
+  retryConfirmed?: boolean
+  provider?: string
+  storyboardShotIds?: string[]
+  allowFullPackage?: boolean
+  acknowledgeUnknownCost?: boolean
+  durationSeconds?: number
+}
+
 export function renderCanonicalProductionPackage(runId: string, retryConfirmed = false, provider?: string) {
   return fetchJson<CanonicalWorkflowResponse>(
     workflowPath(runId, '/renders'),
     { ...jsonPost({ provider: provider || undefined, retry_confirmed: retryConfirmed }), timeoutMs: 600_000 },
+  )
+}
+
+export function renderCanonicalShots(runId: string, input: RenderProductionPackageInput) {
+  return fetchJson<CanonicalWorkflowResponse>(
+    workflowPath(runId, '/renders'),
+    {
+      ...jsonPost({
+        provider: input.provider || undefined,
+        retry_confirmed: input.retryConfirmed ?? false,
+        storyboard_shot_ids: input.storyboardShotIds ?? undefined,
+        allow_full_package: input.allowFullPackage ?? false,
+        acknowledge_unknown_cost: input.acknowledgeUnknownCost ?? false,
+        duration_seconds: input.durationSeconds ?? undefined,
+      }),
+      timeoutMs: 600_000,
+    },
+  )
+}
+
+export type RenderEstimateShot = {
+  storyboard_shot_id: string
+  shot_id: string
+  planned_duration_seconds: number | null
+  effective_duration_seconds: number | null
+  estimated_credits: number | null
+  resolved_model: string | null
+  estimate_available: boolean
+}
+
+export type RenderEstimateResponse = {
+  run_id: string
+  ceiling_credits: number
+  ceiling_env_var: string
+  estimates: RenderEstimateShot[]
+}
+
+// Check-cost probe. Call ONLY from an explicit user click: the dry-run POST
+// may contact Runway (dryRun:true — no task, no billing per provider code
+// comments; billing on this account is unverified). Never call on load/open.
+export function estimateCanonicalRenders(
+  runId: string,
+  input: { storyboardShotIds: string[]; durationSeconds?: number },
+) {
+  return fetchJson<RenderEstimateResponse>(
+    workflowPath(runId, '/renders/estimate'),
+    jsonPost({
+      storyboard_shot_ids: input.storyboardShotIds,
+      duration_seconds: input.durationSeconds ?? undefined,
+    }),
   )
 }
 

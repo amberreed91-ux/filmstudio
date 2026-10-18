@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   beginCanonicalWorkflow,
+  estimateCanonicalRenders,
   generateCanonicalPrevis,
   renderCanonicalRevision,
+  renderCanonicalShots,
   listCanonicalWorkflows,
   renderCanonicalProductionPackage,
 } from './canonicalWorkflowApi'
@@ -71,6 +73,60 @@ describe('canonical workflow API', () => {
     expect(String(url)).toContain('/api/f51/studio/production-threads/run-1/renders')
     expect(init?.method).toBe('POST')
     expect(JSON.parse(String(init?.body))).toEqual({ retry_confirmed: true })
+  })
+
+  it('sends the single-shot filter without the full-package flag', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ run: {}, transitions: [] }), { status: 200 }),
+    )
+
+    await renderCanonicalShots('run-1', {
+      provider: 'runway',
+      storyboardShotIds: ['sbs-002'],
+      durationSeconds: 5,
+      acknowledgeUnknownCost: true,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/f51/studio/production-threads/run-1/renders')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      provider: 'runway',
+      retry_confirmed: false,
+      storyboard_shot_ids: ['sbs-002'],
+      allow_full_package: false,
+      acknowledge_unknown_cost: true,
+      duration_seconds: 5,
+    })
+  })
+
+  it('sends allow_full_package only from the whole-package control', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ run: {}, transitions: [] }), { status: 200 }),
+    )
+
+    await renderCanonicalShots('run-1', { provider: 'runway', allowFullPackage: true })
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      allow_full_package: true,
+    })
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).not.toHaveProperty('storyboard_shot_ids')
+  })
+
+  it('posts cost estimates to the estimate route', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ run_id: 'run-1', ceiling_credits: 300, estimates: [] }), { status: 200 }),
+    )
+
+    await estimateCanonicalRenders('run-1', { storyboardShotIds: ['sbs-002'], durationSeconds: 5 })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/f51/studio/production-threads/run-1/renders/estimate')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      storyboard_shot_ids: ['sbs-002'],
+      duration_seconds: 5,
+    })
   })
 })
 

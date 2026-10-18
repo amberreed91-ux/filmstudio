@@ -11,6 +11,8 @@ from app.models.canonical_workflow import (
     EditorialWorkflowRequest,
     FilmCutWorkflowRequest,
     MemoryWorkflowRequest,
+    RenderEstimateRequest,
+    RenderEstimateResponse,
     RenderWorkflowRequest,
     RevisionRenderWorkflowRequest,
     RevisionWorkflowRequest,
@@ -162,8 +164,29 @@ async def render_thread_package(run_id: str, payload: RenderWorkflowRequest) -> 
             run_id,
             provider=payload.provider,
             retry_confirmed=payload.retry_confirmed,
+            storyboard_shot_ids=payload.storyboard_shot_ids,
+            allow_full_package=payload.allow_full_package,
+            acknowledge_unknown_cost=payload.acknowledge_unknown_cost,
+            duration_seconds=payload.duration_seconds,
         )
         return _response(run_id)
+    except StabilityError as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/production-threads/{run_id}/renders/estimate", response_model=RenderEstimateResponse)
+def estimate_thread_renders(run_id: str, payload: RenderEstimateRequest) -> RenderEstimateResponse:
+    # Check-cost probe: dry-run estimates only. Never creates jobs, never
+    # submits. The dry-run POST contacts Runway (dryRun:true, no task, no
+    # billing per provider code comments) — the UI calls this solely from an
+    # explicit Check-cost click, never on page load or dialog open.
+    try:
+        result = canonical_production_workflow_service.estimate_render_cost(
+            run_id,
+            storyboard_shot_ids=payload.storyboard_shot_ids,
+            duration_seconds=payload.duration_seconds,
+        )
+        return RenderEstimateResponse(**result)
     except StabilityError as exc:
         raise _http_error(exc) from exc
 

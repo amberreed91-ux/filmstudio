@@ -244,7 +244,7 @@ def _through_package(service: CanonicalProductionWorkflowService) -> dict:
 
 
 @pytest.mark.parametrize("provider", ["simulated", "runway"])
-def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provider: str) -> None:
+def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provider: str, monkeypatch) -> None:
     service, storage, state, renderer = _environment(tmp_path)
     run = _begin(service)
     run_id = run["run_id"]
@@ -284,10 +284,14 @@ def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provi
     assert package["blueprint_version_id"] == run["blueprint_version_id"]
     assert package["payload"]["shots"][0]["continuity"]
 
-    run = asyncio.run(service.render_production_package(run_id, provider=provider))
+    # D5: whole-package renders carry the explicit flag (unknown-cost ack for
+    # the runway leg; the estimator is sealed so no provider is contacted).
+    monkeypatch.setattr(service, "_estimate_shot_credits", lambda *args, **kwargs: None)
+    render_kwargs = {"provider": provider, "allow_full_package": True, "acknowledge_unknown_cost": True}
+    run = asyncio.run(service.render_production_package(run_id, **render_kwargs))
     assert run["status"] == "render_completed"
     production_create_count = renderer.create_count
-    assert asyncio.run(service.render_production_package(run_id, provider=provider))["status"] == "render_completed"
+    assert asyncio.run(service.render_production_package(run_id, **render_kwargs))["status"] == "render_completed"
     assert renderer.create_count == production_create_count
     render_row = run["data"]["artifacts"]["render_jobs"][0]
     render_job = renderer.get_job(render_row["render_job_id"])
@@ -425,7 +429,7 @@ def test_render_failure_is_recoverable_without_erasing_upstream_or_creating_memo
     renderer.fail_next_submission = True
 
     with pytest.raises(ProviderError):
-        asyncio.run(service.render_production_package(run_id, provider="simulated"))
+        asyncio.run(service.render_production_package(run_id, provider="simulated", allow_full_package=True))
 
     failed = service.get(run_id)
     assert failed["status"] == "render_failed"
@@ -503,7 +507,14 @@ def test_package_render_keeps_frozen_settings_and_never_uses_video_as_image(tmp_
             (json.dumps(package["payload"], sort_keys=True), package_id),
         )
         conn.commit()
-    result = asyncio.run(service.render_production_package(run["run_id"], provider=provider_override))
+    result = asyncio.run(
+        service.render_production_package(
+            run["run_id"],
+            provider=provider_override,
+            allow_full_package=True,
+            acknowledge_unknown_cost=True,
+        )
+    )
     assert result["status"] == "render_completed"
     for row in result["data"]["artifacts"]["render_jobs"]:
         job = renderer.get_job(row["render_job_id"])
@@ -519,7 +530,7 @@ def test_package_render_review_stop_does_not_poll_forever(tmp_path):
     service, storage, state, renderer = _environment(tmp_path)
     run = _through_package(service)
     renderer.delay_next_submission = True
-    queued = asyncio.run(service.render_production_package(run["run_id"], provider="simulated"))
+    queued = asyncio.run(service.render_production_package(run["run_id"], provider="simulated", allow_full_package=True))
     for row in queued["data"]["artifacts"]["render_jobs"]:
         job = renderer.get_job(row["render_job_id"])
         if job.status != "complete":
@@ -574,7 +585,7 @@ def test_polling_does_not_change_queued_provider(tmp_path):
     service, storage, state, renderer = _environment(tmp_path)
     run = _through_package(service)
     renderer.delay_next_submission = True
-    queued = asyncio.run(service.render_production_package(run["run_id"], provider="simulated"))
+    queued = asyncio.run(service.render_production_package(run["run_id"], provider="simulated", allow_full_package=True))
     count = renderer.create_count
     assert queued["status"] == "render_queued"
     completed = asyncio.run(service.render_production_package(run["run_id"]))
