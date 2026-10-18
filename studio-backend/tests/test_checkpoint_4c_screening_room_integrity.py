@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -8,8 +9,22 @@ from fastapi.testclient import TestClient
 
 from app.data.storage import DatabaseStorage
 from app.models import FinalShortFilmPackage, RenderJobModel, RenderJobOutput, StudioProject
+from app.models.production_acceptance import ProductionAcceptanceRunRequest
 from app.services.screening_room_service import ScreeningRoomService
 from app.services.stability import PlaybackError, StateError, ValidationError
+from app.services.production_acceptance_service import ProductionAcceptanceService
+from app.services.video_asset_service import VideoAssetService
+
+
+class ProjectStore:
+    def __init__(self, scenes=None):
+        self._scenes = scenes or []
+
+    def get_project(self, project_id):
+        return {
+            "id": project_id,
+            "execution_summary": {"scenes": self._scenes},
+        }
 
 
 class FakeRenderer:
@@ -63,6 +78,7 @@ def _service(tmp_path: Path, jobs: list[RenderJobModel]) -> tuple[ScreeningRoomS
     service.outputs_root = outputs.resolve()
     service.static_root = static.resolve()
     service.package_service._outputs_root = outputs.resolve()
+    service.production_acceptance_service._outputs_root = outputs.resolve()
     return service, storage, outputs
 
 
@@ -178,19 +194,40 @@ def test_final_approval_selects_current_output_and_persists_project_completion(t
     final_dir = outputs / "final_films"
     final_dir.mkdir()
     for suffix in ("v1", "v2"):
-        (final_dir / f"film-{suffix}.mp4").write_bytes(f"film-{suffix}".encode())
-        storage.save_final_short_film_package(
-            FinalShortFilmPackage(
-                package_id=f"package-{suffix}",
-                project_id="project_screening",
-                film_title=f"Film {suffix}",
-                final_output_url=f"/outputs/final_films/film-{suffix}.mp4",
-                review_decision="approved",
-                package_status="approved",
-                created_at=f"2026-08-0{1 if suffix == 'v1' else 2}T00:00:00+00:00",
-                updated_at=f"2026-08-0{1 if suffix == 'v1' else 2}T00:00:00+00:00",
-            )
+        output_path = final_dir / f"film-{suffix}.mp4"
+        output_path.write_bytes(f"film-{suffix}".encode())
+        package = FinalShortFilmPackage(
+            package_id=f"package-{suffix}",
+            project_id="project_screening",
+            film_title=f"Film {suffix}",
+            final_output_url=f"/outputs/final_films/film-{suffix}.mp4",
+            render_job_ids=[f"render-{suffix}"],
+            scene_count=2,
+            review_id=f"review-{suffix}",
+            review_decision="approved",
+            package_status="ready_for_review",
+            created_at=f"2026-08-01T00:00:00+00:00",
+            updated_at=f"2026-08-01T00:00:00+00:00",
         )
+        storage.save_final_short_film_package(package)
+        assets = VideoAssetService(storage)
+        assets._outputs_root = outputs
+        assets.register_generated_output(
+            project_id=package.project_id,
+            source_url=package.final_output_url,
+            title=package.film_title,
+            metadata={"package_id": package.package_id},
+        )
+        acceptance = service.production_acceptance_service
+        report = asyncio.run(acceptance.run_acceptance(
+            package.project_id,
+            ProductionAcceptanceRunRequest(
+                package_id=package.package_id,
+                include_advisory_checks=False,
+            ),
+        ))
+        storage.save_production_acceptance_report(report)
+
     manifest = service.sync_manifest("project_screening")
     finals = {row["source_id"]: row for row in manifest["outputs"] if row["output_type"] == "final"}
     service.approve_output(
@@ -200,7 +237,7 @@ def test_final_approval_selects_current_output_and_persists_project_completion(t
         "project_screening", finals["package-v2"]["screening_output_id"], confirmed=True
     )
 
-    reloaded = ScreeningRoomService(storage, FakeRenderer([]))
+    reloaded = ScreeningRoomService(storage, FakeRenderer([]), backend_root=tmp_path)
     current = reloaded.get_manifest("project_screening")
     assert current["completion_status"] == "complete"
     assert current["completed_at"] is not None
@@ -237,7 +274,7 @@ def test_media_route_supports_ranges_and_returns_useful_missing_error(tmp_path: 
     assert missing.json()["detail"]["error_type"] == "state_error"
 
 
-def test_delivered_film_can_be_reviewed_and_explicitly_approved(tmp_path: Path):
+def test_film_delivery_without_canonical_cut_package_and_manifest_cannot_be_approved(tmp_path: Path):
     service, storage, outputs = _service(tmp_path, [])
     final = service.static_root / 'films' / 'project_screening' / 'film_unique.mp4'
     final.parent.mkdir(parents=True)
@@ -248,6 +285,6 @@ def test_delivered_film_can_be_reviewed_and_explicitly_approved(tmp_path: Path):
     film = next(row for row in manifest['outputs'] if row['source_type'] == 'film_delivery')
     assert film['media_status'] == 'available' and not film['approved']
     assert film['metadata']['film_url'] == url
-    approved = service.approve_output('project_screening', film['screening_output_id'], confirmed=True)
-    assert approved['approved']
-    assert service.get_manifest('project_screening')['current_final_output']['screening_output_id'] == film['screening_output_id']
+    with pytest.raises(StateError, match='current canonical cut, package, and exact manifest provenance'):
+        service.approve_output('project_screening', film['screening_output_id'], confirmed=True)
+    assert storage.get_screening_project_state('project_screening')['current_final_output_id'] is None

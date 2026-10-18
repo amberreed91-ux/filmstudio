@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+from urllib.parse import urlparse
 
 from app.data import get_storage
 from app.models.production_acceptance import (
@@ -121,6 +122,13 @@ class ProductionAcceptanceService:
             project = self._project_store_service.get_project(project_id)
             if isinstance(project, dict):
                 return project
+        if self._storage is not None:
+            try:
+                project = self._storage_ref().get_project(project_id)
+                if project is not None:
+                    return _model_dump(project)
+            except Exception:
+                pass
         try:
             from app.services.project_store import project_store
 
@@ -129,8 +137,11 @@ class ProductionAcceptanceService:
                 return project
         except Exception:
             pass
-        project = self._storage_ref().get_project(project_id)
-        return _model_dump(project)
+        try:
+            project = self._storage_ref().get_project(project_id)
+            return _model_dump(project)
+        except Exception:
+            return {}
 
     def _generate_acceptance_id(self) -> str:
         return f"acceptance-{uuid.uuid4().hex[:12]}"
@@ -258,6 +269,229 @@ class ProductionAcceptanceService:
                 reason="Final package not found.",
             )
         project_id = _as_str(_attr(package, "project_id"))
+        if not project_id or _as_str(_attr(package, "package_id")) != package_id:
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="Final package identity or project provenance is invalid.",
+            )
+        project = self._project_ref(project_id)
+        if not project or _as_str(project.get("project_id")) != project_id:
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="The final package project no longer exists.",
+            )
+        canonical_package = self._storage_ref().get_final_short_film_package(package_id)
+        if canonical_package is None:
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="Final package provenance could not be verified.",
+            )
+        if _as_str(_attr(canonical_package, "project_id")) != project_id:
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="Final package belongs to a different project.",
+            )
+        from app.access_context import access_user_id
+        actor_id = access_user_id.get()
+        if actor_id:
+            owner_lookup = getattr(self._storage_ref(), "access_project_owner", None)
+            owner_id = owner_lookup(project_id) if callable(owner_lookup) else None
+            if not owner_id or owner_id != actor_id:
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Only the authenticated project owner can approve the final output.",
+                )
+        cut_id = ""
+        film_provenance = None
+        if hasattr(self._storage_ref(), "get_delivery_manifest"):
+            film_provenance = self._storage_ref().get_delivery_manifest(project_id, "__film__")
+        current_film = self._storage_ref().get_film(project_id) if hasattr(self._storage_ref(), "get_film") else None
+        is_film_delivery = bool(
+            (isinstance(film_provenance, dict) and film_provenance.get("film_url") == _as_str(_attr(package, "final_output_url")))
+            or (isinstance(current_film, dict) and current_film.get("film_url") == _as_str(_attr(package, "final_output_url")))
+        )
+        if is_film_delivery:
+            if not isinstance(film_provenance, dict) or film_provenance.get("film_url") != _as_str(_attr(package, "final_output_url")):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Film delivery is missing its exact persisted delivery manifest.",
+                )
+            if not isinstance(current_film, dict) or current_film.get("film_url") != _as_str(_attr(package, "final_output_url")):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Final package does not point to the current persisted film assembly.",
+                )
+            cut_id = _as_str(film_provenance.get("source_cut_id"))
+            cut = self._storage_ref().get_film_cut_version(cut_id) if cut_id and hasattr(self._storage_ref(), "get_film_cut_version") else None
+            if not cut or cut.get("project_id") != project_id or cut.get("status") != "approved":
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Film delivery is not linked to an approved Film Cut version.",
+                )
+            if str(_attr(package, "metadata", {}).get("film_delivery_id") or "") != str(_attr(current_film, "id") or ""):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Final package does not identify the source film delivery record.",
+                )
+            if _as_str(_attr(package, "metadata", {}).get("source_cut_id")) != cut_id:
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Final package Film Cut provenance does not match the current delivery manifest.",
+                )
+            if not isinstance(_attr(package, "metadata", {}).get("delivery_manifest_hash"), str) or not _attr(package, "metadata", {}).get("delivery_manifest_hash"):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Final package is missing the delivery manifest provenance hash.",
+                )
+            manifest_hash = hashlib.sha256(json.dumps(film_provenance, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+            if _attr(package, "metadata", {}).get("delivery_manifest_hash") != manifest_hash:
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Final package delivery manifest provenance is stale or mismatched.",
+                )
+            if cut.get("scene_order") != film_provenance.get("scene_ids"):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Film delivery scene order no longer matches its approved Film Cut.",
+                )
+            current_cut = self._storage_ref().get_current_film_cut(project_id)
+            cut_state = self._storage_ref().get_film_cut_state(project_id)
+            if (
+                not current_cut
+                or current_cut.get("cut_id") != cut_id
+                or not cut_state
+                or cut_state.get("approved_cut_id") != cut_id
+            ):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Film delivery Film Cut is no longer the current approved version.",
+                )
+            project = self._project_ref(project_id)
+            current_scene_ids = self._scene_ids(project)
+            if not set(film_provenance.get("scene_ids") or []).issubset(current_scene_ids):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Film delivery references scenes that no longer belong to this project.",
+                )
+            compositions = {row.get("scene_id"): row for row in self._storage_ref().list_scene_compositions_for_project(project_id)}
+            provenance_rows = film_provenance.get("scene_provenance")
+            if not isinstance(provenance_rows, list) or len(provenance_rows) != len(film_provenance.get("scene_ids") or []):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Film delivery is missing its complete ordered scene provenance.",
+                )
+            for index, provenance in enumerate(provenance_rows):
+                if not isinstance(provenance, dict) or provenance.get("order_index") != index:
+                    return PackageApprovalGuardResult(
+                        project_id=project_id,
+                        package_id=package_id,
+                        allowed=False,
+                        guard_level="block",
+                        reason="Film delivery ordered scene provenance is invalid.",
+                    )
+                scene_id = str(film_provenance["scene_ids"][index])
+                composition = compositions.get(scene_id) or {}
+                if (
+                    provenance.get("scene_id") != scene_id
+                    or provenance.get("composed_url") != composition.get("composed_url")
+                    or provenance.get("composed_url") != (film_provenance.get("scene_urls") or [None] * len(provenance_rows))[index]
+                    or provenance.get("delivery_manifest") != self._storage_ref().get_delivery_manifest(project_id, scene_id)
+                ):
+                    return PackageApprovalGuardResult(
+                        project_id=project_id,
+                        package_id=package_id,
+                        allowed=False,
+                        guard_level="block",
+                        reason=f"Scene delivery provenance changed for {scene_id}.",
+                    )
+                source_hashes = [
+                    str(row.get("sha256") or "")
+                    for row in (provenance.get("source_media") or {}).values()
+                    if isinstance(row, dict)
+                ]
+                expected_source_media = provenance.get("source_media")
+                scene_manifest = self._storage_ref().get_delivery_manifest(project_id, scene_id)
+                if not isinstance(scene_manifest, dict) or scene_manifest.get("source_media") != expected_source_media or not source_hashes:
+                    return PackageApprovalGuardResult(
+                        project_id=project_id,
+                        package_id=package_id,
+                        allowed=False,
+                        guard_level="block",
+                        reason=f"Scene source media provenance is missing or stale for {scene_id}.",
+                    )
+            if cut_id != _as_str(_attr(package, "metadata", {}).get("source_cut_id")):
+                return PackageApprovalGuardResult(
+                    project_id=project_id,
+                    package_id=package_id,
+                    allowed=False,
+                    guard_level="block",
+                    reason="Final package Film Cut provenance does not match this delivery.",
+                )
+        if desired_status in {"approved", "packaged"} and _as_str(_attr(package, "final_output_url")) != _as_str(_attr(canonical_package, "final_output_url")):
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="Final output URL changed after package registration.",
+            )
+        if not _as_str(_attr(package, "final_output_url")):
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="Final package has no final output URL.",
+            )
+        project_id = _as_str(_attr(package, "project_id"))
         if desired_status not in {"approved", "packaged"}:
             return PackageApprovalGuardResult(
                 project_id=project_id,
@@ -284,6 +518,16 @@ class ProductionAcceptanceService:
                 reason="Run production acceptance before approving this package.",
                 evidence=evidence,
             )
+        if report.project_id != project_id or report.package_id != package_id or report.context.project_id != project_id or report.context.package_id != package_id:
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="Acceptance evidence does not belong to this exact project and package.",
+                latest_acceptance_id=report.acceptance_id,
+                evidence=evidence,
+            )
         evidence.append(
             AcceptanceEvidenceRef(
                 source_type="production_acceptance_report",
@@ -292,16 +536,44 @@ class ProductionAcceptanceService:
                 observed_value=report.disposition,
             )
         )
-        if report.stale:
+        current_snapshot = self._build_snapshot_sync(project_id, package_id)
+        if report.context.final_output_url != _as_str(_attr(package, "final_output_url")):
             return PackageApprovalGuardResult(
                 project_id=project_id,
                 package_id=package_id,
                 allowed=False,
                 guard_level="block",
-                reason="The latest production acceptance report is stale. Re-run acceptance for the current package.",
+                reason="Acceptance evidence does not authorize this exact final output URL.",
                 latest_acceptance_id=report.acceptance_id,
                 evidence=evidence,
-                metadata={"stale_reasons": report.stale_reasons},
+            )
+        if report.context.final_output_asset_fingerprint == hashlib.sha256(b"[]").hexdigest():
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="Acceptance report has no exact registered output asset provenance.",
+                latest_acceptance_id=report.acceptance_id,
+                evidence=evidence,
+            )
+        if current_snapshot.acceptance_input_hash != report.context.acceptance_input_hash or report.stale:
+            stale_reasons = list(report.stale_reasons)
+            if current_snapshot.final_output_asset_fingerprint != report.context.final_output_asset_fingerprint:
+                stale_reasons.append("Final output asset registration changed after acceptance.")
+            if current_snapshot.final_output_url != report.context.final_output_url:
+                stale_reasons.append("Final output URL changed after acceptance.")
+            if not stale_reasons:
+                stale_reasons.append("Production evidence changed after acceptance.")
+            return PackageApprovalGuardResult(
+                project_id=project_id,
+                package_id=package_id,
+                allowed=False,
+                guard_level="block",
+                reason="Production evidence changed after acceptance. Re-run acceptance for the current output and registration.",
+                latest_acceptance_id=report.acceptance_id,
+                evidence=evidence,
+                metadata={"stale_reasons": stale_reasons},
             )
         if report.disposition != "ready_for_creator_approval":
             return PackageApprovalGuardResult(
@@ -329,14 +601,18 @@ class ProductionAcceptanceService:
         if current.acceptance_input_hash != report.context.acceptance_input_hash:
             if current.final_output_url != report.context.final_output_url:
                 reasons.append("Final output URL changed after acceptance.")
-            if current.package_updated_at != report.context.package_updated_at:
-                reasons.append("Final package was updated after acceptance.")
+            if current.final_output_asset_fingerprint != report.context.final_output_asset_fingerprint:
+                reasons.append("Final output asset registration changed after acceptance.")
+            if current.final_output_fingerprint != report.context.final_output_fingerprint:
+                reasons.append("Final output contents changed after acceptance.")
             if sorted(current.render_job_ids) != sorted(report.context.render_job_ids):
                 reasons.append("Render lineage changed after acceptance.")
             if sorted(current.revision_ids) != sorted(report.context.revision_ids):
                 reasons.append("Revision lineage changed after acceptance.")
             if current.review_id != report.context.review_id or current.review_decision != report.context.review_decision:
                 reasons.append("Review state changed after acceptance.")
+            if current.scene_ids != report.context.scene_ids:
+                reasons.append("Project scene list changed after acceptance.")
             if not reasons:
                 reasons.append("Package evidence changed after acceptance.")
         return bool(reasons), reasons
@@ -344,7 +620,7 @@ class ProductionAcceptanceService:
     async def _build_context(self, project_id: str, package_id: str | None) -> ProductionAcceptanceContext:
         storage = self._storage_ref()
         package = storage.get_final_short_film_package(package_id) if package_id else None
-        if not package:
+        if package_id is None:
             packages = storage.list_final_short_film_packages_for_project(project_id) or []
             package = max(packages, key=lambda p: _as_str(_attr(p, "created_at")), default=None)
         project = self._project_ref(project_id)
@@ -383,7 +659,7 @@ class ProductionAcceptanceService:
             "video_assets": len(video_assets or []),
             "keyframes": len(keyframes or []),
             "frame_analyses": len(frame_analyses or []),
-        })
+        }, video_assets=video_assets or [])
         return ProductionAcceptanceContext(
             project_id=project_id,
             package=package,
@@ -408,7 +684,8 @@ class ProductionAcceptanceService:
         storage = self._storage_ref()
         package = storage.get_final_short_film_package(package_id) if package_id else None
         project = self._project_ref(project_id)
-        return self._build_snapshot(project_id, package, self._scene_ids(project), {})
+        assets = storage.list_video_assets_for_project(project_id) if hasattr(storage, "list_video_assets_for_project") else []
+        return self._build_snapshot(project_id, package, self._scene_ids(project), {}, video_assets=assets or [])
 
     def _build_snapshot(
         self,
@@ -416,17 +693,41 @@ class ProductionAcceptanceService:
         package: Any | None,
         scene_ids: List[str],
         evidence_counts: Dict[str, int],
+        video_assets: List[Any] | None = None,
     ) -> ProductionAcceptanceContextSnapshot:
         pkg = _model_dump(package) if package else {}
         render_job_ids = [str(v) for v in (pkg.get("render_job_ids") or []) if str(v).strip()]
         revision_ids = [str(v) for v in (pkg.get("revision_ids") or []) if str(v).strip()]
         final_output_url = _as_str(pkg.get("final_output_url"))
         package_updated_at = _as_str(pkg.get("updated_at"))
-        fingerprint = self._fingerprint_output(final_output_url, _as_str(pkg.get("final_output_path")))
+        fingerprint = self._fingerprint_output(
+            final_output_url,
+            _as_str(pkg.get("final_output_path")),
+            _as_str(pkg.get("package_id")),
+        )
+        package_id = _as_str(pkg.get("package_id"))
+        matching_assets = [
+            {
+                "asset_id": _as_str(_attr(asset, "asset_id")),
+                "source_type": _status(_attr(asset, "source_type")),
+                "source_url": _as_str(_attr(asset, "source_url")),
+                "status": _status(_attr(asset, "status")),
+                "project_id": _as_str(_attr(asset, "project_id")),
+            }
+            for asset in (video_assets or [])
+            if isinstance(_attr(asset, "metadata", {}), dict)
+            and _as_str(_attr(asset, "project_id")) == project_id
+            and _as_str(_attr(asset, "source_url")) == final_output_url
+            and _as_str((_attr(asset, "metadata", {}) or {}).get("package_id")) == package_id
+        ]
+        matching_assets.sort(key=lambda asset: (asset["asset_id"], asset["status"]))
+        asset_fingerprint = hashlib.sha256(
+            json.dumps(matching_assets, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
         hash_payload = {
             "project_id": project_id,
             "package_id": _as_str(pkg.get("package_id")),
-            "package_updated_at": package_updated_at,
+            "package_project_id": _as_str(pkg.get("project_id")),
             "final_output_url": final_output_url,
             "final_output_path": _as_str(pkg.get("final_output_path")),
             "review_id": _as_str(pkg.get("review_id")),
@@ -435,6 +736,15 @@ class ProductionAcceptanceService:
             "revision_ids": sorted(revision_ids),
             "scene_ids": sorted(scene_ids),
             "metadata": pkg.get("metadata") or {},
+            "film_title": _as_str(pkg.get("film_title")),
+            "runtime_seconds": pkg.get("runtime_seconds"),
+            "scene_count": pkg.get("scene_count", 0),
+            "shot_count": pkg.get("shot_count", 0),
+            "has_title_card": bool(pkg.get("has_title_card")),
+            "has_end_card": bool(pkg.get("has_end_card")),
+            "has_soundtrack": bool(pkg.get("has_soundtrack")),
+            "final_output_fingerprint": fingerprint,
+            "final_output_asset_fingerprint": asset_fingerprint,
         }
         input_hash = hashlib.sha256(json.dumps(hash_payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
         return ProductionAcceptanceContextSnapshot(
@@ -443,6 +753,7 @@ class ProductionAcceptanceService:
             package_updated_at=package_updated_at,
             final_output_url=final_output_url,
             final_output_fingerprint=fingerprint,
+            final_output_asset_fingerprint=asset_fingerprint,
             review_id=_as_str(pkg.get("review_id")),
             review_decision=_as_str(pkg.get("review_decision")),
             render_job_ids=render_job_ids,
@@ -452,18 +763,23 @@ class ProductionAcceptanceService:
             evidence_counts=evidence_counts,
         )
 
-    def _fingerprint_output(self, final_output_url: str, final_output_path: str) -> str:
+    def _fingerprint_output(self, final_output_url: str, final_output_path: str, package_id: str) -> str:
         candidate = ""
-        if final_output_path:
-            candidate = final_output_path
-        elif final_output_url.startswith("/outputs/"):
+        if final_output_url.startswith("/outputs/"):
             candidate = str(self._outputs_root / final_output_url.removeprefix("/outputs/"))
+        elif final_output_path:
+            candidate = final_output_path
         if candidate:
-            path = Path(candidate)
-            if path.exists() and path.is_file():
+            path = Path(candidate).resolve()
+            outputs_root = self._outputs_root.resolve()
+            if path.is_relative_to(outputs_root) and path.is_file():
                 stat = path.stat()
-                return f"{path.name}:{int(stat.st_size)}:{int(stat.st_mtime)}"
-        return final_output_url
+                digest = hashlib.sha256()
+                with path.open("rb") as output_file:
+                    for chunk in iter(lambda: output_file.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                return f"{stat.st_size}:sha256:{digest.hexdigest()}"
+        return f"{package_id}:{final_output_url}"
 
     def _scene_ids(self, project: Dict[str, Any]) -> List[str]:
         summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
@@ -479,6 +795,7 @@ class ProductionAcceptanceService:
             self._check_package_exists,
             self._check_final_output_present,
             self._check_final_output_reachable,
+            self._check_final_output_registered,
             self._check_review_decision,
             self._check_revision_debt,
             self._check_render_lineage,
@@ -519,23 +836,26 @@ class ProductionAcceptanceService:
         )
 
     def _check_package_exists(self, context: ProductionAcceptanceContext):
-        if context.package:
+        package_project_id = _as_str(_attr(context.package, "project_id"))
+        package_is_project_scoped = bool(context.package) and package_project_id == context.project_id
+        if package_is_project_scoped:
             return ProductionAcceptanceCheckResult(
                 check_id="package_exists",
                 category="package",
                 severity="pass",
                 title="Final package exists",
-                summary="A final short-film package is available for acceptance.",
+                summary="A final short-film package with a recorded output is available for acceptance.",
                 evidence=[self._evidence("final_short_film_package", context.snapshot.package_id)],
             )
         return ProductionAcceptanceCheckResult(
             check_id="package_exists",
             category="package",
             severity="blocker",
-            title="Final package missing",
-            summary="No final package exists for this project.",
-            co_director_note="The production needs a final package before approval can mean anything concrete.",
-            remediation=["Create a final short-film package from the current stitched output."],
+            title="Final package missing, unscoped, or outputless",
+            summary="No project-scoped final package with a recorded output exists for acceptance.",
+            co_director_note="The production needs a final package tied to this project before approval can mean anything concrete.",
+            evidence=[self._evidence("final_short_film_package", context.snapshot.package_id, "project_id", package_project_id)],
+            remediation=["Select or create a final short-film package for this project."],
         )
 
     def _check_final_output_present(self, context: ProductionAcceptanceContext):
@@ -571,7 +891,13 @@ class ProductionAcceptanceService:
             )
         if url.startswith("/outputs/"):
             path = self._outputs_root / url.removeprefix("/outputs/")
-            if path.exists() and path.is_file():
+            output_root = self._outputs_root.resolve()
+            resolved_path = path.resolve()
+            if (
+                resolved_path.is_relative_to(output_root)
+                and resolved_path.is_file()
+                and resolved_path.stat().st_size > 0
+            ):
                 return ProductionAcceptanceCheckResult(
                     check_id="final_output_reachable",
                     category="media",
@@ -580,12 +906,31 @@ class ProductionAcceptanceService:
                     summary="The final output exists in the studio outputs directory.",
                     evidence=[self._evidence("file", str(path), "exists", True)],
                 )
+            package_path = Path(_as_str(_attr(context.package, "final_output_path"))).resolve()
+            try:
+                if (
+                    resolved_path.is_relative_to(output_root)
+                    and package_path.is_relative_to(output_root)
+                    and package_path == resolved_path
+                    and package_path.is_file()
+                    and package_path.stat().st_size > 0
+                ):
+                    return ProductionAcceptanceCheckResult(
+                        check_id="final_output_reachable",
+                        category="media",
+                        severity="pass",
+                        title="Final output is reachable",
+                        summary="The final output exists in the studio outputs directory.",
+                        evidence=[self._evidence("file", str(package_path), "exists", True)],
+                    )
+            except (OSError, RuntimeError, ValueError):
+                pass
             return ProductionAcceptanceCheckResult(
                 check_id="final_output_reachable",
                 category="media",
                 severity="blocker",
-                title="Final output file missing",
-                summary="The package points to a local output that is not present on disk.",
+                title="Final output file missing or invalid",
+                summary="The package points to a missing, empty, or out-of-root output file.",
                 co_director_note="The approval gate is pointing at an absent cut.",
                 evidence=[self._evidence("file", str(path), "exists", False)],
                 remediation=["Regenerate or restitch the final output."],
@@ -600,13 +945,59 @@ class ProductionAcceptanceService:
                 evidence=[self._evidence("final_short_film_package", context.snapshot.package_id, "final_output_url", url)],
                 remediation=["Package the final film under /outputs before approval."],
             )
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+            return ProductionAcceptanceCheckResult(
+                check_id="final_output_reachable",
+                category="media",
+                severity="blocker",
+                title="Final output reference is invalid",
+                summary="Final outputs must be contained studio files or HTTP(S) URLs with a host.",
+                evidence=[self._evidence("final_short_film_package", context.snapshot.package_id, "final_output_url", url)],
+                remediation=["Replace the reference with an available /outputs file or hosted HTTP(S) video URL."],
+            )
         return ProductionAcceptanceCheckResult(
             check_id="final_output_reachable",
             category="media",
-            severity="pass",
-            title="Final output reference is usable",
-            summary="The package references an external or hosted output URL.",
+            severity="warning",
+            title="Final output availability is unverified",
+            summary="The package references an external HTTP(S) URL, but acceptance did not verify that it resolves to playable media.",
+            co_director_note="The package has an external pointer, not yet evidence of a playable cut.",
             evidence=[self._evidence("final_short_film_package", context.snapshot.package_id, "final_output_url", url)],
+            remediation=["Verify the hosted media is reachable and playable, then register that exact output for this package."],
+        )
+
+    def _check_final_output_registered(self, context: ProductionAcceptanceContext):
+        package_id = context.snapshot.package_id
+        output_url = context.snapshot.final_output_url
+        registered_asset = next((
+            asset
+            for asset in context.video_assets
+            if _status(_attr(asset, "status")) in {"available", "analyzed"}
+            and _status(_attr(asset, "source_type")) == "generated_output"
+            and _as_str(_attr(asset, "project_id")) == context.project_id
+            and _as_str(_attr(asset, "source_url")) == output_url
+            and isinstance(_attr(asset, "metadata", {}), dict)
+            and _as_str((_attr(asset, "metadata", {}) or {}).get("package_id")) == package_id
+        ), None)
+        if registered_asset:
+            return ProductionAcceptanceCheckResult(
+                check_id="final_output_registered",
+                category="media",
+                severity="pass",
+                title="Final output is durably registered",
+                summary="The package output has an available project asset registration.",
+                evidence=[self._evidence("video_asset", _as_str(_attr(registered_asset, "asset_id")), "package_id", package_id)],
+            )
+        return ProductionAcceptanceCheckResult(
+            check_id="final_output_registered",
+            category="media",
+            severity="blocker",
+            title="Final output registration is missing",
+            summary="No durable generated-output asset matches this package, project, and output URL.",
+            co_director_note="The cut exists, but its production record does not yet point back to this package.",
+            evidence=[self._evidence("final_short_film_package", package_id, "final_output_url", output_url)],
+            remediation=["Register the final output as a generated video asset for this project and package."],
         )
 
     def _check_review_decision(self, context: ProductionAcceptanceContext):
@@ -892,6 +1283,9 @@ class ProductionAcceptanceService:
 
     def _with_stale_state(self, report: ProductionAcceptanceReport) -> ProductionAcceptanceReport:
         stale, reasons = self.is_report_stale(report)
+        if report.stale:
+            stale = True
+            reasons = list(dict.fromkeys([*report.stale_reasons, *reasons]))
         if stale != report.stale or reasons != report.stale_reasons:
             data = report.model_dump(mode="json")
             data["stale"] = stale

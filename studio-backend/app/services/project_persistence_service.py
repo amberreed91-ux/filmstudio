@@ -169,6 +169,16 @@ class ProjectPersistenceService:
         current = self.load(project_id)
         if current is None:
             return None
+        from app.services.scene002_contract_only import project_has_protected_execution, assert_no_protected_project_mutation
+        if project_has_protected_execution(current, storage=self._canonical_storage()):
+            candidate = {**current, **(updates or {})}
+            candidate["project_id"] = current["project_id"]
+            assert_no_protected_project_mutation(current, candidate)
+            allowed_summary = candidate.get("execution_summary") if isinstance(candidate.get("execution_summary"), dict) else {}
+            previous_summary = current.get("execution_summary") if isinstance(current.get("execution_summary"), dict) else {}
+            changed_keys = [key for key in set(allowed_summary) | set(previous_summary) if allowed_summary.get(key) != previous_summary.get(key)]
+            if any(key not in {"one_button_render_jobs", "scene_pipeline_assemblies", "scene_assembly_jobs"} for key in changed_keys):
+                raise PersistenceError("Protected Scene 002 project update permits render bookkeeping only", stage="project_update")
         try:
             updated = self._state_store.update_project(project_id, updates)
         except Exception as exc:
@@ -306,6 +316,10 @@ class ProjectPersistenceService:
         return self.update(project_id, {"film_cut": normalized_cut})
 
     def sync(self, project: dict[str, Any]) -> None:
+        if isinstance(project, dict):
+            from app.services.scene002_contract_only import project_has_protected_execution
+            if project_has_protected_execution(project, storage=self._canonical_storage()):
+                raise PersistenceError("Protected Scene 002 execution cannot synchronize creative project state", stage="project_sync")
         if not isinstance(project, dict):
             raise ValidationError("Project state must be an object", stage="project_sync")
         project_id = str(project.get("project_id") or "").strip()
@@ -313,7 +327,49 @@ class ProjectPersistenceService:
             raise ValidationError("project_id is required", stage="project_sync")
         self._save_canonical(project, stage="project_sync")
 
+    def load_readonly_existing(self, project_id: str) -> dict[str, Any] | None:
+        """Read an existing project without hydrating, normalizing, or syncing either store."""
+        project_id = str(project_id or "").strip()
+        if not project_id:
+            return None
+        try:
+            current = self._state_store.read_existing_project_raw(project_id)
+        except Exception as exc:
+            raise PersistenceError(
+                "Project state lookup failed",
+                stage="project_load_readonly",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
+        if current is not None:
+            if not isinstance(current, dict) or current.get("project_id") != project_id:
+                raise PersistenceError("Project state lookup returned an invalid record", stage="project_load_readonly")
+            return current
+
+        storage = self._canonical_storage()
+        if storage is None:
+            raise PersistenceError("Canonical project storage is unavailable", stage="project_load_readonly")
+        try:
+            persisted = storage.get_project(project_id)
+        except Exception as exc:
+            raise PersistenceError(
+                "Canonical project lookup failed",
+                stage="project_load_readonly",
+                metadata={"cause": type(exc).__name__},
+            ) from exc
+        if persisted is None:
+            return None
+        if hasattr(persisted, "model_dump"):
+            payload = persisted.model_dump(mode="json")
+        elif isinstance(persisted, dict):
+            payload = persisted
+        else:
+            raise PersistenceError("Canonical project storage returned an invalid record", stage="project_load_readonly")
+        if payload.get("project_id") != project_id:
+            raise PersistenceError("Canonical project identity does not match the requested project", stage="project_load_readonly")
+        return payload
+
     def load(self, project_id: str) -> dict[str, Any] | None:
+        """Load a project, hydrating the state store from canonical storage if needed."""
         try:
             current = self._state_store.get_project(project_id)
         except Exception as exc:

@@ -67,6 +67,7 @@ def test_regeneration_creates_distinct_version_and_preserves_approved_history(tm
         blueprint_id=first["blueprint"].blueprint_id,
         version_id=first["version"].version_id,
     )
+    service.derive_and_approve_image_prompts_for_version(version_id=first["version"].version_id)
     approved = service.approve_version(
         blueprint_id=first["blueprint"].blueprint_id,
         version_id=first["version"].version_id,
@@ -154,6 +155,7 @@ def test_approved_version_rejects_shot_mutation_and_image_replacement(tmp_path: 
         blueprint_id=detail["blueprint"].blueprint_id,
         version_id=detail["version"].version_id,
     )
+    service.derive_and_approve_image_prompts_for_version(version_id=detail["version"].version_id)
     approved = service.approve_version(
         blueprint_id=detail["blueprint"].blueprint_id,
         version_id=detail["version"].version_id,
@@ -201,3 +203,26 @@ def test_atomic_blueprint_creation_rolls_back_on_duplicate_shot_record(tmp_path:
         )
 
     assert storage.list_storyboard_blueprints("project_storyboard") == []
+
+
+def test_frame_revision_preserves_approved_version(tmp_path: Path) -> None:
+    service, storage = _service(tmp_path)
+    detail = service.get_or_create_blueprint(project_id="project_storyboard", scene_id="scene_001", shot_count=2)
+    blueprint_id = detail["blueprint"].blueprint_id
+    version_id = detail["version"].version_id
+    service.run_continuity_review(blueprint_id=blueprint_id, version_id=version_id)
+    service.derive_and_approve_image_prompts_for_version(version_id=version_id)
+    approved = service.approve_version(blueprint_id=blueprint_id, version_id=version_id)
+    original = approved["shots"][1].model_copy(deep=True)
+    result = service.generate_storyboard_image_for_scene_shot(
+        project_id="project_storyboard", scene_id="scene_001", shot_number=2,
+        provider="pollinations", create_revision=True,
+    )
+    revised = service.get_blueprint_detail(project_id="project_storyboard", scene_id="scene_001")
+    assert revised["version"].version_id != version_id
+    assert revised["version"].status == "draft"
+    assert revised["version"].source_version_id == version_id
+    assert storage.get_storyboard_shot(original.storyboard_shot_id) == original
+    assert storage.get_storyboard_blueprint_version(version_id).status == "approved"
+    assert revised["shots"][1].storyboard_image_url == result["image_url"]
+    assert len(revised["shots"]) == 2

@@ -27,12 +27,14 @@ import { useProjectRouteContext } from '../hooks/useProjectRouteContext'
 import {
   createScene,
   generateSceneStoryboard,
+  getCurrentFilmCut,
   getProductionQueueSummary,
   listStoryboardBlueprints,
   listRenderJobs,
   listScenes,
   cancelRenderJob,
   togglePrevisSeedLock,
+  updateFilmCutTimeline,
   type CoDirectorDebateEntry,
   type RenderJob,
   type Scene,
@@ -188,6 +190,45 @@ export default function ProductionBoard() {
   const [characterFilter, setCharacterFilter] = useState<string | null>(null)
   const [activeDebate, setActiveDebate] = useState<CoDirectorDebateEntry | null>(null)
 
+  // ── Shot-wall drag-and-drop reorder (immediate local persistence + film-cut sync) ──
+  const [dragSceneId, setDragSceneId] = useState<string | null>(null)
+  const [reorderNote, setReorderNote] = useState('')
+  const sceneOrderKey = `board:scene-order:${effectiveProjectId}`
+
+  const persistSceneOrderLocal = useCallback((orderedIds: string[]) => {
+    try {
+      localStorage.setItem(sceneOrderKey, JSON.stringify(orderedIds))
+    } catch {
+      // Local persistence is best-effort; the film-cut sync below is authoritative.
+    }
+  }, [sceneOrderKey])
+
+  const handleShotWallReorder = useCallback(async (fromId: string, toId: string) => {
+    if (!fromId || !toId || fromId === toId) return
+    const fromIndex = scenes.findIndex((scene) => scene.scene_id === fromId)
+    const toIndex = scenes.findIndex((scene) => scene.scene_id === toId)
+    if (fromIndex < 0 || toIndex < 0) return
+    const next = [...scenes]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    setScenes(next)
+    const orderedIds = next.map((scene) => scene.scene_id)
+    persistSceneOrderLocal(orderedIds)
+    setReorderNote('Scene order saved.')
+    if (!effectiveProjectId) return
+    try {
+      const { film_cut } = await getCurrentFilmCut(effectiveProjectId)
+      await updateFilmCutTimeline(effectiveProjectId, {
+        expected_cut_id: film_cut.cut_id,
+        scene_order: orderedIds,
+        timeline: film_cut.timeline,
+        creator_confirmation: true,
+      })
+    } catch {
+      setReorderNote('Scene order saved locally — film-cut sync will retry on next load.')
+    }
+  }, [scenes, persistSceneOrderLocal, effectiveProjectId])
+
   // ── Scene card hover / generating ─────────────────────────────────────────
   const [generatingScenes, setGeneratingScenes] = useState<Set<string>>(new Set())
   const [sceneSeeds, setSceneSeeds] = useState<Map<string, number>>(new Map())
@@ -213,7 +254,18 @@ export default function ProductionBoard() {
           setError(message)
         }
       } else {
-        setScenes(result.scenes)
+        const loaded = result.scenes
+        try {
+          const raw = localStorage.getItem(`board:scene-order:${effectiveProjectId}`)
+          const saved: unknown = raw ? JSON.parse(raw) : null
+          if (Array.isArray(saved) && saved.every((id) => typeof id === 'string')) {
+            const rank = new Map(saved.map((id, index) => [id as string, index]))
+            loaded.sort((a, b) => (rank.get(a.scene_id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.scene_id) ?? Number.MAX_SAFE_INTEGER))
+          }
+        } catch {
+          // Saved order is advisory only — fall back to server order.
+        }
+        setScenes(loaded)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load scenes'
@@ -576,7 +628,8 @@ export default function ProductionBoard() {
 
           <section aria-label="Scene wall" hidden={boardView !== 'scenes'} className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs leading-relaxed text-zinc-400"><span className="text-zinc-200">1. Choose a scene</span><span className="mx-2 text-zinc-600">→</span>2. Approve in Previs<span className="mx-2 text-zinc-600">→</span>3. Render your takes</p>
+              <p className="text-xs leading-relaxed text-zinc-400"><span className="text-zinc-200">1. Choose a scene</span><span className="mx-2 text-zinc-600">→</span>2. Approve in Previs<span className="mx-2 text-zinc-600">→</span>3. Render your takes<span className="mx-2 text-zinc-600">·</span><span className="text-zinc-300">Drag shots to reorder — order saves immediately</span></p>
+              {reorderNote ? <p role="status" className="text-xs text-emerald-200">{reorderNote}</p> : null}
               {allCharacters.length > 0 && <label className="flex items-center gap-2 text-xs text-zinc-400">Show<select aria-label="Filter scenes by character" value={characterFilter || ''} onChange={(event) => setCharacterFilter(event.target.value || null)} className="max-w-48 rounded-md border border-white/15 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">All characters</option>{allCharacters.map((character) => <option key={character} value={character}>{character}</option>)}</select></label>}
             </div>
             {loading && scenes.length === 0 ? <div role="status" className="flex items-center gap-3 py-20 text-sm text-zinc-400"><Loader2 size={20} className="animate-spin" />Loading your scene sequence…</div> : error && scenes.length === 0 ? <div className="rounded-lg border border-white/10 px-6 py-12"><h2 className="text-xl text-zinc-200">Your scene list couldn’t load</h2><p className="mt-2 text-sm text-zinc-400">Try again to see the saved scenes for this film.</p><button type="button" onClick={() => void loadScenes()} disabled={loading} className="mt-5 min-h-11 rounded-md border border-white/20 px-4 py-2 text-sm text-zinc-200 disabled:opacity-40">Retry scene list</button></div> : filteredScenes.length === 0 ? <div className="rounded-lg border border-dashed border-white/15 px-6 py-16 text-center"><Camera size={32} className="mx-auto mb-4 text-zinc-500" /><h2 className="text-xl text-zinc-200">{characterFilter ? 'No matching scenes' : 'Your scene wall starts with a script'}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-400">{characterFilter ? `No scenes found for character "${characterFilter}"` : "No scenes yet. Generate your script in Writer's Room to begin."}</p><button type="button" onClick={() => characterFilter ? setCharacterFilter(null) : navigateToWritersRoom('')} className="mt-5 min-h-11 rounded-md bg-amber-200 px-4 py-2 text-sm font-medium text-zinc-950">{characterFilter ? 'Clear filter' : 'Open The Page'}</button></div> : <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -590,7 +643,16 @@ export default function ProductionBoard() {
                 const storyboardUrl = blueprint?.storyboard_image || resolveSceneStoryboardUrl(scene.scene_id, renderJobs, scenes)
                 const imageUrl = storyboardUrl || getRenderThumbnailUrl(scene.scene_id)
                 const locationLabel = sceneLocationLabel(scene)
-                return <article key={scene.scene_id} className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-zinc-900/40">
+                return <article
+                  key={scene.scene_id}
+                  data-testid={`board-shot-${scene.scene_id}`}
+                  draggable
+                  onDragStart={(event) => { setDragSceneId(scene.scene_id); event.dataTransfer.effectAllowed = 'move' }}
+                  onDragEnd={() => setDragSceneId(null)}
+                  onDragOver={(event) => { if (dragSceneId && dragSceneId !== scene.scene_id) event.preventDefault() }}
+                  onDrop={(event) => { event.preventDefault(); if (dragSceneId) void handleShotWallReorder(dragSceneId, scene.scene_id); setDragSceneId(null) }}
+                  className={`min-w-0 overflow-hidden rounded-lg border bg-zinc-900/40 ${dragSceneId === scene.scene_id ? 'border-[#8B5CF6] shadow-[0_0_22px_rgba(139,92,246,0.5)]' : 'border-white/10'}`}
+                >
                   <button type="button" onClick={() => navigateToPrevis(scene.scene_id)} aria-label={`Review storyboard for ${scene.scene_name || `Scene ${index + 1}`}`} className="relative block aspect-video w-full overflow-hidden bg-zinc-950 text-left focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-amber-200">
                     <StoryboardFrame key={`${scene.scene_id}-${imageUrl}`} imageUrl={imageUrl} sceneName={scene.scene_name || `Scene ${index + 1}`} />
                     <span className="absolute left-3 top-3 rounded bg-black/75 px-2 py-1 text-xs font-medium tabular-nums text-zinc-100">{String(index + 1).padStart(2, '0')}</span>
@@ -598,7 +660,7 @@ export default function ProductionBoard() {
                   </button>
                   <div className="space-y-3 p-4">
                     <div className="flex flex-wrap items-center gap-2"><span className={`rounded border px-2 py-1 text-[10px] font-medium ${statusBadgeClass(status)}`}>{approved ? 'Storyboard approved' : blueprint ? 'Storyboard draft' : 'Script'}</span>{hasRender && <span className="text-[11px] text-emerald-300">Takes available</span>}{blueprint && <span className="text-[11px] text-zinc-400">{blueprint.ready_shot_count}/{blueprint.shot_count} shots ready</span>}</div>
-                    <h2 className="text-base font-medium leading-snug text-zinc-100">{scene.scene_name || `Scene ${index + 1}`}</h2>
+                    <h2 className="text-base font-medium leading-snug text-zinc-100"><span data-testid={`board-shot-drag-handle-${scene.scene_id}`} title="Drag to reorder" aria-label={`Drag to reorder ${scene.scene_name || `Scene ${index + 1}`}`} className="mr-2 inline-block cursor-grab rounded border border-white/15 px-1.5 py-0.5 align-middle text-[10px] text-zinc-400">⠿⠿</span>{scene.scene_name || `Scene ${index + 1}`}</h2>
                     <p className="line-clamp-2 min-h-10 text-xs leading-relaxed text-zinc-400">{scene.description || scene.text || 'Add scene direction in The Page.'}</p>
                     <button type="button" onClick={() => navigateToPrevis(scene.scene_id, approved ? 'render' : 'storyboard')} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-amber-200/25 bg-amber-200/5 px-3 py-2 text-sm text-amber-100 hover:bg-amber-200/10">{approved ? 'Continue to rendering' : 'Review storyboard'}<ArrowRight size={15} /></button>
                     <details className="border-t border-white/10 pt-2"><summary className="min-h-9 cursor-pointer py-2 text-xs text-zinc-400">Scene options</summary><div className="space-y-2 pt-2">

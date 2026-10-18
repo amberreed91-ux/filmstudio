@@ -2,7 +2,11 @@
 Tests for POST /api/f51/studio/projects/{project_id}/co-director/chat
 
 These tests use a real TestClient against the FastAPI app, with the
-LLM call mocked to avoid hitting the Anthropic API.
+provider chain resolved through the route's seam (`_get_llm_callable`)
+mocked to avoid any real provider call. Qwen has been removed from the
+Co-Director provider chain, so tests patch the seam the route actually
+consumes (`app.routes.proactive._get_llm_callable`) rather than the
+legacy `_call_llm` re-export.
 """
 
 import json
@@ -35,18 +39,19 @@ class TestCoDirectorChat:
         POST with specialist='director', context='project_overview' and a
         mocked LLM should return 200 with non-empty reply.
         """
-        # Mock the LLM call
-        with patch(
-            "app.routes.co_director_chat._call_llm",
-            new_callable=AsyncMock,
-        ) as mock_llm:
-            mock_llm.return_value = (
+        # Mock the provider chain at the route seam (no real provider call)
+        mock_llm = AsyncMock(
+            return_value=(
                 "Act two needs more dramatic tension. "
                 "The emotional stakes plateau around page 45. "
                 "Consider introducing the antagonist's counter-objective earlier "
                 "to push against the protagonist's arc."
             )
-
+        )
+        with patch(
+            "app.routes.proactive._get_llm_callable",
+            return_value=mock_llm,
+        ):
             payload = {
                 "specialist": "director",
                 "message": "What's wrong with act two?",
@@ -73,12 +78,11 @@ class TestCoDirectorChat:
         When the LLM call fails, the endpoint returns 500 with
         {"detail": "Co-Director unavailable"} — not a frontend fallback string.
         """
+        mock_llm = AsyncMock(side_effect=RuntimeError("LLM API unavailable"))
         with patch(
-            "app.routes.co_director_chat._call_llm",
-            new_callable=AsyncMock,
-        ) as mock_llm:
-            mock_llm.side_effect = RuntimeError("LLM API unavailable")
-
+            "app.routes.proactive._get_llm_callable",
+            return_value=mock_llm,
+        ):
             payload = {
                 "specialist": "writer",
                 "message": "How's the character arc?",
@@ -100,12 +104,11 @@ class TestCoDirectorChat:
         specialists = ["director", "writer", "memory_archivist", "evaluator", "provider_router"]
 
         for specialist in specialists:
+            mock_llm = AsyncMock(return_value=f"Response from {specialist}.")
             with patch(
-                "app.routes.co_director_chat._call_llm",
-                new_callable=AsyncMock,
-            ) as mock_llm:
-                mock_llm.return_value = f"Response from {specialist}."
-
+                "app.routes.proactive._get_llm_callable",
+                return_value=mock_llm,
+            ):
                 payload = {
                     "specialist": specialist,
                     "message": "How does this look?",
@@ -133,12 +136,11 @@ class TestCoDirectorChat:
         We verify by checking that 'User: ' is the only prefix in the
         message sent to the LLM.
         """
+        mock_llm = AsyncMock(return_value="Custom context response.")
         with patch(
-            "app.routes.co_director_chat._call_llm",
-            new_callable=AsyncMock,
-        ) as mock_llm:
-            mock_llm.return_value = "Custom context response."
-
+            "app.routes.proactive._get_llm_callable",
+            return_value=mock_llm,
+        ):
             payload = {
                 "specialist": "director",
                 "message": "What do you think?",
@@ -178,12 +180,11 @@ class TestCoDirectorChat:
         An unknown project_id should still return 200 (the LLM is called
         without project context). This tests graceful degradation.
         """
+        mock_llm = AsyncMock(return_value="I can still advise without project context.")
         with patch(
-            "app.routes.co_director_chat._call_llm",
-            new_callable=AsyncMock,
-        ) as mock_llm:
-            mock_llm.return_value = "I can still advise without project context."
-
+            "app.routes.proactive._get_llm_callable",
+            return_value=mock_llm,
+        ):
             payload = {
                 "specialist": "director",
                 "message": "What do you recommend?",
@@ -202,16 +203,18 @@ class TestCoDirectorChat:
 
     def test_writer_route_sends_real_scene_text_and_clear_classification(self):
         """The HTTP request path includes canonical screenplay text, not only counts."""
-        with patch(
-            "app.routes.co_director_chat._call_llm",
-            new_callable=AsyncMock,
-        ) as mock_llm:
-            mock_llm.return_value = (
+        mock_llm = AsyncMock(
+            return_value=(
                 "Maya's Chicago walk can carry more emotional consequence if the "
                 "families and Lake Michigan sunset remain inviting before her voice-over "
                 "names the fire. That contrast makes the rooftop choice feel inherited "
                 "from a specific lost city rather than stated as a general survival theme."
             )
+        )
+        with patch(
+            "app.routes.proactive._get_llm_callable",
+            return_value=mock_llm,
+        ):
             response = client.post(
                 "/api/f51/studio/projects/project_3dba9330f43a/co-director/chat",
                 json={

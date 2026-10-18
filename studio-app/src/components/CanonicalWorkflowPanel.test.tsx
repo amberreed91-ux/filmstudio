@@ -35,10 +35,17 @@ describe('CanonicalWorkflowPanel', () => {
   })
 
   it('names the selected real provider in the production panel', () => {
-    const html = renderToStaticMarkup(<CanonicalWorkflowPanel projectId="project-1" sceneId="scene-2" sceneContext={{ scriptId: 'script-1', sequenceId: '', beatIds: [] }} surface="previs" renderProvider="openrouter-video" renderProviderLabel="OpenRouter · HappyHorse" />)
-    expect(html).toContain('OpenRouter · HappyHorse')
+    const html = renderToStaticMarkup(<CanonicalWorkflowPanel projectId="project-1" sceneId="scene-2" sceneContext={{ scriptId: 'script-1', sequenceId: '', beatIds: [] }} surface="previs" renderProvider="runway" renderProviderLabel="Runway" />)
+    expect(html).toContain('Runway')
     expect(html).not.toContain('simulated provider')
     expect(html).toContain('Retries and revisions retain their original render provider')
+  })
+
+  it('labels the Previs step as simulated-only regardless of the render provider picker', () => {
+    const html = renderToStaticMarkup(<CanonicalWorkflowPanel projectId="project-1" sceneId="scene-2" sceneContext={{ scriptId: 'script-1', sequenceId: '', beatIds: [] }} surface="previs" renderProvider="runway" renderProviderLabel="Runway" />)
+    expect(html).toContain('data-testid="canonical-previs-provider"')
+    expect(html).toContain('Simulated previs: instant, no cost')
+    expect(html).not.toContain('New Previs uses the server default')
   })
 
   it('renders exact project and scene context with an explicit start action', () => {

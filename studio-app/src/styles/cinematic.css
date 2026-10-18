@@ -277,3 +277,526 @@
   direction: ltr;
   -webkit-font-smoothing: antialiased;
 }
+
+/* ==========================================================================
+   LIQUID GLOSSY PANEL SYSTEM
+   Layered glass with depth gradient, refraction edge, and animated shimmer.
+   Composes with .glass-panel — add both classes for the full effect.
+   ========================================================================== */
+
+/* Liquid panel — depth gradient + refractive edge + subtle inner highlight.
+   Intentionally NOT setting `position: relative` so Tailwind's `.fixed`/`.absolute`/etc.
+   positioning utilities win. Containers that need to anchor absolute decorative
+   children must add `relative z-10` (or `position: relative`) explicitly. */
+.liquid-panel {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(255, 255, 255, 0.06) 0%, transparent 55%),
+    radial-gradient(120% 80% at 100% 100%, rgba(255, 209, 101, 0.04) 0%, transparent 60%),
+    linear-gradient(165deg, rgba(38, 36, 32, 0.62) 0%, rgba(14, 14, 14, 0.7) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 209, 101, 0.04);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Refraction edge — conic-gradient ring simulating light catch on glass curvature */
+.liquid-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 220deg at 30% 0%,
+    rgba(255, 255, 255, 0.32) 0deg,
+    rgba(255, 209, 101, 0.14) 80deg,
+    rgba(76, 215, 246, 0.1) 180deg,
+    rgba(255, 255, 255, 0.06) 260deg,
+    rgba(255, 255, 255, 0.28) 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.85;
+  mix-blend-mode: screen;
+}
+
+/* Shimmer — diagonal highlight sweep across the panel */
+.liquid-shimmer {
+  position: absolute;
+  inset: -50%;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255, 255, 255, 0.08) 46%,
+    rgba(255, 255, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0.08) 54%,
+    transparent 62%,
+    transparent 100%
+  );
+  transform: translateX(-30%) rotate(8deg);
+  animation: liquid-shimmer-sweep 9s ease-in-out infinite;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+
+@keyframes liquid-shimmer-sweep {
+  0%, 100% { transform: translateX(-30%) rotate(8deg); opacity: 0.3; }
+  50% { transform: translateX(30%) rotate(8deg); opacity: 0.7; }
+}
+
+/* Specular highlight — soft top edge "wet" gleam */
+.liquid-spec {
+  position: absolute;
+  top: 0;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 30%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 255, 255, 0.55) 70%,
+    transparent 100%
+  );
+  filter: blur(0.5px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Inner glow at the bottom — soft amber drop simulating depth */
+.liquid-glow {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -40%;
+  height: 80%;
+  background: radial-gradient(50% 60% at 50% 0%, rgba(255, 209, 101, 0.12), transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Liquid variants — accent-tinted glass */
+.liquid-panel--cyan {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(76, 215, 246, 0.1) 0%, transparent 55%),
+    radial-gradient(120% 80% at 100% 100%, rgba(76, 215, 246, 0.04) 0%, transparent 60%),
+    linear-gradient(165deg, rgba(20, 30, 36, 0.62) 0%, rgba(10, 14, 18, 0.72) 100%);
+  box-shadow:
+    0 1px 0 rgba(76, 215, 246, 0.18) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(76, 215, 246, 0.06);
+}
+
+.liquid-panel--amber {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(255, 209, 101, 0.12) 0%, transparent 55%),
+    radial-gradient(120% 80% at 100% 100%, rgba(255, 209, 101, 0.05) 0%, transparent 60%),
+    linear-gradient(165deg, rgba(36, 30, 22, 0.62) 0%, rgba(14, 12, 10, 0.72) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 209, 101, 0.22) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 209, 101, 0.08);
+}
+
+.liquid-panel--violet {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(159, 141, 197, 0.12) 0%, transparent 55%),
+    radial-gradient(120% 80% at 100% 100%, rgba(159, 141, 197, 0.05) 0%, transparent 60%),
+    linear-gradient(165deg, rgba(28, 24, 36, 0.62) 0%, rgba(12, 10, 16, 0.72) 100%);
+  box-shadow:
+    0 1px 0 rgba(159, 141, 197, 0.22) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(159, 141, 197, 0.08);
+}
+
+.liquid-panel--emerald {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(120, 179, 138, 0.1) 0%, transparent 55%),
+    radial-gradient(120% 80% at 100% 100%, rgba(120, 179, 138, 0.05) 0%, transparent 60%),
+    linear-gradient(165deg, rgba(20, 28, 24, 0.62) 0%, rgba(10, 14, 12, 0.72) 100%);
+  box-shadow:
+    0 1px 0 rgba(120, 179, 138, 0.2) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(120, 179, 138, 0.08);
+}
+
+.liquid-panel--rose {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(244, 63, 94, 0.1) 0%, transparent 55%),
+    radial-gradient(120% 80% at 100% 100%, rgba(244, 63, 94, 0.05) 0%, transparent 60%),
+    linear-gradient(165deg, rgba(36, 20, 24, 0.62) 0%, rgba(14, 10, 12, 0.72) 100%);
+  box-shadow:
+    0 1px 0 rgba(244, 63, 94, 0.2) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(244, 63, 94, 0.08);
+}
+
+.liquid-panel--indigo {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 55%),
+    radial-gradient(120% 80% at 100% 100%, rgba(99, 102, 241, 0.05) 0%, transparent 60%),
+    linear-gradient(165deg, rgba(24, 24, 36, 0.62) 0%, rgba(10, 10, 16, 0.72) 100%);
+  box-shadow:
+    0 1px 0 rgba(99, 102, 241, 0.2) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(99, 102, 241, 0.08);
+}
+
+/* Liquid button — used for primary actions on liquid surfaces */
+.liquid-btn {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(135deg, rgba(255, 209, 101, 0.32) 0%, rgba(255, 209, 101, 0.14) 100%);
+  border: 1px solid rgba(255, 209, 101, 0.45);
+  color: #f7f4ef;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 220ms ease, background 220ms ease;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 8px 22px -10px rgba(255, 209, 101, 0.45);
+}
+
+.liquid-btn::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.liquid-btn:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(255, 209, 101, 0.42) 0%, rgba(255, 209, 101, 0.2) 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 14px 28px -8px rgba(255, 209, 101, 0.6);
+}
+
+.liquid-btn:active {
+  transform: translateY(0);
+}
+
+/* Liquid chip — small status/badge on liquid surfaces */
+.liquid-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  isolation: isolate;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(242, 238, 233, 0.92);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1) inset, 0 4px 10px -4px rgba(0, 0, 0, 0.4);
+}
+
+.liquid-chip--cyan {
+  color: rgba(190, 232, 240, 0.96);
+  background: linear-gradient(135deg, rgba(76, 215, 246, 0.18) 0%, rgba(76, 215, 246, 0.04) 100%);
+  border-color: rgba(76, 215, 246, 0.32);
+}
+
+.liquid-chip--amber {
+  color: rgba(255, 224, 168, 0.96);
+  background: linear-gradient(135deg, rgba(255, 209, 101, 0.2) 0%, rgba(255, 209, 101, 0.04) 100%);
+  border-color: rgba(255, 209, 101, 0.36);
+}
+
+.liquid-chip--emerald {
+  color: rgba(184, 230, 200, 0.96);
+  background: linear-gradient(135deg, rgba(120, 179, 138, 0.2) 0%, rgba(120, 179, 138, 0.04) 100%);
+  border-color: rgba(120, 179, 138, 0.36);
+}
+
+.liquid-chip--rose {
+  color: rgba(255, 200, 200, 0.96);
+  background: linear-gradient(135deg, rgba(208, 131, 131, 0.22) 0%, rgba(208, 131, 131, 0.04) 100%);
+  border-color: rgba(208, 131, 131, 0.36);
+}
+
+/* Liquid stage pill — animated progress dot for journey stages */
+.liquid-stage-dot {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), rgba(255, 209, 101, 0.6) 60%, rgba(255, 209, 101, 0.1) 100%);
+  box-shadow: 0 0 12px rgba(255, 209, 101, 0.5), 0 0 0 1px rgba(255, 209, 101, 0.3) inset;
+}
+
+.liquid-stage-dot--idle {
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.45), rgba(155, 143, 121, 0.4) 60%, rgba(155, 143, 121, 0.05) 100%);
+  box-shadow: 0 0 0 1px rgba(155, 143, 121, 0.25) inset;
+}
+
+.liquid-stage-dot--done {
+  background: radial-gradient(circle at 30% 30%, rgba(184, 230, 200, 0.95), rgba(120, 179, 138, 0.6) 60%, rgba(120, 179, 138, 0.1) 100%);
+  box-shadow: 0 0 12px rgba(120, 179, 138, 0.5), 0 0 0 1px rgba(120, 179, 138, 0.3) inset;
+}
+
+/* Liquid connection line — animated gradient between stage dots */
+.liquid-stage-line {
+  position: relative;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255, 209, 101, 0.3) 0%, rgba(76, 215, 246, 0.3) 50%, rgba(255, 255, 255, 0.15) 100%);
+  overflow: hidden;
+}
+
+.liquid-stage-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: liquid-line-pulse 3.2s ease-in-out infinite;
+}
+
+@keyframes liquid-line-pulse {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+}
+
+/* Crew agent row — glossy avatar + status pill */
+.liquid-crew-row {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.liquid-crew-row:hover {
+  transform: translateX(2px);
+  border-color: rgba(255, 209, 101, 0.2);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 6px 18px -8px rgba(255, 209, 101, 0.4);
+}
+
+.liquid-avatar {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f7f4ef;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), rgba(255, 209, 101, 0.4) 60%, rgba(76, 215, 246, 0.2) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 10px rgba(255, 209, 101, 0.2), 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+
+.liquid-avatar--cyan {
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), rgba(76, 215, 246, 0.5) 60%, rgba(76, 215, 246, 0.15) 100%);
+  box-shadow: 0 0 10px rgba(76, 215, 246, 0.35), 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+
+.liquid-avatar--violet {
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), rgba(159, 141, 197, 0.5) 60%, rgba(159, 141, 197, 0.15) 100%);
+  box-shadow: 0 0 10px rgba(159, 141, 197, 0.35), 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+
+.liquid-avatar--emerald {
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), rgba(120, 179, 138, 0.5) 60%, rgba(120, 179, 138, 0.15) 100%);
+  box-shadow: 0 0 10px rgba(120, 179, 138, 0.35), 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+
+.liquid-avatar--rose {
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), rgba(208, 131, 131, 0.5) 60%, rgba(208, 131, 131, 0.15) 100%);
+  box-shadow: 0 0 10px rgba(208, 131, 131, 0.35), 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+
+/* Liquid panel hover — subtle 3D tilt + glow lift */
+.liquid-tilt {
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 300ms ease;
+  transform-style: preserve-3d;
+  perspective: 800px;
+}
+.liquid-tilt:hover {
+  transform: translateY(-3px) rotateX(2deg) rotateY(-1deg);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.45) inset,
+    0 40px 80px -20px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 209, 101, 0.08),
+    0 0 40px -10px rgba(255, 209, 101, 0.15);
+}
+
+/* Ambient floating orb — decorative background accent */
+@keyframes ambient-float {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
+  25% { transform: translate(15px, -10px) scale(1.05); opacity: 0.45; }
+  50% { transform: translate(-5px, -20px) scale(1.02); opacity: 0.35; }
+  75% { transform: translate(-15px, -5px) scale(0.98); opacity: 0.4; }
+}
+
+.liquid-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  animation: ambient-float 12s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+/* ── Floating Particle Field ───────────────────────────────────────────── */
+/* Lightweight CSS-only ambient particles. Each <span> inside .particle-field
+   gets a unique animation via nth-child. No JS runtime, no canvas. */
+.particle-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.particle-field span {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+  animation: particle-drift linear infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes particle-drift {
+  0% {
+    transform: translateY(0) translateX(0) scale(0.5);
+    opacity: 0;
+  }
+  8% {
+    opacity: var(--p-opacity, 0.6);
+  }
+  50% {
+    transform: translateY(calc(var(--p-dy, -120px) * 0.5)) translateX(calc(var(--p-dx, 30px) * 0.5)) scale(1);
+    opacity: var(--p-opacity, 0.6);
+  }
+  92% {
+    opacity: var(--p-opacity, 0.6);
+  }
+  100% {
+    transform: translateY(var(--p-dy, -120px)) translateX(var(--p-dx, 30px)) scale(0.4);
+    opacity: 0;
+  }
+}
+
+/* Individual particle variants — bigger, brighter, with soft glow halos */
+.particle-field span:nth-child(1)  { --p-dy: -200px; --p-dx: 40px;  --p-opacity: 0.6;  width: 4px;  height: 4px;  animation-duration: 14s; animation-delay: 0s;   left: 8%;  bottom: 10%; background: radial-gradient(circle, rgba(255,209,101,1) 0%, rgba(255,209,101,0.3) 40%, transparent 70%); box-shadow: 0 0 8px 2px rgba(255,209,101,0.25); }
+.particle-field span:nth-child(2)  { --p-dy: -240px; --p-dx: -25px; --p-opacity: 0.5;  width: 3px;  height: 3px;  animation-duration: 18s; animation-delay: 2s;   left: 22%; bottom: 15%; background: radial-gradient(circle, rgba(76,215,246,1) 0%, rgba(76,215,246,0.3) 40%, transparent 70%); box-shadow: 0 0 8px 2px rgba(76,215,246,0.2); }
+.particle-field span:nth-child(3)  { --p-dy: -180px; --p-dx: 55px;  --p-opacity: 0.7;  width: 5px;  height: 5px;  animation-duration: 12s; animation-delay: 4s;   left: 35%; bottom: 5%;  background: radial-gradient(circle, rgba(255,209,101,1) 0%, rgba(255,209,101,0.4) 40%, transparent 70%); box-shadow: 0 0 12px 3px rgba(255,209,101,0.3); }
+.particle-field span:nth-child(4)  { --p-dy: -220px; --p-dx: -40px; --p-opacity: 0.45; width: 3px;  height: 3px;  animation-duration: 20s; animation-delay: 1s;   left: 48%; bottom: 20%; background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.3) 40%, transparent 70%); box-shadow: 0 0 6px 2px rgba(255,255,255,0.15); }
+.particle-field span:nth-child(5)  { --p-dy: -270px; --p-dx: 20px;  --p-opacity: 0.55; width: 4px;  height: 4px;  animation-duration: 16s; animation-delay: 6s;   left: 60%; bottom: 8%;  background: radial-gradient(circle, rgba(159,141,197,1) 0%, rgba(159,141,197,0.3) 40%, transparent 70%); box-shadow: 0 0 10px 2px rgba(159,141,197,0.25); }
+.particle-field span:nth-child(6)  { --p-dy: -150px; --p-dx: -35px; --p-opacity: 0.7;  width: 3px;  height: 3px;  animation-duration: 11s; animation-delay: 3s;   left: 72%; bottom: 12%; background: radial-gradient(circle, rgba(255,209,101,1) 0%, rgba(255,209,101,0.35) 40%, transparent 70%); box-shadow: 0 0 8px 2px rgba(255,209,101,0.25); }
+.particle-field span:nth-child(7)  { --p-dy: -210px; --p-dx: 45px;  --p-opacity: 0.4;  width: 6px;  height: 6px;  animation-duration: 22s; animation-delay: 8s;   left: 85%; bottom: 18%; background: radial-gradient(circle, rgba(76,215,246,0.8) 0%, rgba(76,215,246,0.2) 40%, transparent 70%); box-shadow: 0 0 14px 4px rgba(76,215,246,0.2); filter: blur(0.5px); }
+.particle-field span:nth-child(8)  { --p-dy: -190px; --p-dx: -15px; --p-opacity: 0.55; width: 3px;  height: 3px;  animation-duration: 15s; animation-delay: 5s;   left: 15%; bottom: 25%; background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.25) 40%, transparent 70%); box-shadow: 0 0 6px 2px rgba(255,255,255,0.12); }
+.particle-field span:nth-child(9)  { --p-dy: -230px; --p-dx: 30px;  --p-opacity: 0.5;  width: 4px;  height: 4px;  animation-duration: 19s; animation-delay: 7s;   left: 55%; bottom: 30%; background: radial-gradient(circle, rgba(244,63,94,0.7) 0%, rgba(244,63,94,0.2) 40%, transparent 70%); box-shadow: 0 0 8px 2px rgba(244,63,94,0.15); }
+.particle-field span:nth-child(10) { --p-dy: -160px; --p-dx: -50px; --p-opacity: 0.6;  width: 3px;  height: 3px;  animation-duration: 13s; animation-delay: 0.5s; left: 40%; bottom: 35%; background: radial-gradient(circle, rgba(255,209,101,0.9) 0%, rgba(255,209,101,0.3) 40%, transparent 70%); box-shadow: 0 0 8px 2px rgba(255,209,101,0.2); }
+.particle-field span:nth-child(11) { --p-dy: -260px; --p-dx: 10px;  --p-opacity: 0.35; width: 5px;  height: 5px;  animation-duration: 24s; animation-delay: 10s;  left: 92%; bottom: 5%;  background: radial-gradient(circle, rgba(120,179,138,0.7) 0%, rgba(120,179,138,0.2) 40%, transparent 70%); box-shadow: 0 0 12px 3px rgba(120,179,138,0.15); filter: blur(0.5px); }
+.particle-field span:nth-child(12) { --p-dy: -170px; --p-dx: -20px; --p-opacity: 0.55; width: 3px;  height: 3px;  animation-duration: 17s; animation-delay: 9s;   left: 5%;  bottom: 40%; background: radial-gradient(circle, rgba(255,209,101,0.8) 0%, rgba(255,209,101,0.25) 40%, transparent 70%); box-shadow: 0 0 8px 2px rgba(255,209,101,0.2); }
+
+/* ── Hero Breathing Pulse ─────────────────────────────────────────────── */
+/* Slow radial glow that breathes behind the hero text. */
+@keyframes hero-pulse {
+  0%, 100% {
+    opacity: 0.15;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.05);
+  }
+}
+
+.hero-pulse {
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,209,101,0.25) 0%, rgba(76,215,246,0.08) 40%, transparent 70%);
+  filter: blur(50px);
+  pointer-events: none;
+  animation: hero-pulse 6s ease-in-out infinite;
+}
+
+/* Liquid reveal — staggered fade-up for child sections */
+@keyframes liquid-reveal {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.liquid-reveal > * {
+  animation: liquid-reveal 0.5s ease-out both;
+}
+.liquid-reveal > *:nth-child(1) { animation-delay: 0.05s; }
+.liquid-reveal > *:nth-child(2) { animation-delay: 0.1s; }
+.liquid-reveal > *:nth-child(3) { animation-delay: 0.15s; }
+.liquid-reveal > *:nth-child(4) { animation-delay: 0.2s; }
+.liquid-reveal > *:nth-child(5) { animation-delay: 0.25s; }
+.liquid-reveal > *:nth-child(6) { animation-delay: 0.3s; }
+.liquid-reveal > *:nth-child(7) { animation-delay: 0.35s; }
+.liquid-reveal > *:nth-child(8) { animation-delay: 0.4s; }
+.liquid-reveal > *:nth-child(9) { animation-delay: 0.45s; }
+.liquid-reveal > *:nth-child(10) { animation-delay: 0.5s; }
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  .liquid-shimmer,
+  .liquid-stage-line::after {
+    animation: none !important;
+  }
+  .liquid-crew-row,
+  .liquid-btn,
+  .liquid-tilt {
+    transition: none !important;
+  }
+  .liquid-tilt:hover {
+    transform: none !important;
+  }
+  .liquid-reveal > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .liquid-orb {
+    animation: none !important;
+  }
+  .hero-pulse {
+    animation: none !important;
+    opacity: 0.2 !important;
+  }
+  .particle-field span {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+}

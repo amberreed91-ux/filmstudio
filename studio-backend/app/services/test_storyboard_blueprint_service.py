@@ -45,6 +45,8 @@ def test_create_approve_and_render_storyboard_blueprint(tmp_path: Path) -> None:
     )
     assert review["status"] == "completed"
 
+    # D4: image prompts must be human-approved before board approval.
+    service.derive_and_approve_image_prompts_for_version(version_id=version.version_id)
     approved = service.approve_version(
         blueprint_id=blueprint.blueprint_id,
         version_id=version.version_id,
@@ -52,6 +54,23 @@ def test_create_approve_and_render_storyboard_blueprint(tmp_path: Path) -> None:
     )
     assert approved["blueprint"].approved_version_id == version.version_id
     assert all(shot.status == "approved" for shot in approved["shots"])
+    approved_version = storage.get_storyboard_blueprint_version(version.version_id)
+    assert approved_version.metadata["production_approval"] == {
+        "actor_id": "creator",
+        "actor_authenticated": False,
+    }
+
+    authenticated_approval = service.approve_version(
+        blueprint_id=blueprint.blueprint_id,
+        version_id=version.version_id,
+        approved_by="owner-1",
+        approval_actor_authenticated=True,
+    )
+    assert authenticated_approval["version"].metadata["production_approval"] == {
+        "actor_id": "owner-1",
+        "actor_authenticated": True,
+    }
+
 
     class MockRenderService:
         def __init__(self) -> None:
@@ -211,3 +230,84 @@ def test_storyboard_prompt_includes_project_character_identity_without_cross_pro
     assert "deep brown skin" in prompt
     assert "ELI" not in prompt
     assert "fisherman" not in prompt
+
+
+def _seed_approved_then_draft_board(tmp_path: Path):
+    storage = _make_storage(tmp_path)
+    storage.save_project(
+        StudioProject(
+            project_id="project-version-select",
+            title="Version Selection",
+            execution_summary={"scenes": [{"scene_id": "scene_001", "description": "A held look."}]},
+        )
+    )
+    service = StoryboardBlueprintService(storage)
+    created = service.get_or_create_blueprint(
+        project_id="project-version-select",
+        scene_id="scene_001",
+        shot_count=2,
+    )
+    review = service.run_continuity_review(
+        blueprint_id=created["blueprint"].blueprint_id,
+        version_id=created["version"].version_id,
+        reviewer="version_select_test",
+    )
+    assert review["status"] == "completed"
+    service.derive_and_approve_image_prompts_for_version(version_id=created["version"].version_id)
+    approved = service.approve_version(
+        blueprint_id=created["blueprint"].blueprint_id,
+        version_id=created["version"].version_id,
+        approved_by="creator",
+    )
+    draft = service.create_version(blueprint_id=created["blueprint"].blueprint_id)
+    return storage, service, approved["version"], draft["version"]
+
+
+def test_get_blueprint_detail_defaults_to_current_draft(tmp_path: Path) -> None:
+    _, service, approved_version, draft_version = _seed_approved_then_draft_board(tmp_path)
+    assert draft_version.version_id != approved_version.version_id
+    detail = service.get_blueprint_detail(project_id="project-version-select", scene_id="scene_001")
+    assert detail["version"].version_id == draft_version.version_id
+    assert detail["blueprint"].current_version_id == draft_version.version_id
+    assert {shot.version_id for shot in detail["shots"]} == {draft_version.version_id}
+
+
+def test_get_blueprint_detail_approved_selection_resolves_approved(tmp_path: Path) -> None:
+    _, service, approved_version, draft_version = _seed_approved_then_draft_board(tmp_path)
+    detail = service.get_blueprint_detail(
+        project_id="project-version-select", scene_id="scene_001", version_selection="approved"
+    )
+    assert detail["version"].version_id == approved_version.version_id
+    assert detail["version"].version_id != draft_version.version_id
+    assert {shot.version_id for shot in detail["shots"]} == {approved_version.version_id}
+
+
+def test_get_blueprint_detail_approved_selection_fails_closed_without_approval(tmp_path: Path) -> None:
+    storage = _make_storage(tmp_path)
+    storage.save_project(
+        StudioProject(
+            project_id="project-no-approval",
+            title="No Approval",
+            execution_summary={"scenes": [{"scene_id": "scene_001", "description": "A held look."}]},
+        )
+    )
+    service = StoryboardBlueprintService(storage)
+    service.get_or_create_blueprint(project_id="project-no-approval", scene_id="scene_001", shot_count=1)
+    try:
+        service.get_blueprint_detail(
+            project_id="project-no-approval", scene_id="scene_001", version_selection="approved"
+        )
+        assert False, "Approved selection without an approved version must fail closed"
+    except StateError as exc:
+        assert "No approved storyboard version" in str(exc)
+
+
+def test_get_blueprint_detail_rejects_unknown_selection(tmp_path: Path) -> None:
+    _, service, _, _ = _seed_approved_then_draft_board(tmp_path)
+    try:
+        service.get_blueprint_detail(
+            project_id="project-version-select", scene_id="scene_001", version_selection="newest"
+        )
+        assert False, "Unknown version selection must fail closed, never silently substitute"
+    except StateError as exc:
+        assert "Unknown version selection" in str(exc)

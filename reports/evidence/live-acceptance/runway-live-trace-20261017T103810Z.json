@@ -1,0 +1,156 @@
+{
+  "branch": "backend-expansion-dependency-slicing",
+  "cost_cap": "exactly one live (dryRun=False) video generation POST; no retries, no batches",
+  "outcome": {
+    "live_generation_calls": 0,
+    "reason": "provider outcome: No eligible routed model: Runway Model Router found no eligible model: No eligible model: requested inputs (negativePrompt, seed, audio, reference videos/images/audio, first/last frames, keyframes, re; no retry",
+    "status": "PROVIDER_TERMINAL"
+  },
+  "probe": "runway-live-single-shot",
+  "secret_handling": "values never logged; only presence lengths recorded",
+  "steps": {
+    "batch_authorization": {
+      "failures": [],
+      "ready": true
+    },
+    "create_job": {
+      "job_id": "job-20261017063810-4fc18ea5-scene_live_probe_01_shot_001",
+      "provider": "runway_router",
+      "shot_id": "scene_live_probe_01_shot_001",
+      "status": "pending"
+    },
+    "credential_check": {
+      "RUNWAYML_API_SECRET": {
+        "length": 132,
+        "present": true
+      },
+      "RUNWAY_API_KEY": {
+        "length": 0,
+        "present": false
+      },
+      "RUNWAY_ROUTER_CONFIG_ID": {
+        "length": 0,
+        "present": false
+      },
+      "dotenv_file": {
+        "exists": true,
+        "mode": "0o600"
+      }
+    },
+    "fixture": {
+      "project_id": "project_live_acceptance_probe",
+      "reference_urls": {
+        "env": "https://picsum.photos/...",
+        "face": "https://picsum.photos/...",
+        "note": "full URIs in job metadata; domains only here"
+      },
+      "scene_id": "scene_live_probe_01",
+      "setting_id": "set-live-probe-glassworks",
+      "shots": [
+        "scene_live_probe_01_shot_001",
+        "scene_live_probe_01_shot_002"
+      ]
+    },
+    "isolation": {
+      "production_db_touched": false,
+      "tmpdir": "/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/live-acceptance-0gz62r_o"
+    },
+    "job_metadata_stamp": {
+      "audit_present": true,
+      "authorization_present": true,
+      "batch_authorization_present": true
+    },
+    "live_submission": {
+      "dry_run_posts": 1,
+      "duration_s": 0.29,
+      "error": "No eligible routed model: Runway Model Router found no eligible model: No eligible model: requested inputs (negativePrompt, seed, audio, reference videos/images/audio, first/last frames, keyframes, resolution, duration, and/or aspect ratio) are unsupported by remaining models. (emptiedBy=['input_sup",
+      "estimated_cost": null,
+      "http_calls": [
+        {
+          "dry_run": true,
+          "duration_s": 0.28,
+          "error": "No eligible model: requested inputs (negativePrompt, seed, audio, reference videos/images/audio, first/last frames, keyframes, resolution, duration, and/or aspect ratio) are unsupported by remaining models.",
+          "error_type": "RunwayRouterNoEligibleModelError",
+          "method": "POST",
+          "ok": false,
+          "payload": {
+            "configId": "studio-production-router",
+            "dryRun": true,
+            "input_keys": [
+              "aspectRatio",
+              "audio",
+              "duration",
+              "keyframes",
+              "negativePrompt",
+              "promptText",
+              "referenceAudio",
+              "referenceImages",
+              "referenceVideos",
+              "seed"
+            ],
+            "ref_count": 2
+          },
+          "url": "https://api.dev.runwayml.com/v1/generate/video"
+        }
+      ],
+      "job_id": "job-20261017063810-4fc18ea5-scene_live_probe_01_shot_001",
+      "live_generation_posts": 0,
+      "output_url_prefix": "",
+      "output_url_present": false,
+      "provider_job_id_present": false,
+      "realized_cost": null,
+      "references_forwarded": 0,
+      "resolved_model": null,
+      "router_config_id": "studio-production-router",
+      "router_execution_keys": [
+        "capacity_fallback",
+        "cost_gate",
+        "decision_semantics",
+        "estimated_cost_credits",
+        "estimated_cost_semantics",
+        "generation_context_id",
+        "no_eligible_model",
+        "provider_cost_capabilities",
+        "provider_output_identity",
+        "quote_authorization_supported",
+        "realized_cost_credits",
+        "reference_projection",
+        "references_forwarded",
+        "references_unrepresentable",
+        "resolved_input",
+        "resolved_model",
+        "resolved_settings",
+        "router_config_id",
+        "routing_extra",
+        "routing_mode",
+        "routing_provider",
+        "runway_task_id",
+        "submission_attempted"
+      ],
+      "runway_task_id_present": false,
+      "status": "failed",
+      "task_gets": 0
+    },
+    "mint": {
+      "note": "generic projection authorization minted; proceeding to single live submission",
+      "status": "PASS"
+    },
+    "preflight_digest": {
+      "audit_present": true,
+      "authorization_policy": "runway_reference_projection_authorization",
+      "authorized_env": "ref-live-env",
+      "binding_sha256": "d4d5fde6e6860d199db8279c8277c31b5474397661fcd53b75c9bdf73cb720ff",
+      "confirmation_id_present": true,
+      "prompt_chars": 168,
+      "prompt_preview": "A brass key rests on a workbench in soft dawn light; still, quiet, restrained.\n\n[SHOT POSITION]\nShot 1 of 2 in scene. Ma",
+      "shot_id": "scene_live_probe_01_shot_001"
+    },
+    "prepare_scene_batch": {
+      "blockers": [],
+      "entries": 2,
+      "manifest_fingerprint": "c30704e1e0757bfff16ae56fc90183d95da3661a122208b7c9bd1925689533ee",
+      "ready": true
+    }
+  },
+  "timestamp_utc": "20261017T103810Z"
+}

@@ -43,8 +43,21 @@ class ShortFilmReviewService:
         
         if self._storage:
             self._storage.save_review(review)
+            self._sync_matching_packages(review)
         
         return review
+
+    def _sync_matching_packages(self, review: ShortFilmReview) -> None:
+        """Bind a creator decision to persisted packages for this exact output."""
+        if not self._storage:
+            return
+        for package in self._storage.list_final_short_film_packages_for_project(review.project_id):
+            if package.project_id != review.project_id or package.final_output_url != review.output_url:
+                continue
+            package.review_id = review.review_id
+            package.review_decision = review.decision
+            package.updated_at = self._now_iso()
+            self._storage.update_final_short_film_package(package)
 
     def get_review(self, review_id: str) -> Optional[ShortFilmReview]:
         """Get a review by ID"""
@@ -83,6 +96,7 @@ class ShortFilmReviewService:
 
         if self._storage:
             self._storage.update_review(review)
+            self._sync_matching_packages(review)
 
         return review
 

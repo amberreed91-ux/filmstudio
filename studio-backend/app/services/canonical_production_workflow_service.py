@@ -269,6 +269,16 @@ class CanonicalProductionWorkflowService:
         return "script_" + self._hash({"project_id": project["project_id"], "script_text": script_text})[:24]
 
     async def generate_previs(self, run_id: str, *, provider: str | None = None) -> dict[str, Any]:
+        # Checkpoint 5 Previs is simulated-only (owner decision D3). The provider
+        # parameter is deprecated and kept for route compatibility only: None and
+        # "simulated" are accepted, anything else fails closed before any job is
+        # created. Production renders / revisions keep full provider behavior.
+        if provider not in (None, "simulated"):
+            raise ValidationError(
+                "Checkpoint 5 Previs is simulated-only; provider applies to production renders / revisions only",
+                stage="workflow_previs_generate",
+                metadata={"rejected_provider": provider},
+            )
         started = perf_counter()
         run = self.get(run_id)
         if self._at_or_after(run, "previs_generated"):
@@ -282,7 +292,7 @@ class CanonicalProductionWorkflowService:
                     run["scene_id"],
                     shot_number=int(shot["shot_number"]),
                     storyboard_shot_id=shot["storyboard_shot_id"],
-                    provider=provider,
+                    provider="simulated",
                 )
                 generated.append(result)
         except StabilityError as exc:

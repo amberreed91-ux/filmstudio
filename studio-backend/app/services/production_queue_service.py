@@ -68,15 +68,24 @@ class ProductionQueueService:
         self._last_heartbeat_at: str | None = None
         self._active_item_id: str | None = None
         self._worker_task: asyncio.Task | None = None
+        self._lease_seconds_override: int | None = None
+        self.heartbeat_interval_seconds: float | None = None
+        self._heartbeat_lost_items: set[tuple[str, int]] = set()
 
     @property
     def lease_seconds(self) -> int:
+        if self._lease_seconds_override is not None:
+            return self._lease_seconds_override
         try:
             from app.config import get_settings
 
             return int(getattr(get_settings(), "production_queue_lease_seconds", 300))
         except Exception:
             return 300
+
+    @lease_seconds.setter
+    def lease_seconds(self, value: int) -> None:
+        self._lease_seconds_override = max(1, int(value))
 
     @property
     def loop_interval_seconds(self) -> float:
@@ -516,6 +525,8 @@ class ProductionQueueService:
         item: ProductionQueueItem,
         decision: ProductionQueueSchedulerDecision,
     ) -> ProductionQueueItem:
+        if item.lease_owner or item.status in {ProductionQueueStatus.LEASED, ProductionQueueStatus.RUNNING}:
+            return item
         item.status = ProductionQueueStatus.WAITING_DEPENDENCY
         item.reason = decision.reason
         item.lease_owner = None
@@ -557,6 +568,9 @@ class ProductionQueueService:
         item = self.storage.get_queue_item(queue_item_id)
         if item is None:
             raise ValueError("Queue item not found")
+        expected_status = item.status
+        expected_owner = item.lease_owner
+        expected_generation = item.lease_generation
         item.status = ProductionQueueStatus.CANCELLED
         item.reason = reason or "Cancelled by user."
         item.failure = {"category": QueueFailureCategory.CANCELLED.value, "message": item.reason}
@@ -565,7 +579,19 @@ class ProductionQueueService:
         item.lease_expires_at = None
         item.completed_at = _now_iso()
         item.updated_at = item.completed_at
-        self.storage.update_queue_item(item)
+        canceler = getattr(self.storage, "cancel_queue_item", None)
+        if not callable(canceler):
+            raise RuntimeError("Queue storage does not support atomic lease-fenced cancellation")
+        cancelled = bool(
+            canceler(
+                item,
+                expected_status=expected_status,
+                expected_owner=expected_owner,
+                expected_generation=expected_generation,
+            )
+        )
+        if not cancelled:
+            raise ValueError("Queue item changed while cancellation was being applied")
         self._record_event(
             project_id=item.project_id,
             queue_item_id=item.queue_item_id,
@@ -581,9 +607,10 @@ class ProductionQueueService:
                 if job and job.status in {"pending", "rendering"}:
                     job.status = "cancelled"
                     job.updated_at = _now_iso()
+                    storage = getattr(render_svc, "_storage", None) or self.storage
+                    if storage:
+                        storage.save_job(job)
                     render_svc._jobs[job.id] = job
-                    if getattr(render_svc, "_storage", None):
-                        render_svc._storage.save_job(job)
             except Exception as exc:
                 logger.debug("Render cancellation sync skipped for queue item %s: %s", queue_item_id, exc)
         return item
@@ -746,27 +773,87 @@ class ProductionQueueService:
             queue_item_id=item.queue_item_id,
             attempt_number=item.attempt_count,
             lease_owner=self.worker_owner_id,
+            lease_generation=item.lease_generation,
             status="running",
             started_at=_now_iso(),
         )
-        self.storage.save_queue_attempt(attempt)
-        self._record_event(
-            project_id=item.project_id,
-            queue_item_id=item.queue_item_id,
-            event_type="dispatch_started",
-            stage=item.work_type.value,
-            message="Queue item dispatch started.",
-        )
+        if not self._owns_item_lease(item):
+            return {"status": "lease_lost", "error": "Queue lease is no longer current"}
+        fenced_attempt_writer = getattr(self.storage, "record_queue_attempt_fenced", None)
+        if not callable(fenced_attempt_writer):
+            logger.error("Queue storage does not support atomic lease-fenced attempt recording")
+            return {"status": "lease_lost", "error": "Queue storage does not support lease fencing"}
+        if not fenced_attempt_writer(attempt, item.lease_generation):
+            return {"status": "lease_lost", "error": "Queue lease was superseded before dispatch"}
+        heartbeat_task = asyncio.create_task(self._lease_heartbeat(item))
+        render_module = None
+        fence_token = None
+
         try:
+            from app.services import render as render_module
+        except ImportError:
+            logger.exception("Unable to install queue execution lease fence")
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            raise
+        fence_token = render_module._queue_execution_fence.set({
+            "queue_item_id": item.queue_item_id,
+            "lease_owner": self.worker_owner_id,
+            "lease_generation": item.lease_generation,
+        })
+        try:
+            if not self._owns_item_lease(item):
+                return {"status": "lease_lost", "error": "Queue lease expired before dispatch"}
+            persisted_item = self.storage.get_queue_item(item.queue_item_id)
+            if persisted_item is None:
+                return {"status": "lease_lost", "error": "Queue item disappeared before dispatch"}
+            persisted_item.lease_owner = item.lease_owner
+            persisted_item.lease_generation = item.lease_generation
+            item = persisted_item
+            self._record_event(
+                project_id=item.project_id,
+                queue_item_id=item.queue_item_id,
+                event_type="dispatch_started",
+                stage=item.work_type.value,
+                message="Queue item dispatch started.",
+            )
             if item.work_type == ProductionQueueWorkType.RENDER_JOB:
                 result = await self._execute_render_item(item)
             else:
                 result = self._complete_inspection_only_item(item)
-            attempt.status = "complete"
+
+            if result.get("status") not in {"lease_lost", "running", "cancelled"} and not self._owns_item_lease(item):
+                terminal = self.storage.get_queue_item(item.queue_item_id)
+                if not terminal or terminal.status not in {ProductionQueueStatus.COMPLETE, ProductionQueueStatus.FAILED, ProductionQueueStatus.CANCELLED, ProductionQueueStatus.DEAD_LETTERED}:
+                    result = {"status": "lease_lost", "error": "Queue lease expired or was superseded during execution"}
             attempt.completed_at = _now_iso()
             attempt.duration_ms = int((perf_counter() - start) * 1000)
             attempt.result = result
-            self.storage.save_queue_attempt(attempt)
+            if result.get("status") == "lease_lost":
+                attempt.status = "lease_lost"
+                attempt.error_type = "lease_lost"
+                attempt.error_message = str(result.get("error") or "Queue lease was lost")
+            elif result.get("status") in {"failed", "cancelled"}:
+                attempt.status = str(result["status"])
+                attempt.error_type = str(
+                    result.get("error_type")
+                    or (QueueFailureCategory.CANCELLED.value if attempt.status == "cancelled" else QueueFailureCategory.UNKNOWN.value)
+                )
+                attempt.error_message = str(
+                    result.get("error") or f"Queue item {attempt.status}"
+                )
+            else:
+                attempt.status = "complete"
+            attempt_persisted = self.storage.record_queue_attempt_fenced(
+                attempt,
+                item.lease_generation,
+                final=True,
+            )
+            if not attempt_persisted and result.get("status") not in {"lease_lost", "cancelled"}:
+                return {"status": "lease_lost", "error": "Queue attempt finalization lost its fencing race"}
             log_stage_event(
                 project_id=item.project_id,
                 job_id=item.canonical_id,
@@ -777,6 +864,20 @@ class ProductionQueueService:
             )
             return result
         except Exception as exc:
+            from app.services.render import QueueExecutionLeaseLost
+            terminal = self.storage.get_queue_item(item.queue_item_id)
+            if isinstance(exc, QueueExecutionLeaseLost) or (not self._owns_item_lease(item) and (not terminal or terminal.status not in {ProductionQueueStatus.COMPLETE, ProductionQueueStatus.FAILED, ProductionQueueStatus.CANCELLED, ProductionQueueStatus.DEAD_LETTERED})):
+                attempt.status = "lease_lost"
+                attempt.error_type = "lease_lost"
+                attempt.error_message = str(exc)
+                attempt.completed_at = _now_iso()
+                attempt.duration_ms = int((perf_counter() - start) * 1000)
+                self.storage.record_queue_attempt_fenced(
+                    attempt,
+                    item.lease_generation,
+                    final=True,
+                )
+                return {"status": "lease_lost", "error": str(exc)}
             duration_ms = int((perf_counter() - start) * 1000)
             category = self._failure_category(exc)
             attempt.status = "failed"
@@ -784,8 +885,17 @@ class ProductionQueueService:
             attempt.duration_ms = duration_ms
             attempt.error_type = category
             attempt.error_message = str(exc)
-            self.storage.save_queue_attempt(attempt)
-            self._fail_item(item, category=category, message=str(exc), retryable=True)
+            if not self.storage.record_queue_attempt_fenced(attempt, item.lease_generation):
+                return {"status": "lease_lost", "error": "Queue lease was lost before recording failure"}
+            failure_category, retryable = self._render_failure_policy(item, category, str(exc))
+            if not self._fail_item(
+                item,
+                category=failure_category,
+                message=str(exc),
+                retryable=retryable,
+            ):
+                return {"status": "lease_lost", "error": str(exc)}
+
             log_stage_event(
                 project_id=item.project_id,
                 job_id=item.canonical_id,
@@ -795,6 +905,65 @@ class ProductionQueueService:
                 extra={"queue_item_id": item.queue_item_id, "status": "failed", "error_type": category},
             )
             return {"status": "failed", "error": str(exc), "error_type": category}
+        finally:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            if render_module is not None and fence_token is not None:
+                render_module._queue_execution_fence.reset(fence_token)
+            self._heartbeat_lost_items.discard((item.queue_item_id, item.lease_generation))
+
+    async def _lease_heartbeat(self, item: ProductionQueueItem) -> None:
+        interval = self.heartbeat_interval_seconds
+        if interval is None:
+            interval = max(0.05, self.lease_seconds / 3)
+        interval = min(interval, max(0.01, self.lease_seconds / 3))
+        while True:
+            await asyncio.sleep(interval)
+            now = _now_iso()
+            lease_expiry = _future_iso(self.lease_seconds)
+            renewer = getattr(self.storage, "renew_queue_lease", None)
+            renewed = bool(
+                callable(renewer)
+                and renewer(
+                    item.queue_item_id,
+                    self.worker_owner_id,
+                    item.lease_generation,
+                    lease_expiry,
+                )
+            )
+            if not renewed:
+                self._heartbeat_lost_items.add((item.queue_item_id, item.lease_generation))
+                logger.warning(
+                    "Production queue lease heartbeat lost | queue_item_id=%s | lease_generation=%s | worker=%s",
+                    item.queue_item_id,
+                    item.lease_generation,
+                    self.worker_owner_id,
+                )
+                return
+            self._last_heartbeat_at = now
+            self._heartbeat_lost_items.discard((item.queue_item_id, item.lease_generation))
+
+    def _owns_item_lease(self, item: ProductionQueueItem) -> bool:
+        if (item.queue_item_id, item.lease_generation) in self._heartbeat_lost_items:
+            return False
+        checker = getattr(self.storage, "queue_lease_is_current", None)
+        if callable(checker):
+            return bool(checker(item.queue_item_id, self.worker_owner_id, item.lease_generation))
+        getter = getattr(self.storage, "get_queue_item", None)
+        if not callable(getter):
+            return False
+        persisted = getter(item.queue_item_id)
+        return bool(
+            persisted
+            and persisted.lease_owner == self.worker_owner_id
+            and persisted.lease_generation == item.lease_generation
+            and persisted.lease_expires_at
+            and persisted.lease_expires_at > _now_iso()
+            and persisted.status in {ProductionQueueStatus.LEASED, ProductionQueueStatus.RUNNING}
+        )
 
     async def _execute_render_item(self, item: ProductionQueueItem) -> dict[str, Any]:
         if not item.canonical_id:
@@ -803,37 +972,76 @@ class ProductionQueueService:
         job = render_svc.get_job(item.canonical_id)
         if job is None:
             raise ValueError(f"Render job {item.canonical_id} not found")
+        if not self._owns_item_lease(item):
+            return {"status": "lease_lost", "error": "Queue lease was lost before render dispatch"}
         if job.status == "complete":
-            self._complete_item(item, {"render_job_id": job.id, "status": job.status})
+            if not self._complete_item(item, {"render_job_id": job.id, "status": job.status}):
+                return {"status": "lease_lost", "error": "Queue lease was lost before finalizing completed render"}
             return {"status": "complete", "render_job_id": job.id}
         if job.status in {"failed", "cancelled"}:
-            self._fail_item(
+            category, retryable = self._render_failure_policy(
                 item,
-                category=QueueFailureCategory.PROVIDER_ERROR.value if job.status == "failed" else QueueFailureCategory.CANCELLED.value,
-                message=job.error_message or f"Render job {job.status}",
-                retryable=job.status == "failed",
+                QueueFailureCategory.PROVIDER_ERROR.value if job.status == "failed" else QueueFailureCategory.CANCELLED.value,
+                job.error_message or f"Render job {job.status}",
             )
-            return {"status": job.status, "render_job_id": job.id}
+            if not self._fail_item(
+                item,
+                category=category,
+                message=job.error_message or f"Render job {job.status}",
+                retryable=retryable,
+            ):
+                return {"status": "lease_lost", "error": "Queue lease was lost before finalizing render failure"}
+            return {
+                "status": job.status,
+                "render_job_id": job.id,
+                "error": job.error_message or f"Render job {job.status}",
+                "error_type": category,
+            }
+        if job.status == "cancelled":
+            return {"status": "cancelled", "render_job_id": job.id, "error": "Cancelled by user."}
         submitted = await render_svc.submit_job(job.id)
+        if not self._owns_item_lease(item):
+            terminal = self.storage.get_queue_item(item.queue_item_id)
+            if terminal and terminal.status == ProductionQueueStatus.CANCELLED:
+                return {
+                    "status": "cancelled",
+                    "render_job_id": submitted.id,
+                    "error": terminal.reason or "Cancelled by user.",
+                }
+            return {"status": "lease_lost", "error": "Queue lease expired or was superseded before provider result was recorded"}
         if submitted.status == "complete":
-            self._complete_item(item, {"render_job_id": submitted.id, "status": submitted.status})
+            if not self._complete_item(item, {"render_job_id": submitted.id, "status": submitted.status}):
+                return {"status": "lease_lost", "error": "Queue lease was lost before finalizing completed render"}
             return {"status": "complete", "render_job_id": submitted.id}
         if submitted.status in {"failed", "cancelled"}:
-            self._fail_item(
+            category, retryable = self._render_failure_policy(
                 item,
-                category=QueueFailureCategory.PROVIDER_ERROR.value if submitted.status == "failed" else QueueFailureCategory.CANCELLED.value,
-                message=submitted.error_message or f"Render job {submitted.status}",
-                retryable=submitted.status == "failed",
+                QueueFailureCategory.PROVIDER_ERROR.value if submitted.status == "failed" else QueueFailureCategory.CANCELLED.value,
+                submitted.error_message or f"Render job {submitted.status}",
+                submitted,
             )
-            return {"status": submitted.status, "render_job_id": submitted.id}
+            if not self._fail_item(
+                item,
+                category=category,
+                message=submitted.error_message or f"Render job {submitted.status}",
+                retryable=retryable,
+            ):
+                return {"status": "lease_lost", "error": "Queue lease was lost before finalizing render failure"}
+            return {
+                "status": submitted.status,
+                "render_job_id": submitted.id,
+                "error": submitted.error_message or f"Render job {submitted.status}",
+                "error_type": category,
+            }
         item.status = ProductionQueueStatus.RUNNING
         item.reason = "Render submitted to provider; waiting for canonical render completion."
         item.result = {"render_job_id": submitted.id, "render_status": submitted.status}
+        item.updated_at = _now_iso()
         item.lease_owner = None
         item.lease_acquired_at = None
         item.lease_expires_at = None
-        item.updated_at = _now_iso()
-        self.storage.update_queue_item(item)
+        if not self._finalize_item(item):
+            return {"status": "lease_lost", "error": "Queue lease was superseded before dispatch state was committed"}
         self._record_event(
             project_id=item.project_id,
             queue_item_id=item.queue_item_id,
@@ -850,19 +1058,40 @@ class ProductionQueueService:
             "inspection_only": True,
             "message": f"{item.work_type.value} queue orchestration record completed without direct execution handler.",
         }
-        self._complete_item(item, result)
+        if not self._complete_item(item, result):
+            return {"status": "lease_lost", "error": "Queue lease was lost before completing inspection item"}
         return result
 
-    def _complete_item(self, item: ProductionQueueItem, result: dict[str, Any]) -> ProductionQueueItem:
+    def _finalize_item(self, item: ProductionQueueItem) -> bool:
+        finalizer = getattr(self.storage, "finalize_queue_lease", None)
+        if callable(finalizer):
+            lease_payload = item.model_copy(deep=True)
+            lease_payload.lease_owner = self.worker_owner_id
+            lease_payload.lease_generation = item.lease_generation
+            return bool(finalizer(lease_payload, self.worker_owner_id, item.lease_generation))
+        if not self._owns_item_lease(item):
+            return False
+        updater = self.storage.update_queue_item
+        try:
+            return updater(
+                item,
+                expected_lease=(self.worker_owner_id, item.lease_generation),
+            ) is not None
+        except TypeError:
+            logger.error("Queue storage does not support atomic lease-fenced finalization")
+            return False
+
+    def _complete_item(self, item: ProductionQueueItem, result: dict[str, Any]) -> bool:
         item.status = ProductionQueueStatus.COMPLETE
         item.result = result
         item.reason = "Queue item complete."
+        item.completed_at = _now_iso()
+        item.updated_at = item.completed_at
         item.lease_owner = None
         item.lease_acquired_at = None
         item.lease_expires_at = None
-        item.completed_at = _now_iso()
-        item.updated_at = item.completed_at
-        self.storage.update_queue_item(item)
+        if not self._finalize_item(item):
+            return False
         self._record_event(
             project_id=item.project_id,
             queue_item_id=item.queue_item_id,
@@ -871,7 +1100,7 @@ class ProductionQueueService:
             message=item.reason,
             details=result,
         )
-        return item
+        return True
 
     def _fail_item(
         self,
@@ -880,9 +1109,12 @@ class ProductionQueueService:
         category: str,
         message: str,
         retryable: bool,
-    ) -> ProductionQueueItem:
+    ) -> bool:
         terminal = item.attempt_count >= item.max_attempts or not retryable
-        item.status = ProductionQueueStatus.DEAD_LETTERED if terminal else ProductionQueueStatus.FAILED
+        if category == QueueFailureCategory.CANCELLED.value:
+            item.status = ProductionQueueStatus.CANCELLED
+        else:
+            item.status = ProductionQueueStatus.DEAD_LETTERED if terminal else ProductionQueueStatus.FAILED
         item.failure = {
             "category": category,
             "message": message,
@@ -890,21 +1122,22 @@ class ProductionQueueService:
             "recorded_at": _now_iso(),
         }
         item.reason = message
+        item.completed_at = _now_iso()
+        item.updated_at = item.completed_at
         item.lease_owner = None
         item.lease_acquired_at = None
         item.lease_expires_at = None
-        item.completed_at = _now_iso()
-        item.updated_at = item.completed_at
-        self.storage.update_queue_item(item)
+        if not self._finalize_item(item):
+            return False
         self._record_event(
             project_id=item.project_id,
             queue_item_id=item.queue_item_id,
-            event_type="dispatch_failed",
+            event_type="cancelled" if item.status == ProductionQueueStatus.CANCELLED else "dispatch_failed",
             stage=item.work_type.value,
             message=message,
             details=item.failure,
         )
-        return item
+        return True
 
     def _failure_category(self, exc: Exception) -> str:
         if isinstance(exc, StabilityError):
@@ -915,6 +1148,46 @@ class ProductionQueueService:
         if "value" in name:
             return QueueFailureCategory.VALIDATION_ERROR.value
         return QueueFailureCategory.UNKNOWN.value
+
+    def _render_failure_policy(
+        self,
+        item: ProductionQueueItem,
+        fallback_category: str,
+        fallback_message: str,
+        job: Any = None,
+    ) -> tuple[str, bool]:
+        """Honor render's classified retry policy instead of retrying every failure."""
+        if fallback_category == QueueFailureCategory.CANCELLED.value:
+            return fallback_category, False
+        if job is None and item.canonical_id:
+            try:
+                render_svc = self._get_render_service()
+                job = render_svc.get_job(item.canonical_id)
+            except Exception:
+                logger.debug("Render job lookup unavailable for queue item %s", item.queue_item_id)
+        metadata = getattr(job, "metadata", None)
+        if isinstance(metadata, dict):
+            provider_failure = metadata.get("provider_failure")
+            if isinstance(provider_failure, dict):
+                category = str(provider_failure.get("error_type") or fallback_category)
+                retryable = bool(provider_failure.get("retryable"))
+                return category, retryable
+            location = metadata.get("pipeline_reliability")
+            location = location.get("failure_location") if isinstance(location, dict) else None
+            if isinstance(location, dict) and location.get("category") == "permanent":
+                return str(location.get("error_type") or fallback_category), False
+        try:
+            from app.services.render import _classify_provider_failure
+
+            if job is not None:
+                classification = _classify_provider_failure(job, fallback_message)
+                return str(classification["error_type"]), bool(classification["retryable"])
+        except Exception:
+            logger.debug("Render retry classification unavailable for queue item %s", item.queue_item_id)
+        return fallback_category, fallback_category in {
+            QueueFailureCategory.PROVIDER_ERROR.value,
+            QueueFailureCategory.TIMEOUT.value,
+        }
 
     def diagnostics(self, project_id: str | None = None) -> dict[str, Any]:
         summary = self.summarize(project_id)

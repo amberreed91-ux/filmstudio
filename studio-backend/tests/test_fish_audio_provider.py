@@ -5,8 +5,11 @@ import sys
 from pathlib import Path
 
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+
 def _load_provider_module():
-    path = Path("fish_audio_provider.py")
+    path = _BACKEND_ROOT / "fish_audio_provider.py"
     spec = importlib.util.spec_from_file_location("fish_audio_provider", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader

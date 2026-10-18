@@ -6,6 +6,7 @@ for consistent recovery, reconcile, playback, and reload.
 from __future__ import annotations
 
 import json
+import importlib.util
 import pytest
 from pathlib import Path
 from datetime import datetime
@@ -119,6 +120,31 @@ def test_manual_flow_persists_render_jobs(mock_storage):
     assert saved_job.provider == "simulated"
     assert saved_job.status == "pending"
     assert saved_job.input_payload.prompt == "Test prompt"
+
+
+def test_runway_router_metadata_survives_sqlite_reload(tmp_path, monkeypatch):
+    from app.data.storage import DatabaseStorage
+    from app.services.render import RenderService
+    from app.services.generation_contract import FrozenGenerationContract
+
+    authorization_path = Path(__file__).resolve().with_name("test_production_authorization_service.py")
+    spec = importlib.util.spec_from_file_location("production_authorization_persistence_fixtures", authorization_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load the approved-owner persistence fixture")
+    authorization_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(authorization_module)
+
+    storage = DatabaseStorage(str(tmp_path / "router-render-jobs"))
+    authorization_module._save_sqlite_owner_approved_storyboard(storage)
+    monkeypatch.setattr("app.services.render._storage", storage)
+    source = authorization_module._authorized_job()
+    contract_record = source.metadata["creative_generation_contract"]
+    created = authorization_module._create_job_with_render_service(storage)
+    reloaded = storage.get_job(created.id)
+    assert reloaded is not None
+    assert reloaded.metadata == created.metadata
+    assert reloaded.metadata["creative_generation_contract"] == contract_record
+    assert reloaded.metadata["creative_generation_manifest"] == source.metadata["creative_generation_manifest"]
 
 
 def test_manual_flow_submit_job_persists(mock_storage):

@@ -20,8 +20,12 @@ from app.models import (
 )
 from app.models.video_assets import VideoAsset
 from app.services.project_store import project_store
+from app.services.stability import ValidationError, elapsed_ms, log_stage_event, start_timer
 from app.services.studio_decision_gate_service import studio_decision_gate_service
 from app.services.video_asset_service import VideoAssetService
+
+
+DEMO_PROJECT_ID = "demo_studio_cinematic_001"
 
 
 class DemoSeedService:
@@ -40,7 +44,24 @@ class DemoSeedService:
     def _demo_output_url() -> str:
         return "/outputs/final_films/route_keyframe_demo.mp4"
 
-    def seed_demo_project(self, project_id: str = "demo_studio_cinematic_001") -> Dict[str, Any]:
+    def seed_demo_project(self, project_id: str = DEMO_PROJECT_ID) -> Dict[str, Any]:
+        timer = start_timer()
+        candidate = (project_id or "").strip()
+        if candidate != DEMO_PROJECT_ID:
+            log_stage_event(
+                project_id=candidate or "",
+                job_id=None,
+                provider="demo_seed",
+                stage="demo_seed_rejected",
+                duration_ms=elapsed_ms(timer),
+                extra={"code": "demo_seed_non_demo_project_rejected"},
+            )
+            raise ValidationError(
+                f"Demo seeding is limited to the dedicated demo project '{DEMO_PROJECT_ID}'. "
+                f"Your project '{candidate}' was left unchanged — open the demo project to run the demo seed.",
+                stage="demo_seed",
+                metadata={"code": "demo_seed_non_demo_project_rejected", "project_id": candidate},
+            )
         now = self._now()
         output_url = self._demo_output_url()
         output_path = str((Path(__file__).resolve().parents[2] / output_url.removeprefix("/")).resolve())

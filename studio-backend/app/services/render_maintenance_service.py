@@ -117,6 +117,8 @@ class RenderMaintenanceService:
             if shot_id.startswith(scene_id) or not scene_id
             else f"{scene_id}_{shot_id}"
         )
+        from app.services.scene002_contract_only import assert_protected_seed_unchanged
+        assert_protected_seed_unchanged(storage, project_id, full_shot_id)
         if seed is not None:
             storage.save_shot_seed(
                 project_id,

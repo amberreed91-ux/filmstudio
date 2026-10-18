@@ -29,6 +29,7 @@ from app.routes import audio as audio_route
 from app.data.storage import DatabaseStorage
 from app.services.audio import cosyvoice_tts_service as cosyvoice_module
 from app.services.audio.cosyvoice_tts_service import CosyVoiceTTSService
+from app.services.generation_contract import freeze_dialogue_handoff
 from app.services.audio_pipeline_service import (
     AudioPipelineService,
     TrackStatus,
@@ -361,11 +362,14 @@ class TestShotDialogueWithProvider:
             {"character": "DRE", "text": "I remember the way the light fell."},
             {"character": "MAYA", "text": "So do I."},
         ]
+        handoff = freeze_dialogue_handoff(scene_id="scene_001", shot_id="shot_001", lines=dialogue_lines)
         result = await aps.audio_pipeline_service.generate_shot_dialogue(
             project_id="proj-test",
             scene_id="scene_001",
             shot_id="shot_001",
             dialogue_lines=dialogue_lines,
+            dialogue_handoff=handoff,
+            dialogue_scene_id="scene_001",
             provider="elevenlabs",
         )
         assert result["status"] == TrackStatus.COMPLETE
@@ -383,11 +387,14 @@ class TestShotDialogueWithProvider:
         monkeypatch.setattr(aps, "DIALOGUE_PROVIDER", "cosyvoice")
 
         dialogue_lines = [{"character": "DRE", "text": "Hello."}]
+        handoff = freeze_dialogue_handoff(scene_id="scene_001", shot_id="shot_001", lines=dialogue_lines)
         result = await aps.audio_pipeline_service.generate_shot_dialogue(
             project_id="proj-test",
             scene_id="scene_001",
             shot_id="shot_001",
             dialogue_lines=dialogue_lines,
+            dialogue_handoff=handoff,
+            dialogue_scene_id="scene_001",
         )
         assert result["status"] == TrackStatus.COMPLETE
         assert result["provider"] == "cosyvoice"
@@ -1252,11 +1259,14 @@ class TestShotDialogueWithCosyVoiceProvider:
             {"character": "DRE", "text": "I remember the way the light fell."},
             {"character": "MAYA", "text": "So do I."},
         ]
+        handoff = freeze_dialogue_handoff(scene_id="scene_001", shot_id="shot_001", lines=dialogue_lines)
         result = await aps.audio_pipeline_service.generate_shot_dialogue(
             project_id="proj-test",
             scene_id="scene_001",
             shot_id="shot_001",
             dialogue_lines=dialogue_lines,
+            dialogue_handoff=handoff,
+            dialogue_scene_id="scene_001",
             provider="cosyvoice",
         )
         assert result["status"] == TrackStatus.COMPLETE
@@ -1304,11 +1314,15 @@ class TestShotDialogueWithCosyVoiceProvider:
             _fake_cosyvoice_sync,
         )
 
+        dialogue_lines = [{"character": "DRE", "text": "You good?"}]
+        handoff = freeze_dialogue_handoff(scene_id="scene_001", shot_id="shot_001", lines=dialogue_lines)
         result = await aps.audio_pipeline_service.generate_shot_dialogue(
             project_id="proj-test",
             scene_id="scene_001",
             shot_id="shot_001",
-            dialogue_lines=[{"character": "DRE", "text": "You good?"}],
+            dialogue_lines=dialogue_lines,
+            dialogue_handoff=handoff,
+            dialogue_scene_id="scene_001",
             provider="cosyvoice",
         )
 
@@ -1351,18 +1365,22 @@ class TestShotDialogueWithCosyVoiceProvider:
         )
 
         ssml_text = '<speak>So you<break time="180ms"/> decided.</speak>'
+        dialogue_lines = [
+            {
+                "character": "MAYA",
+                "text": "So you decided.",
+                "ssml_text": ssml_text,
+                "emotional_subtext": "controlled indictment",
+            }
+        ]
+        handoff = freeze_dialogue_handoff(scene_id="scene_001", shot_id="shot_001", lines=dialogue_lines)
         result = await aps.audio_pipeline_service.generate_shot_dialogue(
             project_id="proj-test",
             scene_id="scene_001",
             shot_id="shot_001",
-            dialogue_lines=[
-                {
-                    "character": "MAYA",
-                    "text": "So you decided.",
-                    "ssml_text": ssml_text,
-                    "emotional_subtext": "controlled indictment",
-                }
-            ],
+            dialogue_lines=dialogue_lines,
+            dialogue_handoff=handoff,
+            dialogue_scene_id="scene_001",
             provider="cosyvoice",
         )
 
@@ -1406,18 +1424,22 @@ class TestShotDialogueWithCosyVoiceProvider:
             _fake_cosyvoice_sync,
         )
 
+        dialogue_lines = [
+            {
+                "character": "MAYA",
+                "text": "That's funny.",
+                "emotional_subtext": "bitter and flat, not actually amused",
+                "pacing_tag": "short, dry, almost no lift on funny",
+            }
+        ]
+        handoff = freeze_dialogue_handoff(scene_id="scene_002", shot_id="shot_scene_002_001", lines=dialogue_lines)
         result = await aps.audio_pipeline_service.generate_shot_dialogue(
             project_id="proj-test",
             scene_id="scene_002",
             shot_id="shot_scene_002_001",
-            dialogue_lines=[
-                {
-                    "character": "MAYA",
-                    "text": "That's funny.",
-                    "emotional_subtext": "bitter and flat, not actually amused",
-                    "pacing_tag": "short, dry, almost no lift on funny",
-                }
-            ],
+            dialogue_lines=dialogue_lines,
+            dialogue_handoff=handoff,
+            dialogue_scene_id="scene_002",
             provider="cosyvoice",
             scene_context={"audio_tension": "betrayal at gunpoint"},
         )
@@ -1462,10 +1484,19 @@ class TestFullPipelineNoScoreAmbientProvider:
         monkeypatch.setattr(service, "generate_ambient", _unexpected_ambient)
         monkeypatch.setattr(service, "mix_audio_tracks", _fake_mix)
 
+        dialogue_lines = [{"character": "DRE", "text": "You good?"}]
+        dialogue_handoff = freeze_dialogue_handoff(
+            scene_id="scene_003", shot_id="scene_003", lines=dialogue_lines
+        )
         result = await service.generate_full_pipeline(
+            scene_text="DRE\\nYou good?",
             scene_id="scene_003",
             project_id="proj-test",
-            dialogue_lines=[{"character": "DRE", "text": "You good?"}],
+            dialogue_lines=dialogue_lines,
+            dialogue_handoff=dialogue_handoff,
+            narrative_audio=True,
+            dialogue_scene_id="scene_003",
+            dialogue_shot_id="scene_003",
         )
 
         assert result["status"] == "complete"

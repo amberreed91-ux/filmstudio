@@ -53,6 +53,17 @@ def submit_video_render(payload: Any, config: Any) -> Dict[str, Any]:
     shot_id = _as_clean_str(payload_dict.get("shot_id")) or "shot_001"
     render_id = f"video_{scene_id}_{shot_id}"
 
+    if provider_name.strip().lower() in {"openrouter", "openrouter-video"}:
+        return {
+            "render_id": render_id,
+            "status": "failed",
+            "provider": provider_name,
+            "video_url": None,
+            "thumbnail_url": None,
+            "error": "OpenRouter is retired as a Studio video provider",
+            "meta": {"reason": "provider_retired"},
+        }
+
     if not enabled:
         return {
             "render_id": render_id,

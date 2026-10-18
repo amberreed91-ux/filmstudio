@@ -27,11 +27,18 @@ SLOT_BUDGETS = {
 
 # Legacy preview/adherence display ceiling, not a verified vendor maximum.
 # Slots total 582 before separators/suffixes and historically clipped later
-# lighting and severed individual facts. During RenderService.create_job these
-# helpers collect losslessly; prompt_budget_service applies the final provider
-# policy once all corrections and continuity facts have been assembled.
-# Standalone previews retain this legacy layout for compatibility; their text
-# is not evidence of the actual outgoing video-provider prompt.
+# lighting and severed individual facts. RenderService.create_job collects
+# losslessly; prompt_budget_service applies the final provider policy once all
+# corrections and continuity facts have been assembled.
+#
+# Canonical-creative-integrity rule (Multi Shot audit, Phase 1):
+# build_shot_aware_prompt — the storyboard regeneration path — MUST NOT cut the
+# canonical prompt at this ceiling or any other. A prompt longer than a
+# provider budget is an explicit readiness concern handled by
+# prompt_budget_service (fail-closed) at job creation, never a silent edit of
+# canonical creative content. This constant now bounds only the standalone
+# slotted PREVIEW assembly (build_slotted_prompt), which is a UI display
+# surface, not the canonical board prompt.
 MAX_PROMPT_LENGTH = 512
 
 
@@ -145,13 +152,19 @@ def _segment_scene_text(scene_text: str, num_shots: int) -> list[str]:
 def _extract_characters_from_segment(segment: str, all_characters: list[dict]) -> list[dict]:
     """
     Extract only characters mentioned in this segment.
-    
+
     Returns list of character dicts with name and visual_prompt_summary.
+
+    A name must match on a word boundary: a bare substring check cast "MOM" as
+    a scene_002 character because the word "moment" contains "mom" (Multi Shot
+    audit, cross-scene character leakage). Names are also matched case-
+    sensitively on their stored form first (MOM vs. the lowercase word "mom"
+    in prose) and case-insensitively only on whole words, so real dialogue
+    cues like "Mom sets down her tea." still resolve.
     """
     if not all_characters or not segment:
         return []
     
-    segment_lower = segment.lower()
     mentioned_characters = []
     
     for char in all_characters:
@@ -159,8 +172,8 @@ def _extract_characters_from_segment(segment: str, all_characters: list[dict]) -
         if not char_name:
             continue
         
-        # Check if character name appears in segment
-        if char_name.lower() in segment_lower:
+        pattern = rf"\b{re.escape(str(char_name).strip())}\b"
+        if re.search(pattern, segment) or re.search(pattern, segment, re.IGNORECASE):
             mentioned_characters.append({
                 "name": char_name,
                 "visual_prompt_summary": appearance_description(char) if appearance_approval(char).get("status") == "locked" else char.get("visual_prompt_summary", ""),
@@ -205,6 +218,91 @@ def _merge_scene_characters(
             })
             seen.add(normalized)
     return merged
+
+
+def locked_appearance_characters(all_characters: list[dict] | None) -> list[dict]:
+    """Return only characters with an approved (locked) appearance."""
+    locked: list[dict] = []
+    for char in all_characters or []:
+        if not isinstance(char, dict):
+            continue
+        try:
+            if appearance_approval(char).get("status") == "locked":
+                locked.append(char)
+        except Exception:
+            continue
+    return locked
+
+
+def build_locked_appearance_block(
+    all_characters: list[dict] | None,
+    scene_data: dict | None = None,
+    max_characters: int = 3,
+) -> str:
+    """Build a non-truncatable enforcement block for locked character looks.
+
+    Covers the storyboard race-drift gap: the per-segment prompt only injects
+    a character when their name appears in the shot text or scene cast list,
+    so a locked look can silently drop out (pronouns, typos, empty cast).
+    This block lists locked looks explicitly with a do-not-change directive
+    so the image provider always receives race/skin-tone/age/gender tokens.
+    Returns "" when nothing is locked.
+    """
+    locked = locked_appearance_characters(all_characters)
+    if not locked:
+        return ""
+    # Prefer scene-scoped characters when the scene declares a cast, so other
+    # scenes' locked faces don't leak into this shot. Fall back to all locked
+    # when the scene declares no cast.
+    if isinstance(scene_data, dict):
+        try:
+            names = _scene_character_names(scene_data)
+        except Exception:
+            names = set()
+        if names:
+            scoped = [
+                c for c in locked
+                if str(c.get("name") or "").strip().lower() in names
+            ]
+            if scoped:
+                locked = scoped
+    parts: list[str] = []
+    for char in locked[:max(1, max_characters)]:
+        name = str(char.get("name") or "").strip() or "character"
+        try:
+            visual = str(appearance_description(char) or "").strip()
+        except Exception:
+            visual = str(char.get("visual_prompt_summary") or "").strip()
+        age = str(char.get("age") or "").strip()
+        if visual and age:
+            parts.append(f"{name} ({age}): {visual}")
+        elif visual:
+            parts.append(f"{name}: {visual}")
+        else:
+            parts.append(name)
+    if not parts:
+        return ""
+    joined = "; ".join(parts)
+    return (
+        "Locked appearance - maintain exact look, do not change race, "
+        f"skin tone, age, or gender: {joined}"
+    )
+
+
+def ensure_locked_appearance_in_prompt(
+    prompt: str | None,
+    all_characters: list[dict] | None,
+    scene_data: dict | None = None,
+) -> str:
+    """Append the locked-appearance block when missing. Never truncates."""
+    base = str(prompt or "").strip()
+    block = build_locked_appearance_block(all_characters, scene_data)
+    if not block or "Locked appearance" in base:
+        return base
+    if not base:
+        return f"{block}."
+    return f"{base.rstrip('. ')}. {block}."
+
 
 
 def _format_visible_cast_constraint(character_names: list[str]) -> str:
@@ -298,7 +396,7 @@ def build_shot_aware_prompt(
     all_characters: list[dict] | None = None,
     audio_brief: dict | None = None,
     performance_context: dict | None = None,
-    max_length: int = 512,
+    max_length: int | None = None,
     total_shots: int | None = None,
 ) -> str:
     """
@@ -311,7 +409,9 @@ def build_shot_aware_prompt(
         all_characters: List of character dicts from project (optional)
         audio_brief: Audio context dict (optional)
         performance_context: Provider-neutral acting context with visible prompt lines (optional)
-        max_length: Max prompt length (default 512 for Runway)
+        max_length: Deprecated. Accepted for call compatibility and ignored:
+            canonical prompts are never truncated by this builder. Provider
+            budgets are enforced explicitly by prompt_budget_service.
         total_shots: Real number of shots in this scene. Falls back to the scene
             dict, then to a heuristic, when not supplied.
 
@@ -418,9 +518,19 @@ def build_shot_aware_prompt(
     if take_variation:
         base_prompt += f" {take_variation}"
     
-    # Truncate if needed
-    if len(base_prompt) > max_length:
-        base_prompt = base_prompt[:max_length - 3] + "..."
+    # No truncation here. Canonical prompts are never silently cut to satisfy
+    # a provider budget; prompt_budget_service enforces the provider limit
+    # explicitly (fail-closed) at job creation with full provenance.
+
+    # Locked looks are non-truncatable: append after assembly so race /
+    # skin-tone tokens survive even when the scene text is long. No-op when
+    # nothing is locked or the Characters line already carried the block.
+    try:
+        base_prompt = ensure_locked_appearance_in_prompt(
+            base_prompt, all_characters, scene_data
+        )
+    except Exception:
+        pass
     
     logger.info(
         "SHOT_PROMPT_BUILT | shot=%d | take=%d | length=%d | type=%s",

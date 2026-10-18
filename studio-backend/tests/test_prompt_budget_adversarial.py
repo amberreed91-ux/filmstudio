@@ -95,7 +95,7 @@ def test_required_negative_exclusions_survive_default_terms():
 
 
 def test_unsupported_explicit_negatives_block_paid_generation():
-    job = RenderJobModel(id='n', project_id='p', shot_id='s', provider='openrouter', input_payload=RenderJobInput(prompt='Maya waits.', parameters={'negative_prompt_terms': ['rain']}))
+    job = RenderJobModel(id='n', project_id='p', shot_id='s', provider='runway', input_payload=RenderJobInput(prompt='Maya waits.', parameters={'negative_prompt_terms': ['rain']}))
     assert not budget_job(job).ready
     assert job.status == 'needs_review'
     assert job.metadata['negative_prompt_budget']['required_terms'] == ['rain']
@@ -144,12 +144,13 @@ def test_review_migration_preserves_existing_jobs_and_indexes(tmp_path):
     migrated.close()
 
 
-def test_openrouter_happyhorse_budget_uses_actual_model_and_unknowns_stay_conservative():
+def test_historical_openrouter_video_model_uses_conservative_budget():
     from app.services.prompt_budget_service import prompt_policy
-    assert prompt_policy('openrouter', 'alibaba/happyhorse-1.1')[0] == 5000
+    assert prompt_policy('openrouter', 'alibaba/happyhorse-1.1')[0] == 512
     assert prompt_policy('openrouter', 'unknown/model')[0] == 512
-    assert cost('人物', 'openrouter', 'alibaba/happyhorse-1.1') == 4
+    assert cost('人物', 'openrouter', 'alibaba/happyhorse-1.1') == len('人物')
     job = RenderJobModel(id='model', project_id='p', shot_id='s', provider='openrouter', input_payload=RenderJobInput(prompt=' '.join(f'Keep immutable fact {n}.' for n in range(35))))
     result = budget_job(job)
-    assert result.ready and result.model == 'alibaba/happyhorse-1.1'
-    assert len(result.prompt) > 512
+    assert not result.ready and result.model == 'openrouter'
+    assert result.limit == 512
+    assert job.status == 'needs_review'

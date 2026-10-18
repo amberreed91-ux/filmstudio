@@ -354,7 +354,9 @@ class TestBatchStatus:
 
 class TestBatchRoutes:
 
-    def test_render_batch_endpoint_returns_200(self, render_service):
+    def test_render_batch_endpoint_is_retired_410(self, render_service):
+        # R4.3G: the POST batch route is retired — it must refuse with the
+        # stable contract and persist zero jobs (no preflight on this path).
         from fastapi.testclient import TestClient
         from main import app
         client = TestClient(app)
@@ -369,10 +371,14 @@ class TestBatchRoutes:
                 {"shot_id": "scene_01_shot_002", "description": "Close-up on face"},
             ]},
         )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "batch_id" in data
-        assert len(data["job_ids"]) == 2
+        assert resp.status_code == 410
+        detail = resp.json()["detail"]
+        assert detail["code"] == "render_batch_retired"
+        assert "pipeline/generate" in detail["message"]
+
+        jobs = client.get(f"/api/f51/studio/render/jobs?project_id={project_id}")
+        assert jobs.status_code == 200
+        assert jobs.json() == []
 
     def test_render_batch_endpoint_404_for_missing_project(self, render_service):
         from fastapi.testclient import TestClient
@@ -397,17 +403,22 @@ class TestBatchRoutes:
         assert resp.status_code == 400
 
     def test_batch_status_endpoint_returns_200(self, render_service):
+        # R4.3G: the read-only GET status endpoint still works; the batch is
+        # seeded via the service directly since the POST route is retired.
         from fastapi.testclient import TestClient
         from main import app
+        from app.services.render import render_service as route_singleton
         client = TestClient(app)
         created = client.post("/api/f51/studio/projects", json={"title": "Status Test Film"})
         project_id = created.json()["project_id"]
 
-        batch_resp = client.post(
-            f"/api/f51/studio/projects/{project_id}/scenes/scene_01/render-batch",
-            json={"shots": [{"shot_id": "scene_01_shot_001", "description": "test"}]},
-        )
-        batch_id = batch_resp.json()["batch_id"]
+        batch = run_async(route_singleton.create_scene_batch(
+            film_id=project_id,
+            scene_id="scene_01",
+            scene_data={},
+            shots=[{"shot_id": "scene_01_shot_001", "description": "test"}],
+        ))
+        batch_id = batch["batch_id"]
 
         status_resp = client.get(
             f"/api/f51/studio/projects/{project_id}/render-batch/{batch_id}",

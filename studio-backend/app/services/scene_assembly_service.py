@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import shutil
@@ -82,6 +83,7 @@ class SceneAssemblyService:
             )
 
         audio_inputs = self.audio_sources.snapshot(project_id, scene_id, [job.shot_id for _, job in jobs])
+        source_media = self.source_media_snapshot(jobs)
         output_dir = self.composed_root / project_id
         output_dir.mkdir(parents=True, exist_ok=True)
         from uuid import uuid4
@@ -89,7 +91,12 @@ class SceneAssemblyService:
         if not overwrite:
             storage = self.storage or get_storage("sqlite")
             previous = storage.get_delivery_manifest(project_id, scene_id)
-            if previous and previous.get("job_ids") == [job.id for _, job in jobs] and previous.get("audio_inputs") == audio_inputs:
+            if (
+                previous
+                and previous.get("job_ids") == [job.id for _, job in jobs]
+                and previous.get("audio_inputs") == audio_inputs
+                and previous.get("source_media") == source_media
+            ):
                 previous_path = self._local_path(previous.get("composed_url", ""))
                 if previous_path and previous_path.is_file():
                     return self._result(project_id, scene_id, jobs, previous_path, [], "existing")
@@ -111,18 +118,55 @@ class SceneAssemblyService:
                         getattr(getattr(job, "input_payload", None), "parameters", None)
                         or {}
                     )
+                    dialogue_handoff = None
+                    handoff_lines = []
+                    if allow_audio_generation:
+                        from app.services.generation_contract import verify_dialogue_handoff
+
+                        metadata = getattr(job, "metadata", None)
+                        metadata = metadata if isinstance(metadata, dict) else {}
+                        dialogue_handoff = metadata.get("creative_dialogue_handoff")
+                        if dialogue_handoff is None:
+                            raise StateError(
+                                f"Narrative shot audio has no frozen handoff for {job.shot_id}",
+                                stage="scene_assembly_dialogue_integrity",
+                                metadata={"job_id": job.id, "shot_id": job.shot_id},
+                            )
+                        if dialogue_handoff is not None:
+                            frozen_dialogue = verify_dialogue_handoff(
+                                dialogue_handoff,
+                                scene_id=derive_scene_id_from_shot_id(job.shot_id),
+                                shot_id=job.shot_id,
+                            )
+                            from app.services.dialogue_authority import is_placeholder_dialogue
+
+                            if any(is_placeholder_dialogue(str(row.get("text") or "")) for row in frozen_dialogue["lines"]):
+                                raise StateError(
+                                    f"Frozen shot handoff contains placeholder dialogue for {job.shot_id}",
+                                    stage="scene_assembly_dialogue_integrity",
+                                    metadata={"job_id": job.id, "shot_id": job.shot_id},
+                                )
+                            handoff_lines = frozen_dialogue["lines"]
+                            if params.get("dialogue_lines") is not None and params.get("dialogue_lines") != handoff_lines:
+                                raise StateError(
+                                    f"Render job dialogue does not match its frozen handoff for {job.shot_id}",
+                                    stage="scene_assembly_dialogue_integrity",
+                                    metadata={"job_id": job.id, "shot_id": job.shot_id},
+                                )
                     dialogue = await self.audio_service.generate_shot_dialogue(
                         project_id=project_id,
                         scene_id=scene_id,
                         shot_id=job.shot_id,
                         scene_text=scene_text,
-                        dialogue_lines=params.get("dialogue_lines"),
+                        dialogue_lines=handoff_lines if allow_audio_generation else [],
                         dialogue_line_range=params.get("dialogue_line_range"),
                         characters=characters,
                         split_reason=params.get("split_reason"),
                         provider=dialogue_provider,
                         allow_generation=allow_audio_generation,
                         scene_context={"shot_number": shot_number, "scene_id": scene_id},
+                        dialogue_handoff=dialogue_handoff,
+                        dialogue_scene_id=derive_scene_id_from_shot_id(job.shot_id),
                     )
                     if dialogue.get("status") == TrackStatus.FAILED:
                         dialogue_source = dialogue.get("source") or "live_provider"
@@ -232,6 +276,12 @@ class SceneAssemblyService:
 
         if self.audio_sources.snapshot(project_id, scene_id, [job.shot_id for _, job in jobs]) != audio_inputs:
             raise StateError("A recording changed during assembly. Rebuild the scene to use the new audio.", stage="scene_assembly_audio_inputs", metadata={"project_id": project_id, "scene_id": scene_id})
+        if self.source_media_snapshot(jobs) != source_media:
+            raise StateError(
+                "A rendered shot changed during assembly. Rebuild the scene to use the current take.",
+                stage="scene_assembly_video_inputs",
+                metadata={"project_id": project_id, "scene_id": scene_id},
+            )
         storage = self.storage or get_storage("sqlite")
         duration = self._probe_duration(output_path)
         composed_url = (
@@ -248,6 +298,7 @@ class SceneAssemblyService:
             "composed_url": composed_url,
             "job_ids": [job.id for _, job in jobs],
             "audio_inputs": audio_inputs,
+            "source_media": source_media,
         })
         result = self._result(
             project_id,
@@ -271,6 +322,37 @@ class SceneAssemblyService:
             extra={"scene_id": scene_id, "shot_count": len(jobs)},
         )
         return result
+
+    def source_media_snapshot(self, jobs: list[tuple[int, RenderJobModel]]) -> dict[str, dict[str, str]]:
+        """Fingerprint the selected shot sources without contacting providers.
+
+        Files inside the backend media root are content-hashed; hosted or
+        out-of-root sources are bound to their exact URI and selected job ID.
+        """
+        snapshot: dict[str, dict[str, str]] = {}
+        root = self.backend_root.resolve()
+        for _, job in jobs:
+            url = str(getattr(getattr(job, "output_payload", None), "asset_url", "") or "").strip()
+            local = self._local_path(url)
+            source_kind = "uri"
+            material = url.encode("utf-8")
+            if local is not None and local.is_file() and local.resolve().is_relative_to(root):
+                resolved = local.resolve()
+                source_kind = "local_sha256"
+                digest = hashlib.sha256()
+                with resolved.open("rb") as handle:
+                    for block in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(block)
+                fingerprint = digest.hexdigest()
+            else:
+                fingerprint = hashlib.sha256(material).hexdigest()
+            snapshot[job.shot_id] = {
+                "job_id": str(job.id),
+                "asset_url": url,
+                "source_kind": source_kind,
+                "sha256": fingerprint,
+            }
+        return snapshot
 
     async def _materialize_job_asset(
         self,

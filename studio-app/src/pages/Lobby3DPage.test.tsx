@@ -61,10 +61,27 @@ describe('Lobby3DPage', () => {
       '/studio/previs',
       '/studio/integrity',
       '/studio/universe-graph',
-      '/studio/production-board',
+      '/studio/board',
     ]) {
       expect(targets.has(to)).toBe(true)
     }
+  })
+
+  it('matches the 12-bay tactical soundstage spec', () => {
+    expect(LOBBY_ROOMS.map((room) => room.id)).toEqual([
+      'atrium',
+      'gate',
+      'page',
+      'board',
+      'previs',
+      'screening',
+      'universe',
+      'vault',
+      'production',
+      'integrity',
+      'reference',
+      'project',
+    ])
   })
 
   it('renders the 3D stage with a 2D fallback toggle', async () => {
@@ -76,12 +93,16 @@ describe('Lobby3DPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lobby-3d-fallback')).toBeInTheDocument()
     })
-    expect(screen.getByTestId('lobby-3d-node-production-desk')).toBeInTheDocument()
+    expect(screen.getByTestId('lobby-3d-node-production')).toBeInTheDocument()
+    // Tactical split layout: HUD header + side-rail flank the canvas container.
+    expect(screen.getByTestId('tactical-hud-header')).toBeInTheDocument()
+    expect(screen.getByTestId('tactical-side-rail')).toBeInTheDocument()
+    expect(document.getElementById('canvas-container')).not.toBeNull()
   })
 
   it('routes a 3D hotspot straight to its existing 2D room', async () => {
     renderLobby()
-    const node = await screen.findByTestId('lobby-3d-node-production-desk')
+    const node = await screen.findByTestId('lobby-3d-node-production')
     fireEvent.click(node)
     expect(await screen.findByTestId('location-probe')).toHaveTextContent('/studio/production-desk')
   })
@@ -90,7 +111,7 @@ describe('Lobby3DPage', () => {
     renderLobby()
     fireEvent.click(screen.getByRole('button', { name: 'Switch to 2D List View' }))
     expect(await screen.findByTestId('lobby-2d-list')).toBeInTheDocument()
-    expect(screen.getByTestId('lobby-2d-node-reference-space')).toHaveAttribute(
+    expect(screen.getByTestId('lobby-2d-node-reference')).toHaveAttribute(
       'href',
       '/studio/reference-space',
     )

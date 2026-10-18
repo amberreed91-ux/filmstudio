@@ -74,8 +74,38 @@ def execute_provider_render(
     requested_provider_name = context["requested_provider_name"]
     payload = context["payload"]
     context_config = context["config"]
+    def _selection_failure(error_code: str, message: str) -> Dict[str, Any]:
+        return {
+            "render_id": None,
+            "status": "failed",
+            "provider": requested_provider_name,
+            "error": message,
+            "error_code": error_code,
+            "meta": {"file_path": None, "url": None},
+        }
+
     selection_audit = select_provider_with_audit(requested_provider_name, context_config)
+    if not selection_audit["allowed"]:
+        return _selection_failure(
+            "provider_disabled",
+            f"Provider '{requested_provider_name}' is disabled and cannot execute generation requests.",
+        )
     selected_provider_name = selection_audit["selected_provider"]
+    # An allowed provider is authoritative for this render intent. Do not let
+    # the registry silently substitute mock (or any other provider) when the
+    # selected implementation is absent.
+    if selected_provider_name not in _DIRECT_PROVIDER_ADAPTERS:
+        try:
+            provider = _get_registry(context_config).get_provider(selected_provider_name)
+        except ValueError:
+            return {
+                "render_id": None,
+                "status": "failed",
+                "provider": selected_provider_name,
+                "error": f"Unknown provider: {selected_provider_name}",
+                "error_code": "unknown_provider",
+                "meta": {"file_path": None, "url": None},
+            }
 
     if not validate_provider_payload(payload):
         return normalize_provider_result(
@@ -111,20 +141,6 @@ def execute_provider_render(
         except Exception as exc:  # pragma: no cover - deterministic exception normalization
             raw_result = exc
         return normalize_provider_result(raw_result, selected_provider_name)
-
-    registry = _get_registry(context_config)
-
-    try:
-        provider = registry.get_provider(selected_provider_name)
-    except ValueError:
-        return normalize_provider_result(
-            {
-                "status": "failed",
-                "error_code": "unknown_provider",
-                "error": f"Unknown provider: {selected_provider_name}",
-            },
-            selected_provider_name,
-        )
 
     try:
         raw_result = provider.render(payload)
@@ -167,5 +183,9 @@ def execute_render_sequence(
             result = execute_render(normalized_provider_name, payload_value, config)
         except Exception as exc:  # pragma: no cover - defensive fallback
             result = exc
-        results.append(normalize_provider_result(result, normalized_provider_name))
+        normalized_result = normalize_provider_result(result, normalized_provider_name)
+        # Preserve the caller's execution intent across the compatibility
+        # normalizer, whose legacy provider allowlist maps unknown IDs to mock.
+        normalized_result["provider"] = normalized_provider_name
+        results.append(normalized_result)
     return results

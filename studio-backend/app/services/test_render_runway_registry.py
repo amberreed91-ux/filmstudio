@@ -10,17 +10,24 @@ from app.adapters import (
     WanTextToVideoAdapter,
 )
 from app.services.render import RenderService
+from app.services.scene_production_pipeline_service import SceneProductionPipelineService
 
 
-def test_adapter_registry_includes_runway() -> None:
+def test_adapter_registry_includes_direct_runway_compatibility_and_router() -> None:
+    from app.adapters import RunwayRouterAdapter
+
     assert "runway" in ADAPTER_REGISTRY
     assert ADAPTER_REGISTRY["runway"] is RunwayAdapter
+    assert "runway_router" in ADAPTER_REGISTRY
+    assert ADAPTER_REGISTRY["runway_router"] is RunwayRouterAdapter
     assert "happyhorse" in ADAPTER_REGISTRY
     assert ADAPTER_REGISTRY["happyhorse"] is HappyHorseAdapter
     assert "happyhorse-r2v" in ADAPTER_REGISTRY
     assert ADAPTER_REGISTRY["happyhorse-r2v"] is HappyHorseR2VAdapter
     assert "wan" in ADAPTER_REGISTRY
     assert ADAPTER_REGISTRY["wan"] is WanTextToVideoAdapter
+    assert "openrouter" not in ADAPTER_REGISTRY
+    assert "openrouter-video" not in ADAPTER_REGISTRY
 
 
 def test_render_service_provider_configs_include_runway() -> None:
@@ -32,21 +39,101 @@ def test_render_service_provider_configs_include_runway() -> None:
     assert "wan" in providers
     assert "local" in providers
     assert "simulated" in providers
+    assert "openrouter" not in providers
+    assert "openrouter-video" not in providers
 
 
-def test_default_provider_is_happyhorse(monkeypatch) -> None:
+def test_default_provider_selection_is_preserved_for_operator_alias(monkeypatch) -> None:
     monkeypatch.delenv("RENDER_VIDEO_PROVIDER", raising=False)
-    service = RenderService()
-    assert service.get_default_provider() == "happyhorse"
-
-
-def test_default_provider_can_be_overridden_to_runway(monkeypatch) -> None:
-    monkeypatch.setenv("RENDER_VIDEO_PROVIDER", "runway")
+    monkeypatch.setattr("app.services.render.get_settings", lambda: type("SettingsStub", (), {"render_video_provider": "runway"})())
     service = RenderService()
     assert service.get_default_provider() == "runway"
 
 
-def test_create_job_accepts_runway_provider() -> None:
+@pytest.mark.parametrize(
+    ("selected", "expected"),
+    [
+        ("runway", "runway_router"),
+        ("runway_router", "runway_router"),
+        ("simulated", "simulated"),
+        ("happyhorse", "happyhorse"),
+    ],
+)
+def test_scene_generation_resolves_runway_to_router_without_changing_other_providers(selected, expected):
+    pipeline = SceneProductionPipelineService()
+    assert pipeline._resolve_generation_provider(selected) == expected
+
+
+def test_scene_generation_default_runway_selection_resolves_to_router():
+    from types import SimpleNamespace
+
+    pipeline = SceneProductionPipelineService()
+    pipeline.render_service = SimpleNamespace(get_default_provider=lambda: "runway")
+    assert pipeline._resolve_generation_provider(None) == "runway_router"
+
+
+@pytest.mark.asyncio
+async def test_legacy_direct_runway_job_cannot_reach_an_adapter(monkeypatch) -> None:
+    from app.models import RenderJobInput, RenderJobModel
+
+    service = RenderService()
+    job = RenderJobModel(
+        id="legacy-direct-runway-job",
+        project_id="synthetic-project",
+        shot_id="scene_001_shot_001",
+        provider="runway",
+        input_payload=RenderJobInput(shot_id="scene_001_shot_001", prompt="legacy"),
+    )
+    service._jobs[job.id] = job
+    calls = []
+    monkeypatch.setattr("app.services.render.get_adapter", lambda *_args: calls.append("adapter"))
+
+    result = await service.submit_job(job.id)
+
+    assert result.status == "failed"
+    assert result.metadata["provider_boundary_failure"]["reason"] == "direct_runway_submission_disabled"
+    assert calls == []
+
+
+def test_retired_openrouter_default_fails_closed(monkeypatch) -> None:
+    monkeypatch.setenv("RENDER_VIDEO_PROVIDER", "openrouter")
+    service = RenderService()
+    with pytest.raises(ValueError, match="retired"):
+        service.get_default_provider()
+
+
+@pytest.mark.parametrize("provider", ["openrouter", "openrouter-video"])
+def test_retired_openrouter_video_provider_cannot_be_created_or_configured(provider: str) -> None:
+    service = RenderService()
+    assert service.get_provider_config(provider) is None
+    with pytest.raises(ValueError, match="retired"):
+        service.create_job(project_id="proj-1", shot_id="shot-1", provider=provider, prompt="smoke")
+
+    from app.models import ProviderConfig
+
+    with pytest.raises(ValueError, match="retired"):
+        service.set_provider_config(
+            ProviderConfig(provider_id=provider, name="retired", enabled=True, is_simulated=False)
+        )
+
+
+def test_legacy_video_submit_stub_rejects_retired_openrouter():
+    from app.services.providers.video_provider import submit_video_render
+
+    result = submit_video_render(
+        {"scene_id": "scene-1", "shot_id": "shot-1"},
+        {
+            "video_provider_enabled": True,
+            "video_provider_name": "openrouter",
+            "video_provider_api_key": "",
+        },
+    )
+    assert result["status"] == "failed"
+    assert result["meta"]["reason"] == "provider_retired"
+    assert "retired" in result["error"]
+
+
+def test_create_job_preserves_direct_runway_provider_for_compatibility() -> None:
     service = RenderService()
     job = service.create_job(
         project_id="proj-1",
@@ -55,6 +142,12 @@ def test_create_job_accepts_runway_provider() -> None:
         prompt="smoke",
     )
     assert job.provider == "runway"
+
+
+def test_unsupported_default_provider_fails_closed(monkeypatch) -> None:
+    monkeypatch.setenv("RENDER_VIDEO_PROVIDER", "not-a-provider")
+    with pytest.raises(ValueError, match="Unsupported RENDER_VIDEO_PROVIDER"):
+        RenderService().get_default_provider()
 
 
 def test_invalid_provider_still_returns_clear_error() -> None:
@@ -73,10 +166,8 @@ def test_invalid_provider_still_returns_clear_error() -> None:
         assert "Available providers" in text
 
 
-def test_smoke_test_path_inputs_can_create_runway_job() -> None:
+def test_smoke_test_path_inputs_can_create_runway_compatibility_job() -> None:
     service = RenderService()
-
-    # Mirrors the smoke script query parameters used by /api/f51/studio/render/jobs
     job = service.create_job(
         project_id="smoke-project",
         shot_id="smoke-shot",
@@ -206,6 +297,7 @@ def test_invalid_wan_model_override_is_rejected_before_submission() -> None:
 
 @pytest.mark.asyncio
 async def test_missing_runway_api_key_records_permanent_provider_failure(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.render.validate_generation_payload", lambda **_kwargs: None)
     monkeypatch.delenv("RUNWAYML_API_SECRET", raising=False)
     monkeypatch.delenv("RUNWAY_API_KEY", raising=False)
     monkeypatch.delenv("VIDEO_PROVIDER_API_KEY", raising=False)
@@ -221,15 +313,6 @@ async def test_missing_runway_api_key_records_permanent_provider_failure(monkeyp
     submitted = await service.submit_job(job.id)
 
     assert submitted.status == "failed"
-    assert submitted.error_message == "Missing Runway API key"
-    failure = submitted.metadata["provider_failure"]
-    assert failure["category"] == "permanent"
-    assert failure["error_type"] == "missing_api_key"
-    assert failure["retryable"] is False
-    retry_phase = next(
-        row
-        for row in submitted.metadata["zero_touch_pipeline"]["phases"]
-        if row["phase"] == "retry"
-    )
-    assert retry_phase["status"] == "skipped"
-    assert retry_phase["error_type"] == "missing_api_key"
+    assert submitted.metadata["provider_boundary_failure"]["reason"] == "direct_runway_submission_disabled"
+    assert submitted.metadata["provider_boundary_failure"]["required_provider"] == "runway_router"
+    assert "frozen contract" in submitted.error_message

@@ -13,6 +13,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -27,6 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger("test_corrector")
 
 
+@pytest.mark.skipif(not os.environ.get("STUDIO_ALLOW_LIVE_NETWORK_TESTS"), reason="makes a live network call (LLM); run only with owner authorization")
 async def test_corrector():
     """Test the Groq corrector with a simulated failed adherence score."""
     

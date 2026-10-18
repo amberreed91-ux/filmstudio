@@ -12,6 +12,10 @@ from app.models import RenderJobModel
 from app.models.consistency import CharacterReferenceLock, ConsistencyPayload, ReferenceAsset
 from app.services.character_name_matching import text_mentions_character
 from app.services.project_store import project_store
+from app.services.reference_selection_service import (
+    select_character_references,
+    scene_categories_for_prompt,
+)
 from app.utils.helpers import derive_scene_id_from_shot_id
 from app.utils.character_appearance import appearance_approval, approved_reference_rows
 
@@ -187,6 +191,31 @@ class CharacterVisualReferenceService:
                 seen_ids.add(character_id)
                 characters.append(character)
 
+        if not characters:
+            # Scene cast empty and no name in prompt (pronouns, typos): fall
+            # back to locked looks so face refs still attach instead of going
+            # text-only. Capped to avoid leaking a large ensemble into one shot.
+            try:
+                from app.utils.character_appearance import appearance_approval
+
+                for character in all_characters:
+                    if not isinstance(character, dict):
+                        continue
+                    try:
+                        is_locked = appearance_approval(character).get("status") == "locked"
+                    except Exception:
+                        is_locked = False
+                    if not is_locked:
+                        continue
+                    character_id = str(character.get("id") or "").strip()
+                    if character_id and character_id not in seen_ids:
+                        seen_ids.add(character_id)
+                        characters.append(character)
+                    if len(characters) >= 3:
+                        break
+            except Exception:
+                pass
+
         return characters
 
     def build_consistency_payload_for_shot(
@@ -196,6 +225,7 @@ class CharacterVisualReferenceService:
         shot_id: str,
         storage: Any,
         prompt: str = "",
+        ensure_provisional_locks: bool = True,
     ) -> ConsistencyPayload | None:
         characters = self.resolve_shot_characters(
             project_id=project_id,
@@ -206,16 +236,18 @@ class CharacterVisualReferenceService:
         if not characters:
             return None
 
-        self.ensure_provisional_locks_for_shot(
-            project_id=project_id,
-            shot_id=shot_id,
-            characters=characters,
-            storage=storage,
-        )
+        if ensure_provisional_locks:
+            self.ensure_provisional_locks_for_shot(
+                project_id=project_id,
+                shot_id=shot_id,
+                characters=characters,
+                storage=storage,
+            )
 
         refs: list[ReferenceAsset] = []
         weights: dict[str, float] = {}
         fallback_text: dict[str, str] = {}
+        selection_audit: list[dict[str, Any]] = []
 
         prominence = self.prominence_by_character(characters, prompt)
 
@@ -235,19 +267,37 @@ class CharacterVisualReferenceService:
             locks = self.get_reference_locks_for_character(
                 storage, project_id, character_id, look_id
             )
-            if not locks:
-                continue
-
             character_weight = prominence.get(character_id, self.BACKGROUND_PROMINENCE)
+            selected_images: set[str] = set()
+
+            # Canonical locks are always selected first. Supporting library rows
+            # may fill the remaining per-character budget, but never displace
+            # the locked identity anchor.
             for lock in locks[: self.MAX_REFERENCES_PER_CHARACTER]:
                 if len(refs) >= self.MAX_PROVIDER_REFERENCES:
                     break
                 image_url = str(lock.get("image_url") or "").strip()
-                if not image_url:
-                    continue
                 lock_status = str(lock.get("lock_status") or "locked").strip()
+                lock_is_approved = (
+                    lock_status == "locked"
+                    and str(lock.get("source_status") or "approved") == "approved"
+                    and str(lock.get("review_status") or "approved") in {"approved", "unreviewed"}
+                )
+                # Preserve existing provisional-lock behavior for providers that
+                # historically consume those locks. Local LTX opts out of lock
+                # creation and must only project explicitly approved references.
+                lock_is_eligible = lock_is_approved or (
+                    ensure_provisional_locks and lock_status == "provisional"
+                )
+                if not image_url or image_url in selected_images or not lock_is_eligible:
+                    continue
+                selected_images.add(image_url)
                 role = str(lock.get("reference_role") or "general").strip()
                 lock_look = str(lock.get("look_id") or "default")
+                lock_category = role if role in {"face", "full_body", "wardrobe"} else (
+                    "face" if role == "alternate_angle" else "other"
+                )
+
                 ref_id = (
                     f"charlock:{character_id}:{role}"
                     if lock_look == "default"
@@ -260,6 +310,20 @@ class CharacterVisualReferenceService:
                         image_url=image_url,
                         source_shot_id=lock.get("source_shot_id"),
                         project_id=project_id,
+                        target_type="character",
+                        target_id=character_id,
+                        reference_role=role,
+                        look_id=lock_look,
+                        lock_status=lock_status,
+                        source_status=str(lock.get("source_status") or "approved"),
+                        review_status=str(lock.get("review_status") or "approved"),
+                        capture_method=str(lock.get("capture_method") or ""),
+                        reliability=str(lock.get("reliability") or ""),
+                        reference_created_at=str(lock.get("created_at") or ""),
+                        category=lock_category,
+                        approval_state="approved",
+                        canonical=True,
+                        source_kind="confirmed",
                     )
                 )
                 # Prominence × role: the shot's subject should pull harder than a
@@ -286,19 +350,128 @@ class CharacterVisualReferenceService:
                     f"Reference reliability: {reliability}; source shot: {source_shot or 'unknown'}."
                 )
 
+            supporting = self._approved_supporting_references(
+                storage, project_id, character_id
+            )
+            # Deterministic, auditable selection. Canonical locks above are the
+            # identity anchor and are never in this pool; the selector ranks
+            # identity tiers (face → profile → full body) ahead of context
+            # tiers (scene context → wardrobe → expression → other),
+            # deduplicates duplicate URLs/asset files, and promotes scene
+            # context only into slots identity did not use.
+            # Budget: MAX_REFERENCES_PER_CHARACTER counts the character's
+            # supporting references — the canonical anchor is protected
+            # separately and never counted against this pool, but the global
+            # provider budget always bounds the total.
+            selection = select_character_references(
+                supporting,
+                budget=max(
+                    0,
+                    min(
+                        self.MAX_REFERENCES_PER_CHARACTER,
+                        self.MAX_PROVIDER_REFERENCES - len(refs),
+                    ),
+                ),
+                scene_categories=scene_categories_for_prompt(prompt),
+                character_name=character_name,
+            )
+            for raw in selection.selected:
+                image_url = str(raw.get("image_url") or "").strip()
+                ref_id = str(raw.get("ref_id") or "").strip()
+                if not image_url or not ref_id or image_url in selected_images:
+                    continue
+                selected_images.add(image_url)
+                kind = str(raw.get("kind") or "character_full")
+                if kind not in {"character_face", "character_full"}:
+                    kind = "character_full"
+                refs.append(
+                    ReferenceAsset(
+                        ref_id=ref_id,
+                        kind=kind,
+                        image_url=image_url,
+                        source_shot_id=raw.get("source_shot_id"),
+                        project_id=project_id,
+                        target_type="character",
+                        target_id=character_id,
+                        category=str(raw.get("category") or "other"),
+                        approval_state="approved",
+                        canonical=False,
+                        source_kind=str(raw.get("source_kind") or "confirmed"),
+                        reference_created_at=str(raw.get("created_at") or ""),
+                    )
+                )
+                weights[ref_id] = round(character_weight * 0.45, 4)
+                category = str(raw.get("category") or "supporting").replace("_", " ")
+                fallback_text[ref_id] = (
+                    f"Use approved supporting {category} reference for {character_name or 'this character'} "
+                    "as additional visual evidence; canonical identity remains the locked reference."
+                )
+            if selection.audit:
+                selection_audit.append({
+                    "character_id": character_id,
+                    "selection": selection.summary(),
+                })
+
         if not refs:
             return self._build_confirmed_reference_asset_payload(
                 project_id=project_id,
                 storage=storage,
                 characters=characters,
             )
-        return ConsistencyPayload(
+        payload = ConsistencyPayload(
             project_id=project_id,
             refs=refs,
             weights=weights,
             mode="identity_lock",
             fallback_text=fallback_text,
         )
+        if selection_audit:
+            # Selection is recorded for debugging and reproducibility — visible
+            # in job metadata and logs, never presented to filmmakers as a score.
+            payload = payload.model_copy(update={"selection_audit": selection_audit})
+            logger.info(
+                "REFERENCE_SELECTION_AUDIT | project=%s | shot=%s | characters=%d",
+                project_id,
+                shot_id,
+                len(selection_audit),
+            )
+        return payload
+
+    def _approved_supporting_references(
+        self,
+        storage: Any,
+        project_id: str,
+        character_id: str,
+    ) -> list[dict[str, Any]]:
+        """Return approved, non-canonical library rows for one character."""
+        reader = getattr(storage, "list_reference_assets", None)
+        if not callable(reader):
+            return []
+        try:
+            rows = reader(
+                project_id=project_id,
+                target_type="character",
+                target_id=character_id,
+                approval_state="approved",
+                limit=12,
+            ) or []
+        except TypeError:
+            try:
+                rows = reader(project_id=project_id, limit=12) or []
+            except Exception:
+                return []
+        except Exception:
+            return []
+        return [
+            row for row in rows
+            if isinstance(row, dict)
+            and str(row.get("project_id") or "") == project_id
+            and not bool(row.get("canonical"))
+            and row.get("approval_state", "approved") == "approved"
+            and str(row.get("target_type") or "") == "character"
+            and str(row.get("target_id") or "") == character_id
+            and str(row.get("kind") or "") in {"character_face", "character_full"}
+        ]
 
     def _build_confirmed_reference_asset_payload(
         self,
@@ -344,9 +517,17 @@ class CharacterVisualReferenceService:
             ref_id = str(raw.get("ref_id") or "").strip()
             kind = str(raw.get("kind") or "").strip()
             image_url = str(raw.get("image_url") or "").strip()
+            if raw.get("approval_state") in {"candidate", "rejected"}:
+                continue
+            raw_target_type = str(raw.get("target_type") or "")
+            raw_target_id = str(raw.get("target_id") or "")
+            character_ids = {str(character.get("id") or "") for character in characters}
+            if raw_target_type == "character" and raw_target_id not in character_ids:
+                continue
             if kind in {"character_full", "character_face"} and any(appearance_approval(character) for character in characters):
                 # Reopened approvals must not silently reactivate a broad project
-                # reference that the creator has just chosen to revise.
+                # reference that the creator has just chosen to revise. Scoped
+                # supporting rows are handled above after canonical locks.
                 continue
             if not ref_id or kind not in kind_weights or not image_url:
                 continue
@@ -358,6 +539,11 @@ class CharacterVisualReferenceService:
                     embedding=raw.get("embedding") if isinstance(raw.get("embedding"), list) else None,
                     source_shot_id=raw.get("source_shot_id"),
                     project_id=project_id,
+                    target_type=("character" if raw_target_type == "character" else None),
+                    target_id=(raw_target_id if raw_target_type == "character" else None),
+                    approval_state="approved",
+                    canonical=bool(raw.get("canonical")),
+                    source_kind="confirmed",
                 )
             except Exception:
                 continue

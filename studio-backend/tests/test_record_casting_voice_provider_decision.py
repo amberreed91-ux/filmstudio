@@ -6,9 +6,11 @@ from pathlib import Path
 
 import pytest
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
 
 def _load_decision_module():
-    path = Path("scripts/record_casting_voice_provider_decision.py")
+    path = _BACKEND_ROOT / "scripts" / "record_casting_voice_provider_decision.py"
     spec = importlib.util.spec_from_file_location("record_casting_voice_provider_decision", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader

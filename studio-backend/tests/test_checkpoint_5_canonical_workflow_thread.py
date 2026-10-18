@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -180,6 +181,7 @@ def _approve_storyboard(storage: DatabaseStorage, state: ProjectStore) -> dict:
         shot_count=1,
     )
     try:
+        service.derive_and_approve_image_prompts_for_version(version_id=detail["version"].version_id)
         return service.approve_version(
             blueprint_id=detail["blueprint"].blueprint_id,
             version_id=detail["version"].version_id,
@@ -194,6 +196,7 @@ def _approve_storyboard(storage: DatabaseStorage, state: ProjectStore) -> dict:
             blueprint_id=detail["blueprint"].blueprint_id,
             version_id=detail["version"].version_id,
         )
+        service.derive_and_approve_image_prompts_for_version(version_id=detail["version"].version_id)
         return service.approve_version(
             blueprint_id=detail["blueprint"].blueprint_id,
             version_id=detail["version"].version_id,
@@ -228,6 +231,9 @@ def _begin(service: CanonicalProductionWorkflowService) -> dict:
 def _through_package(service: CanonicalProductionWorkflowService) -> dict:
     run = _begin(service)
     run = asyncio.run(service.generate_previs(run["run_id"]))
+    # Checkpoint 5 previs is simulated-only: the bare call yields simulated jobs.
+    assert run["status"] == "previs_generated"
+    assert {job.provider for job in service.renderer.jobs.values()} == {"simulated"}
     image_ids = [row["previs_image_id"] for row in run["data"]["artifacts"]["previs"]]
     run = service.approve_previs(
         run["run_id"],
@@ -237,7 +243,7 @@ def _through_package(service: CanonicalProductionWorkflowService) -> dict:
     return service.create_production_package(run["run_id"])
 
 
-@pytest.mark.parametrize("provider", ["simulated", "openrouter-video"])
+@pytest.mark.parametrize("provider", ["simulated", "runway"])
 def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provider: str) -> None:
     service, storage, state, renderer = _environment(tmp_path)
     run = _begin(service)
@@ -258,6 +264,11 @@ def test_complete_canonical_workflow_trace_survives_reload(tmp_path: Path, provi
         service.create_production_package(run_id)
 
     run = asyncio.run(service.generate_previs(run_id))
+    # Checkpoint 5 previs is simulated-only; the provider param below applies
+    # to the production-render stage only.
+    assert run["status"] == "previs_generated"
+    assert renderer.jobs
+    assert {job.provider for job in renderer.jobs.values()} == {"simulated"}
     previs_create_count = renderer.create_count
     assert asyncio.run(service.generate_previs(run_id))["run_id"] == run_id
     assert renderer.create_count == previs_create_count
@@ -465,24 +476,38 @@ def test_workflow_rejects_cross_script_and_invalid_state_transitions(tmp_path: P
         )
 
 
-@pytest.mark.parametrize("provider_override", [None, "openrouter-video"])
+@pytest.mark.parametrize("provider_override", [None, "runway"])
 def test_package_render_keeps_frozen_settings_and_never_uses_video_as_image(tmp_path, provider_override):
     service, storage, state, renderer = _environment(tmp_path)
     run = _begin(service)
     run = asyncio.run(service.generate_previs(run["run_id"]))
+    # Checkpoint 5 previs is simulated-only: previs jobs are never Runway.
+    assert run["status"] == "previs_generated"
+    assert {job.provider for job in renderer.jobs.values()} == {"simulated"}
     for job in renderer.jobs.values():
         job.input_payload.parameters.update(duration=8, seed=7, ratio="9:16", storyboard_frame_url="https://media.test/approved-frame.png")
         job.input_payload.referenceAssets = ["https://media.test/approved-frame.png"]
-        job.provider = "openrouter-video"
         storage.save_job(job)
     ids = [row["previs_image_id"] for row in run["data"]["artifacts"]["previs"]]
     run = service.approve_previs(run["run_id"], previs_image_ids=ids, confirmed=True)
     run = service.create_production_package(run["run_id"])
+    # Production-package fixture: Runway enters at the package layer, never via
+    # previs jobs, so production-inherits-frozen assertions stay meaningful.
+    package_id = run["data"]["identifiers"]["production_package_id"]
+    package = storage.get_previs_production_package(package_id)
+    for shot in package["payload"]["shots"]:
+        shot["render_provider"] = "runway"
+    with storage._get_connection() as conn:
+        conn.execute(
+            "UPDATE previs_production_packages SET payload_json = ? WHERE package_id = ?",
+            (json.dumps(package["payload"], sort_keys=True), package_id),
+        )
+        conn.commit()
     result = asyncio.run(service.render_production_package(run["run_id"], provider=provider_override))
     assert result["status"] == "render_completed"
     for row in result["data"]["artifacts"]["render_jobs"]:
         job = renderer.get_job(row["render_job_id"])
-        assert job.provider == "openrouter-video"
+        assert job.provider == "runway"
         assert job.input_payload.parameters["duration"] == 8
         assert job.input_payload.parameters["seed"] == 7
         assert job.input_payload.parameters["ratio"] == "9:16"
@@ -505,27 +530,57 @@ def test_package_render_review_stop_does_not_poll_forever(tmp_path):
     assert service.get(run["run_id"])["status"] == "render_failed"
 
 
-@pytest.mark.parametrize("provider", ["runway", "openrouter-video", "simulated"])
+@pytest.mark.parametrize("provider", ["simulated", None])
 def test_canonical_previs_passes_explicit_provider_to_render_job(tmp_path, provider):
+    # Checkpoint 5 previs is simulated-only: an explicit "simulated" and the
+    # bare (None) call both yield only simulated jobs.
     service, storage, state, renderer = _environment(tmp_path)
     run = _begin(service)
-    result = asyncio.run(service.generate_previs(run["run_id"], provider=provider))
+    kwargs = {} if provider is None else {"provider": provider}
+    result = asyncio.run(service.generate_previs(run["run_id"], **kwargs))
     assert result["status"] == "previs_generated"
     assert renderer.jobs
-    assert {job.provider for job in renderer.jobs.values()} == {provider}
+    assert {job.provider for job in renderer.jobs.values()} == {"simulated"}
+
+
+@pytest.mark.parametrize("provider", ["runway", "runway_router", "runway_direct"])
+def test_canonical_previs_rejects_non_simulated_provider_fail_closed(tmp_path, provider):
+    # Fail-closed: a non-simulated provider raises before any job is created.
+    service, storage, state, renderer = _environment(tmp_path)
+    run = _begin(service)
+    create_count = renderer.create_count
+    with pytest.raises(ValidationError, match="simulated-only"):
+        asyncio.run(service.generate_previs(run["run_id"], provider=provider))
+    assert renderer.create_count == create_count
+    assert renderer.jobs == {}
+
+
+def test_standalone_previs_runway_request_still_fails_closed(tmp_path):
+    # Negative case for the canonical exemption: the standalone Previs path
+    # (no from_canonical_workflow flag) must keep rejecting runway_router,
+    # whether the provider resolves by default or is requested explicitly.
+    from app.services.previs_service import PrevisService
+
+    storage = DatabaseStorage(str(tmp_path / "standalone-db"))
+    renderer = DeterministicRenderer(storage)
+    standalone = PrevisService(storage=storage, renderer=renderer)
+    with pytest.raises(ValidationError, match="standalone Previs path"):
+        asyncio.run(standalone.generate_scene("project-thread", "scene_001"))
+    with pytest.raises(ValidationError, match="standalone Previs path"):
+        asyncio.run(standalone.generate_scene("project-thread", "scene_001", provider="runway"))
 
 
 def test_polling_does_not_change_queued_provider(tmp_path):
     service, storage, state, renderer = _environment(tmp_path)
     run = _through_package(service)
     renderer.delay_next_submission = True
-    queued = asyncio.run(service.render_production_package(run["run_id"], provider="openrouter-video"))
+    queued = asyncio.run(service.render_production_package(run["run_id"], provider="simulated"))
     count = renderer.create_count
     assert queued["status"] == "render_queued"
     completed = asyncio.run(service.render_production_package(run["run_id"]))
     assert completed["status"] == "render_completed"
     assert renderer.create_count == count
-    assert {renderer.get_job(row["render_job_id"]).provider for row in completed["data"]["artifacts"]["render_jobs"]} == {"openrouter-video"}
+    assert {renderer.get_job(row["render_job_id"]).provider for row in completed["data"]["artifacts"]["render_jobs"]} == {"simulated"}
 
 
 def test_legacy_script_context_can_begin_without_reparsing_saved_scenes(tmp_path):

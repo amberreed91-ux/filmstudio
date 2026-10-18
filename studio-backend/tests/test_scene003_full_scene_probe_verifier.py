@@ -6,8 +6,11 @@ from pathlib import Path
 import pytest
 
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+
 def _load_probe_module():
-    path = Path("scripts/probe_scene003_full_scene_pipeline.py")
+    path = _BACKEND_ROOT / "scripts" / "probe_scene003_full_scene_pipeline.py"
     spec = importlib.util.spec_from_file_location("probe_scene003_full_scene_pipeline", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader

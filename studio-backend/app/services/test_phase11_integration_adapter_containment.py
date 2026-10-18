@@ -44,14 +44,15 @@ def test_adapter_and_render_layers_do_not_consume_codirector_metadata():
             assert token not in lowered, f"{target} unexpectedly references '{token}'"
 
 
-def test_render_service_provider_selection_is_unaffected_by_codirector_stack():
+def test_render_service_provider_selection_is_unaffected_by_codirector_stack(monkeypatch):
+    monkeypatch.setenv("RENDER_VIDEO_PROVIDER", "runway")
     """
     Runtime authority stays in render service provider config, not debug metadata.
     """
     service = RenderService()
 
-    # Baseline: provider selection follows the configured render default.
-    assert service.get_default_provider() == "happyhorse"
+    # Baseline: provider selection follows the configured Runway video default.
+    assert service.get_default_provider() == "runway"
 
     # Disable simulated, then enable a real provider and ensure default follows
     # provider config only (not any co-director metadata).
@@ -70,7 +71,7 @@ def test_render_service_provider_selection_is_unaffected_by_codirector_stack():
     assert config is not None
     config.enabled = True
     service.set_provider_config(config)
-    assert service.get_default_provider() == "happyhorse"
+    assert service.get_default_provider() == "runway"
 
 
 def test_authority_paths_do_not_consume_adapter_contract_trace_tokens():

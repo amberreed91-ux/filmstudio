@@ -1174,8 +1174,14 @@ def test_enhance_scene_prompt_with_minimal_fields():
     assert len(enhanced.enhanced_prompt) <= 512
 
 
-def test_enhance_scene_prompt_truncates_long_description():
-    """Test that very long descriptions are truncated to 512 chars."""
+def test_enhance_scene_prompt_does_not_truncate_long_description():
+    """Advisory enhanced prompts are never silently truncated.
+
+    Historical behavior cut the enhanced prompt at 512 chars with an ellipsis,
+    producing severed fragments. Canonical-creative-integrity rule: no silent
+    truncation anywhere in the prompt path; provider budgets are enforced
+    explicitly (fail-closed) by prompt_budget_service at job creation.
+    """
     long_text = "Very detailed scene description. " * 50  # Way over 512 chars
     scene = {
         "scene_id": "scene_003",
@@ -1186,13 +1192,13 @@ def test_enhance_scene_prompt_truncates_long_description():
         "characters": ["Protagonist", "Love Interest"],
     }
     project = {"project_id": "test_project"}
-    
+
     enhanced = script_intelligence_service._enhance_scene_prompt(scene, project)
-    
-    # Must be within Runway's 512 char limit
-    assert len(enhanced.enhanced_prompt) <= 512
-    # Should end with ellipsis when truncated
-    assert "..." in enhanced.enhanced_prompt
+
+    # The full advisory content survives; no ellipsis artifact is introduced.
+    assert "Very detailed scene description." in enhanced.enhanced_prompt
+    assert "..." not in enhanced.enhanced_prompt
+    assert "\u2026" not in enhanced.enhanced_prompt
 
 
 def test_enhance_scene_prompt_handles_empty_description():

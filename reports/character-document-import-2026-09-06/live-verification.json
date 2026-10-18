@@ -1,0 +1,28 @@
+{
+  "ready": {
+    "ready": true,
+    "components": {
+      "database": "ready",
+      "schema": "ready (v62)",
+      "background_tasks": "ready (3 active)"
+    },
+    "timestamp": 1788740683.0986109
+  },
+  "profiles": 93,
+  "bible_profiles": 57,
+  "sources": [
+    {
+      "filename": "1-SIX_Master_Cast_List_App_Ready.json",
+      "sha256": "b6d3c21ec860c154f61a2c08f5efd8469c8d815a7c87f0eeb34c587893525255",
+      "kind": "cast_manifest",
+      "entries": 91
+    },
+    {
+      "filename": "2-SIX_Fifth_Draft_Full_Character_Bible.docx",
+      "sha256": "41c9ca78ddaa4a5495c2fd192563c1cb56441cacc3d120bd857accbf8774204c",
+      "kind": "character_bible",
+      "entries": 64
+    }
+  ],
+  "background_groups": 14
+}

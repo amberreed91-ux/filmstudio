@@ -449,7 +449,7 @@ const UniverseGraphPage: React.FC = () => {
           {success && <div role="status" className="mb-4 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div>}
 
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_350px]">
-            <section aria-label="Universe constellation" className="min-w-0 overflow-hidden rounded-xl border border-[#7891a5]/20 bg-[#080f18]">
+            <section aria-label="Universe constellation" data-testid="universe-constellation-3d" className="min-w-0 overflow-hidden rounded-xl border border-[#7891a5]/20 bg-[#080f18]">
               <div className="relative h-[460px] sm:h-[590px] xl:h-[660px]">
                 <UniverseGraph3D nodes={filteredNodes} layoutNodes={data?.nodes} relationships={data?.relationships || []}
                   selectedNodeId={detailPanelOpen ? selectedNode?.node_id || null : null}

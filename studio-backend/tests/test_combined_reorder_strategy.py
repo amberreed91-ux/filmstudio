@@ -614,6 +614,84 @@ class TestCombinedStrategyStructure:
 # TESTS: All scores from the real data (summary validation)
 # =============================================================================
 
+class TestAdherenceRetryProviderIdentity:
+    @pytest.mark.asyncio
+    async def test_source_job_provider_is_preserved_and_recorded_by_default(self):
+        service = RenderRetryService()
+        service._reconstruct_original_score = AsyncMock(return_value=None)
+        source = MagicMock(id="source-job", project_id="test_project", shot_id="test_shot", provider="runway")
+        created_jobs = []
+
+        with patch("app.services.render.render_service") as renderer:
+            renderer.get_job.return_value = source
+            renderer.get_default_provider.return_value = "happyhorse"
+            renderer.create_job.side_effect = lambda **kwargs: created_jobs.append(kwargs) or MagicMock(id="retry-job")
+            renderer.submit_job = AsyncMock(return_value=MagicMock(status="rendering"))
+            await service.evaluate_and_select_best(
+                shot_id="test_shot",
+                project_id="test_project",
+                original_slots=ORIGINAL_SLOTS,
+                max_attempts=1,
+                source_job_id="source-job",
+            )
+
+        assert created_jobs[0]["provider"] == "runway"
+        assert created_jobs[0]["metadata"]["adherence_retry"]["source_provider"] == "runway"
+        assert created_jobs[0]["metadata"]["adherence_retry"]["selected_provider"] == "runway"
+        assert created_jobs[0]["metadata"]["adherence_retry"]["provider_changed"] is False
+
+    @pytest.mark.asyncio
+    async def test_explicit_enabled_provider_override_is_recorded(self):
+        service = RenderRetryService()
+        service._reconstruct_original_score = AsyncMock(return_value=None)
+        source = MagicMock(id="source-job", project_id="test_project", shot_id="test_shot", provider="runway")
+        created_jobs = []
+        runway_config = MagicMock(enabled=True)
+
+        with patch("app.services.render.render_service") as renderer:
+            renderer.get_job.return_value = source
+            renderer.get_provider_config.return_value = runway_config
+            renderer.create_job.side_effect = lambda **kwargs: created_jobs.append(kwargs) or MagicMock(id="retry-job")
+            renderer.submit_job = AsyncMock(return_value=MagicMock(status="rendering"))
+            await service.evaluate_and_select_best(
+                shot_id="test_shot",
+                project_id="test_project",
+                original_slots=ORIGINAL_SLOTS,
+                max_attempts=1,
+                source_job_id="source-job",
+                provider_override="happyhorse",
+            )
+
+        assert created_jobs[0]["provider"] == "happyhorse"
+        assert created_jobs[0]["metadata"]["adherence_retry"] == {
+            "source_job_id": "source-job",
+            "source_provider": "runway",
+            "selected_provider": "happyhorse",
+            "override_requested": True,
+            "provider_changed": True,
+        }
+
+    @pytest.mark.asyncio
+    async def test_disabled_override_is_rejected_before_job_creation(self):
+        service = RenderRetryService()
+        service._reconstruct_original_score = AsyncMock(return_value=None)
+        source = MagicMock(id="source-job", project_id="test_project", shot_id="test_shot", provider="runway")
+
+        with patch("app.services.render.render_service") as renderer:
+            renderer.get_job.return_value = source
+            renderer.get_provider_config.return_value = MagicMock(enabled=False)
+            with pytest.raises(ValueError, match="provider override 'happyhorse' is disabled"):
+                await service.evaluate_and_select_best(
+                    shot_id="test_shot",
+                    project_id="test_project",
+                    original_slots=ORIGINAL_SLOTS,
+                    max_attempts=1,
+                    source_job_id="source-job",
+                    provider_override="happyhorse",
+                )
+            renderer.create_job.assert_not_called()
+
+
 class TestRealDataSummary:
     """Validate that our test fixtures match documented scores."""
 

@@ -74,6 +74,46 @@ async def test_submit_job_runs_quality_hooks_when_provider_returns_complete(monk
     monkeypatch.setattr(render_module, "_run_render_quality_check", quality_check)
     monkeypatch.setattr(render_module, "_run_continuity_review", continuity_review)
 
+    # Submit-time reference validation is fail-closed: the scene must resolve
+    # a project, a canonical setting entity, and an approved environment
+    # anchor before the (faked) provider boundary. Seed that minimum valid
+    # context in isolated test storage. render_module.project_store is the
+    # shared singleton reference_validation reads, so this fake project
+    # satisfies the project gate; the node + anchor satisfy the setting gates.
+    _setting_id = "proj-hooks-setting"
+    monkeypatch.setattr(
+        render_module.project_store,
+        "get_project",
+        lambda project_id: {
+            "project_id": project_id,
+            "execution_summary": {
+                "scenes": [{"scene_id": "scene_001", "setting_id": _setting_id}]
+            },
+        },
+    )
+    from app.data.storage import get_storage as _get_isolated_storage
+
+    _isolated = _get_isolated_storage("sqlite")
+    _isolated.save_universe_node({
+        "node_id": _setting_id,
+        "project_id": "proj-submit-hooks",
+        "node_type": "location",
+        "name": "Submit hooks setting",
+        "first_scene": "scene_001",
+        "last_scene": "scene_001",
+    })
+    _isolated.save_reference_asset({
+        "ref_id": "proj-hooks-setting-anchor",
+        "project_id": "proj-submit-hooks",
+        "target_type": "setting",
+        "target_id": _setting_id,
+        "kind": "environment",
+        "image_url": "https://cdn.example.com/proj-hooks-setting.png",
+        "canonical": True,
+        "approval_state": "approved",
+        "source_kind": "confirmed",
+    })
+
     job = service.create_job(
         project_id="proj-submit-hooks",
         shot_id="scene_001_shot_001",

@@ -1,5 +1,6 @@
 import { SceneDirectionPanel } from './SceneDirectionPanel'
 import { SettingReferenceAuthorityPanel } from './SettingReferenceAuthorityPanel'
+import { useSceneDirection } from '../hooks/useSceneDirection'
 
 type Props = {
   projectId: string
@@ -10,60 +11,42 @@ type Props = {
 }
 
 /**
- * The creator decision interface for a scene.
- *
- * It composes — without merging — the three separate creator decisions:
- *
- *  1. Setting authority: register / approve / designate an exact environment
- *     reference for the exact setting entity. Opening it performs no mutation.
- *  2. Scene Direction: explicitly select the exact setting reference ID for
- *     this scene. Nothing is preselected and the approved source version is
- *     never modified — saving creates a versioned DRAFT successor.
- *  3. Coverage decisions: every obligation stays UNRESOLVED until the creator
- *     decides it. Nothing is inferred, defaulted, or auto-saved.
- *
- * Setting authority lives in its own panel because approval and canonical
- * designation are distinct creator actions from the Scene Direction
- * reference selection. This interface never marks a scene READY.
+ * Setting authority scoped to the open scene's canonical setting entity.
+ * Reads the same sync-free scene-direction endpoint the Scene Direction panel
+ * reads, so the entity named here always matches the entity the selector
+ * below will filter on. While the entity is still resolving, a status line
+ * holds the space instead of a panel that could point at the wrong entity.
+ * When the scene has no canonical entity (or the read fails), this falls back
+ * to the default authority scope — the Scene Direction panel names the block.
  */
+function ScopedSettingAuthority({ projectId, sceneId, versionId }: { projectId: string; sceneId: string; versionId: string }) {
+  const { data, error } = useSceneDirection(projectId, sceneId, versionId)
+  if (!data && !error) {
+    return <p role="status" className="mt-5 text-xs text-zinc-500">Resolving the scene&apos;s setting entity…</p>
+  }
+  return <SettingReferenceAuthorityPanel projectId={projectId} settingId={data?.canonical_setting_id || undefined} />
+}
+
 export function CreatorDecisionWorkspace({ projectId, sceneId, versionId, activeShotNumber, onSaved }: Props) {
   return (
-    <section
-      aria-label="Creator decision workspace"
-      data-testid="creator-decision-workspace"
-      className="mt-5 space-y-4 rounded-lg border border-amber-200/25 p-4"
-    >
-      <header className="space-y-1">
-        <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-amber-100/80">Creator decision capture</p>
-        <h2 className="text-sm font-medium text-zinc-100">Three separate decisions — nothing is decided for you</h2>
-        <ol className="list-decimal space-y-1 pl-5 text-xs leading-relaxed text-zinc-400">
-          <li><strong className="text-zinc-200">Setting authority</strong> — register, approve, and designate canonical an exact environment reference for the exact setting entity. Opening this makes no change.</li>
-          <li><strong className="text-zinc-200">Scene Direction</strong> — explicitly select the exact reference ID for this scene. No reference is preselected, and saving creates a versioned draft successor.</li>
-          <li><strong className="text-zinc-200">Coverage decisions</strong> — resolve every coverage obligation yourself, then review and commit. Unresolved stays unresolved until you decide.</li>
-        </ol>
-      </header>
-
-      <div>
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.15em] text-amber-100/70">Decision 1 · Setting authority</p>
+    <div className="space-y-2">
+      {sceneId && versionId ? (
+        <ScopedSettingAuthority projectId={projectId} sceneId={sceneId} versionId={versionId} />
+      ) : (
         <SettingReferenceAuthorityPanel projectId={projectId} />
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-amber-100/70">Decisions 2 &amp; 3 · Scene Direction and coverage</p>
-        {sceneId && versionId ? (
-          <SceneDirectionPanel
-            key={`${projectId}/${sceneId}/${versionId}`}
-            projectId={projectId}
-            sceneId={sceneId}
-            versionId={versionId}
-            activeShotNumber={activeShotNumber}
-            onSaved={onSaved}
-          />
-        ) : (
-          <p role="status" className="text-xs text-zinc-400">Select a scene with a storyboard version to capture Scene Direction and coverage decisions.</p>
-        )}
-      </div>
-    </section>
+      )}
+      {sceneId && versionId ? (
+        <SceneDirectionPanel
+          projectId={projectId}
+          sceneId={sceneId}
+          versionId={versionId}
+          activeShotNumber={activeShotNumber}
+          onSaved={onSaved}
+        />
+      ) : (
+        <p className="text-xs text-zinc-500">Open a scene to capture Scene Direction and coverage decisions.</p>
+      )}
+    </div>
   )
 }
 

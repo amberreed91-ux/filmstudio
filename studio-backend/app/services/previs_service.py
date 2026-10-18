@@ -7,12 +7,13 @@ from typing import Any
 
 from app.data.storage import StorageInterface, get_storage
 from app.models.storyboard_blueprint import StoryboardBlueprintStatus
-from app.models.previs_render import PrevisRenderSettings
+from app.models.previs_render import PrevisRenderSettings, PrevisDurationOptions
 from app.prompt_assembly_context import preserve_generation_facts
 from app.services.storyboard_render_inputs import storyboard_render_inputs, append_shot_handoff
 from app.services.render import RenderService, render_service
 from app.services.shot_prompt_builder import build_shot_aware_prompt, get_shot_type_label
 from app.services.stability import PersistenceError, ProviderError, StateError, ValidationError
+
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,11 @@ _build_generation_prompt = preserve_generation_facts(build_shot_aware_prompt)
 
 
 class PrevisService:
+    # Cost protection: automatic generation stops before a paid call when the
+    # estimated cost exceeds these limits (credits). Zero disables the limit.
+    MAX_COST_PER_GENERATION_CREDITS = 0
+    MAX_DAILY_GENERATION_BUDGET_CREDITS = 0
+
     def __init__(
         self,
         storage: StorageInterface | None = None,
@@ -30,6 +36,63 @@ class PrevisService:
     ):
         self._storage = storage
         self._renderer = renderer or render_service
+
+    def _enforce_cost_limit(
+        self,
+        project_id: str,
+        provider: str,
+        parameters: dict[str, Any],
+        user_model: str,
+    ) -> None:
+        """Stop automatic generation when the estimated cost exceeds limits.
+
+        Delegates to the SHARED cost gate (generation_cost_gate) so the previs
+        and batch paths cannot drift: one implementation of credit protection.
+        The estimate comes from the model registry's published per-second
+        rates. No automatic spend loop exists anywhere in Studio; when a limit
+        is configured and hit, the caller must explicitly confirm by raising
+        the limit — never by retrying.
+        """
+        from app.services.generation_cost_gate import generation_cost_gate
+
+        generation_cost_gate.enforce_shot_limit(project_id, provider, parameters, user_model)
+
+    @staticmethod
+    def _resolve_execution_provider(provider: str) -> str:
+        """Keep the Runway operator alias on the frozen Model Router path."""
+        selected = str(provider or "").strip().lower()
+        return "runway_router" if selected == "runway" else selected
+
+    def duration_options(self, provider: str = "") -> PrevisDurationOptions:
+        requested = provider.strip().lower()
+        if requested in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested}' is retired and cannot be used for Previs generation",
+                stage="previs_settings",
+                metadata={"provider": requested},
+            )
+        if requested:
+            resolved = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                resolved = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_settings") from exc
+        else:
+            resolved = "runway"
+        if resolved in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{resolved}' is retired and cannot be used for Previs generation",
+                stage="previs_settings",
+                metadata={"provider": resolved},
+            )
+        if resolved in {"happyhorse", "happyhorse-r2v"}:
+            durations = list(range(3, 16))
+        elif resolved == "wan":
+            durations = [5, 10, 15]
+        else:
+            durations = [4, 8, 12, 16, 20]
+        return PrevisDurationOptions(provider=resolved, valid_durations_seconds=durations)
 
     def _require_storage(self):
         storage = self._storage or get_storage("sqlite")
@@ -93,6 +156,23 @@ class PrevisService:
         prompt = str(shot.render_contract.provider_neutral_prompt or "").strip()
         if not prompt:
             raise ValidationError("Storyboard shot has no render prompt", stage="previs_storyboard_reference")
+        # P0-3: a corrupted approved prompt must never become generation input.
+        # Fail closed with the artifact named; regeneration/re-approval is the
+        # only path forward. Never silently repaired here.
+        from app.services.prompt_integrity import detect_prompt_corruption
+
+        corruption = detect_prompt_corruption(prompt, source="BOARD")
+        if corruption:
+            raise ValidationError(
+                "Generation blocked: the approved storyboard prompt is corrupted. "
+                + " ".join(corruption),
+                stage="prompt_integrity",
+                metadata={
+                    "storyboard_shot_id": shot.storyboard_shot_id,
+                    "version_id": shot.version_id,
+                    "issues": corruption,
+                },
+            )
         inputs = storyboard_render_inputs(shot)
         return {
             "shot": shot,
@@ -118,8 +198,54 @@ class PrevisService:
         render_settings: PrevisRenderSettings | None = None,
     ) -> dict:
         started = perf_counter()
+        requested_provider = str(provider or "").strip().lower()
+        # R4.3L (Policy A, additive): the legacy previs path rejects
+        # Runway-family providers before any job exists. Mirrors the
+        # canonical generate_previs fail-closed structure; every other
+        # provider value falls through unchanged. The standalone
+        # runway_router guard below is untouched.
+        if requested_provider in {"runway", "runway_router", "runway_direct"}:
+            raise ValidationError(
+                "Runway is not used for previs; use simulated previs (instant, no cost). "
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="previs_generate",
+                metadata={"rejected_provider": requested_provider, "code": "legacy_previs_runway_rejected"},
+            )
+        if requested_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{requested_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": requested_provider},
+            )
         if shot_number < 1 or take_number < 1:
             raise ValidationError("shot_number and take_number must be positive", stage="previs_generate")
+
+        # Resolve this boundary before touching existing Previs state (including
+        # superseding/cancelling an active take). Runway must enter through the
+        # canonical scene pipeline, which owns READY and the frozen contract.
+        requested = requested_provider
+        provider_configs = getattr(self._renderer, "_provider_configs", None)
+        if requested:
+            if isinstance(provider_configs, dict) and requested not in provider_configs:
+                raise ValidationError("Unknown render provider", stage="previs_generate")
+            render_provider = requested
+        elif hasattr(self._renderer, "get_default_provider"):
+            try:
+                render_provider = self._renderer.get_default_provider()
+            except ValueError as exc:
+                raise ValidationError(str(exc), stage="previs_generate") from exc
+        else:
+            render_provider = "runway"
+        render_provider = self._resolve_execution_provider(render_provider)
+        if render_provider == "runway_router":
+            raise ValidationError(
+                "Runway video generation requires the canonical scene pipeline's READY frozen contract; "
+                "the standalone Previs path cannot authorize a mutable request.",
+                stage="generation_readiness",
+                metadata={"required_provider": "runway_router", "required_contract": "frozen_generation_contract"},
+            )
+
         storage = self._require_storage()
         scene = self._scene(project_id, scene_id)
         if not storyboard_shot_id:
@@ -165,6 +291,26 @@ class PrevisService:
             )
             shot_id = f"{scene_id}_shot_{shot_number:03d}_take_{take_number}"
             reference_assets = []
+            try:
+                from app.services.shot_prompt_builder import locked_appearance_characters
+                from app.utils.character_appearance import appearance_approval
+
+                for _char in locked_appearance_characters(
+                    [item for item in characters if isinstance(item, dict)]
+                )[:3]:
+                    for _field in ("face_image_url", "body_image_url"):
+                        try:
+                            _url = str(appearance_approval(_char).get(_field) or "").strip()
+                        except Exception:
+                            _url = ""
+                        if _url and _url not in reference_assets:
+                            reference_assets.append(_url)
+                        if len(reference_assets) >= 3:
+                            break
+                    if len(reference_assets) >= 3:
+                        break
+            except Exception:
+                pass
             blueprint_id = None
             blueprint_version_id = None
 
@@ -176,13 +322,27 @@ class PrevisService:
             if explicit_planning:
                 prompt += "\n\n[CREATOR SHOT DIRECTIONS]\n" + "\n".join(f"{key}: {value}" for key, value in explicit_planning.items())
                 parameters["creator_shot_planning"] = explicit_planning
-            for field, key in (("duration_seconds", "duration"), ("resolution", "resolution"), ("seed", "seed")):
+            for field, key in (("duration_seconds", "duration"), ("resolution", "resolution"), ("seed", "seed"), ("visual_model_id", "visual_model_id")):
                 value = getattr(render_settings, field)
                 if value is not None:
                     parameters[key] = value
             parameters["strict_render_settings"] = True
             if render_settings.prompt is not None or explicit_planning:
                 parameters["preserve_shot_prompt"] = True
+        # Frontend sends a stale editable copy of the Step-1 plan (promptText)
+        # that predates later look approvals. Re-attach current locked looks
+        # server-side so Step 1 planning + locks always reach the render,
+        # whether or not the board version is approved yet.
+        try:
+            from app.services.shot_prompt_builder import ensure_locked_appearance_in_prompt
+
+            try:
+                _fresh_characters = storage.get_characters(project_id)
+            except Exception:
+                _fresh_characters = []
+            prompt = ensure_locked_appearance_in_prompt(prompt, _fresh_characters, scene)
+        except Exception:
+            pass
         prompt = append_shot_handoff(prompt, parameters.get("continuity_handoff") or {})
         parameters.update(previs=True, blueprint_id=blueprint_id,
                           blueprint_version_id=blueprint_version_id, storyboard_shot_id=storyboard_shot_id)
@@ -196,8 +356,27 @@ class PrevisService:
         ]
         active = next((image for image in matching if image.get("status") in ACTIVE_STATUSES), None)
         if active:
-            active_take = int((active.get("metadata") or {}).get("take_number") or take_number)
-            return self._generation_response(active, shot_number, active_take, duplicate=True)
+            fresh_requested = bool(render_settings is not None and render_settings.fresh_render)
+            if not fresh_requested:
+                active_take = int((active.get("metadata") or {}).get("take_number") or take_number)
+                return self._generation_response(active, shot_number, active_take, duplicate=True)
+            # Fresh Render: the user explicitly asked for a new generation
+            # context, so an active job for this shot is superseded rather
+            # than silently reused. The old job and its outputs stay in the
+            # project history (The Vault) — nothing is deleted.
+            try:
+                active_job_id = str(active.get("job_id") or "")
+                if active_job_id:
+                    cancelled = self._renderer.cancel_job(active_job_id)
+                    logger.info(
+                        "FRESH_RENDER_SUPERSEDED_ACTIVE | project_id=%s | job_id=%s | cancelled=%s",
+                        project_id, active_job_id, cancelled,
+                    )
+            except Exception as exc:  # noqa: BLE001 — supersede is best-effort; never block the fresh render
+                logger.warning(
+                    "FRESH_RENDER_SUPERSEDE_FAILED | project_id=%s | job_id=%s | cause=%s",
+                    project_id, active.get("job_id"), type(exc).__name__,
+                )
         approved = next((image for image in matching if image.get("approved")), None)
         if approved and not allow_approved_revision:
             raise StateError(
@@ -206,23 +385,100 @@ class PrevisService:
                 metadata={"previs_image_id": approved["id"]},
             )
 
-        # Pick the render provider. A per-render override from the caller (the
-        # RENDER ENGINE dropdown) wins when it names a real, registered provider;
-        # otherwise fall back to the render system's own selection seam
-        # (RENDER_VIDEO_PROVIDER env → render_video_provider setting →
-        # "happyhorse"), the same one render.get_default_provider() uses
-        # everywhere else. This path used to hardcode "runway", which is why the
-        # front-end render ignored the OpenRouter migration.
-        requested = str(provider or "").strip().lower()
-        provider_configs = getattr(self._renderer, "_provider_configs", None)
-        if requested:
-            if isinstance(provider_configs, dict) and requested not in provider_configs:
-                raise ValidationError("Unknown render provider", stage="previs_generate")
-            render_provider = requested
-        elif hasattr(self._renderer, "get_default_provider"):
-            render_provider = self._renderer.get_default_provider()
-        else:
-            render_provider = "runway"
+        if render_provider in {"happyhorse", "happyhorse-r2v", "wan"}:
+            options = self.duration_options(render_provider)
+            duration = parameters.get("duration")
+            if duration is not None and duration not in options.valid_durations_seconds:
+                logger.warning(
+                    "project_id=%s job_id=- provider=%s stage=previs_settings duration_ms=%d",
+                    project_id, render_provider, int((perf_counter() - started) * 1000),
+                )
+                raise ValidationError(
+                    f"{render_provider} cannot render {duration} seconds. Choose one of: "
+                    + ", ".join(str(value) for value in options.valid_durations_seconds)
+                    + " seconds.",
+                    stage="previs_settings",
+                    metadata={"provider": render_provider, "valid_durations_seconds": options.valid_durations_seconds},
+                )
+
+        if render_provider in {"openrouter", "openrouter-video"}:
+            raise ValidationError(
+                f"Video provider '{render_provider}' is retired and cannot be used for Previs generation",
+                stage="previs_generate",
+                metadata={"provider": render_provider},
+            )
+
+        # ── Model routing (registry-backed) ─────────────────────────────────
+        # A user-selected model is authoritative and is never replaced; an
+        # incompatible selection blocks the render with the capability conflict
+        # named. "auto"/omitted routes over verified registry capabilities.
+        user_model = str(render_settings.model or "").strip() if render_settings is not None else ""
+        if user_model and user_model.lower() != "auto":
+            parameters["model"] = user_model
+        elif render_provider == "runway_router":
+            parameters.pop("model", None)  # let the Router select an eligible model
+
+        # ── Generation readiness gate (fresh render protection) ────────────
+        # Build the versioned generation context from CURRENT authoritative
+        # state and validate the camera provenance before any provider call.
+        # Stale or unapproved input blocks here, honestly, with the reason.
+        from app.services.generation_context_service import generation_context_service
+
+        # P0-1: the shot version MUST come from the canonical shot record,
+        # never from frontend state and never as a stub. When an approved
+        # board exists the shot is MANDATORY: ``_storyboard_context`` already
+        # failed closed above if it could not be resolved/renderable. When no
+        # board exists at all, the legacy scene-text previs path has no
+        # canonical shot row — the absent axis is recorded explicitly in the
+        # context metadata rather than silently stubbed.
+        current_shot = storyboard["shot"] if storyboard else None
+        shot_axis_required = current_shot is not None
+
+        camera_instructions = generation_context_service.derive_camera_instructions(
+            creator_planning=parameters.get("creator_shot_planning"),
+            storyboard_shot=current_shot,
+        )
+        context = generation_context_service.create_generation_context(
+            project_id=project_id,
+            scene_id=scene_id,
+            shot_id=shot_id,
+            scene=scene,
+            storyboard_context=storyboard,
+            reference_assets=reference_assets,
+            camera_instructions=camera_instructions,
+            prompt_source="USER_EDITED" if (render_settings is not None and render_settings.prompt is not None) else ("BOARD" if storyboard else "DERIVED"),
+            shot=current_shot,
+            require_shot_version=shot_axis_required,
+        )
+        if not shot_axis_required:
+            context.metadata["shot_version_source"] = "no_storyboard_context"
+        readiness = generation_context_service.validate_generation_context(
+            context=context,
+            current_scene=scene,
+            current_storyboard_context=storyboard,
+            current_reference_assets=reference_assets,
+            expected_scene_id=scene_id,
+            expected_shot_id=shot_id,
+            current_shot=current_shot,
+        )
+        if not readiness.ready:
+            raise ValidationError(
+                "Generation blocked: " + " ".join(readiness.blockers),
+                stage="generation_readiness",
+                metadata={"blockers": readiness.blockers, "generation_context_id": context.generation_context_id},
+            )
+        # The passing gate's context id is recorded with the job by
+        # RenderService.create_job (job.metadata.generation_context) — it must
+        # NOT enter parameters, which feed stable request/idempotency hashing
+        # and must stay byte-identical across a retry of the same take.
+
+        # ── Cost protection ────────────────────────────────────────────────
+        # Estimate the credit cost from the registry's published rates and
+        # stop before a paid call when it exceeds the configured limit. There
+        # is deliberately no automatic retry loop around this.
+        from app.services.generation_cost_gate import generation_cost_gate
+
+        generation_cost_gate.enforce_shot_limit(project_id, render_provider, parameters, user_model)
 
         try:
             job = self._renderer.create_job(
@@ -302,7 +558,7 @@ class PrevisService:
                 reason = str(getattr(submitted, "error_message", "") or f"Provider job {submitted_status}")
                 storage.update_previs_image_status(job.id, submitted_status, failure_reason=reason)
                 raise ProviderError(
-                    "Previs provider did not accept the generation",
+                    f"Could not render this take: {reason}",
                     stage="previs_submit",
                     metadata={"job_id": job.id, "provider": render_provider, "status": submitted_status},
                 )
@@ -404,6 +660,117 @@ class PrevisService:
         if approved is None:
             raise StateError("Previs image not found", stage="previs_approve")
         return approved
+
+    def approve_ai_camera(
+        self,
+        project_id: str,
+        scene_id: str,
+        storyboard_shot_id: str,
+        approved_by: str = "creator",
+        expected_version_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Explicitly approve the board shot's AI-suggested camera values (P0-2).
+
+        This is the ONLY path from AI_SUGGESTED to renderable camera data. It
+        records the user's approval durably on the current board shot by
+        writing the creator camera plan provenance that
+        ``derive_camera_instructions`` requires before stamping APPROVED.
+        A new board version is created first because an approved board is
+        immutable — approval is a deliberate edit with an audit trail, never a
+        silent mutation of approved state.
+
+        ``expected_version_id`` binds the decision to the exact board version
+        the creator saw when preparing it. When given and the shot no longer
+        belongs to that version (superseded, re-drafted, or otherwise changed),
+        the approval is refused instead of being applied to another version.
+        """
+        storage = self._require_storage()
+        from app.services.generation_context_service import (
+            AI_CAMERA_APPROVAL_PROVENANCE,
+            pending_ai_camera_suggestions,
+        )
+        from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+
+        shot = storage.get_storyboard_shot(storyboard_shot_id)
+        if shot is None or shot.project_id != project_id or shot.scene_id != scene_id:
+            raise StateError("Storyboard shot not found in project scene", stage="previs_camera_approval")
+
+        # Stale-version protection: the creator is approving what they saw on
+        # one specific version. Never re-target the decision onto a version
+        # they were not shown.
+        if expected_version_id is not None and str(shot.version_id or "") != str(expected_version_id):
+            raise StateError(
+                "Camera approval refused: this shot no longer belongs to the "
+                "board version the decision was prepared against",
+                stage="previs_camera_approval",
+                metadata={
+                    "expected_version_id": str(expected_version_id),
+                    "shot_version_id": str(shot.version_id or ""),
+                },
+            )
+
+        # The pending AI suggestion view is the read-only authority for what
+        # approval may lock: non-empty visual-plan values that are NOT already
+        # written by a creator camera plan (edit-grammar excluded). Passing
+        # ``derive_camera_instructions(storyboard_shot=…)`` alone would find
+        # nothing — P0-2 deliberately holds pending suggestions out of the
+        # instruction list, so the approval flow reads this view instead.
+        ai_values = pending_ai_camera_suggestions(shot)
+        if not ai_values:
+            raise StateError(
+                "No AI-suggested camera values are pending approval for this shot",
+                stage="previs_camera_approval",
+            )
+
+        service = storyboard_blueprint_service
+        if service.storage is not storage:
+            service = type(service)(storage)
+        blueprint = storage.get_storyboard_blueprint_by_id(shot.blueprint_id)
+        if blueprint is not None and blueprint.approved_version_id == shot.version_id:
+            # Approved boards are immutable: approval creates a new draft
+            # version (history preserved) and the plan lands on the clone.
+            service.create_version(
+                blueprint_id=shot.blueprint_id,
+                change_reason="ai_camera_approval",
+                preserve_locked_shots=True,
+            )
+            # Re-read the blueprint AFTER create_version: the clone shots live
+            # on the version create_version just minted, not on the snapshot
+            # taken before it.
+            fresh_blueprint = storage.get_storyboard_blueprint_by_id(shot.blueprint_id)
+            current_version_id = str(getattr(fresh_blueprint, "current_version_id", "") or "")
+            clones = storage.list_storyboard_shots(shot.blueprint_id, current_version_id) if current_version_id else []
+            shot = next(
+                (item for item in clones if item.shot_id == shot.shot_id),
+                None,
+            )
+            if shot is None:
+                raise StateError(
+                    "Camera approval failed: the approved shot clone could not be "
+                    "resolved on the new draft version",
+                    stage="previs_camera_approval",
+                )
+        if shot.locked:
+            raise StateError("Storyboard shot is locked", stage="previs_camera_approval")
+
+        approved_plan = dict(ai_values)
+        updated = service.update_shot(
+            blueprint_id=shot.blueprint_id,
+            storyboard_shot_id=shot.storyboard_shot_id,
+            render_contract={
+                "structured_parameters": {
+                    **(shot.render_contract.structured_parameters or {}),
+                    "camera_plan": approved_plan,
+                }
+            },
+            change_reason=f"{AI_CAMERA_APPROVAL_PROVENANCE}:{approved_by}",
+        )
+        return {
+            "storyboard_shot_id": updated.storyboard_shot_id,
+            "version_id": updated.version_id,
+            "approved_camera": approved_plan,
+            "approved_by": approved_by,
+        }
 
     async def cancel_image(self, project_id: str, image_id: str) -> dict[str, Any]:
         image = self.get_image(project_id, image_id)

@@ -8,6 +8,7 @@ from app.data.storage import DatabaseStorage
 from app.models import RenderJobOutput
 from app.services import render as render_module
 from app.services.render import RenderService
+from app.services.stability import ValidationError
 
 
 def _storage(tmp_path: Path) -> DatabaseStorage:
@@ -228,7 +229,29 @@ def test_first_shot_without_storyboard_stays_t2v_until_post_render_lock(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_first_completed_character_shot_locks_reference_and_second_routes_to_r2v(tmp_path, monkeypatch):
+async def test_first_character_shot_without_approved_reference_fails_closed_before_provider(tmp_path, monkeypatch):
+    """Retired first-shot-bootstrap premise (B9 product decision).
+
+    Production submission requires an approved canonical character reference
+    in addition to valid setting context and an approved canonical
+    environment anchor; a provisional character lock never satisfies the
+    submit-time gate and no first-shot exception exists. This test pins that
+    fail-closed boundary: with setting context valid but no approved
+    character reference, submit is rejected with
+    canonical_character_reference_missing before the provider boundary, so
+    the job fails, no lock is created, and the provider is never invoked.
+
+    Narrower behaviors remain covered elsewhere: the no-reference-set
+    bootstrap by test_reference_validation.py's
+    test_bootstrap_without_reference_set_remains_allowed_for_existing_post_render_lock_flow,
+    provisional first-shot routing by
+    test_first_shot_with_storyboard_gets_provisional_reference_and_routes_to_r2v,
+    and post-render lock creation by the character_visual_reference service
+    tests. The end-to-end submit-to-lock-to-R2V path under full approvals
+    has no isolated-storage test: the setting-coverage gate additionally
+    requires continuity-resolved environment context that only full
+    production topology provides.
+    """
     storage = _storage(tmp_path)
     monkeypatch.setattr(render_module, "_storage", storage)
     character = storage.save_character(
@@ -237,12 +260,19 @@ async def test_first_completed_character_shot_locks_reference_and_second_routes_
         {"visual_prompt_summary": "short dark hair, blue jacket"},
     )
 
+    # Submit-time reference validation is fail-closed: the scene resolves a
+    # canonical setting entity plus an approved environment anchor, so the
+    # submission reaches the character gate — which must reject it because
+    # Maya has no approved canonical character reference. Seed that exact
+    # context in the test's isolated storage.
+    _setting_id = "proj-char-lock-setting"
+
     def fake_project(project_id):
         return {
             "project_id": project_id,
             "execution_summary": {
                 "scenes": [
-                    {"scene_id": "scene_001", "characters": ["Maya"]},
+                    {"scene_id": "scene_001", "characters": ["Maya"], "setting_id": _setting_id},
                 ]
             },
         }
@@ -252,6 +282,25 @@ async def test_first_completed_character_shot_locks_reference_and_second_routes_
         fake_project,
     )
     monkeypatch.setattr(render_module.project_store, "get_project", fake_project)
+    storage.save_universe_node({
+        "node_id": _setting_id,
+        "project_id": "proj-char-lock",
+        "node_type": "location",
+        "name": "Character lock setting",
+        "first_scene": "scene_001",
+        "last_scene": "scene_001",
+    })
+    storage.save_reference_asset({
+        "ref_id": "proj-char-lock-setting-anchor",
+        "project_id": "proj-char-lock",
+        "target_type": "setting",
+        "target_id": _setting_id,
+        "kind": "environment",
+        "image_url": "https://cdn.example.test/proj-char-lock-setting.png",
+        "canonical": True,
+        "approval_state": "approved",
+        "source_kind": "confirmed",
+    })
 
     async def no_op_review(job):
         return None
@@ -259,8 +308,11 @@ async def test_first_completed_character_shot_locks_reference_and_second_routes_
     monkeypatch.setattr(render_module, "_run_continuity_review", no_op_review)
     monkeypatch.setattr(render_module, "_run_render_quality_check", no_op_review)
 
+    calls = []
+
     class ImmediateCompleteAdapter:
         async def submit_job(self, job):
+            calls.append(job.id)
             job.provider_job_id = f"fake-{job.id}"
             job.status = "complete"
             job.progress = 100
@@ -280,24 +332,9 @@ async def test_first_completed_character_shot_locks_reference_and_second_routes_
         provider="simulated",
         prompt="Maya turns toward the window in a quiet medium shot.",
     )
-    submitted = await service.submit_job(first.id)
+    with pytest.raises(ValidationError, match="no approved canonical reference"):
+        await service.submit_job(first.id)
 
-    assert submitted.status == "complete"
-    lock = storage.get_character_reference_lock("proj-char-lock", character["id"])
-    assert lock is not None
-    assert lock["source_shot_id"] == "scene_001_shot_001"
-    assert lock["image_url"] == "https://cdn.example.test/maya-locked.jpg"
-
-    second = service.create_job(
-        project_id="proj-char-lock",
-        shot_id="scene_001_shot_002",
-        provider="happyhorse",
-        prompt="Maya steps into the hallway, same costume and tired eyes.",
-    )
-
-    assert second.provider == "happyhorse-r2v"
-    assert second.input_payload.consistency_payload is not None
-    refs = second.input_payload.consistency_payload.refs
-    assert len(refs) == 1
-    assert refs[0].image_url == "https://cdn.example.test/maya-locked.jpg"
-    assert refs[0].source_shot_id == "scene_001_shot_001"
+    assert calls == []
+    assert service.get_job(first.id).status == "failed"
+    assert storage.get_character_reference_lock("proj-char-lock", character["id"]) is None

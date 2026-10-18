@@ -4,8 +4,11 @@ import importlib.util
 from pathlib import Path
 
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+
 def _load_audit_module():
-    path = Path("scripts/audit_scene003_audio_goal.py")
+    path = _BACKEND_ROOT / "scripts" / "audit_scene003_audio_goal.py"
     spec = importlib.util.spec_from_file_location("audit_scene003_audio_goal", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader

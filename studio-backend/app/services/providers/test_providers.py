@@ -413,6 +413,8 @@ def test_provider_config_deterministic(monkeypatch):
     monkeypatch.delenv("RUNWAY_API_KEY", raising=False)
     monkeypatch.delenv("VIDEO_PROVIDER_API_KEY", raising=False)
     monkeypatch.delenv("IMAGE_PROVIDER_API_KEY", raising=False)
+    monkeypatch.delenv("IMAGE_PROVIDER_ENABLED", raising=False)
+    monkeypatch.delenv("IMAGE_PROVIDER_NAME", raising=False)
     monkeypatch.delenv("RUNWAY_API_BASE_URL", raising=False)
     monkeypatch.delenv("VIDEO_PROVIDER_BASE_URL", raising=False)
 
@@ -443,6 +445,11 @@ def test_provider_config_deterministic(monkeypatch):
         "video_provider_api_key": "",
         "video_provider_base_url": "https://api.dev.runwayml.com",
         "runway_timeout_seconds": 60,
+        # Runway image provider (gen4_image) — additive keys from the Runway
+        # image workstream; the existing key set above is unchanged.
+        "runway_image_api_key": "",
+        "runway_image_base_url": "",
+        "runway_image_timeout_seconds": 180.0,
     }
 
 
@@ -807,6 +814,28 @@ def test_disabled_or_unknown_provider_falls_back_to_mock_with_fallback_true():
     }
 
 
+def test_execution_layer_disabled_provider_fails_closed_without_mock_fallback(monkeypatch):
+    calls = []
+
+    class _ExplodingAdapter:
+        def __call__(self, *_args, **_kwargs):
+            calls.append("provider")
+            raise AssertionError("disabled provider must never execute")
+
+    monkeypatch.setitem(provider_execution_layer._DIRECT_PROVIDER_ADAPTERS, "real_stub", _ExplodingAdapter())
+    result = execute_provider_render(
+        provider_name="real_stub",
+        provider_payload={"shot_id": "shot_disabled", "prompt": {"base_intent": "x"}},
+        config={"enabled_providers": ["mock"]},
+    )
+
+    assert result["status"] == "failed"
+    assert result["provider"] == "real_stub"
+    assert result["error_code"] == "provider_disabled"
+    assert "disabled" in result["error"]
+    assert calls == []
+
+
 def test_default_provider_resolves_to_mock():
     assert resolve_default_provider(get_provider_config()) == "mock"
     assert resolve_default_provider(None) == "mock"
@@ -1083,7 +1112,7 @@ def test_execution_layer_unknown_provider_returns_normalized_failure():
     assert result == {
         "render_id": None,
         "status": "failed",
-        "provider": "mock",
+        "provider": "unknown_provider",
         "error": "Unknown provider: unknown_provider",
         "error_code": "unknown_provider",
         "meta": {"file_path": None, "url": None},
@@ -1219,6 +1248,35 @@ def test_execution_isolation_outputs_are_deterministic_across_calls():
     first_failure = execute_provider_render("missing", payload, config)
     second_failure = execute_provider_render("missing", payload, config)
     assert first_failure == second_failure
+
+
+def test_render_executor_preserves_disabled_or_unknown_provider_identity():
+    disabled = render_executor.execute_render(
+        {"shot_id": "shot_disabled", "prompt": {"base_intent": "x"}},
+        provider_name="real_stub",
+        config={"enabled_providers": ["mock"]},
+    )
+    unknown = render_executor.execute_render(
+        {"shot_id": "shot_unknown", "prompt": {"base_intent": "x"}},
+        provider_name="vendor_x",
+        config={"enabled_providers": ["vendor_x"]},
+    )
+
+    assert disabled["status"] == "failed"
+    assert disabled["provider"] == "real_stub"
+    assert disabled["error_code"] == "provider_disabled"
+    assert unknown["status"] == "failed"
+    assert unknown["provider"] == "vendor_x"
+    assert unknown["error_code"] == "unknown_provider"
+
+    sequence = provider_execution_layer.execute_render_sequence(
+        "vendor_x",
+        [{"shot_id": "shot_unknown", "prompt": {"base_intent": "x"}}],
+        config={"enabled_providers": ["vendor_x"]},
+        max_shots=1,
+    )
+    assert sequence[0]["provider"] == "vendor_x"
+    assert sequence[0]["error_code"] == "unknown_provider"
 
 
 def test_render_executor_delegates_to_execution_layer(monkeypatch):
@@ -1990,14 +2048,15 @@ def test_phase160_config_snapshot_remains_secret_safe():
     assert "secret-key-material" not in dumped
 
 
-def test_phase160_unknown_provider_does_not_crash_execution_layer():
+def test_phase160_unknown_provider_fails_closed_without_changing_provider():
     result = execute_provider_render(
         provider_name="unknown_provider",
         provider_payload={"shot_id": "shot_scene_001_001", "prompt": {}},
         config=get_provider_config(),
     )
-    assert result["status"] == "success"
-    assert result["provider"] == "mock"
+    assert result["status"] == "failed"
+    assert result["provider"] == "unknown_provider"
+    assert result["error_code"] == "provider_disabled"
 
 
 def test_phase160_malformed_provider_result_is_normalized_failure():
@@ -2264,11 +2323,13 @@ def test_phase200_provider_execution_never_triggers(monkeypatch):
     assert real_stub_result["render_id"] is None
 
     unknown_result = execute_provider_render("unknown_provider", payload, config_mock)
-    assert unknown_result["status"] in {"success", "failed", "not_executed"}
-    assert unknown_result["provider"] == "mock"
+    assert unknown_result["status"] == "failed"
+    assert unknown_result["provider"] == "unknown_provider"
+    assert unknown_result["error_code"] == "provider_disabled"
 
-    # Every execution result is normalized through normalize_provider_result.
-    assert len(normalize_calls) >= 3
+    # Successful or enabled provider results pass through the legacy normalizer;
+    # disabled selections return a direct fail-closed shape without dispatch.
+    assert normalize_calls == ["mock", "real_stub"]
 
     backend_root = Path(__file__).resolve().parents[1]
     execution_layer_source = (backend_root / "providers" / "execution_layer.py").read_text(

@@ -81,7 +81,7 @@ def test_normalize_video_provider_response_shape():
 
 def test_runway_missing_api_key_fails_gracefully():
     adapter = RunwayAdapter(_cfg(api_key=None))
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     assert job.error_message == "Missing Runway API key"
 
@@ -148,7 +148,7 @@ def test_runway_successful_mocked_response(monkeypatch):
         return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert calls == [("GET", "/v1/organization"), ("POST", "/v1/text_to_video"), ("GET", "/v1/tasks/rw-123")]
     assert job.status == "complete"
     assert job.provider_job_id == "rw-123"
@@ -171,7 +171,7 @@ def test_runway_failed_task_returns_structured_error(monkeypatch):
         return {"status": "failed", "message": "safety filter"}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     assert "safety filter" in (job.error_message or "")
     error = job.output_payload.metadata["provider_response_normalized"]["metadata"]["error"]
@@ -197,7 +197,7 @@ def test_runway_timeout_is_failed(monkeypatch):
 
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     assert job.error_message is not None
     assert "timed out" in job.error_message
@@ -230,7 +230,7 @@ def test_runway_missing_video_url_is_failed(monkeypatch):
         return {"status": "completed", "output": []}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     assert "without video_url" in (job.error_message or "")
     error = job.output_payload.metadata["provider_response_normalized"]["metadata"]["error"]
@@ -250,7 +250,7 @@ def test_runway_unauthorized_api_key(monkeypatch):
         )
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     assert "Runway API unauthorized:" in (job.error_message or "")
     assert "invalid api key" in (job.error_message or "")
@@ -274,7 +274,7 @@ def test_runway_http_error_message_includes_provider_body(monkeypatch):
         )
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     assert "Runway API error 400:" in (job.error_message or "")
     assert "ratio must be one of" in (job.error_message or "")
@@ -308,7 +308,7 @@ def test_runway_image_request_uses_image_to_video_and_includes_prompt_image(monk
         return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
     assert result.status == "complete"
     assert calls == [("GET", "/v1/organization"), ("POST", "/v1/image_to_video"), ("GET", "/v1/tasks/rw-123")]
 
@@ -329,7 +329,7 @@ def test_runway_local_reference_asset_degrades_to_text_to_video(monkeypatch):
         return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
 
     assert result.status == "complete"
     assert "promptImage" not in captured_payload
@@ -359,7 +359,7 @@ def test_runway_text_request_keeps_text_to_video_ratio(monkeypatch):
         return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
     assert result.status == "complete"
     assert captured_payload["ratio"] == "1280:720"
 
@@ -379,7 +379,7 @@ def test_runway_long_running_task_completes_without_early_failure(monkeypatch):
         return {"status": "SUCCEEDED", "output": ["https://cdn.runway/video.mp4"]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert poll_count["n"] >= 3
     assert job.status == "complete"
     assert job.output_payload.asset_url == "https://cdn.runway/video.mp4"
@@ -421,7 +421,7 @@ def test_insecure_ssl_override_rejected_outside_local_test(monkeypatch):
     adapter = RunwayAdapter(_cfg())
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("RUNWAY_ALLOW_INSECURE_SSL", "true")
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     assert "only allowed when APP_ENV is local or test" in (job.error_message or "")
 
@@ -434,7 +434,7 @@ def test_ssl_failure_classified_as_ssl_verification_error(monkeypatch):
         raise OSError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_runway_request)
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     error = job.output_payload.metadata["provider_response_normalized"]["metadata"]["error"]
     assert error["error_type"] == "ssl_verification_error"
@@ -444,7 +444,7 @@ def test_render_provider_test_mode_mock_success_returns_output_url(monkeypatch):
     adapter = RunwayAdapter(_cfg(api_key="rk_live"))
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("RENDER_PROVIDER_TEST_MODE", "mock_success")
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "complete"
     assert isinstance(job.provider_job_id, str) and job.provider_job_id.startswith("mock-task-")
     assert job.output_payload is not None
@@ -455,7 +455,7 @@ def test_render_provider_test_mode_mock_success_rejected_in_production(monkeypat
     adapter = RunwayAdapter(_cfg(api_key="rk_live"))
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("RENDER_PROVIDER_TEST_MODE", "mock_success")
-    job = asyncio.run(adapter.submit_job(_job()))
+    job = asyncio.run(adapter._submit_job(_job()))
     assert job.status == "failed"
     error = job.output_payload.metadata["provider_response_normalized"]["metadata"]["error"]
     assert error["error_type"] == "test_mode_not_allowed"
@@ -502,7 +502,7 @@ def test_runway_submit_job_with_consistency_payload_overrides_image_text(monkeyp
                 "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
     assert result.status == "complete"
 
     post_entries = [
@@ -536,7 +536,7 @@ def test_runway_submit_job_without_consistency_payload_unchanged(monkeypatch):
                 "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
     assert result.status == "complete"
 
     post_entries = [
@@ -586,7 +586,7 @@ def test_runway_local_consistency_prompt_image_degrades_selected_ref_to_prompt(m
         return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
 
     assert result.status == "complete"
     assert "promptImage" not in captured_payload
@@ -600,8 +600,10 @@ def test_runway_model_per_request_override_via_parameters(monkeypatch):
     monkeypatch.delenv("RUNWAY_MODEL", raising=False)
     adapter = RunwayAdapter(_cfg())
     job = _job()
-    job.input_payload.parameters["model"] = "gen6"
-    assert adapter._runway_model(job) == "gen6"
+    # Registry-verified Runway model (the retired gen6/gen3 identifiers were
+    # removed from the allowlist: they do not exist on the current API).
+    job.input_payload.parameters["model"] = "gemini_omni_flash"
+    assert adapter._runway_model(job) == "gemini_omni_flash"
 
 
 def test_runway_model_accepts_supported_hosted_override(monkeypatch):
@@ -658,7 +660,8 @@ def test_runway_model_override_reaches_payload(monkeypatch):
     monkeypatch.delenv("RUNWAY_MODEL", raising=False)
     adapter = RunwayAdapter(_cfg())
     job = _job()
-    job.input_payload.parameters["model"] = "gen3"
+    # Registry-verified model id reaching the provider payload unchanged.
+    job.input_payload.parameters["model"] = "gen4_turbo"
     captured_payload: dict = {}
 
     async def _fake_request(method, path, payload=None, params=None):
@@ -670,9 +673,9 @@ def test_runway_model_override_reaches_payload(monkeypatch):
         return {"status": "completed", "output": [{"url": "https://cdn.runway/video.mp4"}]}
 
     monkeypatch.setattr(adapter, "_runway_request", _fake_request)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
     assert result.status == "complete"
-    assert captured_payload["model"] == "gen3"
+    assert captured_payload["model"] == "gen4_turbo"
 
 
 def test_runway_model_rejects_invalid_per_request_override(monkeypatch):
@@ -701,7 +704,7 @@ def test_runway_model_invalid_override_fails_submit_without_provider_call(monkey
 
     monkeypatch.setattr(adapter, "_runway_request", _fail_if_called)
     monkeypatch.setattr(adapter, "_is_local_or_test_env", lambda: True)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
     assert result.status == "failed"
     assert provider_was_called["hit"] is False
     assert "bogus-model" in (result.error_message or "")
@@ -727,7 +730,7 @@ def test_approved_local_board_overrides_identity_sheet_and_uses_portrait_ratio(m
             return {"id": "org"}
         return {"status": "completed", "output": [{"url": "https://media.test/take.mp4"}]}
     monkeypatch.setattr(adapter, "_runway_request", request)
-    result = asyncio.run(adapter.submit_job(job))
+    result = asyncio.run(adapter._submit_job(job))
     assert result.status == "complete"
     assert payloads[0]["promptImage"].startswith("data:image/png;base64,")
     assert payloads[0]["ratio"] == "720:1280"

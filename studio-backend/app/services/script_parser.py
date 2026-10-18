@@ -3,11 +3,14 @@ Script Parser Service - Extracts scenes, characters, and locations from screenpl
 """
 
 import logging
+from app.services.character_name_matching import screenplay_aliases, canonical_character_name, INTRODUCED_NICKNAME
 import re
 import copy
 import os
 import time
 import signal
+
+from app.services.stability import PersistenceError
 
 logger = logging.getLogger(__name__)
 from itertools import combinations
@@ -115,6 +118,7 @@ class Location:
 class ScriptBreakdownInput:
     script_text: Any
     project_id: str = "default_project"
+    execution_id: str = ""
     active_cut_summary: Optional[Dict[str, Any]] = None
     reference_analysis: Optional[Dict[str, Any]] = None
     ignored_agent_decisions: List[Dict[str, Any]] = field(default_factory=list)
@@ -322,6 +326,10 @@ class ScriptParser:
         if isinstance(project_id, str) and project_id.strip():
             normalized.project_id = project_id.strip()
 
+        execution_id = script_text.get("execution_id")
+        if isinstance(execution_id, str) and execution_id.strip():
+            normalized.execution_id = execution_id.strip()
+
         reference_analysis = script_text.get("reference_analysis")
         if isinstance(reference_analysis, dict):
             normalized.reference_analysis = reference_analysis
@@ -361,6 +369,7 @@ class ScriptParser:
         """
         active_cut_summary_input = None
         project_id_input = "default_project"
+        execution_id_input = ""
         staged_reference_analysis_input = None
         ignored_agent_decisions_input: List[Dict[str, Any]] = []
         voice_direction_commands_input: List[str] = []
@@ -372,6 +381,8 @@ class ScriptParser:
             )
             if isinstance(script_text.get("project_id"), str) and script_text.get("project_id").strip():
                 project_id_input = script_text.get("project_id").strip()
+            if isinstance(script_text.get("execution_id"), str) and script_text.get("execution_id").strip():
+                execution_id_input = script_text.get("execution_id").strip()
             staged_reference_analysis_input = (
                 script_text.get("reference_analysis")
                 if isinstance(script_text.get("reference_analysis"), dict)
@@ -448,6 +459,11 @@ class ScriptParser:
             logger.info("[SCRIPT_PARSER] No INT/EXT headings found, trying fallback parsing")
             scenes = self._fallback_scene_parsing(script_text)
         
+        _, aliases = self.extract_cast(script_text)
+        for scene in scenes:
+            names, _ = self.extract_cast(scene["text"])
+            scene["characters"] = list(dict.fromkeys(canonical_character_name(name, aliases) for name in names))
+
         format_detected = "standard" if len(scenes) > 0 and any("INT" in s.get("heading", "").upper() or "EXT" in s.get("heading", "").upper() for s in scenes) else "fallback"
         logger.info("[SCRIPT_PARSER] SCRIPT_PARSED | scenes=%d | format_detected=%s", len(scenes), format_detected)
         
@@ -2545,7 +2561,7 @@ class ScriptParser:
             "provider_identity_context": provider_identity_context,
             "emotional_identity_continuity": emotional_identity_continuity,
             "identity_drift_warnings": identity_drift_warnings,
-            "dialogue_lines": [line.model_dump() for line in dialogue_lines],
+            "dialogue_lines": dialogue_lines,
             "dialogue_timing_metadata": dialogue_timing_metadata,
             "voice_provider_plan": voice_provider_plan,
             "audio_dialogue_timeline": audio_dialogue_timeline,
@@ -2809,6 +2825,12 @@ class ScriptParser:
             "prompt_warnings": prompt_warnings,
             "render_quality_warnings": scene_render_quality_warnings,
             "scene_variance_profile": scene_variance_profile,
+            # Editorial intelligence projection (Phase 5): ONE derived object
+            # (editing_intelligence_service output) is stored under
+            # editing_intelligence; the other three keys are documented
+            # read-only projections of the same payload (not independent
+            # authorities). Consumers must treat editing_intelligence as the
+            # canonical source; advisory_only is always true.
             "editing_intelligence": editing_intelligence_result.get(
                 "editing_intelligence",
                 {"advisory_only": True, "suggestions": [], "suggestion_count": 0},
@@ -2816,10 +2838,12 @@ class ScriptParser:
             "editing_suggestions": editing_intelligence_result.get("editing_suggestions", []),
             "film_assembly_editing_context": {
                 "advisory_only": True,
+                "projection_of": "editing_intelligence",
                 "suggestions": editing_intelligence_result.get("editing_suggestions", []),
             },
             "director_evaluator_editing_context": {
                 "advisory_only": True,
+                "projection_of": "editing_intelligence",
                 "suggestions": editing_intelligence_result.get("editing_suggestions", []),
             },
             "scene_transitions": scene_transitions,
@@ -3953,6 +3977,7 @@ class ScriptParser:
         script_text = breakdown_input.script_text
         active_cut_summary_input = breakdown_input.active_cut_summary
         project_id_input = breakdown_input.project_id
+        execution_id_input = breakdown_input.execution_id
         staged_reference_analysis_input = breakdown_input.reference_analysis
         ignored_agent_decisions_input = breakdown_input.ignored_agent_decisions
         voice_direction_commands_input = breakdown_input.voice_direction_commands
@@ -4021,10 +4046,34 @@ class ScriptParser:
             character_profiles,
             scenes[0] if scenes and isinstance(scenes[0], dict) else {},
         )
-        dialogue_lines = dialogue_voice_service.build_dialogue_lines(
-            scenes,
-            [profile.model_dump() for profile in character_profiles],
-        )
+        # Dialogue authority (Phase 3): the breakdown's dialogue projection is
+        # derived per scene from the parsed screenplay text itself. The old
+        # DialogueVoiceService.build_dialogue_lines call fabricated placeholder
+        # text ("X carries the beat with restrained subtext.") that then leaked
+        # into audio/performance consumers; it is no longer a dialogue source.
+        from app.services.dialogue_authority import canonical_dialogue_lines
+
+        dialogue_lines: List[Dict[str, Any]] = []
+        for _scene in scenes:
+            if not isinstance(_scene, dict) or not str(_scene.get("scene_id") or ""):
+                continue
+            _scene_id = str(_scene["scene_id"])
+            for _index, _line in enumerate(
+                canonical_dialogue_lines(
+                    _scene,
+                    scene_id=_scene_id,
+                    characters=[str(c) for c in (_scene.get("characters") or []) if str(c).strip()],
+                ),
+                start=1,
+            ):
+                dialogue_lines.append(
+                    {
+                        "line_id": f"{_scene_id}_line_{_index:03d}",
+                        "scene_id": _scene_id,
+                        "character": _line.get("character") or _line.get("character_name") or "Narrator",
+                        "text": str(_line.get("text") or ""),
+                    }
+                )
         voice_provider_plan = dialogue_voice_service.build_voice_provider_plan("local_tts")
         dialogue_timing_metadata = dialogue_voice_service.build_dialogue_timing_metadata(
             dialogue_lines
@@ -6347,7 +6396,11 @@ class ScriptParser:
                 "matched_script_elements": list(dict.fromkeys(matched_merged)),
             }
 
-        image_render_assets = self.build_image_render_assets(scenes).get("image_render_assets", [])
+        image_render_assets = self.build_image_render_assets(
+            scenes,
+            project_id=project_id_input,
+            execution_id=execution_id_input,
+        ).get("image_render_assets", [])
         render_asset_summary = self.build_render_asset_summary(image_render_assets).get(
             "render_asset_summary",
             {
@@ -9252,9 +9305,17 @@ class ScriptParser:
     def build_image_render_assets(
         self,
         scenes: Any,
+        *,
+        project_id: str | None = None,
+        execution_id: str | None = None,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Build deterministic image render asset records from scene shot ledgers.
+        Build image records and durably register successful Runway Router outputs.
+
+        Successful Router output requires project and execution provenance;
+        direct callers that omit either identity fail closed rather than
+        returning an unregistered success. Project workflow entry points pass
+        both identities.
         """
         if not isinstance(scenes, list):
             return {"image_render_assets": []}
@@ -9265,6 +9326,21 @@ class ScriptParser:
             image_provider_config = get_render_provider_config()
         except Exception:
             image_provider_config = {}
+        router_image_selected = (
+            image_provider_config.get("image_provider_enabled") is True
+            and str(image_provider_config.get("image_provider_name") or "").strip().lower()
+            == "runway_router"
+        )
+        clean_project_id = str(project_id or "").strip()
+        clean_execution_id = str(execution_id or "").strip()
+        authorization_storage = None
+        if router_image_selected and clean_project_id:
+            try:
+                from app.data.storage import get_storage
+
+                authorization_storage = get_storage("sqlite")
+            except Exception:
+                authorization_storage = None
         seen_asset_ids: set[str] = set()
         for scene in scenes:
             if not isinstance(scene, dict):
@@ -9331,6 +9407,7 @@ class ScriptParser:
 
                 comfy_image = None
                 fallback_reason = None
+                durable_asset_metadata: Dict[str, Any] | None = None
                 base_prompt = prompt_pack.get("base_prompt") if isinstance(prompt_pack.get("base_prompt"), str) else ""
                 negative_prompt_list = (
                     prompt_pack.get("negative_prompt")
@@ -9343,35 +9420,243 @@ class ScriptParser:
                     if isinstance(item, str) and item.strip()
                 )
                 if isinstance(base_prompt, str) and base_prompt.strip():
-                    comfy_image = render_with_comfyui(
-                        base_prompt,
-                        negative_prompt_text,
-                        clean_scene_id,
-                        clean_shot_id,
-                    )
+                    # A selected routed provider is the execution authority for
+                    # this image request. Do not invoke ComfyUI first or silently
+                    # accept its output if the Router later rejects the request.
+                    if not router_image_selected:
+                        comfy_image = render_with_comfyui(
+                            base_prompt,
+                            negative_prompt_text,
+                            clean_scene_id,
+                            clean_shot_id,
+                        )
                 else:
                     fallback_reason = "comfyui_payload_failed"
                 if isinstance(comfy_image, dict) and isinstance(comfy_image.get("url"), str) and comfy_image.get("url").strip():
                     url = comfy_image.get("url").strip()
                     provider = "comfyui"
                     fallback_reason = None
-                elif fallback_reason is None:
+                elif fallback_reason is None and not router_image_selected:
                     comfy_reason = get_comfyui_last_error()
                     fallback_reason = comfy_reason if isinstance(comfy_reason, str) and comfy_reason.strip() else "comfyui_no_image"
 
                 provider_payload = build_image_render_payload(scene, shot, prompt_pack)
-                provider_result = normalize_image_result(
-                    submit_image_render(provider_payload, image_provider_config)
-                )
-                provider_name = provider_result.get("provider")
-                if provider != "comfyui" and isinstance(provider_name, str) and provider_name.strip():
-                    provider = provider_name.strip().lower()
-                if not isinstance(url, str) or not url.strip():
-                    fallback_seed = provider_result.get("render_id") or asset_id
-                    if isinstance(provider_result.get("url"), str) and provider_result.get("url").strip():
-                        url = provider_result.get("url").strip()
+                if router_image_selected:
+                    try:
+                        from app.services.reference_validation import authorize_runway_router_image_references
+
+                        authorization = authorize_runway_router_image_references(
+                            payload={
+                                **provider_payload,
+                                "project_id": clean_project_id,
+                                "references": provider_payload.get("references", []),
+                            },
+                            storage=authorization_storage,
+                        )
+                        provider_payload["references"] = authorization["references"]
+                        provider_payload["reference_authorization"] = {
+                            key: authorization[key]
+                            for key in (
+                                "project_id", "scene_id", "shot_id", "storyboard_version_id",
+                                "storyboard_shot_id", "binding_sha256", "generation_context_id",
+                            )
+                        }
+                    except Exception as exc:
+                        from app.services.stability import ValidationError as _ValidationError
+
+                        error = exc if isinstance(exc, _ValidationError) else _ValidationError(
+                            "Runway Router image references could not be authorized",
+                            stage="reference_validation",
+                            metadata={"failure_type": "image_authority_lookup_failed"},
+                        )
+                        provider_result = normalize_image_result({
+                            "status": "failed",
+                            "provider": "runway_router",
+                            "url": None,
+                            "file_path": None,
+                            "error": error.message,
+                            "meta": {
+                                "reason": "image_reference_authorization_failed",
+                                "reference_authorization_error": error.to_dict(),
+                            },
+                        })
                     else:
-                        url = f"https://picsum.photos/seed/{fallback_seed}/800/450"
+                        provider_result = normalize_image_result(
+                            submit_image_render(provider_payload, image_provider_config)
+                        )
+                else:
+                    provider_result = normalize_image_result(
+                        submit_image_render(provider_payload, image_provider_config)
+                    )
+                provider_name = provider_result.get("provider")
+                if router_image_selected:
+                    provider = "runway_router"
+                    routed_status = provider_result.get("status")
+                    routed_url = provider_result.get("url")
+                    if routed_status == "success" and isinstance(routed_url, str) and routed_url.strip():
+                        asset_status = "success"
+                        url = routed_url.strip()
+                        file_path = provider_result.get("file_path")
+                        routed_meta = provider_result.get("meta") if isinstance(provider_result.get("meta"), dict) else {}
+                        output_identity = routed_meta.get("output_identity") if isinstance(routed_meta.get("output_identity"), dict) else {}
+                        task_id = str(routed_meta.get("runway_task_id") or "").strip()
+                        context_id = (
+                            (provider_payload.get("reference_authorization") or {}).get("generation_context_id")
+                            if isinstance(provider_payload.get("reference_authorization"), dict)
+                            else None
+                        ) or shot.get("generation_context_id") or meta.get("generation_context_id")
+                        try:
+                            reported_project_id = routed_meta.get("project_id")
+                            reported_execution_id = routed_meta.get("execution_id")
+                            if (
+                                (reported_project_id is not None and str(reported_project_id).strip() != clean_project_id)
+                                or (reported_execution_id is not None and str(reported_execution_id).strip() != clean_execution_id)
+                            ):
+                                raise PersistenceError(
+                                    "Runway image result context does not match the requested project or execution",
+                                    stage="image_asset_registration",
+                                    metadata={
+                                        "project_id": clean_project_id,
+                                        "job_id": task_id or clean_execution_id,
+                                        "provider": "runway_router",
+                                    },
+                                )
+                            if not clean_project_id or not clean_execution_id:
+                                raise PersistenceError(
+                                    "Successful Runway image output is missing durable project or execution provenance",
+                                    stage="image_asset_registration",
+                                    metadata={
+                                        "project_id": clean_project_id,
+                                        "job_id": task_id or clean_execution_id,
+                                        "provider": "runway_router",
+                                    },
+                                )
+                            from app.data.storage import get_storage
+                            from app.services.video_asset_service import VideoAssetService
+
+                            storage = get_storage("sqlite")
+                            asset_service = VideoAssetService(storage)
+                            registered_asset = asset_service.register_generated_image_for_execution(
+                                project_id=clean_project_id,
+                                image_render_id=asset_id,
+                                scene_id=clean_scene_id,
+                                shot_id=clean_shot_id,
+                                execution_id=clean_execution_id,
+                                provider_task_id=task_id,
+                                source_url=url,
+                                output_identity=output_identity,
+                                reference_assets=(provider_payload.get("references") if isinstance(provider_payload.get("references"), list) else []),
+                                generation_context_id=context_id if isinstance(context_id, str) else None,
+                            )
+                        except Exception as exc:
+                            registration_error = exc if isinstance(exc, PersistenceError) else PersistenceError(
+                                "Durable Runway image registration failed",
+                                stage="image_asset_registration",
+                                metadata={
+                                    "project_id": clean_project_id,
+                                    "job_id": task_id or clean_execution_id,
+                                    "provider": "runway_router",
+                                    "cause": type(exc).__name__,
+                                },
+                            )
+                            logger.exception(
+                                "RUNWAY_IMAGE_REGISTRATION_FAILED project_id=%s job_id=%s provider=runway_router stage=image_asset_registration",
+                                clean_project_id,
+                                task_id or clean_execution_id,
+                            )
+                            provider_result = {
+                                **provider_result,
+                                "status": "failed",
+                                "url": None,
+                                "file_path": None,
+                                "error": registration_error.message,
+                                "meta": {
+                                    **(provider_result.get("meta") if isinstance(provider_result.get("meta"), dict) else {}),
+                                    "reason": "durable_asset_registration_failed",
+                                    "registration_error": registration_error.to_dict(),
+                                },
+                            }
+                            asset_status = "failed"
+                            url = None
+                            file_path = None
+                        else:
+                            durable_asset_metadata = {
+                                "asset_id": registered_asset.asset_id,
+                                "project_id": registered_asset.project_id,
+                                "execution_id": clean_execution_id,
+                                "provider_task_id": task_id,
+                                "status": registered_asset.status,
+                            }
+                    elif routed_status == "dry_run":
+                        asset_status = "not_executed"
+                        url = None
+                        file_path = None
+                    else:
+                        # Preserve the Router's failure as a failed asset; do
+                        # not reuse stale ledger output or synthesize a preview.
+                        asset_status = "failed"
+                        url = None
+                        file_path = None
+                else:
+                    if provider != "comfyui" and isinstance(provider_name, str) and provider_name.strip():
+                        provider = provider_name.strip().lower()
+                    if not isinstance(url, str) or not url.strip():
+                        fallback_seed = provider_result.get("render_id") or asset_id
+                        if isinstance(provider_result.get("url"), str) and provider_result.get("url").strip():
+                            url = provider_result.get("url").strip()
+                        else:
+                            url = f"https://picsum.photos/seed/{fallback_seed}/800/450"
+
+                asset_meta = {
+                    "prompt_used": base_prompt.strip() if isinstance(base_prompt, str) else "",
+                    "negative_prompt": negative_prompt_text,
+                    "source": "script",
+                    **(
+                        {"fallback_reason": fallback_reason}
+                        if provider != "comfyui" and isinstance(fallback_reason, str) and fallback_reason.strip()
+                        else {}
+                    ),
+                }
+                if router_image_selected:
+                    routed_meta = provider_result.get("meta") if isinstance(provider_result.get("meta"), dict) else {}
+                    router_execution = {
+                        key: routed_meta[key]
+                        for key in (
+                            "router_config_id",
+                            "resolved_model",
+                            "runway_task_id",
+                            "output_identity",
+                            "estimated_cost_credits",
+                            "resolved_settings",
+                            "resolved_input",
+                            "capacity_fallback",
+                            "no_eligible_model",
+                            "reason",
+                            "registration_error",
+                        )
+                        if key in routed_meta and routed_meta[key] is not None
+                    }
+                    if routed_status == "success" and asset_status == "success":
+                        router_execution["reason"] = "runway_router_image_generated"
+                    elif routed_status == "success":
+                        router_execution["reason"] = str((provider_result.get("meta") or {}).get("reason") or "runway_router_image_failed")
+                    router_execution["routing_mode"] = routed_meta.get("routing_mode") or "model_router"
+                    generation_context_id = shot.get("generation_context_id")
+                    if not isinstance(generation_context_id, str) or not generation_context_id.strip():
+                        generation_context_id = meta.get("generation_context_id")
+                    if isinstance(generation_context_id, str) and generation_context_id.strip():
+                        router_execution["generation_context_id"] = generation_context_id.strip()
+                    if routed_status == "success":
+                        router_execution["execution_id"] = clean_execution_id
+                        router_execution["project_id"] = clean_project_id or None
+                    if provider_result.get("error"):
+                        router_execution["error"] = provider_result["error"]
+                    no_eligible = router_execution.get("no_eligible_model")
+                    if isinstance(no_eligible, dict) and "emptied_by" in no_eligible:
+                        no_eligible.setdefault("emptiedBy", no_eligible["emptied_by"])
+                    asset_meta["router_execution"] = router_execution
+                    if durable_asset_metadata is not None:
+                        asset_meta["durable_asset"] = durable_asset_metadata
 
                 assets.append(
                     {
@@ -9382,17 +9667,9 @@ class ScriptParser:
                         "status": asset_status,
                         "file_path": file_path.strip() if isinstance(file_path, str) and file_path.strip() else None,
                         "url": url.strip() if isinstance(url, str) and url.strip() else None,
+                        "error": provider_result.get("error") if router_image_selected else None,
                         "preview_label": f"{clean_scene_id}:{clean_shot_id}",
-                        "meta": {
-                            "prompt_used": base_prompt.strip() if isinstance(base_prompt, str) else "",
-                            "negative_prompt": negative_prompt_text,
-                            "source": "script",
-                            **(
-                                {"fallback_reason": fallback_reason}
-                                if provider != "comfyui" and isinstance(fallback_reason, str) and fallback_reason.strip()
-                                else {}
-                            ),
-                        },
+                        "meta": asset_meta,
                         "shot_intent": {
                             "framing": shot_intent.get("framing") if isinstance(shot_intent.get("framing"), str) else "",
                             "camera": shot_intent.get("camera") if isinstance(shot_intent.get("camera"), str) else "",
@@ -14623,7 +14900,7 @@ class ScriptParser:
         if not re.search(r'[A-Za-z]', name):
             return False
         # Letters and spaces only — no digits, hyphens, periods, slashes.
-        if not re.match(r'^[A-Z][A-Z\s]+$', name):
+        if not re.match(r'^[A-Z][A-Z\s]*$', name):
             return False
         # 1–3 words maximum.
         words = name.split()
@@ -14661,6 +14938,11 @@ class ScriptParser:
             return False
         return True
 
+    def extract_cast(self, script_text: str) -> tuple[list[str], dict[str, str]]:
+        """Discover the whole cast from dialogue and explicit action introductions."""
+        from app.services.screenplay_cast_service import discover_cast
+        return discover_cast(script_text, self._is_valid_dialogue_character, self.GENERIC_ROLES)
+
     def _extract_simple_scene_characters(self, scene_text: str) -> List[str]:
         """
         Extract unique character names from dialogue speaker labels.
@@ -14677,7 +14959,7 @@ class ScriptParser:
             return []
 
         # Character label line — ALL CAPS, 1–3 words, letters/spaces only.
-        label_pattern = re.compile(r'^\s*([A-Z][A-Z][A-Z\s]{0,40})\s*$')
+        label_pattern = re.compile(r'^\s*([A-Z][A-Z \t]{0,40})(?:\s*\((?:V\.O\.|O\.S\.|O\.C\.|CONT[’\']?D|PHONE)\))?\s*$')
         # Scene-heading line: must not be mistaken for a character.
         simple_scene_heading = re.compile(
             r'^\s*(?:SCENE\s+\d+\s*[:\-]\s*)?(?:\d+\.\s*)?'

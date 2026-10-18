@@ -12,11 +12,18 @@ import {
   Share2,
   Archive,
   BookOpen,
+  LayoutDashboard,
+  Factory,
+  ShieldCheck,
+  Images,
   Search,
   Settings,
   Bell,
   User,
   Filter,
+  Home,
+  LayoutGrid,
+  Box,
 } from 'lucide-react'
 import { lazyLoad } from './LazyLoad'
 import { useRenderActivity } from '../context/RenderActivityContext'
@@ -211,10 +218,23 @@ interface RoomNavItem {
   to: string
 }
 
+/* ─── Persistent lobby navigation — always visible across all studio pages ─
+ * Studio Workspace -> /studio · 2D Lobby -> /studio/lobby · 3D Lobby -> /studio/lobby-3d
+ * Rendered as a dedicated cluster above the room rail so users never type URLs. */
+export const LOBBY_NAV_ITEMS: RoomNavItem[] = [
+  { key: 'studio-workspace', label: 'Studio Workspace', stitchName: 'Studio Workspace', icon: <Home size={20} />, to: '/studio' },
+  { key: 'lobby-2d', label: '2D Lobby', stitchName: '2D Lobby', icon: <LayoutGrid size={20} />, to: '/studio/lobby' },
+  { key: 'lobby-3d', label: '3D Lobby', stitchName: '3D Lobby', icon: <Box size={20} />, to: '/studio/lobby-3d' },
+]
+
 const ROOM_NAV_ITEMS: RoomNavItem[] = [
   { key: 'gate', label: 'The Gate', stitchName: 'The Gate', icon: <Clapperboard size={20} />, to: '/' },
+  { key: 'overview', label: 'Overview', stitchName: 'Overview', icon: <LayoutDashboard size={20} />, to: '/studio/overview' },
   { key: 'page', label: 'The Page', stitchName: 'The Page', icon: <FileEdit size={20} />, to: '/studio/writers-room' },
   { key: 'board', label: 'The Board', stitchName: 'The Board', icon: <Eye size={20} />, to: '/studio/production-board' },
+  { key: 'production-desk', label: 'Production Desk', stitchName: 'Production Desk', icon: <Factory size={20} />, to: '/studio/production-desk' },
+  { key: 'integrity', label: 'Integrity Engine', stitchName: 'Integrity Engine', icon: <ShieldCheck size={20} />, to: '/studio/integrity' },
+  { key: 'reference-space', label: 'Reference Space', stitchName: 'Reference Space', icon: <Images size={20} />, to: '/studio/reference-space' },
   { key: 'previs', label: 'The Previs Bay', stitchName: 'The Previs Bay', icon: <Camera size={20} />, to: '/studio/previs' },
   { key: 'theater', label: 'The Theater', stitchName: 'The Theater', icon: <MonitorPlay size={20} />, to: '/studio/screening-room' },
   { key: 'universe', label: 'The Universe', stitchName: 'The Universe', icon: <Share2 size={20} />, to: '/studio/universe-graph' },
@@ -228,11 +248,19 @@ const R3F_ROOMS = new Set(['/studio/writers-room', '/studio/screening-room'])
 /* ─── Route-to-background map ────────────────────────────────────────────── */
 const roomBackgrounds: Record<string, string> = {
   '/': 'url("/backgrounds/the-gate-bg.png")',
+  '/studio/overview': 'url("/backgrounds/the-gate-bg.png")',
   '/studio/production-board': 'url("/backgrounds/the-board-bg.png")',
+  '/studio/production-desk': 'url("/backgrounds/the-board-bg.png")',
+  '/studio/integrity': 'url("/backgrounds/the-board-bg.png")',
+  '/studio/reference-space': 'url("/backgrounds/the-vault-bg.png")',
   '/studio/previs': 'url("/backgrounds/the-previs-bg.png")',
   '/studio/universe-graph': 'url("/backgrounds/the-universe-bg.png")',
   '/studio/archive': 'url("/backgrounds/the-vault-bg.png")',
+  '/studio/vault': 'url("/backgrounds/the-vault-bg.png")',
   '/studio/study-room': 'url("/backgrounds/the-study-bg.png")',
+  '/studio': 'url("/backgrounds/the-gate-bg.png")',
+  '/studio/lobby': 'url("/backgrounds/the-gate-bg.png")',
+  '/studio/lobby-3d': 'url("/backgrounds/the-gate-bg.png")',
 }
 
 /**
@@ -431,9 +459,50 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
         {isStudioRoute && (
           <nav
             aria-label="Studio rooms"
-            className="glass-panel fixed left-4 top-1/2 -translate-y-1/2 z-50 hidden flex-col items-center gap-3 py-6 px-3 rounded-full md:flex"
-            style={{ width: '72px' }}
+            className="liquid-panel fixed left-3 top-1/2 z-50 flex flex-col items-center gap-2 py-4 px-2 md:left-4 md:gap-3 md:py-6 md:px-3"
+            style={{ width: '60px', transform: 'translateY(-50%)' }}
           >
+            <span aria-hidden="true" className="liquid-edge" />
+            <span aria-hidden="true" className="liquid-spec" />
+            <span aria-hidden="true" className="liquid-glow" />
+            <div className="relative z-10 flex flex-col items-center gap-2 md:gap-3">
+            {/* ── Persistent lobby navigation (Studio / 2D Lobby / 3D Lobby) ── */}
+            <div aria-label="Lobby navigation" className="flex flex-col items-center gap-2 md:gap-3">
+            {LOBBY_NAV_ITEMS.map((room) => {
+              const isActive = location.pathname === room.to
+              return (
+                <div key={room.key} className="relative flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => void navigateToRoom(room.to)}
+                    aria-label={room.stitchName}
+                    aria-current={isActive ? 'page' : undefined}
+                    data-testid={`lobby-nav-${room.key}`}
+                    onMouseEnter={() => setHoveredRoom(room.key)}
+                    onMouseLeave={() => setHoveredRoom(null)}
+                    onFocus={() => setHoveredRoom(room.key)}
+                    onBlur={() => setHoveredRoom(null)}
+                    className={`flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-full transition-all duration-200 ${
+                      isActive
+                        ? 'bg-[#ffd165] text-[#3a2c00] scale-110 shadow-[0_0_22px_rgba(255,209,101,0.6)] ring-1 ring-inset ring-white/40'
+                        : 'text-amber-100/85 hover:text-amber-100 hover:bg-white/10 hover:ring-1 hover:ring-inset hover:ring-amber-200/30'
+                    }`}
+                  >
+                    {room.icon}
+                  </button>
+                  {hoveredRoom === room.key && (
+                    <div
+                      className="glass-panel absolute left-full ml-3 px-3 py-1.5 rounded-lg whitespace-nowrap pointer-events-none z-50"
+                      style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}
+                    >
+                      {room.stitchName}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            </div>
+            <div aria-hidden="true" className="h-px w-8 bg-white/10" />
             {ROOM_NAV_ITEMS.map((room) => {
               /* Match: exact path or the route starts with the room path structure */
               const isActive =
@@ -454,10 +523,10 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
                     onMouseLeave={() => setHoveredRoom(null)}
                     onFocus={() => setHoveredRoom(room.key)}
                     onBlur={() => setHoveredRoom(null)}
-                    className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 ${
+                    className={`flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-full transition-all duration-200 ${
                       isActive
-                        ? 'bg-[#03b5d3] text-[#003640] scale-110 shadow-[0_0_20px_rgba(76,215,246,0.4)]'
-                        : 'text-[#d3c5ac] opacity-60 hover:bg-[#3a3939] hover:opacity-100'
+                        ? 'bg-[#03b5d3] text-[#003640] scale-110 shadow-[0_0_22px_rgba(76,215,246,0.6)] ring-1 ring-inset ring-white/40'
+                        : 'text-amber-100/85 hover:text-amber-100 hover:bg-white/10 hover:ring-1 hover:ring-inset hover:ring-amber-200/30'
                     }`}
                   >
                     {room.icon}
@@ -473,11 +542,12 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
                 </div>
               )
             })}
+            </div>
           </nav>
         )}
 
         {/* ── MAIN CONTENT AREA ── */}
-        <div className={`min-w-0 flex-1 flex flex-col ${isStudioRoute ? 'md:ml-[88px]' : ''}`}>
+        <div className={`min-w-0 flex-1 flex flex-col ${isStudioRoute ? 'pl-[76px] md:pl-[88px]' : ''}`}>
           {/* ── TOP BAR ── */}
           {isStudioRoute && (
             <header className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 py-3 flex-shrink-0 lg:h-14 lg:flex-nowrap lg:px-6 lg:py-0" style={{ background: 'transparent' }}>
@@ -497,10 +567,10 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
                 onClick={() => setCodirectorOpen((prev) => !prev)}
                 aria-label="Toggle Co-Director Brain (Cmd+D)"
                 aria-pressed={codirectorOpen}
-                className={`lg:order-3 flex items-center gap-1.5 min-h-11 px-3 py-2 rounded-md text-xs transition-all ${
+                className={`lg:order-3 inline-flex items-center gap-1.5 min-h-11 rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-all ${
                   codirectorOpen
-                    ? 'bg-primary/20 text-primary shadow-[0_0_18px_rgba(255,209,101,0.55)] amber-glow'
-                    : 'text-zinc-200 border border-white/15 hover:bg-[#3a3939]'
+                    ? 'bg-gradient-to-br from-[rgba(255,209,101,0.32)] to-[rgba(255,209,101,0.14)] text-[#f7f4ef] border border-[rgba(255,209,101,0.45)] shadow-[0_0_18px_rgba(255,209,101,0.55),inset_0_1px_0_rgba(255,255,255,0.18)]'
+                    : 'text-zinc-200 border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:border-[rgba(255,209,101,0.3)] hover:bg-white/[0.07]'
                 }`}
               >
                 <Filter size={13} />
@@ -596,7 +666,7 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
             </header>
           )}
 
-          {isStudioRoute && <nav aria-label="Studio rooms on mobile" className="border-y border-white/10 px-4 py-2 md:hidden"><details><summary className="cursor-pointer text-xs text-zinc-300">Rooms <span className="ml-2 text-zinc-500">{activeTitle}</span></summary><div className="grid grid-cols-2 gap-2 pb-2 pt-3">{ROOM_NAV_ITEMS.map((room) => <button type="button" key={room.key} onClick={() => void navigateToRoom(room.to)} aria-label={room.stitchName} className="flex items-center gap-2 rounded border border-white/10 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5">{room.icon}<span>{room.stitchName}</span></button>)}</div></details></nav>}
+          {isStudioRoute && <nav aria-label="Studio rooms on mobile" className="border-y border-white/10 px-4 py-2 md:hidden"><details><summary className="cursor-pointer text-xs text-zinc-300">Rooms <span className="ml-2 text-zinc-500">{activeTitle}</span></summary><div className="grid grid-cols-2 gap-2 pb-2 pt-3">{[...LOBBY_NAV_ITEMS, ...ROOM_NAV_ITEMS].map((room) => <button type="button" key={room.key} onClick={() => void navigateToRoom(room.to)} aria-label={room.stitchName} className="flex items-center gap-2 rounded border border-white/10 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5">{room.icon}<span>{room.stitchName}</span></button>)}</div></details></nav>}
 
           <ProductionJourneyGuide pathname={location.pathname} context={productionContext} beforeNavigate={beforeNavigate} />
 

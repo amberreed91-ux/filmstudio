@@ -19,6 +19,7 @@ import {
   Wand2,
 } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
+import TakeComparisonDrawer, { type TakeComparisonTake } from '../components/TakeComparisonDrawer'
 import { useTakeSelection } from '../hooks/useTakeSelection'
 import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
@@ -31,6 +32,7 @@ import ColoristIntelligencePanel from '../components/ColoristIntelligencePanel'
 import CastingIntelligencePanel from '../components/CastingIntelligencePanel'
 import CanonicalWorkflowPanel from '../components/CanonicalWorkflowPanel'
 import SceneEmotionalGuidancePanel from '../components/SceneEmotionalGuidancePanel'
+import ShotIntentRationaleCard from '../components/ShotIntentRationaleCard'
 import { TheaterScene } from '../rooms/TheTheater'
 import { useStudio } from '../context/StudioContext'
 import {
@@ -249,6 +251,9 @@ export default function ScreeningRoom() {
   // ── Full film playback state ─────────────────────────────────────────────
   const [isFullFilm, setIsFullFilm] = useState(false)
   const [showFinOverlay, setShowFinOverlay] = useState(false)
+
+  // ── Take comparison drawer (A/B split-screen review) ───────────────────────
+  const [isCompareOpen, setIsCompareOpen] = useState(false)
 
   // ── Creator-requested external emotion analysis cache ──────────────────
   const [emotionAnalysisCache, setEmotionAnalysisCache] = useState<Record<string, EmotionAnalysisResult>>({})
@@ -827,6 +832,36 @@ export default function ScreeningRoom() {
     return takes?.[activeShotTakeIndex] || null
   }, [activeShotNumber, activeShotTakeIndex, shotTakes])
 
+  // ── Take comparison drawer wiring ─────────────────────────────────────────
+  // Historical render takes for the active shot feed the A/B split-screen
+  // comparison drawer. Selecting a non-latest take opens the drawer so the
+  // filmmaker can compare it side-by-side before approving.
+  const comparisonTakes: TakeComparisonTake[] = useMemo(() => {
+    const takes = shotTakes[activeShotNumber] || []
+    return takes.map((job, index) => ({
+      id: job.id,
+      label: `Take ${index + 1}${index === 0 ? ' · latest' : ''}${chosenJobId === job.id ? ' · chosen' : ''}`,
+      imageUrl: undefined,
+      note: job.created_at ? `Rendered ${new Date(job.created_at).toLocaleString()} · ${normalizeJobStatus(job.status)}` : normalizeJobStatus(job.status),
+    }))
+  }, [shotTakes, activeShotNumber, chosenJobId])
+
+  const handleSelectComparisonTake = useCallback((id: string) => {
+    const takes = shotTakes[activeShotNumber] || []
+    const index = takes.findIndex((job) => job.id === id)
+    if (index >= 0) {
+      setActiveShotTakeIndex(index)
+      setCurrentTime(0)
+    }
+  }, [shotTakes, activeShotNumber])
+
+  const handleSelectTakeIndex = useCallback((index: number) => {
+    setActiveShotTakeIndex(index)
+    setCurrentTime(0)
+    // Selecting a historical (non-latest) take opens the A/B comparison drawer.
+    if (index > 0) setIsCompareOpen(true)
+  }, [])
+
   const activeStoryboardProvenance = useMemo(() => {
     const takes = shotTakes[activeShotNumber]
     const job = takes?.[activeShotTakeIndex]
@@ -835,6 +870,15 @@ export default function ScreeningRoom() {
       ? storyboard as Record<string, unknown>
       : null
   }, [activeShotNumber, activeShotTakeIndex, shotTakes])
+
+  const screeningRationaleShot = useMemo(() => {
+    if (!activeRenderJob && !activeStoryboardProvenance) return null
+    return {
+      intent: activeStoryboardProvenance?.intent,
+      metadata: activeStoryboardProvenance ?? activeRenderJob?.input_payload?.parameters,
+      prompt: activeRenderJob?.input_payload?.prompt,
+    }
+  }, [activeRenderJob, activeStoryboardProvenance])
 
   // Fix 1: Ensure active shot is valid for current scene
   useEffect(() => {
@@ -1236,7 +1280,7 @@ export default function ScreeningRoom() {
                       </select>
                     </label>
                     <label className="min-w-0 space-y-1.5 text-xs text-zinc-400">Take
-                      <select aria-label="Preview take" className={selectClass} value={activeShotTakeIndex} disabled={isFullFilm || previewScope === 'scene' || !shotTakes[activeShotNumber]?.length} onChange={(event) => { setActiveShotTakeIndex(Number(event.target.value)); setCurrentTime(0) }}>
+                      <select aria-label="Preview take" className={selectClass} value={activeShotTakeIndex} disabled={isFullFilm || previewScope === 'scene' || !shotTakes[activeShotNumber]?.length} onChange={(event) => handleSelectTakeIndex(Number(event.target.value))}>
                         {shotTakes[activeShotNumber]?.length ? shotTakes[activeShotNumber].map((job, index) => <option key={job.id} value={index}>Take {index + 1}{index === 0 ? ' · latest' : ''}{chosenJobId === job.id ? ' · chosen' : ''}</option>) : <option value={0}>No takes</option>}
                       </select>
                     </label>
@@ -1261,6 +1305,7 @@ export default function ScreeningRoom() {
                     <div className="flex flex-wrap items-center gap-2">
                       <button type="button" className={buttonClass} disabled={takeSelection.busy || !activeRenderJob.output_payload?.asset_url || chosenJobId === activeRenderJob.id} onClick={() => void takeSelection.save(activeShotNumber, activeRenderJob.id)}>{takeSelection.busy ? 'Saving…' : chosenJobId === activeRenderJob.id ? 'Chosen for the cut' : 'Use this take for the cut'}</button>
                       {chosenJobId && <button type="button" className={buttonClass} disabled={takeSelection.busy} onClick={() => void takeSelection.save(activeShotNumber, null)}>Clear take choice</button>}
+                      {comparisonTakes.length > 1 && <button type="button" className={buttonClass} onClick={() => setIsCompareOpen(true)}>Compare takes</button>}
                     </div>
                     <p className="text-xs leading-relaxed text-zinc-400">Before choosing, compare the previous shot’s ending with this opening: prop ownership, eyeline, costume, light and action. Check where the dialogue belongs.</p>
                     {takeSelection.error && <p role="alert" className="text-sm text-red-300">{takeSelection.error}</p>}
@@ -1293,6 +1338,7 @@ export default function ScreeningRoom() {
 
                   <section id="theatre-step-review" aria-label="Review and revise" hidden={activeStep !== 'review'} className="space-y-4">
                     <div className="border-l-2 border-amber-200/50 pl-4"><h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-200/80">Why this shot matters</h3><p className="text-sm leading-relaxed text-zinc-300">{loadingRationale ? 'Loading the scene’s intent…' : shotRationale?.rationale || 'No saved rationale for this scene yet. Compare the footage with the intent you set in Previs.'}</p></div>
+                    <ShotIntentRationaleCard shot={screeningRationaleShot} testId="why-this-shot-matters-screening" />
                     <SceneEmotionalGuidancePanel sceneId={activeTake?.sceneId ?? null} className="border-l-2 border-amber-200/40 pl-4 text-sm leading-relaxed text-zinc-300" />
                     <button type="button" onClick={openPrevis} disabled={!activeTake?.sceneId} className={buttonClass}>Revise this shot in Previs<ChevronRight size={15} /></button>
                     <div className="space-y-3 border-t border-white/10 pt-4">
@@ -1419,6 +1465,13 @@ export default function ScreeningRoom() {
             </div>
           </ProjectGuard>
         </StudioShell>
+        <TakeComparisonDrawer
+          open={isCompareOpen}
+          takes={comparisonTakes}
+          selectedId={activeRenderJob?.id ?? null}
+          onSelect={handleSelectComparisonTake}
+          onClose={() => setIsCompareOpen(false)}
+        />
       </div>
     </div>
   )

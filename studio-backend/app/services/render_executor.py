@@ -23,10 +23,22 @@ def execute_render(
     Thin render execution wrapper delegating all provider logic
     to the isolated execution layer.
     """
-    return normalize_provider_result(
-        execute_provider_render(provider_name, provider_payload, config),
+    result = execute_provider_render(provider_name, provider_payload, config)
+    normalized = normalize_provider_result(
+        result,
         provider_name if isinstance(provider_name, str) else "mock",
     )
+    # The legacy failure normalizer only recognizes historical provider IDs and
+    # otherwise rewrites identity to "mock". This wrapper is an execution
+    # boundary: keep the explicitly requested provider authoritative even for
+    # a disabled or unknown-provider failure.
+    requested_provider = (
+        provider_name.strip().lower()
+        if isinstance(provider_name, str) and provider_name.strip()
+        else "mock"
+    )
+    normalized["provider"] = requested_provider
+    return normalized
 
 
 def get_render_provider_config(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

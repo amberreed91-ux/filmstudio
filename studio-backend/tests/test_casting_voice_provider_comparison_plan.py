@@ -13,9 +13,11 @@ from types import SimpleNamespace
 
 import pytest
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
 
 def _load_script_module():
-    path = Path("scripts/plan_casting_voice_provider_comparison.py")
+    path = _BACKEND_ROOT / "scripts" / "plan_casting_voice_provider_comparison.py"
     spec = importlib.util.spec_from_file_location("plan_casting_voice_provider_comparison", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader

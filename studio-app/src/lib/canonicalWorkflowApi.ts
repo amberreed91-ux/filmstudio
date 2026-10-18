@@ -126,9 +126,11 @@ export function beginCanonicalWorkflow(input: {
   )
 }
 
-export function generateCanonicalPrevis(runId: string, provider?: string) {
+// Checkpoint 5 Previs is simulated-only: this route always runs the simulated
+// provider, so the production render provider picker never reaches it.
+export function generateCanonicalPrevis(runId: string) {
   return fetchJson<CanonicalWorkflowResponse>(workflowPath(runId, '/previs/generate'), {
-    ...jsonPost({ provider: provider || undefined }),
+    ...jsonPost({ provider: 'simulated' }),
     timeoutMs: 600_000,
     timeoutLabel: 'Approved Previs generation',
   })

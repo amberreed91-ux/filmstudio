@@ -49,6 +49,12 @@ const UniverseGraphPage = lazy(() => import('./pages/UniverseGraphPage'))
 const ThreeTest = lazy(() => import('./pages/ThreeTest').then(m => ({ default: m.ThreeTest })))
 // eslint-disable-next-line react-refresh/only-export-components
 const Lobby3DPage = lazy(() => import('./pages/Lobby3DPage'))
+// eslint-disable-next-line react-refresh/only-export-components
+const GateRoom = lazy(() => import('./pages/GateRoom'))
+// eslint-disable-next-line react-refresh/only-export-components
+const PageRoom = lazy(() => import('./pages/PageRoom'))
+// eslint-disable-next-line react-refresh/only-export-components
+const BoardRoom = lazy(() => import('./pages/BoardRoom'))
 
 // Loading skeleton for route transitions
 // eslint-disable-next-line react-refresh/only-export-components
@@ -258,6 +264,20 @@ export const APP_ROUTES: AppRoute[] = [
     element: <LazyRoute><ArchiveRoom /></LazyRoute>,
   },
   {
+    path: '/studio/vault',
+    label: 'Vault',
+    title: 'Vault',
+    purpose: 'Browse historical project states, quality snapshots, and prior intervention records.',
+    placement: 'hidden-system',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Vault' }],
+    contextualLinks: [
+      { to: '/studio/lobby', label: 'Return to Home' },
+      { to: '/studio/previs', label: 'Open Storyboard' },
+    ],
+    icon: <FolderKanban size={14} />,
+    element: <LazyRoute><ArchiveRoom /></LazyRoute>,
+  },
+  {
     path: '/studio/devtools',
     label: 'Dev Tools',
     title: 'Studio Dev Tools',
@@ -405,6 +425,49 @@ export const APP_ROUTES: AppRoute[] = [
     ],
     icon: <Home size={14} />,
     element: <LazyRoute><Lobby3DPage /></LazyRoute>,
+  },
+  {
+    path: '/studio/gate',
+    label: 'Gate',
+    title: 'Gate',
+    purpose: 'Project intake and greenlight dossier for new productions.',
+    placement: 'secondary',
+    breadcrumbs: [{ label: 'Studio', to: '/studio' }, { label: 'Gate' }],
+    contextualLinks: [
+      { to: '/studio/page', label: 'Open Page' },
+      { to: '/studio/lobby', label: 'Open Home' },
+    ],
+    icon: <Clapperboard size={14} />,
+    element: <LazyRoute><GateRoom /></LazyRoute>,
+  },
+  {
+    path: '/studio/page',
+    label: 'Page',
+    title: 'Page',
+    purpose: 'Script development room for scenes, screenplay, and story intent.',
+    placement: 'secondary',
+    breadcrumbs: [{ label: 'Studio', to: '/studio' }, { label: 'Page' }],
+    contextualLinks: [
+      { to: '/studio/gate', label: 'Open Gate' },
+      { to: '/studio/board', label: 'Open Board' },
+      { to: '/studio/writers-room', label: "Open Writer's Room" },
+    ],
+    icon: <BookOpen size={14} />,
+    element: <LazyRoute><PageRoom /></LazyRoute>,
+  },
+  {
+    path: '/studio/board',
+    label: 'Board',
+    title: 'Board',
+    purpose: 'Visual storyboarding room with the walkable shot wall.',
+    placement: 'secondary',
+    breadcrumbs: [{ label: 'Studio', to: '/studio' }, { label: 'Board' }],
+    contextualLinks: [
+      { to: '/studio/page', label: 'Open Page' },
+      { to: '/studio/previs', label: 'Open Previs Room' },
+    ],
+    icon: <Film size={14} />,
+    element: <LazyRoute><BoardRoom /></LazyRoute>,
   },
   {
     path: '/studio/dashboard',

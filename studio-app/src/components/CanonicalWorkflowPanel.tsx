@@ -159,8 +159,12 @@ export default function CanonicalWorkflowPanel({
       </div>
 
       <p className="mt-2 text-[10px] text-zinc-400" data-testid="canonical-render-provider">
-        New renders: {providerLabel}. {renderProvider ? '' : 'New Previs uses the server default. '}
+        New renders: {providerLabel}.
         Retries and revisions retain their original render provider.
+      </p>
+
+      <p className="mt-1 text-[10px] text-zinc-400" data-testid="canonical-previs-provider">
+        Simulated previs: instant, no cost.
       </p>
 
       {controller.loading ? (
@@ -214,7 +218,7 @@ export default function CanonicalWorkflowPanel({
           ) : null}
 
           {nextAction === 'generate_previs' ? (
-            <button type="button" disabled={busy} onClick={() => apply('Generating Previs', () => generateCanonicalPrevis(run!.run_id, renderProvider))} className="btn-ghost px-3 py-2 text-[10px]">
+            <button type="button" disabled={busy} onClick={() => apply('Generating Previs', () => generateCanonicalPrevis(run!.run_id))} className="btn-ghost px-3 py-2 text-[10px]">
               Generate approved Previs
             </button>
           ) : null}

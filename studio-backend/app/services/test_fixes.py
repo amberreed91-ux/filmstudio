@@ -293,13 +293,17 @@ class TestFix5CascadeDelete:
 # ── Conftest override ────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")
-def client() -> TestClient:
+def client():
     """Create a TestClient for the FastAPI app, initializing render storage."""
-    import app.services.render
+    import app.services.render as render_module
     from app.data import get_storage as _get_storage
+    previous_storage = render_module._storage
     storage = _get_storage("sqlite")
     if storage:
-        app.services.render.set_storage(storage)
+        render_module.set_storage(storage)
 
-    from main import app
-    return TestClient(app)
+    try:
+        from main import app
+        yield TestClient(app)
+    finally:
+        render_module.set_storage(previous_storage)

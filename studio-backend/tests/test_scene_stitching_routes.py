@@ -126,6 +126,7 @@ def test_generate_scene_pipeline_route_calls_orchestrator(monkeypatch):
             "overwrite": True,
             "on_audio_overrun": "freeze_last_frame",
             "score_ambient_provider": "manual_post_render",
+            "prepared_snapshot_id": "snapshot-route",
             "soundtrack": {
                 "enabled": True,
                 "audio_source_type": "local_file",
@@ -141,6 +142,7 @@ def test_generate_scene_pipeline_route_calls_orchestrator(monkeypatch):
     assert captured["kwargs"]["provider"] == "happyhorse"
     assert captured["kwargs"]["overwrite"] is True
     assert captured["kwargs"]["score_ambient_provider"] == "manual_post_render"
+    assert captured["kwargs"]["prepared_snapshot_id"] == "snapshot-route"
     assert captured["kwargs"]["soundtrack_config"].enabled is True
     assert captured["kwargs"]["soundtrack_config"].local_audio_path == "/tmp/score.wav"
     assert captured["saved"]["updates"] == {"execution_summary": {"one_button_render_jobs": []}}

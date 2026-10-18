@@ -7,6 +7,16 @@ from pathlib import Path
 
 logger = logging.getLogger("studio-backup")
 
+# Active production database target. All automated backups snapshot this
+# file: studio-backend/data/studio.db (resolved from this module's location
+# so the target is stable regardless of process cwd or env overrides).
+ACTIVE_STUDIO_DB_PATH = str(Path(__file__).resolve().parents[2] / "data" / "studio.db")
+
+
+def get_active_db_path() -> str:
+    """Return the hardcoded active backup source (studio-backend/data/studio.db)."""
+    return ACTIVE_STUDIO_DB_PATH
+
 
 class DatabaseBackup:
     """Automated SQLite database backup with rotation."""
@@ -90,7 +100,13 @@ def get_database_backup() -> DatabaseBackup | None:
     return _database_backup
 
 
-def init_database_backup(db_path: str, backup_dir: str = "./backups", max_backups: int = 7) -> DatabaseBackup:
+def init_database_backup(db_path: str | None = None, backup_dir: str = "./backups", max_backups: int = 7) -> DatabaseBackup:
     global _database_backup
-    _database_backup = DatabaseBackup(db_path, backup_dir, max_backups)
+    resolved = db_path or ACTIVE_STUDIO_DB_PATH
+    if str(resolved) != ACTIVE_STUDIO_DB_PATH:
+        logger.warning(
+            "Database backup source %s differs from active target %s",
+            resolved, ACTIVE_STUDIO_DB_PATH,
+        )
+    _database_backup = DatabaseBackup(resolved, backup_dir, max_backups)
     return _database_backup

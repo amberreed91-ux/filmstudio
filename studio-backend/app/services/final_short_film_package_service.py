@@ -34,18 +34,25 @@ class FinalShortFilmPackageService:
         if not final_output_url:
             return False
         
-        # For local files, check if file exists
+        # For studio outputs, enforce canonical root containment, non-empty
+        # contents, and regular-file semantics before a package can be created.
         if final_output_url.startswith('/outputs/'):
-            file_path = self._outputs_root / final_output_url.removeprefix('/outputs/')
-            return file_path.exists() and file_path.is_file()
+            outputs_root = self._outputs_root.resolve()
+            file_path = (outputs_root / final_output_url.removeprefix('/outputs/')).resolve()
+            return (
+                file_path.is_relative_to(outputs_root)
+                and file_path.is_file()
+                and file_path.stat().st_size > 0
+            )
 
         if final_output_url.startswith('/') or final_output_url.startswith('./'):
             file_path = Path(final_output_url)
-            return file_path.exists() and file_path.is_file()
-        
-        # For remote URLs, we could do a HEAD request, but for now assume it's valid
-        # In production, you might want to validate remote URLs
-        return True
+            if not file_path.is_absolute():
+                file_path = Path.cwd() / file_path
+            return file_path.is_file() and file_path.stat().st_size > 0
+
+        parsed = urlparse(final_output_url)
+        return parsed.scheme in {'http', 'https'} and bool(parsed.netloc)
 
     def collect_project_render_metadata(self, project_id: str) -> Dict[str, Any]:
         """Collect render job metadata from the project"""
@@ -167,6 +174,11 @@ class FinalShortFilmPackageService:
     ) -> FinalShortFilmPackage:
         """Create a final package from a project"""
         
+        # A package must reference a concrete output; synthetic manifests are
+        # previews/lineage, not deliverable media artifacts.
+        if not final_output_url or final_output_url.startswith("manifest://"):
+            raise ValueError("A concrete final_output_url is required to create a deliverable package")
+
         # Validate final output exists
         if not self.validate_final_output_exists(final_output_url):
             raise ValueError(f"Final output URL does not exist or is not reachable: {final_output_url}")
@@ -179,10 +191,9 @@ class FinalShortFilmPackageService:
         # Determine package status based on review
         package_status = "draft"
         if review_info:
-            if review_info['review_decision'] == "approved":
-                package_status = "approved"
-            elif review_info['review_decision'] in ["pending", "needs_revision", "rejected"]:
-                package_status = "ready_for_review"
+            # A review decision alone is not production acceptance. Keep even
+            # reviewed outputs short of approved until integrity checks pass.
+            package_status = "ready_for_review"
         
         # Create package
         package = FinalShortFilmPackage(
@@ -210,21 +221,29 @@ class FinalShortFilmPackageService:
         if self._storage:
             self._storage.save_final_short_film_package(package)
 
-        if self._video_asset_service and final_output_url:
-            try:
-                self._video_asset_service.register_generated_output(
-                    project_id=project_id,
-                    source_url=final_output_url,
-                    title=f"{film_title} (Final Package)",
-                    description="Auto-registered from final short film package output",
-                    metadata={
-                        "package_id": package.package_id,
-                        "origin": "final_short_film_package",
-                    },
-                )
-            except Exception:
-                # Keep package creation resilient even if asset registration fails.
-                pass
+        video_asset_service = self._video_asset_service
+        if final_output_url.startswith("/") and not final_output_url.startswith("/outputs/"):
+            video_asset_service = None
+        if video_asset_service is None and self._storage is not None and final_output_url.startswith("/outputs/"):
+            from app.services.video_asset_service import VideoAssetService
+
+            video_asset_service = VideoAssetService(self._storage)
+        if video_asset_service and final_output_url:
+            if final_output_url.startswith("/outputs/"):
+                video_asset_service._outputs_root = self._outputs_root
+            # Registration failure is observable to the caller. The persisted
+            # package remains non-approved and production acceptance independently
+            # blocks delivery until the matching durable asset exists.
+            video_asset_service.register_generated_output(
+                project_id=project_id,
+                source_url=final_output_url,
+                title=f"{film_title} (Final Package)",
+                description="Auto-registered from final short film package output",
+                metadata={
+                    "package_id": package.package_id,
+                    "origin": "final_short_film_package",
+                },
+            )
         
         return package
 
@@ -383,12 +402,15 @@ class FinalShortFilmPackageService:
         latest_clip = ordered_preferred[-1]
 
         if len(ordered_preferred) == 1:
+            if not scene_pipeline_clips and not hosted_clips:
+                raise ValueError("Completed clips do not provide a concrete final film output; assemble the film before packaging")
             assembly_kind = "single_scene_preview"
             final_output_url = str(latest_clip.get("output_url") or "").strip()
             assembly_metadata = {
                 "assembly_kind": assembly_kind,
                 "stitched_video_available": True,
                 "clip_count": 1,
+                "hosted_candidate_count": len(hosted_clips),
                 "source_render_job_ids": [latest_clip.get("job_id", "")],
                 "clip_urls": [final_output_url],
                 "stitch_status": "not_required",
@@ -403,39 +425,19 @@ class FinalShortFilmPackageService:
                     "assembly_kind": assembly_kind,
                     "stitched_video_available": True,
                     "clip_count": len(ordered_hosted),
+                    "hosted_candidate_count": len(hosted_clips),
                     "source_render_job_ids": [str(row.get("job_id") or "") for row in ordered_hosted],
                     "clip_urls": [str(row.get("output_url") or "") for row in ordered_hosted],
                     "stitch_status": "completed",
                     "stitched_output_path": str(stitch_result.get("output_path") or ""),
                 }
             else:
-                stitch_warnings.append(str(stitch_result.get("error_message") or stitch_result.get("blocker") or "stitch_failed"))
-                assembly_kind = "assembled_manifest"
-                final_output_url = f"manifest://{project_id}/latest"
-                assembly_metadata = {
-                    "assembly_kind": assembly_kind,
-                    "stitched_video_available": False,
-                    "clip_count": len(ordered_hosted),
-                    "source_render_job_ids": [str(row.get("job_id") or "") for row in ordered_hosted],
-                    "clip_urls": [str(row.get("output_url") or "") for row in ordered_hosted],
-                    "stitch_status": "failed",
-                    "stitch_error": str(stitch_result.get("error_message") or stitch_result.get("blocker") or "stitch_failed"),
-                }
+                blocker = str(stitch_result.get("error_message") or stitch_result.get("blocker") or "stitch_failed")
+                raise ValueError(f"Final film assembly failed: {blocker}")
         else:
-            assembly_kind = "assembled_manifest"
-            final_output_url = f"manifest://{project_id}/latest"
-            assembly_metadata = {
-                "assembly_kind": assembly_kind,
-                "stitched_video_available": False,
-                "clip_count": len(ordered_preferred),
-                "source_render_job_ids": [str(row.get("job_id") or "") for row in ordered_preferred],
-                "clip_urls": [str(row.get("output_url") or "") for row in ordered_preferred],
-                "stitch_status": "skipped_not_hosted",
-            }
+            raise ValueError("Completed clips do not provide a concrete final film output; assemble the film before packaging")
 
         merged_metadata = {**provided_metadata, **assembly_metadata}
-        if stitch_warnings:
-            merged_metadata["warnings"] = stitch_warnings
         package = self.create_package_from_project(
             project_id=project_id,
             film_title=film_title,
@@ -446,11 +448,6 @@ class FinalShortFilmPackageService:
             has_soundtrack=has_soundtrack,
             metadata=merged_metadata,
         )
-        if assembly_kind == "assembled_manifest":
-            package.package_status = "ready_for_review"
-            package.updated_at = self._now_iso()
-            if self._storage:
-                self._storage.update_final_short_film_package(package)
         return package
 
     def update_package_status(self, package_id: str, new_status: str) -> Optional[FinalShortFilmPackage]:
@@ -458,7 +455,7 @@ class FinalShortFilmPackageService:
         package = self.get_package(package_id)
         if not package:
             return None
-        
+
         # Validate status transition
         valid_statuses = ["draft", "ready_for_review", "approved", "packaged", "archived"]
         if new_status not in valid_statuses:
@@ -467,22 +464,35 @@ class FinalShortFilmPackageService:
         if new_status in {"approved", "packaged"}:
             try:
                 from app.services.production_acceptance_service import ProductionAcceptanceService
+                from app.services.project_store import project_store
 
-                guard = ProductionAcceptanceService(storage=self._storage).evaluate_package_approval_guard(
+                storage_for_guard = self._storage
+                if storage_for_guard is None:
+                    from app.data.storage import get_storage
+
+                    storage_for_guard = get_storage("sqlite")
+                guard_service = ProductionAcceptanceService(
+                    storage=storage_for_guard,
+                    project_store_service=project_store,
+                )
+                guard_service._outputs_root = self._outputs_root
+                guard = guard_service.evaluate_package_approval_guard(
                     package_id=package_id,
                     desired_status=new_status,
                 )
+            except ValueError:
+                raise
             except Exception as exc:
                 raise ValueError(f"Production acceptance guard failed: {exc}") from exc
             if not guard.allowed:
-                raise ValueError(guard.reason)
-        
+                raise ValueError(str(guard.reason))
+
         package.package_status = new_status
         package.updated_at = self._now_iso()
-        
+
         if self._storage:
             self._storage.update_final_short_film_package(package)
-        
+
         return package
 
     def get_package(self, package_id: str) -> Optional[FinalShortFilmPackage]:

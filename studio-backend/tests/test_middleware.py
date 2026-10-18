@@ -182,3 +182,23 @@ class TestRateLimitMiddleware:
         assert "X-RateLimit-Limit" in resp.headers
         assert resp.headers["X-RateLimit-Limit"] == "10"
         assert "X-RateLimit-Remaining" in resp.headers
+
+
+def test_polling_and_creator_actions_have_independent_budgets():
+    api = FastAPI()
+    api.add_middleware(RateLimitMiddleware, requests_per_minute=1, read_requests_per_minute=3)
+
+    @api.get('/room')
+    async def read_room():
+        return {'ok': True}
+
+    @api.post('/save')
+    async def save():
+        return {'ok': True}
+
+    client = TestClient(api)
+    for _ in range(3):
+        assert client.get('/room').status_code == 200
+    assert client.get('/room').status_code == 429
+    assert client.post('/save').status_code == 200
+    assert client.post('/save').status_code == 429

@@ -108,7 +108,18 @@ class AudienceSimulatorService:
 
     def _simulate_casual(self, scene: Dict, memory_scan: Dict, sound: Any) -> AudienceReaction:
         desc = scene.get("description", "").lower()
-        has_dialogue = len(scene.get("dialogue_lines", [])) > 0
+        # Dialogue authority (Phase 3): fabricated placeholder rows must not
+        # register as real dialogue when reasoning about a scene's speech.
+        from app.services.dialogue_authority import canonical_dialogue_lines
+
+        has_dialogue = bool(
+            canonical_dialogue_lines(
+                scene,
+                scene.get("dialogue_lines"),
+                scene_id=str(scene.get("scene_id") or ""),
+                characters=[str(c) for c in (scene.get("characters") or []) if isinstance(c, str)],
+            )
+        )
         
         likely_reaction = "Likely to engage with the immediate emotional stakes"
         if "action" in desc or "tense" in sound.mood:

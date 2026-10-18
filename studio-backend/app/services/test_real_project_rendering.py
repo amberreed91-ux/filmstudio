@@ -10,6 +10,9 @@ Verifies that:
 """
 from __future__ import annotations
 
+import os
+
+import pytest
 from fastapi.testclient import TestClient
 
 from main import app
@@ -19,8 +22,16 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _dev_routes_enabled(monkeypatch):
+    """These tests exercise seed-dependent flows; the /dev/ gate itself is
+    covered in test_demo_seed_route.py."""
+    monkeypatch.setenv("STUDIO_ALLOW_DEV_ROUTES", "1")
+
+
 # ── Part 1: Real project scene generation ────────────────────────────────────
 
+@pytest.mark.skipif(not os.environ.get("STUDIO_ALLOW_LIVE_NETWORK_TESTS"), reason="makes a live network call (LLM); run only with owner authorization")
 def test_real_project_create_and_generate_scenes():
     """Real project: create → generate-scenes → scenes exist with real project_id."""
     client = _client()
@@ -48,6 +59,7 @@ def test_real_project_create_and_generate_scenes():
         assert "demo" not in scene["scene_id"].lower()
 
 
+@pytest.mark.skipif(not os.environ.get("STUDIO_ALLOW_LIVE_NETWORK_TESTS"), reason="makes a live network call (LLM); run only with owner authorization")
 def test_real_project_scenes_have_shot_fallback():
     """Real project: when no shot ledger, scene_id_shot_001 fallback is used."""
     client = _client()

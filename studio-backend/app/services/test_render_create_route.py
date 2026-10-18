@@ -150,7 +150,11 @@ class _FakeAdherenceRetryRenderService:
 
 
 class _FakeAdherenceRetryService:
+    def __init__(self):
+        self.calls = []
+
     async def evaluate_and_select_best(self, **kwargs):
+        self.calls.append(kwargs)
         from app.services.adherence_service import FullCorrectedPrompt
 
         return {
@@ -307,7 +311,8 @@ def test_adherence_retry_returns_json_safe_payload(monkeypatch) -> None:
     monkeypatch.setattr(render_routes, "render_service", _FakeAdherenceRetryRenderService())
     import app.services.render_retry_service as retry_module
 
-    monkeypatch.setattr(retry_module, "render_retry_service", _FakeAdherenceRetryService())
+    retry_service = _FakeAdherenceRetryService()
+    monkeypatch.setattr(retry_module, "render_retry_service", retry_service)
     api = FastAPI()
     api.include_router(render_routes.router, prefix="/api/f51/studio/render")
 
@@ -321,6 +326,25 @@ def test_adherence_retry_returns_json_safe_payload(monkeypatch) -> None:
     assert data["corrected_prompt"]["prompt"] == "Maya watches the train pass."
     assert data["jobs_submitted"] == [{"job_id": "job-retry", "seed": 123, "status": "submitted"}]
     assert data["source_job_id"] == "job-adherence"
+    assert retry_service.calls[0]["provider_override"] is None
+
+
+def test_adherence_retry_explicit_provider_override_is_forwarded(monkeypatch) -> None:
+    monkeypatch.setattr(render_routes, "render_service", _FakeAdherenceRetryRenderService())
+    import app.services.render_retry_service as retry_module
+
+    retry_service = _FakeAdherenceRetryService()
+    monkeypatch.setattr(retry_module, "render_retry_service", retry_service)
+    api = FastAPI()
+    api.include_router(render_routes.router, prefix="/api/f51/studio/render")
+
+    response = TestClient(api).post(
+        "/api/f51/studio/render/jobs/job-adherence/adherence-retry",
+        json={"max_attempts": 1, "provider_override": "happyhorse"},
+    )
+
+    assert response.status_code == 200
+    assert retry_service.calls[0]["provider_override"] == "happyhorse"
 
 
 def test_adherence_retry_reports_provider_queue_failure(monkeypatch) -> None:

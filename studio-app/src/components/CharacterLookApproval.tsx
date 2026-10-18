@@ -3,6 +3,7 @@ import { ArrowLeft, Check, ChevronDown, ImagePlus, LockKeyhole, Loader2, Sparkle
 import type { CharacterLook } from '../lib/characterLookApi'
 import type { CharacterLooksController } from '../hooks/useCharacterLooks'
 import { buildStudioApiUrl } from '../lib/studioApi'
+import CharacterLookTraining from './CharacterLookTraining'
 
 const secondaryButton = 'inline-flex items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2.5 text-xs font-medium text-zinc-200 hover:border-white/35 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 disabled:cursor-not-allowed disabled:opacity-40'
 
@@ -117,6 +118,7 @@ function LookReview({ look, controller, onProfiles }: { look: CharacterLook; con
       <div className="border-t border-white/10 px-5 py-5 sm:px-6">
             {locked ? <>
               <p className="text-sm leading-relaxed text-zinc-300">This appearance is protected for future production.</p>
+              <CharacterLookTraining projectId={look.project_id} look={look} />
               {confirmRevision ? <div className="mt-3 rounded border border-amber-200/25 bg-amber-200/5 p-4"><p className="text-xs leading-relaxed text-zinc-300">Reopen this look to change its image or description. Approve it again before using the new look. Existing storyboards and footage stay unchanged.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={controller.busy} onClick={() => void controller.revise(look)} className={secondaryButton}>Reopen for revision</button><button type="button" disabled={controller.busy} onClick={() => setConfirmRevision(false)} className={secondaryButton}>Keep locked</button></div></div> : <button type="button" disabled={controller.busy} onClick={() => setConfirmRevision(true)} className={`mt-4 ${secondaryButton}`}>Revise look</button>}
             </> : <>
               <p className="mb-3 text-xs leading-relaxed text-zinc-400">Lock the saved description and chosen references together. You can deliberately revise them later.</p>
@@ -150,7 +152,7 @@ export default function CharacterLookApproval({ controller, selectedId, onSelect
           <LookReview key={`${selected.character_id}:${selected.version}:${selected.status}`} look={selected} controller={controller} onProfiles={onProfiles} />
         </>}
       </>}
-      <details className="max-w-3xl pt-2 text-xs text-zinc-400"><summary className="flex w-fit cursor-pointer list-none items-center gap-2 py-2 text-zinc-300">How the look carries into production<ChevronDown size={13} /></summary><div className="mt-2 space-y-2 leading-relaxed"><p>New storyboard prompts use the saved character description. The current storyboard image model works from text; supported video providers also receive your approved reference images.</p><p>Review every frame for likeness. A lock guides generation; it does not guarantee an identical face. After revising a look, regenerate the affected boards and takes yourself. Existing footage remains unchanged.</p></div></details>
+      <details className="max-w-3xl pt-2 text-xs text-zinc-400"><summary className="flex w-fit cursor-pointer list-none items-center gap-2 py-2 text-zinc-300">How the look carries into production<ChevronDown size={13} /></summary><div className="mt-2 space-y-2 leading-relaxed"><p>New storyboard prompts use the saved character description. Qwen storyboard frames also receive your approved face/body reference images; the Legacy model works from text. Supported video providers also receive your approved reference images.</p><p>Review every frame for likeness. A lock guides generation; it does not guarantee an identical face. After revising a look, regenerate the affected boards and takes yourself. Existing footage remains unchanged.</p></div></details>
     </section>
   )
 }

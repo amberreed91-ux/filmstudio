@@ -969,6 +969,10 @@ def _extract_dialogue_lines(
             is_char_cue = clean.upper() in known
 
         if is_char_cue:
+            # Some persisted script imports omit the newline after terminal
+            # punctuation before the next uppercase cue (e.g. "...something.MAYA").
+            # Recover only the known scene-character cue boundary; all dialogue
+            # text remains byte-for-byte the original spoken wording.
             # Save previous dialogue if any
             _flush()
             current_character = clean
@@ -980,6 +984,28 @@ def _extract_dialogue_lines(
                 continue
             # Skip parenthetical stage directions
             if stripped.startswith("(") and stripped.endswith(")"):
+                continue
+            # Recover the known import defect where the next uppercase speaker
+            # cue was joined to the end of the previous line without whitespace.
+            # Restrict matching to known scene characters and terminal sentence
+            # punctuation so unaffected prose remains untouched.
+            joined_cue = None
+            if known:
+                for cue in sorted(known, key=len, reverse=True):
+                    boundary = re.search(
+                        rf"(?<=[.!?])(?P<cue>{re.escape(cue)})$",
+                        stripped,
+                        re.IGNORECASE,
+                    )
+                    if boundary and stripped[boundary.start("cue"):boundary.end("cue")] == cue:
+                        joined_cue = (boundary.start("cue"), cue)
+                        break
+            if joined_cue is not None:
+                split_at, cue = joined_cue
+                current_dialogue.append(stripped[:split_at].rstrip())
+                _flush()
+                current_character = cue
+                current_dialogue = []
                 continue
             # This is dialogue text
             current_dialogue.append(stripped)
@@ -1781,6 +1807,9 @@ os._exit(0)
         dialogue_lines: list[dict[str, str]] | None = None,
         max_duration_seconds: float | None = None,
         scene_context: dict[str, Any] | None = None,
+        dialogue_handoff: dict[str, Any] | None = None,
+        dialogue_scene_id: str | None = None,
+        dialogue_shot_id: str | None = None,
     ) -> Dict[str, Any]:
         """Generate dialogue track using the configured dialogue TTS provider.
 
@@ -1790,6 +1819,25 @@ os._exit(0)
         ``cosyvoice``, or ``auto``.  The *provider* parameter overrides the
         env var per-call.
         """
+        if dialogue_handoff is None:
+            if dialogue_lines or scene_text.strip():
+                raise ValueError("Narrative dialogue requires a frozen canonical handoff")
+            dialogue_lines = []
+        else:
+            from app.services.generation_contract import verify_dialogue_handoff
+            from app.utils.helpers import derive_scene_id_from_shot_id
+
+            frozen_dialogue = verify_dialogue_handoff(
+                dialogue_handoff,
+                scene_id=dialogue_scene_id or scene_id,
+                shot_id=dialogue_shot_id or scene_id,
+            )
+            if dialogue_lines is not None and dialogue_lines != frozen_dialogue["lines"]:
+                raise ValueError("Dialogue lines do not match the frozen canonical handoff")
+            dialogue_lines = frozen_dialogue["lines"]
+            if dialogue_handoff.get("payload", {}).get("silence") is False and not dialogue_lines:
+                raise ValueError("Non-silent dialogue handoff must contain lines")
+
         out_path = self._track_path(project_id, scene_id, "dialogue")
         resolved_provider = _normalize_dialogue_provider(provider)
 
@@ -1805,6 +1853,9 @@ os._exit(0)
             }
 
         # Extract dialogue lines from scene text
+        # Narrative dialogue is never re-extracted from this free-text argument.
+        # Callers must resolve canonical authority and pass its frozen handoff;
+        # absence of a handoff means explicit no-dialogue for this track.
         dialogue_lines = (
             [
                 d
@@ -1814,7 +1865,7 @@ os._exit(0)
                 and d.get("text", "").strip()
             ]
             if isinstance(dialogue_lines, list)
-            else _extract_dialogue_lines(scene_text, characters=characters)
+            else []
         )
         selection_reason = "all resolved scene dialogue lines used"
         if max_duration_seconds is not None:
@@ -1964,6 +2015,8 @@ os._exit(0)
         provider: str | None = None,
         scene_context: dict[str, Any] | None = None,
         allow_generation: bool = True,
+        dialogue_handoff: dict[str, Any] | None = None,
+        dialogue_scene_id: str | None = None,
     ) -> Dict[str, Any]:
         """Resolve or generate a single shot's dialogue WAV.
 
@@ -2022,6 +2075,9 @@ os._exit(0)
                 "advisory": str,
             }
         """
+        from app.services.generation_contract import verify_dialogue_handoff
+        from app.services.dialogue_authority import is_placeholder_dialogue
+
         scene_dir = self._scene_dir(project_id, scene_id)
         out_path = scene_dir / f"{shot_id}_dialogue.wav"
         resolved_provider = _normalize_dialogue_provider(provider)
@@ -2030,6 +2086,36 @@ os._exit(0)
             scene_id,
             shot_id,
         )
+        if dialogue_handoff is not None:
+            frozen_dialogue = verify_dialogue_handoff(
+                dialogue_handoff,
+                scene_id=dialogue_scene_id or scene_id,
+                shot_id=shot_id,
+            )
+            if dialogue_lines is not None and dialogue_lines != frozen_dialogue["lines"]:
+                raise ValueError("Shot dialogue lines do not match the frozen canonical handoff")
+            dialogue_lines = frozen_dialogue["lines"]
+            if dialogue_handoff.get("payload", {}).get("silence") is False and not dialogue_lines:
+                raise ValueError("Non-silent dialogue handoff must contain lines")
+            if any(is_placeholder_dialogue(str(row.get("text") or "")) for row in dialogue_lines):
+                raise ValueError("Frozen shot handoff contains placeholder dialogue")
+        elif not allow_generation:
+            # Existing-media mode never interprets raw dialogue or scene text.
+            # Pre-supplied audio, when present, is still normalized below.
+            dialogue_lines = []
+        elif isinstance(dialogue_lines, list) and not dialogue_lines:
+            # An explicitly frozen-empty shot is silent; do not re-extract from
+            # scene_text or infer dialogue from a line range.
+            return {
+                "track": "shot_dialogue", "status": TrackStatus.SKIPPED,
+                "provider": "none", "source": "none", "file_path": None,
+                "file_url": None, "lines_generated": 0, "shot_id": shot_id,
+                "advisory": "No canonical dialogue was assigned to this shot.",
+            }
+        elif allow_generation:
+            raise ValueError("Narrative shot audio requires a frozen canonical dialogue handoff")
+        else:
+            dialogue_lines = []
 
         if pre_supplied_path is not None:
             logger.info(
@@ -3102,6 +3188,10 @@ os._exit(0)
         characters: list[str] | None = None,
         dialogue_lines: list[dict[str, str]] | None = None,
         scene_context: dict[str, Any] | None = None,
+        dialogue_handoff: dict[str, Any] | None = None,
+        narrative_audio: bool | None = None,
+        dialogue_scene_id: str | None = None,
+        dialogue_shot_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Run the full audio generation pipeline:
@@ -3110,6 +3200,30 @@ os._exit(0)
         3. Mix audio tracks with FFmpeg
         4. Merge audio onto video with FFmpeg (if video_path provided)
         """
+        if dialogue_handoff is None:
+            if narrative_audio is True or bool(dialogue_lines) or (narrative_audio is None and bool(scene_text.strip())):
+                raise ValueError("Narrative audio requires a frozen canonical dialogue handoff")
+            # This is a legitimate non-narrative audio operation. Do not infer
+            # speech from arbitrary scene_text; an empty list means no dialogue.
+            dialogue_lines = []
+        else:
+            from app.services.generation_contract import verify_dialogue_handoff
+            from app.utils.helpers import derive_scene_id_from_shot_id
+
+            frozen_dialogue = verify_dialogue_handoff(
+                dialogue_handoff,
+                scene_id=dialogue_scene_id or scene_id,
+                shot_id=dialogue_shot_id or scene_id,
+            )
+            if dialogue_lines is not None and dialogue_lines != frozen_dialogue["lines"]:
+                raise ValueError("Audio dialogue_lines do not match the frozen shot handoff")
+            dialogue_lines = frozen_dialogue["lines"]
+            if dialogue_handoff.get("payload", {}).get("silence") is False and not dialogue_lines:
+                raise ValueError("Non-silent dialogue handoff must contain lines")
+            from app.services.dialogue_authority import is_placeholder_dialogue
+
+            if any(is_placeholder_dialogue(str(row.get("text") or "")) for row in dialogue_lines):
+                raise ValueError("Frozen shot handoff contains placeholder dialogue")
         job_id = f"audio_pipeline_{project_id}_{scene_id}_{uuid.uuid4().hex[:8]}"
         started_at = datetime.now().isoformat()
         resolved_dialogue_provider = _normalize_dialogue_provider(dialogue_provider)
@@ -3155,12 +3269,15 @@ os._exit(0)
             dialogue_result = await self.generate_dialogue(
                 scene_id,
                 project_id,
-                scene_text,
+                scene_text if dialogue_handoff is not None else "",
                 provider=resolved_dialogue_provider,
                 characters=characters,
                 dialogue_lines=dialogue_lines,
                 max_duration_seconds=video_duration,
                 scene_context=scene_context,
+                dialogue_handoff=dialogue_handoff,
+                dialogue_scene_id=dialogue_scene_id,
+                dialogue_shot_id=dialogue_shot_id or scene_id,
             )
             self._jobs[job_id]["steps"]["dialogue"] = dialogue_result
 

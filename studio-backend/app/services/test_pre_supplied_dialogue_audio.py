@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.services import audio_pipeline_service as audio_module
 from app.services.audio_pipeline_service import AudioPipelineService, TrackStatus
+from app.services.generation_contract import freeze_dialogue_handoff
 from conftest import run_async
 
 
@@ -89,6 +90,7 @@ def test_pre_supplied_shot_audio_bypasses_dialogue_provider(
             shot_id="shot_scene_002_001",
             dialogue_lines=[{"character": "MAYA", "text": "I remember."}],
             provider="cosyvoice",
+            allow_generation=False,
         )
     )
 
@@ -133,6 +135,7 @@ def test_pre_supplied_shot_audio_preserves_internal_pauses(
                 {"character": "DRE", "text": "Someone had to."},
             ],
             provider="cosyvoice",
+            allow_generation=False,
         )
     )
 
@@ -154,14 +157,20 @@ def test_missing_pre_supplied_audio_uses_live_provider_path(
 
     monkeypatch.setattr(audio_module, "MOCK_MODE", False)
     monkeypatch.setattr(service, "_generate_dialogue_tts_sync", fake_generate)
+    dialogue_lines = [{"character": "MAYA", "text": "I remember."}]
 
     result = run_async(
         service.generate_shot_dialogue(
             project_id="project_real",
             scene_id="scene_002",
             shot_id="shot_scene_002_001",
-            dialogue_lines=[{"character": "MAYA", "text": "I remember."}],
+            dialogue_lines=dialogue_lines,
             provider="piper",
+            dialogue_handoff=freeze_dialogue_handoff(
+                scene_id="scene_002",
+                shot_id="shot_scene_002_001",
+                lines=dialogue_lines,
+            ),
         )
     )
 
@@ -207,6 +216,7 @@ def test_invalid_pre_supplied_audio_fails_without_provider_fallback(
             shot_id="shot_scene_002_001",
             dialogue_lines=[{"character": "MAYA", "text": "I remember."}],
             provider="cosyvoice",
+            allow_generation=False,
         )
     )
 

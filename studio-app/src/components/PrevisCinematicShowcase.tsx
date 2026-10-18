@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import ShotIntentRationaleCard from './ShotIntentRationaleCard'
+import type { ShotIntentInput } from '../lib/shotIntentRationale'
 
 type PrevisCinematicShowcaseProps = {
   projectId: string
@@ -15,6 +17,7 @@ type PrevisCinematicShowcaseProps = {
   visualEvidenceCount: number
   decisionGateStatus: string
   isDemoProject: boolean
+  shot?: ShotIntentInput | null
   // Emotional intelligence signals
   emotionalPacingLabel?: string
   tensionTrend?: string
@@ -173,6 +176,7 @@ export default function PrevisCinematicShowcase(props: PrevisCinematicShowcasePr
           <div className="text-[11px] uppercase tracking-[0.16em] text-fuchsia-200">Co-Director Shot Notes</div>
           <p className="mt-2 text-sm text-zinc-300">{coDirectorNote(props)}</p>
           <p className="mt-2 text-sm text-zinc-200">Why this shot matters: {whyThisShotMatters(props)}</p>
+          <ShotIntentRationaleCard shot={props.shot ?? null} testId="why-this-shot-matters-previs" />
           {props.emotionalPacingLabel ? (
             <p className="mt-2 text-xs text-zinc-400">{pacingNote}</p>
           ) : null}

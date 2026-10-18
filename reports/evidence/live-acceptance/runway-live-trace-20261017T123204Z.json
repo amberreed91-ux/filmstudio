@@ -1,0 +1,648 @@
+{
+  "branch": "backend-expansion-dependency-slicing",
+  "probe": "runway-live-single-shot-minimal",
+  "timestamp_utc": "20261017T123204Z",
+  "cost_cap": "exactly one dryRun preflight POST + at most one live (dryRun=False) video generation POST; no retries, no batches",
+  "secret_handling": "values never logged; only presence lengths recorded",
+  "steps": {
+    "credential_check": {
+      "RUNWAY_API_KEY": {
+        "present": false,
+        "length": 0
+      },
+      "RUNWAYML_API_SECRET": {
+        "present": true,
+        "length": 132
+      },
+      "RUNWAY_ROUTER_CONFIG_ID": {
+        "present": false,
+        "length": 0
+      },
+      "dotenv_file": {
+        "exists": true,
+        "mode": "0o600"
+      }
+    },
+    "fixture": {
+      "project_id": "project_live_acceptance_probe",
+      "scene_id": "scene_live_probe_01",
+      "shots": [
+        "scene_live_probe_01_shot_001"
+      ],
+      "setting_id": "set-live-probe-glassworks",
+      "reference_urls": {
+        "primary": "https://picsum.photos/id/1016/...",
+        "note": "full URIs in job metadata; domains only here"
+      }
+    },
+    "isolation": {
+      "tmpdir": "/var/folders/pk/4221jwzd7cdglm4pc5qcl9_40000gn/T/live-acceptance-minimal-_fxde6nq",
+      "production_db_touched": false
+    },
+    "prepare_scene_batch": {
+      "ready": true,
+      "entries": 1,
+      "manifest_fingerprint": "6115908fd9a2fcc41778de8fdf6dd5dc88d472fd2b6e7861fc5241b474af20a1",
+      "duration_s": 0.01,
+      "blockers": []
+    },
+    "preflight_digest": {
+      "shot_id": "scene_live_probe_01_shot_001",
+      "prompt_chars": 168,
+      "prompt_preview": "A brass key rests on a workbench in soft dawn light; still, quiet, restrained.\n\n[SHOT POSITION]\nShot 1 of 1 in scene. Ma",
+      "binding_sha256": "381ab86659f43aa8fe0e2805095f03f786915be008ff03bd491522868dac0709",
+      "authorization_policy": "runway_reference_projection_authorization",
+      "authorized_env": "ref-live-env",
+      "confirmation_id_present": true,
+      "audit_present": true
+    },
+    "batch_authorization": {
+      "ready": true,
+      "failures": []
+    },
+    "mint": {
+      "status": "PASS",
+      "note": "generic projection authorization minted; proceeding to single live submission"
+    },
+    "create_job": {
+      "job_id": "job-20261017082918-07a24088-scene_live_probe_01_shot_001",
+      "shot_id": "scene_live_probe_01_shot_001",
+      "provider": "runway_router",
+      "status": "pending"
+    },
+    "job_metadata_stamp": {
+      "authorization_present": true,
+      "audit_present": true,
+      "batch_authorization_present": true
+    },
+    "live_submission": {
+      "job_id": "job-20261017082918-07a24088-scene_live_probe_01_shot_001",
+      "router_config_id": "studio-production-router",
+      "status": "complete",
+      "error": "",
+      "dry_run_posts": 1,
+      "live_generation_posts": 1,
+      "task_gets": 31,
+      "http_calls": [
+        {
+          "method": "POST",
+          "url": "https://api.dev.runwayml.com/v1/generate/video",
+          "at": "2026-10-17T12:29:18.494102+00:00",
+          "dry_run": true,
+          "payload": {
+            "configId": "studio-production-router",
+            "dryRun": true,
+            "input_keys": [
+              "aspectRatio",
+              "audio",
+              "duration",
+              "keyframes",
+              "promptText",
+              "referenceAudio",
+              "referenceImages",
+              "referenceVideos"
+            ],
+            "ref_count": 1
+          },
+          "ok": true,
+          "duration_s": 4.41,
+          "http_status": 200
+        },
+        {
+          "method": "POST",
+          "url": "https://api.dev.runwayml.com/v1/generate/video",
+          "at": "2026-10-17T12:29:22.915864+00:00",
+          "dry_run": false,
+          "payload": {
+            "configId": "studio-production-router",
+            "dryRun": false,
+            "input_keys": [
+              "aspectRatio",
+              "audio",
+              "duration",
+              "keyframes",
+              "promptText",
+              "referenceAudio",
+              "referenceImages",
+              "referenceVideos"
+            ],
+            "ref_count": 1
+          },
+          "ok": true,
+          "duration_s": 4.78,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:29:27.693178+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.2,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:29:32.906142+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.22,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:29:38.140273+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.22,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:29:43.373713+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.22,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:29:48.607034+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.22,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:29:53.832798+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.28,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:29:59.130589+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.19,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:04.332146+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.23,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:09.570032+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.18,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:14.761476+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.19,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:19.962767+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.23,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:25.194369+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.19,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:30.396755+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.19,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:35.595430+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.25,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:40.859222+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.22,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:46.087814+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.26,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:51.360297+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.18,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:30:56.551661+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.2,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:01.766012+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.21,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:06.983034+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.21,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:12.199999+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.22,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:17.424597+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.19,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:22.621212+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.21,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:27.839020+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.23,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:33.076292+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.21,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:38.301027+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.22,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:43.527445+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.24,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:48.775696+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.22,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:54.004109+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.23,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:31:59.245106+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.19,
+          "http_status": 200
+        },
+        {
+          "method": "GET",
+          "url": "https://api.dev.runwayml.com/v1/tasks/ea6efb69-829c-46fa-ab81-f96a6bb39824",
+          "at": "2026-10-17T12:32:04.448435+00:00",
+          "dry_run": false,
+          "ok": true,
+          "duration_s": 0.23,
+          "http_status": 200
+        }
+      ],
+      "polling_log": [
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:29:27.693178+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:29:32.906142+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:29:38.140273+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:29:43.373713+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:29:48.607034+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:29:53.832798+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:29:59.130589+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:04.332146+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:09.570032+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:14.761476+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:19.962767+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:25.194369+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:30.396755+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:35.595430+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:40.859222+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:46.087814+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:51.360297+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:30:56.551661+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:01.766012+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:06.983034+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:12.199999+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:17.424597+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:22.621212+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:27.839020+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:33.076292+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:38.301027+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:43.527445+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:48.775696+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:54.004109+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:31:59.245106+00:00",
+          "http_status": 200,
+          "ok": true
+        },
+        {
+          "method": "GET",
+          "at": "2026-10-17T12:32:04.448435+00:00",
+          "http_status": 200,
+          "ok": true
+        }
+      ],
+      "duration_s": 166.19,
+      "estimated_cost": 150.0,
+      "realized_cost": 150.0,
+      "resolved_model": "seedance2_5",
+      "references_forwarded": 1,
+      "runway_task_id_present": true,
+      "provider_job_id_present": true,
+      "output_url_present": true,
+      "output_url_prefix": "https://dnznrvs05pmza.cloudfront.net/see",
+      "router_execution_keys": [
+        "capacity_fallback",
+        "cost_gate",
+        "decision_semantics",
+        "estimated_cost_credits",
+        "estimated_cost_semantics",
+        "generation_context_id",
+        "no_eligible_model",
+        "output_identity",
+        "provider_cost_capabilities",
+        "provider_output_identity",
+        "quote_authorization_supported",
+        "realized_cost_credits",
+        "reference_projection",
+        "references_forwarded",
+        "references_unrepresentable",
+        "resolved_input",
+        "resolved_model",
+        "resolved_settings",
+        "router_config_id",
+        "routing_extra",
+        "routing_mode",
+        "routing_provider",
+        "runway_task_id",
+        "submission_attempted"
+      ]
+    },
+    "delivery_record": {
+      "assets": 1
+    }
+  },
+  "outcome": {
+    "status": "LIVE_VERIFIED",
+    "live_generation_calls": 1,
+    "reason": "live task ea6efb69-829c-46fa-ab81-f96a6bb39824 completed; output delivered."
+  }
+}

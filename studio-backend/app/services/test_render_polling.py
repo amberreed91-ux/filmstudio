@@ -199,26 +199,80 @@ async def test_poll_active_runway_jobs_never_raises_on_loop_error(render_service
 
 
 @pytest.mark.asyncio
-async def test_poll_active_runway_jobs_only_processes_runway_jobs(render_service):
-    """Test that poll_active_runway_jobs only processes jobs with provider='runway'"""
-    # Create jobs with different providers
-    runway_job = RenderJobModel(
-        id="job-runway",
+async def test_poll_active_runway_jobs_reconciles_runway_jobs(render_service, mock_rendering_job, mock_processing_job):
+    """Test that poll_active_runway_jobs calls reconcile_completed_runway_task for Runway jobs"""
+    render_service._jobs[mock_rendering_job.id] = mock_rendering_job
+    render_service._jobs[mock_processing_job.id] = mock_processing_job
+
+    reconcile_calls = []
+
+    async def mock_reconcile(job_id):
+        reconcile_calls.append(job_id)
+        if len(reconcile_calls) >= 2:
+            raise KeyboardInterrupt("Test complete")
+        return render_service._jobs[job_id]
+
+    render_service.reconcile_completed_runway_task = mock_reconcile
+
+    try:
+        await render_service.poll_active_runway_jobs()
+    except KeyboardInterrupt:
+        pass
+
+    assert mock_rendering_job.id in reconcile_calls
+    assert mock_processing_job.id in reconcile_calls
+
+
+@pytest.mark.asyncio
+async def test_poll_active_runway_jobs_polls_local_ltx_via_get_job_status(render_service):
+    """Test that poll_active_runway_jobs polls local_ltx jobs through get_job_status"""
+    ltx_job = RenderJobModel(
+        id="job-ltx",
         project_id="project-001",
         shot_id="scene_001_shot_001",
-        provider="runway",
-        provider_job_id="runway-task-123",
-        status="rendering",
+        provider="local_ltx",
+        provider_job_id="j-ltx-123",
+        status="queued",
         input_payload=RenderJobInput(
             shot_id="scene_001_shot_001",
             prompt="Test",
             referenceAssets=[],
-            parameters={}
+            parameters={},
         ),
         created_at=datetime.now().isoformat(),
-        updated_at=datetime.now().isoformat()
+        updated_at=datetime.now().isoformat(),
     )
-    
+
+    render_service._jobs[ltx_job.id] = ltx_job
+
+    get_status_calls = []
+
+    async def mock_get_status(job_id):
+        get_status_calls.append(job_id)
+        return render_service._jobs[job_id]
+
+    render_service.get_job_status = mock_get_status
+
+    iteration_count = [0]
+
+    with patch("asyncio.sleep") as mock_sleep:
+        async def quick_sleep(seconds):
+            iteration_count[0] += 1
+            if iteration_count[0] >= 2:
+                raise KeyboardInterrupt("Test complete")
+
+        mock_sleep.side_effect = quick_sleep
+        try:
+            await render_service.poll_active_runway_jobs()
+        except KeyboardInterrupt:
+            pass
+
+    assert ltx_job.id in get_status_calls
+
+
+@pytest.mark.asyncio
+async def test_poll_active_runway_jobs_does_not_poll_simulated(render_service):
+    """Test that poll_active_runway_jobs does not poll simulated jobs (on-demand only)"""
     simulated_job = RenderJobModel(
         id="job-simulated",
         project_id="project-001",
@@ -230,31 +284,37 @@ async def test_poll_active_runway_jobs_only_processes_runway_jobs(render_service
             shot_id="scene_001_shot_002",
             prompt="Test",
             referenceAssets=[],
-            parameters={}
+            parameters={},
         ),
         created_at=datetime.now().isoformat(),
-        updated_at=datetime.now().isoformat()
+        updated_at=datetime.now().isoformat(),
     )
-    
-    render_service._jobs[runway_job.id] = runway_job
+
     render_service._jobs[simulated_job.id] = simulated_job
-    
-    reconcile_calls = []
-    
-    async def mock_reconcile(job_id):
-        reconcile_calls.append(job_id)
-        raise KeyboardInterrupt("Test complete")
-    
-    render_service.reconcile_completed_runway_task = mock_reconcile
-    
-    try:
-        await render_service.poll_active_runway_jobs()
-    except KeyboardInterrupt:
-        pass
-    
-    # Only runway job should be reconciled
-    assert runway_job.id in reconcile_calls
-    assert simulated_job.id not in reconcile_calls
+
+    get_status_calls = []
+
+    async def mock_get_status(job_id):
+        get_status_calls.append(job_id)
+        return render_service._jobs[job_id]
+
+    render_service.get_job_status = mock_get_status
+
+    iteration_count = [0]
+
+    with patch("asyncio.sleep") as mock_sleep:
+        async def quick_sleep(seconds):
+            iteration_count[0] += 1
+            if iteration_count[0] >= 2:
+                raise KeyboardInterrupt("Test complete")
+
+        mock_sleep.side_effect = quick_sleep
+        try:
+            await render_service.poll_active_runway_jobs()
+        except KeyboardInterrupt:
+            pass
+
+    assert simulated_job.id not in get_status_calls
 
 
 @pytest.mark.asyncio
@@ -339,3 +399,93 @@ async def test_poll_active_runway_jobs_handles_no_active_jobs(render_service, mo
     
     # Should still loop and sleep even with no active jobs
     assert iteration_count[0] >= 2
+
+
+def test_can_transition_to_pending_to_queued():
+    """Pending jobs can transition to queued (local_ltx submit sets this)"""
+    job = RenderJobModel(
+        id="job-transition",
+        project_id="project-001",
+        shot_id="scene_001_shot_001",
+        provider="local_ltx",
+        status="pending",
+        input_payload=RenderJobInput(
+            shot_id="scene_001_shot_001",
+            prompt="Test",
+            referenceAssets=[],
+            parameters={},
+        ),
+        created_at=datetime.now().isoformat(),
+        updated_at=datetime.now().isoformat(),
+    )
+    assert job.can_transition_to("queued") is True
+    assert job.can_transition_to("rendering") is True
+    assert job.can_transition_to("cancelled") is True
+    assert job.can_transition_to("failed") is True
+    assert job.can_transition_to("complete") is False
+
+
+def test_can_transition_to_queued_to_rendering():
+    """Queued jobs can transition to rendering (provider picks up job)"""
+    job = RenderJobModel(
+        id="job-queued",
+        project_id="project-001",
+        shot_id="scene_001_shot_001",
+        provider="local_ltx",
+        status="queued",
+        input_payload=RenderJobInput(
+            shot_id="scene_001_shot_001",
+            prompt="Test",
+            referenceAssets=[],
+            parameters={},
+        ),
+        created_at=datetime.now().isoformat(),
+        updated_at=datetime.now().isoformat(),
+    )
+    assert job.can_transition_to("rendering") is True
+    assert job.can_transition_to("cancelled") is True
+    assert job.can_transition_to("failed") is True
+    assert job.can_transition_to("complete") is False
+    assert job.can_transition_to("queued") is False
+
+
+def test_can_transition_to_terminal_states():
+    """Terminal states reject forward transitions but failed allows retry"""
+    for status in ("complete", "failed", "cancelled"):
+        job = RenderJobModel(
+            id=f"job-{status}",
+            project_id="project-001",
+            shot_id="scene_001_shot_001",
+            provider="local_ltx",
+            status=status,
+            input_payload=RenderJobInput(
+                shot_id="scene_001_shot_001",
+                prompt="Test",
+                referenceAssets=[],
+                parameters={},
+            ),
+            created_at=datetime.now().isoformat(),
+            updated_at=datetime.now().isoformat(),
+        )
+        # No terminal state can go to queued or rendering
+        assert job.can_transition_to("queued") is False
+        assert job.can_transition_to("rendering") is False
+        assert job.can_transition_to("complete") is False
+    # But failed CAN go to pending (retry)
+    failed_job = RenderJobModel(
+        id="job-failed-retry",
+        project_id="project-001",
+        shot_id="scene_001_shot_001",
+        provider="local_ltx",
+        status="failed",
+        input_payload=RenderJobInput(
+            shot_id="scene_001_shot_001",
+            prompt="Test",
+            referenceAssets=[],
+            parameters={},
+        ),
+        created_at=datetime.now().isoformat(),
+        updated_at=datetime.now().isoformat(),
+    )
+    assert failed_job.can_transition_to("pending") is True
+    assert failed_job.can_transition_to("cancelled") is False

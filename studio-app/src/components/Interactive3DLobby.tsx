@@ -1,7 +1,49 @@
-import { Suspense, useRef, useState } from 'react'
+import { Component, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Grid, Html, OrbitControls, Stars } from '@react-three/drei'
-import * as THREE from 'three'
+import { Environment, OrbitControls, useGLTF } from '@react-three/drei'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+import SpatialStudioCanvas, { SPATIAL_PORTALS } from './SpatialStudioCanvas'
+import { getProceduralRoomStyle } from '../lib/proceduralBackdrops'
+
+/**
+ * Designated drop-in for custom Blender exports.
+ * Place `studio_lobby.glb` (or `.gltf`) in `studio-app/public/models/`.
+ * When present, it renders with HDRI environment lighting; otherwise the
+ * tactical procedural soundstage below is shown gracefully.
+ */
+export const LOBBY_MODEL_URL = '/models/studio_lobby.glb'
+
+export async function isLobbyModelAvailable(url: string = LOBBY_MODEL_URL): Promise<boolean> {
+  try {
+    const res = await fetch(url, { method: 'HEAD' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/** Renders a user-supplied GLB/GLTF lobby model. Must sit inside Suspense + error boundary. */
+function LobbyCustomModel({ url }: { url: string }) {
+  const { scene } = useGLTF(url)
+  return <primitive object={scene} position={[0, 0, 0]} />
+}
+
+class LobbyModelErrorBoundary extends Component<{ children: ReactNode; onError?: () => void }, { failed: boolean }> {
+  constructor(props: { children: ReactNode; onError?: () => void }) {
+    super(props)
+    this.state = { failed: false }
+  }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  componentDidCatch() {
+    this.props.onError?.()
+  }
+  render() {
+    if (this.state.failed) return null
+    return this.props.children
+  }
+}
 
 export interface LobbyRoom {
   id: string
@@ -19,18 +61,23 @@ function polar(index: number, total: number, y: number): [number, number, number
   return [Math.cos(angle) * RADIUS, y, Math.sin(angle) * RADIUS]
 }
 
-// Additive spatial directory. Routes mirror the existing 2D room paths in
-// studio-app/src/routes.tsx exactly — no room load logic is touched.
+// Tactical directory — the 12 soundstage bays from the ANIMATION_8 spec.
+// Routes mirror the existing 2D room paths in studio-app/src/routes.tsx
+// exactly — no room load logic is touched. Backend routes + studio.db
+// isolation are untouched; these are navigation targets only.
 export const LOBBY_ROOMS: LobbyRoom[] = [
-  { id: 'production-desk', label: 'Production Desk', description: 'Status, blockers and delivery evidence', to: '/studio/production-desk', color: '#e8a020', position: polar(0, 9, 1.1) },
-  { id: 'reference-space', label: 'Reference Space', description: 'Canonical character and setting references', to: '/studio/reference-space', color: '#7ad6d1', position: polar(1, 9, 1.5) },
-  { id: 'previs', label: 'Previs Bay', description: 'Scenes, shots and approvals before rendering', to: '/studio/previs', color: '#d6a95c', position: polar(2, 9, 1.0) },
-  { id: 'integrity', label: 'Integrity Engine', description: 'Verification console for blockers and provenance', to: '/studio/integrity', color: '#9f8dc5', position: polar(3, 9, 1.6) },
-  { id: 'universe', label: 'Universe', description: 'Characters, locations, lore and objects', to: '/studio/universe-graph', color: '#38b2c8', position: polar(4, 9, 1.1) },
-  { id: 'board', label: 'Board', description: 'Scene execution and stage-state monitoring', to: '/studio/production-board', color: '#78b38a', position: polar(5, 9, 1.5) },
-  { id: 'writers-room', label: "Writer's Room", description: 'Story structure, beats and continuity intent', to: '/studio/writers-room', color: '#d08383', position: polar(6, 9, 1.0) },
-  { id: 'screening-room', label: 'Screening Room', description: 'Playback and review of scene cuts', to: '/studio/screening-room', color: '#5b8dd9', position: polar(7, 9, 1.4) },
-  { id: 'overview', label: 'Overview', description: 'Film health, risks and room progress', to: '/studio/overview', color: '#e8edf5', position: polar(8, 9, 1.2) },
+  { id: 'atrium', label: 'The Atrium', description: 'Glass entry pavilion', to: '/studio', color: '#e0e7ff', position: polar(0, 12, 1.1) },
+  { id: 'gate', label: 'Gate Intake', description: 'Holographic orb vessel', to: '/studio/gate', color: '#38bdf8', position: polar(1, 12, 1.1) },
+  { id: 'page', label: 'Page', description: "Screenwriter's office", to: '/studio/page', color: '#f59e0b', position: polar(2, 12, 1.1) },
+  { id: 'board', label: 'Board', description: 'Narrative shot wall', to: '/studio/board', color: '#ec4899', position: polar(3, 12, 1.1) },
+  { id: 'previs', label: 'Previs Bay', description: 'Virtual production stage', to: '/studio/previs', color: '#a855f7', position: polar(4, 12, 1.0) },
+  { id: 'screening', label: 'Screening', description: 'Cinema 4K DCP review', to: '/studio/screening-room', color: '#ffffff', position: polar(5, 12, 1.1) },
+  { id: 'universe', label: 'Universe', description: 'Spatial constellation graph', to: '/studio/universe-graph', color: '#818cf8', position: polar(6, 12, 1.1) },
+  { id: 'vault', label: 'The Vault', description: 'Spatial helix cold store', to: '/studio/archive', color: '#38bdf8', position: polar(7, 12, 1.1) },
+  { id: 'production', label: 'Production Desk', description: 'Command telemetry desk', to: '/studio/production-desk', color: '#2dd4bf', position: polar(8, 12, 1.1) },
+  { id: 'integrity', label: 'Integrity Engine', description: 'Laser quarantine chamber', to: '/studio/integrity', color: '#10b981', position: polar(9, 12, 1.1) },
+  { id: 'reference', label: 'Reference Atelier', description: 'Visual dev mood boards', to: '/studio/reference-space', color: '#f43f5e', position: polar(10, 12, 1.1) },
+  { id: 'project', label: 'Project Room', description: 'Focus enclave workstation', to: '/studio/slate', color: '#8b5cf6', position: polar(11, 12, 1.1) },
 ]
 
 function supportsWebGL(): boolean {
@@ -46,207 +93,89 @@ function supportsWebGL(): boolean {
   }
 }
 
-function CameraParallax() {
-  const { camera, pointer } = useThree()
+const HOME_POSITION: [number, number, number] = [0, 2.6, 10.5]
+const HOME_TARGET: [number, number, number] = [0, 1, 0]
+
+/** Listens for tactical-dock `recenter-stage` / `focus-room` window events. */
+function CameraRig({ controlsRef, onNavigate }: { controlsRef: React.RefObject<OrbitControlsImpl | null>; onNavigate: (to: string) => void }) {
+  const { camera } = useThree()
+  // Gentle idle drift toward pointer (tilt mechanic) without fighting OrbitControls.
+  const pointer = useRef({ x: 0, y: 0 })
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      pointer.current = {
+        x: (e.clientX / window.innerWidth) * 2 - 1,
+        y: -((e.clientY / window.innerHeight) * 2 - 1),
+      }
+    }
+    window.addEventListener('mousemove', move)
+    return () => window.removeEventListener('mousemove', move)
+  }, [])
   useFrame(() => {
-    const targetX = pointer.x * 0.6
-    const targetY = 2.6 + pointer.y * 0.4
-    camera.position.x += (targetX - camera.position.x) * 0.03
-    camera.position.y += (targetY - camera.position.y) * 0.03
-    camera.lookAt(0, 1, 0)
+    camera.rotation.z += (pointer.current.x * 0.01 - camera.rotation.z) * 0.02
   })
+  useEffect(() => {
+    const recenter = () => {
+      camera.position.set(...HOME_POSITION)
+      controlsRef.current?.target.set(...HOME_TARGET)
+      controlsRef.current?.update()
+    }
+    const focus = (e: Event) => {
+      const roomId = (e as CustomEvent<{ roomId: string }>).detail?.roomId
+      if (!roomId) return
+      const portal = SPATIAL_PORTALS.find((p) => p.key === roomId)
+      const room = LOBBY_ROOMS.find((r) => r.id === roomId)
+      if (portal) {
+        const [px, , pz] = portal.position
+        const len = Math.hypot(px, pz) || 1
+        camera.position.set((px / len) * 4.2, 2.2, (pz / len) * 4.2)
+        controlsRef.current?.target.set(px * 0.55, 0.8, pz * 0.55)
+        controlsRef.current?.update()
+      }
+      if (room) onNavigate(room.to)
+    }
+    window.addEventListener('recenter-stage', recenter)
+    window.addEventListener('focus-room', focus)
+    return () => {
+      window.removeEventListener('recenter-stage', recenter)
+      window.removeEventListener('focus-room', focus)
+    }
+  }, [camera, controlsRef, onNavigate])
   return null
 }
 
-function FloatingMarker({ children, position }: { children: React.ReactNode; position: [number, number, number] }) {
-  const group = useRef<THREE.Group>(null)
-  useFrame(({ clock }) => {
-    if (!group.current) return
-    const t = clock.getElapsedTime()
-    group.current.position.y = position[1] + Math.sin(t * 0.9 + position[0]) * 0.12
-  })
-  return <group ref={group} position={position}>{children}</group>
-}
-
-function RoomNode({
-  room,
-  dimmed,
-  onNavigate,
-  onHover,
-}: {
-  room: LobbyRoom
-  dimmed: boolean
-  onNavigate: (to: string) => void
-  onHover: (id: string | null) => void
-}) {
-  const [hovered, setHovered] = useState(false)
-  const mesh = useRef<THREE.Mesh>(null)
-  const glow = useRef<THREE.Mesh>(null)
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime()
-    const s = hovered ? 1.35 : 1
-    if (mesh.current) {
-      mesh.current.scale.lerp(new THREE.Vector3(s, s, s), 0.15)
-      mesh.current.rotation.y = t * (hovered ? 0.8 : 0.25)
-    }
-    if (glow.current) {
-      const pulse = hovered ? 0.55 + Math.sin(t * 4) * 0.12 : 0.22
-      const material = glow.current.material as THREE.MeshBasicMaterial
-      material.opacity = dimmed ? 0.06 : pulse
-    }
-  })
-
-  return (
-    <FloatingMarker position={room.position}>
-      {/* Emissive halo */}
-      <mesh ref={glow}>
-        <sphereGeometry args={[0.62, 24, 24]} />
-        <meshBasicMaterial color={room.color} transparent opacity={0.22} depthWrite={false} />
-      </mesh>
-      {/* Core hotspot */}
-      <mesh
-        ref={mesh}
-        onClick={(event) => {
-          event.stopPropagation()
-          onNavigate(room.to)
-        }}
-        onPointerOver={(event) => {
-          event.stopPropagation()
-          document.body.style.cursor = 'pointer'
-          setHovered(true)
-          onHover(room.id)
-        }}
-        onPointerOut={() => {
-          document.body.style.cursor = 'auto'
-          setHovered(false)
-          onHover(null)
-        }}
-      >
-        <octahedronGeometry args={[0.38, 0]} />
-        <meshStandardMaterial
-          color={room.color}
-          metalness={0.55}
-          roughness={0.3}
-          emissive={room.color}
-          emissiveIntensity={hovered ? 0.9 : dimmed ? 0.08 : 0.35}
-        />
-      </mesh>
-      {/* Generous invisible hit target for touch */}
-      <mesh
-        onClick={(event) => {
-          event.stopPropagation()
-          onNavigate(room.to)
-        }}
-        onPointerOver={(event) => {
-          event.stopPropagation()
-          setHovered(true)
-          onHover(room.id)
-        }}
-        onPointerOut={() => {
-          setHovered(false)
-          onHover(null)
-        }}
-      >
-        <sphereGeometry args={[0.72, 8, 8]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-      </mesh>
-      <Html center position={[0, -0.95, 0]} zIndexRange={[20, 0]} style={{ pointerEvents: 'auto' }}>
-        <button
-          type="button"
-          data-testid={`lobby-3d-node-${room.id}`}
-          onClick={() => onNavigate(room.to)}
-          aria-label={`Open ${room.label}`}
-          className="w-[132px] cursor-pointer rounded-lg border px-2 py-1.5 text-center backdrop-blur-md transition-all duration-200"
-          style={{
-            background: hovered ? 'rgba(8,12,20,0.92)' : 'rgba(7,10,16,0.78)',
-            borderColor: hovered ? room.color : 'rgba(255,255,255,0.14)',
-            boxShadow: hovered ? `0 0 22px ${room.color}55` : '0 8px 24px rgba(0,0,0,0.45)',
-            opacity: dimmed ? 0.45 : 1,
-          }}
-        >
-          <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-100">{room.label}</span>
-          <span className="mt-0.5 block text-[10px] leading-tight text-zinc-400">{room.description}</span>
-        </button>
-      </Html>
-    </FloatingMarker>
-  )
-}
-
-function Stage() {
-  const ring = useRef<THREE.Mesh>(null)
-  useFrame(({ clock }) => {
-    if (ring.current) ring.current.rotation.z = clock.getElapsedTime() * 0.05
-  })
-  return (
-    <group position={[0, 0, 0]}>
-      {/* Central stage disc */}
-      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[2.1, 64]} />
-        <meshStandardMaterial color="#0d1526" metalness={0.4} roughness={0.6} emissive="#e8a020" emissiveIntensity={0.05} />
-      </mesh>
-      {/* Rotating amber accent ring */}
-      <mesh ref={ring} position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[2.14, 2.2, 96]} />
-        <meshBasicMaterial color="#e8a020" transparent opacity={0.5} side={THREE.DoubleSide} depthWrite={false} />
-      </mesh>
-      {/* Studio wordmark plinth */}
-      <Html center position={[0, 0.55, 0]} zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="text-center" aria-hidden="true">
-          <div className="text-sm font-bold uppercase tracking-[0.4em] text-amber-200/90">Studio</div>
-          <div className="mt-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">Select a room to enter</div>
-        </div>
-      </Html>
-    </group>
-  )
-}
-
-function LobbyScene({ onNavigate }: { onNavigate: (to: string) => void }) {
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
+function LobbyScene({ onNavigate, modelAvailable }: { onNavigate: (to: string) => void; modelAvailable: boolean }) {
+  const [modelFailed, setModelFailed] = useState(false)
+  const controlsRef = useRef<OrbitControlsImpl | null>(null)
+  const showCustomModel = modelAvailable && !modelFailed
   return (
     <>
-      <color attach="background" args={['#040810']} />
-      <fog attach="fog" args={['#040810', 12, 30]} />
-      <ambientLight intensity={0.55} />
-      {/* Warm amber key light + cool cyan rim, matching the studio palette */}
-      <pointLight position={[0, 6, 4]} intensity={60} color="#e8a020" distance={30} />
-      <directionalLight position={[-6, 4, -4]} intensity={1.4} color="#7ad6d1" />
-      <directionalLight position={[6, 3, -2]} intensity={0.7} color="#d6a95c" />
-      <Stars radius={60} depth={30} count={2200} factor={3} saturation={0} fade speed={0.4} />
-      <Grid
-        position={[0, -0.05, 0]}
-        args={[30, 30]}
-        cellSize={1}
-        cellThickness={0.6}
-        cellColor="#1a2744"
-        sectionSize={5}
-        sectionThickness={1}
-        sectionColor="#2d4470"
-        fadeDistance={26}
-        fadeStrength={2}
-        infiniteGrid
-      />
-      <Stage />
-      {LOBBY_ROOMS.map((room) => (
-        <RoomNode
-          key={room.id}
-          room={room}
-          dimmed={hoveredId !== null && hoveredId !== room.id}
-          onNavigate={onNavigate}
-          onHover={setHoveredId}
-        />
-      ))}
-      <CameraParallax />
+      {/* Primary background viewport: tactical Fee Fee Anne soundstage.
+          Owns the obsidian floor grid, neon rings, truss rig, FF pedestal,
+          and 12 bespoke room bays with laser conduits. */}
+      <SpatialStudioCanvas onNavigate={onNavigate} roomModelUrl={null} />
+      {/* Custom Blender export (GLB/GLTF) with HDRI environment lighting when available. */}
+      {showCustomModel && (
+        <LobbyModelErrorBoundary onError={() => setModelFailed(true)}>
+          <Suspense fallback={null}>
+            <LobbyCustomModel url={LOBBY_MODEL_URL} />
+            <Environment preset="city" />
+          </Suspense>
+        </LobbyModelErrorBoundary>
+      )}
+      <CameraRig controlsRef={controlsRef} onNavigate={onNavigate} />
       <OrbitControls
+        ref={controlsRef}
         makeDefault
         enableDamping
         dampingFactor={0.12}
         enablePan={false}
         enableZoom
-        minDistance={5}
-        maxDistance={16}
-        minPolarAngle={Math.PI * 0.18}
-        maxPolarAngle={Math.PI * 0.52}
-        target={[0, 1, 0]}
+        minDistance={4}
+        maxDistance={18}
+        minPolarAngle={Math.PI * 0.15}
+        maxPolarAngle={Math.PI * 0.55}
+        target={HOME_TARGET}
       />
     </>
   )
@@ -260,13 +189,32 @@ export default function Interactive3DLobby({ onNavigate }: Interactive3DLobbyPro
   const [webglAvailable] = useState<boolean>(() =>
     typeof document === 'undefined' ? false : supportsWebGL(),
   )
+  const [modelAvailable, setModelAvailable] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void isLobbyModelAvailable().then((ok) => {
+      if (!cancelled && ok) {
+        // Warm the drei GLTF cache only after HEAD confirms the file exists,
+        // so missing-file deployments never trigger a loader error.
+        useGLTF.preload(LOBBY_MODEL_URL)
+        setModelAvailable(true)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const fallbackBackdrop = getProceduralRoomStyle('atrium')
 
   if (!webglAvailable) {
     return (
       <div
         data-testid="lobby-3d-fallback"
         role="status"
-        className="grid min-h-[420px] place-items-center rounded-2xl border border-white/10 bg-[#080f1a] p-8 text-center"
+        className="grid min-h-[420px] h-full place-items-center p-8 text-center"
+        style={{ background: fallbackBackdrop.background }}
       >
         <div className="max-w-sm">
           <div className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-200/90">Studio Lobby</div>
@@ -292,32 +240,103 @@ export default function Interactive3DLobby({ onNavigate }: Interactive3DLobbyPro
     )
   }
 
+  const focusRoom = (id: string) => {
+    window.dispatchEvent(new CustomEvent('focus-room', { detail: { roomId: id } }))
+  }
+  const recenter = () => {
+    window.dispatchEvent(new CustomEvent('recenter-stage'))
+  }
+
+  // Foreground quick-nav mirrors the spatial bays so every room stays
+  // reachable even if WebGL picking is imprecise.
+  const quickRoutes = [
+    { label: 'Atrium', id: 'atrium' },
+    { label: 'Previs', id: 'previs' },
+    { label: 'Screening', id: 'screening' },
+    { label: 'Vault', id: 'vault' },
+    { label: 'Integrity', id: 'integrity' },
+  ]
+
   return (
-    <div data-testid="lobby-3d-canvas" className="relative h-[560px] min-h-[420px] w-full overflow-hidden rounded-2xl border border-white/10 bg-[#040810]">
-      <Canvas
-        camera={{ position: [0, 2.6, 10.5], fov: 48 }}
-        dpr={[1, 1.75]}
-        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
-      >
-        <Suspense fallback={null}>
-          <LobbyScene onNavigate={onNavigate} />
-        </Suspense>
-      </Canvas>
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between bg-gradient-to-b from-[#040810]/85 to-transparent p-4">
+    <div data-testid="lobby-3d-canvas" className="relative h-full min-h-[420px] w-full overflow-hidden bg-[#05020a]">
+      {/* Primary 3D viewport — explicit ids bind the ANIMATION_8 stage to its
+          flex parent so the renderer never measures zero dimensions. */}
+      <div id="threejs-container-ANIMATION_8" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'auto' }}>
+        <Canvas
+          camera={{ position: HOME_POSITION, fov: 48 }}
+          dpr={[1, 1.75]}
+          shadows
+          gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+          style={{ width: '100%', height: '100%', display: 'block' }}
+        >
+          <Suspense fallback={null}>
+            <LobbyScene onNavigate={onNavigate} modelAvailable={modelAvailable} />
+          </Suspense>
+        </Canvas>
+      </div>
+      {/* Probe for tests/e2e: procedural fallback always mounted; custom model is additive. */}
+      <span data-testid="lobby-3d-model-status" data-available={modelAvailable ? 'true' : 'false'} className="hidden" />
+      {/* HUD tactical viewport overlay */}
+      <div className="pointer-events-none absolute left-4 top-3 z-10 flex items-center space-x-3 rounded border border-purple-900/40 bg-black/40 px-2.5 py-1.5 font-mono text-[10px] tracking-widest text-purple-400/80 backdrop-blur-sm">
+        <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+        <span>DRAG TO ROTATE 3D LOBBY • SCROLL TO ZOOM • HOVER ROOM BAYS</span>
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between bg-gradient-to-b from-[#05020a]/85 to-transparent p-4 pt-12">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-amber-200/90">3D Studio Lobby</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-violet-200/90">Fee Fee Anne Studios · 3D Lobby</div>
           <p className="mt-1 max-w-[240px] text-[11px] leading-5 text-zinc-400">
-            Drift to orbit · Scroll to zoom · Select a glowing room to enter
+            Drift to orbit · Scroll to zoom · Walk through a glowing bay to enter
           </p>
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-500">{LOBBY_ROOMS.length} rooms</span>
       </div>
-      {/* Cinematic vignette + grain, matching StudioShell atmosphere */}
+      {/* Cinematic vignette — never intercepts pointer events. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{ background: 'radial-gradient(circle at center, transparent 52%, rgba(0,0,0,0.5) 100%)' }}
       />
+      {/* Corner framing brackets */}
+      <div aria-hidden="true" className="pointer-events-none absolute right-2 top-2 z-10 h-3 w-3 border-r-2 border-t-2 border-purple-500/40" />
+      <div aria-hidden="true" className="pointer-events-none absolute bottom-8 left-2 z-10 h-3 w-3 border-b-2 border-l-2 border-purple-500/40" />
+      {/* Quick room presets */}
+      <div className="absolute bottom-10 left-4 z-10 flex items-center space-x-1.5 rounded border border-purple-950 bg-[#070312]/80 p-1.5 font-mono text-[9px] text-purple-300/70 backdrop-blur">
+        <span className="px-1 font-semibold text-purple-400">PRESETS:</span>
+        {quickRoutes.map((route) => (
+          <button
+            key={route.id}
+            type="button"
+            data-testid={`lobby-quick-nav-${route.label.toLowerCase()}`}
+            onClick={() => focusRoom(route.id)}
+            className="cursor-pointer rounded px-2 py-0.5 transition hover:bg-purple-900/60 hover:text-white"
+          >
+            {route.label.toUpperCase()}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={recenter}
+          className="rounded border border-purple-700/60 bg-purple-950/80 px-2 py-0.5 font-bold text-purple-200 transition hover:border-purple-400"
+        >
+          RE-CENTER
+        </button>
+      </div>
+      {/* Bottom status bar */}
+      <div className="absolute inset-x-0 bottom-0 z-10 flex h-7 items-center justify-between border-t border-purple-950/70 bg-[#05020b]/90 px-4 font-mono text-[10px] tracking-wider text-purple-400/60">
+        <div className="flex items-center space-x-3">
+          <span className="flex h-3 w-3 items-center justify-center border border-purple-800 text-[8px] text-purple-300">L</span>
+          <span>897.by 42.680</span>
+          <span className="text-purple-900">|</span>
+          <span className="text-purple-300/80">QUANTUM SECURITY STRINGS</span>
+          <span className="text-purple-900">|</span>
+          <span>HASH: 09F41-EE06-CC02</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span>SYNC:</span>
+          <span className="text-purple-300">studio.db</span>
+          <span className="font-bold text-purple-400">[ISOLATED]</span>
+        </div>
+      </div>
     </div>
   )
 }

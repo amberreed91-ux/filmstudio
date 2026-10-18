@@ -29,6 +29,16 @@ def _seed_storyboard_project(project_id: str, scene_id: str = "scene_001") -> No
 
 
 def test_storyboard_blueprint_route_create_approve_and_render_contract() -> None:
+    from app.access_context import access_user_id
+
+    actor_token = access_user_id.set("owner-route-test")
+    try:
+        _test_storyboard_blueprint_route_create_approve_and_render_contract()
+    finally:
+        access_user_id.reset(actor_token)
+
+
+def _test_storyboard_blueprint_route_create_approve_and_render_contract() -> None:
     client = TestClient(app)
     project_id = f"project_route_{uuid4().hex[:8]}"
     scene_id = "scene_001"
@@ -73,10 +83,15 @@ def test_storyboard_blueprint_route_create_approve_and_render_contract() -> None
 
     approve_response = client.post(
         f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
-        json={"approved_by": "creator"},
+        json={},
     )
     assert approve_response.status_code == 422, approve_response.text
     assert "Continuity Review" in approve_response.text
+    mismatched_actor_response = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
+        json={"approved_by": "someone-else"},
+    )
+    assert mismatched_actor_response.status_code == 403, mismatched_actor_response.text
 
     review_response = client.post(
         f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/continuity-review",
@@ -88,13 +103,26 @@ def test_storyboard_blueprint_route_create_approve_and_render_contract() -> None
     assert review["summary"]["shot_count"] == 2
     assert review["comparison_modes"] == ["side_by_side", "overlay", "before_after"]
 
+    # D4: approve each shot's derived image prompt before board approval.
+    for shot in detail["shots"]:
+        image_approve = client.post(
+            f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{shot['storyboard_shot_id']}/image-prompt/approve",
+            json={"approved_by": "owner-route-test"},
+        )
+        assert image_approve.status_code == 200, image_approve.text
+
     approve_response = client.post(
         f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
-        json={"approved_by": "creator"},
+        json={},
     )
     assert approve_response.status_code == 200, approve_response.text
     approved = approve_response.json()
     assert approved["blueprint"]["approved_version_id"] == version_id
+    assert approved["version"]["approved_by"] == "owner-route-test"
+    assert approved["version"]["metadata"]["production_approval"] == {
+        "actor_id": "owner-route-test",
+        "actor_authenticated": True,
+    }
     assert all(shot["status"] == "approved" for shot in approved["shots"])
 
     list_response = client.get(f"/api/f51/studio/projects/{project_id}/storyboard-blueprints")
@@ -141,6 +169,12 @@ def test_storyboard_render_rejects_stale_approved_version() -> None:
         json={"reviewer": "route_test"},
     )
     assert review_response.status_code == 200, review_response.text
+    # D4: approve the shot's derived image prompt before board approval.
+    image_approve = client.post(
+        f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/shots/{storyboard_shot_id}/image-prompt/approve",
+        json={"approved_by": "creator"},
+    )
+    assert image_approve.status_code == 200, image_approve.text
     approve_response = client.post(
         f"/api/f51/studio/storyboard-blueprints/{blueprint_id}/versions/{version_id}/approve",
         json={"approved_by": "creator"},

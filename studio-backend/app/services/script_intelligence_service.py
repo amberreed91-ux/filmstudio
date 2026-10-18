@@ -1035,9 +1035,11 @@ class ScriptIntelligenceService:
         # Build prompt
         enhanced_prompt = " | ".join(components)
 
-        # Truncate to 512 characters
-        if len(enhanced_prompt) > 512:
-            enhanced_prompt = enhanced_prompt[:499] + "..."
+        # NOTE: no silent truncation. The historical 512-char cut here severed
+        # enhanced advisory prompts mid-sentence and produced terminal
+        # fragments; these objects are advisory prompt SUGGESTIONS, and any
+        # provider budget is enforced explicitly at job creation by
+        # prompt_budget_service (fail-closed), never by destroying text here.
 
         # Extract character references
         if isinstance(characters, str):

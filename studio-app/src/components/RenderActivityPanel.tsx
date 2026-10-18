@@ -3,6 +3,8 @@ import { Clapperboard, Sparkles } from 'lucide-react'
 import { useRenderActivity, type LiveRenderStatus } from '../context/RenderActivityContext'
 import { useStudio } from '../context/StudioContext'
 import { formatProviderLabel } from '../lib/providerDisplay'
+import { isRouterPayloadNormalized } from '../lib/routerNormalization'
+import RouterNormalizationBadge from './RouterNormalizationBadge'
 
 function statusLabel(status: LiveRenderStatus): string {
   if (status === 'queued') return 'Queued'
@@ -38,7 +40,9 @@ function statusClasses(status: LiveRenderStatus): string {
 
 export default function RenderActivityPanel({ roomName }: { roomName: 'Lobby' | 'Production Board' | 'Screening Room' }) {
   const { activity } = useRenderActivity()
-  const { providers } = useStudio()
+  const { providers, renderJobs } = useStudio()
+  const activeJob = activity?.jobId ? renderJobs.find((job) => job.id === activity.jobId) ?? null : null
+  const showNormalizationBadge = isRouterPayloadNormalized(activeJob)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [enteredTaskId, _setEnteredTaskId] = useState('')
   const availableProviderIds = useMemo(() => providers.map((provider) => provider.provider_id.toLowerCase()), [providers])
@@ -75,8 +79,11 @@ export default function RenderActivityPanel({ roomName }: { roomName: 'Lobby' | 
             <Clapperboard size={16} />
             {activity?.scene || 'recent_scene'}
           </div>
-          <div className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] transition-all duration-500 ${statusClasses(effectiveStatus)}`}>
-            {statusLabel(effectiveStatus)}
+          <div className="flex items-center gap-2">
+            {showNormalizationBadge ? <RouterNormalizationBadge /> : null}
+            <div className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] transition-all duration-500 ${statusClasses(effectiveStatus)}`}>
+              {statusLabel(effectiveStatus)}
+            </div>
           </div>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-zinc-300">

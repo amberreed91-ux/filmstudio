@@ -43,6 +43,16 @@ class TestAutoSplitFormat:
         assert derive_scene_id_from_shot_id("shot_scene_100_042") == "scene_100"
 
 
+# ─── Slugged scene prefix format (scene_<slug>_shot_MMM) ─────────────────────
+
+class TestSluggedScenePrefixFormat:
+    def test_underscored_scene_slug_is_preserved(self):
+        assert derive_scene_id_from_shot_id("scene_lantern_17_shot_001") == "scene_lantern_17"
+
+    def test_numeric_suffix_and_shot_ordinal_are_not_confused(self):
+        assert derive_scene_id_from_shot_id("scene_lantern_17_shot_12") == "scene_lantern_17"
+
+
 # ─── Old manual format (scene_NNN_shot_MMM) ───────────────────────────────────
 
 class TestOldManualFormat:

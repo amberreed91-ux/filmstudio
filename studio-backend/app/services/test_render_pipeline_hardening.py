@@ -14,7 +14,64 @@ class _StorageStub:
     def __init__(self, jobs: Optional[list[RenderJobModel]] = None):
         self._jobs: dict[str, RenderJobModel] = {job.id: job for job in (jobs or [])}
         self._projects: dict[str, dict] = {}
+        self._universe_nodes: list[dict] = []
+        self._reference_assets: list[dict] = []
         self.last_list_jobs_limit: int | None = None
+
+    def get_universe_nodes(self, project_id: str):
+        return [row for row in self._universe_nodes if row.get("project_id") == project_id]
+
+    def list_reference_assets(self, project_id: str = "", target_type: str = "", target_id: str = "", limit: int = 50):
+        rows = [row for row in self._reference_assets if row.get("project_id") == project_id]
+        if target_type:
+            rows = [row for row in rows if row.get("target_type") == target_type]
+        if target_id:
+            rows = [row for row in rows if row.get("target_id") == target_id]
+        return rows[:limit]
+
+    def seed_project_scene(self, project_id: str, shot_id: str) -> None:
+        """Seed a scene with a project-scoped canonical setting and approved anchor.
+
+        Generation preflight intentionally rejects guessed setting IDs and
+        unapproved/missing anchors, so test scenes must satisfy that same
+        provenance contract before exercising unrelated submit behavior.
+        """
+        from app.services.project_store import project_store
+        from app.utils.helpers import derive_scene_id_from_shot_id
+
+        scene_id = derive_scene_id_from_shot_id(shot_id)
+        setting_id = f"test-setting-{project_id}-{scene_id}"
+        if project_store.get_project(project_id) is None:
+            project_store.create_project(project_id=project_id)
+        project = project_store.get_project(project_id)
+        summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
+        scenes = [row for row in (summary.get("scenes") or []) if isinstance(row, dict)]
+        if not any(row.get("scene_id") == scene_id for row in scenes):
+            scenes.append({"scene_id": scene_id, "heading": f"INT. TEST - {scene_id}", "text": "Test scene.", "setting_id": setting_id, "location": "Test location"})
+            summary["scenes"] = scenes
+            project_store.update_project(project_id, {"execution_summary": summary})
+        if not any(row.get("node_id") == setting_id and row.get("project_id") == project_id for row in self._universe_nodes):
+            self._universe_nodes.append({
+                "node_id": setting_id,
+                "project_id": project_id,
+                "node_type": "location",
+                "name": "Test location",
+                "first_scene": scene_id,
+                "last_scene": scene_id,
+            })
+        if not any(row.get("target_id") == setting_id for row in self._reference_assets):
+            self._reference_assets.append({
+                "ref_id": f"test-environment-{project_id}-{scene_id}",
+                "project_id": project_id,
+                "target_type": "setting",
+                "target_id": setting_id,
+                "kind": "environment",
+                "image_url": f"https://example.com/{setting_id}.png",
+                "canonical": True,
+                "approval_state": "approved",
+                "source_kind": "confirmed",
+            })
+        return scene_id, setting_id
 
     def save_job(self, job: RenderJobModel):
         self._jobs[job.id] = job
@@ -37,6 +94,29 @@ class _StorageStub:
         if project_id:
             self._projects[project_id] = {"project_id": project_id}
         return project
+
+
+class _MissingFileReferenceStub(_StorageStub):
+    """Storage stub that registers the nonexistent file as an approved,
+    canonical setting reference so the reference-ownership gate passes and the
+    file-existence check is what actually fails (the test's subject)."""
+
+    def list_reference_assets(self, project_id: str = "", target_type: str = "", target_id: str = "", limit: int = 50):
+        if target_type == "setting" and target_id == getattr(self, "missing_target_id", None):
+            return [
+                {
+                    "ref_id": "missing-file",
+                    "project_id": project_id,
+                    "target_type": "setting",
+                    "target_id": target_id,
+                    "kind": "environment",
+                    "image_url": "/tmp/studio-reference-that-does-not-exist.png",
+                    "canonical": True,
+                    "approval_state": "approved",
+                    "source_kind": "confirmed",
+                }
+            ]
+        return super().list_reference_assets(project_id, target_type, target_id, limit)
 
 
 class _AdapterComplete:
@@ -176,6 +256,7 @@ def test_duplicate_submission_prevention(monkeypatch):
     storage = _StorageStub()
     set_storage(storage)
     service = RenderService()
+    storage.seed_project_scene("p1", "shot_3")
     monkeypatch.setattr("app.services.render.get_adapter", lambda *_args, **_kwargs: _AdapterComplete())
 
     job = service.create_job(project_id="p1", shot_id="shot_3", provider="simulated", prompt="test")
@@ -202,9 +283,24 @@ def test_duplicate_generate_request_reuses_active_job():
 
 
 def test_missing_reference_file_stops_before_provider_submission():
-    storage = _StorageStub()
+    storage = _MissingFileReferenceStub()
     set_storage(storage)
     service = RenderService()
+    scene_id, setting_id = storage.seed_project_scene("p1", "shot_missing_ref")
+    storage.missing_target_id = setting_id
+    # Replace the valid fixture anchor with the approved-but-missing URI so
+    # preflight reaches the local file-existence check that this test covers.
+    storage._reference_assets = [
+        row for row in storage._reference_assets if row.get("target_id") != setting_id
+    ]
+    from app.models.consistency import ConsistencyPayload, ReferenceAsset
+    from app.services.project_store import project_store
+
+    _project = project_store.get_project("p1")
+    _summary = _project["execution_summary"]
+    for row in _summary["scenes"]:
+        if row.get("scene_id") == scene_id:
+            row["location"] = "Test location"
 
     job = service.create_job(
         project_id="p1",
@@ -212,6 +308,24 @@ def test_missing_reference_file_stops_before_provider_submission():
         provider="simulated",
         prompt="A corridor holds a quiet practical light and a slow push in.",
         reference_assets=["/tmp/studio-reference-that-does-not-exist.png"],
+    )
+    # The reference-ownership gate requires the payload to carry its selected
+    # reference set; give it the (missing-file) environment anchor so the
+    # file-existence check is the failure under test.
+    job.input_payload.consistency_payload = ConsistencyPayload(
+        project_id="p1",
+        mode="environment_lock",
+        refs=[
+            ReferenceAsset(
+                ref_id="missing-file",
+                kind="environment",
+                image_url="/tmp/studio-reference-that-does-not-exist.png",
+                project_id="p1",
+                target_type="setting",
+                target_id=setting_id,
+                approval_state="approved",
+            )
+        ],
     )
     submitted = asyncio.run(service.submit_job(job.id))
 
@@ -270,6 +384,7 @@ def test_provider_call_timeout_records_render_failure(monkeypatch):
     storage = _StorageStub()
     set_storage(storage)
     service = RenderService()
+    storage.seed_project_scene("p1", "shot_provider_timeout")  # derives scene 'shot_provider'
     monkeypatch.setattr(render_module, "PROVIDER_CALL_TIMEOUT_SECONDS", 0.001)
     monkeypatch.setattr("app.services.render.get_adapter", lambda *_args, **_kwargs: _AdapterSlowSubmit())
 
@@ -458,6 +573,9 @@ def test_ten_controlled_mocked_jobs_complete_without_state_corruption(monkeypatc
     storage = _StorageStub()
     set_storage(storage)
     service = RenderService()
+    # create_scene_batch uses film_id as the job's project_id.
+    for index in range(1, 11):
+        storage.seed_project_scene("project-controlled-batch", f"scene_batch_001_shot_{index:03d}")
     monkeypatch.setattr("app.services.render.get_adapter", lambda *_args, **_kwargs: _AdapterComplete())
 
     shots = [

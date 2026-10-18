@@ -22,6 +22,9 @@ class FakeRenderer:
         self.created = 0
         self.polls = 0
 
+    def get_default_provider(self):
+        return "simulated"
+
     def create_job(self, **kwargs):
         self.created += 1
         job_id = f"previs-job-{self.created}"
@@ -104,6 +107,7 @@ def _approved_storyboard(tmp_path: Path, storage: DatabaseStorage) -> dict:
         blueprint_id=detail["blueprint"].blueprint_id,
         version_id=detail["version"].version_id,
     )
+    service.derive_and_approve_image_prompts_for_version(version_id=detail["version"].version_id)
     return service.approve_version(
         blueprint_id=detail["blueprint"].blueprint_id,
         version_id=detail["version"].version_id,
@@ -301,10 +305,10 @@ async def test_render_uses_creator_settings_and_retry_preserves_them(tmp_path):
 
     storage = _storage(tmp_path)
     renderer = FakeRenderer()
-    renderer._provider_configs = {"openrouter-video": {}}
+    renderer._provider_configs = {"simulated": {}}
     service = PrevisService(storage, renderer)
     settings = PrevisRenderSettings(prompt="Close on Maya's left hand. She keeps the key.", duration_seconds=8, resolution="1080p", seed=0)
-    result = await service.generate_scene("project_previs", "scene_001", provider="openrouter-video", render_settings=settings)
+    result = await service.generate_scene("project_previs", "scene_001", provider="simulated", render_settings=settings)
     job = renderer.jobs[result["job_id"]]
     assert job.prompt == settings.prompt
     assert job.parameters["duration"] == 8
@@ -437,12 +441,16 @@ async def test_explicit_shot_directions_survive_previs_request(tmp_path):
 
 
 def test_storyboard_contract_keeps_tail_lighting_before_provider_budget(tmp_path):
+    # P0-3: canonical prompt assembly no longer truncates silently. The full
+    # approved prompt (over any provider budget) is stored byte-accurate;
+    # the provider-side 512 budget is applied later, losslessly, at the wire.
     from app.models.storyboard_blueprint import StoryboardShotVisualPlan
     service = StoryboardBlueprintService(_storage(tmp_path))
     prompt = service._build_provider_neutral_prompt("project_previs", {"text": "Maya holds the key. " * 60}, "scene_001_shot_001", 1, 1,
         StoryboardShotVisualPlan(framing="Close-up", environment="Edit bay", lighting="Only red emergency light illuminates her hand."), "The held key carries her refusal.")
     assert len(prompt) > 512
     assert "Only red emergency light illuminates her hand." in prompt
+    assert not prompt.rstrip().endswith("...")
     # Contract assembly normalizes punctuation between components.
     assert prompt.endswith("The held key carries her refusal")
 
@@ -480,3 +488,96 @@ async def test_production_package_freezes_approved_take_settings(tmp_path):
     assert row["parameters"]["resolution"] == "1080p"
     assert row["parameters"]["storyboard_frame_url"] == shot.storyboard_image_url
     assert row["image_path"] not in row["reference_assets"]
+
+
+@pytest.mark.asyncio
+async def test_runway_video_previs_fails_closed_without_canonical_frozen_contract(tmp_path):
+    from app.services.stability import ValidationError
+
+    renderer = FakeRenderer()
+    renderer._provider_configs = {"runway": {}, "runway_router": {}}
+    with pytest.raises(ValidationError, match="canonical scene pipeline's READY frozen contract"):
+        await PrevisService(_storage(tmp_path), renderer).generate_scene(
+            "project_previs", "scene_001", provider="runway"
+        )
+    assert renderer.created == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('provider', ['openrouter', 'openrouter-video'])
+async def test_retired_provider_rejected_by_previs_before_job_creation(provider: str):
+    from app.services.stability import ValidationError
+
+    renderer = FakeRenderer()
+    service = PrevisService(renderer=renderer)
+    with pytest.raises(ValidationError, match='retired'):
+        await service.generate_scene('project_previs', 'scene_001', provider=provider)
+    assert renderer.created == 0
+
+
+@pytest.mark.asyncio
+async def test_previs_default_rejects_retired_openrouter_configuration(tmp_path: Path):
+    from app.services.stability import ValidationError
+
+    renderer = FakeRenderer()
+    renderer.get_default_provider = lambda: "openrouter"
+    with pytest.raises(ValidationError, match="retired"):
+        await PrevisService(_storage(tmp_path), renderer).generate_scene("project_previs", "scene_001")
+    assert renderer.created == 0
+
+
+def test_duration_options_resolve_runway_default():
+    renderer = FakeRenderer()
+    renderer.get_default_provider = lambda: 'runway'
+    service = PrevisService(renderer=renderer)
+    assert service.duration_options().provider == 'runway'
+    assert service.duration_options().valid_durations_seconds == [4, 8, 12, 16, 20]
+    assert service.duration_options('wan').valid_durations_seconds == [5, 10, 15]
+
+
+@pytest.mark.parametrize('provider', ['openrouter', 'openrouter-video'])
+def test_duration_options_reject_retired_video_provider(provider: str):
+    from app.services.stability import ValidationError
+
+    with pytest.raises(ValidationError, match='retired'):
+        PrevisService(renderer=FakeRenderer()).duration_options(provider)
+
+
+def test_duration_options_route_reports_runway_default(monkeypatch):
+    from app.routes import previs_routes
+    renderer = FakeRenderer()
+    renderer.get_default_provider = lambda: 'runway'
+    monkeypatch.setattr(previs_routes, 'previs_service', PrevisService(renderer=renderer))
+    api = FastAPI()
+    api.include_router(previs_routes.router)
+    response = TestClient(api).get('/previs/duration-options')
+    assert response.status_code == 200
+    assert response.json() == {'provider': 'runway', 'valid_durations_seconds': [4, 8, 12, 16, 20]}
+
+
+@pytest.mark.parametrize('provider', ['openrouter', 'openrouter-video'])
+def test_duration_options_route_rejects_retired_provider(monkeypatch, provider: str):
+    from app.routes import previs_routes
+
+    monkeypatch.setattr(previs_routes, 'previs_service', PrevisService(renderer=FakeRenderer()))
+    api = FastAPI()
+    api.include_router(previs_routes.router)
+    response = TestClient(api).get('/previs/duration-options', params={'provider': provider})
+    assert response.status_code == 422
+    assert 'retired' in response.text
+
+
+@pytest.mark.asyncio
+async def test_provider_rejection_preserves_actionable_reason(tmp_path):
+    class RejectingRenderer(FakeRenderer):
+        async def submit_job(self, job_id):
+            job = self.jobs[job_id]
+            job.status = 'failed'
+            job.error_message = 'The selected resolution is unavailable.'
+            return job
+
+    storage = _storage(tmp_path)
+    service = PrevisService(storage, RejectingRenderer())
+    with pytest.raises(ProviderError, match='The selected resolution is unavailable'):
+        await service.generate_scene('project_previs', 'scene_001')
+    assert storage.get_previs_image_by_job('previs-job-1')['failure_reason'] == 'The selected resolution is unavailable.'

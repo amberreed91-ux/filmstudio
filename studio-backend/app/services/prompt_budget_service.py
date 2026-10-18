@@ -38,8 +38,14 @@ FIELD_PRIORITY = {
 
 
 def prompt_policy(provider, model=''):
-    if provider in {'openrouter', 'openrouter-video'} and model == 'alibaba/happyhorse-1.1':
-        return 5000, 'Alibaba HappyHorse model ceiling via OpenRouter; OpenRouter schema specifies no additional maximum (transport inference)'
+    if provider == 'runway_router':
+        # The Model Router decides per-model eligibility with its own
+        # prompt_length hard filter (router input caps: 32000 chars image /
+        # 20000 chars video). Studio forwards the canonical prompt verbatim
+        # and lets Runway's filter — not a Studio-side truncation policy —
+        # decide what is routable. Ceiling = the smallest routed-input cap;
+        # exceeding it fails closed (needs_review), never shortens.
+        return 20000, 'Runway Model Router input cap (video 20000 / image 32000); routing prompt_length filter owns per-model eligibility'
     if provider in {'happyhorse', 'happyhorse-r2v'}:
         return 5000, 'Alibaba HappyHorse API: 5000 non-Chinese / 2500 Chinese characters'
     if model.startswith(('wan2.1', 'wan2.2')):
@@ -48,13 +54,14 @@ def prompt_policy(provider, model=''):
         return 1500, 'Alibaba Wan 2.6 API: 1500 characters'
     if provider == 'simulated':
         return 5000, 'Local evaluation policy; does not prove hosted model support'
+    if provider == 'local_ltx':
+        return 4400, 'Phosphene LTX-2 Gemma text encoder: 1024-token encode window (LTX2_GEMMA_MAX_LENGTH default, ltx-2-mlx source), ~4.3 chars/token English estimate'
     # A conservative application ceiling, NOT an asserted vendor maximum.
-    # OpenRouter model discovery does not document a universal prompt ceiling.
     return 512, 'Conservative application ceiling; model-specific maximum unverified'
 
 
 def cost(text, provider, model=''):
-    if provider in {'happyhorse', 'happyhorse-r2v'} or (provider in {'openrouter', 'openrouter-video'} and model == 'alibaba/happyhorse-1.1'):
+    if provider in {'happyhorse', 'happyhorse-r2v'}:
         return sum(2 if '\u3400' <= c <= '\u9fff' or '\U00020000' <= c <= '\U000323af' else 1 for c in text)
     return len(text)
 
@@ -108,6 +115,39 @@ def allocate(facts, provider, model='', *, limit=None):
 
 def budget_job(job):
     params = job.input_payload.parameters or {}
+    if job.provider == 'runway_router':
+        # Runway owns per-model prompt-length eligibility. Preserve the already
+        # assembled Studio prompt exactly; never priority-compress, summarize,
+        # or rewrite an approved Router prompt to fit one candidate model.
+        from app.services.render import _provider_model_for_job
+
+        model = _provider_model_for_job(job.provider, params)
+        limit, source = prompt_policy(job.provider, model)
+        raw_prompt = job.input_payload.prompt or ''
+        result = PromptBudgetResult(
+            provider=job.provider,
+            model=model,
+            limit=limit,
+            limit_source=source,
+            prompt=raw_prompt,
+            ready=cost(raw_prompt, job.provider, model) <= limit,
+        )
+        negative = budget_negative(job)
+        if not negative['ready']:
+            result.ready = False
+            result.required_overflow_ids = ['negative_constraints']
+        job.metadata = dict(job.metadata or {})
+        job.metadata['negative_prompt_budget'] = negative
+        job.metadata['prompt_budget'] = result.model_dump(mode='json')
+        params['prompt_budget'] = result.model_dump(mode='json')
+        job.input_payload.parameters = params
+        if not result.ready:
+            # Keep the original text intact for review; submit_job rejects
+            # needs_review, and the Router adapter independently checks caps.
+            job.status = 'needs_review'
+            job.error_message = 'Runway Model Router input caps exceeded; approved prompt content was preserved for review.'
+        return result
+
     slots = params.get('prompt_slots') or {}
     facts = []
     for name, text in slots.items():
@@ -167,14 +207,35 @@ def validate_provider_text(job, text, model=''):
 
 def budget_negative(job):
     """Preserve explicit exclusions; degrade only generated defaults, whole term."""
-    from app.services.negative_prompt_builder import provider_supports_negative_prompt
     params = job.input_payload.parameters or {}
+    original = job.input_payload.negative_prompt or ''
+    if job.provider == 'runway_router':
+        # Routed video supports a separate negativePrompt field up to 1,000
+        # chars. Preserve the entire source; fail closed above Runway's cap.
+        required = list(dict.fromkeys(
+            str(x).strip()
+            for x in (params.get('required_negative_terms') or params.get('negative_prompt_terms') or [])
+            if str(x).strip()
+        ))
+        report = {
+            'limit': 1000,
+            'supported': True,
+            'required_terms': required,
+            'source_text': original,
+            'omitted_terms': [],
+            'ready': len(original) <= 1000,
+            'final_text': original,
+        }
+        if not report['ready']:
+            report['reason'] = 'Runway Model Router negativePrompt input cap exceeded; exclusions were preserved.'
+        return report
+
+    from app.services.negative_prompt_builder import provider_supports_negative_prompt
     required = list(dict.fromkeys(str(x).strip() for x in (params.get('required_negative_terms') or params.get('negative_prompt_terms') or []) if str(x).strip()))
     supported = provider_supports_negative_prompt(job.provider)
     # Conservative separate-channel ceiling, matching the existing application
     # policy. Never infer positive-channel capacity for a negative channel.
     limit = 500
-    original = job.input_payload.negative_prompt or ''
     report = {'limit': limit, 'supported': supported, 'required_terms': required, 'source_text': original, 'omitted_terms': [], 'ready': True}
     if required and (not supported or len(', '.join(required)) > limit):
         report['ready'] = False

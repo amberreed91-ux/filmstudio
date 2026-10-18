@@ -14,6 +14,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.services.adherence_service import AdherenceService, AdherenceScore, DimensionScore
@@ -26,6 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger("test_corrector_variations")
 
 
+@pytest.mark.skipif(not os.environ.get("STUDIO_ALLOW_LIVE_NETWORK_TESTS"), reason="makes a live network call (LLM); run only with owner authorization")
 async def test_minor_failure():
     """Test with minor failures - should see strengthen/prepend_emphasis ops."""
     print("\n" + "=" * 80)
@@ -86,6 +89,7 @@ async def test_minor_failure():
         print(f"    Delta: {op.char_delta:+d}")
 
 
+@pytest.mark.skipif(not os.environ.get("STUDIO_ALLOW_LIVE_NETWORK_TESTS"), reason="makes a live network call (LLM); run only with owner authorization")
 async def test_moderate_failure():
     """Test with moderate failure - character exists but details wrong."""
     print("\n" + "=" * 80)

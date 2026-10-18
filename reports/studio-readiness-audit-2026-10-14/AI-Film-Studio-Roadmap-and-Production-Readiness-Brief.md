@@ -51,7 +51,7 @@ Reports are in `reports/studio-readiness-audit-2026-10-14/`.
 
 **Owner goal (Oct 15, 2026)**: Studio must not be dependent on Runway to work. Independence does not mean eliminating Runway today. It means Runway's limitations stop defining what Studio itself can do. Runway remains the only approved production provider until the owner explicitly authorizes another. Provider independence means a Studio-owned contract, not enabling a second provider.
 
-**Live Runway acceptance: unverified. Verdict: NOT PRODUCTION READY.**
+**Live Runway acceptance: LIVE_VERIFIED (2026-10-17) — single-shot minimal probe completed with output delivered; trace `reports/evidence/live-acceptance/runway-live-trace-20261017T123204Z.json` (task ea6efb69-829c-46fa-ab81-f96a6bb39824, model seedance2_5, 1 dryRun + 1 live POST, 31 task polls). Verdict: NOT PRODUCTION READY (multi-shot + remaining gates still open).**
 
 ---
 
@@ -222,7 +222,7 @@ The R4.0 audit accounted for 23 failures. These must not be treated as resolved 
 - Historical test-order and event-loop issues, with R2.1's specific combined-test issue subsequently fixed and verified.
 - Non-durable confirmation state.
 - Partial outcome traceability.
-- Lack of live Runway acceptance evidence.
+- Live Runway acceptance: LIVE_VERIFIED 2026-10-17 for the single-shot minimal path — trace `reports/evidence/live-acceptance/runway-live-trace-20261017T123204Z.json` (1 primary ref, 16:9, 5s, output delivered). Multi-shot live delivery remains unverified.
 - Over-capacity generic reference bindings that currently fail closed.
 - Remaining route-propagation and job-row persistence claims that were code-inspected rather than fully proven through live execution.
 

@@ -265,6 +265,9 @@ class RenderRetryService:
                     "shot_id": score.shot_id,
                     "attempt_n": score.attempt_n,
                     "frames_scored": score.frames_scored,
+                    "scored_by_provider": score.scored_by_provider,
+                    "scored_by_model": score.scored_by_model,
+                    "unscored_dimensions": score.unscored_dimensions,
                     "dimensions": {
                         dim: {
                             "score": score_obj.score,
@@ -797,7 +800,17 @@ class RenderRetryService:
                 - score: AdherenceScore object
         """
         import asyncio
-        
+        from app.services.scene002_contract_only import MODE
+        from app.services.render import render_service
+        protected = next((
+            job for job in render_service.list_jobs(project_id=project_id)
+            if job.shot_id == shot_id
+            and isinstance(job.metadata, dict)
+            and job.metadata.get("execution_mode") == MODE
+        ), None)
+        if protected is not None:
+            raise ValueError("Adherence evaluation and altered retries are prohibited for Scene 002 contract-only jobs")
+
         # Extract frames at 10%, 50%, 90%
         try:
             frame_paths = await self.extract_representative_frames(
@@ -846,6 +859,9 @@ class RenderRetryService:
             "shot_id": score.shot_id,
             "attempt_n": score.attempt_n,
             "frames_scored": score.frames_scored,
+                    "scored_by_provider": score.scored_by_provider,
+                    "scored_by_model": score.scored_by_model,
+                    "unscored_dimensions": score.unscored_dimensions,
             "dimensions": {
                 dim: {
                     "score": score_obj.score,
@@ -1060,6 +1076,7 @@ class RenderRetryService:
         poll_timeout_seconds: float = 300.0,
         source_job_id: Optional[str] = None,
         cascade_depth: int = 1,
+        provider_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Evaluate original attempt and submit N parallel retries with fresh seeds.
@@ -1091,6 +1108,36 @@ class RenderRetryService:
                 - seeds_used: List of seeds that were generated
         """
         from app.services.render import render_service
+        from app.services.scene002_contract_only import MODE
+
+        if source_job_id:
+            source_probe = render_service.get_job(source_job_id)
+            if source_probe is not None and isinstance(source_probe.metadata, dict) and source_probe.metadata.get("execution_mode") == MODE:
+                raise ValueError("Altered adherence retries are prohibited for Scene 002 contract-only jobs")
+        source_job = render_service.get_job(source_job_id) if source_job_id else None
+        if source_job_id and source_job is None:
+            raise ValueError(f"Adherence retry source job {source_job_id!r} was not found")
+        if source_job is not None:
+            if source_job.project_id != project_id or source_job.shot_id != shot_id:
+                raise ValueError("Adherence retry source job does not match the requested project and shot")
+            source_provider = source_job.provider
+        else:
+            # Backward-compatible non-source invocation still resolves its provider
+            # once, but retries tied to an existing job never use this default.
+            source_provider = render_service.get_default_provider()
+
+        if provider_override is not None:
+            provider_override = str(provider_override).strip().lower()
+            if not provider_override:
+                raise ValueError("Adherence retry provider override cannot be empty")
+            override_config = render_service.get_provider_config(provider_override)
+            if override_config is None:
+                raise ValueError(f"Adherence retry provider override '{provider_override}' is unknown")
+            if not override_config.enabled:
+                raise ValueError(f"Adherence retry provider override '{provider_override}' is disabled")
+            selected_provider = provider_override
+        else:
+            selected_provider = source_provider
 
         logger.info(
             "BEST_OF_N_RETRY_STARTED | shot=%s | project=%s | max_attempts=%d",
@@ -1179,7 +1226,7 @@ class RenderRetryService:
                 job = render_service.create_job(
                     project_id=project_id,
                     shot_id=f"{shot_id}",
-                    provider=render_service.get_default_provider(),
+                    provider=selected_provider,
                     prompt=full_prompt.prompt,
                     parameters={
                         "seed": seed,
@@ -1190,6 +1237,21 @@ class RenderRetryService:
                         "adherence_retry_parent_job_id": source_job_id,
                         "adherence_retry_cascade_depth": cascade_depth,
                         "skip_character_injection": True,
+                        "adherence_retry_provider": {
+                            "source_provider": source_provider,
+                            "selected_provider": selected_provider,
+                            "override_requested": provider_override is not None,
+                            "provider_changed": selected_provider != source_provider,
+                        },
+                    },
+                    metadata={
+                        "adherence_retry": {
+                            "source_job_id": source_job_id or "",
+                            "source_provider": source_provider,
+                            "selected_provider": selected_provider,
+                            "override_requested": provider_override is not None,
+                            "provider_changed": selected_provider != source_provider,
+                        }
                     },
                 )
                 submitted_job = await render_service.submit_job(job.id)

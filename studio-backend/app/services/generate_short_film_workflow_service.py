@@ -100,6 +100,7 @@ class GenerateShortFilmWorkflowService:
         from app.services.script_parser import ScriptParser
         from app.services.stability import log_stage_event, elapsed_ms, start_timer, StateError
         from fastapi import HTTPException
+        from uuid import uuid4
         
         start_all = start_timer()
         current = project_store.get_project(project_id)
@@ -108,7 +109,9 @@ class GenerateShortFilmWorkflowService:
         
         concept = payload.get("concept", "")
         parser = ScriptParser()
-        summary = parser.build_script_breakdown_bundle(concept)
+        summary = parser.build_script_breakdown_bundle(
+            {"project_id": project_id, "execution_id": f"generate-short-film-{uuid4().hex}", "script_text": concept}
+        )
         summary = ensure_scene_fallback(summary, concept)
         scene_ids = [
             str((scene or {}).get("scene_id") or "").strip()

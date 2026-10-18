@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import type { StudioDecisionGate, CoDirectorDebateEntry } from '../lib/studioApi'
 import { saveCreativeDecisionMemory, triggerDebate } from '../lib/studioApi'
 import ScreeningEditorialComparisonPanel from './ScreeningEditorialComparisonPanel'
+import ShotIntentRationaleCard from './ShotIntentRationaleCard'
+import type { ShotIntentInput } from '../lib/shotIntentRationale'
 import SaveDecisionMemoryModal from './SaveDecisionMemoryModal'
 import DirectorDebatePanel from './DirectorDebatePanel'
 import { useTasteMemory } from '../hooks/useTasteMemory'
@@ -47,6 +49,7 @@ type ScreeningCinematicShowcaseProps = {
   initialSessionTasteCleared?: boolean
   // Emotional intelligence signals
   tensionTrend?: string
+  shot?: ShotIntentInput | null
   onApproveCut: () => void
   onRequestRevision: () => void
   onCompareRevision: () => void
@@ -525,6 +528,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
           <div className="text-[11px] uppercase tracking-[0.16em] text-cyan-200">Co-Director Notes</div>
           <p className="mt-2 text-sm text-zinc-200">{creativeRead(props)}</p>
           <p className="mt-2 text-sm text-zinc-200">Why this shot matters: {whyThisShotMatters(props)}</p>
+          <ShotIntentRationaleCard shot={props.shot ?? null} testId="why-this-shot-matters-screening" />
           {props.tensionTrend ? (
             <p className="mt-2 text-xs text-zinc-400">{tensionTrendAdvisory(props.tensionTrend)}</p>
           ) : null}

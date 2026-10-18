@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Film, Trash2, X, Box } from 'lucide-react'
 import { useStudio } from '../context/StudioContext'
 import { createProject, deleteProject, listProjects, type PersistedProjectState } from '../lib/studioApi'
+import { getProceduralRoomStyle } from '../lib/proceduralBackdrops'
 
 // Lazy load AICrewPresence to improve initial load performance
 const LazyAICrewPresence = lazyLoad(
@@ -159,24 +160,70 @@ export default function StudioLobby() {
     }
   }
 
+  // Fee Fee Anne Studios · Atrium identity: violet ambient over obsidian.
+  const atrium = getProceduralRoomStyle('atrium')
+  const telemetry = {
+    films: projects.length,
+    inProduction: projects.filter((project) => getSceneCount(project) > 0).length,
+    scenes: projects.reduce((total, project) => total + getSceneCount(project), 0),
+  }
+  const FEATURED_PORTAL_TITLES = ['I Was Reborn', 'Neon Dreams']
+  const featuredPortals = FEATURED_PORTAL_TITLES.map((title) => ({
+    title,
+    project: projects.find((project) => (project.title || '').toLowerCase().includes(title.toLowerCase())) ?? null,
+  }))
+
+  function openPortal(portal: { title: string; project: PersistedProjectState | null }) {
+    if (portal.project) {
+      void handleSelectProject(portal.project.project_id)
+      return
+    }
+    setNewProjectTitle(portal.title)
+    setNewProjectDescription('')
+    setCreateError('')
+    setShowNewProjectModal(true)
+  }
+
   return (
     <StudioShell title="Studio Home" subtitle="Start a new film or continue working on an existing project.">
-      <div className="w-full overflow-visible bg-background">
+      <div className="w-full overflow-visible" style={{ background: atrium.background }}>
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8 text-zinc-100">
           
-          {/* Hero Section - Start a New Film */}
-          <section className="cinematic-panel p-8 text-center">
-            <h1 className="text-3xl font-bold tracking-wide text-zinc-100 mb-3">
+          {/* Panoramic welcome header — Atrium */}
+          <section
+            className="relative overflow-hidden rounded-2xl border border-white/10 p-8 text-center sm:p-10"
+            style={{
+              background: 'linear-gradient(180deg, rgba(12,8,28,0.85) 0%, rgba(4,6,13,0.9) 100%)',
+              boxShadow: `0 0 44px ${atrium.tokens.accent}22, 0 24px 70px rgba(0,0,0,0.55)`,
+            }}
+          >
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-px"
+              style={{ background: `linear-gradient(90deg, transparent, ${atrium.tokens.accent}aa, transparent)` }}
+            />
+            <p
+              className="text-[11px] font-semibold uppercase"
+              style={{ letterSpacing: '0.32em', color: atrium.tokens.accent }}
+            >
+              Fee Fee Anne Studios · Atrium
+            </p>
+            <h1 className="mt-3 text-3xl font-bold tracking-wide text-zinc-50 sm:text-4xl">
               Welcome to Studio
             </h1>
-            <p className="text-lg text-zinc-300 mb-6">
-              Create cinematic short films from script to screen
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-300">
+              Create cinematic short films from script to screen — step through a glowing portal or start a brand new film.
             </p>
             
             <button
               type="button"
               onClick={() => setShowNewProjectModal(true)}
-              className="inline-flex items-center gap-3 rounded-lg border-2 border-emerald-400/60 bg-emerald-500/20 px-8 py-4 text-lg font-bold uppercase tracking-[0.14em] text-emerald-50 shadow-[0_0_30px_rgba(16,185,129,0.25)] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_40px_rgba(16,185,129,0.35)]"
+              className="mt-6 inline-flex items-center gap-3 rounded-lg border-2 px-8 py-4 text-lg font-bold uppercase tracking-[0.14em] text-zinc-50 transition-all duration-200 hover:scale-[1.02]"
+              style={{
+                borderColor: `${atrium.tokens.accent}99`,
+                background: `${atrium.tokens.accentDeep}66`,
+                boxShadow: atrium.glow,
+              }}
             >
               <Plus size={24} />
               Start a New Film
@@ -185,6 +232,77 @@ export default function StudioLobby() {
             <p className="mt-3 text-sm text-zinc-400">
               Create a new project from scratch
             </p>
+          </section>
+
+          {/* Active production telemetry summary bar */}
+          <section
+            data-testid="atrium-telemetry"
+            aria-label="Active production telemetry"
+            className="grid grid-cols-3 gap-3 rounded-2xl border border-white/10 bg-[#0a0d18]/80 p-4 backdrop-blur-md sm:p-5"
+            style={{ boxShadow: `0 0 28px ${atrium.tokens.accent}18, 0 18px 55px rgba(0,0,0,0.5)` }}
+          >
+            {[
+              { label: 'Films on the slate', value: String(telemetry.films) },
+              { label: 'In production', value: String(telemetry.inProduction) },
+              { label: 'Scenes written', value: String(telemetry.scenes) },
+            ].map((metric) => (
+              <div key={metric.label} className="text-center">
+                <div className="text-2xl font-bold text-zinc-50" style={{ textShadow: `0 0 18px ${atrium.tokens.accent}66` }}>
+                  {loadingProjects ? '—' : metric.value}
+                </div>
+                <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                  {metric.label}
+                </div>
+              </div>
+            ))}
+          </section>
+
+          {/* Glowing project portal cards */}
+          <section
+            data-testid="atrium-portals"
+            aria-label="Featured project portals"
+            className="grid gap-4 md:grid-cols-2"
+          >
+            {featuredPortals.map((portal) => {
+              const sceneCount = portal.project ? getSceneCount(portal.project) : 0
+              return (
+                <button
+                  key={portal.title}
+                  type="button"
+                  data-testid={`atrium-portal-${portal.title.toLowerCase().replace(/\s+/g, '-')}`}
+                  onClick={() => openPortal(portal)}
+                  className="group relative overflow-hidden rounded-2xl border p-6 text-left backdrop-blur-md transition-all duration-200 hover:scale-[1.01]"
+                  style={{
+                    borderColor: `${atrium.tokens.accent}55`,
+                    background: 'linear-gradient(160deg, rgba(16,10,36,0.92) 0%, rgba(4,6,13,0.94) 100%)',
+                    boxShadow: `0 0 30px ${atrium.tokens.accent}2e, 0 18px 55px rgba(0,0,0,0.5)`,
+                  }}
+                >
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-8 top-0 h-px"
+                    style={{ background: `linear-gradient(90deg, transparent, ${atrium.tokens.accent}, transparent)` }}
+                  />
+                  <p
+                    className="text-[10px] font-semibold uppercase"
+                    style={{ letterSpacing: '0.28em', color: atrium.tokens.accent }}
+                  >
+                    {portal.project ? 'Now showing' : 'Open portal'}
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold tracking-wide text-zinc-50">
+                    {portal.title}
+                  </h2>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    {portal.project
+                      ? `${sceneCount} ${sceneCount === 1 ? 'scene' : 'scenes'} on the slate — step in to continue.`
+                      : 'Not yet on the slate — open this portal to start the film.'}
+                  </p>
+                  <span className="mt-4 inline-block text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-200 opacity-70 transition-opacity group-hover:opacity-100">
+                    {portal.project ? 'Enter portal →' : 'Create this film →'}
+                  </span>
+                </button>
+              )
+            })}
           </section>
 
           {/* Existing Projects */}
@@ -294,6 +412,9 @@ export default function StudioLobby() {
             <div className="mb-6" />
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {[
+                { title: 'Gate', desc: 'Project intake and greenlight dossier', to: '/studio/gate', color: 'violet' },
+                { title: 'Page', desc: 'Script development and scene writing', to: '/studio/page', color: 'rose' },
+                { title: 'Board', desc: 'Visual storyboarding and shot wall', to: '/studio/board', color: 'emerald' },
                 { title: "Writer's Room", desc: 'Draft and manage your script', to: '/studio/writers-room', color: 'cyan' },
                 { title: 'Storyboard', desc: 'Review scenes and visuals', to: '/studio/previs', color: 'amber' },
                 { title: 'Scenes', desc: 'Track scene production', to: '/studio/production-board', color: 'purple' },

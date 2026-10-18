@@ -36,7 +36,9 @@ from app.models.script_intelligence import SoundAdvisory
 from app.models.crew import AgentRole
 from app.models.crew_intelligence import CrewEvidenceRef, CrewReasoningType
 from app.services.ambient_audio_service import ambient_audio_service
-from app.services.dialogue_voice_service import dialogue_voice_service
+# NOTE: dialogue_voice_service import removed (Phase 3 dialogue authority).
+# Its build_dialogue_lines output was fabricated placeholder text and must
+# never become production dialogue. See app/services/dialogue_authority.py.
 from app.services.project_store import project_store
 from app.services.stability import StateError, ValidationError, elapsed_ms, log_stage_event, start_timer
 
@@ -286,10 +288,41 @@ class PerformanceAudioIntelligenceService:
             from app.services.audio_pipeline_service import audio_pipeline_service
         except Exception as exc:
             raise StateError("Audio pipeline service unavailable", stage="performance_audio_generate", metadata={"error": str(exc)}) from exc
+        from app.services.generation_contract import freeze_dialogue_handoff
+
+        if plan.scope == "shot":
+            if not plan.scene_id or not plan.shot_id:
+                raise StateError("Shot-scoped audio plans require scene and shot identity", stage="performance_audio_generate")
+            dialogue_handoff = freeze_dialogue_handoff(
+                scene_id=plan.scene_id,
+                shot_id=plan.shot_id,
+                lines=request.dialogue_lines,
+            )
+            from app.services.dialogue_authority import is_placeholder_dialogue
+
+            if any(is_placeholder_dialogue(str(row.get("text") or "")) for row in request.dialogue_lines):
+                raise StateError("Performance plan contains placeholder dialogue", stage="performance_audio_generate")
+            audio_scene_id = plan.shot_id
+            dialogue_shot_id = plan.shot_id
+        else:
+            if not plan.scene_id:
+                raise StateError("Scene-scoped audio plans require scene identity", stage="performance_audio_generate")
+            dialogue_handoff = freeze_dialogue_handoff(
+                scene_id=plan.scene_id,
+                shot_id=plan.scene_id,
+                lines=request.dialogue_lines,
+            )
+            from app.services.dialogue_authority import is_placeholder_dialogue
+
+            if any(is_placeholder_dialogue(str(row.get("text") or "")) for row in request.dialogue_lines):
+                raise StateError("Performance plan contains placeholder dialogue", stage="performance_audio_generate")
+            audio_scene_id = plan.scene_id
+            dialogue_shot_id = plan.scene_id
+
         result = await audio_pipeline_service.generate_full_pipeline(
-            scene_id=request.scene_id or "",
+            scene_id=audio_scene_id,
             project_id=project_id,
-            scene_text="\n".join(line.get("text", "") for line in request.dialogue_lines),
+            scene_text="\n".join(line.get("text", "") for line in request.dialogue_lines) if request.dialogue_lines else "",
             mood=request.mood,
             score_notes=request.score_notes,
             ambient_notes=request.ambient_notes,
@@ -299,6 +332,10 @@ class PerformanceAudioIntelligenceService:
             video_path=None,
             estimated_duration_seconds=request.estimated_duration_seconds or 12.0,
             dialogue_lines=request.dialogue_lines,
+            dialogue_handoff=dialogue_handoff,
+            narrative_audio=True,
+            dialogue_scene_id=plan.scene_id,
+            dialogue_shot_id=dialogue_shot_id,
             scene_context={"source_plan_id": plan_id, **(options or {})},
         )
         result["plan_id"] = plan_id
@@ -710,9 +747,30 @@ class PerformanceAudioIntelligenceService:
         if not scene_id:
             scene_id = "scene_001"
         raw_lines = self._structured_dialogue(scene, scene_id)
+        from app.services.dialogue_authority import canonical_dialogue_lines
+
+        if raw_lines:
+            for row in raw_lines:
+                if row.get("scene_id") not in (None, "", scene_id):
+                    raise ValidationError("Structured performance dialogue belongs to another scene", stage="performance_audio_dialogue")
+                if shot_id and row.get("shot_id") not in (None, "", shot_id):
+                    raise ValidationError("Structured performance dialogue belongs to another shot", stage="performance_audio_dialogue")
+            raw_lines = canonical_dialogue_lines(
+                None,
+                raw_lines,
+                scene_id=scene_id,
+            )
+            if not raw_lines and scene.get("dialogue_lines"):
+                raise ValidationError("Structured performance dialogue contains no canonical lines", stage="performance_audio_dialogue")
         if not raw_lines:
-            generated = dialogue_voice_service.build_dialogue_lines([{"scene_id": scene_id, **scene}], [profile.model_dump(mode="json") for profile in profiles], self._context_bundle(performance_context))
-            raw_lines = [line.model_dump(mode="json") for line in generated]
+            # Dialogue-authority boundary: absent structured lines are derived
+            # deterministically from screenplay text; advisory performance
+            # services never supply dialogue text.
+            raw_lines = canonical_dialogue_lines(
+                scene,
+                scene_id=scene_id,
+                characters=[profile.character_name for profile in profiles],
+            )
         profile_by_name = {profile.character_name.lower(): profile for profile in profiles}
         profile_by_id = {profile.character_id: profile for profile in profiles}
         cues: list[DialoguePerformanceCue] = []

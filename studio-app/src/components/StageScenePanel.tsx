@@ -4,6 +4,7 @@ import {
   applySceneStaging,
   type StageSceneShotProposal,
 } from '../lib/studioApi'
+import CameraFrustumGizmo, { type CameraFrustumParams } from './CameraFrustumGizmo'
 
 const STAGING_FIELDS = [
   'action', 'camera_angle', 'lens_language', 'blocking',
@@ -34,6 +35,9 @@ export default function StageScenePanel({ projectId, sceneId, onApplied }: Props
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [proposals, setProposals] = useState<StageSceneShotProposal[] | null>(null)
+  // Live camera frustum params steered by the gizmo. Local preview state —
+  // staging apply below never sends these; the render step owns its inputs.
+  const [frustum, setFrustum] = useState<CameraFrustumParams>({ fov: 48, tilt: 8 })
 
   const disabled = !sceneId || loading || applying
 
@@ -105,6 +109,13 @@ export default function StageScenePanel({ projectId, sceneId, onApplied }: Props
           {loading ? 'Staging…' : 'Stage Scene (AI)'}
         </button>
       </div>
+
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs text-zinc-400">Camera frustum gizmo · fov {frustum.fov}° · tilt {frustum.tilt}°</summary>
+        <div className="mt-2">
+          <CameraFrustumGizmo initial={frustum} onChange={setFrustum} />
+        </div>
+      </details>
 
       {error && (
         <div className="mt-2 rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">

@@ -331,7 +331,7 @@ export default function StudioLanding() {
                   const projectId = activeProjectId || (overview?.projects?.[0]?.project_id) || (project?.project_id)
                   if (projectId) {
                     await setActiveProject(projectId)
-                    navigate(`/studio/screening-room?project_id=${projectId}`)
+                    navigate(`/studio/overview?project_id=${projectId}`)
                   } else {
                     navigate('/studio')
                   }

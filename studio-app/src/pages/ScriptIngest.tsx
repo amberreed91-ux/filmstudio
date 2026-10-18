@@ -11,13 +11,17 @@ interface RenderProvider {
   name: string
   status: string
   is_simulated: boolean
+  enabled?: boolean
 }
 
+// Offline fallback while the live provider catalog (GET /api/f51/studio/render/providers)
+// is unreachable. Kept minimal and honest — mirrors the backend's registered
+// cloud providers plus the demo simulation; API-key providers default to
+// unavailable here because the live catalog is what would prove otherwise. The
+// live catalog (shared with PrevisRoom through studioApi) always wins on load.
 const DEFAULT_PROVIDERS: RenderProvider[] = [
-  { provider_id: 'runway', name: 'Runway', status: 'available', is_simulated: false },
   { provider_id: 'simulation', name: 'Simulation (Demo)', status: 'available', is_simulated: true },
-  { provider_id: 'openai', name: 'OpenAI', status: 'available', is_simulated: false },
-  { provider_id: 'replicate', name: 'Replicate', status: 'available', is_simulated: false },
+  { provider_id: 'runway', name: 'Runway', status: 'unavailable', is_simulated: false },
 ]
 
 export default function ScriptIngest() {
@@ -38,18 +42,24 @@ export default function ScriptIngest() {
     script_text: '',
   })
 
-  // Load providers on mount
+  // Load providers on mount — the backend catalog is the single source of truth
+  // shared with PrevisRoom (see selectableRenderProviders in studioApi).
   useEffect(() => {
     const loadProviders = async () => {
       try {
         const data = await getRenderProviders()
         if (data && data.length > 0) {
           setProviders(data)
-          const runway = data.find((provider) => provider.provider_id === 'runway')
-          if (runway) {
-            setFormData((prev) => ({ ...prev, render_provider: 'runway' }))
-          } else if (data[0]?.provider_id) {
-            setFormData((prev) => ({ ...prev, render_provider: data[0].provider_id }))
+          // Default to the best usable provider: a ready hosted/local provider,
+          // else the demo simulation. Never default to a known-unavailable one.
+          const usable = data.find((provider) =>
+            provider.provider_mode === 'local' ||
+            (!provider.is_simulated && provider.ready_for_hosted_generation)
+          )
+          const demo = data.find((provider) => provider.is_simulated)
+          const chosen = usable || demo || data[0]
+          if (chosen?.provider_id) {
+            setFormData((prev) => ({ ...prev, render_provider: chosen.provider_id }))
           }
         }
       } catch {
@@ -259,6 +269,7 @@ export default function ScriptIngest() {
                     <option key={provider.provider_id} value={provider.provider_id}>
                       {provider.name}
                       {provider.is_simulated ? ' (Demo)' : ''}
+                      {provider.enabled === false && !provider.is_simulated ? ' — disabled' : ''}
                     </option>
                   ))}
                 </select>

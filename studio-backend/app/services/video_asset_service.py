@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import logging
 import uuid
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from app.models.video_assets import VideoAsset
+from app.services.stability import PersistenceError, ValidationError, elapsed_ms, log_stage_event, start_timer
+
+
+logger = logging.getLogger("video-asset-service")
 
 
 VALID_SOURCE_TYPES = {"uploaded_file", "generated_output", "external_url", "local_file"}
@@ -213,6 +219,258 @@ class VideoAssetService:
         if self._storage_supports("get_video_asset"):
             return self._storage.get_video_asset(asset_id)
         return self._fallback_assets.get(asset_id)
+
+    def find_generated_output_for_render_job(
+        self,
+        *,
+        project_id: str,
+        render_job_id: str,
+        provider_task_id: str,
+        source_url: str,
+    ) -> Optional[VideoAsset]:
+        """Find an existing generated asset by its exact render/task/output provenance."""
+        for asset in self.list_assets_for_project(project_id):
+            metadata = asset.metadata if isinstance(asset.metadata, dict) else {}
+            if (
+                asset.project_id == project_id
+                and asset.source_type == "generated_output"
+                and asset.status in {"available", "analyzed"}
+                and asset.source_url == source_url
+                and metadata.get("render_job_id") == render_job_id
+                and metadata.get("provider_task_id") == provider_task_id
+            ):
+                return asset
+        return None
+
+    def find_generated_image_for_execution(
+        self,
+        *,
+        project_id: str,
+        execution_id: str,
+        provider_task_id: str,
+        source_url: str,
+        image_render_id: str,
+        scene_id: str,
+        shot_id: str,
+    ) -> Optional[VideoAsset]:
+        """Find a registered image by its exact project, task, execution, and output identity."""
+        for asset in self.list_assets_for_project(project_id):
+            metadata = asset.metadata if isinstance(asset.metadata, dict) else {}
+            if (
+                asset.project_id == project_id
+                and asset.source_type == "generated_output"
+                and asset.status in {"available", "analyzed"}
+                and asset.source_url == source_url
+                and metadata.get("media_type") == "image"
+                and metadata.get("execution_id") == execution_id
+                and metadata.get("provider_task_id") == provider_task_id
+                and metadata.get("association_source") == "runway_router_polled_task"
+                and metadata.get("image_render_id") == image_render_id
+                and metadata.get("scene_id") == scene_id
+                and metadata.get("shot_id") == shot_id
+            ):
+                return asset
+        return None
+
+    def register_generated_image_for_execution(
+        self,
+        *,
+        project_id: str,
+        image_render_id: str,
+        scene_id: str,
+        shot_id: str,
+        execution_id: str,
+        provider_task_id: str,
+        source_url: str,
+        output_identity: Dict[str, Any],
+        reference_assets: List[Any] | None = None,
+        generation_context_id: str | None = None,
+    ) -> VideoAsset:
+        """Persist a Router image through the existing generated-asset registry.
+
+        The polled provider task is the image execution identity; no synthetic
+        RenderJob is created for this synchronous image-generation path.
+        """
+        timer = start_timer()
+        clean_project_id = str(project_id or "").strip()
+        clean_render_id = str(image_render_id or "").strip()
+        clean_scene_id = str(scene_id or "").strip()
+        clean_shot_id = str(shot_id or "").strip()
+        clean_execution_id = str(execution_id or "").strip()
+        clean_task_id = str(provider_task_id or "").strip()
+        clean_source_url = str(source_url or "").strip()
+        try:
+            if not all((clean_project_id, clean_render_id, clean_scene_id, clean_shot_id, clean_execution_id, clean_task_id, clean_source_url)):
+                raise ValidationError(
+                    "Runway image registration requires project, execution, shot, task, and output identity",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router"},
+                )
+            identity = output_identity if isinstance(output_identity, dict) else {}
+            if (
+                str(identity.get("provider_task_id") or "").strip() != clean_task_id
+                or str(identity.get("output_url") or "").strip() != clean_source_url
+                or str(identity.get("association_source") or "").strip() != "runway_router_polled_task"
+            ):
+                raise ValidationError(
+                    "Runway image registration provenance does not match the polled task and output",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router"},
+                )
+            if self._storage is None or not all(
+                self._storage_supports(method)
+                for method in (
+                    "get_project",
+                    "save_video_asset",
+                    "get_video_asset",
+                    "list_video_assets_for_project",
+                    "list_video_assets",
+                )
+            ):
+                raise PersistenceError(
+                    "Durable image asset storage is unavailable",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router"},
+                )
+            try:
+                project = self._storage.get_project(clean_project_id)
+            except Exception as exc:
+                raise PersistenceError(
+                    "Image asset project lookup failed",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router", "cause": type(exc).__name__},
+                ) from exc
+            if project is None:
+                raise ValidationError(
+                    "Runway image cannot be registered to a missing project",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router"},
+                )
+
+            clean_context_id = str(generation_context_id or "").strip()
+            matching_task_rows = []
+            for asset in self.list_assets(source_type="generated_output"):
+                metadata = asset.metadata if isinstance(asset.metadata, dict) else {}
+                if (
+                    asset.source_type == "generated_output"
+                    and metadata.get("media_type") == "image"
+                    and metadata.get("provider") == "runway_router"
+                    and metadata.get("provider_task_id") == clean_task_id
+                ):
+                    matching_task_rows.append(asset)
+            existing = self.find_generated_image_for_execution(
+                project_id=clean_project_id,
+                execution_id=clean_execution_id,
+                provider_task_id=clean_task_id,
+                source_url=clean_source_url,
+                image_render_id=clean_render_id,
+                scene_id=clean_scene_id,
+                shot_id=clean_shot_id,
+            )
+            if existing is not None:
+                existing_metadata = existing.metadata if isinstance(existing.metadata, dict) else {}
+                if (
+                    existing_metadata.get("reference_assets") != deepcopy(reference_assets or [])
+                    or str(existing_metadata.get("generation_context_id") or "").strip() != clean_context_id
+                ):
+                    raise ValidationError(
+                        "Runway image task was already registered with different reference or generation-context provenance",
+                        stage="image_asset_registration",
+                        metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router"},
+                    )
+                return existing
+            if matching_task_rows:
+                raise ValidationError(
+                    "Runway image task is already registered to different project, execution, shot, or output provenance",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router"},
+                )
+
+            metadata: Dict[str, Any] = {
+                "media_type": "image",
+                "provider": "runway_router",
+                "scene_id": clean_scene_id,
+                "shot_id": clean_shot_id,
+                "image_render_id": clean_render_id,
+                "execution_id": clean_execution_id,
+                "provider_task_id": clean_task_id,
+                "runway_task_id": clean_task_id,
+                "association_source": "runway_router_polled_task",
+                "output_identity": {
+                    "provider_task_id": clean_task_id,
+                    "output_url": clean_source_url,
+                    "association_source": "runway_router_polled_task",
+                },
+                "reference_assets": deepcopy(reference_assets or []),
+            }
+            if clean_context_id:
+                metadata["generation_context_id"] = clean_context_id
+            try:
+                registered = self.register_generated_output(
+                    project_id=clean_project_id,
+                    source_url=clean_source_url,
+                    title=f"Runway Router image {clean_scene_id} / {clean_shot_id}",
+                    description="Generated image registered from its matching Runway Router task",
+                    metadata=metadata,
+                )
+            except Exception as exc:
+                if isinstance(exc, PersistenceError):
+                    raise
+                if isinstance(exc, ValidationError):
+                    raise
+                raise PersistenceError(
+                    "Durable image asset registration failed",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router", "cause": type(exc).__name__},
+                ) from exc
+            try:
+                persisted = self.get_asset(registered.asset_id)
+            except Exception as exc:
+                raise PersistenceError(
+                    "Durable image asset registration could not be reloaded",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router", "cause": type(exc).__name__},
+                ) from exc
+            persisted_metadata = persisted.metadata if persisted and isinstance(persisted.metadata, dict) else {}
+            if (
+                persisted is None
+                or persisted.asset_id != registered.asset_id
+                or persisted.project_id != clean_project_id
+                or persisted.source_type != "generated_output"
+                or persisted.status not in {"available", "analyzed"}
+                or persisted.source_url != clean_source_url
+                or persisted_metadata.get("media_type") != "image"
+                or persisted_metadata.get("execution_id") != clean_execution_id
+                or persisted_metadata.get("provider_task_id") != clean_task_id
+                or persisted_metadata.get("scene_id") != clean_scene_id
+                or persisted_metadata.get("shot_id") != clean_shot_id
+                or persisted_metadata.get("association_source") != "runway_router_polled_task"
+                or persisted_metadata.get("image_render_id") != clean_render_id
+                or persisted_metadata.get("generation_context_id") != (str(generation_context_id or "").strip() or None)
+                or persisted_metadata.get("reference_assets") != deepcopy(reference_assets or [])
+            ):
+                raise PersistenceError(
+                    "Durable image asset registration could not be verified",
+                    stage="image_asset_registration",
+                    metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router"},
+                )
+            return persisted
+        except (ValidationError, PersistenceError):
+            raise
+        except Exception as exc:
+            raise PersistenceError(
+                "Durable image asset registration failed",
+                stage="image_asset_registration",
+                metadata={"project_id": clean_project_id, "job_id": clean_task_id, "provider": "runway_router", "cause": type(exc).__name__},
+            ) from exc
+        finally:
+            log_stage_event(
+                project_id=clean_project_id,
+                job_id=clean_task_id,
+                provider="runway_router",
+                stage="image_asset_registration",
+                duration_ms=elapsed_ms(timer),
+            )
 
     def list_assets_for_project(self, project_id: str) -> List[VideoAsset]:
         if not self._storage:

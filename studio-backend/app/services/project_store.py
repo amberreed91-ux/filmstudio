@@ -166,6 +166,16 @@ class ProjectStore:
             out.sort(key=lambda row: row.get("updated_at", ""), reverse=True)
             return out
 
+    def read_existing_project_raw(self, project_id: str) -> Optional[ProjectState]:
+        """Return stored JSON as-is; protected callers use it as a revision witness."""
+        project_key = str(project_id or "").strip()
+        if not project_key:
+            return None
+        with self._lock:
+            payload = self._read()
+            raw = payload.get("projects", {}).get(project_key)
+            return deepcopy(raw) if isinstance(raw, dict) else None
+
     def get_project(self, project_id: str) -> Optional[ProjectState]:
         project_key = str(project_id or "").strip()
         if not project_key:

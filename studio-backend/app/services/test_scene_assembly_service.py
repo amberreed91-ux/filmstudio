@@ -6,7 +6,9 @@ from pathlib import Path
 
 from app.models import RenderJobInput, RenderJobModel, RenderJobOutput
 from app.services.audio_pipeline_service import TrackStatus
+from app.services.generation_contract import freeze_dialogue_handoff
 from app.services.scene_assembly_service import SceneAssemblyService
+from app.utils.helpers import derive_scene_id_from_shot_id
 from conftest import run_async
 
 
@@ -39,6 +41,9 @@ class FakeStorage:
 
     def list_take_choices(self, project_id, scene_id):
         return []
+
+    def get_delivery_manifest(self, project_id, scope):
+        return getattr(self, "manifest", None)
 
     def save_delivery_manifest(self, project_id, scope, payload):
         self.manifest = payload
@@ -107,6 +112,13 @@ def _job(
                 "dialogue_lines": [{"character": "MAYA", "text": f"Line for {shot_id}"}],
             },
         ),
+        metadata={
+            "creative_dialogue_handoff": freeze_dialogue_handoff(
+                scene_id=derive_scene_id_from_shot_id(shot_id),
+                shot_id=shot_id,
+                lines=[{"character": "MAYA", "text": f"Line for {shot_id}"}],
+            )
+        },
         output_payload=RenderJobOutput(asset_url=str(video)),
         created_at=created_at,
     )
@@ -208,6 +220,60 @@ def test_dialogue_overrun_stops_without_saving_or_freezing(tmp_path: Path):
         run_async(service.assemble_completed_scene(project_id='project_real', scene_id='scene_001', score_ambient_provider='none'))
     assert error.value.stage == 'scene_assembly_audio_timing'
     assert store.saved is None
+
+
+def test_changed_local_render_bytes_invalidate_scene_manifest_without_job_change(tmp_path: Path):
+    outputs_root = tmp_path / "outputs"
+    outputs_root.mkdir()
+    source_video = outputs_root / "scene_001_shot_001.mp4"
+    job = _job(tmp_path, "scene_001_shot_001", "red", "2026-01-01", create_video=True)
+    Path(job.output_payload.asset_url).replace(source_video)
+    job.output_payload.asset_url = f"file://{source_video}"
+    storage = FakeStorage([job])
+    service = SceneAssemblyService(
+        storage=storage,
+        audio_service=FakeAudio(tmp_path),
+        backend_root=tmp_path,
+        composed_root=tmp_path / "composed",
+    )
+    first = run_async(service.assemble_completed_scene(
+        project_id="project_real", scene_id="scene_001", score_ambient_provider="none"
+    ))
+    manifest_before = dict(storage.manifest)
+    previous_stat = source_video.stat()
+    _video(source_video, "blue")
+    import os
+
+    os.utime(source_video, ns=(previous_stat.st_atime_ns, previous_stat.st_mtime_ns))
+
+    second = run_async(service.assemble_completed_scene(
+        project_id="project_real", scene_id="scene_001", score_ambient_provider="none", overwrite=False
+    ))
+
+    assert second["status"] == "complete"
+    assert second["output_path"] != first["output_path"]
+    assert storage.manifest["source_media"] != manifest_before["source_media"]
+    assert storage.manifest["job_ids"] == [job.id]
+
+
+def test_source_media_change_during_assembly_preserves_previous_manifest(tmp_path: Path, monkeypatch):
+    import pytest
+    from app.services.stability import StateError
+
+    job = _job(tmp_path, "scene_001_shot_001", "red", "2026-01-01", create_video=True)
+    storage = FakeStorage([job])
+    previous = {"composed_url": "/static/previous.mp4"}
+    storage.manifest = previous
+    service = SceneAssemblyService(storage=storage, audio_service=FakeAudio(tmp_path), backend_root=tmp_path)
+    snapshots = iter([service.source_media_snapshot([(1, job)]), {"changed": {"sha256": "different"}}])
+    monkeypatch.setattr(service, "source_media_snapshot", lambda _jobs: next(snapshots))
+
+    with pytest.raises(StateError, match="rendered shot changed") as error:
+        run_async(service.assemble_completed_scene(
+            project_id="project_real", scene_id="scene_001", score_ambient_provider="none"
+        ))
+    assert error.value.stage == "scene_assembly_video_inputs"
+    assert storage.manifest == previous
 
 
 def test_recording_changed_during_assembly_keeps_previous_composition(tmp_path, monkeypatch):

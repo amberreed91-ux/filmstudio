@@ -112,8 +112,8 @@ def test_canonical_workflow_route_formats_ownership_errors(monkeypatch) -> None:
     assert response.json()["detail"]["stage"] == "workflow_ownership"
 
 
-@pytest.mark.parametrize("suffix,method", [("previs/generate", "generate_previs"), ("renders", "render_production_package"), ("revision/render", "render_revision")])
-@pytest.mark.parametrize("provider", [None, "openrouter-video", "simulated"])
+@pytest.mark.parametrize("suffix,method", [("renders", "render_production_package"), ("revision/render", "render_revision")])
+@pytest.mark.parametrize("provider", [None, "runway", "simulated"])
 def test_provider_selection_reaches_service(monkeypatch, suffix, method, provider):
     fake = RouteWorkflowService()
     calls = []
@@ -129,7 +129,70 @@ def test_provider_selection_reaches_service(monkeypatch, suffix, method, provide
     assert calls[0][1]["provider"] == provider
 
 
+@pytest.mark.parametrize("provider", [None, "simulated"])
+def test_previs_provider_selection_reaches_service(monkeypatch, provider):
+    # Checkpoint 5 previs is simulated-only: omission and "simulated" reach
+    # the service; production render / revision keep full provider behavior.
+    fake = RouteWorkflowService()
+    calls = []
+    async def operation(run_id, **kwargs):
+        calls.append((run_id, kwargs))
+        return fake.run
+    setattr(fake, "generate_previs", operation)
+    monkeypatch.setattr(workflow_routes, "canonical_production_workflow_service", fake)
+    body = {} if provider is None else {"provider": provider}
+    response = TestClient(app).post("/api/f51/studio/production-threads/workflow-route-001/previs/generate", json=body)
+    assert response.status_code == 200, response.text
+    assert len(calls) == 1
+    assert calls[0][1]["provider"] == provider
+
+
+@pytest.mark.parametrize("provider", ["runway", "runway_router", "runway_direct"])
+def test_previs_non_simulated_provider_rejected_before_workflow_action(monkeypatch, provider):
+    # Fail-closed at the route: no service call, 4xx surface.
+    fake = RouteWorkflowService()
+    calls = []
+    async def operation(run_id, **kwargs):
+        calls.append((run_id, kwargs))
+        return fake.run
+    setattr(fake, "generate_previs", operation)
+    monkeypatch.setattr(workflow_routes, "canonical_production_workflow_service", fake)
+    response = TestClient(app).post(
+        "/api/f51/studio/production-threads/workflow-route-001/previs/generate",
+        json={"provider": provider},
+    )
+    assert response.status_code == 422
+    assert calls == []
+
+
 @pytest.mark.parametrize("provider", ["", "   ", "runway video"])
 def test_invalid_provider_rejected_before_workflow_action(provider):
     response = TestClient(app).post("/api/f51/studio/production-threads/workflow-route-001/renders", json={"provider": provider})
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "suffix,method",
+    [
+        ("previs/generate", "generate_previs"),
+        ("renders", "render_production_package"),
+        ("revision/render", "render_revision"),
+    ],
+)
+@pytest.mark.parametrize("provider", ["openrouter", "openrouter-video"])
+def test_retired_video_provider_rejected_by_workflow_route_before_action(monkeypatch, suffix, method, provider):
+    fake = RouteWorkflowService()
+    calls = []
+
+    async def operation(run_id, **kwargs):
+        calls.append((run_id, kwargs))
+        return fake.run
+
+    setattr(fake, method, operation)
+    monkeypatch.setattr(workflow_routes, "canonical_production_workflow_service", fake)
+    response = TestClient(app).post(
+        f"/api/f51/studio/production-threads/workflow-route-001/{suffix}",
+        json={"provider": provider},
+    )
+    assert response.status_code == 422
+    assert calls == []

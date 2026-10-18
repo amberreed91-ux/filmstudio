@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.data.storage import DatabaseStorage
-from app.services.reference_asset_service import reference_asset_service
+from app.services.reference_asset_service import ReferenceAssetService, reference_asset_service
 from app.routes.reference_assets import router
 
 
@@ -303,3 +303,172 @@ def test_route_get_list_empty_for_project_with_no_assets(tmp_path: Path):
     body = resp.json()
     assert body["count"] == 0
     assert body["reference_assets"] == []
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# (d) Browser-usable image URLs — broken reference image regression
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# The Character training UI renders ReferenceAsset.image_url directly (through
+# buildStudioApiUrl), so the GET list endpoint must only return URLs the
+# frontend can actually fetch: served namespaces pointing at real files, or
+# absolute http(s) URLs. Historical DB rows carried /media/<file>.png URLs — a
+# namespace the backend never mounted — which rendered as broken images.
+
+
+def client_post_confirm(project_id: str, ref_id: str, image_url: str):
+    """Confirm a reference asset through the API route (TestClient required)."""
+    app = FastAPI()
+    app.include_router(router)
+    confirm_client = TestClient(app)
+    return confirm_client.post(
+        f"/api/f51/studio/projects/{project_id}/reference-assets",
+        json={
+            "ref_id": ref_id,
+            "kind": "character_face",
+            "image_url": image_url,
+            "source_shot_id": None,
+            "project_id": project_id,
+        },
+    )
+
+
+def _write_png(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # 1x1 PNG (smallest valid image), served byte-for-byte by StaticFiles.
+    path.write_bytes(
+        bytes.fromhex(
+            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+            "0000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+        )
+    )
+
+
+def test_list_assets_hides_legacy_unserved_media_rows(tmp_path: Path):
+    """Legacy /media/... rows (unserved namespace, file gone) are not returned.
+
+    The browser previously received /media/vt_character_face.png → 404 → broken
+    image. Such rows must never reach the frontend as image URLs. The DB row is
+    untouched; only the listing view omits it.
+    """
+    db = DatabaseStorage(str(tmp_path / "view.db"))
+    db.save_reference_asset(
+        {
+            "ref_id": "ref_legacy_media",
+            "project_id": "proj-view",
+            "kind": "character_face",
+            "image_url": "/media/vt_character_face.png",
+        }
+    )
+    service = ReferenceAssetService(storage=db)
+    assets = service.list_assets("proj-view")
+    assert assets == []
+    # Storage still holds the row (view-level hiding, not data deletion).
+    assert db.get_reference_asset("ref_legacy_media") is not None
+
+
+def test_list_assets_repairs_legacy_media_rows_when_file_is_served(tmp_path: Path, monkeypatch):
+    """A /media/<file>.png row whose file exists under the served outputs tree
+    is repaired to its browser URL /outputs/reference-assets/<file>."""
+    from app.services import reference_asset_service as service_module
+
+    outputs_dir = tmp_path / "outputs"
+    _write_png(outputs_dir / "reference-assets" / "repaired_face.png")
+    monkeypatch.setattr(service_module, "_backend_outputs_dir", lambda: outputs_dir)
+
+    db = DatabaseStorage(str(tmp_path / "view.db"))
+    db.save_reference_asset(
+        {
+            "ref_id": "ref_legacy_repairable",
+            "project_id": "proj-view",
+            "kind": "character_face",
+            "image_url": "/media/repaired_face.png",
+        }
+    )
+    service = ReferenceAssetService(storage=db)
+    assets = service.list_assets("proj-view")
+    assert len(assets) == 1
+    assert assets[0]["image_url"] == "/outputs/reference-assets/repaired_face.png"
+
+
+def test_list_assets_hides_outputs_urls_without_files(tmp_path: Path):
+    """/outputs/... URLs pointing at missing files would 404 in the browser."""
+    db = DatabaseStorage(str(tmp_path / "view.db"))
+    db.save_reference_asset(
+        {
+            "ref_id": "ref_missing_file",
+            "project_id": "proj-view",
+            "kind": "character_full",
+            "image_url": "/outputs/references/definitely-not-here.png",
+        }
+    )
+    service = ReferenceAssetService(storage=db)
+    assert service.list_assets("proj-view") == []
+
+
+def test_list_assets_keeps_http_urls_and_served_files(tmp_path: Path):
+    """Absolute http(s) URLs and existing /outputs files pass through untouched."""
+    db = DatabaseStorage(str(tmp_path / "view.db"))
+    db.save_reference_asset(
+        {
+            "ref_id": "ref_http",
+            "project_id": "proj-view",
+            "kind": "character_face",
+            "image_url": "https://cdn.example.com/maya.png",
+        }
+    )
+    db.save_reference_asset(
+        {
+            "ref_id": "ref_local_ok",
+            "project_id": "proj-view",
+            "kind": "environment",
+            "image_url": "/outputs/reference-assets/real.png",
+        }
+    )
+    service = ReferenceAssetService(storage=db)
+    assets = service.list_assets("proj-view")
+    urls = {a["ref_id"]: a["image_url"] for a in assets}
+    assert urls["ref_http"] == "https://cdn.example.com/maya.png"
+
+
+def test_route_list_returns_browser_usable_urls_and_they_serve_over_http(tmp_path: Path, monkeypatch):
+    """Full HTTP contract: create a reference whose file exists, GET the list
+    through the API route, then GET the image URL itself and require image
+    bytes — the exact path the browser takes for Character reference cards."""
+    from app.services import reference_asset_service as service_module
+
+    outputs_dir = tmp_path / "outputs"
+    _write_png(outputs_dir / "references" / "proj-view" / "face.png")
+    monkeypatch.setattr(service_module, "_backend_outputs_dir", lambda: outputs_dir)
+
+    db = DatabaseStorage(str(tmp_path / "route_db"))
+    with patch.object(reference_asset_service, "_storage", db):
+        confirm_resp = client_post_confirm(
+            "proj-view",
+            "ref_browser_face",
+            "/outputs/references/proj-view/face.png",
+        )
+    assert confirm_resp.status_code == 200
+
+    app = FastAPI()
+    app.include_router(router)
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/outputs", StaticFiles(directory=str(outputs_dir)), name="outputs")
+    client = TestClient(app)
+
+    with patch.object(reference_asset_service, "_storage", db):
+        list_resp = client.get("/api/f51/studio/projects/proj-view/reference-assets")
+    assert list_resp.status_code == 200
+    body = list_resp.json()
+    assert body["count"] == 1
+    image_url = body["reference_assets"][0]["image_url"]
+    # Browser-usable: a served absolute path, not a filesystem path or video id.
+    assert image_url.startswith("/outputs/")
+    assert image_url.endswith(".png")
+
+    # The URL survives a real HTTP request and returns the image.
+    img_resp = client.get(image_url)
+    assert img_resp.status_code == 200
+    assert img_resp.headers["content-type"].startswith("image/")
+    assert img_resp.content.startswith(b"\x89PNG")

@@ -6,8 +6,11 @@ from pathlib import Path
 import pytest
 
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+
 def _load_capture_module():
-    path = Path("scripts/verify_scene_pipeline_capture.py")
+    path = _BACKEND_ROOT / "scripts" / "verify_scene_pipeline_capture.py"
     spec = importlib.util.spec_from_file_location("verify_scene_pipeline_capture", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader

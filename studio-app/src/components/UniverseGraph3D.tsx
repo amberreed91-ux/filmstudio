@@ -161,6 +161,17 @@ function MapControls({ command }: { command: MapCommand }) {
 
 function GalaxyScene({ nodes, layoutNodes, relationships, selectedNodeId, onNodeClick, onNodeHover, active }: UniverseGraph3DProps & { active: boolean }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  // Force-directed constellation drift: the whole lore graph breathes as one
+  // body so character/location clusters read as a living constellation.
+  const drift = useRef<THREE.Group>(null)
+  useFrame(({ clock }, delta) => {
+    if (!active || !drift.current) return
+    const t = clock.getElapsedTime()
+    drift.current.rotation.z = Math.sin(t * 0.05) * 0.03
+    drift.current.rotation.y = Math.sin(t * 0.07) * 0.02
+    drift.current.position.y = Math.sin(t * 0.3) * 0.05
+    void delta
+  })
   const positions = useMemo(() => {
     const result = new Map<string, Position>()
     const ordered = [...(layoutNodes || nodes)].sort((a, b) => a.node_id.localeCompare(b.node_id))
@@ -186,6 +197,7 @@ function GalaxyScene({ nodes, layoutNodes, relationships, selectedNodeId, onNode
     <directionalLight position={[-4, 6, 8]} intensity={2.4} color="#dfedff" />
     <directionalLight position={[6, -4, 2]} intensity={0.9} color="#d9ad75" />
     <StarDepth active={active} />
+    <group ref={drift} data-testid="universe-constellation-drift">
     {relationships.map((relationship) => {
       const start = positions.get(relationship.from_node)
       const end = positions.get(relationship.to_node)
@@ -193,12 +205,13 @@ function GalaxyScene({ nodes, layoutNodes, relationships, selectedNodeId, onNode
       const highlighted = relationship.from_node === focusId || relationship.to_node === focusId
       return <RelationshipPath key={relationship.relationship_id} start={start} end={end} highlighted={highlighted} subdued={Boolean(focusId) && !highlighted} />
     })}
-    {nodes.map((node) => <StoryNode key={node.node_id} node={node} position={positions.get(node.node_id) || [0, 0, 0]}
+    {nodes.map((node) => <StoryNode key={node.node_id} node={node} position={positions.get(node.node_id) || [0, 0, 0] as [number, number, number]}
       selected={node.node_id === selectedNodeId} connected={connectedIds.has(node.node_id)}
       subdued={Boolean(focusId) && focusId !== node.node_id && !connectedIds.has(node.node_id)}
       showLabel={!focusId || focusId === node.node_id || connectedIds.has(node.node_id)}
       onSelect={() => onNodeClick(node)} onHover={(hovered) => { setHoveredId(hovered ? node.node_id : null); onNodeHover(hovered ? node : null) }} />)}
-  </>
+    </group>
+  </> 
 }
 
 function supportsWebGL() {

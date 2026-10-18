@@ -9,6 +9,8 @@ import pytest
 
 from app.data.storage import DatabaseStorage
 from app.models import RenderJobModel, RenderJobInput, RenderJobOutput, StudioProject
+from test_canonical_film_delivery_handoff import seed_cut
+from app.services.generation_contract import freeze_dialogue_handoff
 from app.services.audio_pipeline_service import AudioPipelineService, TrackStatus
 from app.services.scene_assembly_service import SceneAssemblyService
 from app.services.film_delivery_service import FilmDeliveryService
@@ -62,6 +64,7 @@ def test_local_audio_mixed_shot_sizes_export_approval_and_reopen(tmp_path):
     project_id = 'offline_film'
     project = {'project_id':project_id,'title':'Offline delivery fixture','execution_summary':{'scenes':[{'scene_id':'scene_001'}]}}
     store.save_project(StudioProject(**project))
+    seed_cut(store, project_id, ['scene_001'])
     audio = _audio(tmp_path)
     supplied = audio.output_base / project_id / 'scene_001' / 'pre_supplied'
     supplied.mkdir(parents=True)
@@ -75,12 +78,14 @@ def test_local_audio_mixed_shot_sizes_export_approval_and_reopen(tmp_path):
         command+=['-c:a','aac','-shortest'] if number==2 else ['-an']
         _run(command+[str(path)])
         shot=f'scene_001_shot_{number:03d}'
-        store.save_job(RenderJobModel(id=f'job-{number}',project_id=project_id,shot_id=shot,provider='simulated',status='complete',created_at=f'2026-01-01T00:00:0{number}',input_payload=RenderJobInput(shot_id=shot,prompt='Local verification fixture',parameters={'dialogue_lines':[{'character':'Maya','text':'Must never invoke a voice provider'}]}),output_payload=RenderJobOutput(asset_url=str(path))))
+        lines = [{'character':'Maya','text':'Must never invoke a voice provider'}]
+        store.save_job(RenderJobModel(id=f'job-{number}',project_id=project_id,shot_id=shot,provider='simulated',status='complete',created_at=f'2026-01-01T00:00:0{number}',input_payload=RenderJobInput(shot_id=shot,prompt='Local verification fixture',parameters={'dialogue_lines':lines}),metadata={'creative_dialogue_handoff':freeze_dialogue_handoff(scene_id='scene_001',shot_id=shot,lines=lines)},output_payload=RenderJobOutput(asset_url=str(path))))
     assembly = SceneAssemblyService(storage=store,audio_service=audio,backend_root=tmp_path)
     service = FilmDeliveryService(storage=store,projects=SimpleNamespace(load=lambda _:project),scenes=assembly,backend_root=tmp_path)
+    run_async(assembly.assemble_completed_scene(project_id=project_id,scene_id='scene_001',allow_audio_generation=False))
     result=run_async(service.assemble(project_id))
     audio.generate_score_ambient.assert_not_awaited()
-    final=tmp_path / result.film_url.split('8010/')[1]
+    final=tmp_path / result.film_url.lstrip('/')
     streams=SceneAssemblyService._probe_streams(final)
     video=next(row for row in streams if row['codec_type']=='video')
     assert (video['width'],video['height']) == (320,180)
@@ -93,36 +98,67 @@ def test_local_audio_mixed_shot_sizes_export_approval_and_reopen(tmp_path):
     for start,channel in [(.3,0),(1.3,2)]:
         frame=np.frombuffer(_run(['ffmpeg','-v','error','-ss',str(start),'-i',str(final),'-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','-']),dtype=np.uint8).reshape(180,320,3)
         assert frame[90,160,channel]>200
-    screening=ScreeningRoomService(store,SimpleNamespace(list_jobs=lambda _:store.list_jobs(project_id=project_id)), delivery_service=service)
+    from app.models.production_acceptance import ProductionAcceptanceRunRequest
+    from app.services.production_acceptance_service import ProductionAcceptanceService
+    from app.services.short_film_review_service import ShortFilmReviewService
+    review_service=ShortFilmReviewService(storage=store)
+    review=review_service.create_review(project_id,result.film_url,reviewer='Creator')
+    review_service.update_review_decision(review.review_id,'approved',reviewer='Creator')
+    # The creator decision binds to this exact output only. A fresh acceptance
+    # run is required before Screening can select it; reassembling would mint a
+    # new output URL that this review does not cover.
+    package=store.get_final_short_film_package(result.package_id)
+    assert package.project_id==project_id and package.review_id==review.review_id and package.review_decision=='approved'
+    acceptance=ProductionAcceptanceService(storage=store)
+    acceptance._outputs_root=output_root
+    report=run_async(acceptance.run_acceptance(project_id,ProductionAcceptanceRunRequest(package_id=result.package_id,include_advisory_checks=False)))
+    assert report.disposition=='ready_for_creator_approval'
+    assert report.package_id==result.package_id
+    assert acceptance.evaluate_package_approval_guard(result.package_id,desired_status='approved').allowed
+    screening=ScreeningRoomService(store,SimpleNamespace(list_jobs=lambda _:store.list_jobs(project_id=project_id)), delivery_service=service, backend_root=tmp_path)
+    screening.production_acceptance_service._outputs_root=output_root
+    screening.package_service._outputs_root=output_root
     screening.outputs_root=output_root;screening.static_root=tmp_path/'static'
-    manifest=screening.sync_manifest(project_id)
-    delivered=next(row for row in manifest['outputs'] if row['source_type']=='film_delivery')
-    screening.approve_output(project_id,delivered['screening_output_id'],confirmed=True)
+    synced=screening.sync_manifest(project_id)
+    output=next(row for row in synced['outputs'] if row['source_type']=='final_package' and row['source_id']==result.package_id)
+    assert store.get_screening_output(output['screening_output_id'])['original_url']==result.film_url
+    selected=screening.approve_output(project_id,output['screening_output_id'],confirmed=True)
+    assert selected['approved'] is True
+    screening_output_id=output['screening_output_id']
+    # The handoff was not yet accepted at export time, so no film pointer
+    # persists; the delivery provenance lives on the package until acceptance.
+    assert store.get_film(project_id) is None
+    assert store.get_delivery_manifest(project_id,'__film__') is None
+    provenance=package.metadata['canonical_delivery_manifest']
+    cut=store.get_current_film_cut(project_id)
+    assert provenance['source_cut_id']==cut['cut_id'] and provenance['scene_ids']==['scene_001']
+    assert provenance['film_url']==result.film_url==package.final_output_url
+    assert [row['scene_id'] for row in provenance['scene_provenance']]==['scene_001']
     reopened=DatabaseStorage(str(tmp_path/'db'))
-    assert reopened.get_screening_output(delivered['screening_output_id'])['approved']
+    assert reopened.get_screening_output(screening_output_id)['approved']
     assert reopened.get_delivery_manifest(project_id,'scene_001')['job_ids']==['job-1','job-2']
-    assert FilmDeliveryService(storage=reopened,projects=SimpleNamespace(load=lambda _:project),scenes=assembly,backend_root=tmp_path).status(project_id).film_assembled
+    assert reopened.get_final_short_film_package(result.package_id).final_output_url==result.film_url
+    reopened_delivery=FilmDeliveryService(storage=reopened,projects=SimpleNamespace(load=lambda _:project),scenes=assembly,backend_root=tmp_path)
+    assert not reopened_delivery.status(project_id).film_assembled
 
-    assert screening.get_manifest(project_id)['current_final_output']['cut_freshness']['status'] == 'current'
+    current=screening.get_manifest(project_id)['current_final_output']
+    assert current['approved'] and current['screening_output_id']==screening_output_id
+    assert screening.get_manifest(project_id)['completion_status']=='complete'
     recording = supplied/'scene_001_shot_001.wav'
     previous = recording.stat()
     data = bytearray(recording.read_bytes()); data[-100] ^= 1; recording.write_bytes(data)
     import os
     os.utime(recording, ns=(previous.st_atime_ns, previous.st_mtime_ns))
     stale = screening.get_manifest(project_id)
+    # The previously selected final is preserved, never silently replaced.
+    assert stale['current_final_output']['screening_output_id']==screening_output_id
     assert stale['current_final_output']['approved']
-    assert stale['current_final_output']['cut_freshness']['status'] == 'outdated'
-    assert stale['completion_status'] == 'in_progress'
     assert service.status(project_id).scenes_needing_assembly == ['scene_001']
-    rebuilt = run_async(service.assemble(project_id))
-    assert rebuilt.film_url != result.film_url
-    outputs = screening.sync_manifest(project_id)['outputs']
-    old = next(row for row in outputs if row['screening_output_id'] == delivered['screening_output_id'])
-    new = next(row for row in outputs if row.get('metadata',{}).get('film_url') == rebuilt.film_url)
-    assert old['cut_freshness']['status'] == 'outdated'
-    assert new['cut_freshness']['status'] == 'current'
-    assert not new['approved']
-    screening.approve_output(project_id,new['screening_output_id'],confirmed=True)
+    with pytest.raises(Exception):
+        run_async(service.assemble(project_id))
+    assert store.get_film(project_id) is None
+    assert store.get_screening_project_state(project_id)['current_final_output_id'] == screening_output_id
     assert screening.get_manifest(project_id)['completion_status'] == 'complete'
     recording.unlink()
-    assert service.status(project_id).film_outdated
+    assert not service.status(project_id).film_assembled
+    assert service.status(project_id).scenes_needing_assembly == ['scene_001']

@@ -61,6 +61,14 @@ DEFAULT_PROVIDER_CONFIG: Dict[str, Any] = {
         or "https://api.dev.runwayml.com"
     ),
     "runway_timeout_seconds": _env_int("RUNWAY_TIMEOUT_SECONDS", 60),
+    # Runway image provider (gen4_image) — additive; image seam reads these via
+    # the provider module's environment readers. No existing key is changed.
+    "runway_image_api_key": (
+        os.getenv("RUNWAY_API_KEY", "").strip()
+        or os.getenv("RUNWAYML_API_SECRET", "").strip()
+    ),
+    "runway_image_base_url": os.getenv("RUNWAY_IMAGE_API_BASE_URL", "").strip(),
+    "runway_image_timeout_seconds": _env_float("RUNWAY_IMAGE_TIMEOUT_SECONDS", 180.0),
 }
 
 
@@ -96,6 +104,13 @@ def get_provider_config() -> Dict[str, Any]:
         or "https://api.dev.runwayml.com"
     )
     config["runway_timeout_seconds"] = _env_int("RUNWAY_TIMEOUT_SECONDS", 60)
+    # Runway image provider (gen4_image) — additive; mirrors the defaults dict.
+    config["runway_image_api_key"] = (
+        os.getenv("RUNWAY_API_KEY", "").strip()
+        or os.getenv("RUNWAYML_API_SECRET", "").strip()
+    )
+    config["runway_image_base_url"] = os.getenv("RUNWAY_IMAGE_API_BASE_URL", "").strip()
+    config["runway_image_timeout_seconds"] = _env_float("RUNWAY_IMAGE_TIMEOUT_SECONDS", 180.0)
     return config
 
 

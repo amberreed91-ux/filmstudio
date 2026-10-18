@@ -744,7 +744,8 @@ class RenderJobModel(BaseModel):
     def can_transition_to(self, new_status: str) -> bool:
         """Check if transition to new status is valid"""
         valid_transitions = {
-            "pending": ["rendering", "cancelled", "failed"],
+            "pending": ["rendering", "queued", "cancelled", "failed"],
+            "queued": ["rendering", "cancelled", "failed"],
             "rendering": ["complete", "failed", "cancelled"],
             "complete": [],
             "failed": ["pending"],  # Can retry

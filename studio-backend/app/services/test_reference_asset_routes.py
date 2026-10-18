@@ -221,3 +221,66 @@ def test_confirm_is_only_write_path():
     confirmed = conf_resp.json()["reference_asset"]
     assert confirmed["image_url"] == "https://other.com/v2.mp4"
     assert confirmed["source_shot_id"] == "shot-2"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# F4 regression: the persistence layer owns creation timestamps.
+# Callers that omit created_at (confirm, uploads, URL adds) must persist
+# with a server-side default instead of violating the NOT NULL constraint.
+# These tests run against isolated temp storage (see studio-backend conftest)
+# and never touch production projects or canonical references.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_confirm_without_created_at_persists_with_server_timestamp():
+    """A confirm body without created_at persists and reads back stamped."""
+    conf_resp = client.post(
+        "/api/f51/studio/projects/proj-stamp-1/reference-assets",
+        json={
+            "ref_id": "manual_stamp_1",
+            "kind": "character_full",
+            "image_url": "https://cdn.example.com/stamped.mp4",
+            "source_shot_id": "shot-9",
+            "project_id": "proj-stamp-1",
+        },
+    )
+    assert conf_resp.status_code == 200
+    from app.data.storage import get_storage
+
+    row = get_storage("sqlite").get_reference_asset(conf_resp.json()["reference_asset"]["ref_id"])
+    assert row is not None
+    assert row["project_id"] == "proj-stamp-1"
+    assert row["created_at"]
+
+
+def test_confirm_mismatched_scope_leaves_no_partial_state():
+    """A rejected confirm persists nothing for the refused reference."""
+    conf_resp = client.post(
+        "/api/f51/studio/projects/proj-scope-a/reference-assets",
+        json={
+            "ref_id": "manual_scope_1",
+            "kind": "character_full",
+            "image_url": "https://cdn.example.com/scoped.mp4",
+            "project_id": "proj-scope-b",
+        },
+    )
+    assert conf_resp.status_code == 400
+    for project_id in ("proj-scope-a", "proj-scope-b"):
+        list_resp = client.get(f"/api/f51/studio/projects/{project_id}/reference-assets")
+        assert list_resp.status_code == 200
+        assert all(row["ref_id"] != "manual_scope_1" for row in list_resp.json()["reference_assets"])
+
+
+def test_save_without_created_at_defaults_timestamp_at_storage():
+    """Storage-level default: save_reference_asset stamps missing created_at."""
+    from app.data.storage import get_storage
+
+    storage = get_storage("sqlite")
+    assert storage.save_reference_asset({
+        "ref_id": "manual_store_1",
+        "project_id": "proj-store-1",
+        "kind": "environment",
+        "image_url": "https://cdn.example.com/stored.png",
+    }) is True
+    row = storage.get_reference_asset("manual_store_1")
+    assert row is not None
+    assert row["created_at"]

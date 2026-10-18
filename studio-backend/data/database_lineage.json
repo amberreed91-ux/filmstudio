@@ -1,0 +1,13 @@
+{
+  "registered_at": "2026-10-17T23:28:57.801210+00:00",
+  "db_path": "/Users/amberreed/Enhanced_adaptive_strategy_python/studio-project/studio-backend/data/studio.db",
+  "st_dev": 16777232,
+  "st_ino": 271891263,
+  "bytes": 10194944,
+  "sha256_first1m": "",
+  "schema_version": 582,
+  "git": {
+    "branch": "backend-expansion-dependency-slicing",
+    "commit": "04b3fb6c71ba"
+  }
+}

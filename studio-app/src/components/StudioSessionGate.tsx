@@ -2,10 +2,21 @@ import { useState, type ReactNode } from 'react'
 import { useStudioSession } from '../hooks/useStudioSession'
 
 export function StudioSessionGate({ children }: { children: ReactNode }) {
-  const { status, error, busy, signIn } = useStudioSession()
+  const { status, error, diagnostic, busy, signIn, retrySessionCheck } = useStudioSession()
+  const diagnosticMessage = diagnostic
+    ? `${diagnostic.stage === 'session' ? 'Session' : 'Access-mode'} check failed: ${diagnostic.kind === 'network' ? 'connection failure' : `HTTP ${diagnostic.status}`}`
+    : ''
   const [register, setRegister] = useState(false)
   if (status === 'ready') return children
-  if (status === 'loading') return <div className="p-12 text-zinc-300" role="status">Opening your studio…</div>
+  if (status === 'checking') return <div className="p-12 text-zinc-300" role="status">Checking your studio session…</div>
+  if (status === 'unavailable') return <main className="min-h-screen bg-zinc-950 text-zinc-100 grid place-items-center p-6">
+    <section className="w-full max-w-sm space-y-5" aria-labelledby="backend-unavailable-title">
+      <h1 id="backend-unavailable-title" className="text-3xl font-medium">Studio temporarily unavailable</h1>
+      <p role="alert" className="text-zinc-300">{error}</p>
+      {diagnosticMessage && <p className="text-sm text-zinc-400" data-testid="studio-session-diagnostic">{diagnosticMessage}</p>}
+      <button type="button" onClick={retrySessionCheck} className="w-full rounded bg-amber-200 p-3 text-zinc-950">Check connection again</button>
+    </section>
+  </main>
   return <main className="min-h-screen bg-zinc-950 text-zinc-100 grid place-items-center p-6">
     <form className="w-full max-w-sm space-y-5" onSubmit={event => {
       event.preventDefault()

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getSceneDirection, saveSceneDirection, type AssignedDialogue, type SceneDirection, type ShotHandoff } from '../lib/sceneDirectionApi'
+import { getSceneDirection, saveSceneDirection, type AssignedDialogue, type CoverageDecision, type SceneDirection, type SettingReferenceDecision, type ShotHandoff } from '../lib/sceneDirectionApi'
 
 export function useSceneDirection(project: string, scene: string, version: string) {
   const [data, setData] = useState<SceneDirection | null>(null)
@@ -32,8 +32,14 @@ export function useSceneDirection(project: string, scene: string, version: strin
   const addLine = useCallback(() => {
     setData(value => value && ({ ...value, dialogue: [...value.dialogue, { line_id: `line_${crypto.randomUUID()}`, character: '', text: '', shot_id: null }] })); setDirty(true)
   }, [])
+  const editCoverage = useCallback((type: CoverageDecision['obligation_type'], id: string, patch: Partial<CoverageDecision>) => {
+    setData(value => value && ({ ...value, coverage_decisions: value.coverage_decisions.map(decision => decision.obligation_type === type && decision.obligation_id === id ? { ...decision, ...patch } : decision) })); setDirty(true)
+  }, [])
   const editHandoff = useCallback((id: string, patch: Partial<ShotHandoff>) => {
     setData(value => value && ({ ...value, shots: value.shots.map(shot => shot.shot_id === id ? { ...shot, ...patch } : shot) })); setDirty(true)
+  }, [])
+  const editSettingReference = useCallback((decision: SettingReferenceDecision | null) => {
+    setData(value => value && ({ ...value, setting_reference_decision: decision })); setDirty(true)
   }, [])
   const save = async () => {
     if (!data || busy) return null
@@ -42,6 +48,8 @@ export function useSceneDirection(project: string, scene: string, version: strin
     try {
       const result = await saveSceneDirection(project, scene, {
         expected_version_id: data.version_id, dialogue: data.dialogue,
+        coverage_decisions: data.coverage_decisions,
+        setting_reference_decision: data.setting_reference_decision,
         handoffs: data.shots.map(({ shot_id, opening_state, action_change, ending_state }) => ({ shot_id, opening_state, action_change, ending_state })),
       })
       if (scope !== activeScope.current || sequence !== request.current) return null
@@ -52,5 +60,5 @@ export function useSceneDirection(project: string, scene: string, version: strin
       return null
     } finally { if (scope === activeScope.current && sequence === request.current) setBusy(false) }
   }
-  return { data, busy, dirty, error, editLine, removeLine, addLine, editHandoff, save, reload: () => setReload(value => value + 1) }
+  return { data, busy, dirty, error, editLine, removeLine, addLine, editCoverage, editHandoff, editSettingReference, save, reload: () => setReload(value => value + 1) }
 }

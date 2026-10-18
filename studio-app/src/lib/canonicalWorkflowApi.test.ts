@@ -78,13 +78,21 @@ describe('canonical workflow API', () => {
 describe('canonical provider selection', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it.each(['openrouter-video', 'runway', 'simulated'])('sends explicit %s for new Previs, package and revision jobs', async (provider) => {
+  it.each(['openrouter-video', 'runway', 'simulated'])('sends explicit %s for new package and revision jobs while Previs stays simulated', async (provider) => {
     const request = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ run: {}, transitions: [] }), { status: 200 }))
-    await generateCanonicalPrevis('run-1', provider)
+    await generateCanonicalPrevis('run-1')
     await renderCanonicalProductionPackage('run-1', false, provider)
     await renderCanonicalRevision('run-1', provider)
-    expect(request.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).provider)).toEqual([provider, provider, provider])
+    expect(request.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).provider)).toEqual(['simulated', provider, provider])
     for (const [, init] of request.mock.calls) expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json')
+  })
+
+  it('sends simulated Previs even when a caller still passes a real render provider', async () => {
+    const request = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ run: {}, transitions: [] }), { status: 200 }))
+    const legacyCall = generateCanonicalPrevis as unknown as (runId: string, provider?: string) => Promise<unknown>
+    await legacyCall('run-1', 'runway')
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toEqual({ provider: 'simulated' })
   })
 
   it('omits provider overrides when polling or retaining approved settings', async () => {
@@ -92,6 +100,8 @@ describe('canonical provider selection', () => {
     await generateCanonicalPrevis('run-1')
     await renderCanonicalProductionPackage('run-1')
     await renderCanonicalRevision('run-1')
-    for (const [, init] of request.mock.calls) expect(JSON.parse(String(init?.body))).not.toHaveProperty('provider')
+    const [previs, ...retained] = request.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))
+    expect(previs).toEqual({ provider: 'simulated' })
+    for (const body of retained) expect(body).not.toHaveProperty('provider')
   })
 })

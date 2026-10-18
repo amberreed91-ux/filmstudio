@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import json
 import mimetypes
 from pathlib import Path
 from time import perf_counter
@@ -11,6 +12,7 @@ from app.data.storage import get_storage
 from app.models.film_delivery import CutFreshness
 from app.services.film_delivery_service import FilmDeliveryService
 from app.services.final_short_film_package_service import FinalShortFilmPackageService
+from app.services.production_acceptance_service import ProductionAcceptanceService
 from app.services.render import RenderService, render_service
 from app.services.stability import PersistenceError, PlaybackError, StateError, ValidationError
 from app.utils.helpers import derive_scene_id_from_shot_id
@@ -19,14 +21,158 @@ from app.utils.helpers import derive_scene_id_from_shot_id
 class ScreeningRoomService:
     """Canonical, project-scoped registry for media exposed in the Screening Room."""
 
-    def __init__(self, storage: Any | None = None, renderer: RenderService | None = None, delivery_service: Any | None = None) -> None:
+    def __init__(self, storage: Any | None = None, renderer: RenderService | None = None, delivery_service: Any | None = None, backend_root: Path | None = None) -> None:
         self.storage = storage or get_storage("sqlite")
         self.renderer = renderer or render_service
-        self.backend_root = Path(__file__).resolve().parents[2]
+        self.backend_root = Path(backend_root or Path(__file__).resolve().parents[2]).resolve()
         self.outputs_root = (self.backend_root / "outputs").resolve()
         self.static_root = (self.backend_root / "static").resolve()
         self.delivery_service = delivery_service
         self.package_service = FinalShortFilmPackageService(storage=self.storage)
+        self.production_acceptance_service = ProductionAcceptanceService(
+            storage=self.storage,
+            project_store_service=self,
+        )
+        self._production_acceptance_service_factory = self._new_acceptance_service
+        self.package_service._outputs_root = self.outputs_root
+        self.production_acceptance_service._outputs_root = self.outputs_root
+
+    def get_project(self, project_id: str) -> dict[str, Any]:
+        """Expose the same project view to acceptance checks that Screening uses."""
+        return self._project(project_id)
+
+    def _new_acceptance_service(self) -> ProductionAcceptanceService:
+        service = ProductionAcceptanceService(storage=self.storage, project_store_service=self)
+        service._outputs_root = self.outputs_root
+        service._production_scan_service = self.production_acceptance_service._production_scan_service
+        service._decision_gate_service = self.production_acceptance_service._decision_gate_service
+        return service
+
+    def _canonical_film_delivery_package(self, project_id: str, film: dict[str, Any], manifest: Any) -> Any | None:
+        if not isinstance(manifest, dict) or not film.get("film_url"):
+            return None
+        manifest_hash = sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        return next((
+            row for row in self.storage.list_final_short_film_packages_for_project(project_id)
+            if row.project_id == project_id
+            and row.final_output_url == film.get("film_url")
+            and row.metadata.get("delivery_kind") == "canonical_film_cut"
+            and row.metadata.get("assembly_id") == film.get("id")
+            and row.metadata.get("delivery_manifest_hash") == manifest_hash
+            and row.metadata.get("source_cut_id") == manifest.get("source_cut_id")
+            and row.metadata.get("film_output_sha256") == manifest.get("film_output_sha256")
+        ), None)
+
+    def _register_final_package_output(self, project_id: str, package: Any) -> dict[str, Any] | None:
+        self._register(
+            project_id=project_id,
+            scene_id=None,
+            shot_id=None,
+            source_type="final_package",
+            source_id=package.package_id,
+            output_type="final",
+            original_url=package.final_output_url,
+            created_at=package.created_at,
+            metadata={
+                "film_title": package.film_title,
+                "package_status": package.package_status,
+                "review_id": package.review_id,
+                "review_decision": package.review_decision,
+                "render_job_ids": package.render_job_ids,
+                "revision_ids": package.revision_ids,
+                "has_soundtrack": package.has_soundtrack,
+            },
+            warnings=[],
+        )
+        return next((row for row in self.storage.list_screening_outputs(project_id)
+            if row.get("source_type") == "final_package"
+            and row.get("source_id") == package.package_id
+            and row.get("original_url") == package.final_output_url), None)
+
+    @staticmethod
+    def _acceptance_service_has_current_report(acceptance: ProductionAcceptanceService, project_id: str, package_id: str) -> bool:
+        report = acceptance.get_latest_report(project_id, package_id=package_id)
+        return bool(
+            report
+            and report.project_id == project_id
+            and report.package_id == package_id
+            and report.context.project_id == project_id
+            and report.context.package_id == package_id
+            and not report.stale
+        )
+
+    def _canonical_package_matches_current_cut(self, project_id: str, package: Any) -> bool:
+        metadata = getattr(package, "metadata", {}) or {}
+        if metadata.get("delivery_kind") != "canonical_film_cut":
+            return True
+        cut = self.storage.get_current_film_cut(project_id)
+        if (
+            not cut
+            or cut.get("status") != "approved"
+            or cut.get("project_id") != project_id
+            or metadata.get("source_cut_id") != cut.get("cut_id")
+            or package.project_id != project_id
+        ):
+            return False
+        url = str(package.final_output_url or "")
+        if not url.startswith("/outputs/"):
+            return False
+        path = (self.outputs_root / url.removeprefix("/outputs/")).resolve()
+        if not path.is_relative_to(self.outputs_root) or not path.is_file():
+            return False
+        return FilmDeliveryService._sha256_file(path) == metadata.get("film_output_sha256")
+
+    def _accepted_canonical_package(self, project_id: str, package: Any) -> bool:
+        if not self._canonical_package_matches_current_cut(project_id, package):
+            return False
+        acceptance = self._production_acceptance_service_factory()
+        acceptance._outputs_root = self.outputs_root
+        return bool(
+            self._acceptance_service_has_current_report(acceptance, project_id, package.package_id)
+            and acceptance.evaluate_package_approval_guard(package.package_id, desired_status="approved").allowed
+        )
+
+    def _ensure_film_delivery_handoff(self, project_id: str, film: dict[str, Any], manifest: Any) -> dict[str, Any] | None:
+        package = self._canonical_film_delivery_package(project_id, film, manifest)
+        if package is None:
+            return None
+        self._assert_final_package_access(project_id, package)
+        return self._register_final_package_output(project_id, package)
+
+    def _new_acceptance_service(self) -> ProductionAcceptanceService:
+        service = ProductionAcceptanceService(
+            storage=self.storage,
+            project_store_service=self,
+        )
+        service._outputs_root = self.outputs_root
+        service._production_scan_service = self.production_acceptance_service._production_scan_service
+        service._decision_gate_service = self.production_acceptance_service._decision_gate_service
+        return service
+
+    def _is_package_currently_accepted(self, project_id: str, package: Any) -> bool:
+        if package is None or package.project_id != project_id:
+            return False
+        acceptance = self._production_acceptance_service_factory()
+        acceptance._outputs_root = self.outputs_root
+        return bool(
+            self._acceptance_service_has_current_report(acceptance, project_id, package.package_id)
+            and acceptance.evaluate_package_approval_guard(package.package_id, desired_status="approved").allowed
+        )
+
+    def _clear_unaccepted_current_final(self, project_id: str, state: dict[str, Any], output: dict[str, Any] | None) -> dict[str, Any]:
+        output_id = state.get("current_final_output_id")
+        if not output_id:
+            return state
+        stored_output = self.storage.get_screening_output(output_id)
+        if (
+            output
+            and stored_output
+            and output.get("cut_freshness", {}).get("status") != "outdated"
+            and self._is_current_accepted_final(stored_output, project_id)
+        ):
+            return state
+        self.storage.clear_current_screening_final(project_id)
+        return {**state, "current_final_output_id": None, "completion_status": "in_progress", "completed_at": None}
 
     def sync_manifest(self, project_id: str) -> dict[str, Any]:
         started = perf_counter()
@@ -127,14 +273,40 @@ class ScreeningRoomService:
         film = self.storage.get_film(project_id)
         if film and film.get("film_url"):
             url = str(film["film_url"])
-            self._register(project_id=project_id, scene_id=None, shot_id=None,
-                source_type="film_delivery", source_id=film["id"], output_type="final",
+            delivery_manifest = self.storage.get_delivery_manifest(project_id, "__film__") or {}
+            package = self._canonical_film_delivery_package(project_id, film, delivery_manifest)
+            if package:
+                self._register_final_package_output(project_id, package)
+            self._register(
+                project_id=project_id,
+                scene_id=None,
+                shot_id=None,
+                source_type="final_package" if package else "film_delivery",
+                source_id=package.package_id if package else film["id"],
+                output_type="final",
                 original_url=urlparse(url).path if urlparse(url).hostname in {"localhost", "127.0.0.1"} else url,
-                created_at=film.get("updated_at") or "", metadata={"film_url": url, "scene_count": film["scene_count"]}, warnings=warnings)
+                created_at=film.get("updated_at") or "",
+                metadata=(
+                    {
+                        "film_title": package.film_title,
+                        "package_status": package.package_status,
+                        "review_id": package.review_id,
+                        "review_decision": package.review_decision,
+                        "render_job_ids": package.render_job_ids,
+                        "revision_ids": package.revision_ids,
+                        "has_soundtrack": package.has_soundtrack,
+                    }
+                    if package else {"film_url": url, "scene_count": film["scene_count"]}
+                ),
+                warnings=warnings,
+            )
 
         for package in self.storage.list_final_short_film_packages_for_project(project_id):
             if package.project_id != project_id or not str(package.final_output_url or "").strip():
                 continue
+            if package.metadata.get("delivery_kind") == "canonical_film_cut":
+                if not self._accepted_canonical_package(project_id, package):
+                    continue
             self._register(
                 project_id=project_id,
                 scene_id=None,
@@ -167,19 +339,48 @@ class ScreeningRoomService:
         state = self.storage.get_screening_project_state(project_id)
         current_final_id = state.get("current_final_output_id")
         public_outputs = [self._public_output(row) for row in outputs]
-        current = next((row for row in public_outputs if row["screening_output_id"] == current_final_id), None)
-        outdated = bool(current and current.get("cut_freshness", {}).get("status") == "outdated")
+        current_output = next((row for row in public_outputs if row["screening_output_id"] == current_final_id), None)
+        state = self._clear_unaccepted_current_final(project_id, state, current_output)
+        current_final_id = state.get("current_final_output_id")
+        if current_output and current_output.get("cut_freshness", {}).get("status") == "outdated":
+            self.storage.clear_current_screening_final(project_id)
+            current_output = None
+            state = {**state, "current_final_output_id": None, "completion_status": "in_progress", "completed_at": None}
+        outdated = bool(state.get("current_final_output_id") and not current_output)
         return {
             "project_id": project_id,
             "outputs": public_outputs,
-            "current_final_output": next(
-                (row for row in public_outputs if row["screening_output_id"] == current_final_id),
-                None,
-            ),
+            "current_final_output": current_output,
             "completion_status": "in_progress" if outdated else state.get("completion_status") or "in_progress",
             "completed_at": None if outdated else state.get("completed_at"),
             "warnings": [],
         }
+
+    def _is_current_accepted_final(self, output: dict[str, Any], project_id: str) -> bool:
+        if output.get("output_type") != "final" or output.get("source_type") != "final_package":
+            return False
+        package = self.package_service.get_package(str(output.get("source_id") or ""))
+        return bool(
+            output.get("project_id") == project_id
+            and output.get("original_url") == getattr(package, "final_output_url", None)
+            and self._is_package_currently_accepted(project_id, package)
+        )
+
+    def _assert_final_package_access(self, project_id: str, package: Any) -> None:
+        if package is None or package.project_id != project_id:
+            raise StateError("Final package not found for this project", stage="screening_approve")
+        try:
+            from app.access_context import access_user_id
+
+            actor_id = access_user_id.get()
+            if actor_id:
+                owner_lookup = getattr(self.storage, "access_project_owner", None)
+                if not callable(owner_lookup) or owner_lookup(project_id) != actor_id:
+                    raise StateError("Only the authenticated project owner can approve the final output", stage="screening_approve")
+        except StateError:
+            raise
+        except Exception as exc:
+            raise StateError("Project ownership could not be verified for Screening approval", stage="screening_approve") from exc
 
     def approve_output(
         self,
@@ -195,15 +396,70 @@ class ScreeningRoomService:
         if output is None or output["project_id"] != project_id:
             raise StateError("Screening output not found", stage="screening_approve")
         self._assert_media_available(output)
+        if output["output_type"] == "final" and output["source_type"] == "film_delivery":
+            film = self.storage.get_film(project_id)
+            delivery_manifest = self.storage.get_delivery_manifest(project_id, "__film__")
+            original_url = output.get("original_url")
+            package = self._canonical_film_delivery_package(project_id, film or {}, delivery_manifest)
+            if not isinstance(delivery_manifest, dict) or not film or film.get("film_url") != original_url or package is None:
+                raise StateError("Film delivery has no current canonical cut, package, and exact manifest provenance", stage="screening_approve")
+            self._assert_final_package_access(project_id, package)
+            output = self._ensure_film_delivery_handoff(project_id, film, delivery_manifest)
+            if output is None:
+                raise PersistenceError("Canonical film delivery could not be registered as a package output", stage="screening_approve")
+            screening_output_id = output["screening_output_id"]
         if output["output_type"] == "final" and output["source_type"] == "final_package":
+            original_url = output.get("original_url")
             package = self.package_service.get_package(output["source_id"])
-            if package is None or package.project_id != project_id:
-                raise StateError("Final package not found for Screening output", stage="screening_approve")
-            if package.package_status not in {"approved", "packaged", "archived"}:
-                try:
-                    self.package_service.update_package_status(package.package_id, "approved")
-                except ValueError as exc:
-                    raise StateError(str(exc), stage="screening_approve") from exc
+            self._assert_final_package_access(project_id, package)
+            if (
+                not original_url
+                or package.final_output_url != original_url
+                or not self._canonical_package_matches_current_cut(project_id, package)
+            ):
+                raise StateError("Final package not found or output provenance does not match Screening", stage="screening_approve")
+            try:
+                acceptance = self._production_acceptance_service_factory()
+                acceptance._outputs_root = self.outputs_root
+                guard = acceptance.evaluate_package_approval_guard(
+                    package.package_id,
+                    desired_status="approved",
+                )
+                if guard.allowed and not self._acceptance_service_has_current_report(
+                    acceptance, project_id, package.package_id,
+                ):
+                    raise StateError("Production acceptance report is missing, stale, or not package-scoped", stage="screening_approve")
+                if not guard.allowed:
+                    raise StateError(guard.reason, stage="screening_approve", metadata={"acceptance_id": guard.latest_acceptance_id or ""})
+                if package.package_status not in {"approved", "packaged", "archived"}:
+                    updated = self.package_service.update_package_status(package.package_id, "approved")
+                    if updated is None:
+                        raise StateError("Final package not found for Screening output", stage="screening_approve")
+            except StateError:
+                raise
+            except Exception as exc:
+                raise StateError(
+                    f"Production acceptance guard failed: {exc}",
+                    stage="screening_approve",
+                ) from exc
+            package = self.package_service.get_package(output["source_id"])
+            if package is None or package.project_id != project_id or package.final_output_url != original_url:
+                raise StateError("Final package output changed during Screening approval", stage="screening_approve")
+            acceptance = self._production_acceptance_service_factory()
+            acceptance._outputs_root = self.outputs_root
+            guard = acceptance.evaluate_package_approval_guard(
+                package.package_id,
+                desired_status="approved",
+            )
+            if not guard.allowed:
+                raise StateError(guard.reason, stage="screening_approve", metadata={"acceptance_id": guard.latest_acceptance_id or ""})
+            if not self._acceptance_service_has_current_report(acceptance, project_id, package.package_id):
+                raise StateError("Production acceptance report is missing, stale, or not package-scoped", stage="screening_approve")
+        if output["output_type"] == "final" and output["source_type"] not in {"final_package"}:
+            raise StateError(
+                "Only a final package with matching Production Integrity Gate acceptance can become the current project final.",
+                stage="screening_approve",
+            )
         try:
             approved = self.storage.approve_screening_output(
                 screening_output_id,

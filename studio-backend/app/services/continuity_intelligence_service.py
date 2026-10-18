@@ -2199,10 +2199,14 @@ class ContinuityIntelligenceService:
         if self._storage and hasattr(self._storage, "list_reference_assets"):
             try:
                 for ref in self._storage.list_reference_assets(project_id=film_id, kind="environment", limit=6) or []:
-                    if not isinstance(ref, dict):
+                    if not isinstance(ref, dict) or ref.get("approval_state") in {"candidate", "rejected"}:
+                        continue
+                    target_type = str(ref.get("target_type") or "")
+                    target_id = str(ref.get("target_id") or "")
+                    if target_type == "setting" and target_id and target_id != location_id:
                         continue
                     source = self._normalize_location_id(ref.get("source_shot_id") or "")
-                    if location_id and source and location_id not in source:
+                    if location_id and source and location_id not in source and not (target_type == "setting" and target_id == location_id):
                         continue
                     if not any(existing.get("ref_id") == ref.get("ref_id") for existing in selected if isinstance(existing, dict)):
                         selected.append({
@@ -2211,6 +2215,13 @@ class ContinuityIntelligenceService:
                             "source_shot_id": ref.get("source_shot_id"),
                             "role": "approved_environment",
                             "status": "approved",
+                            "canonical": bool(ref.get("canonical")),
+                            "target_type": "setting",
+                            "target_id": location_id,
+                            "project_id": film_id,
+                            "approval_state": "approved",
+                            "category": ref.get("category") or "other",
+                            "source_kind": ref.get("source_kind") or "confirmed",
                         })
             except Exception:
                 pass
