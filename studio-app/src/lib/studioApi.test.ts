@@ -639,7 +639,26 @@ describe('generateScenePipeline', () => {
         volume: 0.18,
       },
       expected_reference_binding_digests: null,
+      storyboard_shot_ids: null,
+      allow_full_package: false,
+      acknowledge_unknown_cost: false,
     })
+  })
+
+  it('passes the single-take shot filter through to the pipeline endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'complete', shots: [] }), { status: 200 }),
+    )
+    await generateScenePipeline('proj-scene', 'scene_003', {
+      storyboard_shot_ids: ['sbs-002'],
+      allow_full_package: false,
+      acknowledge_unknown_cost: true,
+    })
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(String(init?.body))
+    expect(body.storyboard_shot_ids).toEqual(['sbs-002'])
+    expect(body.allow_full_package).toBe(false)
+    expect(body.acknowledge_unknown_cost).toBe(true)
   })
 
   it('returns an error object when scene pipeline generation fails', async () => {
