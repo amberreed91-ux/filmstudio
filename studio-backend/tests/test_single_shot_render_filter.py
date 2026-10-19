@@ -47,12 +47,29 @@ class RecordingRenderer:
             return self.jobs[self.by_idempotency[idempotency_key]]
         self.create_count += 1
         job_id = f"job-{self.create_count:03d}-{shot_id}"
+        metadata: dict | None = None
+        if (provider or "") == "runway_router":
+            # Synthetic router-contract metadata. The real storage choke point
+            # (DatabaseStorage.save_job) requires these five keys for
+            # runway_router rows, so the fake attaches type-correct synthetic
+            # values. This proves the service-layer submit count on the router
+            # path — NOT real Router authority (the real renderer fails closed
+            # earlier, at RenderService.create_job, without a generation
+            # contract, and real frozen metadata is never synthetic).
+            metadata = {
+                "creative_generation_contract": {"synthetic": True},
+                "creative_generation_manifest": {"synthetic": True},
+                "creative_manifest_fingerprint": "synthetic-fingerprint",
+                "creative_contract_digest": "synthetic-digest",
+                "creative_generation_identity": {"synthetic": True},
+            }
         job = RenderJobModel(
             id=job_id,
             project_id=project_id,
             shot_id=shot_id,
             provider=provider or "simulated",
             status="pending",
+            metadata=metadata,
             input_payload=RenderJobInput(
                 shot_id=shot_id,
                 prompt=prompt,
@@ -511,3 +528,39 @@ def test_estimate_probe_returns_advisory_without_jobs(tmp_path: Path, monkeypatc
         workflow.estimate_render_cost(
             run["run_id"], storyboard_shot_ids=["missing-id"], provider="runway"
         )
+
+
+def test_one_shot_router_path_submits_exactly_one_post(tmp_path: Path) -> None:
+    """Gate 1 Q1: the one-shot filter is provider-agnostic at the service layer.
+
+    Provider `runway_router` through the same fake adapter submits exactly ONE
+    create and ONE submit POST for a one-shot request. No live DB, no restart,
+    no provider contact (the estimator seam is sealed; the router-contract
+    metadata on the fake row is synthetic — see RecordingRenderer.create_job).
+    """
+    workflow, _, renderer = _environment(tmp_path)
+    run = _through_package(workflow)
+    ids = _package_ids(run)
+    assert len(ids) == 5
+
+    result = asyncio.run(
+        workflow.render_production_package(
+            run["run_id"],
+            provider="runway_router",
+            storyboard_shot_ids=[ids[1]],
+            acknowledge_unknown_cost=True,
+        )
+    )
+    assert result["status"] == "render_completed"
+    assert renderer.create_count == 1
+    assert len(renderer.submit_posts) == 1
+    row = result["data"]["artifacts"]["render_jobs"][0]
+    assert row["storyboard_shot_id"] == ids[1]
+    job = renderer.get_job(row["render_job_id"])
+    assert job is not None
+    assert job.provider == "runway_router"
+    # The exact frozen package prompt is what the job carries.
+    package = run["data"]["artifacts"]["production_package"]
+    frozen = next(r for r in package["payload"]["shots"] if r["storyboard_shot_id"] == ids[1])
+    assert job.input_payload.prompt == frozen["prompt"]
+    assert job.input_payload.prompt
