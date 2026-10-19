@@ -545,8 +545,8 @@ export default function CanonicalWorkflowPanel({
                 {estimateRow ? (
                   <span className="text-[10px] text-zinc-300" data-testid="single-shot-estimate">
                     {estimateAvailable
-                      ? `Estimate: ${estimateRow.estimated_credits} credits${estimateRow.resolved_model ? ` · ${estimateRow.resolved_model}` : ''} · ceiling ${estimate?.ceiling_credits} (${estimate?.ceiling_env_var})`
-                      : `Estimate unavailable · ceiling ${estimate?.ceiling_credits} (${estimate?.ceiling_env_var})`}
+                      ? `Router dry-run estimate (submit path may differ — not a quote): ${estimateRow.estimated_credits} credits${estimateRow.resolved_model ? ` · ${estimateRow.resolved_model}` : ''} · ceiling ${estimate?.ceiling_credits} (${estimate?.ceiling_env_var})`
+                      : `Router dry-run unavailable (submit path may differ) · ceiling ${estimate?.ceiling_credits} (${estimate?.ceiling_env_var})`}
                   </span>
                 ) : (
                   <span className="text-[10px] text-zinc-500">

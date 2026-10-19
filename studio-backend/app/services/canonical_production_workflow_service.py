@@ -862,6 +862,12 @@ class CanonicalProductionWorkflowService:
             "run_id": run_id,
             "ceiling_credits": self._render_credit_ceiling(),
             "ceiling_env_var": _RENDER_CREDIT_CEILING_ENV_VAR,
+            # Pre-Phase-B item 3: label the source. These numbers are Router
+            # dry-run advisories; the owner's submit path may differ, and no
+            # submit path on this dialog can spend beyond a refused ceiling —
+            # over-ceiling refuses, unknown requires acknowledgement, and the
+            # mismatch outcome is fail-closed, never a charge.
+            "estimate_source": "runway_router_dry_run",
             "estimates": estimates,
         }
 

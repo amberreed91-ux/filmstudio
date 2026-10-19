@@ -194,6 +194,9 @@ export type RenderEstimateResponse = {
   run_id: string
   ceiling_credits: number
   ceiling_env_var: string
+  // Pre-Phase-B item 3: 'runway_router_dry_run' — an advisory, not a quote
+  // for the submit path.
+  estimate_source: string
   estimates: RenderEstimateShot[]
 }
 

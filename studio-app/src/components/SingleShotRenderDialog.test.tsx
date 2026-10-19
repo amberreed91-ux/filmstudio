@@ -233,6 +233,40 @@ describe('SingleShotRenderDialog', () => {
     })
   })
 
+  it('labels the cost estimate as a router dry-run, not a quote for the submit path', async () => {
+    hookState.run = packageReadyRun()
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith('/renders/estimate')) {
+        return Promise.resolve(jsonResponse({
+          run_id: 'run-single',
+          ceiling_credits: 300,
+          ceiling_env_var: 'RUNWAY_RENDER_MAX_CREDITS',
+          estimate_source: 'runway_router_dry_run',
+          estimates: [{
+            storyboard_shot_id: 'sbs-002',
+            shot_id: 'scene_001_shot_002',
+            planned_duration_seconds: 5,
+            effective_duration_seconds: 5,
+            estimated_credits: 20,
+            resolved_model: 'gen4.5',
+            estimate_available: true,
+          }],
+        }))
+      }
+      return Promise.resolve(jsonResponse({ run: packageReadyRun(), transitions: [] }))
+    })
+    renderPanel()
+
+    fireEvent.click(screen.getByTestId('single-shot-render-toggle'))
+    fireEvent.click(screen.getByDisplayValue('sbs-002'))
+    fireEvent.click(screen.getByTestId('single-shot-check-cost'))
+    await waitFor(() => expect(screen.getByTestId('single-shot-estimate')).toBeInTheDocument())
+    const label = screen.getByTestId('single-shot-estimate').textContent || ''
+    expect(label).toContain('Router dry-run estimate')
+    expect(label).toContain('not a quote')
+  })
+
   it('queues the whole package only behind its own control with allow_full_package', async () => {
     hookState.run = packageReadyRun()
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(

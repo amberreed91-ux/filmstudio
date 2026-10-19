@@ -514,6 +514,8 @@ def test_estimate_probe_returns_advisory_without_jobs(tmp_path: Path, monkeypatc
     )
     assert probe["ceiling_credits"] == 300
     assert probe["ceiling_env_var"] == "RUNWAY_RENDER_MAX_CREDITS"
+    # Pre-Phase-B item 3: the probe labels itself a Router dry-run advisory.
+    assert probe["estimate_source"] == "runway_router_dry_run"
     assert len(probe["estimates"]) == 1
     row = probe["estimates"][0]
     assert row["storyboard_shot_id"] == ids[1]

@@ -101,6 +101,10 @@ class RenderEstimateResponse(BaseModel):
     run_id: str
     ceiling_credits: float
     ceiling_env_var: str = "RUNWAY_RENDER_MAX_CREDITS"
+    # Pre-Phase-B item 3: the estimate is a Runway Model Router dry-run
+    # advisory (dryRun:true, model-agnostic), NOT a quote for the path the
+    # owner's submit uses. Consumers must label it as such.
+    estimate_source: str = "runway_router_dry_run"
     estimates: list[RenderEstimateShot] = Field(default_factory=list)
 
 
