@@ -116,3 +116,35 @@ step 5 queues the whole package's shots, not a single shot (there is no
 one-shot canonical video button; single-shot video exists only via the
 board-shot render route, a different path); retries keep the original provider
 (`:161-163`, `retry_render` reuses jobs without duplicates).
+
+### Correction (2026-10-19, pre–Phase B verification — supersedes step 5 above)
+
+Step 5 as written is wrong on two counts, verified by reading the submit path
+end to end (no render performed):
+
+1. **The dialog does not send `runway_router`.** The panel sends the Previs
+   room's render-provider picker value straight through
+   (`renderCanonicalShots(run.run_id, { provider: renderProvider, … })`,
+   `studio-app/src/lib/canonicalWorkflowApi.ts`). The picker offers `runway`
+   (`PrevisRoom.tsx:398-403`, `buildRenderProviderOptions`), so the owner
+   path submits with **provider `runway`** — never `runway_router`.
+2. **Provider `runway` submits nothing.** `RenderService.submit_job`
+   (`studio-backend/app/services/render.py:4383-4408`) marks any
+   `runway`/`runway_direct` job **failed** with
+   `direct_runway_submission_disabled` ("rebuild through the Runway Model
+   Router with a frozen contract") before any adapter is reached, and
+   `RunwayAdapter.submit_job` (`studio-backend/app/adapters/__init__.py:799`)
+   independently refuses the legacy direct video boundary fail-closed. No
+   video model is selected, no endpoint is contacted, no POST is sent, no
+   credits move. The workflow run ends `render_failed`; the failure is the
+   guard working, not a render.
+
+Corrected click-path outcome: steps 1–4 are durable and free; confirming the
+one-shot dialog with provider `runway` creates exactly one job row, then fails
+it closed at submit — **the owner gets no video and spends nothing**.
+`runway_router` cannot be driven from this dialog either: creation raises
+without a `generation_contract` (`render.py:2161`), which this workflow never
+passes. A working owner render requires Phase B to route this dialog through
+the frozen-contract Router path; until then, no Gate-1/Phase-A claim about
+"the `runway` path that actually submits" should be relied on — real
+submission was proven only under the fake renderer in tests.
