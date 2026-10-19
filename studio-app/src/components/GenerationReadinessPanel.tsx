@@ -223,6 +223,22 @@ function SingleTakeDialog({
   const estimate = selected?.cost_estimate ?? null
   const estimateKnown = Boolean(estimate?.estimated) && estimate?.estimated_credits != null
   const priorSubmissions = selected?.prior_render_submissions ?? 0
+  const priorFailed = selected?.prior_failed_render_submissions ?? 0
+  const priorLabel = (count: number) => count === 0
+    ? 'no prior Runway submissions'
+    : `${count} prior Runway submission${count === 1 ? '' : 's'}`
+  const failedLabel = priorFailed > 0 ? ` (${priorFailed} failed — retry allowed)` : ''
+  // Double-click guard: the parent's busy flag flips only after re-render,
+  // so a same-tick second click is stopped here, synchronously. The
+  // idempotency key the parent sends covers anything past this point.
+  const confirmingRef = useRef(false)
+  const [confirming, setConfirming] = useState(false)
+  useEffect(() => {
+    if (!busy) {
+      confirmingRef.current = false
+      setConfirming(false)
+    }
+  }, [busy])
   return (
     <div className="mt-2" data-testid="single-take-dialog">
       <p className="text-[10px] text-zinc-500">
@@ -241,7 +257,8 @@ function SingleTakeDialog({
             <span>Shot {entry.shot_order ?? entry.shot_id}</span>
             <span className="text-[10px] text-zinc-500">
               {entry.duration_seconds ? `· ${entry.duration_seconds}s` : ''}
-              {' '}· {(entry.prior_render_submissions ?? 0) === 0 ? 'no prior Runway submissions' : `${entry.prior_render_submissions} prior Runway submission${entry.prior_render_submissions === 1 ? '' : 's'}`}
+              {' '}· {priorLabel(entry.prior_render_submissions ?? 0)}
+              {(entry.prior_failed_render_submissions ?? 0) > 0 ? ` (${entry.prior_failed_render_submissions} failed)` : ''}
             </span>
           </label>
         ))}
@@ -253,7 +270,7 @@ function SingleTakeDialog({
         <div className="mt-3 space-y-2 border-t border-white/10 pt-3" data-testid="single-take-confirm">
           <div className="text-xs text-zinc-200">
             Shot {selected.shot_order ?? selected.shot_id} · 1 Runway submission
-            {' '}· {priorSubmissions === 0 ? 'no prior Runway submissions' : `${priorSubmissions} prior Runway submission${priorSubmissions === 1 ? '' : 's'}`}
+            {' '}· {priorLabel(priorSubmissions)}{failedLabel}
           </div>
           <div className="text-[11px] text-zinc-300">
             Characters: {characters.length > 0 ? characters.join(', ') : 'none named'}
@@ -295,8 +312,13 @@ function SingleTakeDialog({
           </label>
           <button
             type="button"
-            disabled={!spendConfirmed || busy}
-            onClick={() => onConfirm(String(selected.storyboard_shot_id))}
+            disabled={!spendConfirmed || busy || confirming}
+            onClick={() => {
+              if (confirmingRef.current) return
+              confirmingRef.current = true
+              setConfirming(true)
+              onConfirm(String(selected.storyboard_shot_id))
+            }}
             className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 disabled:opacity-40"
             data-testid="single-take-confirm-button"
           >

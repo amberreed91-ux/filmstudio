@@ -97,6 +97,7 @@ import { useGenerationPreflightGuard } from '../components/useGenerationPrefligh
 import { getShotSignals, type ShotSignalsEnvelope } from '../lib/shotSignals'
 import {
   buildPrevisScenePipelinePayload,
+  buildSingleTakeIdempotencyKey,
   canGeneratePrevisScenePipeline,
   type PrevisSceneScoreMode,
 } from '../lib/scenePipeline'
@@ -1186,6 +1187,10 @@ export default function PrevisRoom() {
           storyboard_shot_ids: selection.storyboardShotIds,
           allow_full_package: selection.allowFullPackage,
           acknowledge_unknown_cost: selection.acknowledgeUnknownCost,
+          idempotency_key: buildSingleTakeIdempotencyKey(
+            finalPreflight.prepared_snapshot_id,
+            selection.storyboardShotIds,
+          ),
         },
       )
       if (response.error || !response.result) {

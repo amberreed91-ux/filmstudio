@@ -498,6 +498,48 @@ describe('GenerationReadinessPanel', () => {
     })
   })
 
+  it('single take: a same-tick double confirm submits once', async () => {
+    mockPreflight.mockResolvedValue(readyPreflight())
+    const onGenerateSingleShot = vi.fn()
+    await renderResolvedPanel({ onGenerateSingleShot })
+    fireEvent.click(screen.getByTestId('single-take-toggle'))
+    fireEvent.click(screen.getByDisplayValue('sbs_001'))
+    fireEvent.click(screen.getByText(/I understand this spends Runway credits/))
+    const button = screen.getByTestId('single-take-confirm-button')
+    fireEvent.click(button)
+    fireEvent.click(button)
+    expect(onGenerateSingleShot).toHaveBeenCalledTimes(1)
+  })
+
+  it('single take: failed priors are shown without blocking the retry', async () => {
+    const preflight = readyPreflight({
+      entries: [
+        {
+          ...readyShot(1),
+          prior_render_submissions: 2,
+          prior_failed_render_submissions: 1,
+          cost_estimate: { model: 'router', duration_seconds: 5, estimated_credits: null, estimated: false },
+        },
+        readyShot(2),
+      ],
+    })
+    mockPreflight.mockResolvedValue(preflight)
+    const onGenerateSingleShot = vi.fn()
+    await renderResolvedPanel({ onGenerateSingleShot })
+    fireEvent.click(screen.getByTestId('single-take-toggle'))
+    fireEvent.click(screen.getByDisplayValue('sbs_001'))
+    expect(screen.getByTestId('single-take-confirm')).toHaveTextContent(
+      '2 prior Runway submissions (1 failed — retry allowed)',
+    )
+    fireEvent.click(screen.getByText(/I understand this spends Runway credits/))
+    fireEvent.click(screen.getByTestId('single-take-confirm-button'))
+    expect(onGenerateSingleShot).toHaveBeenCalledWith({
+      storyboardShotIds: ['sbs_001'],
+      allowFullPackage: false,
+      acknowledgeUnknownCost: true,
+    })
+  })
+
   it('single take: hidden while the scene is blocked', async () => {
     mockPreflight.mockResolvedValue(blockedPreflight())
     await renderResolvedPanel({ onGenerateSingleShot: vi.fn() })

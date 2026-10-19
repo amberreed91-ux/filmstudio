@@ -642,6 +642,7 @@ describe('generateScenePipeline', () => {
       storyboard_shot_ids: null,
       allow_full_package: false,
       acknowledge_unknown_cost: false,
+      idempotency_key: null,
     })
   })
 
@@ -659,6 +660,19 @@ describe('generateScenePipeline', () => {
     expect(body.storyboard_shot_ids).toEqual(['sbs-002'])
     expect(body.allow_full_package).toBe(false)
     expect(body.acknowledge_unknown_cost).toBe(true)
+    expect(body.idempotency_key).toBeNull()
+  })
+
+  it('sends the client idempotency key when supplied', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'complete', shots: [] }), { status: 200 }),
+    )
+    await generateScenePipeline('proj-scene', 'scene_003', {
+      storyboard_shot_ids: ['sbs-002'],
+      idempotency_key: 'take:snap-1:sbs-002',
+    })
+    const [, init] = fetchMock.mock.calls[0]
+    expect(JSON.parse(String(init?.body)).idempotency_key).toBe('take:snap-1:sbs-002')
   })
 
   it('returns an error object when scene pipeline generation fails', async () => {

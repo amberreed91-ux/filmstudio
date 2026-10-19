@@ -34,3 +34,19 @@ export function canGeneratePrevisScenePipeline(
 ): boolean {
   return scoreMode !== 'manual_post_render' || manualScorePath.trim().length > 0
 }
+
+/**
+ * Client idempotency key for a single-take submit, scoped to the fresh
+ * preflight snapshot and the selected board shots. A same-tick double
+ * confirm replays the identical key, so the backend reuses one job row;
+ * a new preflight (new snapshot) mints a new key. The backend always
+ * appends the frozen manifest fingerprint and shot id server-side.
+ */
+export function buildSingleTakeIdempotencyKey(
+  preparedSnapshotId: string | null | undefined,
+  storyboardShotIds: string[],
+): string {
+  const snapshot = (preparedSnapshotId || '').trim() || 'no-snapshot'
+  const shots = [...storyboardShotIds].map((id) => id.trim()).filter(Boolean).sort().join(',')
+  return `take:${snapshot}:${shots}`
+}

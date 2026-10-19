@@ -2157,6 +2157,8 @@ export type ScenePipelineGeneratePayload = {
   storyboard_shot_ids?: string[] | null
   allow_full_package?: boolean
   acknowledge_unknown_cost?: boolean
+  /** Client replay key, always bound to content server-side. */
+  idempotency_key?: string | null
 }
 
 export type ScenePipelineShotFilterEcho = {
@@ -3019,6 +3021,7 @@ export async function generateScenePipeline(
           storyboard_shot_ids: payload.storyboard_shot_ids ?? null,
           allow_full_package: Boolean(payload.allow_full_package),
           acknowledge_unknown_cost: Boolean(payload.acknowledge_unknown_cost),
+          idempotency_key: payload.idempotency_key ?? null,
         }),
       },
     )
@@ -3090,6 +3093,8 @@ export interface GenerationPreflightEntry {
   character_focus?: string[]
   /** Persisted Runway render jobs for this shot (advisory, may be 0). */
   prior_render_submissions?: number
+  /** Failed priors: shown, but never block a retry. */
+  prior_failed_render_submissions?: number
   duration_seconds?: number
   camera_instructions?: GenerationPreflightCameraInstruction[]
   camera_plan?: Record<string, unknown>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPrevisScenePipelinePayload,
+  buildSingleTakeIdempotencyKey,
   canGeneratePrevisScenePipeline,
 } from './scenePipeline'
 
@@ -39,5 +40,26 @@ describe('Previs scene pipeline payload', () => {
     expect(canGeneratePrevisScenePipeline('none', '')).toBe(true)
     expect(canGeneratePrevisScenePipeline('manual_post_render', '')).toBe(false)
     expect(canGeneratePrevisScenePipeline('manual_post_render', ' /tmp/score.wav ')).toBe(true)
+  })
+})
+
+describe('single-take idempotency key', () => {
+  it('scopes the key to the snapshot and the selected shots', () => {
+    expect(buildSingleTakeIdempotencyKey('snap-1', ['sbs-002'])).toBe('take:snap-1:sbs-002')
+    expect(buildSingleTakeIdempotencyKey('snap-1', ['sbs-002'])).toBe(
+      buildSingleTakeIdempotencyKey('snap-1', ['sbs-002']),
+    )
+  })
+
+  it('mints a new key when the snapshot changes', () => {
+    expect(buildSingleTakeIdempotencyKey('snap-1', ['sbs-002'])).not.toBe(
+      buildSingleTakeIdempotencyKey('snap-2', ['sbs-002']),
+    )
+  })
+
+  it('orders and trims shot ids, falling back without a snapshot', () => {
+    expect(buildSingleTakeIdempotencyKey(null, [' sbs-002 ', 'sbs-001'])).toBe(
+      'take:no-snapshot:sbs-001,sbs-002',
+    )
   })
 })
