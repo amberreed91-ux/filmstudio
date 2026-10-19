@@ -20,19 +20,31 @@ step below lives here except Maya's look and the Desk confirmation.
 
 ## 1. Maya's look (reference gate)
 
-**[NOT VERIFIED as written]** — I could not find an edit control for Maya's
-look in the Page (`pages/PageRoom.tsx` shows character truth read-only,
-`page-characters`). The closest verified control is look approval in
-Reference Space:
+The look text the prompt builder sends (age + look drift-guard tokens) is
+the character record's `look` field
+(`studio-backend/app/services/shot_prompt_builder.py`, `_appearance_only_text`).
+Edit it here — not in the Page, which shows character truth read-only
+(`pages/PageRoom.tsx`, `page-characters`):
 
-1. Open Reference Space (`pages/ReferenceSpace.tsx`), find Maya's look.
-2. Make sure the look has a saved face image (without one, approval is
-   refused in the UI).
-3. Click Approve for the look. This stamps a new `profile_revision` — the
-   canonical appearance the reference gate checks.
+1. Open the Writers Room (`pages/WritersRoom.tsx`), Characters step, Maya's
+   card. Edit the **Maya appearance** box — this is the `look` field,
+   including the paper and the rooftop sentences — and optionally **Maya
+   render description** (`visual_prompt_summary`).
+2. Click the card's Save (`handleSaveCharacter` → `updateCharacter`, then
+   looks refresh). If the boxes are disabled with "Physical look locked",
+   revise the look first (step 4) — locked looks block profile edits.
+3. Open Reference Space (`pages/ReferenceSpace.tsx`), Maya's look card.
+   The saved profile change makes the locked approval stale: click
+   **Revise look**, then **Approve and lock look** with her face image
+   (approval is refused without one). This stamps the new
+   `profile_revision` the reference gate checks.
 
-No new board version. If you edited Maya's description text elsewhere,
-re-derive/approve after the text change so the look anchors the new words.
+No new board version. Rebuild the board prompts (step 2) after
+re-approval so the video carries the new look words.
+
+**[NOT VERIFIED]** — the literal "paper" / "rooftop" strings appear
+nowhere in code; they are data inside Maya's `look` text. The field, the
+save path, and the revise/re-approve path above are all verified.
 
 ## 2. Rebuild the board prompts
 
