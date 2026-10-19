@@ -30,6 +30,119 @@ const isResolved = (data: SceneDirection, row: CoverageDecision): boolean => {
   return false
 }
 
+const SILENCE_ELIGIBLE_KINDS = ['establishing', 'establishing_shot', 'transition', 'transition_shot']
+
+const isSilenceEligibleKind = (kind: string): boolean =>
+  SILENCE_ELIGIBLE_KINDS.includes(kind.trim().toLowerCase())
+
+const shotKindLabel = (kind: string): string => (kind.trim() ? kind : 'kind not recorded')
+
+const contentOwnedByShot = (data: SceneDirection, shotId: string): CoverageDecision[] =>
+  data.coverage_decisions.filter(row => row.obligation_type === 'content' && row.status === 'ASSIGNED' && row.shot_id === shotId)
+
+type ShotBoardState = 'covered' | 'needs-line' | 'silence-allowed'
+
+const shotBoardState = (data: SceneDirection, shotId: string, eligible: boolean): ShotBoardState =>
+  contentOwnedByShot(data, shotId).length > 0 ? 'covered' : eligible ? 'silence-allowed' : 'needs-line'
+
+const shotBoardStateLabel = (state: ShotBoardState): string =>
+  state === 'covered' ? 'covered' : state === 'silence-allowed' ? 'silence allowed' : 'needs a line'
+
+const shotBoardChipClass = (state: ShotBoardState): string =>
+  state === 'covered'
+    ? 'border-emerald-300/40 text-emerald-200'
+    : state === 'silence-allowed'
+      ? 'border-amber-200/40 text-amber-100'
+      : 'border-rose-300/50 text-rose-200'
+
+const shotNumberOf = (data: SceneDirection, shotId: string | null): number | null =>
+  data.shots.find(item => item.shot_id === shotId)?.shot_number ?? null
+
+const VO_CUE_PATTERN = /\(V\.O\.\)/i
+
+const scrollToShotCard = (shotId: string): void => {
+  document.getElementById(`shot-board-card-${shotId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+/**
+ * "Move a line here" for one shot card. Presentation only: a move is a single
+ * content reassignment through the existing editCoverage('content', ...)
+ * path, committed by the existing save flow. A donor left with no lines is
+ * blocked with the reason, and another line is suggested.
+ */
+function MoveLineControl({ data, targetShotId, targetShotNumber, onMove }: {
+  data: SceneDirection
+  targetShotId: string
+  targetShotNumber: number
+  onMove: (lineId: string) => void
+}) {
+  const [selected, setSelected] = useState('')
+  const candidates = data.coverage_decisions.filter(row =>
+    row.obligation_type === 'content' && row.status === 'ASSIGNED' && row.shot_id && row.shot_id !== targetShotId)
+  const donorKeeps = (donorId: string | null): number =>
+    donorId ? contentOwnedByShot(data, donorId).length - 1 : 0
+  const movable = candidates.filter(row => donorKeeps(row.shot_id) >= 1)
+  const targetOwns = contentOwnedByShot(data, targetShotId).length
+  if (candidates.length === 0) {
+    return <p className="text-xs text-zinc-400">No lines are owned by other shots yet — assign a line to a shot in section A first, then move it here.</p>
+  }
+  if (movable.length === 0) {
+    const only = candidates[0]
+    const donorNumber = shotNumberOf(data, only.shot_id)
+    return <p role="status" className="text-xs leading-relaxed text-amber-200">Moving {only.obligation_id} would leave Shot {donorNumber ?? only.shot_id} with no lines, so it stays put. Assign another line to Shot {targetShotNumber} in section A first.</p>
+  }
+  const chosen = candidates.find(row => row.obligation_id === selected)
+  const chosenDonorNumber = chosen ? shotNumberOf(data, chosen.shot_id) : null
+  const chosenBlocked = chosen ? donorKeeps(chosen.shot_id) < 1 : false
+  const suggestion = movable.find(row => row.obligation_id !== selected)
+  return (
+    <div className="space-y-2">
+      <label className="block text-xs text-zinc-300">Move a line here<select aria-label={`Move a line to shot ${targetShotNumber}`} className={inputClass} value={selected} onChange={event => setSelected(event.target.value)}>
+        <option value="">Choose a line from another shot</option>
+        {candidates.map(row => {
+          const donorNumber = shotNumberOf(data, row.shot_id)
+          const empties = donorKeeps(row.shot_id) < 1
+          return <option key={row.obligation_id} value={row.obligation_id} disabled={empties}>{row.obligation_id} · from Shot {donorNumber ?? row.shot_id}{empties ? ' · would leave that shot empty' : ''}</option>
+        })}
+      </select></label>
+      {chosen && !chosenBlocked && <p role="status" className="text-xs text-zinc-300">Shot {chosenDonorNumber ?? chosen.shot_id} keeps {donorKeeps(chosen.shot_id)} {donorKeeps(chosen.shot_id) === 1 ? 'line' : 'lines'}. Shot {targetShotNumber} gets {targetOwns + 1}.</p>}
+      {chosen && chosenBlocked && <p role="status" className="text-xs leading-relaxed text-amber-200">Cannot move {chosen.obligation_id} — Shot {chosenDonorNumber ?? chosen.shot_id} would be left with no lines.{suggestion ? ` Try ${suggestion.obligation_id} from Shot ${shotNumberOf(data, suggestion.shot_id) ?? suggestion.shot_id} instead.` : ' Assign another line in section A first.'}</p>}
+      <button type="button" disabled={!chosen || chosenBlocked} onClick={() => { if (chosen && !chosenBlocked) { onMove(chosen.obligation_id); setSelected('') } }} className={buttonClass}>Move line to Shot {targetShotNumber}</button>
+    </div>
+  )
+}
+
+/**
+ * V.O. group: the cue is a content line, the spoken words are dialogue. Each
+ * stays separately assignable in sections A and B; the spoken lines are
+ * labeled as one unit that stays together on one shot.
+ */
+function VoGroupBox({ data }: { data: SceneDirection }) {
+  const cueUnits = data.coverage_obligations.filter(row => row.obligation_type === 'content' && VO_CUE_PATTERN.test(row.source_text))
+  if (data.dialogue.length === 0 && cueUnits.length === 0) return null
+  const spokenOwners = data.dialogue.map(line => {
+    const decision = decisionFor(data, 'dialogue', line.line_id)
+    return { line, shotId: decision && decision.status === 'ASSIGNED' ? decision.shot_id : null }
+  })
+  const assignedShots = [...new Set(spokenOwners.map(row => row.shotId).filter((id): id is string => id !== null))]
+  const togetherShot = assignedShots.length === 1 ? shotNumberOf(data, assignedShots[0]) : null
+  return (
+    <div data-testid="vo-group" className="space-y-2 rounded-md border border-white/10 bg-black/20 p-3">
+      <h5 className="text-xs font-medium text-zinc-100">V.O. group — cue plus spoken lines</h5>
+      <p className="text-xs leading-relaxed text-zinc-400">The cue (for example “MAYA (V.O.)”) is a content line; the spoken words are dialogue. The cue and each spoken line are assigned separately in sections A and B, and the spoken lines below stay together as one unit on one shot.</p>
+      {cueUnits.map(unit => {
+        const decision = decisionFor(data, 'content', unit.obligation_id)
+        const owner = decision && decision.status === 'ASSIGNED' ? shotNumberOf(data, decision.shot_id) : null
+        return <p key={unit.obligation_id} className="text-xs text-zinc-300">Cue {unit.obligation_id} (“{unit.source_text.slice(0, 60)}”) · {owner ? `Shot ${owner}` : 'no shot yet — assign it in section A'}</p>
+      })}
+      <p className="text-xs text-zinc-300">Spoken-dialogue block · one unit that stays together · {togetherShot ? `together on Shot ${togetherShot}` : assignedShots.length === 0 ? 'no shot yet — assign every spoken line to the same shot in section B' : 'split across shots — bring every spoken line onto one shot in section B'}</p>
+      <ul className="space-y-1">
+        {spokenOwners.map(({ line, shotId }) => <li key={line.line_id} className="text-[11px] text-zinc-400">{line.line_id} · {line.character} · {shotId ? `Shot ${shotNumberOf(data, shotId) ?? shotId}` : 'no shot yet'}</li>)}
+      </ul>
+    </div>
+  )
+}
+
 /** Visible decision label: UNRESOLVED, or the chosen decision state. */
 const badgeLabel = (data: SceneDirection, row: CoverageDecision): string => {
   if (row.status !== 'UNASSIGNED') return row.status
@@ -68,6 +181,8 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
   // reloads or a save produces a successor version, any open review closes.
   const [reviewVersion, setReviewVersion] = useState<string | null>(null)
   const reviewing = reviewVersion !== null && reviewVersion === data?.version_id
+  const [savedVersion, setSavedVersion] = useState<string | null>(null)
+  const showSavedVersion = savedVersion !== null && savedVersion === data?.version_id
 
   const currentIndex = data?.shots.findIndex(shot => shot.shot_number === activeShotNumber) ?? -1
   const shot = data?.shots[currentIndex]
@@ -104,9 +219,20 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
     { key: 'shot_dialogue', label: 'D · SHOT DIALOGUE', count: shotDialogueRows.length, resolved: shotDialogueRows.filter(row => isResolved(data!, row)).length },
   ]
 
+  const coveredShotCount = data ? data.shots.filter(item => contentOwnedByShot(data, item.shot_id).length > 0).length : 0
+  const unassignedContent = data ? data.coverage_decisions.filter(row => row.obligation_type === 'content' && row.status === 'UNASSIGNED') : []
+  const blockingSummary = !data ? '' : !data.coverage_blocked
+    ? 'Nothing on this board is blocking render.'
+    : data.coverage_blockers.length > 0
+      ? `What is blocking render: ${data.coverage_blockers[0]}${data.coverage_blockers.length > 1 ? ` (+${data.coverage_blockers.length - 1} more)` : ''}`
+      : 'What is blocking render: coverage is blocked — work each card below.'
+
   const confirmSave = async () => {
     const result = await editor.save()
-    if (result) { setReviewVersion(null); onSaved() }
+    // The save response model (SceneDirection) returns the new draft
+    // version_id but no image-prompt carry-forward fields, so the success
+    // note below stays static about prompts and names the draft version.
+    if (result) { setReviewVersion(null); setSavedVersion(result.version_id); onSaved() }
   }
 
   return (
@@ -183,17 +309,49 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
                 </fieldset> })}
               </section>
 
-              <section aria-label="Shot content coverage" data-testid="coverage-section-shot-content" className="space-y-3 border-t border-white/10 pt-3">
-                <h4 className="text-sm font-medium text-zinc-100">C · SHOT CONTENT — {shotContentRows.length} obligations</h4>
-                <p className="text-xs text-zinc-400">A shot is satisfied only when you assign content to it, or — for an eligible establishing/transition shot — when you explicitly record intentional silence with a reason. A shot is never silently marked.</p>
-                {shotContentRows.map(row => { const decision = decisionFor(data, 'shot_content', row.obligation_id); const item = data.shots.find(candidate => candidate.shot_id === row.obligation_id); const assigned = ownsAssignment(data, 'content', row.obligation_id); if (!decision || !item) return null; const silenceEligible = ['establishing', 'establishing_shot', 'transition', 'transition_shot'].includes(item.shot_kind.toLowerCase()); return <div key={row.obligation_id} className={cardClass}>
-                  <div className="flex flex-wrap items-center gap-2"><StatusBadge label={badgeLabel(data, decision)} /><span className="text-xs text-zinc-200">Shot {item.shot_number} · <code>{item.shot_id}</code></span></div>
-                  <p className="text-xs text-zinc-400">{data.coverage_decisions.filter(candidate => candidate.obligation_type === 'content' && candidate.status === 'ASSIGNED' && candidate.shot_id === item.shot_id).length} explicitly assigned source line(s)</p>
-                  {assigned ? <p className="text-xs text-zinc-300">Current status: content assigned to this shot above.</p> : <>
-                    <label className="block text-xs text-zinc-300">Disposition<select aria-label={`Content disposition for shot ${item.shot_number}`} className={inputClass} value={decision.status} onChange={event => { const status = event.target.value as CoverageDecision['status']; editor.editCoverage('shot_content', item.shot_id, { status, reason: status === 'UNASSIGNED' ? '' : decision.reason }) }}><option value="UNASSIGNED">UNASSIGNED · decision required</option>{silenceEligible && <option value="INTENTIONAL_SILENCE">Intentional establishing shot</option>}</select></label>
-                    {decision.status === 'INTENTIONAL_SILENCE' && <label className="block text-xs text-zinc-300">Creator reason (required)<textarea aria-label={`Content disposition reason for shot ${item.shot_number}`} required maxLength={2000} rows={2} className={inputClass} value={decision.reason} onChange={event => editor.editCoverage('shot_content', item.shot_id, { reason: event.target.value })} /></label>}
-                  </>}
-                </div> })}
+              <section aria-label="Shot board" data-testid="coverage-section-shot-content" className="space-y-3 border-t border-white/10 pt-3">
+                <h4 className="text-sm font-medium text-zinc-100">C · SHOT BOARD — {data.shots.length} shots</h4>
+                <p className="text-xs text-zinc-400">One card per approved shot, read from the live board. A shot is covered when a content line is assigned to it in section A; an eligible establishing or transition shot may instead record intentional silence with a reason. This board only explains the rules — it never changes them.</p>
+                <p data-testid="shot-board-progress" role="status" className="text-xs font-medium text-amber-100">{coveredShotCount} of {data.shots.length} shots covered</p>
+                <nav aria-label="Shot chips" className="flex flex-wrap gap-2">
+                  {data.shots.map(item => {
+                    const chipState = shotBoardState(data, item.shot_id, isSilenceEligibleKind(item.shot_kind))
+                    return <button key={item.shot_id} type="button" aria-label={`Go to Shot ${item.shot_number} card · ${shotBoardStateLabel(chipState)}`} onClick={() => scrollToShotCard(item.shot_id)} className={`rounded border px-2 py-1 text-[11px] ${shotBoardChipClass(chipState)}`}>Shot {item.shot_number} · {shotBoardStateLabel(chipState)}</button>
+                  })}
+                </nav>
+                <p role="status" className="text-xs leading-relaxed text-zinc-300">{blockingSummary}</p>
+                <VoGroupBox data={data} />
+                <div data-testid="shot-board-tray" className="rounded-md border border-white/10 bg-black/20 p-3">
+                  <h5 className="text-xs font-medium text-zinc-100">Lines with no shot · {unassignedContent.length}</h5>
+                  {unassignedContent.length === 0
+                    ? <p className="mt-1 text-xs text-zinc-400">Every content line currently names a shot.</p>
+                    : <ul className="mt-1 space-y-1">{unassignedContent.map(row => <li key={row.obligation_id} className="text-[11px] text-zinc-400">{row.obligation_id} — assign it in section A above, or bring it onto a card with “Move a line here”.</li>)}</ul>}
+                </div>
+                {data.shots.map(item => {
+                  const decision = decisionFor(data, 'shot_content', item.shot_id)
+                  if (!decision) return null
+                  const silenceEligible = isSilenceEligibleKind(item.shot_kind)
+                  const owned = contentOwnedByShot(data, item.shot_id)
+                  const boardState = shotBoardState(data, item.shot_id, silenceEligible)
+                  return <article key={item.shot_id} id={`shot-board-card-${item.shot_id}`} data-testid={`shot-board-card-${item.shot_number}`} className={cardClass}>
+                    <div className="flex flex-wrap items-center gap-2"><StatusBadge label={badgeLabel(data, decision)} /><span className="text-xs text-zinc-200">Shot {item.shot_number} · <code>{item.shot_id}</code> · {shotKindLabel(item.shot_kind)}</span><span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${shotBoardChipClass(boardState)}`}>{shotBoardStateLabel(boardState)}</span></div>
+                    {boardState === 'covered' && <p className="text-xs text-zinc-300">Covered — {owned.length} {owned.length === 1 ? 'line' : 'lines'} explicitly assigned to this shot.</p>}
+                    {owned.length > 0 && <ul className="space-y-1">{owned.map(row => {
+                      const unit = data.coverage_obligations.find(candidate => candidate.obligation_type === 'content' && candidate.obligation_id === row.obligation_id)
+                      const isVoCue = unit ? VO_CUE_PATTERN.test(unit.source_text) : false
+                      return <li key={row.obligation_id} className="text-[11px] text-zinc-400">{row.obligation_id}{unit ? ` — “${unit.source_text.slice(0, 80)}”` : ''}{isVoCue ? ' · V.O. cue' : ''}</li>
+                    })}</ul>}
+                    {boardState === 'needs-line' && <p role="status" className="text-xs leading-relaxed text-rose-200">Needs a line — this {shotKindLabel(item.shot_kind)} cannot be silent, so intentional silence is not offered here. Assign a line in section A above, or move a line here.</p>}
+                    {boardState === 'silence-allowed' && <>
+                      <p className="text-xs leading-relaxed text-zinc-300">Silence allowed — this establishing or transition shot may record intentional silence with your reason, or take a line instead.</p>
+                      <label className="block text-xs text-zinc-300">Disposition<select aria-label={`Content disposition for shot ${item.shot_number}`} className={inputClass} value={decision.status} onChange={event => { const status = event.target.value as CoverageDecision['status']; editor.editCoverage('shot_content', item.shot_id, { status, reason: status === 'UNASSIGNED' ? '' : decision.reason }) }}><option value="UNASSIGNED">UNASSIGNED · decision required</option><option value="INTENTIONAL_SILENCE">Intentional establishing shot</option></select></label>
+                      {decision.status === 'INTENTIONAL_SILENCE' && <label className="block text-xs text-zinc-300">Creator reason (required)<textarea aria-label={`Content disposition reason for shot ${item.shot_number}`} required maxLength={2000} rows={2} className={inputClass} value={decision.reason} onChange={event => editor.editCoverage('shot_content', item.shot_id, { reason: event.target.value })} /></label>}
+                    </>}
+                    <MoveLineControl data={data} targetShotId={item.shot_id} targetShotNumber={item.shot_number} onMove={lineId => editor.editCoverage('content', lineId, { shot_id: item.shot_id })} />
+                  </article>
+                })}
+                <p className="text-xs leading-relaxed text-zinc-400">What saving does: saving mints a new DRAFT successor version and leaves the approved version untouched. Approved image prompts move across where the shot text did not change. Nothing is marked READY.</p>
+                {showSavedVersion && <p data-testid="save-success" role="status" className="text-xs text-emerald-200">Saved as new draft {savedVersion}. The approved source version is untouched; approved image prompts moved across where the shot text did not change.</p>}
               </section>
 
               <section aria-label="Shot dialogue coverage" data-testid="coverage-section-shot-dialogue" className="space-y-3 border-t border-white/10 pt-3">

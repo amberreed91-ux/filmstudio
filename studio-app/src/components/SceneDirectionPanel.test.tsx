@@ -104,7 +104,10 @@ describe('SceneDirectionPanel coverage decisions', () => {
     renderPanel()
     expect(screen.getByRole('combobox', { name: 'Coverage decision for content 1' })).toHaveValue('UNASSIGNED')
     expect(screen.getByRole('combobox', { name: 'Dialogue disposition for shot 1' })).toHaveValue('UNASSIGNED')
-    expect(screen.getByRole('combobox', { name: 'Content disposition for shot 1' })).toHaveValue('UNASSIGNED')
+    // Shot 1 is a close-up with no lines: the board replaces the dead
+    // one-option disposition select with text that says why and what to do.
+    expect(screen.queryByRole('combobox', { name: 'Content disposition for shot 1' })).toBeNull()
+    expect(screen.getByText(/Needs a line — this close_up cannot be silent/)).toBeTruthy()
   })
 })
 
@@ -262,9 +265,11 @@ describe('SceneDirectionPanel coverage workspace (60 obligations)', () => {
     expect(optionValues('Coverage decision for dialogue 1')).toEqual(['UNASSIGNED', 'ASSIGNED', 'EXPLICITLY_OMITTED'])
     // Shot dialogue: omission or intentional silence with a reason.
     expect(optionValues('Dialogue disposition for shot 1')).toEqual(['UNASSIGNED', 'INTENTIONAL_SILENCE', 'EXPLICITLY_OMITTED'])
-    // Shot content: intentional silence only on an eligible establishing shot.
+    // Shot content: intentional silence only on an eligible establishing shot;
+    // an ineligible empty shot shows why instead of a one-option select.
     expect(optionValues('Content disposition for shot 1')).toEqual(['UNASSIGNED', 'INTENTIONAL_SILENCE'])
-    expect(optionValues('Content disposition for shot 2')).toEqual(['UNASSIGNED'])
+    expect(screen.queryByRole('combobox', { name: 'Content disposition for shot 2' })).toBeNull()
+    expect(within(screen.getByTestId('shot-board-card-2')).getByText(/Needs a line/)).toBeTruthy()
   })
 
   it('requires an explicit shot for assignments and a reason for omission or silence', () => {
