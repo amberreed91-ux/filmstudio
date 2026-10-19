@@ -82,6 +82,30 @@ function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), { status: 200 })
 }
 
+function packageTimestampRun(packageCreatedAt: string | null, boardApprovedAt: string | null): CanonicalWorkflowRun {
+  const run = packageReadyRun()
+  return {
+    ...run,
+    data: {
+      ...run.data,
+      artifacts: {
+        ...run.data.artifacts,
+        production_package: {
+          ...run.data.artifacts.production_package as Record<string, unknown>,
+          ...(packageCreatedAt === null ? { created_at: undefined } : { created_at: packageCreatedAt }),
+        },
+      },
+      approvals: {
+        storyboard: {
+          version_id: 'sbv-approved',
+          approved_at: boardApprovedAt,
+          approved_by: 'creator',
+        },
+      },
+    },
+  }
+}
+
 function renderPanel() {
   return render(
     <CanonicalWorkflowPanel
@@ -265,6 +289,22 @@ describe('SingleShotRenderDialog', () => {
     const label = screen.getByTestId('single-shot-estimate').textContent || ''
     expect(label).toContain('Router dry-run estimate')
     expect(label).toContain('not a quote')
+  })
+
+  it('warns when the package predates the thread\'s board approval, and stays silent otherwise', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({}))
+
+    hookState.run = packageTimestampRun('2026-10-10T12:00:00+00:00', '2026-10-12T12:00:00+00:00')
+    const { unmount } = renderPanel()
+    fireEvent.click(screen.getByTestId('single-shot-render-toggle'))
+    expect(screen.getByTestId('stale-package-warning').textContent).toContain('built before the board approval')
+    unmount()
+    cleanup()
+
+    hookState.run = packageTimestampRun('2026-10-12T12:00:00+00:00', '2026-10-10T12:00:00+00:00')
+    renderPanel()
+    fireEvent.click(screen.getByTestId('single-shot-render-toggle'))
+    expect(screen.queryByTestId('stale-package-warning')).not.toBeInTheDocument()
   })
 
   it('queues the whole package only behind its own control with allow_full_package', async () => {

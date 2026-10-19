@@ -109,6 +109,25 @@ function capsNames(prompt: string): string[] {
   return [...new Set(hits)].slice(0, 12)
 }
 
+// Pre-Phase-B item 4: the package freezes prompt text at build time, while
+// approve_version re-stamps the SAME version in place — so a package built
+// before the board approval this thread started from carries older text, and
+// nothing else warns (thread-level `stale` only compares version ids).
+// Display-only: never blocks the render buttons.
+function packageOlderThanBoardApproval(run: CanonicalWorkflowRun | null): boolean {
+  const artifacts = record(run?.data.artifacts)
+  const builtAt = text(record(artifacts?.production_package)?.created_at)
+  const approvedAt = text(record(record(run?.data.approvals)?.storyboard)?.approved_at)
+  if (!builtAt || !approvedAt) return false
+  const aware = /([zZ]|[+-]\d{2}:?\d{2})$/
+  // Mixed naive/aware timestamps are not safely comparable — stay silent.
+  if (aware.test(builtAt) !== aware.test(approvedAt)) return false
+  const builtMs = Date.parse(builtAt)
+  const approvedMs = Date.parse(approvedAt)
+  if (Number.isNaN(builtMs) || Number.isNaN(approvedMs)) return false
+  return builtMs < approvedMs
+}
+
 export default function CanonicalWorkflowPanel({
   projectId,
   sceneId,
@@ -147,6 +166,7 @@ export default function CanonicalWorkflowPanel({
   )
   const decisions = useMemo(() => decisionRows(run), [run])
   const shots = useMemo(() => packageShots(run), [run])
+  const packageStale = packageOlderThanBoardApproval(run)
   const busy = Boolean(controller.action) || controller.polling
   const selectedShot = shots.find((shot) => shot.storyboard_shot_id === selectedShotId) ?? null
   const plannedDuration = selectedShot ? plannedDurationOf(selectedShot) : null
@@ -482,6 +502,12 @@ export default function CanonicalWorkflowPanel({
           <p className="mt-1 text-[10px] text-zinc-500">
             Nothing is preselected. Pick exactly one shot; confirming spends Runway credits for 1 submission.
           </p>
+          {packageStale ? (
+            <p className="mt-1 text-[10px] text-amber-200" data-testid="stale-package-warning">
+              This package was built before the board approval this thread started from. Rebuild the production
+              package to render the current board text — otherwise the video carries the older characters and staging.
+            </p>
+          ) : null}
           <div className="mt-2 space-y-1" role="radiogroup" aria-label="Package shots">
             {shots.map((shot) => (
               <label key={shot.storyboard_shot_id} className="flex items-center gap-2 text-xs text-zinc-200">
@@ -610,6 +636,12 @@ export default function CanonicalWorkflowPanel({
           <p className="mt-1 text-[10px] text-zinc-400">
             This submits every package shot and needs a separate owner decision. No per-shot estimate is shown here.
           </p>
+          {packageStale ? (
+            <p className="mt-1 text-[10px] text-amber-200" data-testid="stale-package-warning">
+              This package was built before the board approval this thread started from. Rebuild the production
+              package to render the current board text — otherwise the video carries the older characters and staging.
+            </p>
+          ) : null}
           <label className="mt-2 flex items-start gap-2 text-xs text-zinc-200">
             <input
               type="checkbox"
