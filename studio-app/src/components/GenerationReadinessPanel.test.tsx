@@ -447,6 +447,64 @@ describe('GenerationReadinessPanel', () => {
     expect(screen.getByTestId('preflight-authorization-failures')).toHaveTextContent('unresolved readiness blockers')
   })
 
+  it('single take: nothing preselected, exact prompt excerpt, spend ack, one id on confirm', async () => {
+    const longPrompt = `TAKE PROMPT Dreama holds the silence. ${'x'.repeat(562)}TAILMARKER-BEYOND-600${'y'.repeat(200)}`
+    const preflight = readyPreflight({
+      credit_ceiling_credits: 300,
+      credit_ceiling_env_var: 'RUNWAY_RENDER_MAX_CREDITS',
+      entries: [
+        {
+          ...readyShot(1),
+          prompt: longPrompt,
+          character_focus: ['Dreama'],
+          prior_render_submissions: 2,
+          cost_estimate: { model: 'router', duration_seconds: 5, estimated_credits: 60, estimated: true },
+        },
+        readyShot(2),
+      ],
+    })
+    mockPreflight.mockResolvedValue(preflight)
+    const onGenerateSingleShot = vi.fn()
+    await renderResolvedPanel({ onGenerateSingleShot })
+    expect(screen.getByTestId('single-take-section')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('single-take-toggle'))
+    // Nothing preselected: no confirm surface until a shot is picked.
+    expect(screen.getByTestId('single-take-dialog')).toBeInTheDocument()
+    expect(screen.queryByTestId('single-take-confirm')).toBeNull()
+    // One network call so far (the initial preflight); opening picks nothing.
+    expect(mockPreflight).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByDisplayValue('sbs_001'))
+    const confirm = screen.getByTestId('single-take-confirm')
+    expect(confirm).toHaveTextContent('1 Runway submission')
+    expect(confirm).toHaveTextContent('2 prior Runway submissions')
+    expect(confirm).toHaveTextContent('Characters: Dreama')
+    expect(confirm).toHaveTextContent('Duration: 5s')
+    expect(confirm).toHaveTextContent(longPrompt.slice(0, 600))
+    expect(confirm).not.toHaveTextContent('TAILMARKER-BEYOND-600')
+    expect(screen.getByTestId('single-take-estimate')).toHaveTextContent('Runway cost estimate (advisory')
+    expect(screen.getByTestId('single-take-estimate')).toHaveTextContent('60 credits')
+    expect(screen.getByTestId('single-take-estimate')).toHaveTextContent('ceiling 300 (RUNWAY_RENDER_MAX_CREDITS)')
+    // Spend checkbox gates the confirm button.
+    const button = screen.getByTestId('single-take-confirm-button')
+    expect(button).toBeDisabled()
+    fireEvent.click(screen.getByText(/I understand this spends Runway credits/))
+    expect(button).not.toBeDisabled()
+    fireEvent.click(button)
+    expect(onGenerateSingleShot).toHaveBeenCalledTimes(1)
+    expect(onGenerateSingleShot).toHaveBeenCalledWith({
+      storyboardShotIds: ['sbs_001'],
+      allowFullPackage: false,
+      acknowledgeUnknownCost: true,
+    })
+  })
+
+  it('single take: hidden while the scene is blocked', async () => {
+    mockPreflight.mockResolvedValue(blockedPreflight())
+    await renderResolvedPanel({ onGenerateSingleShot: vi.fn() })
+    expect(screen.getByTestId('preflight-status-blocked')).toBeInTheDocument()
+    expect(screen.queryByTestId('single-take-section')).toBeNull()
+  })
+
   it('shows the actual per-shot prompt without truncation and Prompt unavailable when absent', async () => {
     const noPrompt = readyPreflight()
     noPrompt.manifest!.shots = noPrompt.manifest!.shots!.map((shot, index) => ({

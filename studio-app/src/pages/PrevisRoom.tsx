@@ -89,7 +89,7 @@ import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
 import { browserPlaybackUrl } from '../lib/studioMedia'
 import ShotIntentRationaleCard from '../components/ShotIntentRationaleCard'
 import ShotSignalsPanel from '../components/ShotSignalsPanel'
-import GenerationReadinessPanel from '../components/GenerationReadinessPanel'
+import GenerationReadinessPanel, { type SingleTakeSelection } from '../components/GenerationReadinessPanel'
 import AiCameraApproval from '../components/AiCameraApproval'
 import StoryboardImagePromptPanel from '../components/StoryboardImagePromptPanel'
 import PromptRebuildPanel from '../components/PromptRebuildPanel'
@@ -1145,6 +1145,63 @@ export default function PrevisRoom() {
       setPipelineStatus((prev) => ({ ...prev, compose: 'failed', mp4: 'failed' }))
       // The backend may have rejected the batch at its gates — refresh the
       // displayed blockers from the backend instead of guessing.
+      bumpPreflightRevision()
+    } finally {
+      setScenePipelineRunning(false)
+    }
+  }, [selectedSceneId, effectiveProjectId, scenePipelineRunning, manualScorePath, sceneScoreMode, renderProvider, bumpPreflightRevision, confirmationGate, serverConfirmedDigestMap])
+
+  // Single-take submit (Phase 2B): one frozen storyboard shot through the
+  // scene-pipeline shot filter. Same durable-confirmation gate and final
+  // preflight as the whole-scene path; the backend keeps every whole-scene
+  // gate and creates only the selected take (no scene assembly for a subset).
+  const handleGenerateSingleTake = useCallback(async (selection: SingleTakeSelection) => {
+    if (!selectedSceneId || !effectiveProjectId || scenePipelineRunning) return
+    if (!confirmationGate) {
+      bumpPreflightRevision()
+      setPipelineStatus((prev) => ({ ...prev, compose: 'failed', mp4: 'failed' }))
+      setBindingRejection('The durable reference-binding confirmation is stale, missing, or unverified; resolve the shot again and confirm on the Production Desk before submitting.')
+      return
+    }
+    setScenePipelineRunning(true)
+    setScenePipelineResult(null)
+    setError('')
+    setBindingRejection('')
+    setPipelineStatus((prev) => ({ ...prev, compose: 'running', mp4: 'running' }))
+    try {
+      const finalPreflight = await getGenerationPreflight(effectiveProjectId, selectedSceneId, renderProvider || undefined)
+      if (!finalPreflight.ready || finalPreflight.authorization?.ready === false) {
+        bumpPreflightRevision()
+        setPipelineStatus((prev) => ({ ...prev, compose: 'failed', mp4: 'failed' }))
+        setError('Generation blocked by preflight: the scene cannot render until all required shots pass.')
+        return
+      }
+      const response = await generateScenePipeline(
+        effectiveProjectId,
+        selectedSceneId,
+        {
+          ...buildPrevisScenePipelinePayload(sceneScoreMode, manualScorePath),
+          prepared_snapshot_id: finalPreflight.prepared_snapshot_id,
+          expected_reference_binding_digests: serverConfirmedDigestMap,
+          storyboard_shot_ids: selection.storyboardShotIds,
+          allow_full_package: selection.allowFullPackage,
+          acknowledge_unknown_cost: selection.acknowledgeUnknownCost,
+        },
+      )
+      if (response.error || !response.result) {
+        throw new Error(response.error || 'Single-take generation failed')
+      }
+      setBindingRejection('')
+      setScenePipelineResult(response.result)
+      setComposedUrl(response.result.output_url || response.result.stitch?.output_url || null)
+      setPipelineStatus((prev) => ({ ...prev, compose: 'done', mp4: 'done' }))
+      const takeCount = response.result.shot_filter?.selected_shot_ids?.length ?? response.result.shots.length
+      setSuccess(`Single take complete — ${takeCount} shot${takeCount === 1 ? '' : 's'} rendered without scene assembly`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Single-take generation failed'
+      setError(friendlyRefusalError(err, message))
+      setBindingRejection(isBindingConfirmationRejection(message) ? message : '')
+      setPipelineStatus((prev) => ({ ...prev, compose: 'failed', mp4: 'failed' }))
       bumpPreflightRevision()
     } finally {
       setScenePipelineRunning(false)
@@ -3380,6 +3437,8 @@ export default function PrevisRoom() {
                     renderProviderLabel={renderProviderOptions.find((option) => option.value === renderProvider)?.label}
                     onGenerate={() => void handleGenerateScenePipeline()}
                     generateBusy={scenePipelineRunning}
+                    onGenerateSingleShot={(selection) => void handleGenerateSingleTake(selection)}
+                    singleShotBusy={scenePipelineRunning}
                     extraGenerateGate={canGeneratePrevisScenePipeline(sceneScoreMode, manualScorePath) && confirmationGate}
                     revision={preflightRevision}
                   />

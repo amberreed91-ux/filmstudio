@@ -2153,6 +2153,18 @@ export type ScenePipelineGeneratePayload = {
   score_ambient_provider?: SceneScoreAmbientProvider
   soundtrack?: Partial<SoundtrackConfig>
   expected_reference_binding_digests?: Record<string, string> | null
+  /** Phase 2B D5 filter: narrow job creation to these storyboard shots. */
+  storyboard_shot_ids?: string[] | null
+  allow_full_package?: boolean
+  acknowledge_unknown_cost?: boolean
+}
+
+export type ScenePipelineShotFilterEcho = {
+  storyboard_shot_ids?: string[]
+  allow_full_package?: boolean
+  filtered_from?: string
+  selected_shot_ids?: string[]
+  omitted_shot_ids?: string[]
 }
 
 export type ScenePipelineGenerateResult = {
@@ -2161,9 +2173,12 @@ export type ScenePipelineGenerateResult = {
   project_id: string
   scene_id: string
   shots: Array<Record<string, unknown>>
-  stitch: ShortFilmStitchResult
-  assembly?: Record<string, unknown>
-  output_url?: string
+  /** Null for filtered subsets — no scene assembly is written for a subset. */
+  stitch: ShortFilmStitchResult | null
+  assembly?: Record<string, unknown> | null
+  assembly_skipped?: string
+  shot_filter?: ScenePipelineShotFilterEcho
+  output_url?: string | null
   score_ambient_provider?: SceneScoreAmbientProvider | string
   soundtrack_status?: string
 }
@@ -3001,6 +3016,9 @@ export async function generateScenePipeline(
           score_ambient_provider: payload.score_ambient_provider || 'none',
           soundtrack: payload.soundtrack || {},
           expected_reference_binding_digests: payload.expected_reference_binding_digests ?? null,
+          storyboard_shot_ids: payload.storyboard_shot_ids ?? null,
+          allow_full_package: Boolean(payload.allow_full_package),
+          acknowledge_unknown_cost: Boolean(payload.acknowledge_unknown_cost),
         }),
       },
     )
@@ -3069,6 +3087,9 @@ export interface GenerationPreflightEntry {
   storyboard_shot_id?: string
   shot_order?: number
   prompt?: string
+  character_focus?: string[]
+  /** Persisted Runway render jobs for this shot (advisory, may be 0). */
+  prior_render_submissions?: number
   duration_seconds?: number
   camera_instructions?: GenerationPreflightCameraInstruction[]
   camera_plan?: Record<string, unknown>
@@ -3122,6 +3143,9 @@ export interface GenerationPreflight {
   manifest: GenerationPreflightManifest | null
   cost_estimate: GenerationPreflightCostEstimate | null
   authorization?: BatchAuthorizationReport | null
+  /** Per-request spend ceiling enforced on submit (advisory until submit). */
+  credit_ceiling_credits?: number | null
+  credit_ceiling_env_var?: string
 }
 
 /**

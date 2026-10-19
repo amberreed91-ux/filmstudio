@@ -20,6 +20,13 @@ import {
 } from '../lib/studioApi'
 import { friendlyRefusalError } from '../lib/sceneMintRefusals'
 
+/** Single-take submit selection: one frozen storyboard shot via the scene-pipeline filter. */
+export type SingleTakeSelection = {
+  storyboardShotIds: string[]
+  allowFullPackage: boolean
+  acknowledgeUnknownCost: boolean
+}
+
 type Props = {
   projectId: string
   sceneId: string
@@ -28,6 +35,9 @@ type Props = {
   /** Multi-shot path: the panel itself triggers the scene pipeline Generate. */
   onGenerate?: () => void
   generateBusy?: boolean
+  /** Single-take path: the parent submits the selected shot through the pipeline filter. */
+  onGenerateSingleShot?: (selection: SingleTakeSelection) => void
+  singleShotBusy?: boolean
   generateLabel?: string
   /** 'pipeline' gates the whole-scene button; 'single-shot' only blocks via guard. */
   mode?: 'pipeline' | 'single-shot'
@@ -172,6 +182,133 @@ function ShotPlanSection({
 }
 
 /**
+ * Single-take picker + spend dialog. Submits through the scene-pipeline
+ * shot filter (one frozen storyboard shot, whole-scene gates still apply).
+ * Nothing is preselected; confirming spends for exactly 1 submission.
+ */
+function SingleTakeDialog({
+  entries,
+  manifestShots,
+  ceilingCredits,
+  ceilingEnvVar,
+  providerLabel,
+  busy,
+  boardId,
+  onPick,
+  spendConfirmed,
+  onSpendConfirm,
+  onCheckCost,
+  checkingCost,
+  onConfirm,
+}: {
+  entries: GenerationPreflightEntry[]
+  manifestShots: GenerationPreflightManifestShot[]
+  ceilingCredits: number
+  ceilingEnvVar: string
+  providerLabel?: string
+  busy: boolean
+  boardId: string
+  onPick: (boardId: string) => void
+  spendConfirmed: boolean
+  onSpendConfirm: (confirmed: boolean) => void
+  onCheckCost: () => void
+  checkingCost: boolean
+  onConfirm: (boardId: string) => void
+}) {
+  const selectable = entries.filter((entry) => (entry.blockers || []).length === 0 && entry.storyboard_shot_id)
+  const selected = entries.find((entry) => entry.storyboard_shot_id === boardId) ?? null
+  const manifestRow = manifestShots.find((shot) => shot.storyboard_shot_id === boardId) ?? null
+  const exactPrompt = String(selected?.prompt || manifestRow?.shot_prompt || '').trim()
+  const characters = (selected?.character_focus || []).filter(Boolean)
+  const estimate = selected?.cost_estimate ?? null
+  const estimateKnown = Boolean(estimate?.estimated) && estimate?.estimated_credits != null
+  const priorSubmissions = selected?.prior_render_submissions ?? 0
+  return (
+    <div className="mt-2" data-testid="single-take-dialog">
+      <p className="text-[10px] text-zinc-500">
+        Nothing is preselected. Pick exactly one shot{providerLabel ? ` with ${providerLabel}` : ''}; confirming spends Runway credits for 1 submission.
+      </p>
+      <div className="mt-2 space-y-1" role="radiogroup" aria-label="Scene shots">
+        {selectable.map((entry) => (
+          <label key={entry.storyboard_shot_id} className="flex items-center gap-2 text-xs text-zinc-200">
+            <input
+              type="radio"
+              name="single-take-choice"
+              value={entry.storyboard_shot_id}
+              checked={boardId === entry.storyboard_shot_id}
+              onChange={() => onPick(String(entry.storyboard_shot_id))}
+            />
+            <span>Shot {entry.shot_order ?? entry.shot_id}</span>
+            <span className="text-[10px] text-zinc-500">
+              {entry.duration_seconds ? `· ${entry.duration_seconds}s` : ''}
+              {' '}· {(entry.prior_render_submissions ?? 0) === 0 ? 'no prior Runway submissions' : `${entry.prior_render_submissions} prior Runway submission${entry.prior_render_submissions === 1 ? '' : 's'}`}
+            </span>
+          </label>
+        ))}
+        {selectable.length === 0 ? (
+          <p className="text-[10px] text-amber-200">No ready shots are available — resolve the blockers above first.</p>
+        ) : null}
+      </div>
+      {selected && (
+        <div className="mt-3 space-y-2 border-t border-white/10 pt-3" data-testid="single-take-confirm">
+          <div className="text-xs text-zinc-200">
+            Shot {selected.shot_order ?? selected.shot_id} · 1 Runway submission
+            {' '}· {priorSubmissions === 0 ? 'no prior Runway submissions' : `${priorSubmissions} prior Runway submission${priorSubmissions === 1 ? '' : 's'}`}
+          </div>
+          <div className="text-[11px] text-zinc-300">
+            Characters: {characters.length > 0 ? characters.join(', ') : 'none named'}
+            {selected.duration_seconds ? ` · Duration: ${selected.duration_seconds}s` : ''}
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-500">
+              Exact prompt text that will be sent (first 600 characters)
+            </div>
+            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-black/40 p-2 text-[10px] leading-relaxed text-zinc-300">
+              {exactPrompt.slice(0, 600) || '(empty prompt — submission will fail closed)'}
+            </pre>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy || checkingCost}
+              onClick={onCheckCost}
+              className="btn-ghost px-3 py-2 text-[10px]"
+              data-testid="single-take-check-cost"
+              title="Re-runs the read-only generation preflight for this scene. Creates no job and spends nothing."
+            >
+              {checkingCost ? 'Checking cost…' : 'Check cost (estimate)'}
+            </button>
+            <span className="text-[10px] text-zinc-300" data-testid="single-take-estimate">
+              {estimateKnown
+                ? `Runway cost estimate (advisory — submit path may differ, not a quote): ${estimate?.estimated_credits} credits · ceiling ${ceilingCredits} (${ceilingEnvVar})`
+                : `Runway cost estimate unavailable (submit path may differ) · ceiling ${ceilingCredits} (${ceilingEnvVar})`}
+            </span>
+          </div>
+          <label className="flex items-start gap-2 text-xs text-zinc-200">
+            <input
+              type="checkbox"
+              checked={spendConfirmed}
+              onChange={(event) => onSpendConfirm(event.target.checked)}
+              className="mt-0.5"
+            />
+            I understand this spends Runway credits for 1 submission{estimateKnown ? '' : ' and accept the unknown cost'}
+          </label>
+          <button
+            type="button"
+            disabled={!spendConfirmed || busy}
+            onClick={() => onConfirm(String(selected.storyboard_shot_id))}
+            className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 disabled:opacity-40"
+            data-testid="single-take-confirm-button"
+          >
+            Confirm: render this one take
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Generation Readiness — an inspection and safety surface over the backend's
  * own preflight (SceneProductionPipelineService.prepare_scene_batch).
  *
@@ -187,6 +324,8 @@ export default function GenerationReadinessPanel({
   renderProviderLabel,
   onGenerate,
   generateBusy,
+  onGenerateSingleShot,
+  singleShotBusy,
   generateLabel = 'Generate new scene footage',
   mode = 'pipeline',
   onReferenceAction,
@@ -198,6 +337,12 @@ export default function GenerationReadinessPanel({
   const [error, setError] = useState('')
   const [stale, setStale] = useState(false)
   const [expandedShots, setExpandedShots] = useState<Set<number>>(new Set())
+  // Single-take dialog state only. Nothing here submits — confirming calls
+  // the parent's pipeline-filter submit; Check cost only re-runs the
+  // read-only preflight.
+  const [takeOpen, setTakeOpen] = useState(false)
+  const [takeShotBoardId, setTakeShotBoardId] = useState('')
+  const [takeSpendConfirmed, setTakeSpendConfirmed] = useState(false)
   const checkedKeyRef = useRef('')
 
   const canCheck = Boolean(projectId && sceneId)
@@ -520,6 +665,41 @@ export default function GenerationReadinessPanel({
         </>
       )}
 
+      {mode === 'pipeline' && onGenerateSingleShot && !batchBlocked && !stale && !checking && !error && preflight && (
+        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3" data-testid="single-take-section">
+          <button
+            type="button"
+            data-testid="single-take-toggle"
+            onClick={() => { setTakeOpen((open) => !open); setTakeShotBoardId(''); setTakeSpendConfirmed(false) }}
+            className="flex w-full items-center justify-between gap-2 text-left"
+            aria-expanded={takeOpen}
+          >
+            <span className="text-xs font-medium text-zinc-200">Render a single take…</span>
+            <span className="text-[10px] text-zinc-500">{takeOpen ? 'Hide' : 'Pick one frozen shot'}</span>
+          </button>
+          {takeOpen && (
+            <SingleTakeDialog
+              entries={entries}
+              manifestShots={manifestShots}
+              ceilingCredits={preflight.credit_ceiling_credits ?? 300}
+              ceilingEnvVar={preflight.credit_ceiling_env_var || 'RUNWAY_RENDER_MAX_CREDITS'}
+              providerLabel={renderProviderLabel}
+              busy={Boolean(singleShotBusy)}
+              boardId={takeShotBoardId}
+              onPick={(id) => { setTakeShotBoardId(id); setTakeSpendConfirmed(false) }}
+              spendConfirmed={takeSpendConfirmed}
+              onSpendConfirm={setTakeSpendConfirmed}
+              onCheckCost={() => void check()}
+              checkingCost={checking}
+              onConfirm={(boardId) => onGenerateSingleShot({
+                storyboardShotIds: [boardId],
+                allowFullPackage: false,
+                acknowledgeUnknownCost: takeSpendConfirmed,
+              })}
+            />
+          )}
+        </div>
+      )}
       {mode === 'pipeline' && onGenerate && (
         <button
           type="button"
