@@ -564,3 +564,60 @@ def test_one_shot_router_path_submits_exactly_one_post(tmp_path: Path) -> None:
     frozen = next(r for r in package["payload"]["shots"] if r["storyboard_shot_id"] == ids[1])
     assert job.input_payload.prompt == frozen["prompt"]
     assert job.input_payload.prompt
+
+
+def test_created_job_record_stores_estimate_ack_and_prompt(tmp_path: Path, monkeypatch) -> None:
+    """Gate 1 Q5: the created job record stores the estimate, the
+    acknowledgement flag, and the exact promptText sent, so the Phase C
+    audit can read them off the run artifact.
+    """
+    workflow, _, renderer = _environment(tmp_path)
+    run = _through_package(workflow)
+    ids = _package_ids(run)
+    package = run["data"]["artifacts"]["production_package"]
+    frozen = next(r for r in package["payload"]["shots"] if r["storyboard_shot_id"] == ids[0])
+    planned = workflow._planned_shot_duration(frozen)
+    assert planned is not None
+
+    monkeypatch.setattr(workflow, "_estimate_shot_credits", lambda *a, **k: 20.0)
+    result = asyncio.run(
+        workflow.render_production_package(
+            run["run_id"],
+            provider="runway",
+            storyboard_shot_ids=[ids[0]],
+            acknowledge_unknown_cost=True,
+        )
+    )
+    row = result["data"]["artifacts"]["render_jobs"][0]
+    assert row["estimated_credits"] == 20.0
+    assert row["acknowledge_unknown_cost"] is True
+    assert row["effective_duration_seconds"] == planned
+    job = renderer.get_job(row["render_job_id"])
+    assert job is not None
+    assert row["prompt_text"] == job.input_payload.prompt == frozen["prompt"]
+    assert row["prompt_text"]
+
+
+def test_created_job_record_marks_unknown_cost(tmp_path: Path) -> None:
+    """Gate 1 Q5 (unknown-cost leg): no estimate available, acknowledged —
+    the record stores estimated_credits=None alongside ack=True.
+    """
+    workflow, _, renderer = _environment(tmp_path)
+    run = _through_package(workflow)
+    ids = _package_ids(run)
+
+    result = asyncio.run(
+        workflow.render_production_package(
+            run["run_id"],
+            provider="runway",
+            storyboard_shot_ids=[ids[0]],
+            acknowledge_unknown_cost=True,
+        )
+    )
+    row = result["data"]["artifacts"]["render_jobs"][0]
+    assert row["estimated_credits"] is None
+    assert row["acknowledge_unknown_cost"] is True
+    job = renderer.get_job(row["render_job_id"])
+    assert job is not None
+    assert row["prompt_text"] == job.input_payload.prompt
+    assert row["prompt_text"]

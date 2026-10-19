@@ -461,11 +461,22 @@ class CanonicalProductionWorkflowService:
             storyboard_shot_ids,
             allow_full_package=allow_full_package,
         )
+        # Gate 1 Q5: collect one estimate per selected shot BEFORE any job is
+        # created, then reuse the same values in the spend guards and stamp
+        # them onto each created job record, so the Phase C audit can read
+        # estimate + acknowledgement + exact prompt off the run artifact.
+        spend_estimates = {
+            _text(package_shot.get("storyboard_shot_id")): self._estimate_shot_credits(
+                package_shot, provider=provider, duration_seconds=duration_seconds
+            )
+            for package_shot in selected_shots
+        }
         self._enforce_spend_guards(
             selected_shots,
             provider=provider,
             duration_seconds=duration_seconds,
             acknowledge_unknown_cost=acknowledge_unknown_cost,
+            estimates=spend_estimates,
         )
         data = deepcopy(run["data"])
         render_rows: list[dict[str, Any]] = []
@@ -525,7 +536,13 @@ class CanonicalProductionWorkflowService:
                     reference_assets=references,
                     parameters=parameters,
                 )
-                render_rows.append(self._render_artifact(job, package_shot))
+                render_rows.append(self._render_artifact(
+                    job,
+                    package_shot,
+                    estimated_credits=spend_estimates.get(storyboard_shot_id),
+                    acknowledge_unknown_cost=acknowledge_unknown_cost,
+                    effective_duration_seconds=effective_duration,
+                ))
         except Exception as exc:
             error = exc if isinstance(exc, StabilityError) else ProviderError(
                 "Render request construction failed",
@@ -732,17 +749,26 @@ class CanonicalProductionWorkflowService:
         provider: str | None,
         duration_seconds: int | None,
         acknowledge_unknown_cost: bool,
+        estimates: dict[str, float | None] | None = None,
     ) -> None:
-        """Server-side spend guards, enforced before any job is created."""
+        """Server-side spend guards, enforced before any job is created.
+
+        When the caller pre-collected per-shot estimates (Gate 1 Q5, so the
+        same values land on the job records), they are reused — no second
+        dry-run per shot. Otherwise each shot is estimated here.
+        """
         ceiling = self._render_credit_ceiling()
         for package_shot in selected_shots:
             shot_id = _text(package_shot.get("storyboard_shot_id"))
             resolved = str(provider or package_shot.get("render_provider") or "").strip().lower()
             if resolved in {"", "simulated", "simulated provider"}:
                 continue
-            estimated = self._estimate_shot_credits(
-                package_shot, provider=provider, duration_seconds=duration_seconds
-            )
+            if estimates is not None:
+                estimated = estimates.get(shot_id)
+            else:
+                estimated = self._estimate_shot_credits(
+                    package_shot, provider=provider, duration_seconds=duration_seconds
+                )
             if estimated is not None and estimated > ceiling:
                 raise ValidationError(
                     f"Shot {shot_id or '?'} estimate ({estimated:g} credits) exceeds "
@@ -1645,7 +1671,23 @@ class CanonicalProductionWorkflowService:
                 return package
         return None
 
-    def _render_artifact(self, job: Any, package_shot: dict[str, Any]) -> dict[str, Any]:
+    def _render_artifact(
+        self,
+        job: Any,
+        package_shot: dict[str, Any],
+        *,
+        estimated_credits: float | None = None,
+        acknowledge_unknown_cost: bool = False,
+        effective_duration_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Build the durable render-job row for the workflow run artifact.
+
+        Gate 1 Q5: the row carries the spend evidence the Phase C audit
+        reads — the Runway estimate (None when unavailable), the creator's
+        unknown-cost acknowledgement, the effective duration, and a snapshot
+        of the exact prompt text sent (mirroring the job input payload).
+        """
+        prompt_text = _text(getattr(getattr(job, "input_payload", None), "prompt", ""))
         return {
             "render_request_id": f"render-request:{job.id}",
             "render_job_id": job.id,
@@ -1657,6 +1699,10 @@ class CanonicalProductionWorkflowService:
             "previs_image_id": package_shot["previs_image_id"],
             "status": job.status,
             "output_url": "",
+            "prompt_text": prompt_text or _text(package_shot.get("prompt")),
+            "estimated_credits": estimated_credits,
+            "acknowledge_unknown_cost": bool(acknowledge_unknown_cost),
+            "effective_duration_seconds": effective_duration_seconds,
         }
 
     def _render_status(self, job: Any) -> dict[str, Any]:
