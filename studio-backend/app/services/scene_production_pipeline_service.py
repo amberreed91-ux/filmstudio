@@ -179,6 +179,7 @@ class SceneProductionPipelineService:
         storyboard_shot_ids: list[str] | None = None,
         allow_full_package: bool = False,
         acknowledge_unknown_cost: bool = False,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         if not project_id.strip() or not scene_id.strip():
             raise ValidationError("project_id and scene_id are required", stage="scene_pipeline")
@@ -234,6 +235,7 @@ class SceneProductionPipelineService:
         # whole-scene gates below. Legacy callers pass neither field and
         # keep the exact whole-scene behavior.
         filtered_request = storyboard_shot_ids is not None or bool(allow_full_package)
+        client_idempotency_base = str(idempotency_key or "").strip() or "scene-pipeline"
         cleaned_filter: list[str] = []
         if storyboard_shot_ids is not None:
             cleaned_filter = [str(value).strip() for value in storyboard_shot_ids]
@@ -561,6 +563,7 @@ class SceneProductionPipelineService:
             )
             self._refuse_duplicate_filtered_submit(
                 project=project,
+                project_id=project_id,
                 scene_id=scene_id,
                 selected_entries=selected_entries,
             )
@@ -630,13 +633,38 @@ class SceneProductionPipelineService:
             # produced the READY verdict; do not resolve shots or derive prompts here.
             prompt = prepared_entry["prompt"]
             self._assert_prepared_scene_batch_current(batch, project=project, scene_id=scene_id)
+            # Hardening: every filtered create carries an explicit,
+            # deterministic idempotency key (client key when supplied, else
+            # the frozen manifest fingerprint) so a replayed or concurrent
+            # request reuses the same job row instead of minting a second
+            # one. Legacy whole-scene creates are untouched.
+            filtered_job_key: str | None = None
+            if filtered_request:
+                filtered_job_key = ":".join((
+                    client_idempotency_base,
+                    batch_manifest_fingerprint,
+                    shot_id,
+                ))
+            filtered_parameters = deepcopy(prepared_entry["generation_settings"])
+            if filtered_request:
+                # Hardening: every filtered create carries an explicit,
+                # deterministic idempotency key inside parameters (client
+                # key when supplied, else the frozen manifest fingerprint)
+                # so a replayed or concurrent request reuses the same job
+                # row instead of minting a second one. Legacy whole-scene
+                # creates are untouched.
+                filtered_parameters["idempotency_key"] = ":".join((
+                    client_idempotency_base,
+                    batch_manifest_fingerprint,
+                    shot_id,
+                ))
             job_arguments = {
                 "project_id": project_id,
                 "shot_id": shot_id,
                 "provider": provider,
                 "prompt": prompt,
                 "reference_assets": deepcopy(prepared_entry["references"]),
-                "parameters": deepcopy(prepared_entry["generation_settings"]),
+                "parameters": filtered_parameters,
                 "generation_contract": deepcopy(prepared_entry.get("generation_contract")) if provider == "runway_router" else None,
                 "frozen_reference_binding": deepcopy(prepared_entry.get("reference_binding") or []),
                 "metadata": self._batch_authorized_job_metadata(
@@ -921,36 +949,74 @@ class SceneProductionPipelineService:
                 },
             )
 
-    @staticmethod
     def _refuse_duplicate_filtered_submit(
+        self,
         *,
         project: dict[str, Any],
+        project_id: str,
         scene_id: str,
         selected_entries: list[dict[str, Any]],
     ) -> None:
-        """Refuse a filtered resubmission for an already-completed take."""
+        """Refuse a filtered submit when the shot already has a live job.
+
+        Two evidence sources: the durable execution-summary rows (completed
+        takes) and the persisted render/job tables (ANY non-failed job —
+        queued, submitted, rendering, complete — including leftovers from a
+        crashed request). A failed prior attempt never blocks a retry.
+        """
         summary = project.get("execution_summary")
         rows = summary.get("one_button_render_jobs") if isinstance(summary, dict) else None
-        if not isinstance(rows, list):
-            return
         completed_jobs: dict[tuple[str, str], str] = {}
-        for row in rows:
-            if not isinstance(row, dict) or str(row.get("status") or "") != "complete":
-                continue
-            completed_jobs[(str(row.get("scene_id") or ""), str(row.get("shot_id") or ""))] = str(row.get("job_id") or "")
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict) or str(row.get("status") or "") != "complete":
+                    continue
+                completed_jobs[(str(row.get("scene_id") or ""), str(row.get("shot_id") or ""))] = str(row.get("job_id") or "")
         dupes = [
             str(entry.get("shot_id") or "")
             for entry in selected_entries
             if (scene_id, str(entry.get("shot_id") or "")) in completed_jobs
         ]
+        dupe_job_ids = [completed_jobs[(scene_id, shot_id)] for shot_id in dupes]
+        # Persisted render/job tables: the summary only records completed
+        # takes, so consult job history for anything still live.
+        reader = getattr(self.render_service, "list_persisted_jobs", None)
+        if callable(reader):
+            try:
+                jobs = reader(project_id=project_id)
+            except Exception as exc:
+                raise ValidationError(
+                    "Studio cannot verify prior submissions because persisted render history "
+                    "could not be read; generation is blocked.",
+                    stage="scene_pipeline_shot_filter",
+                    metadata={
+                        "cost_status": "history_unavailable",
+                        "history_error": type(exc).__name__,
+                    },
+                ) from exc
+            wanted = {str(entry.get("shot_id") or "") for entry in selected_entries}
+            for job in jobs or []:
+                try:
+                    provider = str(getattr(job, "provider", "") or "").strip().lower()
+                    shot_id = str(getattr(job, "shot_id", "") or "")
+                    status = str(getattr(job, "status", "") or "")
+                except Exception:
+                    continue
+                if provider not in {"runway_router", "runway"} or shot_id not in wanted:
+                    continue
+                if status == "failed":
+                    continue
+                if shot_id not in dupes:
+                    dupes.append(shot_id)
+                    dupe_job_ids.append(str(getattr(job, "id", "") or ""))
         if dupes:
             raise ValidationError(
-                f"Shot(s) {', '.join(dupes)} already have a completed scene-pipeline render; "
-                "resubmission is refused to prevent a duplicate charge",
+                f"Shot(s) {', '.join(dupes)} already have a scene-pipeline render that has not "
+                "failed; resubmission is refused to prevent a duplicate charge",
                 stage="scene_pipeline_shot_filter",
                 metadata={
                     "duplicate_shot_ids": dupes,
-                    "existing_job_ids": [completed_jobs[(scene_id, shot_id)] for shot_id in dupes],
+                    "existing_job_ids": dupe_job_ids,
                 },
             )
 
@@ -959,11 +1025,13 @@ class SceneProductionPipelineService:
         *,
         project_id: str,
         shot_ids: list[str],
-    ) -> dict[str, int]:
+    ) -> dict[str, dict[str, int]]:
         """Count persisted Runway render jobs per shot (read-only, advisory).
 
-        Feeds the single-take dialog's "N Runway submissions" line. Never
-        raises: history gaps report zero rather than blocking preflight.
+        Returns ``{shot_id: {"total": n, "failed": m}}``. Feeds the
+        single-take dialog's "N Runway submissions" line; failed attempts
+        are shown but never block a retry. Never raises: history gaps
+        report zero rather than blocking preflight.
         """
         wanted = {str(value) for value in shot_ids if str(value)}
         if not wanted:
@@ -972,16 +1040,20 @@ class SceneProductionPipelineService:
             jobs = self.render_service.list_persisted_jobs(project_id=project_id)
         except Exception:
             return {}
-        counts: dict[str, int] = {}
+        counts: dict[str, dict[str, int]] = {}
         for job in jobs or []:
             try:
                 provider = str(getattr(job, "provider", "") or "").strip().lower()
                 shot_id = str(getattr(job, "shot_id", "") or "")
+                status = str(getattr(job, "status", "") or "")
             except Exception:
                 continue
             if provider not in {"runway_router", "runway"} or shot_id not in wanted:
                 continue
-            counts[shot_id] = counts.get(shot_id, 0) + 1
+            row = counts.setdefault(shot_id, {"total": 0, "failed": 0})
+            row["total"] += 1
+            if status == "failed":
+                row["failed"] += 1
         return counts
 
     # ══ All-or-nothing batch authorization preflight (R4.1A) ═══════════════

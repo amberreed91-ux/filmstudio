@@ -13,6 +13,7 @@ with hermetic fakes + temp dirs — no provider contact, no live DB):
 """
 from __future__ import annotations
 
+import asyncio
 import copy
 import hashlib
 from dataclasses import replace
@@ -21,6 +22,7 @@ from typing import Any
 
 import pytest
 
+from app.models import RenderJobInput, RenderJobModel, RenderJobOutput
 from app.services.generation_contract import (
     FrozenGenerationContract,
     freeze_dialogue_handoff,
@@ -28,7 +30,7 @@ from app.services.generation_contract import (
 )
 from app.services.scene_production_pipeline_service import SceneProductionPipelineService
 from app.services.shot_manifest import build_shot_manifest
-from app.services.stability import ValidationError
+from app.services.stability import ProviderError, ValidationError
 from app.services.test_scene_production_pipeline_service import (
     FakeAudioService,
     FakeRenderService,
@@ -70,15 +72,115 @@ def _project5() -> dict[str, Any]:
 
 
 class CountingRenderService(FakeRenderService):
-    """FakeRenderService that also counts submit_job calls (submit POSTs)."""
+    """Hermetic submit path with mirrors of the production guarantees.
+
+    Mirrors of RenderService (cited so drift is reviewable): explicit
+    idempotency-key reuse on create returns the existing row with no new
+    row (cf. create_job / _find_idempotent_job); submit skips live and
+    finished jobs and serializes concurrent submits per job id (cf.
+    submit_job's _submit_locks + status skip), so each counted submit is
+    one provider POST. Anything these mirrors get wrong is a test-only
+    gap, never production behavior.
+    """
 
     def __init__(self, outputs_dir: Path):
         super().__init__(outputs_dir)
         self.submits: list[str] = []
+        self._submit_locks: set[str] = set()
+        self.fail_next_submit: Exception | None = None
+
+    @staticmethod
+    def _explicit_key(kwargs: dict[str, Any]) -> str:
+        params = kwargs.get("parameters") or {}
+        return str(params.get("idempotency_key") or "").strip()
+
+    def create_job(self, **kwargs):
+        key = self._explicit_key(kwargs)
+        if key:
+            for existing in self.jobs.values():
+                reliability = ((existing.metadata or {}).get("pipeline_reliability") or {})
+                if (
+                    existing.project_id == kwargs["project_id"]
+                    and existing.shot_id == kwargs["shot_id"]
+                    and existing.provider == (kwargs.get("provider") or "happyhorse")
+                    and reliability.get("idempotency_key") == key
+                ):
+                    return existing
+        index = len(self.created) + 1
+        job_id = f"job-{index}"
+        shot_id = kwargs["shot_id"]
+        video = self.outputs_dir / f"{shot_id}.mp4"
+        video.write_bytes(b"fake-video")
+        metadata: dict[str, Any] = dict(kwargs.get("metadata") or {})
+        reliability = dict(metadata.get("pipeline_reliability") or {})
+        if key:
+            reliability["idempotency_key"] = key
+            reliability["idempotency_key_source"] = "caller"
+            metadata["pipeline_reliability"] = reliability
+        job = RenderJobModel(
+            id=job_id,
+            project_id=kwargs["project_id"],
+            shot_id=shot_id,
+            provider=kwargs.get("provider") or "happyhorse",
+            status="pending",
+            input_payload=RenderJobInput(
+                shot_id=shot_id,
+                prompt=kwargs["prompt"],
+                referenceAssets=kwargs.get("reference_assets") or [],
+                parameters=kwargs.get("parameters") or {},
+                consistency_payload=self.consistency_payload,
+            ),
+            output_payload=RenderJobOutput(asset_url=f"/outputs/renders/{video.name}"),
+            metadata=metadata,
+        )
+        self.created.append(kwargs)
+        self.jobs[job_id] = job
+        return job
 
     async def submit_job(self, job_id: str):
-        self.submits.append(job_id)
-        return await super().submit_job(job_id)
+        import asyncio
+
+        if job_id in self._submit_locks:
+            return self.jobs[job_id]
+        job = self.jobs[job_id]
+        if job.status in {"rendering", "complete", "needs_review"}:
+            return job
+        self._submit_locks.add(job_id)
+        try:
+            self.submits.append(job_id)
+            if self.fail_next_submit is not None:
+                exc = self.fail_next_submit
+                self.fail_next_submit = None
+                job.status = "failed"
+                job.error_message = str(exc)
+                raise exc
+            await asyncio.sleep(0)  # let a concurrent duplicate arrive mid-POST
+            job.status = "complete"
+            return job
+        finally:
+            self._submit_locks.discard(job_id)
+
+    async def get_job_status(self, job_id: str):
+        return self.jobs[job_id]
+
+    def list_persisted_jobs(self, project_id: str | None = None):
+        return [
+            job for job in self.jobs.values()
+            if project_id is None or job.project_id == project_id
+        ]
+
+    def seed_job(self, shot_id: str, status: str, provider: str = "runway_router") -> RenderJobModel:
+        """Plant a leftover/history job row (e.g. from a crashed request)."""
+        job = RenderJobModel(
+            id=f"seed-{len(self.jobs)}-{shot_id}-{status}",
+            project_id="project_filter_test",
+            shot_id=shot_id,
+            provider=provider,
+            status=status,
+            input_payload=RenderJobInput(shot_id=shot_id, prompt="seed"),
+        )
+        self.jobs[job.id] = job
+        return job
 
 
 def _tag_shots(costs: list[float | None]):
@@ -543,3 +645,93 @@ def test_legacy_whole_scene_path_unchanged(tmp_path: Path, monkeypatch: pytest.M
     assert len(stitching.calls) == 1
     assert result["assembly"] is not None
     assert "shot_filter" not in result
+
+
+def test_filtered_create_carries_deterministic_idempotency_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    service, render, _ = _harness(tmp_path, monkeypatch, costs=[10.0] * 5)
+    result = _generate(service, _project5(), storyboard_shot_ids=["sbs-002"])
+    key = render.created[0]["parameters"]["idempotency_key"]
+    assert key.endswith(":scene_001_shot_002")
+    assert result["shot_manifest"]["manifest_fingerprint"] in key
+    job = render.jobs[render.submits[0]]
+    assert job.metadata["pipeline_reliability"]["idempotency_key"] == key
+    assert job.metadata["pipeline_reliability"]["idempotency_key_source"] == "caller"
+
+
+@pytest.mark.parametrize("status", ["queued", "submitted", "rendering", "complete", "cancelled"])
+def test_leftover_non_failed_job_blocks_submit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status: str):
+    service, render, _ = _harness(tmp_path, monkeypatch, costs=[10.0] * 5)
+    render.seed_job("scene_001_shot_002", status)
+    with pytest.raises(ValidationError) as excinfo:
+        _generate(service, _project5(), storyboard_shot_ids=["sbs-002"])
+    assert "has not failed" in str(excinfo.value.message)
+    assert render.created == []
+    assert render.submits == []
+
+
+def test_failed_prior_attempt_allows_retry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    service, render, _ = _harness(tmp_path, monkeypatch, costs=[10.0] * 5)
+    render.seed_job("scene_001_shot_002", "failed")
+    result = _generate(service, _project5(), storyboard_shot_ids=["sbs-002"])
+    assert result["status"] == "complete"
+    assert len(render.created) == 1
+    assert len(render.submits) == 1
+
+
+def test_concurrent_duplicate_requests_produce_one_submit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    service, render, _ = _harness(tmp_path, monkeypatch, costs=[10.0] * 5)
+    project = _project5()
+
+    async def _both():
+        first = service.generate_scene(
+            project_id="project_filter_test", scene_id="scene_001", project=project,
+            provider="runway_router", storyboard_shot_ids=["sbs-002"],
+        )
+        second = service.generate_scene(
+            project_id="project_filter_test", scene_id="scene_001", project=project,
+            provider="runway_router", storyboard_shot_ids=["sbs-002"],
+        )
+        return await asyncio.gather(first, second, return_exceptions=True)
+
+    outcomes = run_async(_both())
+    assert render.submits == [render.submits[0]] and len(render.submits) == 1
+    assert len(render.created) == 1
+    successes = [row for row in outcomes if isinstance(row, dict)]
+    refusals = [row for row in outcomes if isinstance(row, ValidationError)]
+    assert len(successes) == 1 and len(refusals) == 1
+    assert "has not failed" in str(refusals[0].message)
+
+
+def test_provider_error_after_post_does_not_retry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    service, render, stitching = _harness(tmp_path, monkeypatch, costs=[10.0] * 5)
+    render.fail_next_submit = ProviderError("router exploded", stage="provider_submission")
+    with pytest.raises(ProviderError):
+        _generate(service, _project5(), storyboard_shot_ids=["sbs-002"])
+    # Exactly one POST: the failure propagates with no automatic retry,
+    # no assembly, no persisted take.
+    assert len(render.submits) == 1
+    assert stitching.calls == []
+    # The failed take does not block an explicit retry, which reuses the
+    # same idempotent job row and POSTs once more.
+    retry = _generate(service, _project5(), storyboard_shot_ids=["sbs-002"])
+    assert retry["status"] == "complete"
+    assert len(render.created) == 1
+    assert len(render.submits) == 2
+
+
+def test_prior_counts_split_total_and_failed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    service, render, _ = _harness(tmp_path, monkeypatch, costs=[10.0] * 5)
+    render.seed_job("scene_001_shot_001", "complete")
+    render.seed_job("scene_001_shot_001", "complete")
+    render.seed_job("scene_001_shot_001", "failed")
+    render.seed_job("scene_001_shot_002", "queued")
+    counts = service.count_prior_router_submissions(
+        project_id="project_filter_test",
+        shot_ids=["scene_001_shot_001", "scene_001_shot_002"],
+    )
+    assert counts == {
+        "scene_001_shot_001": {"total": 3, "failed": 1},
+        "scene_001_shot_002": {"total": 1, "failed": 0},
+    }

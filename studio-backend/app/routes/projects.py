@@ -252,6 +252,7 @@ class GenerateScenePipelinePayload(StitchScenePayload):
     storyboard_shot_ids: Optional[List[str]] = None
     allow_full_package: bool = False
     acknowledge_unknown_cost: bool = False
+    idempotency_key: Optional[str] = None
 
 
 class CollaborationSessionPayload(BaseModel):
@@ -699,6 +700,7 @@ async def generate_scene_pipeline(project_id: str, scene_id: str, payload: Gener
             storyboard_shot_ids=payload.storyboard_shot_ids,
             allow_full_package=bool(payload.allow_full_package),
             acknowledge_unknown_cost=bool(payload.acknowledge_unknown_cost),
+            idempotency_key=(payload.idempotency_key or "").strip() or None,
             # R4.2: the submission entrypoint requires a durable,
             # project-scoped confirmation per reference-bound shot, revalidated
             # against current bindings inside the batch preflight. Missing,
@@ -826,7 +828,9 @@ def get_generation_preflight(
         prior_submissions = {}
     for entry in batch.get("entries") or []:
         if isinstance(entry, dict):
-            entry["prior_render_submissions"] = int(prior_submissions.get(str(entry.get("shot_id") or ""), 0))
+            counts = prior_submissions.get(str(entry.get("shot_id") or ""), {})
+            entry["prior_render_submissions"] = int(counts.get("total", 0))
+            entry["prior_failed_render_submissions"] = int(counts.get("failed", 0))
     # D4: storyboard image-prompt render-readiness (read-only, advisory).
     # Shows which shots are not render-ready for Runway images and why.
     try:
