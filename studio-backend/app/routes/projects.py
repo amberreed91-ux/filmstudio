@@ -249,6 +249,9 @@ class GenerateScenePipelinePayload(StitchScenePayload):
     execution_mode: Optional[str] = None
     source_authority_id: Optional[str] = None
     expected_reference_binding_digests: Optional[Dict[str, str]] = None
+    storyboard_shot_ids: Optional[List[str]] = None
+    allow_full_package: bool = False
+    acknowledge_unknown_cost: bool = False
 
 
 class CollaborationSessionPayload(BaseModel):
@@ -693,6 +696,9 @@ async def generate_scene_pipeline(project_id: str, scene_id: str, payload: Gener
             execution_mode=payload.execution_mode,
             source_authority_id=payload.source_authority_id,
             expected_reference_binding_digests=payload.expected_reference_binding_digests,
+            storyboard_shot_ids=payload.storyboard_shot_ids,
+            allow_full_package=bool(payload.allow_full_package),
+            acknowledge_unknown_cost=bool(payload.acknowledge_unknown_cost),
             # R4.2: the submission entrypoint requires a durable,
             # project-scoped confirmation per reference-bound shot, revalidated
             # against current bindings inside the batch preflight. Missing,
@@ -802,6 +808,25 @@ def get_generation_preflight(
         shot_manifest=batch.get("manifest"),
         expected_digests=None,
     )
+    # Phase 2B: single-take dialog inputs (read-only, advisory). The spend
+    # ceiling shares one env var with the submit-time guard, and prior
+    # Runway submissions are counted from persisted render history.
+    from app.services.scene_production_pipeline_service import (
+        SHOT_FILTER_CREDIT_CEILING_ENV_VAR,
+        filtered_render_credit_ceiling,
+    )
+
+    credit_ceiling_credits = filtered_render_credit_ceiling()
+    try:
+        prior_submissions = scene_production_pipeline_service.count_prior_router_submissions(
+            project_id=batch.get("project_id") or project_id,
+            shot_ids=[str(entry.get("shot_id") or "") for entry in (batch.get("entries") or [])],
+        )
+    except Exception:
+        prior_submissions = {}
+    for entry in batch.get("entries") or []:
+        if isinstance(entry, dict):
+            entry["prior_render_submissions"] = int(prior_submissions.get(str(entry.get("shot_id") or ""), 0))
     # D4: storyboard image-prompt render-readiness (read-only, advisory).
     # Shows which shots are not render-ready for Runway images and why.
     try:
@@ -827,6 +852,8 @@ def get_generation_preflight(
         "cost_estimate": batch.get("cost_estimate"),
         "prepared_snapshot_id": batch.get("prepared_snapshot_id"),
         "authorization": authorization,
+        "credit_ceiling_credits": credit_ceiling_credits,
+        "credit_ceiling_env_var": SHOT_FILTER_CREDIT_CEILING_ENV_VAR,
         "image_prompt_readiness": image_prompt_readiness,
     }
 

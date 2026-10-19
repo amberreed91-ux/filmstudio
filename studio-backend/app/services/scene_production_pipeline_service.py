@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import secrets
 import time
 from copy import deepcopy
@@ -120,6 +121,25 @@ def _decide_router_seed_before_freeze(*, project_id: str, shot_id: str) -> int |
     return seed_val
 
 
+# Phase 2B D5 shot filter: per-request spend ceiling shared with the
+# canonical workflow surface (canonical_production_workflow_service -
+# _RENDER_CREDIT_CEILING_ENV_VAR). One env var, one default, enforced here
+# against the SUM of the selected entries.
+SHOT_FILTER_CREDIT_CEILING_ENV_VAR = "RUNWAY_RENDER_MAX_CREDITS"
+SHOT_FILTER_CREDIT_CEILING_DEFAULT = 300.0
+
+
+def filtered_render_credit_ceiling() -> float:
+    raw = os.getenv(SHOT_FILTER_CREDIT_CEILING_ENV_VAR, str(SHOT_FILTER_CREDIT_CEILING_DEFAULT))
+    try:
+        ceiling = float(str(raw).strip())
+    except (TypeError, ValueError):
+        ceiling = float(SHOT_FILTER_CREDIT_CEILING_DEFAULT)
+    if ceiling != ceiling or ceiling <= 0:  # NaN or non-positive falls back
+        return float(SHOT_FILTER_CREDIT_CEILING_DEFAULT)
+    return ceiling
+
+
 class SceneProductionPipelineService:
     """Coordinate ordered shot rendering, per-shot dialogue, and scene stitching."""
 
@@ -156,6 +176,9 @@ class SceneProductionPipelineService:
         source_authority_id: str | None = None,
         expected_reference_binding_digests: dict[str, str] | None = None,
         require_persisted_confirmation: bool = False,
+        storyboard_shot_ids: list[str] | None = None,
+        allow_full_package: bool = False,
+        acknowledge_unknown_cost: bool = False,
     ) -> dict[str, Any]:
         if not project_id.strip() or not scene_id.strip():
             raise ValidationError("project_id and scene_id are required", stage="scene_pipeline")
@@ -173,6 +196,11 @@ class SceneProductionPipelineService:
             )
         if protected_mode and provider != "runway_router":
             raise ValidationError("Scene 002 contract-only execution requires the audited Runway Router boundary", stage="scene_pipeline_contract")
+        if protected_mode and (storyboard_shot_ids is not None or allow_full_package):
+            raise ValidationError(
+                "Shot filters do not apply to contract-only execution",
+                stage="scene_pipeline_contract",
+            )
         if protected_mode:
             if soundtrack_config and soundtrack_config.enabled:
                 raise ValidationError("Contract-only execution does not authorize soundtrack or assembly", stage="scene_pipeline_contract")
@@ -199,6 +227,46 @@ class SceneProductionPipelineService:
             provider=resolved_score_provider,
             config=soundtrack_config,
         )
+
+        # ── D5 shot-filter shape checks (Phase 2B) ─────────────────────
+        # Operator mistakes fail fast here, before any batch work. Unknown
+        # ids need the prepared entries, so they are checked after the
+        # whole-scene gates below. Legacy callers pass neither field and
+        # keep the exact whole-scene behavior.
+        filtered_request = storyboard_shot_ids is not None or bool(allow_full_package)
+        cleaned_filter: list[str] = []
+        if storyboard_shot_ids is not None:
+            cleaned_filter = [str(value).strip() for value in storyboard_shot_ids]
+            if any(not value for value in cleaned_filter):
+                raise ValidationError(
+                    "Shot filter contains an empty storyboard_shot_id",
+                    stage="scene_pipeline_shot_filter",
+                )
+            seen_filter_ids: set[str] = set()
+            duplicate_filter_ids: list[str] = []
+            for value in cleaned_filter:
+                if value in seen_filter_ids and value not in duplicate_filter_ids:
+                    duplicate_filter_ids.append(value)
+                seen_filter_ids.add(value)
+            if duplicate_filter_ids:
+                raise ValidationError(
+                    f"Shot filter names duplicates: {', '.join(duplicate_filter_ids)}",
+                    stage="scene_pipeline_shot_filter",
+                    metadata={"duplicate_storyboard_shot_ids": duplicate_filter_ids},
+                )
+            if len(cleaned_filter) > 1 and not allow_full_package:
+                raise ValidationError(
+                    "Rendering more than one shot requires allow_full_package=true; "
+                    "a single shot needs no flag",
+                    stage="scene_pipeline_shot_filter",
+                    metadata={"requested_storyboard_shot_ids": cleaned_filter},
+                )
+            if not cleaned_filter and not allow_full_package:
+                raise ValidationError(
+                    "A shot filter is required: name storyboard_shot_ids, or pass "
+                    "allow_full_package=true for the whole scene",
+                    stage="scene_pipeline_shot_filter",
+                )
 
         # ── Generation readiness + cost gates (P0-4) ───────────────────────
         # The batch path goes through the SAME protection stack as the Previs
@@ -469,6 +537,33 @@ class SceneProductionPipelineService:
             for row in (authorization.get("shots") or [])
             if isinstance(row, dict)
         }
+        # ── D5 selection AFTER the whole-scene gates (Phase 2B) ────────
+        # Every gate above still applied to EVERY shot; this only narrows
+        # which frozen entries are turned into render jobs, reusing their
+        # frozen payloads byte-for-byte (same prompt, contract, manifest).
+        submission_pairs: list[tuple[dict[str, Any], dict[str, Any]]] = list(zip(shots, entries))
+        if filtered_request:
+            selected_entries = self._select_filtered_entries(
+                entries=entries,
+                storyboard_shot_ids=cleaned_filter,
+                allow_full_package=allow_full_package,
+            )
+            selected_ids = {str(entry.get("shot_id") or "") for entry in selected_entries}
+            submission_pairs = [
+                (shot, entry) for shot, entry in zip(shots, entries)
+                if str(entry.get("shot_id") or "") in selected_ids
+            ]
+            self._enforce_filtered_spend_guards(
+                project_id=project_id,
+                provider=provider,
+                selected_entries=selected_entries,
+                acknowledge_unknown_cost=acknowledge_unknown_cost,
+            )
+            self._refuse_duplicate_filtered_submit(
+                project=project,
+                scene_id=scene_id,
+                selected_entries=selected_entries,
+            )
         batch_manifest_fingerprint = str((shot_manifest or {}).get("manifest_fingerprint") or "")
         batch_snapshot_id = str(batch.get("prepared_snapshot_id") or "")
         per_shot_score_provider = "none" if resolved_score_provider == "manual_post_render" else resolved_score_provider
@@ -529,7 +624,7 @@ class SceneProductionPipelineService:
             summary["one_button_render_jobs"] = render_rows
 
         rendered_shots: list[dict[str, Any]] = []
-        for index, (shot, prepared_entry) in enumerate(zip(shots, entries), start=1):
+        for index, (shot, prepared_entry) in enumerate(submission_pairs, start=1):
             shot_id = str(prepared_entry["shot_id"])
             # Every generation input comes from the same prepared entry that
             # produced the READY verdict; do not resolve shots or derive prompts here.
@@ -552,7 +647,7 @@ class SceneProductionPipelineService:
                     manifest_fingerprint=batch_manifest_fingerprint,
                     prepared_snapshot_id=batch_snapshot_id,
                     batch_shot_index=index,
-                    batch_shot_count=len(shots),
+                    batch_shot_count=len(submission_pairs),
                     confirmation_enforced=require_persisted_confirmation,
                 ),
                 "generation_context_id": prepared_entry.get("generation_context_id", ""),
@@ -616,7 +711,7 @@ class SceneProductionPipelineService:
                 narrative_audio=True,
                 dialogue_scene_id=scene_id,
                 dialogue_shot_id=shot_id,
-                scene_context={"scene": scene, "shot": shot, "shot_index": index, "shot_count": len(shots)},
+                scene_context={"scene": scene, "shot": shot, "shot_index": index, "shot_count": len(submission_pairs)},
             )
             final_url = audio_result.get("final_video_url") or source_url
             consistency = self._consistency_summary(completed_job)
@@ -646,6 +741,48 @@ class SceneProductionPipelineService:
                 }
             )
 
+        if filtered_request and len(submission_pairs) < len(entries):
+            # Subset atomicity (Phase 2B item 2): per-shot render rows are
+            # upserted and persisted below, but NO scene assembly is written
+            # — a partial stitch must never overwrite the scene's assembly
+            # row or its assembly file, and no soundtrack is mixed for a
+            # subset. The full manifest still rides on every job, so each
+            # take verifies against the whole-scene freeze.
+            selected_shot_ids = [str(entry.get("shot_id") or "") for _, entry in submission_pairs]
+            omitted_shot_ids = [
+                str(entry.get("shot_id") or "") for entry in entries
+                if str(entry.get("shot_id") or "") not in set(selected_shot_ids)
+            ]
+            if save_project is not None and not protected_mode:
+                saved = save_project(working_project)
+                if isinstance(saved, dict):
+                    working_project = saved
+            single_output_url: str | None = None
+            if len(rendered_shots) == 1:
+                audio_payload = rendered_shots[0].get("audio")
+                if isinstance(audio_payload, dict):
+                    single_output_url = str(audio_payload.get("final_video_url") or "") or None
+            return {
+                "status": "complete",
+                "project_id": project_id,
+                "scene_id": scene_id,
+                "shots": rendered_shots,
+                "stitch": None,
+                "assembly": None,
+                "assembly_skipped": "subset_selection_has_no_scene_assembly",
+                "output_url": single_output_url,
+                "score_ambient_provider": resolved_score_provider,
+                "soundtrack_status": self._soundtrack_status(soundtrack_config),
+                "shot_manifest": shot_manifest,
+                "prepared_snapshot_id": batch.get("prepared_snapshot_id", ""),
+                "shot_filter": {
+                    "storyboard_shot_ids": cleaned_filter,
+                    "allow_full_package": bool(allow_full_package),
+                    "filtered_from": "full_scene_batch",
+                    "selected_shot_ids": selected_shot_ids,
+                    "omitted_shot_ids": omitted_shot_ids,
+                },
+            }
         stitch_result = self.stitching_service.stitch_scene(
             project_id=project_id,
             scene_id=scene_id,
@@ -683,6 +820,169 @@ class SceneProductionPipelineService:
             "shot_manifest": shot_manifest,
             "prepared_snapshot_id": batch.get("prepared_snapshot_id", ""),
         }
+
+    # ══ D5 shot filter + spend guards (Phase 2B) ═════════════════════════
+
+    @staticmethod
+    def _select_filtered_entries(
+        *,
+        entries: list[dict[str, Any]],
+        storyboard_shot_ids: list[str],
+        allow_full_package: bool,
+    ) -> list[dict[str, Any]]:
+        """Narrow frozen batch entries to the requested storyboard shots.
+
+        The batch stays whole-scene; only job creation is narrowed. Unknown
+        ids are refused by name. Order follows the request.
+        """
+        if not storyboard_shot_ids:
+            if not allow_full_package:
+                raise ValidationError(
+                    "A shot filter is required: name storyboard_shot_ids, or pass "
+                    "allow_full_package=true for the whole scene",
+                    stage="scene_pipeline_shot_filter",
+                )
+            return list(entries)
+        available = {
+            str(entry.get("storyboard_shot_id") or "").strip()
+            for entry in entries
+        } - {""}
+        unknown = [value for value in storyboard_shot_ids if value not in available]
+        if unknown:
+            raise ValidationError(
+                f"Shot filter names shots outside this scene batch: {', '.join(unknown)}",
+                stage="scene_pipeline_shot_filter",
+                metadata={"unknown_storyboard_shot_ids": unknown},
+            )
+        by_board_id: dict[str, dict[str, Any]] = {}
+        for entry in entries:
+            key = str(entry.get("storyboard_shot_id") or "").strip()
+            if key and key not in by_board_id:
+                by_board_id[key] = entry
+        return [by_board_id[value] for value in storyboard_shot_ids]
+
+    @staticmethod
+    def _enforce_filtered_spend_guards(
+        *,
+        project_id: str,
+        provider: str | None,
+        selected_entries: list[dict[str, Any]],
+        acknowledge_unknown_cost: bool,
+    ) -> None:
+        """Server-side spend guards over the SELECTED entries, pre-creation.
+
+        Estimates are the batch's own per-shot cost pictures (no new provider
+        contact). Known credits are summed and refused over the per-request
+        ceiling with no acknowledgement bypass; any unknown estimate requires
+        explicit acknowledgement. Simulated providers never spend.
+        """
+        resolved = str(provider or "").strip().lower()
+        if resolved in {"", "simulated"}:
+            return
+        ceiling = filtered_render_credit_ceiling()
+        known_total = 0.0
+        unknown_shot_ids: list[str] = []
+        for entry in selected_entries:
+            shot_id = str(entry.get("shot_id") or "?")
+            estimate = entry.get("cost_estimate")
+            credited = None
+            if isinstance(estimate, dict) and estimate.get("estimated") is True:
+                try:
+                    credited = float(estimate.get("estimated_credits"))
+                except (TypeError, ValueError):
+                    credited = None
+            if credited is None:
+                unknown_shot_ids.append(shot_id)
+            else:
+                known_total += credited
+        if unknown_shot_ids and not acknowledge_unknown_cost:
+            raise ValidationError(
+                f"Shot(s) {', '.join(unknown_shot_ids)} have no verified cost estimate; pass "
+                "acknowledge_unknown_cost=true to proceed without one",
+                stage="scene_pipeline_spend_guard",
+                metadata={
+                    "project_id": project_id,
+                    "unknown_cost_shot_ids": unknown_shot_ids,
+                    "ceiling_credits": ceiling,
+                    "ceiling_env_var": SHOT_FILTER_CREDIT_CEILING_ENV_VAR,
+                },
+            )
+        if known_total > ceiling:
+            raise ValidationError(
+                f"Selected shots estimate ({known_total:g} credits) exceeds the per-request "
+                f"ceiling ({ceiling:g} credits, {SHOT_FILTER_CREDIT_CEILING_ENV_VAR})",
+                stage="scene_pipeline_spend_guard",
+                metadata={
+                    "project_id": project_id,
+                    "estimated_credits": known_total,
+                    "ceiling_credits": ceiling,
+                    "ceiling_env_var": SHOT_FILTER_CREDIT_CEILING_ENV_VAR,
+                    "selected_shot_ids": [str(entry.get("shot_id") or "") for entry in selected_entries],
+                },
+            )
+
+    @staticmethod
+    def _refuse_duplicate_filtered_submit(
+        *,
+        project: dict[str, Any],
+        scene_id: str,
+        selected_entries: list[dict[str, Any]],
+    ) -> None:
+        """Refuse a filtered resubmission for an already-completed take."""
+        summary = project.get("execution_summary")
+        rows = summary.get("one_button_render_jobs") if isinstance(summary, dict) else None
+        if not isinstance(rows, list):
+            return
+        completed_jobs: dict[tuple[str, str], str] = {}
+        for row in rows:
+            if not isinstance(row, dict) or str(row.get("status") or "") != "complete":
+                continue
+            completed_jobs[(str(row.get("scene_id") or ""), str(row.get("shot_id") or ""))] = str(row.get("job_id") or "")
+        dupes = [
+            str(entry.get("shot_id") or "")
+            for entry in selected_entries
+            if (scene_id, str(entry.get("shot_id") or "")) in completed_jobs
+        ]
+        if dupes:
+            raise ValidationError(
+                f"Shot(s) {', '.join(dupes)} already have a completed scene-pipeline render; "
+                "resubmission is refused to prevent a duplicate charge",
+                stage="scene_pipeline_shot_filter",
+                metadata={
+                    "duplicate_shot_ids": dupes,
+                    "existing_job_ids": [completed_jobs[(scene_id, shot_id)] for shot_id in dupes],
+                },
+            )
+
+    def count_prior_router_submissions(
+        self,
+        *,
+        project_id: str,
+        shot_ids: list[str],
+    ) -> dict[str, int]:
+        """Count persisted Runway render jobs per shot (read-only, advisory).
+
+        Feeds the single-take dialog's "N Runway submissions" line. Never
+        raises: history gaps report zero rather than blocking preflight.
+        """
+        wanted = {str(value) for value in shot_ids if str(value)}
+        if not wanted:
+            return {}
+        try:
+            jobs = self.render_service.list_persisted_jobs(project_id=project_id)
+        except Exception:
+            return {}
+        counts: dict[str, int] = {}
+        for job in jobs or []:
+            try:
+                provider = str(getattr(job, "provider", "") or "").strip().lower()
+                shot_id = str(getattr(job, "shot_id", "") or "")
+            except Exception:
+                continue
+            if provider not in {"runway_router", "runway"} or shot_id not in wanted:
+                continue
+            counts[shot_id] = counts.get(shot_id, 0) + 1
+        return counts
 
     # ══ All-or-nothing batch authorization preflight (R4.1A) ═══════════════
 
