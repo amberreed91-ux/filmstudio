@@ -293,3 +293,94 @@ describe('Coverage grid (section C replacement)', () => {
     expect(screen.getByTestId('coverage-grid-status')).toHaveTextContent('Shots 1, 2, 3, 4 and 5 need a line.')
   })
 })
+
+describe('Coverage grid keyboard (one Tab stop per row)', () => {
+  it('gives every script line exactly one Tab stop on its assigned dot', () => {
+    mockScene(buildGridScene({
+      shotCount: 3,
+      contents: [
+        { id: 'kb_a', text: 'First line.', shot: 2 },
+        { id: 'kb_b', text: 'Second line.' },
+        { id: 'kb_c', text: 'Third line.', omitted: true },
+      ],
+      dialogue: [
+        { id: 'kb_d1', text: 'Spoken one.', character: 'MAYA', shot: 3 },
+      ],
+    }))
+    renderPanel()
+    // Assigned content rows: the owner's dot is the single tab stop.
+    const dotsA = within(screen.getByTestId('coverage-grid-row-kb_a')).getAllByRole('button')
+    expect(dotsA).toHaveLength(3)
+    expect(dotsA.map(dot => dot.tabIndex)).toEqual([-1, 0, -1])
+    // Unassigned rows: the first dot is the single tab stop.
+    const dotsB = within(screen.getByTestId('coverage-grid-row-kb_b')).getAllByRole('button')
+    expect(dotsB.map(dot => dot.tabIndex)).toEqual([0, -1, -1])
+    // Dialogue rows behave the same.
+    const dotsD = within(screen.getByTestId('coverage-grid-row-kb_d1')).getAllByRole('button')
+    expect(dotsD.map(dot => dot.tabIndex)).toEqual([-1, -1, 0])
+    // Skipped rows render no dots, so they are never tab stops.
+    expect(within(screen.getByTestId('coverage-grid-row-kb_c')).queryAllByRole('button')).toHaveLength(0)
+    // The stay-together block is one more single-stop group.
+    const blockDots = within(screen.getByTestId('coverage-grid-row-spoken-block')).getAllByRole('button')
+    expect(blockDots).toHaveLength(3)
+    expect(blockDots.filter(dot => dot.tabIndex === 0)).toHaveLength(1)
+  })
+
+  it('moves between shots with arrows and selects, jumping with Home and End', () => {
+    mockScene(buildGridScene({
+      shotCount: 4,
+      contents: [{ id: 'kb_move', text: 'Movable line.', shot: 1 }],
+      dialogue: [],
+    }))
+    renderPanel()
+    const dots = within(screen.getByTestId('coverage-grid-row-kb_move')).getAllByRole('button')
+    dots[0].focus()
+    expect(document.activeElement).toBe(dots[0])
+    fireEvent.keyDown(dots[0], { key: 'ArrowRight' })
+    expect(editCoverage).toHaveBeenCalledWith('content', 'kb_move', { status: 'ASSIGNED', shot_id: 'grid_shot_002', reason: '' })
+    expect(document.activeElement).toBe(dots[1])
+    fireEvent.keyDown(dots[1], { key: 'End' })
+    expect(editCoverage).toHaveBeenCalledWith('content', 'kb_move', { status: 'ASSIGNED', shot_id: 'grid_shot_004', reason: '' })
+    expect(document.activeElement).toBe(dots[3])
+    fireEvent.keyDown(dots[3], { key: 'ArrowRight' })
+    expect(editCoverage).toHaveBeenCalledWith('content', 'kb_move', { status: 'ASSIGNED', shot_id: 'grid_shot_001', reason: '' })
+    expect(document.activeElement).toBe(dots[0])
+    fireEvent.keyDown(dots[0], { key: 'Home' })
+    expect(editCoverage).toHaveBeenCalledWith('content', 'kb_move', { status: 'ASSIGNED', shot_id: 'grid_shot_001', reason: '' })
+    // Labels keep naming the line and the shot for every dot in the row.
+    expect(dots[1]).toHaveAttribute('aria-label', 'Assign kb_move to Shot 2')
+  })
+
+  it('selects spoken lines with arrows and mirrors the assignment', () => {
+    mockScene(buildGridScene({
+      shotCount: 3,
+      contents: [],
+      dialogue: [{ id: 'kb_sp', text: 'Spoken.', character: 'DRE', shot: 1 }],
+    }))
+    renderPanel()
+    const dots = within(screen.getByTestId('coverage-grid-row-kb_sp')).getAllByRole('button')
+    dots[0].focus()
+    fireEvent.keyDown(dots[0], { key: 'ArrowLeft' })
+    // Wraps to the last shot and selects it through the mirrored path.
+    expect(editCoverage).toHaveBeenCalledWith('dialogue', 'kb_sp', { status: 'ASSIGNED', shot_id: 'grid_shot_003', reason: '' })
+    expect(editLine).toHaveBeenCalledWith('kb_sp', { shot_id: 'grid_shot_003' })
+    expect(document.activeElement).toBe(dots[2])
+  })
+
+  it('falls back to the first dot when the owner names a shot off the board', () => {
+    const scene = buildGridScene({
+      shotCount: 3,
+      contents: [{ id: 'kb_ghost', text: 'Haunted line.', shot: 1 }],
+      dialogue: [],
+    })
+    scene.coverage_decisions = scene.coverage_decisions.map(row =>
+      row.obligation_type === 'content' && row.obligation_id === 'kb_ghost'
+        ? { ...row, shot_id: 'grid_shot_009' }
+        : row,
+    )
+    mockScene(scene)
+    renderPanel()
+    const dots = within(screen.getByTestId('coverage-grid-row-kb_ghost')).getAllByRole('button')
+    expect(dots.map(dot => dot.tabIndex)).toEqual([0, -1, -1])
+  })
+})

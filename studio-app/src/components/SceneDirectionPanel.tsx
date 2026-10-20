@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useSceneDirection } from '../hooks/useSceneDirection'
 import type { CoverageDecision, SceneDirection } from '../lib/sceneDirectionApi'
 import { LEGACY_SCENE002_REFERENCE_ID } from '../lib/settingReferenceApi'
@@ -86,6 +86,49 @@ const dotClass = (selected: boolean, columnEmpty: boolean): string =>
       ? 'border-rose-300/30 text-rose-200/60 hover:border-rose-300/60 hover:text-rose-200'
       : 'border-white/15 text-zinc-500 hover:border-white/40 hover:text-zinc-200'
 
+/**
+ * Keyboard: each script line is one group with a single Tab stop.
+ *
+ * editCoverage/editLine are draft-local (no network until the explicit
+ * Save), so the radio-group pattern applies: arrows move between shots
+ * AND select, Home/End jump to the first/last shot. The tabbable dot is
+ * derived from the current owner — the first dot when unassigned or when
+ * the owner names a shot that is no longer on the board — so no separate
+ * focus state can go stale. Skipped rows render no dots and are never
+ * tab stops.
+ */
+const gridRowTabbable = (shots: SceneDirection['shots'], ownerShotId: string | null, dotIndex: number): number => {
+  const owned = ownerShotId ? shots.findIndex(shot => shot.shot_id === ownerShotId) : -1
+  const tabbable = owned >= 0 ? owned : 0
+  return dotIndex === tabbable ? 0 : -1
+}
+
+const handleGridDotKeyDown = (
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  shots: SceneDirection['shots'],
+  dotIndex: number,
+  assign: (shotId: string) => void,
+): void => {
+  if (shots.length === 0) return
+  let target: number | null = null
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+    target = (dotIndex + 1) % shots.length
+  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    target = (dotIndex - 1 + shots.length) % shots.length
+  } else if (event.key === 'Home') {
+    target = 0
+  } else if (event.key === 'End') {
+    target = shots.length - 1
+  }
+  if (target === null) return
+  const destination = shots[target]
+  if (!destination) return
+  event.preventDefault()
+  assign(destination.shot_id)
+  const peer = event.currentTarget.closest('tr')?.querySelectorAll('button')[target]
+  if (peer instanceof HTMLButtonElement) peer.focus()
+}
+
 function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, onAssignContent, onAssignDialogue, onAssignBlock, onSave }: {
   data: SceneDirection
   busy: boolean
@@ -157,7 +200,7 @@ function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, 
                     const selected = owner === shot.shot_id
                     return (
                       <td key={shot.shot_id} className="px-1 py-1 text-center">
-                        <button type="button" aria-label={`Assign ${unit.obligation_id} to Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} onClick={() => onAssignContent(unit.obligation_id, shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
+                        <button type="button" aria-label={`Assign ${unit.obligation_id} to Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} tabIndex={gridRowTabbable(shots, owner, index)} onKeyDown={event => handleGridDotKeyDown(event, shots, index, shotId => onAssignContent(unit.obligation_id, shotId))} onClick={() => onAssignContent(unit.obligation_id, shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
                       </td>
                     )
                   })}
@@ -182,7 +225,7 @@ function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, 
                     const selected = owner === shot.shot_id
                     return (
                       <td key={shot.shot_id} className="px-1 py-1 text-center">
-                        <button type="button" aria-label={`Assign spoken line ${line.line_id} to Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} onClick={() => onAssignDialogue(line.line_id, shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
+                        <button type="button" aria-label={`Assign spoken line ${line.line_id} to Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} tabIndex={gridRowTabbable(shots, owner, index)} onKeyDown={event => handleGridDotKeyDown(event, shots, index, shotId => onAssignDialogue(line.line_id, shotId))} onClick={() => onAssignDialogue(line.line_id, shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
                       </td>
                     )
                   })}
@@ -196,7 +239,7 @@ function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, 
                   const selected = blockShotId === shot.shot_id
                   return (
                     <td key={shot.shot_id} className="px-1 py-1 text-center">
-                      <button type="button" aria-label={`Keep all spoken lines together on Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} onClick={() => onAssignBlock(shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
+                      <button type="button" aria-label={`Keep all spoken lines together on Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} tabIndex={gridRowTabbable(shots, blockShotId, index)} onKeyDown={event => handleGridDotKeyDown(event, shots, index, shotId => onAssignBlock(shotId))} onClick={() => onAssignBlock(shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
                     </td>
                   )
                 })}
