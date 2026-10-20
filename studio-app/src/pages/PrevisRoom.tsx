@@ -90,6 +90,7 @@ import { browserPlaybackUrl } from '../lib/studioMedia'
 import ShotIntentRationaleCard from '../components/ShotIntentRationaleCard'
 import ShotSignalsPanel from '../components/ShotSignalsPanel'
 import GenerationReadinessPanel, { type SingleTakeSelection } from '../components/GenerationReadinessPanel'
+import { resolveTakePromptPrefill } from '../lib/takePromptPrefill'
 import AiCameraApproval from '../components/AiCameraApproval'
 import StoryboardImagePromptPanel from '../components/StoryboardImagePromptPanel'
 import PromptRebuildPanel from '../components/PromptRebuildPanel'
@@ -936,6 +937,15 @@ export default function PrevisRoom() {
     return storyboardBlueprint?.shots.find((shot) => shot.shot_number === activeShotNumber) || null
   }, [activeShotNumber, storyboardBlueprint?.shots])
 
+  // The take box reads the approved image prompt — the same text the
+  // generation manifest sends verbatim — never the board's stale
+  // provider_neutral_prompt. Anything but a ready prompt blocks with
+  // directions instead of prefilling board text.
+  const takePrefill = useMemo(() => resolveTakePromptPrefill(
+    activeBlueprintShot,
+    (activeBlueprintShot && storyboardBlueprint?.image_prompts?.[activeBlueprintShot.storyboard_shot_id]) ?? null,
+  ), [activeBlueprintShot, storyboardBlueprint?.image_prompts])
+
   const continuityReview = useMemo<StoryboardContinuityReview | null>(() => {
     const review = storyboardBlueprint?.blueprint.metadata?.continuity_review
     if (!review || typeof review !== 'object') return null
@@ -1572,16 +1582,34 @@ export default function PrevisRoom() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeShotNumber, selectedSceneId, scenes, totalShots, effectiveProjectId])
 
+  // Shot arrival always syncs the take box to the approved image prompt.
+  // A storyboard state refresh while parked on the shot (derive/approve)
+  // syncs too — but never over creator-typed direction.
+  const lastTakePrefillShotRef = useRef('')
+  const lastTakePrefillEntryRef = useRef('')
   useEffect(() => {
     if (!activeBlueprintShot) return
-    setPromptText(activeBlueprintShot.render_contract.provider_neutral_prompt)
+    const arrivalKey = activeBlueprintShot.storyboard_shot_id
+    const entryKey = `${takePrefill.ready}:${takePrefill.text}`
+    if (lastTakePrefillShotRef.current !== arrivalKey) {
+      lastTakePrefillShotRef.current = arrivalKey
+      lastTakePrefillEntryRef.current = entryKey
+    } else if (lastTakePrefillEntryRef.current === entryKey || promptDirtyRef.current) {
+      return
+    } else {
+      lastTakePrefillEntryRef.current = entryKey
+    }
+    setPromptText(takePrefill.text)
     promptDirtyRef.current = false
     setGenConfig((previous) => ({
       ...previous,
       duration: activeBlueprintShot.render_contract.duration_seconds,
       seed: activeBlueprintShot.render_contract.seed ?? null,
     }))
-  }, [activeBlueprintShot?.storyboard_shot_id])
+    // storyboardBlueprint excluded: identity churns on every refetch; the
+    // shot + entry keys above bound this effect instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBlueprintShot?.storyboard_shot_id, takePrefill])
 
   // ── Load history from render jobs ─────────────────────────────────────────
   useEffect(() => {
@@ -1676,7 +1704,14 @@ export default function PrevisRoom() {
       setError('No active project')
       return
     }
-    const storyboardPrompt = activeBlueprintShot?.render_contract.provider_neutral_prompt?.trim() || ''
+    // Provider-bound take text is the approved image prompt. When it is not
+    // ready the box is empty by construction, so stop here with directions
+    // instead of silently falling back to the stale board prompt.
+    if (activeBlueprintShot && !takePrefill.ready) {
+      setError(`Take blocked: ${takePrefill.notice ?? 'Approve the image prompt in the storyboard panel first.'}`)
+      return
+    }
+    const storyboardPrompt = activeBlueprintShot ? takePrefill.text.trim() : ''
     const renderPrompt = promptText.trim() || storyboardPrompt
     if (!renderPrompt) {
       setError('Enter a prompt before rendering')
@@ -1794,7 +1829,7 @@ export default function PrevisRoom() {
       setRendering(false)
       setPipelineStatus({ loop1: 'failed', loop2: 'pending', compose: 'pending', mp4: 'pending' })
     }
-  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, promptText, genConfig, renderProvider, selectedSceneId, activeShotNumber, visibleRenderHistory, shotPlanningOverrides, shotVisualModelId, genModel, freshRender, preflightGuard])
+  }, [effectiveProjectId, activeBlueprintShot, storyboardBlueprint, takePrefill, promptText, genConfig, renderProvider, selectedSceneId, activeShotNumber, visibleRenderHistory, shotPlanningOverrides, shotVisualModelId, genModel, freshRender, preflightGuard])
 
   // ── Inline delete confirms (no native dialogs — blocked popups silently
   // abort deletion, which reads as "nothing happens") ───────────────────────
@@ -2846,7 +2881,12 @@ export default function PrevisRoom() {
                             {/* PROMPT TEXTAREA */}
             <div>
               <label htmlFor="previs-render-prompt" className="mb-2 block text-sm font-medium text-zinc-100">Direct the action</label>
-              <p className="mb-3 text-xs leading-relaxed text-zinc-400">Describe what moves, what happens, and how the camera follows. Your current direction is sent with this take.</p>
+              <p className="mb-3 text-xs leading-relaxed text-zinc-400">Describe what moves, what happens, and how the camera follows. Edited direction is sent with this previs take only — Runway video renders always use the approved board image prompt.</p>
+              {activeBlueprintShot && !takePrefill.ready && takePrefill.notice && (
+                <p className="mb-2 rounded border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[11px] leading-relaxed text-amber-200" data-testid="take-prompt-blocked-notice" role="status">
+                  {takePrefill.notice}
+                </p>
+              )}
               {coDirectorNoteApplied && (
                 <div className="mb-2 rounded border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-300">
                   Co-Director note applied to prompt
@@ -2864,7 +2904,7 @@ export default function PrevisRoom() {
                            text-white/80 text-sm p-2 min-h-[80px] resize-y"
                 value={promptText}
                 onChange={(e) => { setPromptText(e.target.value); promptDirtyRef.current = true }}
-                placeholder="Describe this shot..."
+                placeholder={activeBlueprintShot && !takePrefill.ready ? 'Approve the image prompt in the storyboard panel to direct this shot…' : 'Describe this shot...'}
               />
               {originalPrompt && (
                 <div className="mt-2 p-2 bg-white/5 rounded border border-white/10">
@@ -3245,6 +3285,7 @@ export default function PrevisRoom() {
                       || preflightGuard.status === 'blocked'
                       || preflightGuard.status === 'error'
                       || preflightGuard.status === 'stale'
+                      || (activeBlueprintShot != null && !takePrefill.ready)
                     }
                     className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500"
                   >
