@@ -107,7 +107,11 @@ class ShotRationaleService:
             base += "."
             return base
 
-        return f"{scene_label}. A beat that earns its place in the larger composition."
+        # No generic filler: when no emotional/character signal exists, the
+        # rationale is just the scene label from existing data. Template
+        # sentences ("A beat that earns its place...") read as provider-bound
+        # prompt text on the board path, so they must never be minted here.
+        return f"{scene_label}."
 
     def _format_characters(self, characters: List[str]) -> str:
         if not characters:

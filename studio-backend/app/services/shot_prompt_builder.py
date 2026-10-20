@@ -103,6 +103,21 @@ def _classify_script_line_tag(line: str) -> Optional[str]:
     return None
 
 
+def clean_prompt_punctuation(text: str) -> str:
+    """Collapse punctuation artifacts from line-joined prompt assembly.
+
+    A scene-text line ending in a comma ("Music,") joined with ". "
+    separators mints the fake-terminal artifact "Music,." — a comma wearing
+    a period. Only sentence-boundary punctuation may terminate a clause.
+    Applies to newly built prompts only; stored board text is never touched.
+    """
+    cleaned = re.sub(r",\s*\.", ",", str(text or ""))
+    cleaned = re.sub(r"\.{2,}", ".", cleaned)
+    cleaned = re.sub(r"\s+\.", ".", cleaned)
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    return cleaned.strip()
+
+
 def _segment_scene_text(scene_text: str, num_shots: int) -> list[str]:
     """
     Segment scene text into approximately equal chunks for each shot.
@@ -114,6 +129,18 @@ def _segment_scene_text(scene_text: str, num_shots: int) -> list[str]:
         return [""] * num_shots
     
     lines = [line.strip() for line in scene_text.split("\n") if line.strip()]
+    # Merge comma-continuation lines before distributing: a sentence broken
+    # across lines ("Music," / "laughter, ...") must stay in one segment.
+    # Splitting it severs the sentence across shots and the ". " join then
+    # mints the "Music,." artifact. Only trailing commas merge — terminal
+    # punctuation (periods, colons, dialogue) keeps its line boundary.
+    merged: list[str] = []
+    for line in lines:
+        if merged and merged[-1].endswith(","):
+            merged[-1] = f"{merged[-1]} {line}"
+        else:
+            merged.append(line)
+    lines = merged
     
     # Filter out scene headings and transitions (they belong to Shot 1)
     content_lines = []
@@ -642,8 +669,9 @@ def build_shot_aware_prompt(
     # 8. Style suffix
     parts.append("Cinematic, film quality, single continuous shot.")
     
-    # Join parts
-    base_prompt = ". ".join(parts)
+    # Join parts (punctuation-cleaned so severed comma-lines can never mint
+    # a fake-terminal ",." artifact on newly built prompts).
+    base_prompt = clean_prompt_punctuation(". ".join(parts))
     
     # 8. Take variation (append for Take 2+)
     take_variation = TAKE_VARIATIONS.get(take_number, "")

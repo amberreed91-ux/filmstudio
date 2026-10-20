@@ -1158,11 +1158,18 @@ class StoryboardBlueprintService:
         parameters["storyboard"] = self._storyboard_metadata_for_shot(shot)
         if shot.render_contract.seed is not None:
             parameters.setdefault("seed", shot.render_contract.seed)
+        send_prompt = shot.render_contract.provider_neutral_prompt
+        if str(provider or "").strip().lower() in {"runway", "gen4_image", "runway_router"}:
+            # Runway-family renders send ONLY the approved, hash-linked image
+            # prompt — never the board's provider_neutral_prompt. Missing,
+            # stale, unapproved, or over-limit prompts fail closed here via
+            # StateError before any job exists.
+            send_prompt = self._image_prompt_service().approved_prompt_for_shot(shot)
         job = svc.create_job(
             project_id=shot.project_id,
             shot_id=shot.shot_id,
             provider=provider,
-            prompt=shot.render_contract.provider_neutral_prompt,
+            prompt=send_prompt,
             reference_assets=inputs["reference_assets"],
             parameters=parameters,
         )
@@ -1495,6 +1502,12 @@ class StoryboardBlueprintService:
             text = ensure_locked_appearance_in_prompt(
                 text, self._project_characters_for_prompt(project_id), scene
             )
+        except Exception:
+            pass
+        try:
+            from app.services.shot_prompt_builder import clean_prompt_punctuation
+
+            text = clean_prompt_punctuation(text)
         except Exception:
             pass
         return text

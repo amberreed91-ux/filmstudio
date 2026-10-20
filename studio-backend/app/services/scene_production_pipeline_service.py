@@ -1665,6 +1665,15 @@ class SceneProductionPipelineService:
                     raise ValidationError("Authorized storyboard prompt is missing", stage="scene_pipeline_contract")
             else:
                 prompt = self._shot_prompt(scene, shot, index, len(shots))
+            # Provider-bound text for storyboard-backed shots is ALWAYS the
+            # approved, hash-linked image prompt — never the board's
+            # provider_neutral_prompt. Resolution happens below once the
+            # current board shot is known; ``prompt`` above stays the board
+            # text so board-integrity checks keep reading board text.
+            send_prompt: str | None = None
+            send_prompt_sha256 = ""
+            send_prompt_error = ""
+            send_prompt_applies = False
             reference_assets = [str(url) for url in (shot.get("reference_assets") or shot.get("source_refs") or [])]
             storyboard_meta = parameters.get("storyboard") if isinstance(parameters.get("storyboard"), dict) else {}
 
@@ -1688,6 +1697,15 @@ class SceneProductionPipelineService:
                         current_shot = candidate
                 except Exception:
                     current_shot = None
+            if not protected_mode and storyboard_shot_id:
+                send_prompt_applies = True
+                send_prompt, send_prompt_sha256, send_prompt_error = (
+                    self._resolve_storyboard_send_prompt(
+                        shot_id=shot_id,
+                        storyboard_shot_id=storyboard_shot_id,
+                        current_shot=current_shot,
+                    )
+                )
             from app.services.camera_provenance import (
                 CAMERA_PROVENANCE_AI,
                 CAMERA_PROVENANCE_CREATOR,
@@ -1796,6 +1814,8 @@ class SceneProductionPipelineService:
                 canonical_script_text=(authority["screenplay_text"] if protected_mode else project.get("script_text")) if isinstance((authority["screenplay_text"] if protected_mode else project.get("script_text")), str) else None,
             )
             shot_blockers = [*camera_blockers, *readiness.blockers]
+            if send_prompt_applies and send_prompt_error:
+                shot_blockers.append(send_prompt_error)
             if provider == "runway_router" and not camera_plan:
                 shot_blockers.append("camera plan: Runway Router requires an authoritative camera plan")
 
@@ -2119,7 +2139,9 @@ class SceneProductionPipelineService:
                     "character_focus": deepcopy(shot.get("character_focus") or (shot.get("intent") or {}).get("character_focus", [])),
                     "storyboard_shot_id": storyboard_shot_id,
                     "shot_order": index,
-                    "prompt": prompt,
+                    "prompt": send_prompt if send_prompt_applies else prompt,
+                    "image_prompt_ready": (not send_prompt_applies) or not send_prompt_error,
+                    "image_prompt_sha256": send_prompt_sha256,
                     "scene_version": context.scene_version,
                     "source_shot_version": self._snapshot_fingerprint(shot),
                     "dialogue_handoff": dialogue_handoff,
@@ -2160,7 +2182,11 @@ class SceneProductionPipelineService:
                     "references": reference_assets,
                     "reference_version": context.reference_version,
                     "generation_context_id": context.generation_context_id,
-                    "shot_version": context.shot_version,
+                    "shot_version": (
+                        self._shot_version_with_image_prompt(context.shot_version, send_prompt_sha256)
+                        if send_prompt_applies and not send_prompt_error and send_prompt_sha256
+                        else context.shot_version
+                    ),
                     "blockers": shot_blockers,
                     "cost_estimate": estimate,
                     "reference_requirements": (
@@ -2381,7 +2407,12 @@ class SceneProductionPipelineService:
 
         coverage_resolved = not coverage_blockers
         for entry in entries:
-            if not coverage_resolved:
+            if not coverage_resolved or not entry.get("image_prompt_ready", True):
+                # Keep failed preflight data inspectable, but do not create a
+                # frozen/provider-eligible contract from unresolved coverage
+                # or from a missing/unapproved/stale image prompt. Blocked
+                # entries carry an empty sendable prompt so the manifest
+                # renders "Prompt unavailable" instead of stale board text.
                 # Keep failed preflight data inspectable, but do not create a
                 # frozen/provider-eligible contract from unresolved coverage.
                 entry["generation_contract"] = None
@@ -3371,6 +3402,66 @@ class SceneProductionPipelineService:
                 stage="scene_pipeline_snapshot",
                 metadata={"failure_type": "stale_shot_snapshot", "scene_id": scene_id},
             )
+        if source_kind == "storyboard":
+            self._assert_storyboard_send_prompts_current(batch, project_id=project_id, scene_id=scene_id)
+
+    def _assert_storyboard_send_prompts_current(
+        self,
+        batch: dict[str, Any],
+        *,
+        project_id: str,
+        scene_id: str,
+    ) -> None:
+        """Reject a prepared snapshot whose approved image prompts changed.
+
+        Board bytes are covered by the shot-source fingerprint above; image
+        prompts live in a separate table, so an edit/approval after preflight
+        would otherwise submit the preflight-time text. Entries that were
+        already blocked at preflight are skipped — their blockers (not this
+        snapshot) refuse generation until a fresh preflight.
+        """
+        from app.services.storyboard_blueprint_service import (
+            storyboard_blueprint_service,
+        )
+
+        blueprint = storyboard_blueprint_service.storage.get_storyboard_blueprint(project_id, scene_id)
+        approved_version = str(getattr(blueprint, "approved_version_id", "") or "") if blueprint else ""
+        current_version = str(getattr(blueprint, "current_version_id", "") or "") if blueprint else ""
+        for entry in batch.get("entries") or []:
+            if not isinstance(entry, dict):
+                continue
+            storyboard_shot_id = str(entry.get("storyboard_shot_id") or "")
+            if not storyboard_shot_id:
+                continue
+            if not entry.get("image_prompt_ready") or not str(entry.get("prompt") or ""):
+                continue
+            shot_id = str(entry.get("shot_id") or "")
+            current_shot = None
+            try:
+                candidate = storyboard_blueprint_service.storage.get_storyboard_shot(storyboard_shot_id)
+                if (
+                    candidate is not None
+                    and str(getattr(candidate, "version_id", "") or "") == approved_version
+                    and str(getattr(candidate, "version_id", "") or "") == current_version
+                    and str(getattr(candidate, "shot_id", "") or "") == shot_id
+                    and str(getattr(candidate, "project_id", "") or "") == project_id
+                    and str(getattr(candidate, "scene_id", "") or "") == scene_id
+                ):
+                    current_shot = candidate
+            except Exception:
+                current_shot = None
+            text, _, error = self._resolve_storyboard_send_prompt(
+                shot_id=shot_id,
+                storyboard_shot_id=storyboard_shot_id,
+                current_shot=current_shot,
+            )
+            if error or text != str(entry.get("prompt") or ""):
+                raise ValidationError(
+                    f"Shot {shot_id}: the approved image prompt changed after "
+                    "preflight; run preflight again before generation.",
+                    stage="scene_pipeline_snapshot",
+                    metadata={"failure_type": "stale_image_prompt_snapshot", "scene_id": scene_id},
+                )
 
     def _snapshot_fingerprint(self, value: Any) -> str:
         if isinstance(value, list):
@@ -3526,6 +3617,79 @@ class SceneProductionPipelineService:
     def _resolve_ordered_shots(self, project: dict[str, Any], scene: dict[str, Any]) -> list[dict[str, Any]]:
         shots, _, _ = self._resolve_shot_source(project, scene)
         return shots
+
+    def _resolve_storyboard_send_prompt(
+        self,
+        *,
+        shot_id: str,
+        storyboard_shot_id: str,
+        current_shot: Any,
+    ) -> tuple[str, str, str]:
+        """Resolve the provider-bound text for one storyboard-backed shot.
+
+        Returns ``(text, sha256, error)``. On success ``error`` is empty and
+        ``text`` is the approved, hash-linked image prompt with ``sha256``
+        its hex digest. On ANY failure ``text`` is empty and ``error``
+        carries the fail-closed message (missing / stale / unapproved /
+        over-limit / unresolvable board shot) — callers must block the shot
+        and must never fall back to the board prompt. Never raises.
+        """
+        import hashlib as _hashlib
+
+        if current_shot is None:
+            return (
+                "",
+                "",
+                f"Shot {shot_id}: storyboard shot {storyboard_shot_id} cannot be "
+                "resolved from the approved board version; re-approve the "
+                "board before generation.",
+            )
+        try:
+            from app.services.storyboard_blueprint_service import (
+                storyboard_blueprint_service as _blueprint_service,
+            )
+            from app.services.storyboard_image_prompt_service import (
+                storyboard_image_prompt_service as _image_prompt_service,
+            )
+            from app.services.stability import StateError as _StateError
+            from app.services.stability import ValidationError as _ValidationError
+
+            _image_prompt_service.set_storage(_blueprint_service.storage)
+            text = _image_prompt_service.approved_prompt_for_shot(current_shot)
+        except (_StateError, _ValidationError) as exc:
+            message = str(getattr(exc, "message", None) or str(exc) or "").strip()
+            return "", "", message or f"Shot {shot_id}: approved image prompt is not render-ready."
+        except Exception as exc:
+            logger.warning(
+                "IMAGE_PROMPT_RESOLVE_FAILED | shot=%s | storyboard_shot=%s | cause=%s",
+                shot_id,
+                storyboard_shot_id,
+                type(exc).__name__,
+            )
+            return (
+                "",
+                "",
+                f"Shot {shot_id}: approved image prompt cannot be verified "
+                f"({type(exc).__name__}); derive and approve it before generation.",
+            )
+        return text, _hashlib.sha256(text.encode("utf-8")).hexdigest(), ""
+
+    def _shot_version_with_image_prompt(self, board_shot_version: str, image_prompt_sha256: str) -> str:
+        """Bind the sendable image prompt into the shot version hash.
+
+        The board-only version is blind to image-prompt edits; combining it
+        with the approved text digest means any image-prompt change yields a
+        different shot version (and, via the sent prompt, a different
+        manifest fingerprint and contract digest).
+        """
+        from app.services.generation_context_service import _stable_hash
+
+        return _stable_hash(
+            {
+                "board_shot_version": board_shot_version,
+                "image_prompt_sha256": image_prompt_sha256,
+            }
+        )
 
     def _shot_prompt(self, scene: dict[str, Any], shot: dict[str, Any], index: int, total: int) -> str:
         base = str(
