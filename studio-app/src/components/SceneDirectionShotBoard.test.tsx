@@ -163,23 +163,30 @@ describe('Shot board (section C rework)', () => {
     expect(screen.getByTestId('vo-group')).toHaveTextContent('no shot yet — assign it in section A')
   })
 
-  it('keeps the static what-saving-does note and names the new draft version after save', async () => {
-    mockScene(buildScene002Fixture(), true)
+  it('keeps the saving notes and names the new draft version after save', async () => {
+    const scene = buildScene002Fixture()
+    scene.coverage_decisions = scene.coverage_decisions.map(row => {
+      if (row.obligation_type !== 'content') return row
+      const index = Number(row.obligation_id.split('_')[1])
+      return { ...row, status: 'ASSIGNED' as const, shot_id: `scene_002_shot_00${(index % 5) + 1}` }
+    })
+    mockScene(scene, true)
     const onSaved = vi.fn()
     const panel = <SceneDirectionPanel projectId="project_5907c60cddbc" sceneId="scene_002" versionId="sbv_a6096cb1fea5" activeShotNumber={1} onSaved={onSaved} />
     const { rerender } = render(panel)
-    expect(screen.getByText(/What saving does: saving mints a new DRAFT successor version/)).toBeTruthy()
-    expect(screen.getByText(/Approved image prompts move across where the shot text did not change/)).toBeTruthy()
+    expect(screen.getByText('Saving never changes your approved version.')).toBeTruthy()
+    // Advanced keeps the long-form what-saving-does note.
+    expect(within(screen.getByTestId('coverage-advanced')).getByText(/What saving does: saving mints a new DRAFT successor version/)).toBeTruthy()
     // The save response model returns version_id but no prompt-carry fields,
     // so the note stays static and only the draft version is dynamic. The
     // real hook swaps in the successor as the new data; emulate that here.
     const successor = { ...activeData, version_id: 'sbv_newdraft0001' }
     vi.mocked(save).mockResolvedValue(successor)
-    fireEvent.click(screen.getByRole('button', { name: 'Review & save decisions' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & save decisions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save as new draft' }))
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
     mockScene(successor)
     rerender(<SceneDirectionPanel projectId="project_5907c60cddbc" sceneId="scene_002" versionId="sbv_a6096cb1fea5" activeShotNumber={1} onSaved={onSaved} />)
     await waitFor(() => expect(screen.getByTestId('save-success')).toHaveTextContent('Saved as new draft sbv_newdraft0001'))
+    expect(screen.getByTestId('save-success')).toHaveTextContent('Approved image prompts carry over where the shot text did not change.')
   })
 })

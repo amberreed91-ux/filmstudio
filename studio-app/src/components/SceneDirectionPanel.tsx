@@ -60,6 +60,162 @@ const shotNumberOf = (data: SceneDirection, shotId: string | null): number | nul
 
 const VO_CUE_PATTERN = /\(V\.O\.\)/i
 
+/**
+ * Line-by-shot grid (section C, presentation only).
+ *
+ * Each script line is a row; each shot is a column; one dot per row assigns
+ * the line to a shot through the existing editCoverage path with the same
+ * payload shape the per-line controls use (ASSIGNED plus the shot, and the
+ * dialogue mirror for spoken lines). Nothing here changes coverage rules,
+ * eligibility, gates, contracts, the save payload, or what a save writes.
+ * Skipped-on-purpose lines render muted with no dots. The spoken-dialogue
+ * block renders as one extra row that assigns every spoken line together.
+ */
+const gridLineCount = (data: SceneDirection, shotId: string): number =>
+  data.coverage_decisions.filter(row =>
+    (row.obligation_type === 'content' || row.obligation_type === 'dialogue')
+    && row.status === 'ASSIGNED' && row.shot_id === shotId).length
+
+const formatShotList = (numbers: number[]): string =>
+  numbers.length <= 2 ? numbers.join(' and ') : `${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}`
+
+const dotClass = (selected: boolean, columnEmpty: boolean): string =>
+  selected
+    ? 'border-emerald-300/60 bg-emerald-300/15 text-emerald-200'
+    : columnEmpty
+      ? 'border-rose-300/30 text-rose-200/60 hover:border-rose-300/60 hover:text-rose-200'
+      : 'border-white/15 text-zinc-500 hover:border-white/40 hover:text-zinc-200'
+
+function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, onAssignContent, onAssignDialogue, onAssignBlock, onSave }: {
+  data: SceneDirection
+  busy: boolean
+  saveNotice: string | null
+  showSavedVersion: boolean
+  savedVersion: string | null
+  onAssignContent: (lineId: string, shotId: string) => void
+  onAssignDialogue: (lineId: string, shotId: string) => void
+  onAssignBlock: (shotId: string) => void
+  onSave: () => void
+}) {
+  const shots = data.shots
+  const counts = shots.map(shot => gridLineCount(data, shot.shot_id))
+  const emptyNumbers = shots.map(shot => shot.shot_number).filter((_, index) => counts[index] === 0)
+  const coveredCount = shots.length - emptyNumbers.length
+  const contentUnits = data.coverage_obligations.filter(row => row.obligation_type === 'content')
+  const spokenLines = data.dialogue
+  const liveSpoken = spokenLines.filter(line => decisionFor(data, 'dialogue', line.line_id)?.status !== 'EXPLICITLY_OMITTED')
+  const blockOwners = liveSpoken.map(line => {
+    const decision = decisionFor(data, 'dialogue', line.line_id)
+    return decision && decision.status === 'ASSIGNED' ? decision.shot_id : null
+  })
+  const blockShotId = liveSpoken.length > 0 && blockOwners.every(id => id !== null && id === blockOwners[0]) ? blockOwners[0] : null
+  const statusSentence = emptyNumbers.length === 0
+    ? 'Every shot has a line. You can save.'
+    : emptyNumbers.length === 1
+      ? `Shot ${emptyNumbers[0]} needs a line. Tap a dot in its column. A shot that loses its last line will turn red.`
+      : `Shots ${formatShotList(emptyNumbers)} need a line. Tap a dot in their columns. A shot that loses its last line will turn red.`
+  const dotButtonClass = (selected: boolean, columnEmpty: boolean): string =>
+    `inline-flex h-8 w-8 items-center justify-center rounded-full border text-base leading-none disabled:opacity-40 ${dotClass(selected, columnEmpty)}`
+  return (
+    <section aria-label="Shot assignment grid" data-testid="coverage-grid" className="space-y-3">
+      <h4 className="text-sm font-medium text-zinc-100">C · SHOT CONTENT</h4>
+      <p className="text-sm text-zinc-100">Which shot does each line belong to?</p>
+      <p data-testid="coverage-grid-progress" role="status" className="text-xs font-medium text-amber-100">{coveredCount} of {shots.length} shots covered</p>
+      <div className="overflow-x-auto rounded-md border border-white/10">
+        <table className="w-full min-w-[480px] border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-white/10 bg-black/30">
+              <th scope="col" className="px-2 py-2 text-left font-medium text-zinc-400">Line</th>
+              {shots.map((shot, index) => {
+                const empty = counts[index] === 0
+                return (
+                  <th key={shot.shot_id} scope="col" data-testid={`coverage-grid-column-${shot.shot_number}`} data-empty={empty ? 'true' : 'false'} className="min-w-16 px-1 py-2 text-center">
+                    <span className="block font-medium text-zinc-100">Shot {shot.shot_number}</span>
+                    <span className={`block text-[11px] ${empty ? 'text-rose-200' : 'text-emerald-200'}`}>{empty ? 'Needs a line' : `${counts[index]} ${counts[index] === 1 ? 'line' : 'lines'}`}</span>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {contentUnits.map(unit => {
+              const decision = decisionFor(data, 'content', unit.obligation_id)
+              if (decision?.status === 'EXPLICITLY_OMITTED') {
+                return (
+                  <tr key={unit.obligation_id} data-testid={`coverage-grid-row-${unit.obligation_id}`} className="border-b border-white/5 opacity-50">
+                    <td className="px-2 py-2 text-zinc-400">{unit.source_text} <span className="text-[11px]">· skipped on purpose</span></td>
+                    <td colSpan={shots.length || 1} />
+                  </tr>
+                )
+              }
+              const owner = decision && decision.status === 'ASSIGNED' ? decision.shot_id : null
+              const isVoCue = VO_CUE_PATTERN.test(unit.source_text)
+              return (
+                <tr key={unit.obligation_id} data-testid={`coverage-grid-row-${unit.obligation_id}`} className="border-b border-white/5">
+                  <td className="px-2 py-2 text-zinc-100">{isVoCue && <span className="text-zinc-400">V.O. cue · </span>}{unit.source_text}</td>
+                  {shots.map((shot, index) => {
+                    const selected = owner === shot.shot_id
+                    return (
+                      <td key={shot.shot_id} className="px-1 py-1 text-center">
+                        <button type="button" aria-label={`Assign ${unit.obligation_id} to Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} onClick={() => onAssignContent(unit.obligation_id, shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+            {spokenLines.map(line => {
+              const decision = decisionFor(data, 'dialogue', line.line_id)
+              if (decision?.status === 'EXPLICITLY_OMITTED') {
+                return (
+                  <tr key={line.line_id} data-testid={`coverage-grid-row-${line.line_id}`} className="border-b border-white/5 opacity-50">
+                    <td className="px-2 py-2 text-zinc-400">{line.character ? `${line.character} · ` : ''}{line.text} <span className="text-[11px]">· skipped on purpose</span></td>
+                    <td colSpan={shots.length || 1} />
+                  </tr>
+                )
+              }
+              const owner = decision && decision.status === 'ASSIGNED' ? decision.shot_id : null
+              return (
+                <tr key={line.line_id} data-testid={`coverage-grid-row-${line.line_id}`} className="border-b border-white/5">
+                  <td className="px-2 py-2 text-zinc-100"><span className="text-zinc-400">Spoken line{line.character ? ` · ${line.character}` : ''} · </span>{line.text}</td>
+                  {shots.map((shot, index) => {
+                    const selected = owner === shot.shot_id
+                    return (
+                      <td key={shot.shot_id} className="px-1 py-1 text-center">
+                        <button type="button" aria-label={`Assign spoken line ${line.line_id} to Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} onClick={() => onAssignDialogue(line.line_id, shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+            {liveSpoken.length > 0 && (
+              <tr data-testid="coverage-grid-row-spoken-block" className="border-b border-white/5 bg-white/[0.02]">
+                <td className="px-2 py-2 text-zinc-300">Spoken-dialogue block · stays together on one shot</td>
+                {shots.map((shot, index) => {
+                  const selected = blockShotId === shot.shot_id
+                  return (
+                    <td key={shot.shot_id} className="px-1 py-1 text-center">
+                      <button type="button" aria-label={`Keep all spoken lines together on Shot ${shot.shot_number}`} aria-pressed={selected} disabled={busy} onClick={() => onAssignBlock(shot.shot_id)} className={dotButtonClass(selected, counts[index] === 0)}><span aria-hidden="true">{selected ? '●' : '○'}</span></button>
+                    </td>
+                  )
+                })}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p data-testid="coverage-grid-status" role="status" className="text-xs leading-relaxed text-zinc-300">{statusSentence}</p>
+      <div className="space-y-1">
+        <button type="button" disabled={busy} onClick={onSave} className="min-h-11 rounded-md bg-amber-200 px-4 py-2 text-sm font-medium text-zinc-950 disabled:opacity-40">{busy ? 'Saving…' : 'Save as new draft'}</button>
+        {saveNotice && <p data-testid="coverage-grid-notice" role="status" className="text-xs text-amber-200">{saveNotice}</p>}
+        <p className="text-[11px] text-zinc-400">Saving never changes your approved version.</p>
+        {showSavedVersion && <p data-testid="save-success" role="status" className="text-xs text-emerald-200">Saved as new draft {savedVersion}. Approved image prompts carry over where the shot text did not change.</p>}
+      </div>
+    </section>
+  )
+}
+
 const scrollToShotCard = (shotId: string): void => {
   document.getElementById(`shot-board-card-${shotId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -177,11 +333,8 @@ function StatusBadge({ label }: { label: string }) {
 export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotNumber, onSaved }: Props) {
   const editor = useSceneDirection(projectId, sceneId, versionId)
   const data = editor.data
-  // The review is bound to the version it was opened for: when the data
-  // reloads or a save produces a successor version, any open review closes.
-  const [reviewVersion, setReviewVersion] = useState<string | null>(null)
-  const reviewing = reviewVersion !== null && reviewVersion === data?.version_id
   const [savedVersion, setSavedVersion] = useState<string | null>(null)
+  const [gridNotice, setGridNotice] = useState<string | null>(null)
   const showSavedVersion = savedVersion !== null && savedVersion === data?.version_id
 
   const currentIndex = data?.shots.findIndex(shot => shot.shot_number === activeShotNumber) ?? -1
@@ -232,7 +385,18 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
     // The save response model (SceneDirection) returns the new draft
     // version_id but no image-prompt carry-forward fields, so the success
     // note below stays static about prompts and names the draft version.
-    if (result) { setReviewVersion(null); setSavedVersion(result.version_id); onSaved() }
+    if (result) { setGridNotice(null); setSavedVersion(result.version_id); onSaved() }
+  }
+
+  // Grid save gate (presentation only): an empty shot answers the click with
+  // a message instead of calling save. The existing save validation still
+  // owns every real gate; this changes nothing a save writes.
+  const handleGridSave = async () => {
+    if (!data) return
+    const empty = data.shots.filter(shot => gridLineCount(data, shot.shot_id) === 0)
+    if (empty.length === 1) { setGridNotice(`Not yet: shot ${empty[0].shot_number} still needs a line.`); return }
+    if (empty.length > 1) { setGridNotice(`Not yet: shots ${formatShotList(empty.map(shot => shot.shot_number))} still need a line.`); return }
+    await confirmSave()
   }
 
   return (
@@ -242,7 +406,7 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
         <p className="text-xs leading-relaxed text-zinc-400">This surface captures creator decisions only: the Scene Direction reference selection and all coverage obligations. Save commits your explicit decisions as a new draft; existing takes stay as they are. Nothing here runs preflight, contacts a provider, or marks the scene READY.</p>
         {editor.error && <p role="alert" className="text-sm text-red-300">{editor.error}</p>}
         {!data && editor.busy && <p role="status" className="text-sm text-zinc-400">Loading scene direction…</p>}
-        {data && <form className="space-y-5" onSubmit={event => { event.preventDefault(); if (editor.dirty && data) setReviewVersion(data.version_id) }}>
+        {data && <form className="space-y-5" onSubmit={event => event.preventDefault()}>
           <fieldset disabled={editor.busy} className="min-w-0 space-y-4">
             <section className="space-y-3 rounded-md border border-amber-200/20 bg-amber-200/[0.03] p-3">
               <h3 className="text-sm font-medium text-zinc-100">Scene Direction · exact setting reference selection</h3>
@@ -265,6 +429,20 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
             </section>
 
             <section aria-label="Coverage decisions" data-testid="coverage-workspace" className="space-y-4 rounded-md border border-white/15 p-3">
+              <CoverageGrid
+                data={data}
+                busy={editor.busy}
+                saveNotice={gridNotice}
+                showSavedVersion={showSavedVersion}
+                savedVersion={savedVersion}
+                onAssignContent={(lineId, shotId) => { setGridNotice(null); editor.editCoverage('content', lineId, { status: 'ASSIGNED', shot_id: shotId, reason: '' }) }}
+                onAssignDialogue={(lineId, shotId) => { setGridNotice(null); editor.editCoverage('dialogue', lineId, { status: 'ASSIGNED', shot_id: shotId, reason: '' }); editor.editLine(lineId, { shot_id: shotId }) }}
+                onAssignBlock={shotId => { setGridNotice(null); for (const line of data.dialogue) { if (decisionFor(data, 'dialogue', line.line_id)?.status !== 'EXPLICITLY_OMITTED') { editor.editCoverage('dialogue', line.line_id, { status: 'ASSIGNED', shot_id: shotId, reason: '' }); editor.editLine(line.line_id, { shot_id: shotId }) } } }}
+                onSave={() => void handleGridSave()}
+              />
+              <details data-testid="coverage-advanced" className="rounded-md border border-white/10">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-zinc-300">Advanced</summary>
+                <div className="space-y-4 px-3 pb-3">
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-zinc-100">Coverage decisions · {totalCount} obligations</h3>
                 <div data-testid="coverage-progress" role="status" className="space-y-1">
@@ -351,7 +529,6 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
                   </article>
                 })}
                 <p className="text-xs leading-relaxed text-zinc-400">What saving does: saving mints a new DRAFT successor version and leaves the approved version untouched. Approved image prompts move across where the shot text did not change. Nothing is marked READY.</p>
-                {showSavedVersion && <p data-testid="save-success" role="status" className="text-xs text-emerald-200">Saved as new draft {savedVersion}. The approved source version is untouched; approved image prompts moved across where the shot text did not change.</p>}
               </section>
 
               <section aria-label="Shot dialogue coverage" data-testid="coverage-section-shot-dialogue" className="space-y-3 border-t border-white/10 pt-3">
@@ -366,6 +543,8 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
                   </>}
                 </div> })}
               </section>
+                </div>
+              </details>
             </section>
           </fieldset>
 
@@ -381,21 +560,7 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
 
           <p className="text-xs leading-relaxed text-zinc-400">UNASSIGNED obligations remain unresolved and block coverage. Saving records creator decisions only; it does not run preflight, create a generation contract, contact a provider, or mark Scene 002 READY.</p>
 
-          {reviewing && <section aria-label="Review decisions before saving" data-testid="save-review" className="space-y-3 rounded-md border border-amber-200/40 bg-amber-200/[0.05] p-3">
-            <h4 className="text-sm font-medium text-amber-100">Review before commit</h4>
-            <p className="text-xs leading-relaxed text-zinc-300">Saving writes {resolvedCount} resolved and {unresolvedCount} UNRESOLVED decisions as a new DRAFT successor of <code>{data.version_id}</code>. The approved source version is not modified and this does not mark the scene READY. Unresolved obligations stay unresolved.</p>
-            <p className="text-xs text-zinc-300">Scene Direction reference: {data.setting_reference_decision ? <code>{data.setting_reference_decision.reference_id}</code> : 'no reference selected'} · Shot handoffs: {data.shots.length} shot(s)</p>
-            <ul className="max-h-64 space-y-1 overflow-y-auto rounded border border-white/10 bg-black/30 p-2 text-[11px] text-zinc-300">
-              {data.coverage_decisions.map(row => <li key={`${row.obligation_type}:${row.obligation_id}`}><span className="text-zinc-500">{row.obligation_type}</span> · {row.obligation_id} → <strong className={badgeLabel(data, row) === 'UNRESOLVED' ? 'text-rose-200' : 'text-emerald-200'}>{badgeLabel(data, row)}</strong>{row.shot_id ? ` · ${row.shot_id}` : ''}{row.reason ? ` · reason: ${row.reason}` : ''}</li>)}
-            </ul>
-            {editor.error && <p role="alert" className="text-xs text-red-300">{editor.error}</p>}
-            <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={editor.busy} onClick={() => void confirmSave()} className="min-h-11 rounded-md bg-amber-200 px-4 py-2 text-sm font-medium text-zinc-950 disabled:opacity-40">{editor.busy ? 'Saving…' : 'Confirm & save decisions'}</button>
-              <button type="button" disabled={editor.busy} onClick={() => setReviewVersion(null)} className={buttonClass}>Keep editing</button>
-            </div>
-          </section>}
-
-          {!reviewing && <div className="flex flex-wrap gap-2"><button type="submit" disabled={editor.busy || !editor.dirty} className="min-h-11 rounded-md bg-amber-200 px-4 py-2 text-sm font-medium text-zinc-950 disabled:opacity-40">{editor.busy ? 'Saving…' : 'Review & save decisions'}</button><button type="button" disabled={editor.busy} onClick={editor.reload} className={buttonClass}>{editor.dirty ? 'Discard edits and reload' : 'Reload saved direction'}</button></div>}
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={editor.busy} onClick={editor.reload} className={buttonClass}>{editor.dirty ? 'Discard edits and reload' : 'Reload saved direction'}</button></div>
         </form>}
         {!data && !editor.busy && <button type="button" className={buttonClass} onClick={editor.reload}>Retry loading direction</button>}
       </div>

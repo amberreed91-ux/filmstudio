@@ -70,9 +70,10 @@ beforeEach(() => {
 describe('SceneDirectionPanel coverage decisions', () => {
   it('shows exact canonical speaker/text, content, and unresolved status with no shot selected', () => {
     renderPanel()
-    expect(screen.getByText('Exact canonical words.')).toBeTruthy()
+    const advanced = screen.getByTestId('coverage-advanced')
+    expect(within(advanced).getByText('Exact canonical words.')).toBeTruthy()
     expect(screen.getByText('MAYA · canonical source wording')).toBeTruthy()
-    expect(screen.getByText('Maya stands.')).toBeTruthy()
+    expect(within(advanced).getByText('Maya stands.')).toBeTruthy()
     expect(screen.getByText('Current status: Unassigned')).toBeTruthy()
     expect(screen.getByRole('combobox', { name: 'Coverage decision for dialogue 1' })).toHaveValue('UNASSIGNED')
     expect(screen.queryByRole('combobox', { name: 'Owning shot for dialogue 1' })).toBeNull()
@@ -81,7 +82,7 @@ describe('SceneDirectionPanel coverage decisions', () => {
 
   it('serializes a creator-selected owner and offers reason-required omission', () => {
     renderPanel()
-    const lineCard = screen.getByText('Exact canonical words.').closest('fieldset')!
+    const lineCard = within(screen.getByTestId('coverage-advanced')).getByText('Exact canonical words.').closest('fieldset')!
     fireEvent.change(within(lineCard).getByRole('combobox', { name: 'Coverage decision for dialogue 1' }), { target: { value: 'ASSIGNED' } })
     expect(editCoverage).toHaveBeenCalledWith('dialogue', 'dlg1', { status: 'ASSIGNED', shot_id: null, reason: '' })
     expect(editLine).toHaveBeenCalledWith('dlg1', { shot_id: null })
@@ -89,7 +90,7 @@ describe('SceneDirectionPanel coverage decisions', () => {
     cleanup()
     mockEditor({ coverage_decisions: data.coverage_decisions.map(row => row.obligation_type === 'dialogue' ? { ...row, status: 'ASSIGNED' as const } : row) }, true)
     renderPanel()
-    const assignedCard = screen.getByText('Exact canonical words.').closest('fieldset')!
+    const assignedCard = within(screen.getByTestId('coverage-advanced')).getByText('Exact canonical words.').closest('fieldset')!
     fireEvent.change(within(assignedCard).getByRole('combobox', { name: 'Owning shot for dialogue 1' }), { target: { value: 'shot1' } })
     expect(editCoverage).toHaveBeenCalledWith('dialogue', 'dlg1', { shot_id: 'shot1' })
     expect(editLine).toHaveBeenCalledWith('dlg1', { shot_id: 'shot1' })
@@ -291,33 +292,40 @@ describe('SceneDirectionPanel coverage workspace (60 obligations)', () => {
     expect(screen.getByRole('textbox', { name: 'Content disposition reason for shot 1' })).toBeRequired()
   })
 
-  it('reviews every decision before commit and saves only on explicit confirm', async () => {
+  it('gates the single save on coverage and names the new draft version after save', async () => {
     mockScene(buildScene002Fixture(), true)
     const onSaved = vi.fn()
     render(<SceneDirectionPanel projectId="project_5907c60cddbc" sceneId="scene_002" versionId="sbv_a6096cb1fea5" activeShotNumber={1} onSaved={onSaved} />)
-    // Opening never opens a review and never saves.
-    expect(screen.queryByTestId('save-review')).toBeNull()
+    // Opening never saves; the single button stays enabled so the gate can answer.
     expect(save).not.toHaveBeenCalled()
-    // The review lists what would be committed, before anything is committed.
-    fireEvent.click(screen.getByRole('button', { name: 'Review & save decisions' }))
-    const review = screen.getByTestId('save-review')
-    expect(review).toHaveTextContent('0 resolved and 60 UNRESOLVED')
-    expect(review).toHaveTextContent('sbv_a6096cb1fea5')
-    expect(review).toHaveTextContent('The approved source version is not modified')
-    const rows = Array.from(review.querySelectorAll('li')).map(row => row.textContent || '')
-    expect(rows).toHaveLength(60)
-    expect(rows[0]).toContain('content · content_01 → UNRESOLVED')
+    const saveButton = screen.getByRole('button', { name: 'Save as new draft' })
+    expect(saveButton).toBeEnabled()
+    fireEvent.click(saveButton)
+    expect(screen.getByTestId('coverage-grid-notice')).toHaveTextContent('Not yet: shots 1, 2, 3, 4 and 5 still need a line.')
     expect(save).not.toHaveBeenCalled()
-    // Back to editing without saving.
-    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
-    expect(screen.queryByTestId('save-review')).toBeNull()
-    expect(save).not.toHaveBeenCalled()
-    // Only the explicit confirm commits.
-    fireEvent.click(screen.getByRole('button', { name: 'Review & save decisions' }))
-    vi.mocked(save).mockResolvedValue(activeData)
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & save decisions' }))
+    expect(onSaved).not.toHaveBeenCalled()
+
+    // Cover every shot, then the same button saves through the existing flow.
+    cleanup()
+    vi.clearAllMocks()
+    const covered = buildScene002Fixture()
+    covered.coverage_decisions = covered.coverage_decisions.map(row => {
+      if (row.obligation_type !== 'content') return row
+      const index = Number(row.obligation_id.split('_')[1])
+      return { ...row, status: 'ASSIGNED' as const, shot_id: `scene_002_shot_00${(index % 5) + 1}` }
+    })
+    mockScene(covered, true)
+    const coveredSaved = vi.fn()
+    const second = render(<SceneDirectionPanel projectId="project_5907c60cddbc" sceneId="scene_002" versionId="sbv_a6096cb1fea5" activeShotNumber={1} onSaved={coveredSaved} />)
+    // The save response model returns the new draft version_id; the real
+    // hook swaps in the successor as the new data, emulated here.
+    const successor = { ...activeData, version_id: 'sbv_newdraft0001' }
+    vi.mocked(save).mockResolvedValue(successor)
+    fireEvent.click(screen.getByRole('button', { name: 'Save as new draft' }))
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
-    expect(onSaved).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(screen.queryByTestId('save-review')).toBeNull())
+    expect(coveredSaved).toHaveBeenCalledTimes(1)
+    mockScene(successor)
+    second.rerender(<SceneDirectionPanel projectId="project_5907c60cddbc" sceneId="scene_002" versionId="sbv_a6096cb1fea5" activeShotNumber={1} onSaved={coveredSaved} />)
+    await waitFor(() => expect(screen.getByTestId('save-success')).toHaveTextContent('Saved as new draft sbv_newdraft0001'))
   })
 })
