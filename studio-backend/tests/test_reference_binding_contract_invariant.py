@@ -337,6 +337,13 @@ def test_production_prepare_path_passes_invariant_with_storyboard_composition(tm
     )
     board_shot.parameters["creator_coverage_decisions"] = creator_decisions
 
+    # Image-prompt authority: this invariant covers reference binding, so
+    # satisfy the fail-closed send-prompt gate with a fixed approved text.
+    monkeypatch.setattr(
+        SceneProductionPipelineService,
+        "_resolve_storyboard_send_prompt",
+        lambda self, **kwargs: ("Approved test image prompt bytes.", "abc123", ""),
+    )
     service = SceneProductionPipelineService(backend_root=tmp_path)
     from app.services.generation_contract import GenerationContractError
 

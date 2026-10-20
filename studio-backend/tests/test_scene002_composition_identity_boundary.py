@@ -306,6 +306,13 @@ def _run_prepare(*, reference_assets: list[str], parameters_extra: dict[str, Any
 
     import tempfile
 
+    # Image-prompt authority: composition boundary covers reference binding,
+    # so satisfy the fail-closed send-prompt gate with fixed approved text.
+    monkeypatch.setattr(
+        SceneProductionPipelineService,
+        "_resolve_storyboard_send_prompt",
+        lambda self, **kwargs: ("Approved Scene 002 image prompt bytes.", "abc123", ""),
+    )
     service = SceneProductionPipelineService(backend_root=tempfile.gettempdir())  # type: ignore[arg-type]
     batch = service.prepare_scene_batch(
         project_id=PROJECT_ID,

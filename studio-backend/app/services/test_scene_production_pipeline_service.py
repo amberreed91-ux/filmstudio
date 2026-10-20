@@ -862,12 +862,23 @@ def test_preflight_emits_one_isolated_entry_per_approved_storyboard_shot(tmp_pat
         lambda *, provider, shots: {"provider": provider, "per_shot": [], "estimated": False},
     )
     from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+    from app.services.storyboard_image_prompt_service import storyboard_image_prompt_service
 
     board_shots_by_id = {shot.storyboard_shot_id: shot for shot in board_shots}
     monkeypatch.setattr(
         storyboard_blueprint_service.storage,
         "get_storyboard_shot",
         lambda storyboard_shot_id: board_shots_by_id.get(storyboard_shot_id),
+    )
+    # Prompt authority: provider-bound text is the approved image prompt.
+    # These synthetic board shots carry approved prompts without image rows.
+    approved_texts = {
+        f"board-shot-{index}": f"approved-image-prompt-{index}" for index in range(1, 6)
+    }
+    monkeypatch.setattr(
+        storyboard_image_prompt_service,
+        "approved_prompt_for_shot",
+        lambda shot: approved_texts[shot.storyboard_shot_id],
     )
     batch = service.prepare_scene_batch(
         project_id=project_id,
@@ -882,9 +893,13 @@ def test_preflight_emits_one_isolated_entry_per_approved_storyboard_shot(tmp_pat
     assert [entry["shot_id"] for entry in entries] == shot_ids
     assert len({entry["shot_id"] for entry in entries}) == len(shot_ids)
     assert [entry["prompt"] for entry in entries] == [
-        f"originating-prompt-{index}\n\n[SHOT POSITION]\n"
-        f"Shot {index} of 5 in scene. Maintain character identity and visual continuity."
-        for index in range(1, 6)
+        f"approved-image-prompt-{index}" for index in range(1, 6)
+    ]
+    assert [entry["image_prompt_ready"] for entry in entries] == [True] * 5
+    # The board text never reaches provider-bound fields, and the shot
+    # version binds the sendable image prompt (not the board version alone).
+    assert [entry["shot_version"] for entry in entries] != [
+        f"version-{shot_id}" for shot_id in shot_ids
     ]
     assert [entry["camera_plan"] for entry in entries] == [
         {"framing": f"framing-{index}", "camera": f"move-{index}"}
@@ -904,6 +919,9 @@ def test_preflight_emits_one_isolated_entry_per_approved_storyboard_shot(tmp_pat
     )
     assert batch["manifest"]["batch"]["shot_count"] == 5
     assert [shot["shot_id"] for shot in batch["manifest"]["shots"]] == shot_ids
+    assert [shot["shot_prompt"] for shot in batch["manifest"]["shots"]] == [
+        f"approved-image-prompt-{index}" for index in range(1, 6)
+    ]
     assert [shot["camera_plan"] for shot in batch["manifest"]["shots"]] == [
         entry["camera_plan"] for entry in entries
     ]
