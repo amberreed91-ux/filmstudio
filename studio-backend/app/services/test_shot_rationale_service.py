@@ -91,8 +91,41 @@ def test_scene_version_regenerates_when_importance_changes():
     tone_edited["emotional_tone"] = "grief"
     assert service.scene_version(base) != service.scene_version(tone_edited)
 
+    chars_edited = dict(base)
+    chars_edited["characters"] = ["MAYA"]
+    assert service.scene_version(base) != service.scene_version(chars_edited)
+
+    loc_edited = dict(base)
+    loc_edited["location"] = "SOUTH SIDE — NIGHT"
+    assert service.scene_version(base) != service.scene_version(loc_edited)
+
 
 def test_scene_version_stable_for_identical_state():
     service = GenerationContextService()
     assert service.scene_version(_scene_001_like()) == service.scene_version(_scene_001_like())
     assert service.scene_version(None) == "absent"
+
+
+def test_stale_scene_version_context_is_rejected_with_rebuild_blocker():
+    service = GenerationContextService()
+    base = _scene_001_like()
+    context = service.create_generation_context(
+        project_id="p",
+        scene_id="scene_001",
+        shot_id="scene_001_shot_001",
+        scene=base,
+        storyboard_context=None,
+        reference_assets=[],
+        prompt_source="BOARD",
+    )
+    edited = dict(base)
+    edited["description"] = base["description"] + " Maya keeps walking."
+    readiness = service.validate_generation_context(
+        context=context,
+        current_scene=edited,
+        current_storyboard_context=None,
+        current_reference_assets=[],
+    )
+    assert not readiness.ready
+    assert any("scene version mismatch" in b.lower() for b in readiness.blockers)
+    assert any("rebuild" in b.lower() for b in readiness.blockers)

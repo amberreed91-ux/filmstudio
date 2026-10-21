@@ -243,10 +243,19 @@ class GenerationContextService:
         if not isinstance(scene, dict):
             return "absent"
         script_hash = hashlib.sha256(canonical_script_text.encode("utf-8")).hexdigest() if isinstance(canonical_script_text, str) else ""
+        # Importance axes are versioned, not just identity/text: the plan
+        # (rationale, manifest scene_version, fingerprint) must regenerate
+        # when the scene's importance statement changes. Previously only
+        # heading/text were hashed, so description/emotional_tone/character
+        # edits left stale cached plan text looking current.
         return _stable_hash({
             "scene_id": scene.get("scene_id"),
             "heading": scene.get("heading"),
             "text": scene.get("text"),
+            "description": scene.get("description"),
+            "emotional_tone": scene.get("emotional_tone"),
+            "characters": scene.get("characters"),
+            "location": scene.get("location"),
             "updated_at": scene.get("updated_at"),
             "canonical_script_sha256": script_hash,
         })
