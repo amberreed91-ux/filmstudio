@@ -305,14 +305,33 @@ class SceneDirectionService:
         if blueprint.locked:
             raise StateError('Unlock the storyboard before changing its direction.', stage='scene_direction')
 
+        prior_scene_direction = source.metadata.get('scene_direction') if isinstance(source.metadata, dict) else None
+        prior_raw = prior_scene_direction.get('setting_reference_decision') if isinstance(prior_scene_direction, dict) else None
+        prior_decision: SettingReferenceDecision | None = None
+        if prior_raw is not None:
+            try:
+                prior_decision = SettingReferenceDecision.model_validate(prior_raw)
+            except Exception as exc:
+                raise ValidationError('The saved setting reference decision is malformed.', stage='scene_direction') from exc
         setting_decision = payload.setting_reference_decision
         if 'setting_reference_decision' not in payload.model_fields_set:
-            prior_scene_direction = source.metadata.get('scene_direction') if isinstance(source.metadata, dict) else None
-            prior = prior_scene_direction.get('setting_reference_decision') if isinstance(prior_scene_direction, dict) else None
-            setting_decision = SettingReferenceDecision.model_validate(prior) if prior is not None else None
+            setting_decision = prior_decision
         if setting_decision is not None:
-            if source.status != StoryboardBlueprintStatus.APPROVED or blueprint.approved_version_id != source.version_id or blueprint.current_version_id != source.version_id:
-                raise StateError('Scene Direction decisions can only authorize the current approved storyboard version.', stage='scene_direction')
+            is_unchanged_carry = (
+                prior_decision is not None
+                and setting_decision.model_dump(mode='json') == prior_decision.model_dump(mode='json')
+            )
+            is_draft_current = (
+                blueprint.current_version_id == source.version_id
+                and source.status == StoryboardBlueprintStatus.DRAFT
+            )
+            # Option B: an unchanged decision on the current draft carries
+            # forward without re-authorizing; new/changed decisions still
+            # require the current approved source. The live reference check
+            # below still runs on every save.
+            if not (is_unchanged_carry and is_draft_current):
+                if source.status != StoryboardBlueprintStatus.APPROVED or blueprint.approved_version_id != source.version_id or blueprint.current_version_id != source.version_id:
+                    raise StateError('Scene Direction decisions can only authorize the current approved storyboard version.', stage='scene_direction')
             canonical_setting_id = self._scene_setting_identity(project_id, scene_id)
             if not canonical_setting_id or setting_decision.canonical_setting_id != canonical_setting_id:
                 raise ValidationError('Select a reference for the exact canonical setting entity of this scene.', stage='scene_direction')

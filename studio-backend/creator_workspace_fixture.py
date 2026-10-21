@@ -300,8 +300,27 @@ def create_app(store: FixtureStore | None = None) -> FastAPI:
         if len(handoffs) != len(shots) or {row["shot_id"] for row in handoffs} != set(shots):
             raise HTTPException(status_code=422, detail="Include every fixture shot handoff exactly once.")
 
+        prior_raw = current.get("setting_reference_decision")
+        prior_decision: ReferenceDecision | None = None
+        if prior_raw is not None:
+            try:
+                prior_decision = ReferenceDecision.model_validate(prior_raw)
+            except Exception:
+                raise HTTPException(status_code=422, detail="The saved fixture setting reference decision is malformed.")
         setting_decision = payload.setting_reference_decision
+        if "setting_reference_decision" not in payload.model_fields_set:
+            setting_decision = prior_decision
         if setting_decision is not None:
+            is_unchanged_carry = (
+                prior_decision is not None
+                and setting_decision.model_dump() == prior_decision.model_dump()
+            )
+            is_draft_current = current.get("version_status") == "draft"
+            # Option B parity with the real service: unchanged decisions carry
+            # on the current draft; new/changed decisions require the approved source.
+            if not (is_unchanged_carry and is_draft_current):
+                if current.get("version_status") != "approved" or current.get("version_id") != fixture.approved_source.get("version_id"):
+                    raise HTTPException(status_code=409, detail="Scene Direction decisions can only authorize the current approved storyboard version.")
             if setting_decision.canonical_setting_id != SETTING_ID:
                 raise HTTPException(status_code=422, detail="Select the exact fixture setting entity.")
             eligible = any(row["ref_id"] == setting_decision.reference_id
