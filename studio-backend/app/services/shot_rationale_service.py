@@ -1,9 +1,45 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# The template filler minted by earlier board builds when a scene carried no
+# emotional/character signal. Stored board rows still contain it baked into
+# ``rationale`` / ``shot_planning.rationale`` / the provider-neutral prompt
+# tail, so the plan/manifest path must detect it rather than trust it.
+# Newly minted rationale must never contain it (see _build_sentence).
+GENERIC_FALLBACK_SENTENCE = "A beat that earns its place in the larger composition."
+
+# Explicit empty state shown when a scene genuinely carries no importance
+# signal. Displayed verbatim so an unset field can never read as content.
+SCENE_IMPORTANCE_NOT_SET = "Scene importance not set."
+
+
+def is_generic_fallback(text: Any) -> bool:
+    """True when text carries the retired template-filler sentence."""
+    return GENERIC_FALLBACK_SENTENCE.lower() in str(text or "").lower()
+
+
+def strip_generic_fallback(text: Any) -> str:
+    """Remove the retired filler sentence from (usually stored) text."""
+    cleaned = re.sub(re.escape(GENERIC_FALLBACK_SENTENCE), "", str(text or ""), flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s+\.", ".", cleaned)
+    return cleaned.strip()
+
+
+def _first_sentence(text: str, limit: int = 240) -> str:
+    """First sentence of free text, capped at a word boundary."""
+    raw = re.split(r"[.!?\n]+", str(text or "").strip())[0].strip() if str(text or "").strip() else ""
+    if not raw:
+        return ""
+    if len(raw) > limit:
+        cut = raw[:limit].rsplit(" ", 1)[0].strip() or raw[:limit].strip()
+        raw = cut
+    return raw if raw.endswith((".", "!", "?")) else f"{raw}."
 
 
 class ShotRationaleService:
@@ -33,8 +69,20 @@ class ShotRationaleService:
             scene_position=scene_position,
             total_scenes=total_scenes,
         )
+        description = str(scene_data.get("description") or scene_data.get("text") or "").strip()
         return {
             "rationale": sentence,
+            # Explicit empty state for plan surfaces: "set" when the sentence
+            # carries real scene content, "not_set" when only the label (or
+            # nothing) was available. UIs must render "not_set" verbatim
+            # instead of substituting silent filler.
+            "importance_state": "not_set" if SCENE_IMPORTANCE_NOT_SET in sentence else "set",
+            "importance_source": (
+                "description"
+                if description and _first_sentence(description) in sentence
+                else ("signals" if SCENE_IMPORTANCE_NOT_SET not in sentence else "none")
+            ),
+            "contains_generic_fallback": is_generic_fallback(sentence),
             "scene_context": {
                 "scene_id": scene_id,
                 "characters": scene_data.get("characters", []),
@@ -66,6 +114,11 @@ class ShotRationaleService:
         heading = str(scene_data.get("heading") or "").strip()
         description = str(scene_data.get("description") or scene_data.get("text") or "").strip()
         scene_name = str(scene_data.get("scene_name") or "").strip()
+        # Stored scenes sometimes persist an empty cast as the literal string
+        # "[]". That is absence, not a character named "[]".
+        raw_characters = scene_data.get("characters", [])
+        if isinstance(raw_characters, str) and raw_characters.strip().lower() in ("", "[]", "none", "null"):
+            characters = []
 
         emotional_register = ""
         active_motifs: List[str] = []
@@ -107,11 +160,22 @@ class ShotRationaleService:
             base += "."
             return base
 
-        # No generic filler: when no emotional/character signal exists, the
-        # rationale is just the scene label from existing data. Template
-        # sentences ("A beat that earns its place...") read as provider-bound
-        # prompt text on the board path, so they must never be minted here.
-        return f"{scene_label}."
+        # The scene's own description IS its importance statement and must be
+        # read before giving up: earlier builds ignored it (assigned but never
+        # referenced), so described scenes fell through to template filler.
+        first = _first_sentence(description)
+        if first:
+            return f"{scene_label}. {first}" if scene_label else first
+
+        # No generic filler, ever: when the field is genuinely empty the plan
+        # surfaces an explicit not-set state instead of silent filler.
+        # Template sentences ("A beat that earns its place...") read as
+        # provider-bound prompt text on the board path, so they must never be
+        # minted here; use is_generic_fallback/strip_generic_fallback to
+        # detect them in stored rows.
+        if scene_label:
+            return f"{scene_label}. {SCENE_IMPORTANCE_NOT_SET}"
+        return SCENE_IMPORTANCE_NOT_SET
 
     def _format_characters(self, characters: List[str]) -> str:
         if not characters:
