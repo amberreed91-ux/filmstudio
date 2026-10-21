@@ -215,3 +215,81 @@ def test_camera_approval_path_carries(tmp_path):
         )
     assert storyboard_image_prompt_service.gate_for_version(clones)["approved"] is True
     assert result["approved_camera"]
+
+
+def test_missing_and_over_limit_still_block_after_version_bump(tmp_path):
+    """Fix A guard: a missing row or an over-limit row blocks the D4 gate
+    even after a version bump (carry must not invent or smuggle approval)."""
+    service, storage, detail = _fixture(tmp_path, shot_count=2)
+    _approve_all_human(storage, detail)
+    service.create_version(blueprint_id=detail["blueprint"].blueprint_id)
+    blueprint = storage.get_storyboard_blueprint_by_id(detail["blueprint"].blueprint_id)
+    clones = {
+        shot.shot_id: shot
+        for shot in storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.current_version_id)
+    }
+    # Missing: delete one clone's row -> gate must name that shot.
+    storage.delete_storyboard_image_prompt(clones["scene_001_shot_001"].storyboard_shot_id) \
+        if hasattr(storage, "delete_storyboard_image_prompt") else None
+    if not hasattr(storage, "delete_storyboard_image_prompt"):
+        # Fallback: overwrite with an empty proposed row is still not-ready,
+        # but a true delete is the sharper missing-state probe.
+        storage.save_storyboard_image_prompt({
+            **storage.get_storyboard_image_prompt(clones["scene_001_shot_001"].storyboard_shot_id),
+            "status": "proposed", "image_prompt": "", "utf16_length": 0,
+        })
+    gate = storyboard_image_prompt_service.gate_for_version(list(clones.values()))
+    assert gate["approved"] is False
+    assert any("scene_001_shot_001" in str(item.get("message")) for item in gate["not_ready"])
+    # Over-limit: store a 1001-unit row directly on the other clone -> over_limit.
+    bad = dict(storage.get_storyboard_image_prompt(clones["scene_001_shot_002"].storyboard_shot_id))
+    bad["image_prompt"] = "z" * 1001
+    bad["utf16_length"] = 1001
+    bad["status"] = "approved"
+    storage.save_storyboard_image_prompt(bad)
+    status = storyboard_image_prompt_service.status_for_shot(
+        clones["scene_001_shot_002"],
+        storage.get_storyboard_image_prompt(clones["scene_001_shot_002"].storyboard_shot_id),
+    )
+    assert status["state"] == "over_limit"
+    gate = storyboard_image_prompt_service.gate_for_version(list(clones.values()))
+    assert gate["approved"] is False
+
+
+def test_repair_is_dry_run_by_default_and_idempotent(tmp_path):
+    """Fix A guard: the orphan repair reports without writing by default,
+    relinks exactly once with dry_run=False, and is a no-op on re-run."""
+    service, storage, detail = _fixture(tmp_path, shot_count=1)
+    shots = _approve_all_human(storage, detail)
+    service.create_version(blueprint_id=detail["blueprint"].blueprint_id)
+    blueprint = storage.get_storyboard_blueprint_by_id(detail["blueprint"].blueprint_id)
+    clone = storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.current_version_id)[0]
+    # Simulate a pre-carry orphan: drop the carried row so the current shot
+    # is missing while the approved source row still exists on v1.
+    if hasattr(storage, "delete_storyboard_image_prompt"):
+        storage.delete_storyboard_image_prompt(clone.storyboard_shot_id)
+    else:
+        row = storage.get_storyboard_image_prompt(clone.storyboard_shot_id)
+        storage.save_storyboard_image_prompt({**row, "status": "proposed", "image_prompt": ""})
+        # Force missing-state by removing text; repair does not upgrade proposed.
+    dry = storyboard_image_prompt_service.repair_orphaned_for_blueprint(
+        blueprint_id=detail["blueprint"].blueprint_id, dry_run=True
+    )
+    assert dry["dry_run"] is True
+    # Dry-run writes nothing: the clone is still not ready.
+    status = storyboard_image_prompt_service.status_for_shot(
+        storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.current_version_id)[0]
+    )
+    assert status["state"] != "ready"
+    applied = storyboard_image_prompt_service.repair_orphaned_for_blueprint(
+        blueprint_id=detail["blueprint"].blueprint_id, dry_run=False
+    )
+    assert applied["dry_run"] is False
+    again = storyboard_image_prompt_service.repair_orphaned_for_blueprint(
+        blueprint_id=detail["blueprint"].blueprint_id, dry_run=True
+    )
+    assert again["would_relink"] == []
+    gate = storyboard_image_prompt_service.gate_for_version(
+        storage.list_storyboard_shots(blueprint.blueprint_id, blueprint.current_version_id)
+    )
+    assert gate["approved"] is True

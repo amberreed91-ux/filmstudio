@@ -81,6 +81,10 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
 
   const draftLength = utf16Length(draft)
   const draftOverLimit = draftLength > RUNWAY_IMAGE_PROMPT_LIMIT
+  const overBy = draftOverLimit ? draftLength - RUNWAY_IMAGE_PROMPT_LIMIT : 0
+  const saveDisabledReason = draftOverLimit
+    ? `Save disabled — prompt is ${overBy} unit${overBy === 1 ? '' : 's'} over the ${RUNWAY_IMAGE_PROMPT_LIMIT} UTF-16 limit. Shorten it before saving.`
+    : ''
   const dirty = draft !== current
   const summary = useMemo(() => removedSummary(entry), [entry])
 
@@ -207,6 +211,8 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
             type="button"
             onClick={() => void run('save')}
             disabled={disabled || busy !== null || !dirty || !draft.trim() || draftOverLimit}
+            title={draftOverLimit ? saveDisabledReason : 'Save hand edit as a proposal (approval is separate)'}
+            aria-disabled={disabled || busy !== null || !dirty || !draft.trim() || draftOverLimit}
             data-testid={`image-prompt-save-${shot.shot_number}`}
             className="flex items-center gap-1.5 rounded-md border border-white/15 px-3 py-1.5 text-[11px] text-zinc-200 hover:bg-white/5 disabled:opacity-40"
           >
@@ -217,6 +223,7 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
             type="button"
             onClick={() => void run('approve')}
             disabled={disabled || busy !== null || draftOverLimit}
+            title={draftOverLimit ? saveDisabledReason : 'Approve this prompt for Runway renders'}
             data-testid={`image-prompt-approve-${shot.shot_number}`}
             className="flex items-center gap-1.5 rounded-md border border-emerald-400/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-100 hover:bg-emerald-500/15 disabled:opacity-40"
           >
@@ -238,6 +245,9 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
           )}
         </div>
       </div>
+      {draftOverLimit && (
+        <p className="text-[11px] leading-relaxed text-rose-300" role="status" data-testid={`image-prompt-overlimit-${shot.shot_number}`}>{saveDisabledReason}</p>
+      )}
       {error && <p className="text-[11px] leading-relaxed text-rose-300" role="alert">{error}</p>}
     </div>
   )

@@ -145,6 +145,21 @@ describe('StoryboardImagePromptPanel', () => {
     expect(screen.getByTestId('image-prompt-save-1')).toBeDisabled()
   })
 
+  it('names the visible reason when Save is disabled over the limit', () => {
+    const long = `x${'🎬'.repeat(600)}`
+    render(
+      <StoryboardImagePromptPanel
+        blueprintId="sbp_test"
+        shot={shot()}
+        entry={{ image_prompt: long, state: 'over_limit', gate_message: 'over the limit', utf16_length: utf16Length(long) }}
+        onChanged={() => {}}
+      />,
+    )
+    // Fix A UX trap: the silently-disabled Save button must show a visible reason.
+    expect(screen.getByTestId('image-prompt-overlimit-1')).toHaveTextContent(/Save disabled/)
+    expect(screen.getByTestId('image-prompt-save-1')).toHaveAttribute('title', expect.stringMatching(/over the/))
+  })
+
   it('approves explicitly and refreshes through onChanged', async () => {
     const onChanged = vi.fn()
     mockApprove.mockResolvedValue({ status: 'approved' })

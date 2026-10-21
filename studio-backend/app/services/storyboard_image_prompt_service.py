@@ -444,6 +444,112 @@ class StoryboardImagePromptService:
             ),
         }
 
+    def repair_orphaned_for_blueprint(
+        self, *, blueprint_id: str, dry_run: bool = True
+    ) -> dict[str, Any]:
+        """One-time repair for rows orphaned before hash-gated carry-forward.
+
+        Scans every version of ``blueprint_id`` oldest-first. For each shot on
+        the current version whose prompt is missing/stale/unapproved/over-limit,
+        looks for an APPROVED row on an older version with the same ``shot_id``
+        whose ``source_prompt_sha256`` still equals the current canonical hash
+        (and whose text is non-empty and within limit). Dry-run (default)
+        only reports what it would relink; ``dry_run=False`` writes the copies
+        with the same ``carried_from:<source_sbs>`` lineage as live carry-
+        forward. Idempotent: already-fresh approved rows are never touched,
+        and re-running after a repair reports zero actions. Never touches the
+        canonical prompt and never upgrades a ``proposed`` row.
+        """
+        from app.services.runway_image_prompt_compactor import canonical_sha256 as _canonical_sha256  # local to avoid cycle
+
+        storage = self._storage_or_raise()
+        blueprint = storage.get_storyboard_blueprint_by_id(blueprint_id)
+        if blueprint is None:
+            raise StateError("Storyboard blueprint not found", stage="storyboard_image_prompt_repair")
+        versions = storage.list_storyboard_blueprint_versions(blueprint_id)
+        by_id = {v.version_id: v for v in versions}
+        current_id = blueprint.current_version_id
+        if not current_id or current_id not in by_id:
+            raise StateError("Current storyboard version not found", stage="storyboard_image_prompt_repair")
+        current_shots = storage.list_storyboard_shots(blueprint_id, current_id)
+        # Index every approved row by shot_id across all versions (oldest first
+        # so the earliest approved text wins deterministically).
+        ordered = sorted(versions, key=lambda v: int(getattr(v, "version_number", 0) or 0))
+        approved_by_shot: dict[str, dict[str, Any]] = {}
+        for version in ordered:
+            if version.version_id == current_id:
+                continue
+            try:
+                rows = storage.list_storyboard_image_prompts(blueprint_id, version.version_id)
+            except Exception:
+                rows = []
+            for row in rows or []:
+                if str(row.get("status") or "") != "approved":
+                    continue
+                shot_id = str(row.get("shot_id") or "")
+                if not shot_id or shot_id in approved_by_shot:
+                    continue
+                approved_by_shot[shot_id] = dict(row)
+        plan: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for shot in sorted(current_shots, key=lambda s: s.shot_number):
+            status = self.status_for_shot(shot)
+            if status.get("state") == "ready":
+                continue
+            canonical = str(getattr(shot.render_contract, "provider_neutral_prompt", "") or "")
+            current_sha = _canonical_sha256(canonical)
+            source = approved_by_shot.get(str(shot.shot_id or ""))
+            if source is None:
+                skipped.append({"shot_id": shot.shot_id, "reason": "no_approved_source_row"})
+                continue
+            if str(source.get("source_prompt_sha256") or "") != current_sha:
+                skipped.append({"shot_id": shot.shot_id, "reason": "source_hash_changed"})
+                continue
+            text = str(source.get("image_prompt") or "").strip()
+            if not text or utf16_length(text) > RUNWAY_IMAGE_MAX_PROMPT_UTF16:
+                skipped.append({"shot_id": shot.shot_id, "reason": "source_empty_or_over_limit"})
+                continue
+            try:
+                rules = json.loads(str(source.get("rules_applied_json") or "[]"))
+                if not isinstance(rules, list):
+                    rules = []
+            except Exception:
+                rules = []
+            marker = f"carried_from:{source.get('storyboard_shot_id')}"
+            entry = {
+                "shot_id": shot.shot_id,
+                "from_storyboard_shot_id": source.get("storyboard_shot_id"),
+                "to_storyboard_shot_id": shot.storyboard_shot_id,
+                "from_version_id": source.get("version_id"),
+                "to_version_id": current_id,
+            }
+            plan.append(entry)
+            if dry_run:
+                continue
+            record: ImagePromptRecord = {
+                **dict(source),
+                "storyboard_shot_id": shot.storyboard_shot_id,
+                "blueprint_id": blueprint_id,
+                "version_id": current_id,
+                "project_id": shot.project_id,
+                "scene_id": shot.scene_id,
+                "shot_id": shot.shot_id,
+                "source_prompt_sha256": current_sha,
+                "rules_applied_json": json.dumps(
+                    [*rules, marker] if marker not in [str(i) for i in rules] else rules
+                ),
+                "canonical_utf16": utf16_length(canonical),
+                "updated_at": _now(),
+                "carried_from": source.get("storyboard_shot_id"),
+                "carried_at": _now(),
+            }
+            storage.save_storyboard_image_prompt(record)
+        logger.info(
+            "project_id=%s job_id=%s provider=runway stage=image_prompt_repair duration_ms=%d",
+            getattr(blueprint, "project_id", ""), f"dry_run={dry_run} relink={len(plan)}", 0,
+        )
+        return {"blueprint_id": blueprint_id, "dry_run": dry_run, "would_relink": plan, "skipped": skipped}
+
     def approved_digest_for_shot(self, shot: Any) -> str | None:
         """Digest pin for the contract chain, or None when nothing approved."""
         storage = self._storage_or_raise()
