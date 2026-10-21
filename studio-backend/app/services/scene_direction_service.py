@@ -331,7 +331,7 @@ class SceneDirectionService:
             # below still runs on every save.
             if not (is_unchanged_carry and is_draft_current):
                 if source.status != StoryboardBlueprintStatus.APPROVED or blueprint.approved_version_id != source.version_id or blueprint.current_version_id != source.version_id:
-                    raise StateError('Scene Direction decisions can only authorize the current approved storyboard version.', stage='scene_direction')
+                    raise StateError('New or changed Scene Direction decisions require the current approved storyboard version. An unchanged decision carries forward across current drafts and is re-validated live on every save.', stage='scene_direction')
             canonical_setting_id = self._scene_setting_identity(project_id, scene_id)
             if not canonical_setting_id or setting_decision.canonical_setting_id != canonical_setting_id:
                 raise ValidationError('Select a reference for the exact canonical setting entity of this scene.', stage='scene_direction')
