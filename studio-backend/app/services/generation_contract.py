@@ -393,12 +393,17 @@ class FrozenGenerationContract:
         if scene_coverage is not None:
             from app.services.scene_coverage_contract import verify_scene_coverage_contract
             try:
-                verify_scene_coverage_contract(scene_coverage)
+                verify_scene_coverage_contract(scene_coverage, require_resolved=False)
             except ValueError as exc:
                 raise GenerationContractError(f"Frozen scene coverage is invalid: {exc}") from exc
             coverage_shots = [row for row in scene_coverage.get("shots", []) if row.get("shot_id") == payload.get("shot_id")]
             if len(coverage_shots) != 1 or scene_coverage_shot != coverage_shots[0]:
                 raise GenerationContractError("Frozen scene coverage does not contain exactly one matching shot contract")
+            _own = coverage_shots[0] if isinstance(coverage_shots[0], dict) else {}
+            if _own.get("content_coverage_state") == "UNRESOLVED":
+                raise GenerationContractError("Frozen scene coverage is invalid: shot content coverage is UNRESOLVED")
+            if not _own.get("covered_content_ids") and _own.get("content_coverage_state") != "INTENTIONAL_ESTABLISHING":
+                raise GenerationContractError("Frozen scene coverage is invalid: shot canonical content coverage is unresolved")
             if any(not isinstance(row, dict) for row in refs):
                 raise GenerationContractError("Frozen generation contract reference entry is malformed")
             # The frozen handoff must name exactly the dialogue obligations this
