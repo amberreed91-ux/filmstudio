@@ -959,12 +959,25 @@ class StoryboardBlueprintService:
             _gen_scene = self._get_scene(project_id, scene_id)
         except Exception:
             _gen_scene = None
-        _locked_block = self._locked_block_for_scene(project_id, _gen_scene)
+        try:
+            _shot_focus = list((shot.intent.character_focus or []) if shot.intent else [])
+        except Exception:
+            _shot_focus = []
+        try:
+            _shot_text_hint = str(shot.render_contract.provider_neutral_prompt or "")
+        except Exception:
+            _shot_text_hint = ""
+        _locked_block = self._locked_block_for_scene(
+            project_id, _gen_scene, shot_characters=_shot_focus, shot_text=_shot_text_hint
+        )
         if edits:
             base_prompt = shot.metadata.get("camera_plan_base_prompt")
             if base_prompt is None:
                 base_prompt = shot.render_contract.provider_neutral_prompt or self._prompt_from_shot(shot, _locked_block)
-            base_prompt = self._refresh_prompt_with_locked_characters(base_prompt, project_id, _gen_scene)
+            base_prompt = self._refresh_prompt_with_locked_characters(
+                base_prompt, project_id, _gen_scene,
+                shot_characters=_shot_focus, shot_text=_shot_text_hint,
+            )
             if "camera" in edits:
                 shot.visual_plan.camera_movement = edits["camera"].strip()
             if "framing" in edits:
@@ -1005,12 +1018,20 @@ class StoryboardBlueprintService:
             or self._prompt_from_shot(shot, _locked_block),
             project_id,
             _gen_scene,
+            shot_characters=_shot_focus,
+            shot_text=_shot_text_hint or str(shot.render_contract.provider_neutral_prompt or ""),
         )
         shot.render_contract.provider_neutral_prompt = prompt
         # Persist lock anchors so the approved-board → final-render handoff
         # carries face/body refs even for text-only storyboard providers.
+        # gen4_image allows 3 refs: trim preserves shot-named first.
         try:
-            _lock_refs = self._locked_reference_images_for_scene(project_id, _gen_scene)
+            _lock_refs = self._locked_reference_images_for_scene(
+                project_id, _gen_scene,
+                shot_characters=_shot_focus,
+                shot_text=_shot_text_hint or prompt,
+                model_id="gen4_image",
+            )
         except Exception:
             _lock_refs = []
         if _lock_refs:
@@ -1018,7 +1039,8 @@ class StoryboardBlueprintService:
             for _ref in _lock_refs:
                 if _ref not in existing_refs:
                     existing_refs.append(_ref)
-            shot.render_contract.reference_assets = existing_refs[:9]
+            # gen4_image budget is 3; never exceed the model limit here.
+            shot.render_contract.reference_assets = existing_refs[:3]
         normalized_provider = (provider or "runway").strip().lower()
         if normalized_provider in {"qwen", "qwen-image-max", "dashscope", "wanx"}:
             normalized_provider = "runway"
@@ -1979,16 +2001,15 @@ class StoryboardBlueprintService:
         return [character for character in characters if isinstance(character, dict)]
 
     def _locked_characters_for_prompt(self, project_id: str, characters: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Intersect appearance-locked characters with the reference-lock table.
+        """Reference-lock filter for image anchors (NOT for text blocks).
 
-        The prompt block's `appearance_approval.status == 'locked'` is a
-        project-wide flag (all six scene_001 characters), while
-        `character_reference_locks` (`lock_status='locked'`) is the visual
-        identity actually bound to references (MAYA/MOM only; DRE is
-        provisional). When the lock table has locked rows, characters without
-        a locked row are dropped so other scenes' faces never leak in.
-        Missing table / lookup failure fails open to the appearance-locked
-        list so boards still build."""
+        Intersects appearance-locked characters with `character_reference_locks`
+        (`lock_status='locked'`). Text blocks use appearance-locked + shot/scene
+        scoping directly (see `_locked_block_for_scene`); this helper is only
+        for reference-image anchors where an unauthorized face must never be
+        sent. No fail-open: empty table / lookup failure / empty intersect
+        returns [] (deterministic, explainable) with a stage log so boards
+        stay text-only rather than leaking other scenes' faces."""
         try:
             from app.services.shot_prompt_builder import locked_appearance_characters
 
@@ -1997,10 +2018,21 @@ class StoryboardBlueprintService:
                 return locked
             try:
                 rows = self.storage.list_character_reference_locks(project_id, lock_status="locked", limit=200)
-            except Exception:
-                return locked
+            except Exception as exc:
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "LOCKED_REF_FILTER_EMPTY | reason=lock_table_unavailable | cause=%s",
+                    type(exc).__name__,
+                )
+                return []
             if not rows:
-                return locked
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "LOCKED_REF_FILTER_EMPTY | reason=lock_table_empty",
+                )
+                return []
             allowed_ids: set[str] = set()
             allowed_names: set[str] = set()
             for row in rows:
@@ -2013,7 +2045,12 @@ class StoryboardBlueprintService:
                 if cname:
                     allowed_names.add(cname)
             if not allowed_ids and not allowed_names:
-                return locked
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "LOCKED_REF_FILTER_EMPTY | reason=lock_rows_unusable",
+                )
+                return []
             narrowed = []
             for char in locked:
                 if not isinstance(char, dict):
@@ -2022,16 +2059,22 @@ class StoryboardBlueprintService:
                 cname = str(char.get("name") or "").strip().lower()
                 if (cid and cid in allowed_ids) or (cname and cname in allowed_names):
                     narrowed.append(char)
-            # If nothing intersects (e.g. name drift), fail open rather than
-            # minting an empty block that the rebuild gate would refuse.
-            return narrowed or locked
-        except Exception:
-            try:
-                from app.services.shot_prompt_builder import locked_appearance_characters
+            # No fail-open: empty intersect means no authorized anchors.
+            # Boards stay text-only rather than leaking unbound faces.
+            if not narrowed:
+                import logging as _logging
 
-                return locked_appearance_characters(characters)
-            except Exception:
-                return [c for c in characters if isinstance(c, dict)]
+                _logging.getLogger(__name__).warning(
+                    "LOCKED_REF_FILTER_EMPTY | reason=no_intersect",
+                )
+            return narrowed
+        except Exception:
+            import logging as _logging
+
+            _logging.getLogger(__name__).warning(
+                "LOCKED_REF_FILTER_EMPTY | reason=filter_exception",
+            )
+            return []
 
     def _locked_block_for_scene(
         self,
@@ -2044,14 +2087,23 @@ class StoryboardBlueprintService:
     ) -> str:
         """Fresh locked-appearance block so post-lock approvals still apply.
 
-        Shot context (focus names, shot text, scene-wide shot texts for the
-        union fallback) scopes the block to this shot; without it an empty
-        scene cast resolves empty instead of leaking other scenes' faces."""
+        Precedence (first non-empty scope wins): shot focus names, else the
+        scene's declared cast, else locked characters named in this shot's
+        text, else locked characters named in any shot of the scene (union
+        fallback, stage-logged), else empty with a warning. The reference-lock
+        table is NOT a pre-filter here: text blocks scope from
+        appearance-locked characters so a shot-named locked character is never
+        dropped. Reference anchors use `_locked_reference_images_for_scene`.
+        Without shot context an empty scene cast resolves empty instead of
+        leaking other scenes' faces."""
         try:
-            from app.services.shot_prompt_builder import build_locked_appearance_block
+            from app.services.shot_prompt_builder import (
+                build_locked_appearance_block,
+                locked_appearance_characters,
+            )
 
             characters = self._project_characters_for_prompt(project_id)
-            characters = self._locked_characters_for_prompt(project_id, characters)
+            characters = locked_appearance_characters(characters)
             return build_locked_appearance_block(
                 characters,
                 scene,
@@ -2063,40 +2115,104 @@ class StoryboardBlueprintService:
             return ""
 
     def _locked_reference_images_for_scene(
-        self, project_id: str, scene: dict[str, Any] | None
+        self,
+        project_id: str,
+        scene: dict[str, Any] | None,
+        *,
+        shot_characters: list[str] | None = None,
+        shot_text: str | None = None,
+        model_id: str | None = None,
+        max_refs: int | None = None,
     ) -> list[str]:
-        """Face-first lock anchors for this scene, fresh from storage."""
+        """Face-first lock anchors, scoped shot-first with per-model trim.
+
+        Scope precedence: shot focus/text names ∩ lock-filtered, else scene
+        cast ∩ lock-filtered, else deterministic fallback (lock-filtered sorted
+        by name) with a stage-log warning. Trim to `max_refs` (or the model's
+        `maximum_reference_count` when `model_id` is given) preserving
+        shot-named characters first, then scene-cast, then alphabetical — never
+        dropping a shot-named character for an unfeatured one."""
         try:
+            import logging as _logging
             from app.utils.character_appearance import appearance_approval
+
+            from app.services.shot_prompt_builder import _scene_character_names
 
             characters = self._project_characters_for_prompt(project_id)
             locked = self._locked_characters_for_prompt(project_id, characters)
-            if isinstance(scene, dict):
+            if not locked:
+                return []
+            by_name = {str(c.get("name") or "").strip().lower(): c for c in locked if isinstance(c, dict)}
+            shot_names: list[str] = []
+            for raw in shot_characters or []:
+                key = str(raw or "").strip().lower()
+                if key and key not in shot_names:
+                    shot_names.append(key)
+            if shot_text:
                 try:
-                    from app.services.shot_prompt_builder import _scene_character_names
+                    from app.services.shot_prompt_builder import _extract_characters_from_segment
 
+                    for item in _extract_characters_from_segment(str(shot_text), locked) or []:
+                        key = str((item or {}).get("name") or "").strip().lower()
+                        if key and key not in shot_names:
+                            shot_names.append(key)
+                except Exception:
+                    pass
+            scoped: list[dict[str, Any]] = [by_name[k] for k in shot_names if k in by_name]
+            scope = "shot" if scoped else "none"
+            if not scoped and isinstance(scene, dict):
+                try:
                     names = _scene_character_names(scene)
                 except Exception:
                     names = set()
                 if names:
-                    scoped = [
-                        c for c in locked
-                        if str(c.get("name") or "").strip().lower() in names
-                    ]
-                    if scoped:
-                        locked = scoped
+                    scoped = [c for c in locked if str(c.get("name") or "").strip().lower() in names]
+                    scope = "scene_cast" if scoped else "none"
+            if not scoped:
+                scoped = sorted(locked, key=lambda c: str(c.get("name") or ""))
+                scope = "fallback_sorted"
+                _logging.getLogger(__name__).warning(
+                    "LOCKED_REF_FALLBACK | scope=fallback_sorted | characters=%s",
+                    [str(c.get("name")) for c in scoped],
+                )
+            # Per-model trim: never drop a shot-named character first.
+            limit = max_refs
+            if limit is None and model_id:
+                try:
+                    from app.services.model_registry import get_model as _get_model
+
+                    limit = _get_model(str(model_id)).maximum_reference_count
+                except Exception:
+                    limit = None
+            # Count refs (face+body per char = 2); convert char limit from ref limit.
+            # gen4_image allows 3 refs: trim at the character level first so the
+            # face-first pass below never exceeds the model budget.
+            if isinstance(limit, int) and limit >= 0:
+                max_chars = max(1, limit // 2) if limit else 0
+                if max_chars and len(scoped) > max_chars:
+                    shot_set = set(shot_names)
+                    shot_first = [c for c in scoped if str(c.get("name") or "").strip().lower() in shot_set]
+                    rest = [c for c in scoped if str(c.get("name") or "").strip().lower() not in shot_set]
+                    scoped = (shot_first + rest)[:max_chars]
+                    _logging.getLogger(__name__).warning(
+                        "LOCKED_REF_TRIM | model=%s | limit=%s | kept=%s",
+                        str(model_id or ""), limit, [str(c.get("name")) for c in scoped],
+                    )
             refs: list[str] = []
-            # Face first: strongest identity signal, then full-body. No
-            # alphabetical truncation: every in-scope locked character keeps
-            # its anchors (face pass, then body pass).
             for field in ("face_image_url", "body_image_url"):
-                for char in locked:
+                for char in scoped:
                     try:
                         url = str(appearance_approval(char).get(field) or "").strip()
                     except Exception:
                         url = ""
                     if url and url not in refs:
                         refs.append(url)
+            if isinstance(limit, int) and limit >= 0:
+                refs = refs[:limit]
+            _logging.getLogger(__name__).info(
+                "LOCKED_REF_SCOPE | scope=%s | characters=%s | refs=%d",
+                scope, [str(c.get("name")) for c in scoped], len(refs),
+            )
             return refs
         except Exception:
             return []
@@ -2173,11 +2289,24 @@ class StoryboardBlueprintService:
             return {"locked": [], "unlocked": [], "missing_face_reference": [], "scene_cast": [], "warnings": []}
 
     def _refresh_prompt_with_locked_characters(
-        self, base_prompt: str | None, project_id: str, scene: dict[str, Any] | None
+        self,
+        base_prompt: str | None,
+        project_id: str,
+        scene: dict[str, Any] | None,
+        *,
+        shot_characters: list[str] | None = None,
+        shot_text: str | None = None,
+        scene_shot_texts: list[str] | None = None,
     ) -> str:
         """Re-attach current locked looks to a possibly stale stored prompt."""
         base = str(base_prompt or "").strip()
-        block = self._locked_block_for_scene(project_id, scene)
+        block = self._locked_block_for_scene(
+            project_id,
+            scene,
+            shot_characters=shot_characters,
+            shot_text=shot_text if shot_text is not None else base,
+            scene_shot_texts=scene_shot_texts,
+        )
         if not block or "Locked appearance" in base:
             return base
         if not base:
