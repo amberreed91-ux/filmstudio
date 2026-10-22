@@ -66,6 +66,15 @@ def test_lock_table_narrows_refs_to_maya_and_mom() -> None:
     svc = _service(SIX, LOCK_ROWS)
     narrowed = svc._locked_characters_for_prompt("proj", SIX)
     assert {c["name"] for c in narrowed} == {"MAYA", "MOM"}
+    # Fix B v2: shot-scoped anchors with per-model trim. These keyword-only
+    # arguments do not exist on the pre-fix helper (TypeError there).
+    refs = svc._locked_reference_images_for_scene(
+        "proj", {"scene_id": "s", "characters": []},
+        shot_characters=["MOM"], shot_text="MOM sets down her tea.",
+        model_id="gen4_image",
+    )
+    assert len(refs) <= 3, refs
+    assert refs and refs[0] == "https://face/mom.jpg", refs
 
 
 def test_empty_lock_table_returns_no_refs() -> None:
@@ -105,23 +114,29 @@ def test_per_shot_blocks_differ() -> None:
     assert "SIMONE" in sim_block and "DRE" not in sim_block
 
 
-def test_fourth_alphabetical_shot_named_never_dropped() -> None:
-    # Alphabetical: DRE, ELENA, JAY, MAYA(4th), MOM, SIMONE. Shot names MAYA.
+def test_shot_named_locked_unreferenced_character_never_dropped() -> None:
+    # JAY is appearance-locked but NOT reference-locked. A JAY shot must
+    # still name JAY in the text block (text scopes from appearance locks,
+    # never from the lock table). Pre-fix code pre-filtered by the lock
+    # table and dropped him.
     svc = _service(SIX, LOCK_ROWS)
     block = svc._locked_block_for_scene(
         "proj", {"scene_id": "s", "characters": []},
-        shot_text="Only MAYA visible. MAYA walks through the city.",
+        shot_text="Only JAY visible. JAY walks through the city.",
     )
-    assert "MAYA" in block
+    assert "JAY" in block
+    assert "MAYA" not in block and "MOM" not in block
 
 
 def test_empty_scene_cast_falls_back_to_shot_text() -> None:
+    # JAY (locked, not reference-locked) via shot text: pre-fix code
+    # dropped him because the lock-table pre-filter removed him first.
     svc = _service(SIX, LOCK_ROWS)
     block = svc._locked_block_for_scene(
         "proj", {"scene_id": "s", "characters": []},
-        shot_text="MOM sets down her tea.",
+        shot_text="JAY sets down his tea.",
     )
-    assert "MOM" in block
+    assert "JAY" in block
 
 
 def test_gen4_image_trim_preserves_shot_named_first() -> None:
