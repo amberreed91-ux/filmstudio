@@ -824,6 +824,9 @@ function LaserConduits() {
   return (
     <group>
       {lineGeoms.map((geom, i) => (
+        // DEFERRED: SVG <line> typing; resolve in 3D studio redesign (post-roadmap)
+        // NOTE: @ts-expect-error masks ALL errors on the next line; recheck line 827 when the 3D redesign lands.
+        // @ts-expect-error
         <line key={SPATIAL_PORTALS[i].key} geometry={geom}>
           <lineBasicMaterial color="#a855f7" transparent opacity={0.7} />
         </line>
