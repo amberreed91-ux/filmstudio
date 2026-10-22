@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import argparse
 import os
-import sqlite3
 from pathlib import Path
+from app.data.db_guard import LIVE_DB_FILE, open_db_readonly, resolve_db_dir
 from urllib.parse import quote
 
 
@@ -36,15 +36,13 @@ def _load_env_file(path: Path) -> None:
 
 
 def _resolved_get_storage_db() -> Path:
-    storage_path = os.getenv("STUDIO_STORAGE_PATH")
-    if storage_path:
-        return Path(storage_path).expanduser() / "studio.db"
-    return BACKEND_ROOT / "data" / "studio.db"
+    # Central resolver: explicit env > dev-copy default (never live by default).
+    _ = LIVE_DB_FILE  # documented live target for the diagnostic report
+    return resolve_db_dir() / "studio.db"
 
 
-def _connect_readonly(db_path: Path) -> sqlite3.Connection:
-    uri = f"file:{quote(str(db_path.resolve()))}?mode=ro"
-    return sqlite3.connect(uri, uri=True)
+def _connect_readonly(db_path: Path):
+    return open_db_readonly(db_path)
 
 
 def _project_ids(db_path: Path) -> tuple[list[str], str | None]:

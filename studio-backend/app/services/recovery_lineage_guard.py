@@ -40,6 +40,7 @@ import sqlite3
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from app.data.db_guard import open_db_readonly
 from typing import Any
 
 logger = logging.getLogger("studio-recovery-guard")
@@ -164,7 +165,7 @@ def _project_creative_counts(db_path: Path) -> dict[str, dict[str, int]]:
     with ``mode=ro`` on the resolved path WITHOUT touching any WAL sidecar —
     suitable for closed/restored snapshots. Live-lineage reads should be done
     on a copy (see forensic tooling) or with the backend stopped."""
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn = open_db_readonly(db_path)
     conn.row_factory = sqlite3.Row
     try:
         counts: dict[str, dict[str, int]] = {}
@@ -270,7 +271,7 @@ def _database_fingerprint(db_path: Path) -> dict[str, Any]:
         "schema_version": None,
     }
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        conn = open_db_readonly(db_path)
         try:
             fingerprint["schema_version"] = conn.execute("PRAGMA schema_version").fetchone()[0]
         finally:

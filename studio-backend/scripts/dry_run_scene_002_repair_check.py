@@ -12,6 +12,7 @@ import json
 import sys
 from copy import deepcopy
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -127,7 +128,7 @@ def main() -> int:
     # the live DB snapshot; the dry run never writes approval state.
     import sqlite3
 
-    db = sqlite3.connect(str(Path(__file__).resolve().parents[1] / "data" / "studio.db"))
+    db = open_db_readwrite(resolve_db_file())
     db.row_factory = sqlite3.Row
     version = db.execute(
         "SELECT version_id FROM storyboard_blueprint_versions WHERE scene_id=? AND project_id=? AND status='approved'",

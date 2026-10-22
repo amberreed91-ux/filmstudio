@@ -9,6 +9,7 @@ This file ensures:
 
 import asyncio
 import os
+import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -20,6 +21,17 @@ os.environ["STUDIO_STORAGE_PATH"] = _test_storage.name
 os.environ["STUDIO_PROJECT_STORE_PATH"] = str(Path(_test_storage.name) / "project_state_store.json")
 
 os.environ["STUDIO_ACCESS_MODE"] = "local"
+
+# --- DB isolation guard (Part 2): keep live-server scripts out of default
+# collection. These top-level scripts target localhost dev servers and/or
+# open the live DB path directly; they run only with explicit opt-in.
+if os.getenv("STUDIO_ALLOW_LIVE_SCRIPTS") != "1":
+    collect_ignore = [
+        "test_project_creation_fix.py",
+        "test_corrector_direct.py",
+        "test_corrector_variations.py",
+        "test_defensive_validation.py",
+    ]
 
 import pytest
 from typing import Generator
@@ -44,6 +56,44 @@ def test_render_provider_default_isolation(monkeypatch) -> Generator[None, None,
         yield
     finally:
         settings.render_video_provider = original_provider
+
+
+# --- DB isolation guard (Part 2): suite-wide fail-closed sqlite open.
+# Tests can never resolve the live DB path. Any read-write open of the live
+# studio.db from inside the test process raises, with no flag override.
+from app.data.db_guard import LIVE_DB_FILE, LiveDatabaseRefused  # noqa: E402
+
+_real_sqlite_connect = sqlite3.connect
+
+
+def _guarded_sqlite_connect(database=None, *args, **kwargs):
+    try:
+        db_str = os.fspath(database) if database is not None else ""
+    except Exception:
+        db_str = ""
+    is_ro_uri = kwargs.get("uri") and "mode=ro" in db_str
+    if not is_ro_uri and db_str not in ("", ":memory:"):
+        try:
+            if Path(db_str).expanduser().resolve() == LIVE_DB_FILE.resolve():
+                raise LiveDatabaseRefused(
+                    "refusing: tests can never open the live DB path "
+                    f"({db_str}); use tmp_path / an isolated copy"
+                )
+        except LiveDatabaseRefused:
+            raise
+        except Exception:
+            pass
+    return _real_sqlite_connect(database, *args, **kwargs)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _db_isolation_guard():
+    """Install the suite-wide live-DB refuse patch for the whole session."""
+    sqlite3.connect = _guarded_sqlite_connect
+    try:
+        yield
+    finally:
+        sqlite3.connect = _real_sqlite_connect
 
 
 # R4.5-Phase2 (#1, #17, #18 + reconciliation pollution): credential/flag keys

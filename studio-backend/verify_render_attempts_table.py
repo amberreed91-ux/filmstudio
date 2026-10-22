@@ -5,21 +5,21 @@ Verification script for render_attempts table schema.
 Run this after starting the backend to verify migration 26 was applied.
 """
 
-import sqlite3
 import sys
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 def verify_render_attempts_table():
     """Verify the render_attempts table exists with correct schema."""
     
-    db_path = Path(__file__).parent / "studio.db"
+    db_path = resolve_db_file()  # was studio-backend/studio.db (wrong file); now guarded dev default
     
     if not db_path.exists():
         print("❌ studio.db not found. Start the backend first to initialize the database.")
         return False
     
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = open_db_readwrite(db_path)
         cursor = conn.cursor()
         
         # Check current schema version

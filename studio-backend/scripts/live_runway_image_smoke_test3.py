@@ -12,7 +12,7 @@ Operator-approved execution basis (this session):
   seed 916483 locked=False, 16:9, no contract references) is the 2026-09-26
   pre-approval backup at .validation/scene002_approval_20260926/. Per operator
   decision, this test runs against a TEMP-COPY of that snapshot; the live
-  data/studio.db and the healthy backend are never touched.
+  the live database and the healthy backend are never touched.
 - IMAGE_PROVIDER_NAME=nvidia in .env is overridden in-process to 'runway'
   (operator-approved, single request). .env is not modified.
 
@@ -55,6 +55,7 @@ import time
 import urllib.request
 import uuid
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 BACKEND = Path(__file__).resolve().parents[1]
 REPO = BACKEND.parent
@@ -136,7 +137,7 @@ def _sha256(text: str) -> str:
 
 def _capture_canonical_state(db_path: Path) -> dict:
     """Fingerprint authoritative canonical state (read-only)."""
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn = open_db_readonly(db_path)
     conn.row_factory = sqlite3.Row
     fp: dict = {}
 
@@ -182,7 +183,7 @@ def _capture_canonical_state(db_path: Path) -> dict:
 
 
 def _checkpoint_wal(db_path: Path) -> None:
-    conn = sqlite3.connect(str(db_path))
+    conn = open_db_readwrite(db_path)
     try:
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
@@ -471,7 +472,7 @@ def main() -> int:
             "previs_image_rows_before": len(pre_state.get("previs_images_test", [])),
             "previs_image_rows_after": len(post_state.get("previs_images_test", [])),
             "note": "Executed on an operator-approved temp copy of the verified canonical snapshot "
-                    "(2026-09-26 pre-approval backup); the live data/studio.db and the running backend "
+                    "(2026-09-26 pre-approval backup); the live database and the running backend "
                     "were never touched. Store copy fingerprints (before/after DB files) are retained "
                     f"under {ARTIFACT_DIR.relative_to(REPO)} for audit.",
         },

@@ -18,6 +18,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from app.data.db_guard import LIVE_DB_FILE, open_db_readonly
 
 REPO = Path(__file__).resolve().parents[2]
 BACKEND = REPO / "studio-backend"
@@ -30,7 +31,7 @@ EVIDENCE_IDS = [
 EVIDENCE_NUMBERS = ["916483", "259c21e05769bf63", "c66c7e8e573b00ec"]
 
 STORES = [
-    ("LIVE-DB", BACKEND / "data/studio.db"),
+    ("LIVE-DB", LIVE_DB_FILE),
     ("PREAPPROVAL-20260926-1616", BACKEND / ".validation/scene002_approval_20260926/studio.db.pre-approval-backup"),
     ("PREAPPROVAL-WAL-20260926-1616", BACKEND / ".validation/scene002_approval_20260926/studio.db-wal.pre-approval-backup"),
     ("NIGHTLY-20260926", BACKEND / "backups/studio_20260926_160722.db"),
@@ -48,7 +49,7 @@ def open_copy(db_path: Path, wal_path: Path | None, workdir: Path) -> sqlite3.Co
     shutil.copy2(db_path, tmp_db)
     if wal_path and wal_path.exists():
         shutil.copy2(wal_path, workdir / "audit_copy.db-wal")
-    conn = sqlite3.connect(str(tmp_db))
+    conn = open_db_readonly(tmp_db)
     conn.row_factory = sqlite3.Row
     return conn
 

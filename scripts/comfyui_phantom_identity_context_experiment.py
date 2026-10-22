@@ -11,7 +11,7 @@ setting, and whether both can coexist.
 This script runs the controlled arms that answer that question.
 
 Nothing in Studio is imported or modified. The Studio database
-(studio-backend/data/studio.db) is opened READ-ONLY to record the provenance of
+(the live database) is opened READ-ONLY to record the provenance of
 the approved reference assets. No row, approval state, canonical flag or lock
 status is written.
 
@@ -75,12 +75,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'studio-backend'))
+from app.data.db_guard import LIVE_DB_FILE, open_db_readonly
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTROOT = ROOT / "docs" / "comfyui_multiref_evidence" / "identity_context"
 COMFY_INPUT = Path("/Users/amberreed/ComfyUI-Shared/input")
 COMFY_MODELS = Path("/Users/amberreed/ComfyUI-Shared/models")
-STUDIO_DB = ROOT / "studio-backend" / "data" / "studio.db"
+STUDIO_DB = LIVE_DB_FILE
 DEFAULT_SERVER = "http://127.0.0.1:8190"
 
 # ── Controlled generation settings (identical across every arm) ──────────────
@@ -357,7 +359,7 @@ def studio_reference_provenance():
     """Read-only snapshot of the Studio rows behind every reference used."""
     if not STUDIO_DB.exists():
         return {"error": f"studio db not found: {STUDIO_DB}"}
-    con = sqlite3.connect(f"file:{STUDIO_DB}?mode=ro", uri=True)
+    con = open_db_readonly(STUDIO_DB)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     ids = [r["ref_id"] for r in REFS.values() if r.get("ref_id")]

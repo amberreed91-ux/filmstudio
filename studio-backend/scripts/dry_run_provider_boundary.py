@@ -1,7 +1,7 @@
 """Local dry run to the provider boundary — Multi Shot Integrity workstream §7.
 
 SAFETY CONTRACT (verified by this script's own behavior):
-- Copies the real data stores (data/studio.db + project_state_store.json) to a
+- Copies the real data stores (live studio.db + project_state_store.json) to a
   temp directory and grounds ALL app storage env vars at the copies. The real
   stores are never opened for writing.
 - Runs SceneProductionPipelineService.prepare_scene_batch ONLY. That method

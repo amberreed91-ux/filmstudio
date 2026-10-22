@@ -79,3 +79,6 @@ studio-backend/.validation/
 studio-backend/data/quarantine_stale_wal_20260927/
 studio-backend/data/recovery_artifacts_20260927/
 studio-backend/data/recovery-snapshots/
+
+# ── Part 2 DB isolation: dev-copy DB location (never commit project data) ──
+studio-backend/data-dev/

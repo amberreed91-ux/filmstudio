@@ -6,14 +6,14 @@ Reports pass/fail for all critical components without fixing anything.
 import os
 import sys
 import time
-import sqlite3
 import subprocess
 import requests
 from datetime import datetime
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 API_BASE = "http://localhost:8010"
-DB_PATH = Path(__file__).parent / "data" / "studio.db"
+DB_PATH = resolve_db_file()  # guarded: live needs both opt-in flags
 
 # Results storage
 results = {}
@@ -59,7 +59,7 @@ def test_project_creation():
             results['PROJECT CREATION'] = 'FAIL'
             return None
         
-        conn = sqlite3.connect(DB_PATH)
+        conn = open_db_readonly(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT project_id, data FROM projects WHERE project_id = ?", (project_id,))
         row = cursor.fetchone()
@@ -400,7 +400,7 @@ def test_database_tables():
     ]
     
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = open_db_readonly(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         existing_tables = {row[0] for row in cursor.fetchall()}

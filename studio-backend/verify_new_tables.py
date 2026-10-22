@@ -2,10 +2,10 @@
 """
 Verify that previs_images and surfaced_disagreements tables were created successfully.
 """
-import sqlite3
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
-DB_PATH = Path(__file__).parent / "data" / "studio.db"
+DB_PATH = resolve_db_file()  # guarded: live needs both opt-in flags
 
 def verify_tables():
     """Verify both new tables exist with correct schema"""
@@ -16,7 +16,7 @@ def verify_tables():
         print(f"❌ FAIL: Database not found at {DB_PATH}")
         return False
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = open_db_readonly(DB_PATH)
     cursor = conn.cursor()
     
     # Check if tables exist

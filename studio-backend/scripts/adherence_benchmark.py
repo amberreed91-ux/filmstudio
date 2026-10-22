@@ -50,6 +50,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+from app.data.db_guard import open_db_readonly
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
@@ -87,15 +88,14 @@ DIMENSION_TO_SLOT = {
 
 
 def db_path() -> Path:
-    root = os.getenv("STUDIO_STORAGE_PATH") or str(BACKEND_ROOT / "data")
-    return Path(root) / "studio.db"
+    return resolve_db_file()
 
 
 def connect():
     p = db_path()
     if not p.is_file():
         raise SystemExit(f"database not found: {p}")
-    c = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+    c = open_db_readonly(p)
     c.row_factory = sqlite3.Row
     return c
 

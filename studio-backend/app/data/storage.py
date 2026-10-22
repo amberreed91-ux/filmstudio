@@ -1,7 +1,6 @@
 import json
 import sqlite3
 import os
-import sys
 import logging
 from pathlib import Path
 from typing import Optional, Any, List, Dict
@@ -13,6 +12,12 @@ import time
 from uuid import uuid4
 
 from app.models import StudioProject, StudioOverview, BuildInfo, RenderJobModel
+
+from app.data.db_guard import (
+    assert_live_open_allowed,
+    open_db_readwrite,
+    resolve_db_dir,
+)
 
 logger = logging.getLogger("studio-storage")
 
@@ -82,6 +87,9 @@ class DatabaseStorage:
     """SQLite storage with connection pooling and WAL mode."""
 
     def __init__(self, storage_path: str, pool_size: int = 10):
+        # Fail closed BEFORE any SQLite open: instantiating against a WAL
+        # DB rewrites main+WAL (checkpoint) with zero row changes.
+        assert_live_open_allowed(Path(storage_path) / "studio.db")
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.db_path = self.storage_path / "studio.db"
@@ -94,7 +102,7 @@ class DatabaseStorage:
 
     def _create_connection(self):
         """Create a new database connection"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = open_db_readwrite(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
@@ -17352,12 +17360,9 @@ def get_storage(storage_type: str = "sqlite", **kwargs) -> Any:
         - PostgreSQL requires SQLAlchemy setup (see docs for migration)
         - JSON storage is deprecated and only for backwards compatibility
     """
-    default_storage_path = os.getenv("STUDIO_STORAGE_PATH")
-    if not default_storage_path:
-        if os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
-            default_storage_path = str(Path("/tmp") / f"studio-backend-pytest-{os.getpid()}")
-        else:
-            default_storage_path = str(Path(__file__).resolve().parents[2] / "data")
+    # Central resolver: explicit kwarg > STUDIO_STORAGE_PATH > pytest /tmp >
+    # dev-copy default (never the live path; live needs both opt-in flags).
+    default_storage_path = str(resolve_db_dir())
     if storage_type == "sqlite":
         return DatabaseStorage(kwargs.get("storage_path", default_storage_path))
     elif storage_type == "json":

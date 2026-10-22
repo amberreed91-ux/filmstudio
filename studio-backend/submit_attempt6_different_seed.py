@@ -25,7 +25,6 @@ import asyncio
 import json
 import logging
 import os
-import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +35,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.data.storage import get_storage
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 from app.services.render import render_service
 from app.services.adherence_service import AdherenceService
 from app.services.render_retry_service import render_retry_service
@@ -54,7 +54,7 @@ PROJECT_ID = "project_3dba9330f43a"
 TEST_SHOT_ID = "scene_001_attempt6"
 ORIGINAL_SHOT_ID = "scene_001"  # Original shot for fetching prompt from DB
 DIFFERENT_SEED = 123456789  # A completely different seed value
-DB_PATH = Path(__file__).parent / "data" / "studio.db"
+DB_PATH = resolve_db_file()  # guarded: live needs both opt-in flags
 
 
 # ─── Pull the EXACT attempt 1 prompt from the database ───────────────────────
@@ -66,7 +66,7 @@ def fetch_attempt1_prompt_from_db() -> str:
     This guarantees byte-for-byte identity with the original submission —
     no retyping, no reconstruction from notes.
     """
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = open_db_readwrite(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT prompt_text FROM render_attempts WHERE shot_id=? AND attempt_n=1",
@@ -168,7 +168,7 @@ async def main():
     attempt1_prompt = fetch_attempt1_prompt_from_db()
 
     # Also pull the attempt 1 score for comparison reference
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = open_db_readwrite(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT score_json FROM render_attempts WHERE shot_id=? AND attempt_n=1",

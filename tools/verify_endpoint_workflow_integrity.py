@@ -24,6 +24,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'studio-backend'))
+from app.data.db_guard import open_db_readonly
 from typing import Any
 from uuid import uuid4
 
@@ -323,7 +325,7 @@ def extract_run(response: Any, step: str) -> dict[str, Any]:
 def export_database(storage_dir: Path, run_id: str, evidence_dir: Path) -> dict[str, Any]:
     database = storage_dir / "studio.db"
     require(database.exists(), f"SQLite database was not created at {database}")
-    with sqlite3.connect(database) as connection:
+    with open_db_readonly(database) as connection:
         connection.row_factory = sqlite3.Row
         tables = [
             row["name"]

@@ -31,6 +31,7 @@ import re
 import sqlite3
 import sys
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
@@ -65,7 +66,9 @@ FUSED_CUE = re.compile(r"([.!?])([A-Z]{2,}(?:\s*\(.*\))?)$")
 
 
 def _db_path() -> Path:
-    return Path(os.getenv("STUDIO_STORAGE_PATH") or (BACKEND_ROOT / "data")) / "studio.db"
+    # Central resolver keeps STUDIO_STORAGE_PATH support; default is the
+    # dev-copy dir, and the live path needs both opt-in flags.
+    return resolve_db_file()
 
 
 def _strip_screenplay_furniture(text: str) -> str:
@@ -291,7 +294,7 @@ def _propose(shots: list[dict], canon: dict[str, str], model: str) -> list[dict]
 
 def _apply(conn_path: Path, review_file: Path) -> int:
     proposals = json.loads(review_file.read_text())
-    conn = sqlite3.connect(conn_path)
+    conn = open_db_readwrite(conn_path)
     written = 0
     try:
         for entry in proposals:
@@ -354,7 +357,7 @@ def main() -> int:
         print("No model id. Set ADHERENCE_VISION_MODEL in .env or pass --model.")
         return 2
 
-    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    conn = open_db_readonly(db)
     shots = _load_shots(conn, args.project_id, args.scene_id)
     canon = _character_canon(conn, args.project_id)
     conn.close()

@@ -1,20 +1,24 @@
 import asyncio
 import logging
 import os
-import sqlite3
 import time
 from pathlib import Path
+from app.data.db_guard import (
+    LIVE_DB_FILE,
+    assert_live_open_allowed,
+    backup_database,
+)
 
 logger = logging.getLogger("studio-backup")
 
 # Active production database target. All automated backups snapshot this
 # file: studio-backend/data/studio.db (resolved from this module's location
 # so the target is stable regardless of process cwd or env overrides).
-ACTIVE_STUDIO_DB_PATH = str(Path(__file__).resolve().parents[2] / "data" / "studio.db")
+ACTIVE_STUDIO_DB_PATH = str(LIVE_DB_FILE)
 
 
 def get_active_db_path() -> str:
-    """Return the hardcoded active backup source (studio-backend/data/studio.db)."""
+    """Return the active backup source (the live studio.db file)."""
     return ACTIVE_STUDIO_DB_PATH
 
 
@@ -27,6 +31,8 @@ class DatabaseBackup:
         backup_dir: str = "./backups",
         max_backups: int = 7,
     ):
+        # Fail closed on the live path (construction-time, before any open).
+        assert_live_open_allowed(db_path)
         self.db_path = db_path
         self.backup_dir = Path(backup_dir)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -38,13 +44,7 @@ class DatabaseBackup:
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         backup_path = self.backup_dir / f"studio_{timestamp}.db"
 
-        source = sqlite3.connect(self.db_path)
-        dest = sqlite3.connect(str(backup_path))
-        try:
-            source.backup(dest)
-        finally:
-            source.close()
-            dest.close()
+        backup_database(self.db_path, backup_path)
 
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         size_bytes = backup_path.stat().st_size

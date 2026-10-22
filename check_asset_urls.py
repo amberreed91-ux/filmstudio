@@ -7,7 +7,10 @@ Validates all render job asset URLs in the database
 import sqlite3
 import json
 import os
+import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'studio-backend'))
+from app.data.db_guard import open_db_readonly, resolve_db_file
 from urllib.parse import urlparse
 from typing import Dict, List, Tuple
 
@@ -21,12 +24,12 @@ RESET = "\033[0m"
 
 class AssetURLChecker:
     def __init__(self):
-        self.db_path = Path(__file__).parent / "studio-backend" / "data" / "studio.db"
+        self.db_path = resolve_db_file()  # guarded: live needs both opt-in flags
         self.outputs_dir = Path(__file__).parent / "studio-backend" / "outputs"
         
     def get_all_render_jobs(self) -> List[Dict]:
         """Get all render jobs from database"""
-        conn = sqlite3.connect(self.db_path)
+        conn = open_db_readonly(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         

@@ -18,11 +18,12 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from app.data.db_guard import open_db_readonly
 from typing import Any
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = BACKEND_ROOT / "data" / "studio.db"
+DB_PATH = resolve_db_file()  # guarded: live needs both opt-in flags
 
 
 def _loads_json(raw: str | None) -> dict[str, Any]:
@@ -99,7 +100,7 @@ def _completed_render_shot_ids(conn: sqlite3.Connection, project_id: str) -> lis
 
 
 def build_report() -> dict[str, Any]:
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    conn = open_db_readonly(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         projects: list[dict[str, Any]] = []

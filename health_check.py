@@ -10,8 +10,9 @@ import os
 import json
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'studio-backend'))
+from app.data.db_guard import open_db_readonly, resolve_db_file
 from typing import Dict, List, Tuple
-import sqlite3
 
 # Color codes for terminal output
 GREEN = "\033[92m"
@@ -94,7 +95,7 @@ class HealthChecker:
         """Verify SQLite database accessibility and schema integrity"""
         self.print_section("2. Database Health Check")
         
-        db_path = self.backend_dir / "data" / "studio.db"
+        db_path = resolve_db_file()  # guarded: live needs both opt-in flags
         
         # Check database file exists
         db_exists = db_path.exists()
@@ -105,7 +106,7 @@ class HealthChecker:
         
         try:
             # Connect to database
-            conn = sqlite3.connect(db_path)
+            conn = open_db_readonly(db_path)
             cursor = conn.cursor()
             self.print_result("Database connection", True, "Connected")
             

@@ -2,16 +2,24 @@
 """
 Quick test to verify project creation endpoint works correctly with JSON body.
 """
+import os
 import requests
 import sqlite3
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 from datetime import datetime
 
 API_BASE = "http://localhost:8010"
-DB_PATH = Path(__file__).parent / "data" / "studio.db"
+DB_PATH = resolve_db_file()  # guarded: live needs both opt-in flags
 
 def test_project_creation():
     """Test project creation with correct JSON body format"""
+    # Opt-in gate: this script POSTs to a live dev server AND opens the
+    # live DB path directly. Never run by accident (incl. pytest root scope).
+    if os.getenv("STUDIO_ALLOW_LIVE_SCRIPTS") != "1":
+        print("REFUSING: set STUDIO_ALLOW_LIVE_SCRIPTS=1 to run this live-server script.")
+        return False
+
     print("Testing Project Creation Endpoint")
     print("="*60)
     
@@ -44,7 +52,7 @@ def test_project_creation():
         print(f"   ❌ FAIL: Database not found at {DB_PATH}")
         return False
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = open_db_readwrite(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT project_id, data FROM projects WHERE project_id = ?", (project_id,))
     row = cursor.fetchone()

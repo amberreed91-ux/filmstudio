@@ -24,9 +24,9 @@ import argparse
 import json
 import os
 import re
-import sqlite3
 import sys
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
@@ -58,7 +58,7 @@ ACTION_SLOT_BUDGET = 110
 
 
 def _db_path() -> Path:
-    return Path(os.getenv("STUDIO_STORAGE_PATH") or (BACKEND_ROOT / "data")) / "studio.db"
+    return resolve_db_file()
 
 
 def main() -> int:
@@ -72,7 +72,7 @@ def main() -> int:
         print(json.dumps({"error": "database not found", "path": str(db)}, indent=2))
         return 2
 
-    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    conn = open_db_readonly(db)
     rows = list(conn.execute(
         "SELECT shot_id, scene_id, status, intent_json, visual_plan_json "
         "FROM storyboard_shots WHERE project_id=? ORDER BY scene_id, shot_id",

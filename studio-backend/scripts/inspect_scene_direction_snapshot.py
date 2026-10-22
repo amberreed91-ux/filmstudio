@@ -17,6 +17,7 @@ import sqlite3
 import sys
 import tempfile
 from pathlib import Path
+from app.data.db_guard import open_db_readonly
 from types import ModuleType
 from typing import Any
 
@@ -79,7 +80,7 @@ def _assert_readonly_copy(source: Path, copy: Path) -> None:
         raise RuntimeError("Inspection refused: disposable DB copy is absent or empty")
     uri = f"{copy_real.as_uri()}?mode=ro"
 
-    connection = sqlite3.connect(uri, uri=True)
+    connection = open_db_readonly(copy_real)
     try:
         connection.execute("PRAGMA query_only=ON")
         connection.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
@@ -110,7 +111,7 @@ class ReadOnlySceneStorage:
                 raise RuntimeError("Disposable DB is missing Scene Direction tables")
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._uri, uri=True)
+        connection = open_db_readonly(self.db_path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA query_only=ON")
         return connection

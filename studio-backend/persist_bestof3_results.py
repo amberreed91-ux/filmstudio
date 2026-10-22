@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Persist the Best-of-N scoring results that were already computed."""
-import sqlite3
 import json
 import uuid
 from pathlib import Path
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
-DB_PATH = Path(__file__).parent / "data" / "studio.db"
+DB_PATH = resolve_db_file()  # guarded: live needs both opt-in flags
 
 attempts_data = [
     {
@@ -52,7 +52,7 @@ attempts_data = [
     }
 ]
 
-conn = sqlite3.connect(str(DB_PATH))
+conn = open_db_readwrite(DB_PATH)
 cursor = conn.cursor()
 
 for attempt in attempts_data:

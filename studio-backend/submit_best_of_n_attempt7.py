@@ -25,7 +25,6 @@ import asyncio
 import json
 import logging
 import os
-import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +35,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.data.storage import get_storage
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 from app.services.render import render_service
 from app.services.adherence_service import AdherenceService
 from app.services.render_retry_service import render_retry_service
@@ -52,7 +52,7 @@ logger = logging.getLogger("best_of_n_test")
 PROJECT_ID = "project_3dba9330f43a"
 ORIGINAL_SHOT_ID = "scene_001"  # Original shot for fetching prompt/score from DB
 NUM_PARALLEL_ATTEMPTS = 3  # N=3 for best-of-N
-DB_PATH = Path(__file__).parent / "data" / "studio.db"
+DB_PATH = resolve_db_file()  # guarded: live needs both opt-in flags
 
 # ─── Fetch attempt 1 data ────────────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ def fetch_attempt1_data() -> tuple[str, dict, dict]:
     Returns:
         Tuple of (prompt_text, score_json, prompt_slots)
     """
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = open_db_readwrite(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT prompt_text, score_json FROM render_attempts WHERE shot_id=? AND attempt_n=1",
