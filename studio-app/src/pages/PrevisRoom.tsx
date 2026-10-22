@@ -93,6 +93,7 @@ import GenerationReadinessPanel, { type SingleTakeSelection } from '../component
 import { resolveTakePromptPrefill } from '../lib/takePromptPrefill'
 import AiCameraApproval from '../components/AiCameraApproval'
 import StoryboardImagePromptPanel from '../components/StoryboardImagePromptPanel'
+import RenderPromptScopeNote from '../components/RenderPromptScopeNote'
 import PromptRebuildPanel from '../components/PromptRebuildPanel'
 import { useGenerationPreflightGuard } from '../components/useGenerationPreflightGuard'
 import { getShotSignals, type ShotSignalsEnvelope } from '../lib/shotSignals'
@@ -2881,7 +2882,7 @@ export default function PrevisRoom() {
                             {/* PROMPT TEXTAREA */}
             <div>
               <label htmlFor="previs-render-prompt" className="mb-2 block text-sm font-medium text-zinc-100">Direct the action</label>
-              <p className="mb-3 text-xs leading-relaxed text-zinc-400">Describe what moves, what happens, and how the camera follows. Edited direction is sent with this previs take only — Runway video renders always use the approved board image prompt.</p>
+              <RenderPromptScopeNote />
               {activeBlueprintShot && !takePrefill.ready && takePrefill.notice && (
                 <p className="mb-2 rounded border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[11px] leading-relaxed text-amber-200" data-testid="take-prompt-blocked-notice" role="status">
                   {takePrefill.notice}
