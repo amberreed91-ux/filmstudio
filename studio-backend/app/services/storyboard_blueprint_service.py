@@ -1978,15 +1978,87 @@ class StoryboardBlueprintService:
             ) from exc
         return [character for character in characters if isinstance(character, dict)]
 
+    def _locked_characters_for_prompt(self, project_id: str, characters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Intersect appearance-locked characters with the reference-lock table.
+
+        The prompt block's `appearance_approval.status == 'locked'` is a
+        project-wide flag (all six scene_001 characters), while
+        `character_reference_locks` (`lock_status='locked'`) is the visual
+        identity actually bound to references (MAYA/MOM only; DRE is
+        provisional). When the lock table has locked rows, characters without
+        a locked row are dropped so other scenes' faces never leak in.
+        Missing table / lookup failure fails open to the appearance-locked
+        list so boards still build."""
+        try:
+            from app.services.shot_prompt_builder import locked_appearance_characters
+
+            locked = locked_appearance_characters(characters)
+            if not locked:
+                return locked
+            try:
+                rows = self.storage.list_character_reference_locks(project_id, lock_status="locked", limit=200)
+            except Exception:
+                return locked
+            if not rows:
+                return locked
+            allowed_ids: set[str] = set()
+            allowed_names: set[str] = set()
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                cid = str(row.get("character_id") or "").strip()
+                if cid:
+                    allowed_ids.add(cid)
+                cname = str(row.get("character_name") or "").strip().lower()
+                if cname:
+                    allowed_names.add(cname)
+            if not allowed_ids and not allowed_names:
+                return locked
+            narrowed = []
+            for char in locked:
+                if not isinstance(char, dict):
+                    continue
+                cid = str(char.get("id") or char.get("character_id") or "").strip()
+                cname = str(char.get("name") or "").strip().lower()
+                if (cid and cid in allowed_ids) or (cname and cname in allowed_names):
+                    narrowed.append(char)
+            # If nothing intersects (e.g. name drift), fail open rather than
+            # minting an empty block that the rebuild gate would refuse.
+            return narrowed or locked
+        except Exception:
+            try:
+                from app.services.shot_prompt_builder import locked_appearance_characters
+
+                return locked_appearance_characters(characters)
+            except Exception:
+                return [c for c in characters if isinstance(c, dict)]
+
     def _locked_block_for_scene(
-        self, project_id: str, scene: dict[str, Any] | None
+        self,
+        project_id: str,
+        scene: dict[str, Any] | None,
+        *,
+        shot_characters: list[str] | None = None,
+        shot_text: str | None = None,
+        scene_shot_texts: list[str] | None = None,
     ) -> str:
-        """Fresh locked-appearance block so post-lock approvals still apply."""
+        """Fresh locked-appearance block so post-lock approvals still apply.
+
+        Shot context (focus names, shot text, scene-wide shot texts for the
+        union fallback) scopes the block to this shot; without it an empty
+        scene cast resolves empty instead of leaking other scenes' faces."""
         try:
             from app.services.shot_prompt_builder import build_locked_appearance_block
 
             characters = self._project_characters_for_prompt(project_id)
-            return build_locked_appearance_block(characters, scene) or ""
+            characters = self._locked_characters_for_prompt(project_id, characters)
+            return build_locked_appearance_block(
+                characters,
+                scene,
+                shot_characters=shot_characters,
+                shot_text=shot_text,
+                scene_shot_texts=scene_shot_texts,
+            ) or ""
         except Exception:
             return ""
 
@@ -1995,11 +2067,10 @@ class StoryboardBlueprintService:
     ) -> list[str]:
         """Face-first lock anchors for this scene, fresh from storage."""
         try:
-            from app.services.shot_prompt_builder import locked_appearance_characters
             from app.utils.character_appearance import appearance_approval
 
             characters = self._project_characters_for_prompt(project_id)
-            locked = locked_appearance_characters(characters)
+            locked = self._locked_characters_for_prompt(project_id, characters)
             if isinstance(scene, dict):
                 try:
                     from app.services.shot_prompt_builder import _scene_character_names
@@ -2015,19 +2086,17 @@ class StoryboardBlueprintService:
                     if scoped:
                         locked = scoped
             refs: list[str] = []
-            # Face first: strongest identity signal, then full-body.
+            # Face first: strongest identity signal, then full-body. No
+            # alphabetical truncation: every in-scope locked character keeps
+            # its anchors (face pass, then body pass).
             for field in ("face_image_url", "body_image_url"):
-                for char in locked[:3]:
+                for char in locked:
                     try:
                         url = str(appearance_approval(char).get(field) or "").strip()
                     except Exception:
                         url = ""
                     if url and url not in refs:
                         refs.append(url)
-                    if len(refs) >= 3:
-                        break
-                if len(refs) >= 3:
-                    break
             return refs
         except Exception:
             return []
