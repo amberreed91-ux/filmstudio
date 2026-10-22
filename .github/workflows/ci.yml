@@ -44,7 +44,7 @@ jobs:
       - name: Typecheck
         run: |
           cd studio-app
-          npx tsc --noEmit
+          npm run typecheck
       - name: Unit tests
         run: |
           cd studio-app

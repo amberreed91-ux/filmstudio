@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build",
     "build:creator-workspace-fixture": "vite build --config vite.creator-workspace-fixture.config.ts",
     "test": "vitest run",
+    "typecheck": "tsc -b --force",
     "lint": "eslint .",
     "preview": "vite preview"
   },

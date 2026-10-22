@@ -12,7 +12,7 @@ import {
 import * as settingApi from '../lib/settingReferenceApi'
 import * as visualApi from '../lib/visualTrainingApi'
 import { approveReferenceLibraryAsset, getReferenceLibrary, listReferenceAssets } from '../lib/visualTrainingApi'
-import type { ReferenceLibrary } from '../lib/visualTrainingApi'
+import type { ReferenceAsset, ReferenceLibrary } from '../lib/visualTrainingApi'
 
 vi.mock('../lib/settingReferenceApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/settingReferenceApi')>()
@@ -159,7 +159,7 @@ describe('SettingReferenceAuthorityPanel', () => {
 describe('SettingReferenceAuthorityPanel for another setting entity', () => {
   const SETTING_ID = 'loc-b543d669'
 
-  const libRow = (over: Record<string, unknown> = {}) => ({
+  const libRow = (over: Partial<ReferenceAsset> = {}): ReferenceAsset => ({
     ref_id: 'ref_lib_a',
     kind: 'environment',
     image_url: 'https://assets.example.test/golden.png',
@@ -229,7 +229,7 @@ describe('SettingReferenceAuthorityPanel for another setting entity', () => {
 
   it('approves only the exact reference ID the creator clicked', async () => {
     mockLibrary({ candidates: [libRow()] })
-    vi.mocked(visualApi.approveReferenceLibraryAsset).mockResolvedValue(libRow({ approval_state: 'approved' }) as never)
+    vi.mocked(visualApi.approveReferenceLibraryAsset).mockResolvedValue(libRow({ approval_state: 'approved' }))
     render(<SettingReferenceAuthorityPanel projectId={SCENE002_PROJECT_ID} settingId={SETTING_ID} />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Approve reference ref_lib_a' }))
@@ -242,7 +242,7 @@ describe('SettingReferenceAuthorityPanel for another setting entity', () => {
 
   it('designates canonical only from an approved reference, as its own action', async () => {
     mockLibrary({ supporting: [libRow({ ref_id: 'ref_lib_b', approval_state: 'approved' })] })
-    vi.mocked(visualApi.designateReferenceLibraryCanonical).mockResolvedValue(libRow({ ref_id: 'ref_lib_b', approval_state: 'approved', canonical: true }) as never)
+    vi.mocked(visualApi.designateReferenceLibraryCanonical).mockResolvedValue(libRow({ ref_id: 'ref_lib_b', approval_state: 'approved', canonical: true }))
     render(<SettingReferenceAuthorityPanel projectId={SCENE002_PROJECT_ID} settingId={SETTING_ID} />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Designate canonical reference ref_lib_b' }))
@@ -262,7 +262,7 @@ describe('SettingReferenceAuthorityPanel for another setting entity', () => {
   })
 
   it('registers a new candidate for the exact setting scope only', async () => {
-    vi.mocked(visualApi.addReferenceLibraryAsset).mockResolvedValue(libRow() as never)
+    vi.mocked(visualApi.addReferenceLibraryAsset).mockResolvedValue(libRow())
     render(<SettingReferenceAuthorityPanel projectId={SCENE002_PROJECT_ID} settingId={SETTING_ID} />)
 
     fireEvent.change(await screen.findByLabelText('Reference image URI'), { target: { value: 'https://assets.example.test/new.png' } })

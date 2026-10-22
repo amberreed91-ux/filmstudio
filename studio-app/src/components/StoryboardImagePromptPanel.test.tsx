@@ -7,7 +7,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import StoryboardImagePromptPanel, { removedSummary, stateLabel } from './StoryboardImagePromptPanel'
 import {
   approveShotImagePrompt,
-  deriveShotImagePrompt,
   editShotImagePrompt,
   reapproveShotImagePrompt,
   utf16Length,
@@ -25,7 +24,6 @@ vi.mock('../lib/studioApi', async (importOriginal) => {
   }
 })
 
-const mockDerive = vi.mocked(deriveShotImagePrompt)
 const mockEdit = vi.mocked(editShotImagePrompt)
 const mockApprove = vi.mocked(approveShotImagePrompt)
 const mockReapprove = vi.mocked(reapproveShotImagePrompt)
