@@ -132,17 +132,27 @@ SHOT_FILTER_CREDIT_CEILING_DEFAULT = 300.0
 def entry_freeze_blocked(entry: dict[str, Any]) -> bool:
     """True when this single entry must not mint a frozen contract.
 
-    Per-shot freeze gate (Fix C): only the entry's own unresolved coverage
-    (UNRESOLVED state or prompt/coverage mismatch) or its own
-    missing/unapproved/stale image prompt blocks it. A sibling shot's
-    failure never appears here, so one bad shot cannot poison the batch.
+    Per-shot freeze gate (Fix C): only the entry's own signals block it —
+    UNRESOLVED coverage, prompt/coverage mismatch, missing/unapproved/stale
+    image prompt, or its own pre-freeze blockers (e.g. missing authoritative
+    camera plan for Router, corrupt board text, unresolvable binding). A
+    sibling shot's failure never appears here, so one bad shot cannot poison
+    the batch.
     """
     shot_coverage = entry.get("shot_coverage") or {}
     if shot_coverage.get("content_coverage_state") == "UNRESOLVED":
         return True
     if bool(entry.get("prompt_coverage_problems")):
         return True
-    return not entry.get("image_prompt_ready", True)
+    if not entry.get("image_prompt_ready", True):
+        return True
+    # Own pre-freeze blockers (camera, binding, corruption, cost, dialogue)
+    # hold out this entry only; siblings with empty blockers still freeze.
+    try:
+        blockers = entry.get("blockers") or []
+    except Exception:
+        blockers = []
+    return bool(blockers)
 
 
 def filtered_render_credit_ceiling() -> float:

@@ -756,12 +756,21 @@ def freeze_generation_contract(
     if scene_coverage is not None:
         from app.services.scene_coverage_contract import verify_scene_coverage_contract
         try:
-            verify_scene_coverage_contract(scene_coverage)
+            # Per-shot isolation (Fix C): verify lineage/shape without requiring
+            # every sibling resolved, so a bad shot cannot poison healthy ones.
+            # This shot's own resolved state is enforced below (fail-closed).
+            verify_scene_coverage_contract(scene_coverage, require_resolved=False)
         except ValueError as exc:
             raise GenerationContractError(f"Scene coverage is unresolved: {exc}") from exc
         matches = [row for row in scene_coverage.get("shots", []) if row.get("shot_id") == shot_id]
         if len(matches) != 1:
             raise GenerationContractError("Scene coverage does not contain exactly one generation shot")
+        _own = matches[0] if isinstance(matches[0], dict) else {}
+        _own_state = _own.get("content_coverage_state")
+        if _own_state == "UNRESOLVED":
+            raise GenerationContractError("Scene coverage is unresolved: shot content coverage is UNRESOLVED")
+        if not _own.get("covered_content_ids") and _own_state != "INTENTIONAL_ESTABLISHING":
+            raise GenerationContractError("Scene coverage is unresolved: shot canonical content coverage is unresolved")
         if scene_coverage_shot is not None and scene_coverage_shot != matches[0]:
             raise GenerationContractError("Per-shot scene coverage does not match the scene coverage contract")
         scene_coverage_shot = matches[0]

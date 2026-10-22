@@ -15,6 +15,7 @@ def _entry(**overrides) -> dict:
         "shot_id": "scene_001_shot_001",
         "shot_coverage": {"content_coverage_state": "ASSIGNED"},
         "image_prompt_ready": True,
+        "blockers": [],
     }
     base.update(overrides)
     return base
@@ -43,3 +44,26 @@ def test_prompt_coverage_mismatch_blocks() -> None:
 
 def test_unready_image_prompt_blocks() -> None:
     assert entry_freeze_blocked(_entry(image_prompt_ready=False)) is True
+
+
+def test_own_camera_blocker_holds_out_only_that_entry() -> None:
+    bad = _entry(
+        shot_id="scene_001_shot_003",
+        blockers=["camera plan: Runway Router requires an authoritative camera plan"],
+    )
+    good = _entry(shot_id="scene_001_shot_001", blockers=[])
+    assert entry_freeze_blocked(bad) is True
+    assert entry_freeze_blocked(good) is False
+
+
+def test_zero_coverage_blocks() -> None:
+    assert entry_freeze_blocked(_entry(shot_coverage={"content_coverage_state": "UNRESOLVED", "covered_content_ids": []})) is True
+
+
+def test_missing_camera_plan_blocks() -> None:
+    assert entry_freeze_blocked(_entry(blockers=["camera plan missing"])) is True
+
+
+def test_all_invalid_batch_blocks_all() -> None:
+    for i in (1, 2, 3):
+        assert entry_freeze_blocked(_entry(shot_id=f"scene_001_shot_{i:03d}", blockers=["camera plan missing"])) is True
