@@ -129,6 +129,22 @@ SHOT_FILTER_CREDIT_CEILING_ENV_VAR = "RUNWAY_RENDER_MAX_CREDITS"
 SHOT_FILTER_CREDIT_CEILING_DEFAULT = 300.0
 
 
+def entry_freeze_blocked(entry: dict[str, Any]) -> bool:
+    """True when this single entry must not mint a frozen contract.
+
+    Per-shot freeze gate (Fix C): only the entry's own unresolved coverage
+    (UNRESOLVED state or prompt/coverage mismatch) or its own
+    missing/unapproved/stale image prompt blocks it. A sibling shot's
+    failure never appears here, so one bad shot cannot poison the batch.
+    """
+    shot_coverage = entry.get("shot_coverage") or {}
+    if shot_coverage.get("content_coverage_state") == "UNRESOLVED":
+        return True
+    if bool(entry.get("prompt_coverage_problems")):
+        return True
+    return not entry.get("image_prompt_ready", True)
+
+
 def filtered_render_credit_ceiling() -> float:
     raw = os.getenv(SHOT_FILTER_CREDIT_CEILING_ENV_VAR, str(SHOT_FILTER_CREDIT_CEILING_DEFAULT))
     try:
@@ -2405,16 +2421,17 @@ class SceneProductionPipelineService:
         # execution resolution and cost never enter it.
         from app.services.generation_contract import FrozenGenerationContract, freeze_generation_contract
 
-        coverage_resolved = not coverage_blockers
         for entry in entries:
-            if not coverage_resolved or not entry.get("image_prompt_ready", True):
-                # Keep failed preflight data inspectable, but do not create a
-                # frozen/provider-eligible contract from unresolved coverage
-                # or from a missing/unapproved/stale image prompt. Blocked
-                # entries carry an empty sendable prompt so the manifest
-                # renders "Prompt unavailable" instead of stale board text.
-                # Keep failed preflight data inspectable, but do not create a
-                # frozen/provider-eligible contract from unresolved coverage.
+            if entry_freeze_blocked(entry):
+                # Per-shot freeze: only this entry's own unresolved coverage
+                # (UNRESOLVED state or prompt/coverage mismatch) or its own
+                # missing/unapproved/stale image prompt blocks its contract.
+                # One bad shot no longer poisons the batch: healthy entries
+                # still freeze so the batch verdict can name the single bad
+                # shot instead of producing zero contracts. Batch-level
+                # `blockers` still carry the global verdict. Blocked entries
+                # carry an empty sendable prompt so the manifest renders
+                # "Prompt unavailable" instead of stale board text.
                 entry["generation_contract"] = None
                 entry["generation_contract_digest"] = ""
                 continue
@@ -2478,16 +2495,29 @@ class SceneProductionPipelineService:
                 }
                 for row in entry.get("reference_binding") or []
             ]
-            frozen = freeze_generation_contract(
-                shot_id=entry["shot_id"],
-                prompt=entry["prompt"],
-                negative_prompt=entry["negative_prompt"],
-                reference_assets=reference_rows,
-                parameters=approved_parameters,
-                dialogue_handoff=entry["dialogue_handoff"],
-                scene_coverage=entry.get("scene_coverage"),
-                scene_coverage_shot=entry.get("shot_coverage"),
-            )
+            try:
+                frozen = freeze_generation_contract(
+                    shot_id=entry["shot_id"],
+                    prompt=entry["prompt"],
+                    negative_prompt=entry["negative_prompt"],
+                    reference_assets=reference_rows,
+                    parameters=approved_parameters,
+                    dialogue_handoff=entry["dialogue_handoff"],
+                    scene_coverage=entry.get("scene_coverage"),
+                    scene_coverage_shot=entry.get("shot_coverage"),
+                )
+            except GenerationContractError as exc:
+                # A freeze refusal (e.g. scene-wide coverage still unresolved)
+                # holds out this entry only: the batch stays inspectable and
+                # sibling shots are unaffected. Freeze stays fail-closed; the
+                # refusal is recorded on the entry and the batch verdict.
+                entry["generation_contract"] = None
+                entry["generation_contract_digest"] = ""
+                freeze_blocker = f"freeze refused: {exc}"
+                if isinstance(entry.get("blockers"), list):
+                    entry["blockers"].append(freeze_blocker)
+                blockers.append(f"Shot {entry['shot_id']}: {freeze_blocker}")
+                continue
             entry["generation_contract"] = frozen.to_record()
             entry["generation_contract_digest"] = frozen.creative_digest()
             entry["duration_seconds"] = frozen.duration or 0
