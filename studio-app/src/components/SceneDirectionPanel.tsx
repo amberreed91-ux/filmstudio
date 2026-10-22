@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import RenderPromptScopeNote from './RenderPromptScopeNote'
 import { useSceneDirection } from '../hooks/useSceneDirection'
 import type { CoverageDecision, SceneDirection } from '../lib/sceneDirectionApi'
 import { LEGACY_SCENE002_REFERENCE_ID } from '../lib/settingReferenceApi'
@@ -532,6 +533,7 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
 
               <section aria-label="Shot board" data-testid="coverage-section-shot-content" className="space-y-3 border-t border-white/10 pt-3">
                 <h4 className="text-sm font-medium text-zinc-100">C · SHOT BOARD — {data.shots.length} shots</h4>
+                <RenderPromptScopeNote takeReady={false} boardReady imageReady={false} />
                 <p className="text-xs text-zinc-400">One card per approved shot, read from the live board. A shot is covered when a content line is assigned to it in section A; an eligible establishing or transition shot may instead record intentional silence with a reason. This board only explains the rules — it never changes them.</p>
                 <p data-testid="shot-board-progress" role="status" className="text-xs font-medium text-amber-100">{coveredShotCount} of {data.shots.length} shots covered</p>
                 <nav aria-label="Shot chips" className="flex flex-wrap gap-2">
