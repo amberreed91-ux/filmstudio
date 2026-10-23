@@ -630,28 +630,21 @@ def _verify_setting_identity_provenance(
     if entity is None:
         # Existing universe location nodes are project-scoped canonical source
         # entities (unlike free-form scene location labels or reference target
-        # IDs). Resolve only exact node IDs and location type; do not create or
-        # promote entities or infer approval from their display names.
-        node_reader = getattr(storage, "get_universe_nodes", None)
-        if callable(node_reader):
-            try:
-                nodes = node_reader(project_id) or []
-            except Exception:  # noqa: BLE001 — a broken entity resolver fails closed
-                nodes = []
-            matches = [
-                row for row in nodes
-                if isinstance(row, dict)
-                and str(row.get("project_id") or "") == project_id
-                and str(row.get("node_type") or "") == "location"
-                and str(row.get("node_id") or "") == setting_id
-            ]
-            if len(matches) == 1:
-                node = matches[0]
-                entity = {
-                    "id": node.get("node_id"), "project_id": node.get("project_id"),
-                    "entity_type": node.get("node_type"), "name": node.get("name"),
-                    "first_scene": node.get("first_scene"), "last_scene": node.get("last_scene"),
-                }
+        # IDs). Resolve through the central alias-aware resolver: an exact
+        # node match wins, otherwise a universe_id_aliases row maps a retired
+        # ID to its live node. The resolver never guesses. The entity keeps
+        # the requested setting_id so approved-anchor checks against
+        # reference rows (which still carry the original target ID) work
+        # without rewriting any reference.
+        from app.services.universe_id_resolution import resolve_setting_entity
+
+        node = resolve_setting_entity(storage, project_id, setting_id)
+        if node is not None:
+            entity = {
+                "id": setting_id, "project_id": node.get("project_id"),
+                "entity_type": node.get("node_type"), "name": node.get("name"),
+                "first_scene": node.get("first_scene"), "last_scene": node.get("last_scene"),
+            }
     if hasattr(entity, "model_dump"):
         entity = entity.model_dump(mode="json")
     entity_id = str((entity or {}).get("setting_id") or (entity or {}).get("id") or "") if isinstance(entity, dict) else ""

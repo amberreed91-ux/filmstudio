@@ -323,14 +323,9 @@ class ReferenceAssetService:
                     or (entity.get("canonical") is False)):
                 raise LookupError("The exact project-scoped setting entity is not resolvable")
             return
-        matches = [
-            row for row in (storage.get_universe_nodes(project_id) or [])
-            if isinstance(row, dict)
-            and str(row.get("project_id") or "") == project_id
-            and str(row.get("node_id") or "") == SCENE002_SETTING_ID
-            and str(row.get("node_type") or "") == "location"
-        ]
-        if len(matches) != 1:
+        from app.services.universe_id_resolution import resolve_setting_entity
+
+        if resolve_setting_entity(storage, project_id, SCENE002_SETTING_ID) is None:
             raise LookupError("The exact project-scoped setting entity is not resolvable")
 
     def _require_storage(self):

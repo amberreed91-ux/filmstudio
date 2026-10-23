@@ -82,6 +82,25 @@ class StorageInterface:
     def list_universe_project_ids(self) -> List[str]:
         raise NotImplementedError
 
+    def ensure_universe_id_alias_table(self) -> bool:
+        raise NotImplementedError
+
+    def save_universe_id_alias(
+        self, project_id: str, old_node_id: str, current_node_id: str, reason: str = ""
+    ) -> bool:
+        raise NotImplementedError
+
+    def get_universe_id_alias(self, old_node_id: str) -> Optional[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def list_universe_id_aliases(self, project_id: str) -> List[Dict[str, Any]]:
+        raise NotImplementedError
+
+    def find_universe_node_references(
+        self, project_id: str, node_id: str
+    ) -> List[Dict[str, str]]:
+        raise NotImplementedError
+
 
 class DatabaseStorage:
     """SQLite storage with connection pooling and WAL mode."""
@@ -6144,12 +6163,28 @@ class DatabaseStorage:
         def _write():
             with self._get_connection() as conn:
                 cursor = conn.cursor()
+                # True upsert: UPDATE in place so the parent row is never
+                # deleted. A REPLACE-style delete would fire the
+                # ON DELETE CASCADE on universe_relationships and wipe the
+                # node's edges on every rebuild. created_at is preserved.
                 cursor.execute(
-                    """INSERT OR REPLACE INTO universe_nodes
-                       (node_id, project_id, node_type, name, description, first_scene, last_scene, universe_tags, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM universe_nodes WHERE node_id = ?), ?), ?)""",
-                    (node_id, project_id, node_type, name, description, first_scene, last_scene, universe_tags, node_id, now, now),
+                    """UPDATE universe_nodes
+                       SET project_id = ?, node_type = ?, name = ?,
+                           description = ?, first_scene = ?, last_scene = ?,
+                           universe_tags = ?, updated_at = ?
+                       WHERE node_id = ?""",
+                    (project_id, node_type, name, description, first_scene,
+                     last_scene, universe_tags, now, node_id),
                 )
+                if cursor.rowcount == 0:
+                    cursor.execute(
+                        """INSERT INTO universe_nodes
+                           (node_id, project_id, node_type, name, description,
+                            first_scene, last_scene, universe_tags, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (node_id, project_id, node_type, name, description,
+                         first_scene, last_scene, universe_tags, now, now),
+                    )
                 conn.commit()
 
         self._execute_write_with_retry("save_universe_node", _write)
@@ -6183,12 +6218,25 @@ class DatabaseStorage:
         def _write():
             with self._get_connection() as conn:
                 cursor = conn.cursor()
+                # True upsert: UPDATE in place, never delete+reinsert, so
+                # created_at survives rebuilds and rowids stay stable.
                 cursor.execute(
-                    """INSERT OR REPLACE INTO universe_relationships
-                       (relationship_id, project_id, from_node, to_node, relationship_type, description, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM universe_relationships WHERE relationship_id = ?), ?))""",
-                    (relationship_id, project_id, from_node, to_node, relationship_type, description, relationship_id, now),
+                    """UPDATE universe_relationships
+                       SET project_id = ?, from_node = ?, to_node = ?,
+                           relationship_type = ?, description = ?
+                       WHERE relationship_id = ?""",
+                    (project_id, from_node, to_node, relationship_type,
+                     description, relationship_id),
                 )
+                if cursor.rowcount == 0:
+                    cursor.execute(
+                        """INSERT INTO universe_relationships
+                           (relationship_id, project_id, from_node, to_node,
+                            relationship_type, description, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (relationship_id, project_id, from_node, to_node,
+                         relationship_type, description, now),
+                    )
                 conn.commit()
 
         self._execute_write_with_retry("save_universe_relationship", _write)
@@ -6220,6 +6268,156 @@ class DatabaseStorage:
             cursor = conn.cursor()
             cursor.execute("SELECT DISTINCT project_id FROM universe_nodes")
             return [row["project_id"] for row in cursor.fetchall()]
+
+    # Universe ID aliases: old random node IDs -> current stable node IDs.
+    # The table is created lazily by the write path only; read paths tolerate
+    # its absence (behaving exactly as before aliases existed). No column is
+    # added to universe_nodes and no existing row is ever rewritten by aliasing.
+    def ensure_universe_id_alias_table(self) -> bool:
+        def _write():
+            with self._get_connection() as conn:
+                conn.execute(
+                    """CREATE TABLE IF NOT EXISTS universe_id_aliases (
+                        old_node_id TEXT PRIMARY KEY,
+                        current_node_id TEXT NOT NULL,
+                        project_id TEXT NOT NULL,
+                        reason TEXT NOT NULL DEFAULT '',
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        CHECK (old_node_id != ''),
+                        CHECK (current_node_id != '')
+                    )"""
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_universe_aliases_project "
+                    "ON universe_id_aliases(project_id)"
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("ensure_universe_id_alias_table", _write)
+        return True
+
+    def save_universe_id_alias(
+        self, project_id: str, old_node_id: str, current_node_id: str, reason: str = ""
+    ) -> bool:
+        old_clean = str(old_node_id or "").strip()
+        current_clean = str(current_node_id or "").strip()
+        project_clean = str(project_id or "").strip()
+        if not old_clean or not current_clean or not project_clean:
+            return False
+        if old_clean == current_clean:
+            return False
+
+        def _write():
+            with self._get_connection() as conn:
+                conn.execute(
+                    """CREATE TABLE IF NOT EXISTS universe_id_aliases (
+                        old_node_id TEXT PRIMARY KEY,
+                        current_node_id TEXT NOT NULL,
+                        project_id TEXT NOT NULL,
+                        reason TEXT NOT NULL DEFAULT '',
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        CHECK (old_node_id != ''),
+                        CHECK (current_node_id != '')
+                    )"""
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_universe_aliases_project "
+                    "ON universe_id_aliases(project_id)"
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO universe_id_aliases "
+                    "(old_node_id, current_node_id, project_id, reason) "
+                    "VALUES (?, ?, ?, ?)",
+                    (old_clean, current_clean, project_clean, str(reason or "")),
+                )
+                conn.commit()
+
+        self._execute_write_with_retry("save_universe_id_alias", _write)
+        return True
+
+    def get_universe_id_alias(self, old_node_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT * FROM universe_id_aliases WHERE old_node_id = ?",
+                    (str(old_node_id or "").strip(),),
+                ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        return dict(row) if row else None
+
+    def list_universe_id_aliases(self, project_id: str) -> List[Dict[str, Any]]:
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM universe_id_aliases WHERE project_id = ? ORDER BY old_node_id ASC",
+                    (project_id,),
+                )
+                return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.OperationalError:
+            return []
+
+    def find_universe_node_references(
+        self, project_id: str, node_id: str
+    ) -> List[Dict[str, str]]:
+        """List project-scoped rows holding a universe node ID (read-only)."""
+        clean_project = str(project_id or "")
+        clean_id = str(node_id or "")
+        if not clean_project or not clean_id:
+            return []
+        hits: List[Dict[str, str]] = []
+        like = f"%{clean_id}%"
+        with self._get_connection() as conn:
+            for row in conn.execute(
+                "SELECT ref_id FROM reference_assets WHERE project_id = ? AND target_id = ?",
+                (clean_project, clean_id),
+            ).fetchall():
+                hits.append({"table": "reference_assets", "column": "target_id"})
+            for row in conn.execute(
+                "SELECT relationship_id, 'from_node' AS col FROM universe_relationships "
+                "WHERE project_id = ? AND from_node = ? "
+                "UNION ALL SELECT relationship_id, 'to_node' FROM universe_relationships "
+                "WHERE project_id = ? AND to_node = ?",
+                (clean_project, clean_id, clean_project, clean_id),
+            ).fetchall():
+                hits.append({"table": "universe_relationships", "column": str(row["col"])})
+            for col in ("metadata", "provenance_json", "inspection_json"):
+                try:
+                    found = conn.execute(
+                        f"SELECT version_id FROM storyboard_blueprint_versions "
+                        f"WHERE project_id = ? AND CAST(\"{col}\" AS TEXT) LIKE ?",
+                        (clean_project, like),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    continue
+                for _ in found:
+                    hits.append({"table": "storyboard_blueprint_versions", "column": col})
+            for col in (
+                "intent_json", "visual_plan_json", "continuity_plan_json",
+                "render_contract_json", "department_notes_json", "metadata",
+            ):
+                try:
+                    found = conn.execute(
+                        f"SELECT storyboard_shot_id FROM storyboard_shots "
+                        f"WHERE project_id = ? AND CAST(\"{col}\" AS TEXT) LIKE ?",
+                        (clean_project, like),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    continue
+                for _ in found:
+                    hits.append({"table": "storyboard_shots", "column": col})
+            try:
+                found = conn.execute(
+                    "SELECT blueprint_id FROM storyboard_blueprints "
+                    "WHERE project_id = ? AND CAST(metadata AS TEXT) LIKE ?",
+                    (clean_project, like),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                found = []
+            for _ in found:
+                hits.append({"table": "storyboard_blueprints", "column": "metadata"})
+        return hits
 
     # Render-scoped authority and result persistence
     def save_scene002_render_authority(self, authority: dict[str, Any]) -> dict[str, Any]:
