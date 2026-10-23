@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+import sqlite3
 from typing import Any
 
 from app.models.consistency import ConsistencyPayload, ReferenceAsset
 from app.services.project_store import project_store
 from app.services.stability import ValidationError
 from app.utils.character_appearance import appearance_approval
+
+logger = logging.getLogger("studio-setting-anchor")
 
 
 _VALID_TARGET_TYPES = {"character", "setting"}
@@ -228,6 +232,93 @@ def _asset_rows(storage: Any, *, project_id: str, target_type: str, target_id: s
     ]
 
 
+def _is_alias_table_absent(exc: BaseException) -> bool:
+    """True only when the failure is a missing ``universe_id_aliases`` table.
+
+    A missing table (or a storage double without alias methods) means the
+    deployment predates aliasing: the anchor check must behave exactly as
+    before, silently. Every other lookup failure falls back to exact-only
+    but logs a warning so it is visible instead of silent.
+    """
+    if isinstance(exc, sqlite3.OperationalError):
+        text = str(exc).lower()
+        return "no such table" in text and "universe_id_aliases" in text
+    return False
+
+
+def _setting_anchor_target_ids(storage: Any, *, project_id: str, setting_id: str) -> set[str]:
+    """Exact setting ID plus alias old_node_ids resolving to it, same project.
+
+    Central gate-narrowing-safe widening: an anchor row bound to a retired
+    ID is accepted only when the committed alias resolver maps that retired
+    ID to the requested live setting node in the same project. Missing alias
+    table (or storage without alias methods) returns exactly ``{setting_id}``
+    — identical to today. Ambiguous aliases have no row by construction, so
+    they refuse exactly as today.
+    """
+    ids: set[str] = {setting_id}
+    try:
+        lister = getattr(storage, "list_universe_id_aliases", None)
+        if not callable(lister):
+            return ids
+        aliases = lister(project_id) or []
+    except Exception as exc:  # noqa: BLE001 — broken alias registry fails closed to exact-only
+        if _is_alias_table_absent(exc):
+            return ids
+        logger.warning(
+            "SETTING_ANCHOR_ALIAS_LOOKUP_FAILED | project_id=%s setting_id=%s error=%s",
+            project_id,
+            setting_id,
+            exc,
+        )
+        return ids
+    from app.services.universe_id_resolution import resolve_setting_entity
+
+    for alias in aliases or []:
+        if not isinstance(alias, dict):
+            continue
+        if str(alias.get("project_id") or "") != project_id:
+            continue
+        if str(alias.get("current_node_id") or "") != setting_id:
+            continue
+        old_id = str(alias.get("old_node_id") or "").strip()
+        if not old_id or old_id == setting_id:
+            continue
+        try:
+            node = resolve_setting_entity(storage, project_id, old_id)
+        except Exception as exc:  # noqa: BLE001 — a broken resolver fails closed per alias
+            if _is_alias_table_absent(exc):
+                continue
+            logger.warning(
+                "SETTING_ANCHOR_ALIAS_LOOKUP_FAILED | project_id=%s setting_id=%s error=%s",
+                project_id,
+                setting_id,
+                exc,
+            )
+            continue
+        if (
+            node is not None
+            and str(node.get("node_id") or "") == setting_id
+            and str(node.get("project_id") or "") == project_id
+        ):
+            ids.add(old_id)
+    return ids
+
+
+def _setting_anchor_rows(storage: Any, *, project_id: str, setting_id: str) -> list[dict[str, Any]]:
+    """All candidate setting anchor rows: exact plus alias-bound, deduped."""
+    rows: list[dict[str, Any]] = []
+    seen_refs: set[str] = set()
+    for target_id in sorted(_setting_anchor_target_ids(storage, project_id=project_id, setting_id=setting_id)):
+        for row in _asset_rows(storage, project_id=project_id, target_type="setting", target_id=target_id):
+            ref_id = str(row.get("ref_id") or "")
+            if not ref_id or ref_id in seen_refs:
+                continue
+            seen_refs.add(ref_id)
+            rows.append(row)
+    return rows
+
+
 def _approved_character_references(storage: Any, *, project_id: str, character: dict[str, Any]) -> list[dict[str, Any]]:
     """Return approved canonical character anchors in deterministic source order."""
     character_id = str(character.get("id") or "")
@@ -327,7 +418,7 @@ def _approved_character_urls(storage: Any, *, project_id: str, character: dict[s
 
 
 def _approved_setting_references(storage: Any, *, project_id: str, setting_id: str) -> list[dict[str, Any]]:
-    rows = _asset_rows(storage, project_id=project_id, target_type="setting", target_id=setting_id)
+    rows = _setting_anchor_rows(storage, project_id=project_id, setting_id=setting_id)
     references: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     for row in rows:
@@ -669,9 +760,10 @@ def _verify_setting_identity_provenance(
         )
     if require_approved_anchor:
         try:
-            rows = _asset_rows(storage, project_id=project_id, target_type="setting", target_id=setting_id)
+            rows = _setting_anchor_rows(storage, project_id=project_id, setting_id=setting_id)
         except Exception:  # noqa: BLE001 — a broken reference registry fails closed
             rows = None
+        allowed_target_ids = _setting_anchor_target_ids(storage, project_id=project_id, setting_id=setting_id) if rows is not None else {setting_id}
         approved_rows = [
             row for row in (rows or [])
             if row.get("canonical")
@@ -680,7 +772,7 @@ def _verify_setting_identity_provenance(
             and str(row.get("ref_id") or "").strip()
             and str(row.get("project_id") or "") == project_id
             and str(row.get("target_type") or "") == "setting"
-            and str(row.get("target_id") or "") == setting_id
+            and str(row.get("target_id") or "") in allowed_target_ids
             and not (project_id == SCENE002_PROJECT_ID and setting_id == SCENE002_SETTING_ID
                      and str(row.get("ref_id") or "") == LEGACY_SCENE002_REFERENCE_ID)
         ]
