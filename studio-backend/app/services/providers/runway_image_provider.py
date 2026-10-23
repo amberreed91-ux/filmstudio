@@ -95,7 +95,8 @@ RUNWAY_IMAGE_MAX_POLL_ATTEMPTS = int(
 )
 
 # Fail-closed request constraints (verified gen4_image schema, 2026-09-27).
-_RUNWAY_MAX_PROMPT_LENGTH = 1000
+# The prompt cap lives in app.services.runway_prompt_length
+# (RUNWAY_IMAGE_MAX_PROMPT_UTF16); no second definition here by D6-Step-2.
 _RUNWAY_MAX_SEED = 4294967295
 _RUNWAY_MAX_REFERENCE_IMAGES = 3
 # Verified gen4_image ratio enum (POST /v1/text_to_image - model gen4_image).
@@ -345,14 +346,18 @@ def build_runway_image_request(
     clean_prompt = str(prompt or "")
     if not clean_prompt.strip():
         raise ValueError("Runway image request requires a non-empty prompt")
-    # D4: the limit is 1000 UTF-16 code units (gen4_image schema). Measured
-    # with the shared helper so emoji/non-BMP text cannot slip past len().
-    from app.services.runway_prompt_length import utf16_length as _utf16_length
+    # D4/D6: the limit is 1000 UTF-16 code units (gen4_image schema).
+    # Measured with the shared helper so emoji/non-BMP text cannot slip
+    # past len(); the cap itself is the single canonical constant.
+    from app.services.runway_prompt_length import (
+        RUNWAY_IMAGE_MAX_PROMPT_UTF16,
+        utf16_length as _utf16_length,
+    )
 
     _prompt_units = _utf16_length(clean_prompt)
-    if _prompt_units > _RUNWAY_MAX_PROMPT_LENGTH:
+    if _prompt_units > RUNWAY_IMAGE_MAX_PROMPT_UTF16:
         raise ValueError(
-            f"Runway image prompt exceeds the {_RUNWAY_MAX_PROMPT_LENGTH}-character limit "
+            f"Runway image prompt exceeds the {RUNWAY_IMAGE_MAX_PROMPT_UTF16}-character limit "
             f"({_prompt_units} characters); the canonical prompt is never truncated — "
             "fail closed instead."
         )

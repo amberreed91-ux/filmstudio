@@ -1047,13 +1047,13 @@ class StoryboardBlueprintService:
         provider_used = "runway"
         model_used = "gen4_image"
 
-        # D4: the Runway promptText is ALWAYS the approved image prompt, never
-        # the canonical text. Fail closed BEFORE any provider call. Legacy
-        # Pollinations path keeps its previous behavior.
+        # D4+D6: the Runway promptText is ALWAYS the approved image prompt, never
+        # the canonical text. D6 send-time gate fails closed BEFORE any provider
+        # call. Legacy Pollinations path keeps its previous behavior.
         render_prompt = prompt
         if normalized_provider in {"runway", "gen4_image", "runway_router"}:
             try:
-                render_prompt = self._image_prompt_service().approved_prompt_for_shot(shot)
+                render_prompt = self._image_prompt_service().resolve_provider_send_text(shot)
             except (StateError, ValidationError) as exc:
                 logger.info(
                     "project_id=%s job_id=%s provider=runway stage=storyboard_image_generation duration_ms=%d",
@@ -1064,6 +1064,7 @@ class StoryboardBlueprintService:
                 raise StateError(
                     str(getattr(exc, "message", str(exc))),
                     stage="storyboard_image_generation",
+                    metadata=dict(getattr(exc, "metadata", None) or {}),
                 ) from exc
         if normalized_provider in {"pollinations", "pollinations.ai", "legacy"}:
             encoded = urllib.parse.quote(prompt)
@@ -1183,10 +1184,10 @@ class StoryboardBlueprintService:
         send_prompt = shot.render_contract.provider_neutral_prompt
         if str(provider or "").strip().lower() in {"runway", "gen4_image", "runway_router"}:
             # Runway-family renders send ONLY the approved, hash-linked image
-            # prompt — never the board's provider_neutral_prompt. Missing,
-            # stale, unapproved, or over-limit prompts fail closed here via
-            # StateError before any job exists.
-            send_prompt = self._image_prompt_service().approved_prompt_for_shot(shot)
+            # prompt — never the board's provider_neutral_prompt. The D6
+            # send-time gate fails closed here via StateError (typed condition
+            # in metadata) before any job exists.
+            send_prompt = self._image_prompt_service().resolve_provider_send_text(shot)
         job = svc.create_job(
             project_id=shot.project_id,
             shot_id=shot.shot_id,

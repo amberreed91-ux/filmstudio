@@ -588,5 +588,73 @@ class StoryboardImagePromptService:
             )
         return text
 
+    # -- D6 send-time gate --------------------------------------------------
+    def resolve_provider_send_text(self, shot: Any) -> str:
+        """D6 provider-bound send-time text gate (fail closed).
+
+        The single choke point every shot-aware send path must call
+        immediately before the provider payload is built (board image render,
+        single-shot board render, batch ``_resolve_storyboard_send_prompt``).
+        Reuses the D4 ``status_for_shot`` states verbatim, then verifies the
+        exact outgoing text. Fails closed on all six conditions — missing,
+        unapproved, stale, empty, over-limit, unresolvable — with a typed
+        ``StateError`` naming the shot and carrying ``metadata.condition``.
+        Never falls back to another prompt, never truncates, never
+        auto-approves. D4 itself is unchanged.
+        """
+        started = perf_counter()
+        project_id = str(getattr(shot, "project_id", "") or "")
+        storyboard_shot_id = str(getattr(shot, "storyboard_shot_id", "") or "")
+        shot_id = str(getattr(shot, "shot_id", "") or storyboard_shot_id or "unknown-shot")
+
+        def _block(condition: str, message: str) -> Any:
+            logger.warning(
+                "project_id=%s job_id=%s provider=runway stage=image_send_gate_blocked duration_ms=%d condition=%s",
+                project_id,
+                storyboard_shot_id or shot_id,
+                int((perf_counter() - started) * 1000),
+                condition,
+            )
+            raise StateError(
+                message,
+                stage="storyboard_image_send_gate",
+                metadata={
+                    "condition": condition,
+                    "shot_id": shot_id,
+                    "storyboard_shot_id": storyboard_shot_id,
+                },
+            )
+
+        if shot is None:
+            return _block(
+                "unresolvable",
+                "Shot unknown-shot: storyboard shot cannot be resolved from "
+                "the approved board version; re-approve the board before "
+                "generation.",
+            )
+        status = self.status_for_shot(shot)
+        if not status.get("render_ready"):
+            return _block(
+                str(status.get("state") or "unapproved"),
+                str(status.get("message") or f"Shot {shot_id} is not render-ready"),
+            )
+        storage = self._storage_or_raise()
+        record = storage.get_storyboard_image_prompt(shot.storyboard_shot_id) or {}
+        text = str(record.get("image_prompt") or "").strip()
+        if not text:
+            return _block(
+                "empty",
+                f"Shot {shot_id}: approved image prompt is empty; derive or "
+                "write one, then approve it before generation.",
+            )
+        length = utf16_length(text)
+        if length > RUNWAY_IMAGE_MAX_PROMPT_UTF16:
+            return _block(
+                "over_limit",
+                f"Shot {shot_id}: approved image prompt is {length} UTF-16 units "
+                f"(limit {RUNWAY_IMAGE_MAX_PROMPT_UTF16}); shorten and re-approve.",
+            )
+        return text
+
 
 storyboard_image_prompt_service = StoryboardImagePromptService()

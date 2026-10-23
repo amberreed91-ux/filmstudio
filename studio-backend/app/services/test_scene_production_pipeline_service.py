@@ -872,12 +872,13 @@ def test_preflight_emits_one_isolated_entry_per_approved_storyboard_shot(tmp_pat
     )
     # Prompt authority: provider-bound text is the approved image prompt.
     # These synthetic board shots carry approved prompts without image rows.
+    # D6: the send-time authority is the central gate; stub it here.
     approved_texts = {
         f"board-shot-{index}": f"approved-image-prompt-{index}" for index in range(1, 6)
     }
     monkeypatch.setattr(
         storyboard_image_prompt_service,
-        "approved_prompt_for_shot",
+        "resolve_provider_send_text",
         lambda shot: approved_texts[shot.storyboard_shot_id],
     )
     batch = service.prepare_scene_batch(

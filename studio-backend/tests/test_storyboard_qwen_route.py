@@ -25,9 +25,10 @@ def test_storyboard_route_defaults_to_runway_image() -> None:
         "app.services.storyboard_image_service.storyboard_image_service.generate_runway_image",
         return_value=result,
     ) as generate, patch(
-        # D4: the Runway path requires an approved image prompt; the gate
-        # itself is covered by the D4 suite, so stub the accessor here.
-        "app.services.storyboard_image_prompt_service.storyboard_image_prompt_service.approved_prompt_for_shot",
+        # D6: the Runway path requires an approved image prompt via the
+        # central send-time gate; the gate itself is covered by the D6
+        # suite, so stub the gate here.
+        "app.services.storyboard_image_prompt_service.storyboard_image_prompt_service.resolve_provider_send_text",
         return_value="cinematic film storyboard",
     ), patch(
         "app.services.storyboard_blueprint_service.storyboard_blueprint_service.storage.save_previs_image"

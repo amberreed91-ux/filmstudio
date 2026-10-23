@@ -3671,8 +3671,11 @@ class SceneProductionPipelineService:
         ``text`` is the approved, hash-linked image prompt with ``sha256``
         its hex digest. On ANY failure ``text`` is empty and ``error``
         carries the fail-closed message (missing / stale / unapproved /
-        over-limit / unresolvable board shot) — callers must block the shot
-        and must never fall back to the board prompt. Never raises.
+        empty / over-limit / unresolvable board shot) — callers must block
+        the shot and must never fall back to the board prompt. Never raises.
+        The D6 central gate (``resolve_provider_send_text``) performs the
+        state checks; this wrapper only translates the typed error into the
+        per-shot ``(text, sha, error)`` contract.
         """
         import hashlib as _hashlib
 
@@ -3695,7 +3698,7 @@ class SceneProductionPipelineService:
             from app.services.stability import ValidationError as _ValidationError
 
             _image_prompt_service.set_storage(_blueprint_service.storage)
-            text = _image_prompt_service.approved_prompt_for_shot(current_shot)
+            text = _image_prompt_service.resolve_provider_send_text(current_shot)
         except (_StateError, _ValidationError) as exc:
             message = str(getattr(exc, "message", None) or str(exc) or "").strip()
             return "", "", message or f"Shot {shot_id}: approved image prompt is not render-ready."
