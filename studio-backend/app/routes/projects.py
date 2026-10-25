@@ -1308,6 +1308,37 @@ def list_project_scenes(project_id: str):
     return {"scenes": enriched}
 
 
+@router.get("/projects/{project_id}/desk-gate-summary")
+def get_desk_gate_summary(project_id: str):
+    """Read-only Production Desk board aggregate (pass 1).
+
+    Returns per-scene, per-shot gate states (D4 prompt, D6 send-text,
+    setting anchor, batch blockers, approval, latest job) plus one
+    ``next_action`` enum per scene. Pure reads only: no job creation, no
+    provider calls, no writes, no refresh. Unknown projects fail with 404.
+    """
+    from app.services.desk_gate_summary_service import desk_gate_summary_service
+
+    timer = start_timer()
+    try:
+        result = desk_gate_summary_service.get_summary(project_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Project not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except StabilityError as exc:
+        raise _project_http_error(exc) from exc
+    log_stage_event(
+        project_id=project_id,
+        job_id=None,
+        provider="none",
+        stage="desk_gate_summary",
+        duration_ms=elapsed_ms(timer),
+        extra={"scene_count": result.get("scene_count", 0)},
+    )
+    return result
+
+
 @router.post("/projects/{project_id}/scenes")
 def create_scene(project_id: str, payload: CreateScenePayload):
     """Create a new scene for a project"""
