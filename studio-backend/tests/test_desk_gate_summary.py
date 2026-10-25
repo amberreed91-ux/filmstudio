@@ -344,3 +344,147 @@ def test_desk_gate_summary_creates_no_job_and_calls_no_provider(monkeypatch) -> 
 
     # The board aggregate is GET-only: nothing here may accept a write.
     assert client.post(f"/api/f51/studio/projects/{project_id}/desk-gate-summary").status_code == 405
+
+
+# ----------------------------------------------------------------------
+# Anchor truthfulness: set / blocked / unknown are distinct (STEP 1a fix).
+# ----------------------------------------------------------------------
+
+
+def _seed_alias_anchor(
+    project_id: str,
+    scene_id: str = "scene_001",
+    setting_id: str = "loc-061ebeb1",
+    retired_id: str = "loc-b543d669",
+    approval_state: str = "approved",
+) -> None:
+    """Mirror the devcopy-post shape: approved anchor bound to a retired
+    setting ID, bridged to the live node by a universe alias."""
+    storage = get_storage("sqlite")
+    storage.save_universe_node(
+        {
+            "node_id": setting_id,
+            "project_id": project_id,
+            "node_type": "location",
+            "name": "Edit Bay",
+            "first_scene": scene_id,
+            "last_scene": scene_id,
+        }
+    )
+    assert storage.save_universe_id_alias(project_id, retired_id, setting_id, reason="test")
+    assert storage.save_reference_asset(
+        {
+            "ref_id": "ref_test_anchor_001",
+            "project_id": project_id,
+            "target_type": "setting",
+            "target_id": retired_id,
+            "kind": "environment",
+            "role": "environment",
+            "category": "environment",
+            "canonical": True,
+            "approval_state": approval_state,
+            "image_url": "https://cdn.example/anchor.jpg",
+            "source_kind": "uploaded",
+        }
+    )
+
+
+def test_desk_gate_summary_alias_bound_anchor_resolves_set() -> None:
+    client = TestClient(app)
+    project_id = "project_desk_alias"
+    _seed_project(project_id)
+    _board(project_id, shot_count=1)
+    _seed_alias_anchor(project_id)
+
+    response = client.get(f"/api/f51/studio/projects/{project_id}/desk-gate-summary")
+    assert response.status_code == 200, response.text
+    (row,) = response.json()["scenes"][0]["shots"]
+    assert row["setting_anchor"] == "set"
+    assert all("Setting anchor" not in blocker for blocker in response.json()["scenes"][0]["blockers"])
+
+
+def test_desk_gate_summary_missing_project_store_still_evaluates_anchor() -> None:
+    """False-blocked regression: without the project-store file the board
+    used to report blocked (project_not_found swallowed). The scene the
+    board already loaded is sufficient — the anchor is truly evaluated."""
+    client = TestClient(app)
+    project_id = "project_desk_nostore"
+    _seed_project(project_id)
+    _board(project_id, shot_count=1)
+    _seed_alias_anchor(project_id)
+    project_store.delete_project(project_id)
+
+    response = client.get(f"/api/f51/studio/projects/{project_id}/desk-gate-summary")
+    assert response.status_code == 200, response.text
+    (row,) = response.json()["scenes"][0]["shots"]
+    assert row["setting_anchor"] == "set"
+    assert row["setting_anchor"] != "blocked"
+
+
+def test_desk_gate_summary_unresolvable_project_reports_unknown_never_blocked(
+    monkeypatch,
+) -> None:
+    from app.services import reference_validation as reference_validation_module
+    from app.services.stability import ValidationError
+
+    def _boom(**_kwargs: Any) -> Any:
+        raise ValidationError(
+            "Generation blocked: Scene scene_001. the project could not be resolved",
+            stage="reference_validation",
+            metadata={"failure_type": "project_not_found", "scene_id": "scene_001"},
+        )
+
+    monkeypatch.setattr(
+        reference_validation_module, "resolve_scene_reference_requirements", _boom
+    )
+    client = TestClient(app)
+    project_id = "project_desk_unknown"
+    _seed_project(project_id)
+    detail = _board(project_id, shot_count=1)
+    for shot in _shots(detail):
+        _approve(shot)
+
+    response = client.get(f"/api/f51/studio/projects/{project_id}/desk-gate-summary")
+    assert response.status_code == 200, response.text
+    scene = response.json()["scenes"][0]
+    assert scene["shots"][0]["setting_anchor"] == "unknown"
+    assert all(row["setting_anchor"] != "blocked" for row in scene["shots"])
+    assert scene["next_action"] == "check_project_data"
+
+
+def test_desk_gate_summary_unapproved_anchor_still_blocked() -> None:
+    """A genuinely unevaluated-against gate (no approved anchor) stays
+    blocked — unknown must not swallow real gate failures."""
+    client = TestClient(app)
+    project_id = "project_desk_unapproved"
+    _seed_project(project_id)
+    detail = _board(project_id, shot_count=1)
+    for shot in _shots(detail):
+        _approve(shot)
+    _seed_alias_anchor(project_id, approval_state="candidate")
+
+    response = client.get(f"/api/f51/studio/projects/{project_id}/desk-gate-summary")
+    assert response.status_code == 200, response.text
+    scene = response.json()["scenes"][0]
+    assert scene["shots"][0]["setting_anchor"] == "blocked"
+    assert scene["next_action"] == "confirm_setting_anchor"
+
+
+def test_desk_gate_summary_anchor_verdicts_stay_project_isolated() -> None:
+    ready_project = "project_desk_iso_ready"
+    blocked_project = "project_desk_iso_blocked"
+    _seed_project(ready_project)
+    _board(ready_project, shot_count=1)
+    _seed_alias_anchor(ready_project)
+    project_store.delete_project(ready_project)
+    _seed_project(blocked_project)
+    blocked_detail = _board(blocked_project, shot_count=1)
+    for shot in _shots(blocked_detail):
+        _approve(shot)
+
+    client = TestClient(app)
+    ready = client.get(f"/api/f51/studio/projects/{ready_project}/desk-gate-summary").json()
+    blocked = client.get(f"/api/f51/studio/projects/{blocked_project}/desk-gate-summary").json()
+    assert ready["scenes"][0]["shots"][0]["setting_anchor"] == "set"
+    assert blocked["scenes"][0]["shots"][0]["setting_anchor"] == "blocked"
+    assert blocked["scenes"][0]["next_action"] == "confirm_setting_anchor"

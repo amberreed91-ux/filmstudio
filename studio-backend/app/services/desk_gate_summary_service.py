@@ -14,6 +14,12 @@ registry — and runs the cost gate), does NOT touch the universe graph
 and invokes no provider. See READ_CALLS below; every entry is a SELECT or
 an in-memory derivation over already-loaded rows.
 
+``setting_anchor`` is ``set`` (verified), ``blocked`` (gate evaluated and
+failed), or ``unknown`` (the anchor could not be evaluated because the
+project/scene record itself is unresolvable — never a gate verdict). The
+scene record the board already loaded is injected into the resolution so
+evaluation does not depend on the global project store.
+
 The single ``CREATE TABLE IF NOT EXISTS`` reachable from here lives inside
 ``DatabaseStorage.get_storyboard_image_prompt`` (via
 ``_ensure_image_prompts_table``). It is a no-op when the table already
@@ -62,6 +68,7 @@ NEXT_CREATE_BOARD = "create_board"
 NEXT_APPROVE_PROMPTS = "approve_image_prompts"
 NEXT_REAPPROVE_STALE = "reapprove_stale_prompts"
 NEXT_CONFIRM_ANCHOR = "confirm_setting_anchor"
+NEXT_CHECK_PROJECT_DATA = "check_project_data"
 NEXT_RETRY_JOBS = "retry_failed_jobs"
 NEXT_AWAIT_MEDIA = "await_media"
 NEXT_READY = "ready"
@@ -93,6 +100,29 @@ def _image_prompts_table_present(storage: Any) -> bool:
             conn.close()
     except Exception:
         return True
+
+
+# Failure types that mean the anchor could not be evaluated at all (missing
+# project/scene record), as opposed to a gate that evaluated and failed.
+# ``reference_validation._failure`` reports these in ``exc.metadata``.
+_UNEVALUATABLE_FAILURES = frozenset({"project_not_found", "unknown_scene"})
+
+ANCHOR_SET = "set"
+ANCHOR_BLOCKED = "blocked"
+ANCHOR_UNKNOWN = "unknown"
+
+
+def _anchor_failure_kind(exc: BaseException) -> str:
+    """Classify an anchor-resolution failure as evaluatable or not.
+
+    Returns :data:`ANCHOR_UNKNOWN` when the project/scene record itself is
+    unresolvable (nothing was judged), else :data:`ANCHOR_BLOCKED`.
+    """
+    metadata = getattr(exc, "metadata", None)
+    failure_type = metadata.get("failure_type") if isinstance(metadata, dict) else None
+    if failure_type in _UNEVALUATABLE_FAILURES:
+        return ANCHOR_UNKNOWN
+    return ANCHOR_BLOCKED
 
 
 def _shot_sort_key(shot: Any) -> tuple[int, str]:
@@ -177,7 +207,10 @@ def _summarize(
             shots = []
         shots = sorted(shots or [], key=_shot_sort_key)
 
-        # Setting-anchor state: single read-only resolution per scene.
+        # Setting-anchor state: single read-only resolution per scene. The
+        # already-loaded scene record is injected (as prepare_scene_batch
+        # does) so evaluation never depends on the global project store;
+        # whatever store the board itself read is sufficient.
         try:
             from app.services.reference_validation import resolve_scene_reference_requirements
 
@@ -185,13 +218,17 @@ def _summarize(
                 project_id=project_id,
                 scene_id=scene_id,
                 storage=storage,
+                scene=entry,
             )
-            anchor_state = "set"
+            anchor_state = ANCHOR_SET
             anchor_reason: str | None = None
             _ = requirements
         except Exception as exc:
-            anchor_state = "blocked"
-            anchor_reason = str(exc)[:300] or "Setting anchor is not confirmed."
+            anchor_state = _anchor_failure_kind(exc)
+            if anchor_state == ANCHOR_UNKNOWN:
+                anchor_reason = "Project data is unavailable for anchor evaluation."
+            else:
+                anchor_reason = str(exc)[:300] or "Setting anchor is not confirmed."
 
         # Confirmation display state: read-only revalidation, never writes.
         try:
@@ -310,6 +347,10 @@ def _summarize(
             next_action = NEXT_APPROVE_PROMPTS
         elif has_stale:
             next_action = NEXT_REAPPROVE_STALE
+        elif anchor_state == ANCHOR_UNKNOWN:
+            next_action = NEXT_CHECK_PROJECT_DATA
+            if anchor_reason:
+                scene_blockers.append(f"Setting anchor: {anchor_reason}")
         elif anchor_state == "blocked":
             next_action = NEXT_CONFIRM_ANCHOR
             if anchor_reason:
