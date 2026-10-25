@@ -168,6 +168,108 @@ class GenerationCostGate:
             "unpriced_shot_count": len(per_shot) - len(estimated_rows),
         }
 
+    def estimate_router_shot_via_dry_run(
+        self,
+        *,
+        contract_record: dict[str, Any] | None,
+        manifest: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """One ADVISORY, non-billing dry-run estimate from a frozen entry.
+
+        The request is built with ``reconstruct_runway_router_video_request``
+        — the exact payload builder the adapter uses immediately before a
+        live submission — and sent with ``dry_run=True`` (routing decision
+        only: no task, no output, no billing). The estimator input is
+        therefore the same frozen promptText, camera projection, remapped
+        reference roles, and duration the real submit would send; the
+        provider seam additionally verifies body equality on receipt.
+
+        Never raises: every failure (reconstruction mismatch, transport
+        error, timeout, malformed or missing cost) is returned as an
+        unestimated picture with a ``failure_class`` so the caller can
+        refuse closed. No margin is applied anywhere — the ceiling is
+        enforced against the raw advisory figure by the caller.
+        """
+        import logging
+        import time
+
+        from app.services.providers.runway_router_provider import (
+            reconstruct_runway_router_video_request,
+            resolve_runway_router_aspect_ratio,
+            submit_runway_router_video_render,
+        )
+
+        started = time.monotonic()
+        failure: str | None = None
+        duration_seconds: int | None = None
+        resolved_model: str | None = None
+        credits: float | None = None
+        try:
+            body = reconstruct_runway_router_video_request(
+                contract_record, manifest, dry_run=True,
+            )
+        except Exception:
+            body = None
+            failure = "reconstruction_failed"
+        if body is not None:
+            try:
+                video_input = body.get("input") or {}
+                payload = (contract_record or {}).get("payload") or {}
+                contract_refs = payload.get("references") or []
+                result = submit_runway_router_video_render(
+                    str(video_input.get("promptText") or ""),
+                    aspect_ratio=resolve_runway_router_aspect_ratio(
+                        str(payload.get("aspect_ratio") or "16:9")
+                    ),
+                    duration=payload.get("duration"),
+                    resolution=payload.get("resolution"),
+                    negative_prompt=payload.get("negative_prompt") or None,
+                    generate_audio=payload.get("audio"),
+                    seed=payload.get("seed"),
+                    references=[
+                        {"image_url": ref.get("uri"), "role": ref.get("role")}
+                        for ref in contract_refs
+                    ],
+                    reference_videos=payload.get("reference_videos"),
+                    reference_audio=payload.get("reference_audio"),
+                    keyframes=payload.get("keyframes"),
+                    content_moderation=payload.get("content_moderation"),
+                    dry_run=True,
+                    request_payload=body,
+                )
+                if not isinstance(result, dict) or result.get("status") != "dry_run":
+                    raise ValueError("router dry run did not return a dry-run routing decision")
+                meta = result.get("meta") or {}
+                raw_credits = meta.get("estimated_cost_credits")
+                if isinstance(raw_credits, bool) or not isinstance(raw_credits, (int, float)):
+                    raise ValueError("router dry run carried no numeric estimated cost")
+                credits = float(raw_credits)
+                resolved_model = str(meta.get("resolved_model") or "") or None
+                try:
+                    duration_seconds = int(video_input.get("duration"))
+                except (TypeError, ValueError):
+                    duration_seconds = None
+            except Exception as exc:
+                failure = getattr(exc, "__class__", type(exc)).__name__ or "dry_run_failed"
+                credits = None
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        logging.getLogger(__name__).info(
+            "project_id=%s job_id=%s provider=runway_router stage=router_spend_estimate duration_ms=%d estimated=%s",
+            "",
+            "",
+            elapsed_ms,
+            credits is not None,
+        )
+        return {
+            "model": resolved_model,
+            "duration_seconds": duration_seconds,
+            "estimated_credits": credits,
+            "estimated": credits is not None,
+            "estimate_source": "runway_router_dry_run",
+            "advisory": True,
+            "failure_class": failure,
+        }
+
     # ── Daily budget (from real render history) ───────────────────────────
 
     def _daily_spent_credits(self, project_id: str) -> Decimal:

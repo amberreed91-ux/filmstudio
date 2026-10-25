@@ -602,6 +602,21 @@ class SceneProductionPipelineService:
                 (shot, entry) for shot, entry in zip(shots, entries)
                 if str(entry.get("shot_id") or "") in selected_ids
             ]
+            # Router ceiling (Phase 6): the batch cost picture is locally
+            # unpriced for runway_router, so price each selected router shot
+            # with one advisory non-billing dry-run BEFORE the spend guard
+            # and before any job row. Preflight authorization already passed,
+            # so no provider is contacted for an unauthorized batch.
+            await self._estimate_filtered_router_shots(
+                project_id=project_id,
+                provider=provider,
+                selected_entries=selected_entries,
+                shot_manifest=shot_manifest,
+            )
+            self._refuse_unestimated_router_shots(
+                project_id=project_id,
+                selected_entries=selected_entries,
+            )
             self._enforce_filtered_spend_guards(
                 project_id=project_id,
                 provider=provider,
@@ -936,6 +951,112 @@ class SceneProductionPipelineService:
                 by_board_id[key] = entry
         return [by_board_id[value] for value in storyboard_shot_ids]
 
+    async def _estimate_filtered_router_shots(
+        self,
+        *,
+        project_id: str,
+        provider: str | None,
+        selected_entries: list[dict[str, Any]],
+        shot_manifest: dict[str, Any] | None,
+    ) -> None:
+        """Price selected runway_router shots with one advisory dry-run each.
+
+        Runs after preflight authorization and before the spend guard and
+        before any job row. Non-router entries and already-estimated entries
+        are untouched. Each estimate is stamped onto its entry's own
+        ``cost_estimate`` picture (advisory, no margin); a hung or failing
+        dry-run is bounded by the router timeout and stamps unestimated.
+        """
+        from app.services.generation_cost_gate import generation_cost_gate
+        from app.services.providers.runway_router_provider import (
+            get_runway_router_timeout_seconds,
+        )
+
+        resolved = str(provider or "").strip().lower()
+        if resolved != "runway_router":
+            return
+        timeout_seconds = get_runway_router_timeout_seconds()
+        for entry in selected_entries:
+            shot_id = str(entry.get("shot_id") or "?")
+            current = entry.get("cost_estimate")
+            if isinstance(current, dict) and current.get("estimated") is True:
+                continue
+            contract_record = entry.get("generation_contract")
+            if not isinstance(contract_record, dict) or not isinstance(shot_manifest, dict):
+                entry["cost_estimate"] = {
+                    "model": None,
+                    "duration_seconds": entry.get("duration_seconds"),
+                    "estimated_credits": None,
+                    "estimated": False,
+                    "estimate_source": "runway_router_dry_run",
+                    "advisory": True,
+                    "failure_class": "missing_frozen_contract",
+                }
+                continue
+            try:
+                estimated = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        generation_cost_gate.estimate_router_shot_via_dry_run,
+                        contract_record=contract_record,
+                        manifest=shot_manifest,
+                    ),
+                    timeout=timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                estimated = {
+                    "model": None,
+                    "duration_seconds": entry.get("duration_seconds"),
+                    "estimated_credits": None,
+                    "estimated": False,
+                    "estimate_source": "runway_router_dry_run",
+                    "advisory": True,
+                    "failure_class": "dry_run_timeout",
+                }
+            entry["cost_estimate"] = estimated
+            logger.info(
+                "project_id=%s job_id=%s provider=runway_router stage=router_spend_estimate_applied duration_ms=%d",
+                project_id,
+                shot_id,
+                0,
+            )
+
+    @staticmethod
+    def _refuse_unestimated_router_shots(
+        *,
+        project_id: str,
+        selected_entries: list[dict[str, Any]],
+    ) -> None:
+        """Fail closed when a router shot has no verified dry-run estimate.
+
+        Additive refusal only: router entries stamped unestimated by the
+        dry-run estimator are refused even when ``acknowledge_unknown_cost``
+        is true, because an unverified ceiling cannot be evaluated. Non-router
+        entries keep the existing acknowledgement semantics in the spend
+        guard below; nothing already allowed becomes refused.
+        """
+        unestimated = [
+            str(entry.get("shot_id") or "?")
+            for entry in selected_entries
+            if isinstance(entry.get("cost_estimate"), dict)
+            and entry["cost_estimate"].get("estimate_source") == "runway_router_dry_run"
+            and entry["cost_estimate"].get("estimated") is not True
+        ]
+        if not unestimated:
+            return
+        raise ValidationError(
+            f"Shot(s) {', '.join(unestimated)} have no verified Runway router cost estimate "
+            "(the advisory non-billing dry-run estimate was unavailable or failed); "
+            "resubmission requires a successful estimate — acknowledge_unknown_cost "
+            "cannot waive it for runway_router",
+            stage="scene_pipeline_spend_guard",
+            metadata={
+                "project_id": project_id,
+                "unknown_cost_shot_ids": unestimated,
+                "estimate_source": "runway_router_dry_run",
+                "advisory": True,
+            },
+        )
+
     @staticmethod
     def _enforce_filtered_spend_guards(
         *,
@@ -984,8 +1105,9 @@ class SceneProductionPipelineService:
             )
         if known_total > ceiling:
             raise ValidationError(
-                f"Selected shots estimate ({known_total:g} credits) exceeds the per-request "
-                f"ceiling ({ceiling:g} credits, {SHOT_FILTER_CREDIT_CEILING_ENV_VAR})",
+                f"Selected shots estimate ({known_total:g} credits, advisory) exceeds the per-request "
+                f"ceiling ({ceiling:g} credits, {SHOT_FILTER_CREDIT_CEILING_ENV_VAR}); "
+                "the ceiling is applied to the estimate exactly, with no margin",
                 stage="scene_pipeline_spend_guard",
                 metadata={
                     "project_id": project_id,
@@ -993,6 +1115,7 @@ class SceneProductionPipelineService:
                     "ceiling_credits": ceiling,
                     "ceiling_env_var": SHOT_FILTER_CREDIT_CEILING_ENV_VAR,
                     "selected_shot_ids": [str(entry.get("shot_id") or "") for entry in selected_entries],
+                    "advisory": True,
                 },
             )
 

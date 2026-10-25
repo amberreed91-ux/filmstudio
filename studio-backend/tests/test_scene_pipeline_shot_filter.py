@@ -603,9 +603,26 @@ def test_unknown_cost_needs_acknowledgement(tmp_path: Path, monkeypatch: pytest.
     assert render.created == []
     assert render.submits == []
 
-    result = _generate(
-        service, _project5(), storyboard_shot_ids=["sbs-002"], acknowledge_unknown_cost=True,
-    )
+    # Phase 6: runway_router unknowns are never waived by acknowledgement —
+    # an unverified ceiling cannot be evaluated, so the submit refuses even
+    # with acknowledge_unknown_cost=True.
+    with pytest.raises(ValidationError) as excinfo:
+        _generate(
+            service, _project5(), storyboard_shot_ids=["sbs-002"], acknowledge_unknown_cost=True,
+        )
+    assert "acknowledge_unknown_cost" in str(excinfo.value.message)
+    assert render.created == []
+    assert render.submits == []
+
+    # Non-router providers keep the existing acknowledgement semantics.
+    result = run_async(service.generate_scene(
+        project_id="project_filter_test",
+        scene_id="scene_001",
+        project=_project5(),
+        provider="happyhorse",
+        storyboard_shot_ids=["sbs-002"],
+        acknowledge_unknown_cost=True,
+    ))
     assert len(render.created) == 1
     assert len(render.submits) == 1
     assert result["shot_filter"]["selected_shot_ids"] == ["scene_001_shot_002"]
