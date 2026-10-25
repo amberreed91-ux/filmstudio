@@ -65,10 +65,19 @@ class ClipRevisionService:
             try:
                 original_job = self._render_service.get_job(original_job_id)
                 if original_job:
-                    from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+                    from app.services.storyboard_blueprint_service import (
+                        StoryboardBlueprintService,
+                        storyboard_blueprint_service,
+                    )
 
-                    storyboard_blueprint_service.storage = self._storage or storyboard_blueprint_service.storage
-                    link = storyboard_blueprint_service.link_revision_from_job(
+                    # Never rebind the shared singleton: a request/test-scoped
+                    # storage must not redirect later global blueprint calls.
+                    blueprints = (
+                        StoryboardBlueprintService(self._storage)
+                        if self._storage is not None
+                        else storyboard_blueprint_service
+                    )
+                    link = blueprints.link_revision_from_job(
                         project_id=project_id,
                         revision_id=revision.revision_id,
                         original_job=original_job,
@@ -156,10 +165,19 @@ class ClipRevisionService:
         if self._storage:
             self._storage.update_clip_revision(revision)
         try:
-            from app.services.storyboard_blueprint_service import storyboard_blueprint_service
+            from app.services.storyboard_blueprint_service import (
+                StoryboardBlueprintService,
+                storyboard_blueprint_service,
+            )
 
-            storyboard_blueprint_service.storage = self._storage or storyboard_blueprint_service.storage
-            link = storyboard_blueprint_service.link_revision_from_job(
+            # Never rebind the shared singleton: a request/test-scoped
+            # storage must not redirect later global blueprint calls.
+            blueprints = (
+                StoryboardBlueprintService(self._storage)
+                if self._storage is not None
+                else storyboard_blueprint_service
+            )
+            link = blueprints.link_revision_from_job(
                 project_id=revision.project_id,
                 revision_id=revision.revision_id,
                 original_job=original_job,
