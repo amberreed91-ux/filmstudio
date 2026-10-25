@@ -491,16 +491,31 @@ def contract_comparison_binding(rows: list[dict[str, Any]] | None) -> list[dict[
     ``assert_setting_project_scope``). Ordering is preserved; no sorting, no
     dropping, no substitution. Missing keys or non-mapping rows fail closed.
     """
+    # Option A: known setting framing terms (e.g. "wide") compare as
+    # studio_role="environment" for kind=environment + target_type=setting
+    # rows only. Single source of truth: generation_contract.
+    # _SETTING_FRAMING_TERMS (lazy import keeps this cycle-free, matching the
+    # codebase pattern). Raw rows stay stored verbatim; this is
+    # comparison-only so a freshly frozen contract matches its raw manifest
+    # binding. Unknown, garbage and composition roles never remap.
+    from app.services.generation_contract import _setting_framing_studio_role
+
     projected: list[dict[str, Any]] = []
     for row in rows or []:
         if not isinstance(row, dict):
             raise ValueError("Reference binding comparison requires mapping rows")
+        effective_role = row.get("studio_role") or row["role"]
+        remapped = _setting_framing_studio_role(
+            effective_role, kind=row.get("kind"), target_type=row.get("target_type")
+        )
+        if remapped is not None:
+            effective_role = remapped
         entry: dict[str, Any] = {
             "ref_id": row["ref_id"],
             "uri": row["uri"],
             "target_type": row["target_type"],
             "target_id": row["target_id"],
-            "role": row.get("studio_role") or row["role"],
+            "role": effective_role,
             "category": row["category"],
             "canonical": row["canonical"],
             "approval_state": row["approval_state"],

@@ -34,6 +34,15 @@ logger = logging.getLogger(__name__)
 SCENE_SCORE_AMBIENT_PROVIDERS = {"none", "manual_post_render", "ace_step", "musicgen"}
 
 
+# Single source of truth: generation_contract._SETTING_FRAMING_TERMS. This
+# thin delegate exists so the invariant projection uses the exact same
+# vocabulary as the freeze; the set itself lives in exactly one place.
+def _canonical_setting_framing_role(role: Any, *, kind: Any, target_type: Any) -> str | None:
+    from app.services.generation_contract import _setting_framing_studio_role
+
+    return _setting_framing_studio_role(role, kind=kind, target_type=target_type)
+
+
 def _canonical_binding_to_contract_references(binding: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """Project a raw canonical reference binding onto the frozen contract shape.
 
@@ -42,12 +51,25 @@ def _canonical_binding_to_contract_references(binding: list[dict[str, Any]] | No
     frozen contract stores ``role="reference"``, ``studio_role=<raw role>``,
     and ``source="canonical_reference_binding"``. The raw binding is never
     mutated here; ordering is preserved.
+
+    Option A: a kind=environment + target_type=setting row carrying framing
+    vocabulary (e.g. ``role="wide"``) projects to
+    ``studio_role="environment"`` here so the invariant matches the frozen
+    contract; the raw row itself is untouched.
     """
-    return [
-        {
+    projected: list[dict[str, Any]] = []
+    for reference in binding or []:
+        raw_role = reference["role"]
+        studio_role = (
+            _canonical_setting_framing_role(
+                raw_role, kind=reference.get("kind"), target_type=reference.get("target_type")
+            )
+            or raw_role
+        )
+        projected.append({
             "uri": reference["uri"],
             "role": "reference",
-            "studio_role": reference["role"],
+            "studio_role": studio_role,
             "category": reference["category"],
             "source": "canonical_reference_binding",
             "ref_id": reference["ref_id"],
@@ -57,9 +79,8 @@ def _canonical_binding_to_contract_references(binding: list[dict[str, Any]] | No
             "approval_state": reference["approval_state"],
             "source_kind": reference["source_kind"],
             "kind": reference["kind"],
-        }
-        for reference in binding or []
-    ]
+        })
+    return projected
 
 
 def _canonical_frozen_references(frozen: Any) -> list[dict[str, Any]]:

@@ -527,6 +527,35 @@ def _reference_uri(value: Any) -> tuple[str, dict[str, Any]]:
     return "", {}
 
 
+# Setting framing terms (e.g. "wide") are upload framing vocabulary, not
+# Studio identity roles. At freeze time only, a kind=environment +
+# target_type=setting row whose resolved role is a known framing term maps
+# to studio_role="environment" so the Router can represent it as a plain
+# reference. Category, kind, target, URI and approval fields stay
+# byte-identical. Anything else — characters, storyboard composition,
+# temporal tokens, unknown/garbage roles such as "composition" — is never
+# remapped and still fails closed downstream.
+_SETTING_FRAMING_TERMS = frozenset({
+    "wide", "wide_shot", "medium", "medium_shot", "medium_wide",
+    "medium_close", "close", "close_up", "closeup", "detail",
+    "establishing", "establishing_shot", "aerial",
+    "over_the_shoulder", "profile", "negative_space", "center_weighted",
+    "off_axis",
+})
+
+
+def _setting_framing_studio_role(role: Any, *, kind: Any, target_type: Any) -> str | None:
+    """Return "environment" when a setting framing term needs the remap, else None."""
+    if str(kind or "").strip() != "environment":
+        return None
+    if str(target_type or "").strip() != "setting":
+        return None
+    token = str(role or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if token in _SETTING_FRAMING_TERMS:
+        return "environment"
+    return None
+
+
 def _studio_reference_role(raw: dict[str, Any], fallback: Any = None) -> tuple[str, str, str]:
     explicit_role = raw.get("studio_role") or raw.get("reference_role")
     explicit = explicit_role or fallback
@@ -545,7 +574,13 @@ def _studio_reference_role(raw: dict[str, Any], fallback: Any = None) -> tuple[s
     # Distinct Studio roles/categories are retained and rejected if Runway's
     # schema lacks an equivalent; they are never flattened into generic refs.
     semantic = semantic_category if token in {"", "reference", "generic"} else token
-    return semantic or "reference", "reference", category
+    semantic = semantic or "reference"
+    # Option A: setting framing vocabulary (e.g. "wide") resolves to the
+    # environment identity role at freeze time only. The stored category is
+    # preserved verbatim for provenance.
+    if _setting_framing_studio_role(semantic, kind=raw.get("kind"), target_type=raw.get("target_type")) == "environment":
+        return "environment", "reference", category
+    return semantic, "reference", category
 
 
 def _audio_enabled(parameters: dict[str, Any]) -> bool:
