@@ -72,6 +72,8 @@ Fail-closed discipline (no silent adjustments, ever):
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import logging
 import os
@@ -403,6 +405,174 @@ class RunwayRouterReferenceIncompatibility(ValueError):
         self.detail = {"code": code, **details}
 
 
+# ── Dry-run placeholder URIs (spend estimator only) ──────────────────────
+# The spend estimator prices frozen entries whose references are local paths
+# Runway cannot fetch. It deep-copies the entry + manifest and substitutes
+# each non-forwardable URI with a deterministic stand-in below. Placeholders
+# carry the original count, order, and roles but name no real bytes; they
+# must NEVER reach a live request, a persisted contract, or a manifest.
+DRY_RUN_PLACEHOLDER_URI_PREFIX = "runway://dry-run-placeholder/"
+
+
+def is_dry_run_placeholder_uri(value: Any) -> bool:
+    """True for estimator-only stand-in URIs (never billable, never real)."""
+    return isinstance(value, str) and value.startswith(DRY_RUN_PLACEHOLDER_URI_PREFIX)
+
+
+def _is_router_forwardable_uri(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and (
+            value.startswith("https://")
+            or value.startswith("runway://")
+            or value.startswith("data:image/")
+        )
+    )
+
+
+def _placeholder_key(ref_id: Any, index: int) -> str:
+    label = str(ref_id or "").strip()
+    return label or f"index_{index}"
+
+
+def reject_dry_run_placeholder_uris(values: Any, *, source: str) -> None:
+    """Fail closed when an estimator stand-in would enter a real artifact.
+
+    ``values`` is a flat iterable of URI strings (or reference mappings
+    carrying one). Raises ``ValueError`` naming the offending source.
+    """
+    for value in values or []:
+        uri: Any = None
+        if isinstance(value, str):
+            uri = value
+        elif isinstance(value, dict):
+            for key in ("image_url", "url", "uri", "asset_url"):
+                candidate = value.get(key)
+                if candidate:
+                    uri = candidate
+                    break
+        if is_dry_run_placeholder_uri(uri):
+            raise ValueError(
+                f"Dry-run placeholder reference URI would enter {source}; "
+                "placeholders are estimator-only and are refused in real "
+                "request bodies and persisted artifacts."
+            )
+
+
+def substitute_dry_run_placeholder_uris(
+    contract_record: Any,
+    manifest: Any,
+) -> tuple[Any, Any, int]:
+    """Return estimator-only copies with local reference URIs substituted.
+
+    Deep-copies both inputs (the caller's frozen artifacts are never
+    mutated) and replaces every non-forwardable reference URI with a
+    deterministic ``runway://dry-run-placeholder/<ref_id-or-index>``
+    stand-in — same count, order, and roles, no bytes read, no upload.
+    Manifest rows for the contract's shot are substituted through the same
+    URI→placeholder map, the row digest is re-stamped from the substituted
+    contract, and both the manifest fingerprint and the record integrity
+    digest are recomputed, so every frozen comparison still verifies.
+    Returns ``(record_copy, manifest_copy, substituted_count)``.
+    """
+    from dataclasses import replace as _dataclass_replace
+
+    from app.services.generation_contract import (
+        FrozenGenerationContract,
+        _canonical_json,
+    )
+    from app.services.shot_manifest import recompute_manifest_fingerprint
+
+    record_copy = copy.deepcopy(contract_record)
+    manifest_copy = copy.deepcopy(manifest)
+    try:
+        contract = FrozenGenerationContract.from_record(record_copy)
+    except Exception:
+        return record_copy, manifest_copy, 0
+    mapping: dict[str, str] = {}
+    for index, ref in enumerate(contract.references):
+        uri = ref.uri
+        if _is_router_forwardable_uri(uri) or not isinstance(uri, str) or not uri:
+            continue
+        mapping.setdefault(
+            uri,
+            DRY_RUN_PLACEHOLDER_URI_PREFIX + _placeholder_key(ref.ref_id, index),
+        )
+    if not mapping:
+        return record_copy, manifest_copy, 0
+    payload = record_copy.get("payload") if isinstance(record_copy, dict) else None
+    if not isinstance(payload, dict):
+        return copy.deepcopy(contract_record), copy.deepcopy(manifest), 0
+    for ref in payload.get("references", []) or []:
+        if isinstance(ref, dict) and ref.get("uri") in mapping:
+            ref["uri"] = mapping[ref["uri"]]
+    coverage = payload.get("scene_coverage")
+    if isinstance(coverage, dict):
+        for shot_row in coverage.get("shots", []) or []:
+            if not isinstance(shot_row, dict):
+                continue
+            for brow in shot_row.get("approved_reference_bindings", []) or []:
+                if isinstance(brow, dict) and brow.get("uri") in mapping:
+                    brow["uri"] = mapping[brow["uri"]]
+    coverage_shot = payload.get("scene_coverage_shot")
+    if isinstance(coverage_shot, dict):
+        for brow in coverage_shot.get("approved_reference_bindings", []) or []:
+            if isinstance(brow, dict) and brow.get("uri") in mapping:
+                brow["uri"] = mapping[brow["uri"]]
+    record_copy["sha256"] = hashlib.sha256(
+        _canonical_json(payload).encode("utf-8")
+    ).hexdigest()
+    try:
+        substituted = FrozenGenerationContract.from_record(
+            record_copy, _allow_dry_run_placeholders=True
+        )
+    except Exception:
+        return copy.deepcopy(contract_record), copy.deepcopy(manifest), 0
+    digest = substituted.creative_digest()
+    if isinstance(manifest_copy, dict):
+        shots = manifest_copy.get("shots")
+        if isinstance(shots, list):
+            for row in shots:
+                if not isinstance(row, dict) or row.get("shot_id") != substituted.shot_id:
+                    continue
+                binding = row.get("reference_binding")
+                if isinstance(binding, list):
+                    for brow in binding:
+                        if isinstance(brow, dict) and brow.get("uri") in mapping:
+                            brow["uri"] = mapping[brow["uri"]]
+                flat = row.get("references")
+                if isinstance(flat, list):
+                    row["references"] = [mapping.get(item, item) for item in flat]
+                for coverage_key in ("scene_coverage", "scene_coverage_shot"):
+                    coverage_value = row.get(coverage_key)
+                    if not isinstance(coverage_value, dict):
+                        continue
+                    coverage_shots = coverage_value.get("shots")
+                    if coverage_key == "scene_coverage_shot" or not isinstance(
+                        coverage_shots, list
+                    ):
+                        candidate_rows = [coverage_value]
+                    else:
+                        candidate_rows = [
+                            item for item in coverage_shots if isinstance(item, dict)
+                        ]
+                    for candidate in candidate_rows:
+                        for brow in candidate.get("approved_reference_bindings", []) or []:
+                            if isinstance(brow, dict) and brow.get("uri") in mapping:
+                                brow["uri"] = mapping[brow["uri"]]
+                row["generation_contract_digest"] = digest
+        try:
+            manifest_copy["manifest_fingerprint"] = recompute_manifest_fingerprint(
+                manifest_copy
+            )
+        except Exception:
+            return copy.deepcopy(contract_record), copy.deepcopy(manifest), 0
+        record_copy = _dataclass_replace(
+            substituted, manifest_fingerprint=manifest_copy["manifest_fingerprint"]
+        ).to_record()
+    return record_copy, manifest_copy, len(mapping)
+
+
 def _reject_concrete_model(model: Any) -> None:
     """Fail closed when a concrete model is supplied on the routed path."""
     requested = _as_clean_str(model)
@@ -613,6 +783,10 @@ def build_runway_router_image_request(
         if normalized:
             image_input["referenceImages"] = normalized
     reported["forwarded"] = len(image_input.get("referenceImages", []))
+    if not dry_run:
+        reject_dry_run_placeholder_uris(
+            image_input.get("referenceImages"), source="routed image request"
+        )
 
     body: Dict[str, Any] = {"configId": resolved_config_id, "input": image_input}
     if dry_run:
@@ -799,6 +973,10 @@ def build_runway_router_video_request(
             "Runway video input permits at most one first and one last reference role.",
             roles=reported["roles"],
         )
+    if not dry_run:
+        # Estimator stand-ins are dry-run-only: a placeholder reaching a
+        # billable body is refused before any network call.
+        reject_dry_run_placeholder_uris(reference_images, source="routed video request")
 
     body: Dict[str, Any] = {"configId": resolved_config_id, "input": video_input}
     if dry_run:
@@ -812,6 +990,7 @@ def reconstruct_runway_router_video_request(
     *,
     config_id: Optional[str] = None,
     dry_run: bool = False,
+    _allow_dry_run_placeholders: bool = False,
 ) -> Dict[str, Any]:
     """Deterministically rebuild a routed video body from its immutable proof.
 
@@ -819,6 +998,10 @@ def reconstruct_runway_router_video_request(
     adapter submission. The persisted manifest is checked against the frozen
     contract first; neither mutable RenderJob input nor current project text is
     consulted here.
+
+    ``_allow_dry_run_placeholders`` is estimator-internal: only the spend
+    estimator passes True, for in-memory substituted copies that are never
+    persisted. Every other caller keeps the default refusal.
     """
     from app.services.generation_contract import FrozenGenerationContract
     from app.services.reference_validation import (
@@ -829,7 +1012,9 @@ def reconstruct_runway_router_video_request(
     from app.services.scene_coverage_contract import verify_scene_coverage_contract
     from app.services.shot_manifest import recompute_manifest_fingerprint
 
-    contract = FrozenGenerationContract.from_record(contract_record)
+    contract = FrozenGenerationContract.from_record(
+        contract_record, _allow_dry_run_placeholders=_allow_dry_run_placeholders
+    )
     payload = contract.payload()
     if not isinstance(manifest, dict):
         raise ValueError("Frozen Router reconstruction requires a creative manifest")

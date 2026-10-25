@@ -321,7 +321,16 @@ class FrozenGenerationContract:
         return {"payload": payload, "sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest()}
 
     @classmethod
-    def from_record(cls, record: Any) -> "FrozenGenerationContract":
+    def from_record(
+        cls, record: Any, *, _allow_dry_run_placeholders: bool = False
+    ) -> "FrozenGenerationContract":
+        """Rehydrate a frozen contract, verifying integrity.
+
+        ``_allow_dry_run_placeholders`` is an estimator-internal escape hatch:
+        only the spend estimator may pass True, and only for in-memory
+        substituted copies that are never persisted (persistence layers keep
+        the default and refuse placeholders).
+        """
         if not isinstance(record, dict) or not isinstance(record.get("payload"), dict):
             raise GenerationContractError("Frozen generation contract is missing or malformed")
         payload = record["payload"]
@@ -333,6 +342,15 @@ class FrozenGenerationContract:
         refs = payload.get("references")
         if not isinstance(refs, list):
             raise GenerationContractError("Frozen generation contract references are malformed")
+        from app.services.providers.runway_router_provider import (
+            is_dry_run_placeholder_uri as _is_placeholder,
+        )
+        for ref in refs:
+            uri = ref.get("uri") if isinstance(ref, dict) else None
+            if not _allow_dry_run_placeholders and _is_placeholder(uri):
+                raise GenerationContractError(
+                    "Estimator placeholder reference URIs cannot persist in a generation contract"
+                )
         if (
             not isinstance(payload.get("shot_id"), str)
             or not payload["shot_id"].strip()
@@ -912,6 +930,13 @@ def freeze_generation_contract(
             )
     elif scene_coverage_shot is not None:
         raise GenerationContractError("Per-shot scene coverage requires the scene coverage contract")
+    from app.services.providers.runway_router_provider import (
+        is_dry_run_placeholder_uri as _is_placeholder,
+    )
+    if any(_is_placeholder(ref.uri) for ref in references):
+        raise GenerationContractError(
+            "Estimator placeholder reference URIs cannot be frozen into a persisted generation contract"
+        )
     return FrozenGenerationContract(
         shot_id=str(shot_id), prompt=str(prompt), negative_prompt=str(negative_prompt or ""),
         references=tuple(references),

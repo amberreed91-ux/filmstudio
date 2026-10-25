@@ -126,8 +126,21 @@ def build_shot_manifest(
     references (list of urls), reference_version, storyboard_shot_id,
     parameters (provider parameters for this shot).
     """
+    from app.services.providers.runway_router_provider import (
+        is_dry_run_placeholder_uri as _is_placeholder,
+    )
     shots: list[dict[str, Any]] = []
     for entry in entries:
+        for url in list(entry.get("references") or []):
+            if _is_placeholder(url):
+                raise ValueError(
+                    "Estimator placeholder reference URIs cannot persist in a shot manifest"
+                )
+        for row in list(entry.get("reference_binding") or []):
+            if isinstance(row, dict) and _is_placeholder(row.get("uri")):
+                raise ValueError(
+                    "Estimator placeholder reference URIs cannot persist in a shot manifest"
+                )
         shots.append(
             {
                 "shot_id": str(entry.get("shot_id") or ""),

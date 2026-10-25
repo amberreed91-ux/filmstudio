@@ -184,6 +184,17 @@ class GenerationCostGate:
         reference roles, and duration the real submit would send; the
         provider seam additionally verifies body equality on receipt.
 
+        Local-path references (which Runway cannot fetch) are priced with
+        deterministic ``runway://dry-run-placeholder/`` stand-ins substituted
+        into deep copies of the entry and manifest — same count, order, and
+        roles, no bytes read, no upload, frozen artifacts untouched. Such a
+        picture carries ``materialization_required=True``: the price is
+        advisory on URI identity (owner-accepted) because a real submit
+        would first materialize the local bytes. A ``failure_class`` of
+        ``materialization_required`` is never set on success; it is the
+        estimator's way of naming the local-URI condition distinctly from
+        genuinely malformed frozen data (``reconstruction_failed``).
+
         Never raises: every failure (reconstruction mismatch, transport
         error, timeout, malformed or missing cost) is returned as an
         unestimated picture with a ``failure_class`` so the caller can
@@ -194,9 +205,11 @@ class GenerationCostGate:
         import time
 
         from app.services.providers.runway_router_provider import (
+            RunwayRouterReferenceIncompatibility,
             reconstruct_runway_router_video_request,
             resolve_runway_router_aspect_ratio,
             submit_runway_router_video_render,
+            substitute_dry_run_placeholder_uris,
         )
 
         started = time.monotonic()
@@ -204,17 +217,48 @@ class GenerationCostGate:
         duration_seconds: int | None = None
         resolved_model: str | None = None
         credits: float | None = None
+        effective_record = contract_record
+        placeholders_used = False
+        materialization_required = False
         try:
             body = reconstruct_runway_router_video_request(
                 contract_record, manifest, dry_run=True,
             )
+        except RunwayRouterReferenceIncompatibility as exc:
+            details = getattr(exc, "detail", None)
+            detail_code = details.get("code") if isinstance(details, dict) else None
+            if detail_code == "unsupported_uri_scheme":
+                record_copy, manifest_copy, substituted = substitute_dry_run_placeholder_uris(
+                    contract_record, manifest,
+                )
+                if substituted > 0:
+                    effective_record = record_copy
+                    placeholders_used = True
+                    try:
+                        body = reconstruct_runway_router_video_request(
+                            record_copy,
+                            manifest_copy,
+                            dry_run=True,
+                            _allow_dry_run_placeholders=True,
+                        )
+                    except Exception:
+                        body = None
+                        failure = "reconstruction_failed"
+                    else:
+                        materialization_required = True
+                else:
+                    body = None
+                    failure = "reconstruction_failed"
+            else:
+                body = None
+                failure = "reconstruction_failed"
         except Exception:
             body = None
             failure = "reconstruction_failed"
         if body is not None:
             try:
                 video_input = body.get("input") or {}
-                payload = (contract_record or {}).get("payload") or {}
+                payload = (effective_record or {}).get("payload") or {}
                 contract_refs = payload.get("references") or []
                 result = submit_runway_router_video_render(
                     str(video_input.get("promptText") or ""),
@@ -268,6 +312,8 @@ class GenerationCostGate:
             "estimate_source": "runway_router_dry_run",
             "advisory": True,
             "failure_class": failure,
+            "materialization_required": materialization_required,
+            "uri_placeholders_used": placeholders_used,
         }
 
     # ── Daily budget (from real render history) ───────────────────────────
