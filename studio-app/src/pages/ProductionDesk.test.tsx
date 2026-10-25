@@ -5,14 +5,22 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import ProductionDesk from './ProductionDesk'
+import {
+  DESK_BOARD_READY_FIXTURE_LABEL,
+  deskBoardReadyAcceptance,
+  deskBoardReadyAssembly,
+  deskBoardReadyCut,
+  deskBoardReadyFixture,
+  deskBoardReadyScreening,
+} from './__fixtures__/deskBoardReady.fixture'
 
 function PrevisProbe() {
   const location = useLocation()
   return createElement('div', { 'data-testid': 'previs-handoff-state' }, JSON.stringify(location.state ?? null))
 }
 
-function renderDeskWithPrevisProbe() {
-  return render(createElement(MemoryRouter, { initialEntries: ['/studio/production-desk?project_id=project-a'] },
+function renderDeskWithPrevisProbe(projectId = 'project-a') {
+  return render(createElement(MemoryRouter, { initialEntries: [`/studio/production-desk?project_id=${projectId}`] },
     createElement(Routes, null,
       createElement(Route, { path: '/studio/production-desk', element: createElement(ProductionDesk) }),
       createElement(Route, { path: '/studio/previs', element: createElement(PrevisProbe) }),
@@ -33,98 +41,188 @@ const deskBinding = (digest: string) => ({
   allowed_urls: ['https://cdn.example.test/face.png'],
 })
 
+const routeState = vi.hoisted(() => ({ projectId: 'project-a' }))
+
 const mocks = vi.hoisted(() => ({
+  fetchJson: vi.fn(),
   getAssemblyStatus: vi.fn(),
   getCurrentFilmCut: vi.fn(),
   getLatestProductionAcceptanceSummary: vi.fn(),
-  getProductionQueueSummary: vi.fn(),
   getScreeningManifest: vi.fn(),
-  listFinalShortFilmPackagesForProject: vi.fn(),
-  listRenderJobs: vi.fn(),
-  listScenes: vi.fn(),
-  listStoryboardBlueprints: vi.fn(),
 }))
 
-const takeMocks = vi.hoisted(() => ({ getTakeChoices: vi.fn() }))
 const referenceMocks = vi.hoisted(() => ({ listReferenceAssets: vi.fn(), resolveShotReferenceBinding: vi.fn(), recordShotReferenceConfirmation: vi.fn(), getShotReferenceConfirmation: vi.fn(), listSceneReferenceConfirmations: vi.fn() }))
 
 vi.mock('../lib/studioApi', () => mocks)
-vi.mock('../lib/takeSelectionApi', () => takeMocks)
 vi.mock('../lib/visualTrainingApi', () => referenceMocks)
 vi.mock('../components/StudioShell', () => ({ default: ({ children }: { children: ReactNode }) => createElement('div', null, children) }))
 vi.mock('../components/ProjectGuard', () => ({ default: ({ children }: { children: ReactNode }) => createElement('div', null, children) }))
 vi.mock('../components/ProjectContextBar', () => ({ default: () => createElement('div', null, 'Project context') }))
 vi.mock('../context/StudioContext', () => ({ useStudio: () => ({ activeProject: { title: 'Persisted Film' } }) }))
-vi.mock('../hooks/useProjectRouteContext', () => ({ useProjectRouteContext: () => ({ projectId: 'project-a', projectError: '' }) }))
+vi.mock('../hooks/useProjectRouteContext', () => ({ useProjectRouteContext: () => ({ projectId: routeState.projectId, projectError: '' }) }))
 
-function renderDesk() {
-  return render(createElement(MemoryRouter, { initialEntries: ['/studio/production-desk?project_id=project-a'] },
+function renderDesk(projectId = 'project-a') {
+  return render(createElement(MemoryRouter, { initialEntries: [`/studio/production-desk?project_id=${projectId}`] },
     createElement(Routes, null, createElement(Route, { path: '/studio/production-desk', element: createElement(ProductionDesk) })),
   ))
 }
 
+function emptyBoard(projectId = 'project-a') {
+  return { project_id: projectId, scene_count: 0, scenes: [], next_action: 'add_scenes' }
+}
+
+function readyShot(shotId: string, shotNumber: number, over: Record<string, unknown> = {}) {
+  return {
+    shot_id: shotId,
+    shot_number: shotNumber,
+    d4_state: 'ready',
+    d4_ready: true,
+    d6_state: 'ready',
+    d6_ready: true,
+    setting_anchor: 'set',
+    approval_state: 'approved',
+    latest_job_status: 'complete',
+    latest_job_id: `job-${shotId}`,
+    has_media: true,
+    binding_confirmation: 'confirmed',
+    blockers: [],
+    ...over,
+  }
+}
+
+function boardScene(sceneId: string, sceneName: string, over: Record<string, unknown> = {}) {
+  return {
+    scene_id: sceneId,
+    scene_name: sceneName,
+    approval_status: 'draft',
+    board_state: 'blocked',
+    shot_count: 1,
+    ready_shot_count: 0,
+    shots: [],
+    next_action: 'await_media',
+    blockers: [],
+    ...over,
+  }
+}
+
 type SuccessOptions = {
-  scenes?: Array<Record<string, unknown>>
-  jobs?: Array<Record<string, unknown>>
+  board?: Record<string, unknown> | null
+  boardError?: string
   cutStatus?: string
-  packages?: Array<Record<string, unknown>>
+  cutVersion?: number
+  assembly?: 'loaded' | 'waiting' | 'unavailable'
+  assemblyMessage?: string
+  screeningFinal?: boolean
   acceptance?: Record<string, unknown> | null
-  screening?: Record<string, unknown> | null
-  queue?: Record<string, unknown> | null
-  blueprints?: Array<Record<string, unknown>>
-  references?: Array<Record<string, unknown>>
-  takes?: Record<string, Array<{ shot_number: number; job_id: string | null }>>
-  staleScenes?: string[]
 }
 
 function successData({
-  scenes = [],
-  jobs = [],
+  board = emptyBoard(),
+  boardError,
   cutStatus = 'draft',
-  packages = [],
+  cutVersion = 1,
+  assembly = 'loaded',
+  assemblyMessage = 'assembly API offline',
+  screeningFinal = false,
   acceptance = null,
-  screening = null,
-  queue = null,
-  blueprints = [],
-  references = [],
-  takes = {},
-  staleScenes = [],
 }: SuccessOptions = {}) {
-  mocks.getAssemblyStatus.mockResolvedValue({
-    scenes_with_compositions: Math.max(0, scenes.length - staleScenes.length),
-    scenes_total: scenes.length,
-    film_assembled: false,
-    film_url: null,
-    has_audio: false,
-    film_outdated: false,
-    scenes_needing_assembly: staleScenes,
-  })
-  mocks.getProductionQueueSummary.mockResolvedValue(queue || {
+  if (boardError) {
+    mocks.fetchJson.mockRejectedValue(new Error(boardError))
+  } else {
+    mocks.fetchJson.mockResolvedValue(board)
+  }
+  if (assembly === 'waiting') {
+    mocks.getAssemblyStatus.mockRejectedValue(new Error('Approve the current Film Cut before assembling a full-film delivery (state_error)'))
+  } else if (assembly === 'unavailable') {
+    mocks.getAssemblyStatus.mockRejectedValue(new Error(assemblyMessage))
+  } else {
+    mocks.getAssemblyStatus.mockResolvedValue({
+      scenes_with_compositions: 0,
+      scenes_total: 0,
+      film_assembled: false,
+      film_url: null,
+      has_audio: false,
+      film_outdated: false,
+      scenes_needing_assembly: [],
+    })
+  }
+  mocks.getCurrentFilmCut.mockResolvedValue({ film_cut: { cut_id: 'cut-a', project_id: 'project-a', version_number: cutVersion, status: cutStatus, scene_order: [], timeline: [], metadata: {}, created_at: '', updated_at: '' } })
+  mocks.getLatestProductionAcceptanceSummary.mockResolvedValue({ summary: acceptance || { project_id: 'project-a', package_id: '', latest_acceptance_id: '', disposition: 'not_run', stale: false, blocker_count: 0, warning_count: 0, generated_at: '', recommended_action: 'Run acceptance after a traceable final package exists.' } })
+  mocks.getScreeningManifest.mockResolvedValue(screeningFinal
+    ? { project_id: 'project-a', outputs: [], current_final_output: { approved: true, source_id: '' }, completion_status: 'complete', warnings: [] }
+    : { project_id: 'project-a', outputs: [], current_final_output: null, completion_status: 'in_progress', warnings: [] })
+}
+
+function blockedBoard() {
+  return {
     project_id: 'project-a',
-    captured_at: '2026-10-13T00:00:00Z',
-    counts_by_status: {},
-    counts_by_work_type: {},
-    provider_pressure: [],
-    project_throughput: [],
-    oldest_waiting_item: null,
-    blocked_reasons: [],
-    stale_leases: 0,
-    recent_failures: [],
-  })
-  mocks.listStoryboardBlueprints.mockResolvedValue(blueprints)
-  referenceMocks.listReferenceAssets.mockResolvedValue({ reference_assets: references, count: references.length })
-  takeMocks.getTakeChoices.mockImplementation((projectId: string, sceneId: string) =>
-    Promise.resolve({ project_id: projectId, scene_id: sceneId, choices: takes[sceneId] || [] }))
-  mocks.getCurrentFilmCut.mockResolvedValue({ film_cut: { cut_id: 'cut-a', project_id: 'project-a', version_number: 1, status: cutStatus, scene_order: scenes.map((scene) => String(scene.scene_id ?? '')), timeline: [], metadata: {}, created_at: '', updated_at: '' } })
-  mocks.getLatestProductionAcceptanceSummary.mockResolvedValue({ summary: acceptance || { project_id: 'project-a', package_id: '', latest_acceptance_id: '', disposition: 'not_run', stale: false, blocker_count: 0, warning_count: 0, generated_at: '', recommended_action: 'Run acceptance only after a traceable final package exists.' } })
-  mocks.getScreeningManifest.mockResolvedValue(screening || { project_id: 'project-a', outputs: [], current_final_output: null, completion_status: 'in_progress', warnings: [] })
-  mocks.listFinalShortFilmPackagesForProject.mockResolvedValue({ packages })
-  mocks.listRenderJobs.mockResolvedValue(jobs)
-  mocks.listScenes.mockResolvedValue({ scenes })
+    scene_count: 2,
+    scenes: [
+      boardScene('scene_001', 'Held breath', {
+        shot_count: 2,
+        ready_shot_count: 0,
+        next_action: 'approve_image_prompts',
+        blockers: ['scene_001_shot_002: D4 image prompt unapproved.'],
+        shots: [
+          readyShot('scene_001_shot_001', 1, {
+            latest_job_status: 'failed',
+            latest_job_id: 'job-failed-1',
+            has_media: false,
+            binding_confirmation: 'missing',
+            blockers: ['Latest render job failed.'],
+          }),
+          {
+            shot_id: 'scene_001_shot_002',
+            shot_number: 2,
+            d4_state: 'unapproved',
+            d4_ready: false,
+            d6_state: 'unapproved',
+            d6_ready: false,
+            setting_anchor: 'set',
+            approval_state: 'proposed',
+            latest_job_status: null,
+            latest_job_id: null,
+            has_media: false,
+            binding_confirmation: 'missing',
+            blockers: ['D4 image prompt unapproved.', 'No completed media with a saved URL.'],
+          },
+        ],
+      }),
+      boardScene('scene_002', 'The river', {
+        board_state: 'missing_board',
+        shots: [],
+        next_action: 'create_board',
+        blockers: ['No storyboard board exists for this scene yet.'],
+      }),
+    ],
+    next_action: null,
+  }
+}
+
+function unknownAnchorBoard() {
+  return {
+    project_id: 'project-a',
+    scene_count: 1,
+    scenes: [
+      boardScene('scene_001', 'Held breath', {
+        board_state: 'blocked',
+        next_action: 'check_project_data',
+        blockers: ['Setting anchor: Project data is unavailable for anchor evaluation.'],
+        shots: [
+          readyShot('scene_001_shot_001', 1, {
+            setting_anchor: 'unknown',
+            blockers: [],
+          }),
+        ],
+      }),
+    ],
+    next_action: null,
+  }
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  routeState.projectId = 'project-a'
   successData()
   referenceMocks.recordShotReferenceConfirmation.mockResolvedValue({
     project_id: 'project-a',
@@ -149,94 +247,166 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('Production Desk', () => {
-  it('renders saved project scene, output, cut, queue, delivery and acceptance evidence', async () => {
-    successData({ scenes: [{ scene_id: 'scene_001', scene_name: 'Held breath' } as never], jobs: [{ id: 'job-a', project_id: 'project-a', shot_id: 'scene_001_shot_001', status: 'complete', output_payload: { asset_url: '/outputs/a.mp4' } } as never], cutStatus: 'approved' })
-    renderDesk()
-    expect(screen.queryByText('Held breath: no completed shot output with a saved media URL.')).not.toBeInTheDocument()
-    expect(await screen.findByText('1/1 scenes with completed shot outputs')).toBeInTheDocument()
-    expect(screen.getByText('Film Cut v1 · approved')).toBeInTheDocument()
-    expect(screen.getByText('No final package is recorded yet.')).toBeInTheDocument()
-    expect(screen.getByText('Acceptance · not_run')).toBeInTheDocument()
-  })
-
-  it('shows honest empty states without inferring delivery or acceptance', async () => {
+describe('Production Desk board', () => {
+  it('renders the empty project state with plain guidance', async () => {
     successData()
     renderDesk()
-    expect(await screen.findByText('0/0 scenes with completed shot outputs')).toBeInTheDocument()
-    expect(screen.getByText('No saved scenes yet. Start in The Page, then return here for coverage.')).toBeInTheDocument()
-    expect(screen.getByText('No current full-film assembly is recorded. Assembly requires every included scene output and an approved Film Cut.')).toBeInTheDocument()
-    expect(screen.getByText('No verified current accepted final')).toBeInTheDocument()
+    expect(await screen.findByText('No saved scenes yet. Start in The Page, then return here for coverage.')).toBeInTheDocument()
+    expect(screen.getByText('0 of 0 scenes ready')).toBeInTheDocument()
+    expect(screen.getAllByText('Open The Page').length).toBeGreaterThan(0)
   })
 
-  it('keeps failed API requests unavailable rather than converting them to success', async () => {
-    mocks.getAssemblyStatus.mockRejectedValue(new Error('assembly API offline'))
-    mocks.listScenes.mockRejectedValue(new Error('scene API denied'))
-    mocks.getLatestProductionAcceptanceSummary.mockRejectedValue(new Error('acceptance API offline'))
+  it('renders the ready state from the labeled fixture only', async () => {
+    expect(DESK_BOARD_READY_FIXTURE_LABEL).toBe('desk-board-ready-fixture')
+    mocks.fetchJson.mockResolvedValue(deskBoardReadyFixture)
+    mocks.getCurrentFilmCut.mockResolvedValue({ film_cut: deskBoardReadyCut })
+    mocks.getAssemblyStatus.mockResolvedValue(deskBoardReadyAssembly)
+    mocks.getScreeningManifest.mockResolvedValue(deskBoardReadyScreening)
+    mocks.getLatestProductionAcceptanceSummary.mockResolvedValue({ summary: deskBoardReadyAcceptance })
     renderDesk()
-    expect(await screen.findByText(/Scene data unavailable: scene API denied/)).toBeInTheDocument()
-    expect(await screen.findByText(/Delivery status unavailable: assembly API offline/)).toBeInTheDocument()
-    expect(await screen.findByText(/Acceptance record unavailable: acceptance API offline/)).toBeInTheDocument()
-    expect(screen.getByText('Acceptance unavailable')).toBeInTheDocument()
+    expect(await screen.findByTestId('scene-card-scene_001')).toBeInTheDocument()
+    expect(screen.getByTestId('scene-card-scene_002')).toBeInTheDocument()
+    expect(screen.getByText('Morning Light')).toBeInTheDocument()
+    expect(screen.getByText('Night Window')).toBeInTheDocument()
+    // One next action per scene, both ready.
+    expect(screen.getByTestId('scene-next-scene_001')).toHaveTextContent('Ready to screen')
+    expect(screen.getByTestId('scene-next-scene_002')).toHaveTextContent('Ready to screen')
+    expect(screen.getByText('2 of 2 scenes ready')).toBeInTheDocument()
+    expect(screen.getAllByText('Image ready').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Look set').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Media ready').length).toBeGreaterThan(0)
+    // No scores, no percentages, no jargon anywhere on the board.
+    const text = document.body.textContent || ''
+    expect(text).not.toContain('%')
+    expect(text).not.toMatch(/score/i)
+    expect(text).not.toContain('Tier 01')
+    expect(text).not.toContain('Tier 02')
+    expect(text).not.toContain('Tier 03')
+    expect(text).not.toContain('latency vector')
+    expect(text).not.toContain('credit radial')
+    expect(text).not.toContain('Auto-Optimized')
   })
 
-  it('builds the scene production table from saved render, take, shot list and delivery evidence', async () => {
-    successData({
-      scenes: [
-        { scene_id: 'scene_001', scene_name: 'Held breath' } as never,
-        { scene_id: 'scene_002', scene_name: 'The river' } as never,
-      ],
-      jobs: [
-        { id: 'job-a', project_id: 'project-a', shot_id: 'scene_001_shot_001', status: 'complete', output_payload: { asset_url: '/outputs/a.mp4' } } as never,
-        { id: 'job-b', project_id: 'project-a', shot_id: 'scene_002_shot_001', status: 'failed', output_payload: {} } as never,
-      ],
-      cutStatus: 'approved',
-      staleScenes: ['scene_002'],
-      blueprints: [{ blueprint_id: 'bp-1', project_id: 'project-a', scene_id: 'scene_001', status: 'approved', locked: true, shot_count: 3, ready_shot_count: 2, updated_at: '2026-10-01T00:00:00Z' } as never],
-      takes: { scene_001: [{ shot_number: 1, job_id: 'job-a' }] },
-      references: [{ ref_id: 'ref-1', kind: 'environment', image_url: '/outputs/ref.png', project_id: 'project-a', approval_state: 'approved', canonical: true } as never],
-    })
+  it('renders blocked scenes with one next action and a blocked-reason popover', async () => {
+    successData({ board: blockedBoard() as never, cutStatus: 'draft' })
     renderDesk()
-    expect(await screen.findByText('Held breath')).toBeInTheDocument()
-    expect(screen.getByText('The river')).toBeInTheDocument()
-    expect(screen.getByText('2/3 shots ready')).toBeInTheDocument()
-    expect(screen.getByText('No storyboard plan')).toBeInTheDocument()
-    expect(screen.getByText('1/1 selected')).toBeInTheDocument()
-    expect(screen.getByText('Current composition')).toBeInTheDocument()
-    expect(screen.getByText('Assembly needed')).toBeInTheDocument()
-    expect(screen.getByText('1 failed shot')).toBeInTheDocument()
-    expect(screen.getByText('1 reference asset · 1 approved · 1 canonical')).toBeInTheDocument()
-    expect(screen.getByText('1/2 scenes with a storyboard plan')).toBeInTheDocument()
+    expect(await screen.findByTestId('scene-card-scene_001')).toBeInTheDocument()
+    expect(screen.getByTestId('scene-next-scene_001')).toHaveTextContent('Approve the image prompts')
+    expect(screen.getByTestId('scene-next-scene_002')).toHaveTextContent('Sketch the shot plan')
+    expect(screen.getByText('Image waiting')).toBeInTheDocument()
+    expect(screen.getByText('Try again')).toBeInTheDocument()
+    expect(screen.getAllByText('Look set').length).toBeGreaterThan(0)
+    const popovers = screen.getAllByText('Why is this waiting?')
+    expect(popovers).toHaveLength(2)
+    fireEvent.click(popovers[0])
+    expect(screen.getByText('scene_001_shot_002: D4 image prompt unapproved.')).toBeInTheDocument()
   })
 
-  it('derives the next blocking actions from evidence instead of showing a green dashboard', async () => {
+  it('treats an unknown setting anchor as neutral, never blocked', async () => {
+    successData({ board: unknownAnchorBoard() as never })
+    renderDesk()
+    expect(await screen.findByText("Can't check")).toBeInTheDocument()
+    expect(screen.queryByText('Look needed')).not.toBeInTheDocument()
+    expect(screen.getByTestId('scene-next-scene_001')).toHaveTextContent('Check the project data')
+  })
+
+  it('renders a missing board with a shot-plan next action', async () => {
+    successData({ board: blockedBoard() as never })
+    renderDesk()
+    expect(await screen.findByTestId('scene-card-scene_002')).toBeInTheDocument()
+    expect(screen.getByText('No shot plan yet')).toBeInTheDocument()
+    expect(screen.getByTestId('scene-next-scene_002')).toHaveTextContent('Sketch the shot plan')
+  })
+
+  it('shows an assembly 409 as waiting on cut approval, never unavailable', async () => {
+    successData({ assembly: 'waiting', cutStatus: 'draft' })
+    renderDesk()
+    expect(await screen.findByText('waiting on cut approval')).toBeInTheDocument()
+    expect(screen.getByText('Full-film stitching is waiting on cut approval. Approve the current Film Cut first.')).toBeInTheDocument()
+    expect(screen.queryByText('Delivery status unavailable')).not.toBeInTheDocument()
+  })
+
+  it('keeps an unavailable board honest instead of inventing coverage', async () => {
+    successData({ board: null, boardError: 'board offline' })
+    renderDesk()
+    expect(await screen.findByText(/Scene board unavailable: board offline/)).toBeInTheDocument()
+    expect(screen.queryByTestId('scene-card-scene_001')).not.toBeInTheDocument()
+  })
+
+  it('keeps exactly one next action per scene', async () => {
+    successData({ board: blockedBoard() as never })
+    renderDesk()
+    await screen.findByTestId('scene-card-scene_001')
+    const nexts = screen.getAllByTestId(/scene-next-scene_/)
+    const links = screen.getAllByTestId(/scene-next-link-scene_/)
+    expect(nexts).toHaveLength(2)
+    // One next-action line and at most one navigation link per scene card.
+    expect(links.length).toBeLessThanOrEqual(2)
+  })
+
+  it('renders a second project in isolation', async () => {
+    routeState.projectId = 'project-b'
     successData({
-      scenes: [{ scene_id: 'scene_001', scene_name: 'Held breath' } as never],
-      jobs: [{ id: 'job-a', project_id: 'project-a', shot_id: 'scene_001_shot_001', status: 'failed', output_payload: {} } as never],
-      cutStatus: 'draft',
-      queue: {
-        project_id: 'project-a',
-        captured_at: '2026-10-13T00:00:00Z',
-        counts_by_status: { failed: 1 },
-        counts_by_work_type: {},
-        provider_pressure: [],
-        project_throughput: [],
-        oldest_waiting_item: null,
-        blocked_reasons: ['provider quota exhausted'],
-        stale_leases: 0,
-        recent_failures: [],
+      board: {
+        project_id: 'project-b',
+        scene_count: 1,
+        next_action: null,
+        scenes: [
+          boardScene('scene_010', 'Second Light', {
+            board_state: 'ready',
+            next_action: 'ready',
+            shots: [readyShot('scene_010_shot_001', 1)],
+          }),
+        ],
       } as never,
     })
-    renderDesk()
-    expect(await screen.findByText('1 render job failed')).toBeInTheDocument()
-    expect(screen.getByText('Approve the current Film Cut')).toBeInTheDocument()
-    expect(screen.getByText('Production queue reports 1 blockage')).toBeInTheDocument()
-    expect(screen.getAllByText('provider quota exhausted').length).toBeGreaterThan(0)
-    expect(screen.getByText('Inspect the queue')).toBeInTheDocument()
+    renderDesk('project-b')
+    expect(await screen.findByText('Second Light')).toBeInTheDocument()
+    expect(screen.queryByText('Held breath')).not.toBeInTheDocument()
+    expect(screen.getByTestId('scene-next-scene_010')).toHaveTextContent('Ready to screen')
   })
 
+  it('issues no job-creating or spend-bound request from the board', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    successData({ board: blockedBoard() as never })
+    renderDesk()
+    await screen.findByTestId('scene-card-scene_001')
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh evidence' }))
+    await screen.findByTestId('scene-card-scene_001')
+    fireEvent.change(screen.getByLabelText('Shot ID'), { target: { value: 'scene_001_shot_001' } })
+    referenceMocks.resolveShotReferenceBinding.mockResolvedValue(deskBinding('digest-abc'))
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve binding' }))
+    await screen.findByText('face-1')
+    // No Confirm click happened, so the single allowed write path stays silent.
+    expect(referenceMocks.recordShotReferenceConfirmation).not.toHaveBeenCalled()
+    const forbidden = ['render/jobs', 'submit', 'retry', 'assemble-film', 'screening/outputs', 'production-acceptance', 'image-prompt', 'take-choices', 'providers', 'runway']
+    const seen: string[] = [
+      ...mocks.fetchJson.mock.calls.map((call) => String(call[0])),
+      ...fetchSpy.mock.calls.map((call) => String(call[0])),
+    ]
+    expect(seen.length).toBeGreaterThan(0)
+    for (const url of seen) {
+      for (const bad of forbidden) {
+        expect(url.toLowerCase()).not.toContain(bad)
+      }
+    }
+    for (const call of mocks.fetchJson.mock.calls) {
+      const init = call[1] as RequestInit | undefined
+      expect(init?.method ?? 'GET').toBe('GET')
+    }
+    fetchSpy.mockRestore()
+  })
+
+  it('shows a default state when no project is selected', async () => {
+    routeState.projectId = ''
+    renderDesk('')
+    expect(await screen.findByText('Choose a project to inspect its production state.')).toBeInTheDocument()
+  })
+})
+
+describe('Production Desk binding (unchanged write path)', () => {
   it('resolves and explicitly confirms a shot binding without ranking or job creation', async () => {
-    successData({ scenes: [{ scene_id: 'scene_001', scene_name: 'Held breath' } as never] })
+    successData()
     referenceMocks.resolveShotReferenceBinding.mockResolvedValue({
       project_id: 'project-a',
       scene_id: 'scene_001',
@@ -260,7 +430,7 @@ describe('Production Desk', () => {
     expect(referenceMocks.resolveShotReferenceBinding).toHaveBeenCalledWith('project-a', 'scene_001_shot_001')
     fireEvent.click(screen.getByRole('button', { name: 'Confirm this binding' }))
     expect(await screen.findByText(/Confirmed for scene_001_shot_001/)).toBeInTheDocument()
-    expect(mocks.listRenderJobs).toHaveBeenCalledTimes(1)
+    expect(mocks.fetchJson).toHaveBeenCalled()
   })
 
   it('keeps binding resolution fail-closed with the server message', async () => {
@@ -395,85 +565,5 @@ describe('Production Desk', () => {
     expect(await screen.findByText('face-1')).toBeInTheDocument()
     expect(screen.queryByText(/recovered from the durable record/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Confirmed for scene_001_shot_001/)).not.toBeInTheDocument()
-  })
-
-  it('derives queue, credit, duration, and log telemetry from saved job records', async () => {
-    successData({
-      jobs: [
-        {
-          id: 'job-a', project_id: 'project-a', shot_id: 'scene_001_shot_001', provider: 'runway', status: 'complete',
-          output_payload: { asset_url: '/outputs/a.mp4' },
-          created_at: '2026-10-17T10:00:00Z', completed_at: '2026-10-17T10:02:00Z', updated_at: '2026-10-17T10:02:00Z',
-          metadata: { router_execution: { resolved_model: 'gen4.5', realized_cost_credits: 120, estimated_cost_credits: 100 } },
-        },
-        {
-          id: 'job-b', project_id: 'project-a', shot_id: 'scene_001_shot_002', provider: 'runway', status: 'queued',
-          output_payload: {}, created_at: '2026-10-17T10:03:00Z', updated_at: '2026-10-17T10:03:00Z',
-          metadata: { router_execution: { estimated_cost_credits: 40 } },
-        },
-        {
-          id: 'job-c', project_id: 'project-a', shot_id: 'scene_001_shot_003', provider: 'runway', status: 'failed',
-          output_payload: {}, created_at: '2026-10-17T10:04:00Z', completed_at: '2026-10-17T10:05:00Z', updated_at: '2026-10-17T10:05:00Z',
-          metadata: { provider_failure: { category: 'rate_limit', message: 'Provider is busy.' } },
-        },
-        {
-          id: 'job-d', project_id: 'project-a', shot_id: 'scene_002_shot_001', provider: 'runway', status: 'complete',
-          output_payload: { asset_url: '/outputs/d.mp4' },
-          created_at: '2026-10-17T10:00:00Z', completed_at: '2026-10-17T10:04:00Z', updated_at: '2026-10-17T10:04:00Z',
-          metadata: { router_execution: { payload_normalized: true, payload_normalization_warnings: ['router_payload_normalized: non_verified_aspect'] } },
-        },
-      ] as never,
-    })
-    renderDesk()
-
-    // Queue counts by normalized status.
-    expect((await screen.findByTestId('queue-chip-complete')).textContent).toContain('2')
-    expect(screen.getByTestId('queue-chip-pending').textContent).toContain('1')
-    expect(screen.getByTestId('queue-chip-failed').textContent).toContain('1')
-
-    // Credits: realized spend, plus estimates that are still only estimates.
-    expect(screen.getByTestId('credit-realized').textContent).toContain('120')
-    expect(screen.getByText(/1 still estimated.*40 credit/i)).toBeInTheDocument()
-    expect(screen.getByText(/spend on record, not an account balance/i)).toBeInTheDocument()
-
-    // Durations come from recorded timestamps only.
-    const sparkline = screen.getByTestId('render-duration-sparkline')
-    expect(sparkline).toHaveAttribute('data-samples', '2')
-    expect(screen.getByText(/Median 180s · slowest 240s/)).toBeInTheDocument()
-
-    // Execution log is filterable by the same vocabulary as the queue.
-    expect(screen.getByTestId('execution-row-job-a')).toBeInTheDocument()
-    expect(screen.getByTestId('execution-row-job-d')).toHaveTextContent('Auto-Optimized')
-    expect(screen.getByTestId('execution-row-job-c')).toHaveTextContent('Provider is busy.')
-
-    fireEvent.click(screen.getByTestId('execution-filter-auto_optimized'))
-    expect(screen.getByTestId('execution-row-job-d')).toBeInTheDocument()
-    expect(screen.queryByTestId('execution-row-job-a')).toBeNull()
-
-    fireEvent.click(screen.getByTestId('execution-filter-queued'))
-    expect(screen.getByTestId('execution-row-job-b')).toBeInTheDocument()
-    expect(screen.queryByTestId('execution-row-job-c')).toBeNull()
-
-    fireEvent.click(screen.getByTestId('execution-filter-failed'))
-    expect(screen.getByTestId('execution-row-job-c')).toBeInTheDocument()
-    expect(screen.queryByTestId('execution-row-job-d')).toBeNull()
-  })
-
-  it('reports telemetry unavailable instead of zeros when the render queue read fails', async () => {
-    mocks.listRenderJobs.mockRejectedValue(new Error('render queue denied'))
-    renderDesk()
-    expect(await screen.findByText(/Render telemetry unavailable: render queue denied/)).toBeInTheDocument()
-    expect(screen.queryByTestId('credit-realized')).toBeNull()
-    expect(screen.queryByTestId('render-duration-sparkline')).toBeNull()
-  })
-
-  it('keeps queue and reference coverage unavailable when their APIs fail', async () => {
-    mocks.getProductionQueueSummary.mockRejectedValue(new Error('queue offline'))
-    referenceMocks.listReferenceAssets.mockRejectedValue(new Error('references offline'))
-    renderDesk()
-    expect(await screen.findByText(/Production queue unavailable: queue offline/)).toBeInTheDocument()
-    expect(await screen.findByText(/Reference assets unavailable: references offline/)).toBeInTheDocument()
-    expect(screen.getByText('Reference assets unavailable')).toBeInTheDocument()
-    expect(screen.getByText(/Production queue unavailable/)).toBeInTheDocument()
   })
 })
