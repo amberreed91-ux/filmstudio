@@ -36,6 +36,8 @@ const ProductionIntegrityEngine = lazy(() => import('./pages/ProductionIntegrity
 // eslint-disable-next-line react-refresh/only-export-components
 const ReferenceSpace = lazy(() => import('./pages/ReferenceSpace'))
 // eslint-disable-next-line react-refresh/only-export-components
+const ReferenceBoard = lazy(() => import('./pages/ReferenceBoard'))
+// eslint-disable-next-line react-refresh/only-export-components
 const ScreeningRoom = lazy(() => import('./pages/ScreeningRoom'))
 // eslint-disable-next-line react-refresh/only-export-components
 const ArchiveRoom = lazy(() => import('./pages/ArchiveRoom'))
@@ -234,6 +236,21 @@ export const APP_ROUTES: AppRoute[] = [
     ],
     icon: <Clapperboard size={14} />,
     element: <LazyRoute><ReferenceSpace /></LazyRoute>,
+  },
+  {
+    path: '/studio/reference-board',
+    label: 'Reference Board',
+    title: 'Reference Board',
+    purpose: 'Read-only reference board: who and where the film remembers. Nothing here sends anything.',
+    placement: 'secondary',
+    breadcrumbs: [{ label: 'Studio Lobby', to: '/studio' }, { label: 'Reference Board' }],
+    contextualLinks: [
+      { to: '/studio/reference-space', label: 'Open Reference Space' },
+      { to: '/studio/production-board', label: 'Open Scenes' },
+      { to: '/studio/screening-room', label: 'Open Screening' },
+    ],
+    icon: <Clapperboard size={14} />,
+    element: <LazyRoute><ReferenceBoard /></LazyRoute>,
   },
   {
     path: '/studio/screening-room',
