@@ -146,6 +146,32 @@ def list_reference_binding_confirmations(project_id: str, scene_id: str = ""):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.get("/{project_id}/shots/{shot_id}/integrity-gates")
+def get_shot_integrity_gates(project_id: str, shot_id: str):
+    """Per-shot integrity gates for the visual gate pipeline (read-only).
+
+    Pure reads only (SELECTs + in-memory derivation over loaded rows): no
+    job creation, no provider calls, no dry runs, no preparation, no seed
+    saves, no confirmation writes, no lazy table creation. Unknown projects
+    and shots fail with 404. Gate states are ``pass`` / ``blocked`` /
+    ``cant_check`` / ``not_yet``; ``spend.estimated_credits`` echoes only a
+    value already persisted on the latest job (never a computed price, and
+    never a number for local-ref shots); ``preflight`` never authorizes a
+    future send.
+    """
+    from app.services.shot_integrity_gates_service import shot_integrity_gates_service
+    from app.services.stability import StabilityError
+
+    try:
+        return shot_integrity_gates_service.get_gates(project_id, shot_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except StabilityError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 def _sync_creator_references_best_effort(project_id: str) -> None:
     """Mirror approved looks/environments into the registry before listing.
 
