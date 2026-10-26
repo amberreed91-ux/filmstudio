@@ -11,7 +11,7 @@ Two-phase flow (propose → confirm) — no auto-promotion path exists:
 
 import logging
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
@@ -316,9 +316,19 @@ def designate_scene002_setting_reference(project_id: str, setting_id: str, ref_i
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/{project_id}/reference-library/{target_type}/{target_id}")
-def get_reference_library(project_id: str, target_type: Literal["character", "setting"], target_id: str):
-    """Return one entity's canonical, approved supporting, and candidate refs."""
-    _sync_creator_references_best_effort(project_id)
+def get_reference_library(
+    project_id: str,
+    target_type: Literal["character", "setting"],
+    target_id: str,
+    sync: int = Query(default=1),
+):
+    """Return one entity's canonical, approved supporting, and candidate refs.
+
+    ``sync=0`` skips the best-effort creator-reference sync for a pure read;
+    any other value (including the default) preserves the existing sync-on-read.
+    """
+    if sync != 0:
+        _sync_creator_references_best_effort(project_id)
     try:
         return reference_asset_service.list_library(project_id, target_type, target_id)
     except ValueError as exc:
@@ -453,14 +463,20 @@ def remove_reference_library_asset(project_id: str, target_type: Literal["charac
 
 
 @router.get("/{project_id}/reference-assets")
-def list_reference_assets(project_id: str, kind: str | None = None):
+def list_reference_assets(
+    project_id: str,
+    kind: str | None = None,
+    sync: int = Query(default=1),
+):
     """List confirmed ReferenceAssets for a project from the DB.
 
     Creator-approved visuals (locked looks, approved environment stills) are
     synced into the registry first so the visual-training panels see every
     reference the creator has actually approved — not just assets promoted
-    through the propose/confirm flow.
+    through the propose/confirm flow. ``sync=0`` skips that sync for a pure
+    read; the default preserves the existing sync-on-read.
     """
-    _sync_creator_references_best_effort(project_id)
+    if sync != 0:
+        _sync_creator_references_best_effort(project_id)
     assets = reference_asset_service.list_assets(project_id, kind)
     return {"reference_assets": assets, "count": len(assets)}
