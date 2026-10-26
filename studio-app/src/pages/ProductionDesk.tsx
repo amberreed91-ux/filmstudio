@@ -18,6 +18,12 @@ import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
 import { RoomBackdrop } from '../components/RoomCinematicChrome'
 import { getProceduralRoomStyle } from '../lib/proceduralBackdrops'
+import ShotGateChips from '../components/status/ShotGateChips'
+export { shotGateChips } from '../components/status/ShotGateChips'
+import NextActionLine from '../components/status/NextActionLine'
+export { nextActionCopy, type NextActionCopy } from '../components/status/NextActionLine'
+import VerdictStrip from '../components/status/VerdictStrip'
+import TechDetailsDrawer, { BlockerList } from '../components/status/TechDetailsDrawer'
 import { useProjectRouteContext } from '../hooks/useProjectRouteContext'
 import { useStudio } from '../context/StudioContext'
 import { getShotReferenceConfirmation, recordShotReferenceConfirmation, resolveShotReferenceBinding, type ShotReferenceBinding, type ShotReferenceConfirmation } from '../lib/visualTrainingApi'
@@ -88,80 +94,9 @@ export function isWaitingOnCutApproval(message: string): boolean {
   return /approve[^.]*film cut|film cut[^.]*approv|waiting on cut|state_error/i.test(message || '')
 }
 
-export type NextActionCopy = { label: string; detail: string; to: string | null; toLabel: string | null }
-
-// One plain-language next action per scene. No counts-as-judgment, no jargon.
-export function nextActionCopy(projectId: string, nextAction: string, sceneId: string): NextActionCopy {
-  const q = encodeURIComponent(projectId || '')
-  const page = `/studio/writers-room?project_id=${q}`
-  const previs = `/studio/previs?project_id=${q}`
-  const board = `/studio/production-board?project_id=${q}`
-  const theater = `/studio/screening-room?project_id=${q}`
-  const vault = `/studio/vault?project_id=${q}`
-  switch (nextAction) {
-    case 'add_scenes':
-      return { label: 'Add scenes to begin', detail: 'This project has no saved scenes yet. Start in The Page.', to: page, toLabel: 'Open The Page' }
-    case 'create_board':
-      return { label: 'Sketch the shot plan', detail: `${sceneId} has no shot plan yet. Sketch shots in Previs to begin.`, to: previs, toLabel: 'Open Previs' }
-    case 'approve_image_prompts':
-      return { label: 'Approve the image prompts', detail: 'Some shots still carry proposed prompts. Approve them in Previs.', to: previs, toLabel: 'Open Previs' }
-    case 'reapprove_stale_prompts':
-      return { label: 'Look again at the changed prompts', detail: 'A prompt changed after approval. Look again and approve in Previs.', to: previs, toLabel: 'Open Previs' }
-    case 'confirm_setting_anchor':
-      return { label: 'Settle the setting look', detail: 'The setting look is not settled. Check the look in the Vault.', to: vault, toLabel: 'Open the Vault' }
-    case 'check_project_data':
-      return { label: 'Check the project data', detail: 'The setting look could not be checked from the saved data.' , to: null, toLabel: null }
-    case 'retry_failed_jobs':
-      return { label: 'Try the failed shot again', detail: 'A render failed. Try it again from the scene board.', to: board, toLabel: 'Open scene board' }
-    case 'await_media':
-      return { label: 'Wait for the media to land', detail: 'Shots are moving. Wait for finished media before the next step.', to: board, toLabel: 'Open scene board' }
-    case 'ready':
-      return { label: 'Ready to screen', detail: 'Every check passed. Watch it in the Screening Room.', to: theater, toLabel: 'Open Screening Room' }
-    default:
-      return { label: 'Check this scene', detail: 'Something needs a look before this scene can move on.', to: board, toLabel: 'Open scene board' }
-  }
-}
-
-type GateTone = 'ok' | 'waiting' | 'idle' | 'attention'
-
-const GATE_TONE_CLASS: Record<GateTone, string> = {
-  ok: 'border-emerald-400/40 text-emerald-200',
-  waiting: 'border-amber-400/40 text-amber-200',
-  idle: 'border-white/15 text-zinc-400',
-  attention: 'border-rose-400/40 text-rose-200',
-}
-
-const DOT_CLASS: Record<GateTone, string> = {
-  ok: 'bg-emerald-400',
-  waiting: 'bg-amber-300',
-  idle: 'bg-zinc-500',
-  attention: 'bg-rose-400',
-}
-
-// Plain gate chips: icon + color + one short label each. Anchor "unknown" is
-// neutral ("can't check"), never a stop sign.
-export function shotGateChips(shot: DeskGateShot): Array<{ key: string; label: string; tone: GateTone }> {
-  const d4 = shot.d4_ready ? { key: 'd4', label: 'Image ready', tone: 'ok' as GateTone } : { key: 'd4', label: 'Image waiting', tone: 'waiting' as GateTone }
-  const d6 = shot.d6_ready ? { key: 'd6', label: 'Words ready', tone: 'ok' as GateTone } : { key: 'd6', label: 'Words waiting', tone: 'waiting' as GateTone }
-  const anchor = shot.setting_anchor === 'set'
-    ? { key: 'anchor', label: 'Look set', tone: 'ok' as GateTone }
-    : shot.setting_anchor === 'blocked'
-      ? { key: 'anchor', label: 'Look needed', tone: 'waiting' as GateTone }
-      : { key: 'anchor', label: "Can't check", tone: 'idle' as GateTone }
-  const confirmed = String(shot.binding_confirmation || 'missing').toLowerCase() === 'confirmed'
-    ? { key: 'confirm', label: 'Settled', tone: 'ok' as GateTone }
-    : String(shot.binding_confirmation || 'missing').toLowerCase() === 'missing'
-      ? { key: 'confirm', label: 'Unsettled', tone: 'idle' as GateTone }
-      : { key: 'confirm', label: 'Look again', tone: 'waiting' as GateTone }
-  const job = shot.has_media
-    ? { key: 'job', label: 'Media ready', tone: 'ok' as GateTone }
-    : String(shot.latest_job_status || '').toLowerCase() === 'failed'
-      ? { key: 'job', label: 'Try again', tone: 'attention' as GateTone }
-      : ['pending', 'queued', 'rendering'].includes(String(shot.latest_job_status || '').toLowerCase())
-        ? { key: 'job', label: 'Making now', tone: 'waiting' as GateTone }
-        : { key: 'job', label: 'No media yet', tone: 'idle' as GateTone }
-  return [d4, d6, anchor, confirmed, job]
-}
+// Shared status pieces live in components/status and render in both the
+// Desk and the Integrity Engine (re-exported at the top of this file so
+// existing importers keep working unchanged).
 
 type LoadState<T> = { status: 'loading' } | { status: 'unavailable'; message: string } | { status: 'loaded'; value: T }
 
@@ -382,13 +317,7 @@ export default function ProductionDesk() {
             </div>
             <button type="button" onClick={() => void load(true)} disabled={!projectId || refreshing} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/15 px-4 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">{refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}Refresh evidence</button>
           </div>
-          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {stages.map((stage) => <div key={stage.key} className="border-l-2 border-white/15 pl-4" aria-label={`${stage.label} stage`}>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{stage.label}</p>
-              <p className={`mt-1.5 text-lg ${stage.state === 'verified' ? 'text-emerald-200' : stage.state === 'blocked' || stage.state === 'stale' ? 'text-amber-200' : stage.state === 'unavailable' ? 'text-zinc-500' : 'text-zinc-200'}`}>{stage.detail}</p>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500">{stage.note}</p>
-            </div>)}
-          </div>
+          <VerdictStrip stages={stages} />
         </header>
 
         {projectError && <p role="alert" className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">{projectError}</p>}
@@ -405,7 +334,6 @@ export default function ProductionDesk() {
           </>}
           {board.status === 'loaded' && board.value.scene_count > 0 && <div className="grid gap-4 md:grid-cols-2" aria-label="Scene cards">
             {boardScenes.map((scene) => {
-              const copy = nextActionCopy(projectId || '', scene.next_action, scene.scene_id)
               const waiting = scene.next_action !== 'ready'
               return (
               <article key={scene.scene_id} data-testid={`scene-card-${scene.scene_id}`} className={`rounded-lg border border-white/10 bg-white/[0.02] p-4 ${waiting ? 'border-l-4 border-l-amber-300/70' : 'border-l-4 border-l-emerald-300/70'}`}>
@@ -423,37 +351,16 @@ export default function ProductionDesk() {
                     {scene.shots.map((shot) => (
                       <li key={shot.shot_id} data-testid={`shot-row-${shot.shot_id}`} className="rounded-md border border-white/10 p-2">
                         <p className="font-mono text-[11px] text-zinc-300">{shot.shot_id}</p>
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {shotGateChips(shot).map((gate) => (
-                            <span key={gate.key} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${GATE_TONE_CLASS[gate.tone]}`}>
-                              <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full ${DOT_CLASS[gate.tone]}`} />
-                              {gate.label}
-                            </span>
-                          ))}
-                        </div>
+                        <ShotGateChips shot={shot} />
                       </li>
                     ))}
                   </ul>
                 )}
-                <p data-testid={`scene-next-${scene.scene_id}`} className="mt-3 text-sm text-zinc-200">
-                  <span className="text-zinc-500">Next: </span>{copy.label}
-                </p>
-                {copy.to && (
-                  <Link
-                    data-testid={`scene-next-link-${scene.scene_id}`}
-                    className="mt-1 inline-flex min-h-10 items-center gap-1.5 text-sm text-cyan-200"
-                    to={copy.to}
-                  >
-                    {copy.toLabel} <ArrowRight size={14} />
-                  </Link>
-                )}
+                <NextActionLine projectId={projectId || ''} nextAction={scene.next_action} sceneId={scene.scene_id} />
                 {scene.blockers.length > 0 && (
-                  <details className="mt-2 text-xs text-zinc-400">
-                    <summary className="cursor-pointer text-amber-200/90">Why is this waiting?</summary>
-                    <ul className="mt-1 list-disc space-y-1 pl-5">
-                      {scene.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
-                    </ul>
-                  </details>
+                  <TechDetailsDrawer summary="Why is this waiting?">
+                    <BlockerList items={scene.blockers} />
+                  </TechDetailsDrawer>
                 )}
               </article>
               )
