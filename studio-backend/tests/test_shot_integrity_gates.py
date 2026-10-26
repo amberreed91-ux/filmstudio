@@ -230,6 +230,7 @@ def test_shot_gates_unapproved_prompts_block_with_next_action() -> None:
     assert payload["gates"]["image"]["state"] == "blocked"
     assert payload["gates"]["words"]["state"] == "blocked"
     assert payload["gates"]["settled"]["state"] == "not_yet"
+    assert payload["gates"]["settled"]["label"] == "Not confirmed yet"
     assert payload["next_action"] == "approve_image_prompts"
     assert payload["blockers"]
 
@@ -308,7 +309,11 @@ def test_shot_gates_confirmed_binding_passes_settled() -> None:
 
     response = _gates(project_id, shot.shot_id)
     assert response.status_code == 200, response.text
-    assert response.json()["gates"]["settled"]["state"] == "pass"
+    assert response.json()["gates"]["settled"] == {
+        "state": "pass",
+        "label": "Confirmed",
+        "detail": "The binding was explicitly confirmed and still matches.",
+    }
 
 
 def test_shot_gates_mismatched_digest_marks_settled_blocked() -> None:
@@ -332,6 +337,7 @@ def test_shot_gates_mismatched_digest_marks_settled_blocked() -> None:
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["gates"]["settled"]["state"] == "blocked"
+    assert payload["gates"]["settled"]["label"] == "Changed since confirmed"
     assert payload["next_action"] == "confirm_binding"
 
 

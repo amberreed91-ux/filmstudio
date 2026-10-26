@@ -552,17 +552,17 @@ class ShotIntegrityGatesService:
         except Exception:  # noqa: BLE001 — a lookup failure reads as missing
             confirm_status = "missing"
         if confirm_status == "confirmed":
-            settled = _gate(PASS, "Settled", "The binding was explicitly confirmed and still matches.")
+            settled = _gate(PASS, "Confirmed", "The binding was explicitly confirmed and still matches.")
             confirm_ready = True
         elif confirm_status == "stale":
             confirm_ready = False
-            settled = _gate(BLOCKED, "Look again", "The confirmed binding differs from the current resolution; confirm again.")
+            settled = _gate(BLOCKED, "Changed since confirmed", "The confirmed binding differs from the current resolution; confirm again.")
         elif confirm_status == "unverifiable":
             confirm_ready = False
-            settled = _gate(CANT_CHECK, "Can't check settling", "The current binding cannot be resolved, so the confirmation cannot be judged.")
+            settled = _gate(CANT_CHECK, "Can't check", "The current binding cannot be resolved, so the confirmation cannot be judged.")
         else:
             confirm_ready = False
-            settled = _gate(NOT_YET, "Not settled yet", "This shot has not been explicitly confirmed yet.")
+            settled = _gate(NOT_YET, "Not confirmed yet", "This shot has not been explicitly confirmed yet.")
 
         # 7. Latest persisted job (SELECT only).
         try:
