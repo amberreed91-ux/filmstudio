@@ -173,6 +173,13 @@ async def main():
 
 
 if __name__ == "__main__":
+    from app.script_guard import refuse_non_approved_provider
+
+    refuse_non_approved_provider(
+        __file__,
+        what="exercise corrector variations with real Groq LLM calls",
+        provider="groq",
+    )
     try:
         asyncio.run(main())
     except Exception as e:

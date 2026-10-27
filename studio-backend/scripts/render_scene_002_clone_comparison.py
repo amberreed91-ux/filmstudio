@@ -16,11 +16,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
-
-
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="render bare vs instructed scene_002 clone comparisons via CosyVoice TTS",
+    provider="dashscope",
+)
+
+from dotenv import load_dotenv
+
 load_dotenv(BACKEND_ROOT / ".env")
 
 from app.services.audio.cosyvoice_tts_service import CosyVoiceTTSService

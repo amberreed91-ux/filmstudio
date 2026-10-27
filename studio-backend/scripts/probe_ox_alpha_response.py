@@ -21,6 +21,13 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="one probe call to Ox Alpha via OpenRouter to inspect empty-content responses",
+    provider="openrouter",
+)
 try:
     from dotenv import load_dotenv
     load_dotenv(BACKEND_ROOT / ".env")

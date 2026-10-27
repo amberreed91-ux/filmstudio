@@ -36,6 +36,12 @@ def test_main_fails_fast_when_mock_mode_enabled(monkeypatch):
     monkeypatch.setattr(verify, "resolve_runway_key", lambda: ("RUNWAY_API_KEY", "rk_live_1234"))
     monkeypatch.setenv("RENDER_PROVIDER_TEST_MODE", "mock_success")
     monkeypatch.setattr(verify, "parse_args", lambda: types.SimpleNamespace(prompt="x", timeout_seconds=60))
+    # Direct main() call through the documented dual opt-in; all transports stay mocked.
+    monkeypatch.setenv("STUDIO_ALLOW_LIVE_SPEND_SCRIPT", "1")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["verify_runway_hosted_generation.py", "--confirm-spend=verify_runway_hosted_generation.py"],
+    )
 
     rc = verify.main()
     assert rc == 1
@@ -57,6 +63,12 @@ def test_main_succeeds_in_hosted_ready_mode_without_live_calls(monkeypatch):
             "ready_for_hosted_generation": True,
             "missing_requirements": [],
         },
+    )
+    # Direct main() call through the documented dual opt-in; all transports stay mocked.
+    monkeypatch.setenv("STUDIO_ALLOW_LIVE_SPEND_SCRIPT", "1")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["verify_runway_hosted_generation.py", "--confirm-spend=verify_runway_hosted_generation.py"],
     )
     monkeypatch.setattr(verify, "create_render_job", lambda _base, _prompt: {"id": "job-1"})
     monkeypatch.setattr(

@@ -207,4 +207,18 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+
+    _backend_root = str(Path(__file__).resolve().parents[1])
+    if _backend_root not in sys.path:
+        sys.path.insert(0, _backend_root)
+    from app.script_guard import require_live_spend_gate
+
+    require_live_spend_gate(
+        __file__,
+        what="poll an existing Runway task OR submit one new Runway render job",
+        exposure="poll is read-only; without --task-id submits 1 Runway render + polls",
+        provider="runway",
+    )
     raise SystemExit(main())

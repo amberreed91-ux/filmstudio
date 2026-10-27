@@ -343,5 +343,13 @@ async def main():
 
 
 if __name__ == "__main__":
+    from app.script_guard import require_live_spend_gate
+
+    require_live_spend_gate(
+        __file__,
+        what="retry-loop test: score, correct, re-render on Runway, score again",
+        exposure="multiple Runway video renders + polls + Groq/Gemini scoring calls",
+        provider="runway",
+    )
     exit_code = asyncio.run(main())
     sys.exit(exit_code)

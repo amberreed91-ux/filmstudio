@@ -9,6 +9,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from app.script_guard import require_live_spend_gate
+
+require_live_spend_gate(
+    __file__,
+    what="exercise the submit path with the simulated provider (no spend) + job-row writes",
+    exposure="no provider spend (simulated submit); writes job rows to the resolved DB",
+    provider="runway",
+)
+
 from dotenv import load_dotenv
 load_dotenv()
 

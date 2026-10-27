@@ -55,6 +55,14 @@ import time
 import urllib.request
 import uuid
 from pathlib import Path
+from app.script_guard import require_live_spend_gate
+
+require_live_spend_gate(
+    __file__,
+    what="submit exactly ONE live Runway gen4_image task + bounded polls (authorized single-request validation)",
+    exposure="1 Runway image task + polls; temp-copy DB; live network (refuse-by-default, incl. --dry-run)",
+    provider="runway",
+)
 from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 BACKEND = Path(__file__).resolve().parents[1]

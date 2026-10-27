@@ -175,4 +175,11 @@ async def main():
 
 
 if __name__ == "__main__":
+    from app.script_guard import refuse_non_approved_provider
+
+    refuse_non_approved_provider(
+        __file__,
+        what="run the Groq corrector on a real failed adherence score (real LLM call)",
+        provider="groq",
+    )
     asyncio.run(main())

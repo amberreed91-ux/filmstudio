@@ -18,6 +18,7 @@ import json
 import mimetypes
 import os
 import subprocess
+import sys
 import time
 import uuid
 import urllib.error
@@ -25,6 +26,17 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[1] / "studio-backend")
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="convert a dialogue take via ElevenLabs speech-to-speech voice conversion (real call, billed)",
+    provider="elevenlabs",
+)
 
 API_URL = "https://api.elevenlabs.io/v1/speech-to-speech"
 DEFAULT_MODEL_ID = os.environ.get("ELEVENLABS_STS_MODEL_ID", "eleven_multilingual_sts_v2")

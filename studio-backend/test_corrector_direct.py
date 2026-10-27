@@ -181,6 +181,13 @@ async def test_corrector():
 
 
 if __name__ == "__main__":
+    from app.script_guard import refuse_non_approved_provider
+
+    refuse_non_approved_provider(
+        __file__,
+        what="exercise the Groq corrector in isolation (real LLM call)",
+        provider="groq",
+    )
     try:
         asyncio.run(test_corrector())
     except Exception as e:

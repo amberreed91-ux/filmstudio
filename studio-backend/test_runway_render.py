@@ -158,4 +158,15 @@ def main():
     return 0
 
 if __name__ == "__main__":
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from app.script_guard import require_live_spend_gate
+
+    require_live_spend_gate(
+        __file__,
+        what="create + submit a test render job to Runway via the local backend API",
+        exposure="1 Runway video render + polls via localhost backend",
+        provider="runway",
+    )
     sys.exit(main())

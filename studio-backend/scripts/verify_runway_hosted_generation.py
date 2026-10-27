@@ -194,6 +194,20 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    import sys
+    from pathlib import Path
+
+    _backend_root = str(Path(__file__).resolve().parents[1])
+    if _backend_root not in sys.path:
+        sys.path.insert(0, _backend_root)
+    from app.script_guard import require_live_spend_gate
+
+    require_live_spend_gate(
+        __file__,
+        what="hosted Runway release verification incl. submitting a real render job",
+        exposure="1 Runway video render + polls via localhost backend",
+        provider="runway",
+    )
     args = parse_args()
     load_env(ENV_PATH)
 

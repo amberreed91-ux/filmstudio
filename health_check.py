@@ -11,6 +11,14 @@ import json
 import time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'studio-backend'))
+from app.script_guard import require_live_spend_gate
+
+require_live_spend_gate(
+    __file__,
+    what="health check incl. creating + submitting a render job via the backend API",
+    exposure="1 Runway video render + polls via localhost backend when the render phase runs",
+    provider="runway",
+)
 from app.data.db_guard import open_db_readonly, resolve_db_file
 from typing import Dict, List, Tuple
 

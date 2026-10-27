@@ -190,4 +190,11 @@ async def main():
 
 
 if __name__ == '__main__':
+    from app.script_guard import refuse_non_approved_provider
+
+    refuse_non_approved_provider(
+        __file__,
+        what="download a prior Runway clip + score it with Gemini/Groq vision calls",
+        provider="gemini",
+    )
     asyncio.run(main())

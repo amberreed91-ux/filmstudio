@@ -3,10 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlencode
+
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[1])
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
 
 try:
     from verify_runway_hosted_generation import (
@@ -24,6 +28,15 @@ except ModuleNotFoundError:
         load_env,
         submit_and_poll_job,
     )
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="six-film Wan (DashScope) certification incl. submitting real render jobs",
+    provider="dashscope",
+)
+
+from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT / ".env"

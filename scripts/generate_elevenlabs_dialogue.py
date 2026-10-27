@@ -23,6 +23,17 @@ import urllib.request
 from pathlib import Path
 
 
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[1] / "studio-backend")
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="synthesize a dialogue WAV via the ElevenLabs TTS API (real call, credit spend)",
+    provider="elevenlabs",
+)
+
 ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech"
 DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"
 DEFAULT_MODEL_ID = os.environ.get("ELEVENLABS_MODEL_ID", "eleven_flash_v2_5")

@@ -23,11 +23,6 @@ def main():
     # Check environment variables
     print("\n1. ENVIRONMENT VARIABLES:")
     print(f"   RUNWAYML_API_SECRET: {'SET' if os.getenv('RUNWAYML_API_SECRET') else 'NOT SET'}")
-    if os.getenv('RUNWAYML_API_SECRET'):
-        key = os.getenv('RUNWAYML_API_SECRET', '')
-        print(f"   Key length: {len(key)}")
-        print(f"   Key first 4: {key[:4]}")
-        print(f"   Key last 4: {key[-4:]}")
     print(f"   RUNWAY_API_KEY: {'SET' if os.getenv('RUNWAY_API_KEY') else 'NOT SET'}")
     print(f"   RENDER_PROVIDER_TEST_MODE: {os.getenv('RENDER_PROVIDER_TEST_MODE', 'NOT SET')}")
     print(f"   APP_ENV: {os.getenv('APP_ENV', 'NOT SET')}")

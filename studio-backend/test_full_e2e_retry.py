@@ -399,4 +399,12 @@ async def main():
 
 
 if __name__ == '__main__':
+    from app.script_guard import require_live_spend_gate
+
+    require_live_spend_gate(
+        __file__,
+        what="full end-to-end retry loop with real Runway renders + adherence scoring",
+        exposure="multiple Runway video renders + polls + Groq/Gemini scoring calls",
+        provider="runway",
+    )
     asyncio.run(main())

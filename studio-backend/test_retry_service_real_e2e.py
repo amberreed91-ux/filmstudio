@@ -182,5 +182,12 @@ async def main():
 
 
 if __name__ == "__main__":
+    from app.script_guard import refuse_non_approved_provider
+
+    refuse_non_approved_provider(
+        __file__,
+        what="end-to-end retry-service test with real Groq/Gemini scoring calls",
+        provider="groq",
+    )
     exit_code = asyncio.run(main())
     sys.exit(exit_code)

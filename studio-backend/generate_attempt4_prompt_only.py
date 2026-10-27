@@ -12,6 +12,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="generate the full-corrected prompt via a REAL Groq LLM call (no Runway submit)",
+    provider="groq",
+)
+
 from dotenv import load_dotenv
 load_dotenv()
 

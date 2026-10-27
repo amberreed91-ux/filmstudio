@@ -25,6 +25,17 @@ import sys
 import time
 from pathlib import Path
 
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[1] / "studio-backend")
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="synthesize a dialogue WAV via the Fish Audio TTS API (real call, per-character billing)",
+    provider="fish-audio",
+)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(

@@ -610,6 +610,13 @@ async def _run_live_comparison(args: argparse.Namespace, report: dict[str, Any])
 
 
 def main() -> None:
+    from app.script_guard import refuse_non_approved_provider
+
+    refuse_non_approved_provider(
+        __file__,
+        what="build a casting voice-provider comparison plan; --live runs external Fish/DashScope comparisons",
+        provider="fish-audio",
+    )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-audio", type=Path)
     parser.add_argument("--public-reference-url", default="")

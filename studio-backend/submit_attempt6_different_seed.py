@@ -31,6 +31,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from app.script_guard import require_live_spend_gate
+
+require_live_spend_gate(
+    __file__,
+    what="submit Attempt 6 render to Runway (unchanged prompt, different seed) + Groq/Gemini scoring",
+    exposure="1 Runway video render + polls + Groq/Gemini scoring calls",
+    provider="runway",
+)
+
 from dotenv import load_dotenv
 load_dotenv()
 

@@ -11,6 +11,19 @@ Shows:
 
 import asyncio
 import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="demo the adherence loop incl. corrective-diff generation via real Groq calls",
+    provider="groq",
+)
+
 from app.services.adherence_service import (
     adherence_service,
     AdherenceScore,

@@ -18,6 +18,13 @@ from fastapi.testclient import TestClient
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="run one fresh hosted render for pipeline wiring proof (provider happyhorse default, runway optional)",
+    provider="happyhorse",
+)
 CAPTURE_ROOT = BACKEND_ROOT / "outputs" / "real_render_validation"
 PROJECT_ID = "project_3dba9330f43a"
 SCENE_ID = "scene_002"

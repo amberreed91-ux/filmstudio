@@ -13,6 +13,16 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from app.script_guard import require_live_spend_gate
+
+require_live_spend_gate(
+    __file__,
+    what="master end-to-end validation incl. Runway render-context posts + production-queue render items",
+    exposure="drives render/queue paths that can spend; isolated storage/report dirs",
+    provider="runway",
+)
 REPO = ROOT.parent
 REPORT_DIR = ROOT / "reports" / "master_e2e_validation"
 STORAGE_DIR = REPORT_DIR / "storage"

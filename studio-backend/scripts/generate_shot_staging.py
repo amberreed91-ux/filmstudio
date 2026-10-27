@@ -31,11 +31,18 @@ import re
 import sqlite3
 import sys
 from pathlib import Path
-from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="propose shot staging via OpenRouter LLM; with --apply writes storyboard_shots rows",
+    provider="openrouter",
+)
+from app.data.db_guard import open_db_readonly, open_db_readwrite, resolve_db_file
 
 try:
     from dotenv import load_dotenv

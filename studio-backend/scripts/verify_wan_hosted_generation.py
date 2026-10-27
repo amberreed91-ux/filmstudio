@@ -3,9 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
-from urllib.parse import urlencode
+
+_BACKEND_ROOT = str(Path(__file__).resolve().parents[1])
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
 
 from verify_runway_hosted_generation import (
     _extract_output_fields,
@@ -15,6 +19,15 @@ from verify_runway_hosted_generation import (
     safe_key_info,
     submit_and_poll_job,
 )
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="hosted Wan (DashScope) release verification incl. submitting a real render job",
+    provider="dashscope",
+)
+
+from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT / ".env"

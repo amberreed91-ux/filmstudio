@@ -33,6 +33,14 @@ from pathlib import Path
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent))
 
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="score frames with the Gemini vision model (+ optional Groq corrective diff)",
+    provider="gemini",
+)
+
 from app.services.adherence_service import AdherenceService, AdherenceScore
 
 # Configure logging

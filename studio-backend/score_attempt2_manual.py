@@ -10,6 +10,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from app.script_guard import refuse_non_approved_provider
+
+refuse_non_approved_provider(
+    __file__,
+    what="score Attempt 2 via the Gemini vision model + ffmpeg frame extraction",
+    provider="gemini",
+)
+
 from dotenv import load_dotenv
 load_dotenv()
 
