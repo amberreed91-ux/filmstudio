@@ -136,7 +136,7 @@ export default function CanonicalWorkflowPanel({
         </div>
         <div className="flex items-center gap-2">
           {run ? (
-            <span className={`rounded-full border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] ${
+            <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] ${
               stale
                 ? 'border-rose-400/40 bg-rose-500/10 text-rose-200'
                 : run.status.includes('failed')
@@ -150,6 +150,7 @@ export default function CanonicalWorkflowPanel({
             type="button"
             onClick={() => void controller.refresh()}
             disabled={!run || busy}
+            aria-busy={busy || controller.loading}
             aria-label="Refresh production thread"
             className="rounded border border-white/10 p-1.5 text-zinc-400 hover:text-zinc-100 disabled:opacity-30"
           >
@@ -211,6 +212,7 @@ export default function CanonicalWorkflowPanel({
                 beatIds: resolvedSceneContext.beatIds,
               }))}
               disabled={busy || !projectId || !sceneId || !resolvedSceneContext.scriptId}
+              aria-busy={busy}
               className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 disabled:opacity-40"
             >
               Start approved production thread
@@ -218,7 +220,7 @@ export default function CanonicalWorkflowPanel({
           ) : null}
 
           {nextAction === 'generate_previs' ? (
-            <button type="button" disabled={busy} onClick={() => apply('Generating Previs', () => generateCanonicalPrevis(run!.run_id))} className="btn-ghost px-3 py-2 text-[10px]">
+            <button type="button" disabled={busy} aria-busy={busy} onClick={() => apply('Generating Previs', () => generateCanonicalPrevis(run!.run_id))} className="btn-ghost px-3 py-2 text-xs">
               Generate approved Previs
             </button>
           ) : null}
@@ -227,6 +229,7 @@ export default function CanonicalWorkflowPanel({
             <button
               type="button"
               disabled={busy}
+              aria-busy={busy}
               onClick={() => confirmAction(
                 'Approve every generated Previs artifact for this exact Blueprint version?',
                 'Approving Previs',
@@ -239,7 +242,7 @@ export default function CanonicalWorkflowPanel({
           ) : null}
 
           {nextAction === 'create_package' ? (
-            <button type="button" disabled={busy} onClick={() => apply('Building package', () => createCanonicalProductionPackage(run!.run_id))} className="btn-ghost px-3 py-2 text-[10px]">
+            <button type="button" disabled={busy} aria-busy={busy} onClick={() => apply('Building package', () => createCanonicalProductionPackage(run!.run_id))} className="btn-ghost px-3 py-2 text-xs">
               Build production package
             </button>
           ) : null}
@@ -271,6 +274,7 @@ export default function CanonicalWorkflowPanel({
             <button
               type="button"
               disabled={busy}
+              aria-busy={busy}
               onClick={() => confirmAction(
                 'Retry the existing paid render jobs without creating duplicates?',
                 'Retrying render',
@@ -283,7 +287,7 @@ export default function CanonicalWorkflowPanel({
           ) : null}
 
           {nextAction === 'sync_screening' ? (
-            <button type="button" disabled={busy} onClick={() => apply('Registering Screening output', () => syncCanonicalScreening(run!.run_id))} className="btn-ghost px-3 py-2 text-[10px]">
+            <button type="button" disabled={busy} aria-busy={busy} onClick={() => apply('Registering Screening output', () => syncCanonicalScreening(run!.run_id))} className="btn-ghost px-3 py-2 text-xs">
               Register completed clips in Screening
             </button>
           ) : null}
@@ -298,6 +302,7 @@ export default function CanonicalWorkflowPanel({
             <button
               type="button"
               disabled={busy}
+              aria-busy={busy}
               onClick={() => confirmAction(
                 'Approve every Screening output registered to this production thread?',
                 'Approving Screening output',
@@ -310,7 +315,7 @@ export default function CanonicalWorkflowPanel({
           ) : null}
 
           {nextAction === 'analyze_editorial' ? (
-            <button type="button" disabled={busy} onClick={() => apply('Reading cut', () => analyzeCanonicalEditorial(run!.run_id))} className="btn-ghost px-3 py-2 text-[10px]">
+            <button type="button" disabled={busy} aria-busy={busy} onClick={() => apply('Reading cut', () => analyzeCanonicalEditorial(run!.run_id))} className="btn-ghost px-3 py-2 text-xs">
               Read approved cut
             </button>
           ) : null}
@@ -319,6 +324,7 @@ export default function CanonicalWorkflowPanel({
             <button
               type="button"
               disabled={busy}
+              aria-busy={busy}
               onClick={() => confirmAction('Create a new Film Cut version from the confirmed decision?', 'Creating Film Cut', () => updateCanonicalFilmCut(run!.run_id))}
               className="btn-ghost px-3 py-2 text-[10px]"
             >
@@ -330,6 +336,7 @@ export default function CanonicalWorkflowPanel({
             <button
               type="button"
               disabled={busy}
+              aria-busy={busy}
               onClick={() => confirmAction('Approve this exact Film Cut version?', 'Approving Film Cut', () => approveCanonicalFilmCut(run!.run_id))}
               className="btn-ghost px-3 py-2 text-[10px]"
             >
@@ -341,6 +348,7 @@ export default function CanonicalWorkflowPanel({
             <button
               type="button"
               disabled={busy}
+              aria-busy={busy}
               onClick={() => confirmAction(
                 nextAction === 'retry_revision' ? 'Retry this existing Revision render?' : 'Render the confirmed Revision?',
                 nextAction === 'retry_revision' ? 'Retrying Revision' : 'Rendering Revision',
@@ -363,12 +371,13 @@ export default function CanonicalWorkflowPanel({
 
       {nextAction === 'choose_editorial_decision' && decisions.length > 0 ? (
         <div className="mt-3 space-y-2" data-testid="canonical-editorial-decisions">
-          <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Proposed Editorial changes</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">Proposed Editorial changes</div>
           {decisions.map((decision) => (
             <button
               key={text(decision.decision_id)}
               type="button"
               disabled={busy}
+              aria-busy={busy}
               onClick={() => confirmAction(
                 `Apply this proposed Editorial change: ${text(decision.recommendation) || 'selected change'}?`,
                 'Applying Editorial decision',
@@ -381,7 +390,7 @@ export default function CanonicalWorkflowPanel({
               className="block w-full rounded-lg border border-white/10 bg-white/5 p-2 text-left hover:bg-white/10 disabled:opacity-40"
             >
               <span className="block text-xs text-zinc-200">{text(decision.recommendation) || 'Editorial change'}</span>
-              <span className="mt-1 block text-[10px] leading-relaxed text-zinc-500">{text(decision.rationale)}</span>
+              <span className="mt-1 block text-xs leading-relaxed text-zinc-500">{text(decision.rationale)}</span>
             </button>
           ))}
         </div>
@@ -396,6 +405,7 @@ export default function CanonicalWorkflowPanel({
             <button
               type="button"
               disabled={busy || !revisionPrompt.trim() || !revisionReason.trim()}
+              aria-busy={busy}
               onClick={() => confirmAction(
                 'Create a Revision from the approved cut and preserve all unchanged continuity?',
                 'Creating Revision',
@@ -423,6 +433,7 @@ export default function CanonicalWorkflowPanel({
               <button
                 type="button"
                 disabled={busy}
+                aria-busy={busy}
                 onClick={() => confirmAction('Save this approved output to editable project memory?', 'Saving approved memory', () => saveCanonicalMemory(run.run_id, memorySummary))}
                 className="rounded border border-emerald-400/40 px-2 py-1 text-[10px] font-bold uppercase"
               >
@@ -436,14 +447,14 @@ export default function CanonicalWorkflowPanel({
       ) : null}
 
       {!run && !controller.loading && !resolvedSceneContext.scriptId ? (
-        <p className="mt-2 text-[10px] text-amber-200">Save this film’s script in Write before starting a production thread.</p>
+        <p className="mt-2 text-xs text-amber-200">Save this film’s script in Write before starting a production thread.</p>
       ) : null}
       {!run && !controller.loading && resolvedSceneContext.scriptId && !controller.currentBlueprintVersionId ? (
-        <p className="mt-2 text-[10px] text-amber-200">Build and approve this scene’s Storyboard Blueprint, then start its production thread.</p>
+        <p className="mt-2 text-xs text-amber-200">Build and approve this scene’s Storyboard Blueprint, then start its production thread.</p>
       ) : null}
 
       {run ? (
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[9px] uppercase tracking-[0.08em] text-zinc-600">
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] uppercase tracking-[0.08em] text-zinc-600">
           <span>Run {run.run_id}</span>
           <span>Approved source</span>
           <span>{controller.transitions.length} persisted transitions</span>

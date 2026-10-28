@@ -6,7 +6,7 @@ import '@testing-library/jest-dom/vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import Lobby3DPage from './Lobby3DPage'
 import { APP_ROUTES } from '../routes'
-import { LOBBY_ROOMS } from '../components/Interactive3DLobby'
+import { LOBBY_ROOMS } from '../lib/lobbyRooms'
 
 vi.mock('../components/StudioShell', () => ({
   default: ({ children }: { children: ReactNode }) => createElement('div', null, children),

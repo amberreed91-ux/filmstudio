@@ -56,6 +56,7 @@ export default function ProductionQueueDetailPanel({ projectId, refreshKey = 0 }
   const [actingItemId, setActingItemId] = useState<string | null>(null)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
   const [eventsByItem, setEventsByItem] = useState<Record<string, ProductionQueueEvent[]>>({})
+  const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const loadPage = useCallback(
@@ -94,7 +95,14 @@ export default function ProductionQueueDetailPanel({ projectId, refreshKey = 0 }
     async (itemId: string) => {
       const next = expandedItemId === itemId ? null : itemId
       setExpandedItemId(next)
-      if (next && !eventsByItem[next]) await refreshEvents(next)
+      if (next && !eventsByItem[next]) {
+        setEventsLoadingId(next)
+        try {
+          await refreshEvents(next)
+        } finally {
+          setEventsLoadingId(null)
+        }
+      }
     },
     [eventsByItem, expandedItemId, refreshEvents],
   )
@@ -150,7 +158,9 @@ export default function ProductionQueueDetailPanel({ projectId, refreshKey = 0 }
           <button
             type="button"
             onClick={() => loadPage(null, false)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-white/60 transition hover:bg-white/10 hover:text-white"
+            disabled={loading}
+            aria-busy={loading}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
             title="Refresh queue items"
             aria-label="Refresh queue items"
           >
@@ -175,7 +185,7 @@ export default function ProductionQueueDetailPanel({ projectId, refreshKey = 0 }
               className="grid gap-2 px-3 py-3 md:grid-cols-[minmax(0,1fr)_120px_120px_160px] md:items-center"
               data-testid="production-queue-item-row"
             >
-              <button type="button" onClick={() => toggleEvents(item.queue_item_id)} className="min-w-0 text-left">
+              <button type="button" onClick={() => toggleEvents(item.queue_item_id)} disabled={loading || eventsLoadingId === item.queue_item_id} aria-busy={eventsLoadingId === item.queue_item_id} className="min-w-0 text-left">
                 <div className="truncate text-sm font-medium text-white">{label(item.work_type)} · {itemTarget(item)}</div>
                 <div className="mt-1 truncate text-xs text-white/50">
                   {label(item.provider)} · priority {item.priority} · attempt {item.attempt_count}/{item.max_attempts}
@@ -193,6 +203,7 @@ export default function ProductionQueueDetailPanel({ projectId, refreshKey = 0 }
                   <button
                     type="button"
                     disabled={actingItemId === item.queue_item_id}
+                    aria-busy={actingItemId === item.queue_item_id}
                     onClick={() => runAction(item, 'retry')}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
                     title="Retry queue item"
@@ -205,6 +216,7 @@ export default function ProductionQueueDetailPanel({ projectId, refreshKey = 0 }
                   <button
                     type="button"
                     disabled={actingItemId === item.queue_item_id}
+                    aria-busy={actingItemId === item.queue_item_id}
                     onClick={() => runAction(item, 'cancel')}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
                     title="Cancel queue item"
@@ -242,6 +254,7 @@ export default function ProductionQueueDetailPanel({ projectId, refreshKey = 0 }
         <button
           type="button"
           disabled={loading}
+          aria-busy={loading}
           onClick={() => loadPage(cursor, true)}
           className="mt-3 inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
         >

@@ -243,16 +243,16 @@ export function SettingReferenceAuthorityPanel({ projectId, settingId = SCENE002
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-xs text-zinc-200"><code>{row.ref_id}</code></p>
-                      <p className="text-[11px] text-zinc-500">{row.target_type}/{row.target_id} · {row.kind}</p>
+                      <p className="text-xs text-zinc-500">{row.target_type}/{row.target_id} · {row.kind}</p>
                     </div>
                     <span data-testid={`state-${row.ref_id}`} className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${STATE_STYLE[state]}`}>{state}</span>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {state === 'candidate' && <button type="button" aria-label={`Approve reference ${row.ref_id}`} disabled={busy} onClick={() => void approve(row.ref_id)} className="inline-flex items-center gap-1 rounded border border-emerald-300/30 px-2 py-1 text-xs text-emerald-200 disabled:opacity-40"><Check size={12} />Approve</button>}
-                    {exact && (state === 'candidate' || state === 'approved') && <button type="button" aria-label={`Reject reference ${row.ref_id}`} disabled={busy} onClick={() => void reject(row.ref_id)} className="inline-flex items-center gap-1 rounded border border-red-300/30 px-2 py-1 text-xs text-red-200 disabled:opacity-40"><X size={12} />Reject</button>}
-                    {state === 'approved' && <button type="button" aria-label={`Designate canonical reference ${row.ref_id}`} disabled={busy} onClick={() => void designate(row.ref_id)} className="inline-flex items-center gap-1 rounded border border-amber-200/40 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"><Stamp size={12} />Designate canonical</button>}
-                    {state === 'canonical' && <><span className="text-[11px] text-amber-100">canonical for this setting</span>{exact && <button type="button" aria-label={`Reject reference ${row.ref_id}`} disabled={busy} onClick={() => void reject(row.ref_id)} className="inline-flex items-center gap-1 rounded border border-red-300/30 px-2 py-1 text-xs text-red-200 disabled:opacity-40"><X size={12} />Reject</button>}</>}
-                    {state === 'rejected' && <span className="text-[11px] text-red-200">rejected · unavailable for selection</span>}
+                    {state === 'candidate' && <button type="button" aria-label={`Approve reference ${row.ref_id}`} disabled={busy} aria-busy={busy} onClick={() => void approve(row.ref_id)} className="inline-flex items-center gap-1 rounded border border-emerald-300/30 px-2 py-1 text-xs text-emerald-200 disabled:opacity-40"><Check size={12} />Approve</button>}
+                    {exact && (state === 'candidate' || state === 'approved') && <button type="button" aria-label={`Reject reference ${row.ref_id}`} disabled={busy} aria-busy={busy} onClick={() => void reject(row.ref_id)} className="inline-flex items-center gap-1 rounded border border-red-300/30 px-2 py-1 text-xs text-red-200 disabled:opacity-40"><X size={12} />Reject</button>}
+                    {state === 'approved' && <button type="button" aria-label={`Designate canonical reference ${row.ref_id}`} disabled={busy} aria-busy={busy} onClick={() => void designate(row.ref_id)} className="inline-flex items-center gap-1 rounded border border-amber-200/40 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"><Stamp size={12} />Designate canonical</button>}
+                    {state === 'canonical' && <><span className="text-xs text-amber-100">canonical for this setting</span>{exact && <button type="button" aria-label={`Reject reference ${row.ref_id}`} disabled={busy} aria-busy={busy} onClick={() => void reject(row.ref_id)} className="inline-flex items-center gap-1 rounded border border-red-300/30 px-2 py-1 text-xs text-red-200 disabled:opacity-40"><X size={12} />Reject</button>}</>}
+                    {state === 'rejected' && <span className="text-xs text-red-200">rejected · unavailable for selection</span>}
                   </div>
                 </li>
               )
@@ -263,7 +263,7 @@ export function SettingReferenceAuthorityPanel({ projectId, settingId = SCENE002
               <input aria-label="Reference image URI" className={inputClass} value={imageUrl} placeholder="https://… or /outputs/…" disabled={busy} onChange={event => setImageUrl(event.target.value)} />
             </label>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className={buttonClass} disabled={busy || !imageUrl.trim()} onClick={() => void registerUri()}>Register reference</button>
+              <button type="button" className={buttonClass} disabled={busy || !imageUrl.trim()} aria-busy={busy} onClick={() => void registerUri()}>Register reference</button>
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 disabled:opacity-40">
                 Upload image
                 <input aria-label="Upload reference image" type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={busy} ref={fileInputRef} onChange={event => void registerUpload(event.target.files?.[0])} />

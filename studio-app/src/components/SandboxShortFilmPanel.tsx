@@ -141,6 +141,10 @@ export default function SandboxShortFilmPanel() {
   const [latestPackage, setLatestPackage] = useState<FinalShortFilmPackage | null>(null)
   const [packageStatus, setPackageStatus] = useState<'idle' | 'creating' | 'updating' | 'completed' | 'error'>('idle')
   const [packageError, setPackageError] = useState('')
+  const [recovering, setRecovering] = useState(false)
+  const [refreshingRowId, setRefreshingRowId] = useState('')
+  const [reviewSaving, setReviewSaving] = useState<'' | 'create' | 'approved' | 'needs_revision' | 'rejected'>('')
+  const [restitching, setRestitching] = useState(false)
   const providerStatus = useProviderStatus(provider, useMockSuccess)
   const { pollUntilTerminal } = useRenderPolling<RenderJob>({
     isTerminal: (job) => ['complete', 'failed', 'cancelled'].includes(job.status),
@@ -158,13 +162,13 @@ export default function SandboxShortFilmPanel() {
     return Math.max(1, sceneCount * perScene)
   }, [scriptText])
 
-  async function createSandboxProject() {
+  const createSandboxProject = useCallback(async () => {
     const created = await createProject({ title: projectTitle || 'Sandbox Short Film' })
     if (!created.project?.project_id) {
       throw new Error(created.error || 'Unable to create sandbox project')
     }
     return created.project
-  }
+  }, [projectTitle])
 
   function applyProjectSummary(nextProject: PersistedProjectState) {
     const summary = nextProject.execution_summary || {}
@@ -211,6 +215,7 @@ export default function SandboxShortFilmPanel() {
   async function onRecoverJob() {
     const lookupId = jobLookupId.trim()
     if (!lookupId) return
+    setRecovering(true)
     setRecoveryMessage('')
     setError('')
     try {
@@ -230,10 +235,12 @@ export default function SandboxShortFilmPanel() {
       )
     } catch (err) {
       setRecoveryMessage(`Recovery failed: ${err instanceof Error ? err.message : err}`)
+    } finally {
+      setRecovering(false)
     }
   }
 
-  async function runManualRenderFlow(project: PersistedProjectState, sceneRows: Array<Record<string, unknown>>, shotRows: Array<Record<string, unknown>>) {
+  const runManualRenderFlow = useCallback(async (project: PersistedProjectState, sceneRows: Array<Record<string, unknown>>, shotRows: Array<Record<string, unknown>>) => {
     if (!submitRenders) return []
     const rows: RenderRow[] = []
     setState('rendering')
@@ -259,7 +266,7 @@ export default function SandboxShortFilmPanel() {
       rows.push(normalizeJobToRenderRow(sceneId, shotId, submitted, outputUrl, previewUrl))
     }
     return rows
-  }
+  }, [pollUntilTerminal, provider, submitRenders])
 
   const onRun = useCallback(async () => {
     setState('generating')
@@ -335,12 +342,12 @@ export default function SandboxShortFilmPanel() {
     }
   }, [
     assembleFinal,
+    createSandboxProject,
     genre,
     mode,
-    pollUntilTerminal,
-    projectTitle,
     provider,
     providerStatus.selectedProviderKey,
+    runManualRenderFlow,
     scriptText,
     setSelectedRenderProvider,
     submitRenders,
@@ -350,6 +357,17 @@ export default function SandboxShortFilmPanel() {
   ])
 
   const runAction = useAsyncAction(onRun, { preventConcurrent: true })
+
+  const loadLatestReview = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const result = await getLatestShortFilmReview(projectId)
+      setLatestReview(result.review)
+    } catch {
+      // No reviews exist yet, which is fine
+      setLatestReview(null)
+    }
+  }, [projectId])
 
   const onStitchShortFilm = useCallback(async () => {
     if (!projectId) return
@@ -403,6 +421,7 @@ export default function SandboxShortFilmPanel() {
     enableSoundtrack,
     enableTitleCard,
     endCardText,
+    loadLatestReview,
     projectId,
     soundtrackAudioPath,
     soundtrackAudioUrl,
@@ -415,19 +434,9 @@ export default function SandboxShortFilmPanel() {
 
   const stitchAction = useAsyncAction(onStitchShortFilm, { preventConcurrent: true })
 
-  async function loadLatestReview() {
-    if (!projectId) return
-    try {
-      const result = await getLatestShortFilmReview(projectId)
-      setLatestReview(result.review)
-    } catch {
-      // No reviews exist yet, which is fine
-      setLatestReview(null)
-    }
-  }
-
   async function onCreateReview() {
     if (!projectId || !stitchResult?.output_url) return
+    setReviewSaving('create')
     try {
       const result = await createShortFilmReview(projectId, {
         output_url: stitchResult.output_url,
@@ -438,11 +447,14 @@ export default function SandboxShortFilmPanel() {
       setReviewNotes('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create review')
+    } finally {
+      setReviewSaving('')
     }
   }
 
   async function onUpdateReviewDecision(decision: 'approved' | 'needs_revision' | 'rejected') {
     if (!latestReview) return
+    setReviewSaving(decision)
     try {
       const result = await updateShortFilmReviewDecision(projectId, latestReview.review_id, {
         decision,
@@ -458,6 +470,8 @@ export default function SandboxShortFilmPanel() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update review decision')
+    } finally {
+      setReviewSaving('')
     }
   }
 
@@ -536,7 +550,7 @@ export default function SandboxShortFilmPanel() {
     completedRevisions.forEach(revision => {
       revisionOverrides[revision.original_job_id] = revision.output_url!
     })
-    
+    setRestitching(true)
     try {
       const result = await restitchProjectWithRevisions(projectId, {
         revision_overrides: revisionOverrides,
@@ -571,6 +585,8 @@ export default function SandboxShortFilmPanel() {
       setRevisedStitchResult(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to restitch with revisions')
+    } finally {
+      setRestitching(false)
     }
   }
 
@@ -699,9 +715,10 @@ export default function SandboxShortFilmPanel() {
         type="button"
           onClick={() => void runAction.run()}
         disabled={runAction.isRunning || state === 'generating' || state === 'rendering' || state === 'assembling'}
+        aria-busy={runAction.isRunning}
         className="mt-3 rounded-lg border border-cyan-300/55 bg-cyan-500/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100 disabled:opacity-50"
       >
-        Run Sandbox Flow
+        {runAction.isRunning ? 'Running Sandbox Flow…' : 'Run Sandbox Flow'}
       </button>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <input
@@ -714,9 +731,10 @@ export default function SandboxShortFilmPanel() {
           type="button"
           onClick={onLoadProject}
           disabled={state === 'generating' || state === 'rendering' || state === 'assembling'}
+          aria-busy={state === 'generating'}
           className="rounded-lg border border-zinc-500/55 bg-zinc-700/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100 disabled:opacity-50"
         >
-          Load Project
+          {state === 'generating' ? 'Loading Project…' : 'Load Project'}
         </button>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -729,10 +747,11 @@ export default function SandboxShortFilmPanel() {
         <button
           type="button"
           onClick={onRecoverJob}
-          disabled={state === 'generating' || state === 'rendering' || state === 'assembling'}
+          disabled={recovering || state === 'generating' || state === 'rendering' || state === 'assembling'}
+          aria-busy={recovering}
           className="rounded-lg border border-cyan-500/55 bg-cyan-700/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200 disabled:opacity-50"
         >
-          Recover Job
+          {recovering ? 'Recovering Job…' : 'Recover Job'}
         </button>
       </div>
       {recoveryMessage ? (
@@ -818,16 +837,17 @@ export default function SandboxShortFilmPanel() {
           />
         </div>
       </div>
-      {projectId ? <div className="mt-2 text-[11px] text-zinc-300">Project: {projectId}</div> : null}
+      {projectId ? <div className="mt-2 text-xs text-zinc-300">Project: {projectId}</div> : null}
       {error ? <div className="mt-2 text-xs text-rose-300">{error}</div> : null}
       {hasCompletedRenderOutputs ? (
         <button
           type="button"
           onClick={() => void stitchAction.run()}
           disabled={stitchAction.isRunning || state === 'generating' || state === 'rendering' || state === 'assembling'}
+          aria-busy={stitchAction.isRunning}
           className="mt-2 rounded-lg border border-emerald-300/55 bg-emerald-500/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 disabled:opacity-50"
         >
-          Stitch Short Film
+          {stitchAction.isRunning ? 'Stitching Short Film…' : 'Stitch Short Film'}
         </button>
       ) : null}
 
@@ -852,6 +872,7 @@ export default function SandboxShortFilmPanel() {
       <div className="mt-4 space-y-3">
         {renderRows.map((row) => {
           async function refreshThisRow() {
+            setRefreshingRowId(row.job_id)
             try {
               const refreshed = await reconcileRenderJob(row.job_id)
               const outputs = await getRenderJobOutputs(row.job_id)
@@ -866,6 +887,8 @@ export default function SandboxShortFilmPanel() {
               )
             } catch {
               // best-effort refresh
+            } finally {
+              setRefreshingRowId('')
             }
           }
           return (
@@ -882,9 +905,11 @@ export default function SandboxShortFilmPanel() {
                 <button
                   type="button"
                   onClick={refreshThisRow}
-                  className="shrink-0 rounded border border-cyan-400/40 bg-cyan-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200 hover:bg-cyan-500/30"
+                  disabled={refreshingRowId === row.job_id}
+                  aria-busy={refreshingRowId === row.job_id}
+                  className="shrink-0 rounded border border-cyan-400/40 bg-cyan-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-50"
                 >
-                  Refresh
+                  {refreshingRowId === row.job_id ? 'Refreshing…' : 'Refresh'}
                 </button>
               </div>
               {row.error_message ? <div className="mt-2 text-xs text-rose-300">{row.error_message}</div> : null}
@@ -930,7 +955,7 @@ export default function SandboxShortFilmPanel() {
                     }`}>{latestReview.decision}</span></div>
                     {latestReview.reviewer && <div className="mt-1">Reviewer: {latestReview.reviewer}</div>}
                     {latestReview.notes && <div className="mt-1">Notes: {latestReview.notes}</div>}
-                    <div className="mt-1 text-[10px] text-gray-400">ID: {latestReview.review_id}</div>
+                    <div className="mt-1 text-xs text-gray-400">ID: {latestReview.review_id}</div>
                   </div>
                 </div>
               ) : (
@@ -960,32 +985,40 @@ export default function SandboxShortFilmPanel() {
                     <button
                       type="button"
                       onClick={onCreateReview}
-                      className="rounded border border-blue-300/50 bg-blue-500/20 px-3 py-1 text-xs font-semibold text-blue-100 hover:bg-blue-500/30"
+                      disabled={reviewSaving !== ''}
+                      aria-busy={reviewSaving === 'create'}
+                      className="rounded border border-blue-300/50 bg-blue-500/20 px-3 py-1 text-xs font-semibold text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
                     >
-                      Create Review
+                      {reviewSaving === 'create' ? 'Creating Review…' : 'Create Review'}
                     </button>
                   ) : (
                     <>
                       <button
                         type="button"
                         onClick={() => onUpdateReviewDecision('approved')}
-                        className="rounded border border-green-300/50 bg-green-500/20 px-2 py-1 text-xs font-semibold text-green-100 hover:bg-green-500/30"
+                        disabled={reviewSaving !== ''}
+                        aria-busy={reviewSaving === 'approved'}
+                        className="rounded border border-green-300/50 bg-green-500/20 px-2 py-1 text-xs font-semibold text-green-100 hover:bg-green-500/30 disabled:opacity-50"
                       >
-                        Approve
+                        {reviewSaving === 'approved' ? 'Approving…' : 'Approve'}
                       </button>
                       <button
                         type="button"
                         onClick={() => onUpdateReviewDecision('needs_revision')}
-                        className="rounded border border-yellow-300/50 bg-yellow-500/20 px-2 py-1 text-xs font-semibold text-yellow-100 hover:bg-yellow-500/30"
+                        disabled={reviewSaving !== ''}
+                        aria-busy={reviewSaving === 'needs_revision'}
+                        className="rounded border border-yellow-300/50 bg-yellow-500/20 px-2 py-1 text-xs font-semibold text-yellow-100 hover:bg-yellow-500/30 disabled:opacity-50"
                       >
-                        Needs Revision
+                        {reviewSaving === 'needs_revision' ? 'Saving…' : 'Needs Revision'}
                       </button>
                       <button
                         type="button"
                         onClick={() => onUpdateReviewDecision('rejected')}
-                        className="rounded border border-red-300/50 bg-red-500/20 px-2 py-1 text-xs font-semibold text-red-100 hover:bg-red-500/30"
+                        disabled={reviewSaving !== ''}
+                        aria-busy={reviewSaving === 'rejected'}
+                        className="rounded border border-red-300/50 bg-red-500/20 px-2 py-1 text-xs font-semibold text-red-100 hover:bg-red-500/30 disabled:opacity-50"
                       >
-                        Reject
+                        {reviewSaving === 'rejected' ? 'Saving…' : 'Reject'}
                       </button>
                     </>
                   )}
@@ -1034,6 +1067,7 @@ export default function SandboxShortFilmPanel() {
                   type="button"
                   onClick={onCreateClipRevision}
                   disabled={!selectedJobForRevision || !revisionPrompt || !revisionReason || revisionStatus === 'creating' || revisionStatus === 'submitting'}
+                  aria-busy={revisionStatus === 'creating' || revisionStatus === 'submitting'}
                   className="rounded border border-orange-300/50 bg-orange-500/20 px-3 py-2 text-xs font-semibold text-orange-100 hover:bg-orange-500/30 disabled:opacity-50"
                 >
                   {revisionStatus === 'creating' || revisionStatus === 'submitting' ? 'Submitting...' : 'Submit Clip Revision'}
@@ -1063,7 +1097,7 @@ export default function SandboxShortFilmPanel() {
                         {revision.output_url && (
                           <div className="mt-1">
                             <div className="font-semibold">Output URL:</div>
-                            <div className="break-all text-[10px]">{revision.output_url}</div>
+                            <div className="break-all text-xs">{revision.output_url}</div>
                           </div>
                         )}
                         {revision.new_job_id && (
@@ -1072,7 +1106,7 @@ export default function SandboxShortFilmPanel() {
                         {revision.revision_prompt && (
                           <div className="mt-1">
                             <div className="font-semibold">Prompt:</div>
-                            <div className="text-[10px]">{revision.revision_prompt}</div>
+                            <div className="text-xs">{revision.revision_prompt}</div>
                           </div>
                         )}
                       </div>
@@ -1090,9 +1124,11 @@ export default function SandboxShortFilmPanel() {
                   <button
                     type="button"
                     onClick={onRestitchWithRevisions}
-                    className="rounded border border-green-300/50 bg-green-500/20 px-3 py-2 text-xs font-semibold text-green-100 hover:bg-green-500/30"
+                    disabled={restitching}
+                    aria-busy={restitching}
+                    className="rounded border border-green-300/50 bg-green-500/20 px-3 py-2 text-xs font-semibold text-green-100 hover:bg-green-500/30 disabled:opacity-50"
                   >
-                    Re-stitch With Revisions
+                    {restitching ? 'Re-stitching…' : 'Re-stitch With Revisions'}
                   </button>
                 </div>
               ) : null}
@@ -1124,6 +1160,7 @@ export default function SandboxShortFilmPanel() {
                     type="button"
                     onClick={onCreateFinalPackage}
                     disabled={packageStatus === 'creating' || packageStatus === 'updating'}
+                    aria-busy={packageStatus === 'creating'}
                     className="rounded border border-purple-300/50 bg-purple-500/20 px-3 py-2 text-xs font-semibold text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
                   >
                     {packageStatus === 'creating' ? 'Creating Package...' : 'Create Final Package'}
@@ -1183,6 +1220,7 @@ export default function SandboxShortFilmPanel() {
                         type="button"
                         onClick={() => onUpdatePackageStatus('archived')}
                         disabled={packageStatus === 'updating'}
+                        aria-busy={packageStatus === 'updating'}
                         className="rounded border border-gray-300/50 bg-gray-500/20 px-2 py-1 text-xs font-semibold text-gray-100 hover:bg-gray-500/30 disabled:opacity-50"
                       >
                         Archive

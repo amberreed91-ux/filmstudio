@@ -104,6 +104,7 @@ export default function StageScenePanel({ projectId, sceneId, onApplied }: Props
           type="button"
           onClick={runStaging}
           disabled={disabled}
+          aria-busy={loading}
           className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? 'Staging…' : 'Stage Scene (AI)'}
@@ -151,7 +152,7 @@ export default function StageScenePanel({ projectId, sceneId, onApplied }: Props
                   {STAGING_FIELDS.map((field) => {
                     const value = fieldValue(p.staging, field)
                     return (
-                      <div key={field} className="grid grid-cols-[110px_1fr] gap-2 text-[11px]">
+                      <div key={field} className="grid grid-cols-[110px_1fr] gap-2 text-xs">
                         <div className="text-zinc-500">{field}</div>
                         <div className={value ? 'text-zinc-200' : 'text-zinc-600'}>
                           {value || '—'}
@@ -168,6 +169,7 @@ export default function StageScenePanel({ projectId, sceneId, onApplied }: Props
               type="button"
               onClick={applyStaging}
               disabled={applying}
+              aria-busy={applying}
               className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
               {applying ? 'Applying…' : 'Apply to shots'}

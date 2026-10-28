@@ -9,6 +9,7 @@ import {
   Edit3,
   FileText,
   Italic,
+  Loader2,
   MemoryStick,
   Mic,
   Plus,
@@ -136,6 +137,7 @@ export default function WritersRoom() {
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [isDirty, setIsDirty] = useState(false)
   const [showExportDropdown, setShowExportDropdown] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null)
 
   // Undo/redo stack
@@ -179,6 +181,7 @@ export default function WritersRoom() {
   const [charactersLoading, setCharactersLoading] = useState(false)
   const [charactersLoaded, setCharactersLoaded] = useState(false)
   const [charactersSaving, setCharactersSaving] = useState<Record<string, boolean>>({})
+  const [creatingCharacters, setCreatingCharacters] = useState(false)
   const [characterUploading, setCharacterUploading] = useState<Record<string, boolean>>({})
   const [newCharacterNames, setNewCharacterNames] = useState<string[]>([])
   const [editDrafts, setEditDrafts] = useState<Record<string, Partial<CharacterRecord>>>({})
@@ -279,7 +282,7 @@ export default function WritersRoom() {
     void checkHealth()
   }
 
-  const loadScenes = async () => {
+  const loadScenes = useCallback(async () => {
     if (!effectiveProjectId) return
     setLoading(true)
     setError('')
@@ -323,7 +326,14 @@ export default function WritersRoom() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [
+    activeSceneId,
+    editorProjectId,
+    effectiveProjectId,
+    isDirty,
+    querySceneId,
+    setSearchParams,
+  ])
 
   const loadCharacters = useCallback(async () => {
     if (!effectiveProjectId) return
@@ -448,6 +458,8 @@ export default function WritersRoom() {
     return saveCurrentScene()
   }, [editDrafts, saveCurrentScene, characterLooks.busy])
 
+  const [switchingSceneId, setSwitchingSceneId] = useState<string | null>(null)
+
   const handleSelectScene = useCallback(async (sceneId: string) => {
     const draft = latestEditor.current
     const pendingScene = draft.dirty && isSaving ? draft.sceneId : ''
@@ -490,6 +502,18 @@ export default function WritersRoom() {
       return next
     }, { replace: true })
   }, [activeSceneId, isSaving, scenes, saveCurrentScene, effectiveProjectId, setSearchParams])
+
+  // A scene switch can await an autosave; the list reports which row is in
+  // flight and blocks a second switch until it settles.
+  const selectSceneFromList = useCallback(async (sceneId: string) => {
+    if (switchingSceneId) return
+    setSwitchingSceneId(sceneId)
+    try {
+      await handleSelectScene(sceneId)
+    } finally {
+      setSwitchingSceneId(null)
+    }
+  }, [handleSelectScene, switchingSceneId])
 
   // Read incoming same-room scene links too (including legacy Production Board links).
   // (Decision logic lives in sceneSwitchGuard.ts, with regression tests.)
@@ -633,8 +657,10 @@ export default function WritersRoom() {
 
   // ── Export the current screenplay draft ─────────────────────────────────
   const handleExport = useCallback(async (format: ExportFormat) => {
+    if (exporting) return
     setShowExportDropdown(false)
     setError('')
+    setExporting(true)
     try {
       if (format === 'clipboard') {
         await navigator.clipboard.writeText(scriptText)
@@ -652,8 +678,10 @@ export default function WritersRoom() {
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The script draft could not be exported.')
+    } finally {
+      setExporting(false)
     }
-  }, [scriptText, activeSceneId])
+  }, [scriptText, activeSceneId, exporting])
 
   // ── AI suggestion handlers ───────────────────────────────────────────────
   const acceptSuggestion = useCallback(() => {
@@ -822,7 +850,7 @@ export default function WritersRoom() {
     } finally {
       setMemorySaving(false)
     }
-  }, [effectiveProjectId, activeSceneId, activeScene, scriptText])
+  }, [effectiveProjectId, activeSceneId, activeScene])
 
   // ── Character save handler ────────────────────────────────────────────────
   const handleSaveCharacter = useCallback(
@@ -854,8 +882,9 @@ export default function WritersRoom() {
   )
 
   const handleCreateSkeletonCharacters = useCallback(async () => {
-    if (!effectiveProjectId || charactersLoading || !charactersLoaded) return
+    if (!effectiveProjectId || charactersLoading || !charactersLoaded || creatingCharacters) return
     setCharactersLoading(true)
+    setCreatingCharacters(true)
     setError('')
     try {
       for (const name of newCharacterNames) {
@@ -866,10 +895,14 @@ export default function WritersRoom() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Character profiles could not be created.')
     } finally {
-      await loadCharacters()
-      await refreshCharacterLooks()
+      try {
+        await loadCharacters()
+        await refreshCharacterLooks()
+      } finally {
+        setCreatingCharacters(false)
+      }
     }
-  }, [effectiveProjectId, charactersLoading, charactersLoaded, newCharacterNames, loadCharacters, refreshCharacterLooks])
+  }, [effectiveProjectId, charactersLoading, charactersLoaded, creatingCharacters, newCharacterNames, loadCharacters, refreshCharacterLooks])
 
   const handleUploadDescriptor = useCallback(
     async (charId: string) => {
@@ -995,8 +1028,8 @@ export default function WritersRoom() {
                         No scenes loaded
                       </span>
                     )}
-                    <button type="button" onClick={() => void saveCurrentScene()} disabled={isSaving || !isDirty} className="inline-flex items-center gap-2 rounded-md border border-amber-200/30 bg-amber-200/5 px-3 py-2 text-xs text-amber-100 disabled:opacity-40"><Save size={13} />{isSaving ? 'Saving…' : 'Save script'}</button>
-                    <button type="button" onClick={() => void handleGenerateScene()} disabled={generationLoading || !activeSceneId || !scriptText.trim()} className="inline-flex items-center gap-2 rounded-md border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-100 disabled:opacity-40">{generationLoading ? 'Generating…' : 'Generate selected scene'}</button>
+                    <button type="button" onClick={() => void saveCurrentScene()} disabled={isSaving || !isDirty} aria-busy={isSaving || undefined} className="inline-flex items-center gap-2 rounded-md border border-amber-200/30 bg-amber-200/5 px-3 py-2 text-xs text-amber-100 disabled:opacity-40"><Save size={13} />{isSaving ? 'Saving…' : 'Save script'}</button>
+                    <button type="button" onClick={() => void handleGenerateScene()} disabled={generationLoading || !activeSceneId || !scriptText.trim()} aria-busy={generationLoading || undefined} className="inline-flex items-center gap-2 rounded-md border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-100 disabled:opacity-40">{generationLoading ? 'Generating…' : 'Generate selected scene'}</button>
                     {/* Autosave indicator */}
                     <span
                       className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em]"
@@ -1095,7 +1128,9 @@ export default function WritersRoom() {
                       <button
                         type="button"
                         onClick={() => setShowExportDropdown((p) => !p)}
-                        className="flex items-center gap-1 rounded px-2 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] transition-all hover:bg-white/10"
+                        disabled={exporting}
+                        aria-busy={exporting || undefined}
+                        className="flex items-center gap-1 rounded px-2 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] transition-all hover:bg-white/10 disabled:opacity-50"
                         style={{ color: 'var(--color-on-surface-variant)' }}
                       >
                         Export
@@ -1113,8 +1148,10 @@ export default function WritersRoom() {
                             <button
                               key={item.key}
                               type="button"
-                              onClick={() => handleExport(item.key)}
-                              className="flex w-full items-center gap-3 px-4 py-2 text-[11px] transition-all hover:bg-white/5"
+                              onClick={() => void handleExport(item.key)}
+                              disabled={exporting}
+                              aria-busy={exporting || undefined}
+                              className="flex w-full items-center gap-3 px-4 py-2 text-[11px] transition-all hover:bg-white/5 disabled:opacity-50"
                               style={{ color: 'var(--color-on-surface)' }}
                             >
                               <item.icon size={14} className="shrink-0" style={{ color: 'var(--color-on-surface-variant)' }} />
@@ -1293,6 +1330,7 @@ export default function WritersRoom() {
                         type="button"
                         onClick={handleAddScene}
                         disabled={loading || !effectiveProjectId}
+                        aria-busy={loading || undefined}
                         className="rounded-lg p-1.5 transition-all hover:bg-white/10 disabled:opacity-50"
                         title="Add scene"
                         style={{ color: 'var(--color-primary)' }}
@@ -1320,8 +1358,10 @@ export default function WritersRoom() {
                             <button
                               key={scene.scene_id}
                               type="button"
-                              onClick={() => handleSelectScene(scene.scene_id)}
-                              className={`flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition-all ${
+                              onClick={() => void selectSceneFromList(scene.scene_id)}
+                              disabled={switchingSceneId !== null}
+                              aria-busy={switchingSceneId === scene.scene_id || undefined}
+                              className={`flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition-all disabled:cursor-progress disabled:opacity-70 ${
                                 isActive
                                   ? 'border-l-2 shadow-[inset_0_0_20px_rgba(255,209,101,0.06)]'
                                   : 'hover:bg-white/5'
@@ -1397,6 +1437,7 @@ export default function WritersRoom() {
                             type="button"
                             onClick={handleStartDebate}
                             disabled={debateRunning || !activeSceneId}
+                            aria-busy={debateRunning || undefined}
                             className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.02] disabled:opacity-50"
                             style={{
                               background: 'rgba(76,215,246,0.15)',
@@ -1457,6 +1498,7 @@ export default function WritersRoom() {
                             type="button"
                             onClick={handleSimulateCharacter}
                             disabled={characterSimulating || !selectedCharacter}
+                            aria-busy={characterSimulating || undefined}
                             className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.02] disabled:opacity-50"
                             style={{
                               background: 'rgba(76,215,246,0.15)',
@@ -1483,11 +1525,12 @@ export default function WritersRoom() {
                         type="button"
                         onClick={handleSaveMemory}
                         disabled={memorySaving || !effectiveProjectId}
+                        aria-busy={memorySaving || undefined}
                         className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] transition-all hover:bg-white/5 disabled:opacity-50"
                         style={{ color: 'var(--color-on-surface)' }}
                       >
-                        <MemoryStick size={16} />
-                        Save this decision to project memory
+                        {memorySaving ? <Loader2 size={16} className="animate-spin" /> : <MemoryStick size={16} />}
+                        {memorySaving ? 'Saving decision…' : 'Save this decision to project memory'}
                         {memorySavedChip && (
                           <span className="ml-auto flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-400">
                             <CheckCircle2 size={10} />
@@ -1525,14 +1568,16 @@ export default function WritersRoom() {
                           <button
                             type="button"
                             onClick={handleCreateSkeletonCharacters}
-                            className="shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02]"
+                            disabled={creatingCharacters || charactersLoading || !charactersLoaded || !effectiveProjectId}
+                            aria-busy={creatingCharacters || undefined}
+                            className="shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
                             style={{
                               background: 'rgba(251,191,36,0.15)',
                               color: '#fbbf24',
                               border: '1px solid rgba(251,191,36,0.3)',
                             }}
                           >
-                            Add
+                            {creatingCharacters ? 'Adding…' : 'Add'}
                           </button>
                         </div>
                       </div>
@@ -1585,8 +1630,9 @@ export default function WritersRoom() {
                                 <div className="flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => handleUploadDescriptor(char.id)}
+                                    onClick={() => void handleUploadDescriptor(char.id)}
                                     disabled={characterUploading[char.id] || appearanceLocked || appearanceUnavailable}
+                                    aria-busy={characterUploading[char.id] || undefined}
                                     className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
                                     style={{
                                       background: 'rgba(76,175,80,0.15)',
@@ -1605,8 +1651,9 @@ export default function WritersRoom() {
                                   {hasChanges && (
                                     <button
                                       type="button"
-                                      onClick={() => handleSaveCharacter(char.id)}
+                                      onClick={() => void handleSaveCharacter(char.id)}
                                       disabled={isSaving}
+                                      aria-busy={isSaving || undefined}
                                       className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.02] disabled:opacity-50"
                                       style={{
                                         background: 'rgba(255,209,101,0.15)',
@@ -1625,7 +1672,7 @@ export default function WritersRoom() {
                                 </div>
                               </div>
 
-                              {appearanceLocked && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-amber-200/20 bg-amber-200/5 px-3 py-2"><span className="text-xs text-amber-100">Physical look locked · version {savedLook.version}</span><button type="button" onClick={() => { setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('step', 'looks'); next.set('character', char.id); return next }, { replace: true }); void refreshCharacterLooks() }} className="py-1 text-xs text-zinc-200 underline underline-offset-4">Review or revise look</button></div>}
+                              {appearanceLocked && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-amber-200/20 bg-amber-200/5 px-3 py-2"><span className="text-xs text-amber-100">Physical look locked · version {savedLook.version}</span><button type="button" onClick={() => { setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('step', 'looks'); next.set('character', char.id); return next }, { replace: true }); void refreshCharacterLooks() }} disabled={characterLooks.busy} aria-busy={characterLooks.busy || undefined} className="py-1 text-xs text-zinc-200 underline underline-offset-4 disabled:opacity-50">Review or revise look</button></div>}
                               {appearanceUnavailable && <p className="mb-3 text-xs text-zinc-400">{characterLooks.error ? 'Appearance approval could not be checked. Reload saved looks in step 3.' : 'Checking appearance approval…'}</p>}
                               {/* Voice assignment */}
                               <div className="mb-2 flex items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/30 px-3 py-2">
@@ -1662,7 +1709,7 @@ export default function WritersRoom() {
                               </div>
 
                               <div className="space-y-2">
-                                <label className="block text-[11px] text-zinc-400">Age<input aria-label={`${char.name} age`} value={age} disabled={appearanceLocked || appearanceUnavailable} onChange={(event) => setEditDrafts((previous) => ({ ...previous, [char.id]: { ...(previous[char.id] || {}), age: event.target.value } }))} className="mt-1 block w-full rounded border border-white/10 bg-transparent p-2 text-xs text-zinc-200 outline-none focus:border-amber-400/60 disabled:opacity-60" /></label>
+                                <label className="block text-xs text-zinc-400">Age<input aria-label={`${char.name} age`} value={age} disabled={appearanceLocked || appearanceUnavailable} onChange={(event) => setEditDrafts((previous) => ({ ...previous, [char.id]: { ...(previous[char.id] || {}), age: event.target.value } }))} className="mt-1 block w-full rounded border border-white/10 bg-transparent p-2 text-xs text-zinc-200 outline-none focus:border-amber-400/60 disabled:opacity-60" /></label>
                                 <div>
                                   <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-outline-variant)' }}>
                                     Look
@@ -1731,7 +1778,7 @@ export default function WritersRoom() {
               {rightTab === 'looks' && <CharacterLookApproval controller={characterLooks} selectedId={selectedLookCharacter} onSelect={(id) => setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('character', id); return next }, { replace: true })} onProfiles={() => setRightTab('characters')} hasProfileDrafts={Object.keys(editDrafts).length > 0} />}
               <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
                 <p className="max-w-xl text-xs leading-relaxed text-zinc-400">{rightTab === 'scenes' ? 'Edits save while you work. Review character profiles before planning your shots.' : Object.keys(editDrafts).length ? 'Save the changed character profiles before continuing.' : rightTab === 'characters' ? 'Next, cast each character with generated options or your own portraits, then lock the look.' : 'Your saved script, profiles, and approved looks stay with this film in Previs.'}</p>
-                {rightTab === 'scenes' ? <button type="button" onClick={() => setRightTab('characters')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100">Review character profiles →</button> : rightTab === 'characters' ? <button type="button" disabled={Object.keys(editDrafts).length > 0 || Object.values(charactersSaving).some(Boolean)} onClick={() => setRightTab('looks')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">Review and lock character looks →</button> : <button type="button" disabled={isSaving || !activeSceneId || Object.keys(editDrafts).length > 0 || characterLooks.busy} onClick={async () => { if (await saveCurrentScene()) navigate(withProductionContext('/studio/previs', { projectId: effectiveProjectId, sceneId: activeSceneId, shotNumber: Number(searchParams.get('shot')) || null })) }} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">Continue to storyboard →</button>}
+                {rightTab === 'scenes' ? <button type="button" onClick={() => setRightTab('characters')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100">Review character profiles →</button> : rightTab === 'characters' ? <button type="button" disabled={Object.keys(editDrafts).length > 0 || Object.values(charactersSaving).some(Boolean)} onClick={() => setRightTab('looks')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">Review and lock character looks →</button> : <button type="button" disabled={isSaving || !activeSceneId || Object.keys(editDrafts).length > 0 || characterLooks.busy} onClick={async () => { if (await saveCurrentScene()) navigate(withProductionContext('/studio/previs', { projectId: effectiveProjectId, sceneId: activeSceneId, shotNumber: Number(searchParams.get('shot')) || null })) }} aria-busy={isSaving || characterLooks.busy || undefined} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">Continue to storyboard →</button>}
               </div>
             </div>
 

@@ -120,6 +120,7 @@ export default function ApprovalControls({
               type="button"
               onClick={() => void handleApproval('approved')}
               disabled={isUpdating}
+              aria-busy={isUpdating}
               className="px-3 py-1.5 text-xs font-medium rounded-md border border-emerald-400/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 transition-colors flex items-center gap-1"
             >
               {isUpdating ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
@@ -129,6 +130,7 @@ export default function ApprovalControls({
               type="button"
               onClick={() => void handleApproval('changes_requested')}
               disabled={isUpdating}
+              aria-busy={isUpdating}
               className="px-3 py-1.5 text-xs font-medium rounded-md border border-rose-400/40 bg-rose-500/15 text-rose-200 hover:bg-rose-500/20 disabled:opacity-50 transition-colors flex items-center gap-1"
             >
               {isUpdating ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
@@ -142,6 +144,7 @@ export default function ApprovalControls({
             type="button"
             onClick={() => void handleApproval('approved')}
             disabled={isUpdating || currentStatus === 'approved'}
+            aria-busy={isUpdating}
             className="flex-1 px-3 py-1.5 text-xs font-medium rounded-md border border-emerald-400/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
           >
             {isUpdating ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}

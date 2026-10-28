@@ -77,7 +77,7 @@ export default function ProductionRecoveryIndicator({
                 {recoveryStatus === 'failed' && 'Recovery Failed'}
               </h4>
               {onSafeRefresh && !isRecovering && (
-                <button
+                <button type="button"
                   onClick={onSafeRefresh}
                   className="text-zinc-400 hover:text-zinc-300 transition-colors"
                   title="Safe Refresh"
@@ -129,7 +129,7 @@ export default function ProductionRecoveryIndicator({
         </div>
 
         {onDismiss && (
-          <button
+          <button type="button"
             onClick={onDismiss}
             className="text-zinc-400 hover:text-zinc-300 transition-colors"
           >

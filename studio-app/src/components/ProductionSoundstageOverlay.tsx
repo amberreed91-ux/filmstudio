@@ -94,7 +94,7 @@ export default function ProductionSoundstageOverlay({ rigs, selectedJobId, onSel
 
       <div className="absolute inset-x-0 bottom-0 flex flex-wrap gap-1.5 p-2.5">
         {active.length === 0 ? (
-          <span className="text-[11px] text-zinc-500">Stage idle — rigs appear here while jobs queue or render.</span>
+          <span className="text-xs text-zinc-500">Stage idle — rigs appear here while jobs queue or render.</span>
         ) : (
           active.map((rig) => (
             <button

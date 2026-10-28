@@ -59,7 +59,7 @@ export default function ProviderStatusBadge({
     <div className="flex items-center gap-1.5" data-testid="provider-status-badge">
       {/* Main badge */}
       <span
-        className={`rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] ${
+        className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] ${
           isHosted
             ? 'border-emerald-400/50 bg-emerald-500/12 text-emerald-200'
             : 'border-zinc-600/50 bg-zinc-700/30 text-zinc-400'
@@ -78,7 +78,7 @@ export default function ProviderStatusBadge({
             onMouseLeave={() => setTooltipOpen(false)}
             onFocus={() => setTooltipOpen(true)}
             onBlur={() => setTooltipOpen(false)}
-            className="text-[9px] text-zinc-500 hover:text-zinc-300"
+            className="text-[10px] text-zinc-500 hover:text-zinc-300"
             aria-label="Missing requirements"
             data-testid="missing-requirements-trigger"
           >
@@ -86,7 +86,7 @@ export default function ProviderStatusBadge({
           </button>
           {tooltipOpen && (
             <div
-              className="absolute z-[9999] w-48 max-w-[12rem] overflow-hidden rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[9px] text-zinc-300 shadow-lg pointer-events-none"
+              className="absolute z-[9999] w-48 max-w-[12rem] overflow-hidden rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[10px] text-zinc-300 shadow-lg pointer-events-none"
               style={{
                 top: '100%',
                 left: '50%',
@@ -110,7 +110,8 @@ export default function ProviderStatusBadge({
           type="button"
           onClick={handleSwitchToHosted}
           disabled={switching}
-          className="text-[9px] text-zinc-500 underline-offset-2 hover:text-cyan-300 hover:underline disabled:opacity-40"
+          aria-busy={switching}
+          className="text-[10px] text-zinc-500 underline-offset-2 hover:text-cyan-300 hover:underline disabled:opacity-40"
           data-testid="switch-to-hosted-link"
         >
           {switching ? '…' : 'Switch to Hosted'}
@@ -118,7 +119,7 @@ export default function ProviderStatusBadge({
       )}
 
       {switchError && (
-        <span className="text-[9px] text-rose-400" data-testid="switch-error">
+        <span className="text-[10px] text-rose-400" data-testid="switch-error">
           {switchError}
         </span>
       )}

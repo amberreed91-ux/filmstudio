@@ -76,7 +76,7 @@ export default function SceneCard(props: SceneCardProps) {
         <div>
           <div className="text-sm font-semibold text-zinc-100">{props.sceneId}</div>
           <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-zinc-400">{props.selectedCut}</div>
-          <div className="mt-1 text-[11px] text-zinc-300">agent: {props.agentOwner}</div>
+          <div className="mt-1 text-xs text-zinc-300">agent: {props.agentOwner}</div>
         </div>
         <div className="flex items-center gap-2">
           {needsAttention && (
@@ -208,13 +208,13 @@ export default function SceneCard(props: SceneCardProps) {
       {/* Edit Cut Actions */}
       {props.editCutMode && (
         <div className="mt-2 flex flex-wrap gap-2">
-          <button onClick={props.onMoveUp} className="rounded-md border border-zinc-500/45 bg-zinc-700/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200">
+          <button type="button" onClick={props.onMoveUp} className="rounded-md border border-zinc-500/45 bg-zinc-700/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200">
             Move Up
           </button>
-          <button onClick={props.onMoveDown} className="rounded-md border border-zinc-500/45 bg-zinc-700/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200">
+          <button type="button" onClick={props.onMoveDown} className="rounded-md border border-zinc-500/45 bg-zinc-700/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-200">
             Move Down
           </button>
-          <button
+          <button type="button"
             onClick={props.onToggleCut}
             className={`rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.12em] ${
               props.inCut ? 'border-rose-400/50 bg-rose-500/12 text-rose-100' : 'border-emerald-400/50 bg-emerald-500/12 text-emerald-100'
@@ -227,11 +227,11 @@ export default function SceneCard(props: SceneCardProps) {
 
       {/* Open Scene Button */}
       <div className="flex gap-2">
-        <button onClick={props.onOpen} className="mt-2 rounded-lg border border-cyan-300/40 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100">
+        <button type="button" onClick={props.onOpen} className="mt-2 rounded-lg border border-cyan-300/40 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100">
           Open Scene
         </button>
         {props.onDebate && (
-          <button
+          <button type="button"
             onClick={props.onDebate}
             className="mt-2 rounded-lg border border-indigo-400/40 bg-indigo-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100"
             title="Debate this decision"
@@ -240,7 +240,7 @@ export default function SceneCard(props: SceneCardProps) {
           </button>
         )}
         {props.onSimulateAudience && (
-          <button
+          <button type="button"
             onClick={props.onSimulateAudience}
             className="mt-2 rounded-lg border border-purple-400/40 bg-purple-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-purple-100"
             title="Simulate Audience Reactions"
@@ -286,11 +286,11 @@ export default function SceneCard(props: SceneCardProps) {
         {/* Action Buttons */}
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {props.renderStatus.canRetry ? (
-          <button onClick={props.onRetry} className="w-full sm:w-auto rounded-lg border border-amber-400/45 bg-amber-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
+          <button type="button" onClick={props.onRetry} className="w-full sm:w-auto rounded-lg border border-amber-400/45 bg-amber-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
             Retry Render
           </button>
         ) : (props.renderStatus.status === 'not_started' || props.renderStatus.status === 'complete') && (
-          <button
+          <button type="button"
             onClick={props.onGenerate}
             disabled={props.isGenerating}
             className="w-full sm:w-auto rounded-lg border border-fuchsia-400/45 bg-fuchsia-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-fuchsia-100 disabled:opacity-50 disabled:cursor-not-allowed"

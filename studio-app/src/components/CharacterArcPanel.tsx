@@ -199,7 +199,7 @@ export default function CharacterArcPanel({ projectId }: CharacterArcPanelProps)
                     {char.scene_count} {char.scene_count === 1 ? 'scene' : 'scenes'}
                   </p>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => setSelectedChar(char)}
                   className="p-2 text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors"
                   title="Simulate Character Mind"
@@ -306,7 +306,7 @@ export default function CharacterArcPanel({ projectId }: CharacterArcPanelProps)
                   <p className="text-xs text-zinc-500">Character Mind Simulator</p>
                 </div>
               </div>
-              <button
+              <button type="button"
                 onClick={() => setSelectedChar(null)}
                 className="p-2 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors"
               >
@@ -329,7 +329,7 @@ export default function CharacterArcPanel({ projectId }: CharacterArcPanelProps)
                     placeholder="e.g. 'How would they react to a sudden betrayal by Elena?'"
                     className="w-full min-h-[100px] p-4 bg-zinc-800/50 border border-zinc-700 rounded-xl text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400/50 resize-none"
                   />
-                  <button
+                  <button type="button"
                     disabled={!query.trim() || simulateMutation.isPending}
                     onClick={() => simulateMutation.mutate({ charId: selectedChar.character_id, query })}
                     className="absolute bottom-3 right-3 px-4 py-2 bg-amber-400 text-black text-xs font-bold rounded-lg hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg"
@@ -358,7 +358,7 @@ export default function CharacterArcPanel({ projectId }: CharacterArcPanelProps)
                         <CheckCircle2 size={14} />
                         Likely Reaction
                       </div>
-                      <button
+                      <button type="button"
                         onClick={() => saveToNotesMutation.mutate(simulateMutation.data!)}
                         disabled={saveToNotesMutation.isPending}
                         className="flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-100 transition-colors"

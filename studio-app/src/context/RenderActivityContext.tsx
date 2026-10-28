@@ -55,8 +55,9 @@ function statusPriority(status: LiveRenderStatus): number {
 
 export function RenderActivityProvider({ children }: { children: ReactNode }) {
   const { project, renderJobs, pollingJobs, selectedRenderProvider, providers } = useStudio()
-  const [startedAtByTask, setStartedAtByTask] = useState<Record<string, number>>({})
-  const [now, setNow] = useState(Date.now())
+  // Start at 0 instead of Date.now(): reading the clock during render is
+  // impure. The interval below fills in a real timestamp within one second.
+  const [now, setNow] = useState(0)
 
   const activity = useMemo(() => {
     type Candidate = {
@@ -141,7 +142,7 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
       ? (selected.provider || resolvedSelectedProvider || 'idle')
       : 'idle'
     const model = selected.isActive ? selected.model : null
-    const start = startedAtByTask[selected.taskId] ?? selected.createdAt
+    const start = selected.createdAt
     const elapsedSeconds = Math.max(0, Math.floor((now - start) / 1000))
     return {
       status: selected.status,
@@ -155,17 +156,17 @@ export function RenderActivityProvider({ children }: { children: ReactNode }) {
       updatedAt: selected.updatedAt,
       isActive: selected.isActive,
     } satisfies LiveRenderActivity
-  }, [now, pollingJobs, project?.render_provider?.provider_name, project?.render_queue, providers, renderJobs, selectedRenderProvider, startedAtByTask])
+  }, [now, pollingJobs, project?.render_provider?.provider_name, project?.render_queue, providers, renderJobs, selectedRenderProvider])
 
   useEffect(() => {
-    if (!activity?.taskId) return
-    if (startedAtByTask[activity.taskId]) return
-    setStartedAtByTask((prev) => ({ ...prev, [activity.taskId]: Date.now() }))
-  }, [activity?.taskId, startedAtByTask])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
+    const tick = () => setNow(Date.now())
+    // Fill in a real clock reading as soon as the effect runs, then keep it fresh.
+    const initial = window.setTimeout(tick, 0)
+    const timer = window.setInterval(tick, 1000)
+    return () => {
+      window.clearTimeout(initial)
+      window.clearInterval(timer)
+    }
   }, [])
 
   return <RenderActivityContext.Provider value={{ activity }}>{children}</RenderActivityContext.Provider>

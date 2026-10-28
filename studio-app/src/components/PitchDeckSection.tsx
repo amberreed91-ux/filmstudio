@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { studioApi } from "../lib/studioApi";
 import type { PitchDeck, PitchDeckSummary, PitchDeckSlide } from "../lib/studioApi";
 
@@ -11,22 +11,23 @@ export function PitchDeckSection({ projectId }: PitchDeckSectionProps) {
   const [pastDecks, setPastDecks] = useState<PitchDeckSummary[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingDeckId, setLoadingDeckId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [targetAudience, setTargetAudience] = useState<'festival' | 'investor' | 'general'>('general');
 
-  useEffect(() => {
-    loadPastDecks();
-  }, [projectId]);
-
-  const loadPastDecks = async () => {
+  const loadPastDecks = useCallback(async () => {
     try {
       const result = await studioApi.listPitchDecks(projectId, 5);
       setPastDecks(result.decks || []);
     } catch (err) {
       console.error("Failed to load past decks:", err);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    loadPastDecks();
+  }, [loadPastDecks]);
 
   const generateDeck = async () => {
     setLoading(true);
@@ -45,7 +46,7 @@ export function PitchDeckSection({ projectId }: PitchDeckSectionProps) {
   };
 
   const loadDeck = async (deckId: string) => {
-    setLoading(true);
+    setLoadingDeckId(deckId);
     setError(null);
     try {
       const deck = await studioApi.getPitchDeck(projectId, deckId);
@@ -54,7 +55,7 @@ export function PitchDeckSection({ projectId }: PitchDeckSectionProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load pitch deck");
     } finally {
-      setLoading(false);
+      setLoadingDeckId(null);
     }
   };
 
@@ -97,9 +98,10 @@ export function PitchDeckSection({ projectId }: PitchDeckSectionProps) {
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-300">Pitch Deck</h3>
-        <button
+        <button type="button"
           onClick={() => setShowOptions(!showOptions)}
           disabled={loading}
+          aria-busy={loading}
           className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
         >
           {loading ? "Generating..." : "Generate Draft"}
@@ -129,14 +131,15 @@ export function PitchDeckSection({ projectId }: PitchDeckSectionProps) {
           </div>
 
           <div className="flex gap-3">
-            <button
+            <button type="button"
               onClick={generateDeck}
               disabled={loading}
+              aria-busy={loading}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
             >
               Generate Draft
             </button>
-            <button
+            <button type="button"
               onClick={() => setShowOptions(false)}
               className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm font-medium transition-colors"
             >
@@ -205,7 +208,7 @@ export function PitchDeckSection({ projectId }: PitchDeckSectionProps) {
 
           {/* Actions */}
           <div className="flex gap-3">
-            <button
+            <button type="button"
               onClick={copyAllAsText}
               className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm font-medium transition-colors"
             >
@@ -240,10 +243,12 @@ export function PitchDeckSection({ projectId }: PitchDeckSectionProps) {
           <h4 className="text-xs font-semibold text-slate-400 mb-2">Past Decks</h4>
           <div className="space-y-2">
             {pastDecks.map((deck) => (
-              <button
+              <button type="button"
                 key={deck.deck_id}
                 onClick={() => loadDeck(deck.deck_id)}
-                className={`w-full text-left px-3 py-2 rounded-md border transition-colors text-sm ${
+                disabled={loadingDeckId === deck.deck_id}
+                aria-busy={loadingDeckId === deck.deck_id}
+                className={`w-full text-left px-3 py-2 rounded-md border transition-colors text-sm disabled:opacity-50 ${
                   selectedDeckId === deck.deck_id
                     ? "bg-slate-700 border-slate-600"
                     : "bg-slate-750 border-slate-700 hover:bg-slate-700"

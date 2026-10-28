@@ -55,29 +55,33 @@ export default function BoardRoom() {
   const accent = getProceduralRoomStyle('board').tokens.accent
 
   const [scenes, setScenes] = useState<Scene[]>([])
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState('')
+  // Load state is keyed by project so switching projects reads as loading
+  // without a synchronous reset inside the effect.
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<{ projectId: string; message: string } | null>(null)
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!projectId) return
     let cancelled = false
-    setLoading(true)
-    setLoadError('')
-    setSelectedShotId(null)
     void listScenes(projectId).then((result) => {
       if (cancelled) return
       if (result.error) {
-        setLoadError(result.error)
+        setLoadError({ projectId, message: result.error })
+        setScenes([])
       } else {
         setScenes(result.scenes)
+        setLoadError(null)
       }
-      setLoading(false)
+      setLoadedProjectId(projectId)
     })
     return () => {
       cancelled = true
     }
   }, [projectId])
+
+  const loading = Boolean(projectId) && loadedProjectId !== projectId
+  const errorMessage = loadError?.projectId === projectId ? loadError.message : ''
 
   const shots = useMemo(() => buildShotWall(scenes), [scenes])
   const selectedShot = useMemo(
@@ -116,9 +120,9 @@ export default function BoardRoom() {
             <GlassPanel accent={accent} testid="board-loading">
               <p className="text-sm text-zinc-400">Hanging frames on the wall…</p>
             </GlassPanel>
-          ) : loadError ? (
+          ) : errorMessage ? (
             <GlassPanel accent={accent} testid="board-error">
-              <p className="text-sm text-rose-200">{loadError}</p>
+              <p className="text-sm text-rose-200">{errorMessage}</p>
             </GlassPanel>
           ) : (
             <>
@@ -198,7 +202,7 @@ export default function BoardRoom() {
                                   {shot.sceneName}
                                 </span>
                                 <span
-                                  className="shrink-0 rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em]"
+                                  className="shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]"
                                   style={{ borderColor: `${accent}55`, color: accent }}
                                 >
                                   {shot.status}

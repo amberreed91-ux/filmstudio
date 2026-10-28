@@ -53,7 +53,7 @@ export default function WritersDebateModal({
               <p className="text-xs text-zinc-400">Two perspectives on the same scene</p>
             </div>
           </div>
-          <button
+          <button type="button"
             onClick={onDismiss}
             className="text-zinc-500 hover:text-white transition-colors"
           >
@@ -70,7 +70,7 @@ export default function WritersDebateModal({
                 <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-400">
                   RESTRAINT VIEW
                 </div>
-                <div className="text-[9px] text-zinc-500 mt-0.5">Minimalist · Contemplative</div>
+                <div className="text-xs text-zinc-500 mt-0.5">Minimalist · Contemplative</div>
               </div>
               <div className="flex-1 px-5 py-4">
                 <p className="text-[13px] leading-relaxed text-zinc-300 whitespace-pre-wrap">
@@ -82,6 +82,7 @@ export default function WritersDebateModal({
                   type="button"
                   onClick={() => handleAgree('restraint')}
                   disabled={saving !== null || agreed !== null}
+                  aria-busy={saving !== null}
                   className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.02] disabled:opacity-50 ${
                     agreed === 'restraint'
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
@@ -114,7 +115,7 @@ export default function WritersDebateModal({
                 <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400">
                   URGENCY VIEW
                 </div>
-                <div className="text-[9px] text-zinc-500 mt-0.5">Dynamic · Emotionally Direct</div>
+                <div className="text-xs text-zinc-500 mt-0.5">Dynamic · Emotionally Direct</div>
               </div>
               <div className="flex-1 px-5 py-4">
                 <p className="text-[13px] leading-relaxed text-zinc-300 whitespace-pre-wrap">
@@ -126,6 +127,7 @@ export default function WritersDebateModal({
                   type="button"
                   onClick={() => handleAgree('urgency')}
                   disabled={saving !== null || agreed !== null}
+                  aria-busy={saving !== null}
                   className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.02] disabled:opacity-50 ${
                     agreed === 'urgency'
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'

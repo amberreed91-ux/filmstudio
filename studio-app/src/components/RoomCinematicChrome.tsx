@@ -7,7 +7,7 @@ import { getProceduralRoomStyle } from '../lib/proceduralBackdrops'
  * Backdrops come from the procedural engine — no image downloads.
  */
 
-export function roomBackdrop(roomKey: string): { background: string; accent: string; accentDeep: string; glow: string } {
+function roomBackdrop(roomKey: string): { background: string; accent: string; accentDeep: string; glow: string } {
   const style = getProceduralRoomStyle(roomKey)
   return {
     background: style.background,

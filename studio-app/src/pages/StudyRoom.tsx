@@ -199,7 +199,7 @@ function MemorySection({
       </div>
       {items.length === 0 ? (
         <div>
-          <p className="text-on-surface-variant body-md text-[11px]">{emptyLabel}</p>
+          <p className="text-on-surface-variant body-md text-xs">{emptyLabel}</p>
           {teachPlaceholder && onTeach && (
             <button
               type="button"
@@ -291,6 +291,8 @@ export default function StudyRoom() {
   const [selectedStudioBrainFiles, setSelectedStudioBrainFiles] = useState<Set<string>>(new Set())
   const [loadingStudioBrainFiles, setLoadingStudioBrainFiles] = useState(false)
   const [attachingStudioBrainFiles, setAttachingStudioBrainFiles] = useState(false)
+  const [savingReferenceId, setSavingReferenceId] = useState('')
+  const [deletingMemoryId, setDeletingMemoryId] = useState('')
 
   // useRef — ALL of them
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -444,6 +446,7 @@ export default function StudyRoom() {
 
   const handleSaveReference = useCallback(async (ref: ReferenceCard) => {
     if (!resolvedProjectId) return
+    setSavingReferenceId(ref.id)
     try {
       await saveDirectorMemoryEntry(resolvedProjectId, 'notes', {
         headline: ref.title,
@@ -454,6 +457,8 @@ export default function StudyRoom() {
       void loadMemories()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save reference')
+    } finally {
+      setSavingReferenceId('')
     }
   }, [resolvedProjectId, loadMemories])
 
@@ -523,11 +528,14 @@ export default function StudyRoom() {
 
   const handleDeleteMemory = useCallback(async (entryId: string, kind: DirectorMemoryKind) => {
     if (!resolvedProjectId) return
+    setDeletingMemoryId(entryId)
     try {
       await deleteDirectorMemoryEntry(resolvedProjectId, kind, entryId)
       void loadMemories()
     } catch {
       setError('Failed to delete memory')
+    } finally {
+      setDeletingMemoryId('')
     }
   }, [resolvedProjectId, loadMemories])
 
@@ -563,9 +571,9 @@ export default function StudyRoom() {
     } finally {
       setFilmProcessing(false)
     }
-  }, [filmTitle, filmDimensions, resolvedProjectId, loadReferences])
+  }, [filmTitle, filmDimensions, resolvedProjectId, loadReferences, loadMemories])
 
-  const getFileCategory = (file: File): string => {
+  const getFileCategory = useCallback((file: File): string => {
     const ext = file.name.toLowerCase().split('.').pop() || ''
     const mime = file.type
     if (MIME_TYPE_MAP[mime]) return MIME_TYPE_MAP[mime]
@@ -573,33 +581,9 @@ export default function StudyRoom() {
     if (['mp3', 'wav'].includes(ext)) return 'audio'
     if (['pdf', 'txt', 'fdx', 'md'].includes(ext)) return 'document'
     return 'document'
-  }
+  }, [])
 
-  const handleFileIngest = useCallback(async (files: File[]) => {
-    try {
-      if (!resolvedProjectId) {
-        setError('No active project. Select a project first.')
-        return
-      }
-      const validFiles: File[] = []
-      for (const file of files) {
-        const ext = '.' + file.name.toLowerCase().split('.').pop()
-        if (ACCEPTED_EXTENSIONS.includes(ext) || MIME_TYPE_MAP[file.type]) {
-          validFiles.push(file)
-        } else {
-          setError(`Unsupported file type: ${ext}. Accepted: ${ACCEPTED_EXTENSIONS}`)
-        }
-      }
-      if (validFiles.length === 0) return
-      for (const file of validFiles) {
-        uploadFileWithProgress(resolvedProjectId, file)
-      }
-    } catch (err) {
-      console.error('handleFileIngest failed:', err)
-    }
-  }, [resolvedProjectId, filmDimensions])
-
-  const uploadFileWithProgress = (projectId: string, file: File) => {
+  const uploadFileWithProgress = useCallback((projectId: string, file: File) => {
     const filename = file.name
     const fileType = getFileCategory(file)
     setUploadProgress((prev) => ({
@@ -653,7 +637,31 @@ export default function StudyRoom() {
       setUploadProgress((prev) => ({ ...prev, [filename]: { filename, progress: 0, status: 'error', error: 'Network error' } }))
     }
     xhr.send(formData)
-  }
+  }, [getFileCategory, loadReferences, loadMemories])
+
+  const handleFileIngest = useCallback(async (files: File[]) => {
+    try {
+      if (!resolvedProjectId) {
+        setError('No active project. Select a project first.')
+        return
+      }
+      const validFiles: File[] = []
+      for (const file of files) {
+        const ext = '.' + file.name.toLowerCase().split('.').pop()
+        if (ACCEPTED_EXTENSIONS.includes(ext) || MIME_TYPE_MAP[file.type]) {
+          validFiles.push(file)
+        } else {
+          setError(`Unsupported file type: ${ext}. Accepted: ${ACCEPTED_EXTENSIONS}`)
+        }
+      }
+      if (validFiles.length === 0) return
+      for (const file of validFiles) {
+        uploadFileWithProgress(resolvedProjectId, file)
+      }
+    } catch (err) {
+      console.error('handleFileIngest failed:', err)
+    }
+  }, [resolvedProjectId, uploadFileWithProgress])
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -785,7 +793,7 @@ export default function StudyRoom() {
                           <option value="narrative">Narrative</option>
                         </select>
                       </div>
-                       <button type="button" onClick={handleFilmTitleIngest} disabled={filmProcessing || !resolvedProjectId} title={!resolvedProjectId ? 'Loading project...' : undefined} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
+                       <button type="button" onClick={handleFilmTitleIngest} disabled={filmProcessing || !resolvedProjectId} aria-busy={filmProcessing} title={!resolvedProjectId ? 'Loading project...' : undefined} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
                         {filmProcessing ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
                         {filmProcessing ? 'ANALYZING...' : 'Study this reference'}
                       </button>
@@ -867,7 +875,7 @@ export default function StudyRoom() {
                   <div className="mb-3 flex items-center justify-between">
                     <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-on-surface)' }}>REFERENCE LIBRARY</span>
                     <div className="flex items-center gap-3">
-                      <span className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>{filteredReferences.length} items</span>
+                      <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>{filteredReferences.length} items</span>
                       <button type="button" onClick={() => setFilmIngestMode('upload')} className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-white/10" style={{ color: 'var(--color-secondary)' }} title="Add a new reference"><Plus size={10} />ADD REFERENCE</button>
                     </div>
                   </div>
@@ -879,14 +887,16 @@ export default function StudyRoom() {
                           <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--color-secondary)' }}>{ref.category}</div>
                           <h3 className="mb-1 text-[13px] font-bold pr-6" style={{ color: 'var(--color-on-surface)' }}>{ref.title}</h3>
                           <p className="line-clamp-2 text-xs leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>{ref.summary}</p>
-                          {ref.source && <p className="mt-1.5 text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>Source: {ref.source}</p>}
-                          <button type="button" onClick={(e) => { e.stopPropagation(); void handleSaveReference(ref) }} className="absolute top-2.5 right-2 rounded p-1 transition-all hover:bg-white/10 opacity-70 group-hover:opacity-100 focus-visible:opacity-100" style={{ color: 'var(--color-secondary)' }} title="Save to Director's Memory">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg>
+                          {ref.source && <p className="mt-1.5 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>Source: {ref.source}</p>}
+                          <button type="button" onClick={(e) => { e.stopPropagation(); void handleSaveReference(ref) }} disabled={savingReferenceId === ref.id} aria-busy={savingReferenceId === ref.id} className="absolute top-2.5 right-2 rounded p-1 transition-all hover:bg-white/10 opacity-70 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40" style={{ color: 'var(--color-secondary)' }} title="Save to Director's Memory">
+                            {savingReferenceId === ref.id
+                              ? <Loader2 size={12} className="animate-spin" />
+                              : <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg>}
                           </button>
                         </div>
                       ))}
                       {filteredReferences.length === 0 && !loadingRefs && (
-                        <p className="col-span-full text-center text-[11px] py-4" style={{ color: 'var(--color-on-surface-variant)' }}>No references match the current filters. Click + ADD REFERENCE to add one.</p>
+                        <p className="col-span-full text-center text-xs py-4" style={{ color: 'var(--color-on-surface-variant)' }}>No references match the current filters. Click + ADD REFERENCE to add one.</p>
                       )}
                     </div>
                   </div>
@@ -900,7 +910,7 @@ export default function StudyRoom() {
 
                 <textarea aria-label="Research question" value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="Enter a research question, topic, or area you'd like Studio Brain to analyze..." rows={3} className="cyber-input mb-3 w-full rounded px-3 py-2 text-sm outline-none" style={{ color: 'var(--color-on-surface)' }} />
 
-                <button type="button" onClick={handleAnalyze} disabled={analyzing || !queryText.trim()} className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
+                <button type="button" onClick={handleAnalyze} disabled={analyzing || !queryText.trim()} aria-busy={analyzing} className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
                   {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   {analyzing ? 'ANALYZING...' : 'ANALYZE'}
                 </button>
@@ -994,6 +1004,7 @@ export default function StudyRoom() {
                     type="button"
                     onClick={handleAttachStudioBrainFiles}
                     disabled={!resolvedProjectId || selectedStudioBrainCount === 0 || attachingStudioBrainFiles}
+                    aria-busy={attachingStudioBrainFiles}
                     className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-all hover:bg-white/10 disabled:opacity-50"
                     style={{ color: 'var(--color-secondary)' }}
                     title="Add selected Studio Brain files to this project"
@@ -1033,13 +1044,13 @@ export default function StudyRoom() {
                         )
                       })}
                       {studioBrainFiles.length === 0 && (
-                        <p className="col-span-full text-center text-[11px] py-4" style={{ color: 'var(--color-on-surface-variant)' }}>No permanent Studio Brain Markdown files found.</p>
+                        <p className="col-span-full text-center text-xs py-4" style={{ color: 'var(--color-on-surface-variant)' }}>No permanent Studio Brain Markdown files found.</p>
                       )}
                     </div>
                   </div>
                 )}
               </div></div></details>
-              <details className="rounded-lg border border-white/10 p-4"><summary className="cursor-pointer text-xs text-zinc-400">Library maintenance</summary><p className="mt-3 text-xs leading-relaxed text-zinc-400">Reorganize existing references when you want their categories refreshed.</p><button type="button" disabled={reorganizing || !resolvedProjectId} onClick={() => void handleReorganizeReferences()} className="mt-3 rounded border border-white/15 px-3 py-2 text-xs text-zinc-200 disabled:opacity-40">{reorganizing ? 'Reorganizing…' : 'Reorganize references'}</button></details>
+              <details className="rounded-lg border border-white/10 p-4"><summary className="cursor-pointer text-xs text-zinc-400">Library maintenance</summary><p className="mt-3 text-xs leading-relaxed text-zinc-400">Reorganize existing references when you want their categories refreshed.</p><button type="button" disabled={reorganizing || !resolvedProjectId} aria-busy={reorganizing} onClick={() => void handleReorganizeReferences()} className="mt-3 rounded border border-white/15 px-3 py-2 text-xs text-zinc-200 disabled:opacity-40">{reorganizing ? 'Reorganizing…' : 'Reorganize references'}</button></details>
               <button type="button" onClick={() => setStudyStep('guidance')} className="rounded-md bg-amber-200 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-amber-100">Review saved guidance →</button>
             </section>
             <section aria-label="Saved creative guidance" className={studyStep === 'guidance' ? 'space-y-5' : 'hidden'}>
@@ -1048,7 +1059,7 @@ export default function StudyRoom() {
                 <div className="flex flex-wrap items-center gap-3">
                   <MessageSquare size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
                   <input type="text" aria-label="Creative decision to remember" value={ingestText} onChange={(e) => setIngestText(e.target.value)} placeholder="The direction I want to remember for this film…" className="cyber-input min-w-0 basis-[220px] flex-1 rounded px-3 py-2 text-sm outline-none" style={{ color: 'var(--color-on-surface)' }} onKeyDown={(e) => { if (e.key === 'Enter') void handleIngest() }} />
-                  <button type="button" onClick={handleIngest} disabled={ingesting || !ingestText.trim()} className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-[0.1em] transition-all hover:scale-[1.02] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
+                  <button type="button" onClick={handleIngest} disabled={ingesting || !ingestText.trim()} aria-busy={ingesting} className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-[0.1em] transition-all hover:scale-[1.02] disabled:opacity-50" style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}>
                     {ingesting ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
                     Save this decision
                   </button>
@@ -1119,14 +1130,14 @@ export default function StudyRoom() {
               {loadingMemories ? (
                 <div className="flex items-center justify-center py-6"><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-primary)' }} /></div>
               ) : allMemories.length === 0 ? (
-                <div className="text-[11px]" style={{ color: 'var(--color-on-surface-variant)' }}>No memories saved yet. Save references to build your memory bank.</div>
+                <div className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>No memories saved yet. Save references to build your memory bank.</div>
               ) : (
                 <div className="space-y-2">
                   {allMemories.map((mem) => (
                     <div key={mem.entry_id} className="rounded-lg border p-2.5" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                       <div className="mb-1 flex items-center justify-between">
                         <span className="truncate text-[11px] font-semibold" style={{ color: 'var(--color-on-surface)' }}>{mem.text}</span>
-                        <button type="button" onClick={() => void handleDeleteMemory(mem.entry_id, mem.kind)} aria-label={`Forget saved memory: ${mem.text}`} className="ml-1 rounded p-2 transition-all hover:bg-white/10" style={{ color: 'var(--color-error)' }}><Trash2 size={10} /></button>
+                        <button type="button" onClick={() => void handleDeleteMemory(mem.entry_id, mem.kind)} disabled={deletingMemoryId === mem.entry_id} aria-busy={deletingMemoryId === mem.entry_id} aria-label={`Forget saved memory: ${mem.text}`} className="ml-1 rounded p-2 transition-all hover:bg-white/10 disabled:opacity-40" style={{ color: 'var(--color-error)' }}>{deletingMemoryId === mem.entry_id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}</button>
                       </div>
                       <p className="text-[11px] uppercase tracking-[0.1em]" style={{ color: 'var(--color-on-surface-variant)' }}>{mem.kind}</p>
                     </div>

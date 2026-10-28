@@ -43,7 +43,7 @@ export default function FilmMemoryPanel({
           </span>
         </div>
         {archivistStatus ? (
-          <div className="mt-2 text-[11px] text-emerald-200">{archivistStatus}</div>
+          <div className="mt-2 text-xs text-emerald-200">{archivistStatus}</div>
         ) : null}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {nodes.length === 0 ? (

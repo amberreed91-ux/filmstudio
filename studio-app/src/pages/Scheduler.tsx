@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import StudioShell from '../components/StudioShell'
 import CrewOpsDashboard from '../components/CrewOpsDashboard'
@@ -125,6 +125,10 @@ export default function Scheduler() {
   const [crewOverview, setCrewOverview] = useState<CrewIntelligenceOverview | null>(null)
   const [packages, setPackages] = useState<FinalShortFilmPackage[]>([])
   const [message, setMessage] = useState('')
+  // In-flight guard for job recovery actions — a second click would issue a
+  // second reconcile/retry for the same job.
+  const [pendingJobAction, setPendingJobAction] = useState<{ id: string; action: 'reconcile' | 'retry' } | null>(null)
+  const jobActionInFlightRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -394,7 +398,7 @@ export default function Scheduler() {
               <br />
               <span className="text-zinc-100">{directorSignature ? `${(directorSignature.confidence * 100).toFixed(0)}%` : '—'}</span>
               {directorSignature?.metadata && directorSignature.metadata.insufficient_data ? (
-                <div className="text-[10px] text-amber-200">Limited evidence</div>
+                <div className="text-xs text-amber-200">Limited evidence</div>
               ) : null}
             </div>
             <div className="rounded border border-violet-400/30 bg-violet-500/10 p-2">
@@ -470,31 +474,47 @@ export default function Scheduler() {
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
+                      disabled={pendingJobAction?.id === job.id}
+                      aria-busy={pendingJobAction?.id === job.id && pendingJobAction.action === 'reconcile' || undefined}
                       onClick={async () => {
+                        if (jobActionInFlightRef.current) return
+                        jobActionInFlightRef.current = true
+                        setPendingJobAction({ id: job.id, action: 'reconcile' })
                         try {
                           await reconcileRenderJob(job.id)
                           setMessage(`Reconciled ${job.id}`)
                         } catch (err) {
                           setMessage(err instanceof Error ? err.message : `Failed to reconcile ${job.id}`)
+                        } finally {
+                          jobActionInFlightRef.current = false
+                          setPendingJobAction(null)
                         }
                       }}
-                      className="rounded border border-rose-300/50 bg-rose-500/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-rose-100"
+                      className="rounded border border-rose-300/50 bg-rose-500/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Recover/Reconcile
+                      {pendingJobAction?.id === job.id && pendingJobAction.action === 'reconcile' ? 'Reconciling…' : 'Recover/Reconcile'}
                     </button>
                     <button
                       type="button"
+                      disabled={pendingJobAction?.id === job.id}
+                      aria-busy={pendingJobAction?.id === job.id && pendingJobAction.action === 'retry' || undefined}
                       onClick={async () => {
+                        if (jobActionInFlightRef.current) return
+                        jobActionInFlightRef.current = true
+                        setPendingJobAction({ id: job.id, action: 'retry' })
                         try {
                           await retryRenderJobById(job.id)
                           setMessage(`Retried ${job.id}`)
                         } catch (err) {
                           setMessage(err instanceof Error ? err.message : `Failed to retry ${job.id}`)
+                        } finally {
+                          jobActionInFlightRef.current = false
+                          setPendingJobAction(null)
                         }
                       }}
-                      className="rounded border border-amber-300/50 bg-amber-500/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100"
+                      className="rounded border border-amber-300/50 bg-amber-500/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Retry
+                      {pendingJobAction?.id === job.id && pendingJobAction.action === 'retry' ? 'Retrying…' : 'Retry'}
                     </button>
                   </div>
                 </div>

@@ -419,6 +419,7 @@ export default function ReferenceSpace() {
                 type="button"
                 onClick={() => void refreshAll()}
                 disabled={!projectId || refreshing}
+                aria-busy={refreshing}
                 className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/15 px-4 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
@@ -431,28 +432,28 @@ export default function ReferenceSpace() {
                 <p className="mt-1.5 text-lg text-zinc-100">
                   {characters.status === 'ready' ? `${characters.value.length} in project` : characters.status === 'unavailable' ? 'Unavailable' : 'Loading…'}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-zinc-500">Identity lives in character looks.</p>
+                <p className="mt-1 text-xs leading-snug text-zinc-500">Identity lives in character looks.</p>
               </div>
               <div className="border-l-2 border-white/15 pl-4" aria-label="Locked looks verdict">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Locked looks</p>
                 <p className="mt-1.5 text-lg text-zinc-100">
                   {looksLoading ? 'Loading…' : looks.error ? 'Unavailable' : `${looks.looks.filter((look) => look.status === 'locked').length} of ${looks.looks.length} locked`}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-zinc-500">Approval is explicit, never automatic.</p>
+                <p className="mt-1 text-xs leading-snug text-zinc-500">Approval is explicit, never automatic.</p>
               </div>
               <div className="border-l-2 border-white/15 pl-4" aria-label="Registered references verdict">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Registered references</p>
                 <p className="mt-1.5 text-lg text-zinc-100">
                   {assets.status === 'ready' ? `${totalAssets} confirmed` : assets.status === 'unavailable' ? 'Unavailable' : 'Loading…'}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-zinc-500">Candidates need approval before use.</p>
+                <p className="mt-1 text-xs leading-snug text-zinc-500">Candidates need approval before use.</p>
               </div>
               <div className="border-l-2 border-white/15 pl-4" aria-label="Setting collections verdict">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Setting collections</p>
                 <p className="mt-1.5 text-lg text-zinc-100">
                   {assets.status === 'ready' ? `${settingTargets.length} discovered` : assets.status === 'unavailable' ? 'Unavailable' : 'Loading…'}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-zinc-500">Grouped from registered records.</p>
+                <p className="mt-1 text-xs leading-snug text-zinc-500">Grouped from registered records.</p>
               </div>
             </div>
           </header>
@@ -610,7 +611,7 @@ export default function ReferenceSpace() {
                             <p role="status" className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400"><Loader2 size={12} className="animate-spin" />Generating casting options… they appear below as they finish.</p>
                           ) : null}
                           {(selectedLook.casting_generations || []).filter((job) => job.status === 'failed' || job.status === 'partial').slice(0, 1).map((job) => (
-                            <p key={job.id} role="alert" className="mt-2 text-[11px] text-rose-200">{job.error || 'This casting set could not finish. Finished portraits are saved.'}</p>
+                            <p key={job.id} role="alert" className="mt-2 text-xs text-rose-200">{job.error || 'This casting set could not finish. Finished portraits are saved.'}</p>
                           ))}
                         </div>
                       ) : null}
@@ -618,7 +619,7 @@ export default function ReferenceSpace() {
                         <div className="mt-3">
                           <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Look candidates ({selectedLook.candidates.length})</p>
                           {selectedLook.status !== 'locked' ? (
-                            <p className="mt-1 text-[11px] text-zinc-500">Select a candidate to approve it as this look&apos;s face identity, or approve the saved face slot.</p>
+                            <p className="mt-1 text-xs text-zinc-500">Select a candidate to approve it as this look&apos;s face identity, or approve the saved face slot.</p>
                           ) : null}
                           <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
                             {selectedLook.candidates.map((candidate, index) => {
@@ -665,7 +666,7 @@ export default function ReferenceSpace() {
                       <h2 className="text-sm font-semibold text-zinc-100">
                         {selected.kind === 'character' ? 'Character' : 'Setting'} reference library · <span className="font-mono text-xs">{selected.targetId}</span>
                       </h2>
-                      {libraryValue ? <span className="text-[11px] capitalize text-zinc-500">{(libraryValue.coverage || 'not covered').replace(/_/g, ' ')}</span> : null}
+                      {libraryValue ? <span className="text-xs capitalize text-zinc-500">{(libraryValue.coverage || 'not covered').replace(/_/g, ' ')}</span> : null}
                     </div>
                     {libraryValue ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -722,7 +723,7 @@ export default function ReferenceSpace() {
                         {candidates.length > 0 ? (
                           <div className="mt-4 rounded border border-sky-300/20 bg-sky-500/5 p-3">
                             <p className="text-xs text-sky-100">Candidates awaiting approval ({candidates.length})</p>
-                            <p className="mt-1 text-[11px] text-zinc-400">Approval makes a candidate supporting evidence. It never replaces the canonical reference.</p>
+                            <p className="mt-1 text-xs text-zinc-400">Approval makes a candidate supporting evidence. It never replaces the canonical reference.</p>
                             <ul className="mt-2 space-y-2">
                               {candidates.map((asset) => (
                                 <li key={asset.ref_id} className="flex items-center justify-between gap-2 rounded border border-white/10 bg-black/30 p-2">
@@ -734,8 +735,8 @@ export default function ReferenceSpace() {
                                     </div>
                                   </div>
                                   <div className="flex shrink-0 items-center gap-1">
-                                    <button type="button" aria-label={`Compare candidate ${asset.ref_id}`} disabled={busy} onClick={() => setCompareId(compareId === asset.ref_id ? null : asset.ref_id)} className="rounded border border-white/20 px-2 py-1 text-[11px] text-zinc-200 disabled:opacity-40">Compare</button>
-                                    <button type="button" aria-label={`Approve candidate ${asset.ref_id}`} disabled={busy} onClick={() => handleApprove(asset.ref_id)} className="inline-flex items-center gap-1 rounded border border-emerald-300/30 px-2 py-1 text-[11px] text-emerald-200 disabled:opacity-40"><Check size={11} />Approve</button>
+                                    <button type="button" aria-label={`Compare candidate ${asset.ref_id}`} disabled={busy} onClick={() => setCompareId(compareId === asset.ref_id ? null : asset.ref_id)} className="rounded border border-white/20 px-2 py-1 text-xs text-zinc-200 disabled:opacity-40">Compare</button>
+                                    <button type="button" aria-label={`Approve candidate ${asset.ref_id}`} disabled={busy} onClick={() => handleApprove(asset.ref_id)} className="inline-flex items-center gap-1 rounded border border-emerald-300/30 px-2 py-1 text-xs text-emerald-200 disabled:opacity-40"><Check size={11} />Approve</button>
                                     <button type="button" aria-label={`Reject candidate ${asset.ref_id}`} disabled={busy} onClick={() => handleRemove(asset.ref_id, true)} className="rounded border border-rose-300/30 p-1 text-rose-200 disabled:opacity-40" title="Reject candidate"><X size={12} /></button>
                                   </div>
                                 </li>
@@ -808,7 +809,7 @@ export default function ReferenceSpace() {
           <section aria-label="All registered references" className="border-t border-white/10 pt-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-sm font-semibold text-zinc-100">All registered references</h2>
-              <span className="text-[11px] text-zinc-500">Project-wide registry · read-only here</span>
+              <span className="text-xs text-zinc-500">Project-wide registry · read-only here</span>
             </div>
             {assets.status === 'loading' ? (
               <p role="status" className="mt-2 flex items-center gap-2 text-xs text-zinc-400"><Loader2 size={13} className="animate-spin" />Reading registry…</p>
@@ -822,9 +823,9 @@ export default function ReferenceSpace() {
                   <div key={asset.ref_id} className="overflow-hidden rounded border border-white/10 bg-black/30">
                     <div className="aspect-square"><AssetThumb asset={asset} size="md" /></div>
                     <div className="px-2 py-1.5">
-                      <p className={`inline-block rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${statusTone(asset)}`}>{statusLabel(asset)}</p>
+                      <p className={`inline-block rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${statusTone(asset)}`}>{statusLabel(asset)}</p>
                       <p className="mt-1 truncate text-[10px] capitalize text-zinc-400">{roleLabel(asset)}</p>
-                      <p className="truncate font-mono text-[9px] text-zinc-600">{asset.target_type}/{asset.target_id}</p>
+                      <p className="truncate font-mono text-[10px] text-zinc-600">{asset.target_type}/{asset.target_id}</p>
                     </div>
                   </div>
                 ))}

@@ -75,7 +75,7 @@ function CausalFlagsSection({ causalCheck }: { causalCheck: CausalCheck }) {
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300">
             Causal Flags
           </span>
-          <span className={`rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] ${badgeStyle}`}>
+          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] ${badgeStyle}`}>
             {impossibilities.length} flag{impossibilities.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -91,15 +91,15 @@ function CausalFlagsSection({ causalCheck }: { causalCheck: CausalCheck }) {
               data-testid={`causal-flag-${imp.severity}`}
             >
               <div className="flex items-center gap-1.5">
-                <span className="rounded border border-current/30 px-1 py-0.5 text-[8px] uppercase tracking-[0.1em] opacity-70">
+                <span className="rounded border border-current/30 px-1 py-0.5 text-[10px] uppercase tracking-[0.1em] opacity-70">
                   {causalSeverityLabel(imp.severity)}
                 </span>
-                <span className="text-zinc-400 text-[9px]">
+                <span className="text-zinc-400 text-[10px]">
                   established at {imp.established_at || '—'}
                 </span>
               </div>
               <div className="mt-1">{imp.description}</div>
-              <div className="mt-0.5 text-[9px] opacity-60">
+              <div className="mt-0.5 text-[10px] opacity-60">
                 Causal event: {imp.conflicting_event}
               </div>
             </div>
@@ -108,7 +108,7 @@ function CausalFlagsSection({ causalCheck }: { causalCheck: CausalCheck }) {
           {uncertainty_notes.length > 0 && (
             <div className="space-y-0.5 pt-1">
               {uncertainty_notes.map((note, i) => (
-                <div key={`u${i}`} className="text-[9px] text-zinc-500">· {note}</div>
+                <div key={`u${i}`} className="text-[10px] text-zinc-500">· {note}</div>
               ))}
             </div>
           )}

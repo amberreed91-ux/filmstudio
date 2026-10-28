@@ -8,10 +8,10 @@ import GroupRow from '../components/reference/GroupRow'
 import { listReferenceBoardAssets, type BoardAsset } from '../lib/referenceBoardApi'
 
 type BoardState =
-  | { status: 'needs-project' }
-  | { status: 'loading' }
-  | { status: 'unavailable'; message: string }
-  | { status: 'ready'; assets: BoardAsset[] }
+  | { projectId: string; status: 'needs-project' }
+  | { projectId: string; status: 'loading' }
+  | { projectId: string; status: 'unavailable'; message: string }
+  | { projectId: string; status: 'ready'; assets: BoardAsset[] }
 
 function distinctTargets(assets: BoardAsset[], targetType: 'character' | 'setting'): string[] {
   const seen = new Set<string>()
@@ -24,24 +24,31 @@ function distinctTargets(assets: BoardAsset[], targetType: 'character' | 'settin
 export default function ReferenceBoard() {
   const [searchParams] = useSearchParams()
   const projectId = (searchParams.get('project_id') || '').trim()
-  const [state, setState] = useState<BoardState>(projectId ? { status: 'loading' } : { status: 'needs-project' })
+  const [rawState, setState] = useState<BoardState>({
+    projectId,
+    status: projectId ? 'loading' : 'needs-project',
+  })
+  // Results are tagged with their project, so switching projects reads as
+  // loading until the new project's board lands, with no reset effect.
+  const state: BoardState = useMemo(
+    () => rawState.projectId === projectId
+      ? rawState
+      : { projectId, status: projectId ? 'loading' : 'needs-project' },
+    [rawState, projectId],
+  )
 
   useEffect(() => {
-    if (!projectId) {
-      setState({ status: 'needs-project' })
-      return
-    }
+    if (!projectId) return
     let cancelled = false
-    setState({ status: 'loading' })
     listReferenceBoardAssets(projectId)
       .then((response) => {
         if (cancelled) return
-        setState({ status: 'ready', assets: response.reference_assets || [] })
+        setState({ projectId, status: 'ready', assets: response.reference_assets || [] })
       })
       .catch((error: unknown) => {
         if (cancelled) return
         const message = error instanceof Error && error.message.trim() ? error.message.trim() : 'Reference board unavailable'
-        setState({ status: 'unavailable', message })
+        setState({ projectId, status: 'unavailable', message })
       })
     return () => {
       cancelled = true

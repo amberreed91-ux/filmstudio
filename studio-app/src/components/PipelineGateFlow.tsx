@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronRight, ShieldAlert, ShieldCheck, CircleHelp, Loader2 } from 'lucide-react'
-import EvidenceAuditDrawer, { hashLogEntry } from './EvidenceAuditDrawer'
+import EvidenceAuditDrawer from './EvidenceAuditDrawer'
+import { hashLogEntry } from '../lib/evidenceLog'
 import {
   gateStageStateLabel,
   type GateStage,
@@ -88,7 +89,7 @@ function StageViewport({ stages }: { stages: GateStage[] }) {
             {normalizer?.state === 'unavailable' ? 'NO RECORD — the normalizer read failed.' : 'NOT ESTABLISHED — no normalizer execution is recorded yet.'}
           </p>
         ) : entries.length === 0 ? (
-          <p className="text-[11px] text-zinc-400">Payloads passed through with no recorded artifact adjustment.</p>
+          <p className="text-xs text-zinc-400">Payloads passed through with no recorded artifact adjustment.</p>
         ) : (
           <ul className="space-y-1 font-mono text-[10px] text-amber-100/90">
             {entries.map((entry) => (
@@ -107,7 +108,7 @@ function CustodyLedger({ stages }: { stages: GateStage[] }) {
       <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Chain-of-custody ledger</p>
       <ol className="mt-2 space-y-1.5">
         {stages.map((stage) => (
-          <li key={stage.id} className="flex items-baseline justify-between gap-2 text-[11px]">
+          <li key={stage.id} className="flex items-baseline justify-between gap-2 text-xs">
             <span className="min-w-0 truncate text-zinc-300">
               <span className="mr-1.5 font-mono tabular-nums text-zinc-500">{stage.order}</span>
               {stage.label}
@@ -181,7 +182,7 @@ export default function PipelineGateFlow({ stages, loading = false, projectId = 
                     </span>
                     <span className="text-xs font-medium leading-snug text-zinc-100">{stage.label}</span>
                     {focusedReview ? (
-                      <span data-testid="focused-review-tag" className="inline-flex w-fit items-center gap-1.5 rounded border border-violet-300/60 bg-violet-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-violet-100">
+                      <span data-testid="focused-review-tag" className="inline-flex w-fit items-center gap-1.5 rounded border border-violet-300/60 bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-100">
                         <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
                           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-300 opacity-75 motion-reduce:animate-none" />
                           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-violet-200" />

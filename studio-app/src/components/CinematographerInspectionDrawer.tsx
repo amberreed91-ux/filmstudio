@@ -60,7 +60,7 @@ export default function CinematographerInspectionDrawer({
                   <div key={slot.slot} className="rounded border border-zinc-700/60 bg-zinc-950/60 p-2">
                     <div className="text-xs font-semibold text-zinc-200">{label(slot.slot)}</div>
                     <p className="mt-1 text-xs text-zinc-400">{slot.suggestion}</p>
-                    <p className="mt-1 text-[11px] text-zinc-600">{slot.budget_used}/{slot.budget_limit} characters</p>
+                    <p className="mt-1 text-xs text-zinc-600">{slot.budget_used}/{slot.budget_limit} characters</p>
                   </div>
                 ))}
               </div>

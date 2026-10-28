@@ -141,7 +141,7 @@ export default function ScreeningEditorialComparisonPanel({
         </div>
       ) : null}
       {comparison.uncertainty_note ? (
-        <div className="mt-2 text-[11px] text-zinc-500">{comparison.uncertainty_note}</div>
+        <div className="mt-2 text-xs text-zinc-500">{comparison.uncertainty_note}</div>
       ) : null}
     </div>
   )

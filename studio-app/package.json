@@ -11,7 +11,10 @@
     "build:creator-workspace-fixture": "vite build --config vite.creator-workspace-fixture.config.ts",
     "test": "vitest run",
     "typecheck": "tsc -b --force",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
+    "check:type-scale": "node check_type_scale.cjs",
+    "check:buttons": "node check_button_conventions.cjs",
+    "check:buttons:self-test": "node --test check_button_conventions.self-test.cjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -34,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

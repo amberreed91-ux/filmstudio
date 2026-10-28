@@ -124,7 +124,7 @@ function BatchProgress({
                 <button
                   type="button"
                   disabled={retryingJobId === job.id}
-                  className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-amber-200 disabled:opacity-40"
+                  className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-amber-200 disabled:opacity-40"
                   data-testid="retry-shot-button"
                 >
                   {retryingJobId === job.id ? '…' : 'Retry'}

@@ -53,14 +53,14 @@ export default function ProductionScanReportView({ report, onRescan }: Productio
           </div>
         </div>
         <div className="flex items-center gap-3 print:hidden">
-          <button
+          <button type="button"
             onClick={onRescan}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm font-medium"
           >
             <RefreshCw size={16} />
             Re-scan
           </button>
-          <button
+          <button type="button"
             onClick={handleExport}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 text-black hover:bg-cyan-400 transition-colors text-sm font-bold uppercase tracking-wider"
           >

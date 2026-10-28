@@ -16,6 +16,7 @@ import {
   type StoryboardImagePromptEntry,
   type StoryboardShot,
 } from '../lib/studioApi'
+import { removedSummary, stateLabel } from '../lib/storyboardPromptCopy'
 
 type Props = {
   blueprintId: string
@@ -23,42 +24,6 @@ type Props = {
   entry?: StoryboardImagePromptEntry | null
   disabled?: boolean
   onChanged: () => void
-}
-
-function parseStringList(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : []
-  } catch {
-    return []
-  }
-}
-
-export function removedSummary(entry: StoryboardImagePromptEntry | null | undefined): string | null {
-  if (!entry || entry.origin === 'human') return null
-  const rules = parseStringList(entry.rules_applied_json)
-  const dropped = parseStringList(entry.dropped_segments_json)
-  const removed = entry.chars_removed ?? 0
-  if (!rules.length && !dropped.length && !removed) return null
-  const parts = [`compactor removed ${removed} chars`]
-  if (rules.length) parts.push(`rules: ${rules.join(', ')}`)
-  if (dropped.length) parts.push(`${dropped.length} segment${dropped.length === 1 ? '' : 's'} dropped`)
-  return parts.join(' · ')
-}
-
-// Honest state labels: the badge names the actual situation (including what
-// the creator must do next) instead of echoing backend state words.
-const STATE_LABELS: Record<string, string> = {
-  missing: 'No image prompt yet — derive or write one, then approve',
-  unapproved: 'Proposal — awaiting approval (saving is not approving)',
-  stale: 'Board text changed — re-approve this prompt against the new text',
-  over_limit: 'Over the Runway limit — shorten, then approve',
-  ready: 'render-ready',
-}
-
-export function stateLabel(state: string): string {
-  return STATE_LABELS[state] ?? state.replaceAll('_', ' ')
 }
 
 export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, disabled, onChanged }: Props) {
@@ -142,7 +107,7 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
       {entry?.gate_message && state !== 'ready' && (
         <p className="text-[11px] leading-relaxed text-amber-200/90" role="status">{entry.gate_message}</p>
       )}
-      {summary && <p className="text-[11px] leading-relaxed text-zinc-500">{summary}</p>}
+      {summary && <p className="text-xs leading-relaxed text-zinc-500">{summary}</p>}
       {entry?.origin && (
         <p className="text-[11px] text-zinc-500">
           {entry.origin === 'human' ? 'Hand-edited proposal' : 'Compactor proposal'}
@@ -156,11 +121,11 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
           <div className="grid gap-2 md:grid-cols-2">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Before</p>
-              <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300" data-testid={`image-prompt-rebuild-before-${shot.shot_number}`}>{rebuildBefore}</p>
+              <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-xs leading-relaxed text-zinc-300" data-testid={`image-prompt-rebuild-before-${shot.shot_number}`}>{rebuildBefore}</p>
             </div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">After</p>
-              <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300" data-testid={`image-prompt-rebuild-after-${shot.shot_number}`}>{rebuildAfter}</p>
+              <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-xs leading-relaxed text-zinc-300" data-testid={`image-prompt-rebuild-after-${shot.shot_number}`}>{rebuildAfter}</p>
             </div>
           </div>
         </div>
@@ -193,7 +158,7 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
         />
       </label>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className={`text-[11px] tabular-nums ${draftOverLimit ? 'font-medium text-rose-300' : 'text-zinc-500'}`} data-testid={`image-prompt-count-${shot.shot_number}`}>
+        <span className={`text-xs tabular-nums ${draftOverLimit ? 'font-medium text-rose-300' : 'text-zinc-500'}`} data-testid={`image-prompt-count-${shot.shot_number}`}>
           {draftLength}/{RUNWAY_IMAGE_PROMPT_LIMIT} UTF-16{draftOverLimit ? ' — over the limit' : ''}
         </span>
         <div className="flex flex-wrap gap-2">
@@ -201,6 +166,7 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
             type="button"
             onClick={() => void run('derive')}
             disabled={disabled || busy !== null}
+            aria-busy={busy === 'derive'}
             data-testid={`image-prompt-derive-${shot.shot_number}`}
             className="flex items-center gap-1.5 rounded-md border border-white/15 px-3 py-1.5 text-[11px] text-zinc-200 hover:bg-white/5 disabled:opacity-40"
           >
@@ -211,6 +177,7 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
             type="button"
             onClick={() => void run('save')}
             disabled={disabled || busy !== null || !dirty || !draft.trim() || draftOverLimit}
+            aria-busy={busy === 'save'}
             title={draftOverLimit ? saveDisabledReason : 'Save hand edit as a proposal (approval is separate)'}
             aria-disabled={disabled || busy !== null || !dirty || !draft.trim() || draftOverLimit}
             data-testid={`image-prompt-save-${shot.shot_number}`}
@@ -223,6 +190,7 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
             type="button"
             onClick={() => void run('approve')}
             disabled={disabled || busy !== null || draftOverLimit}
+            aria-busy={busy === 'approve'}
             title={draftOverLimit ? saveDisabledReason : 'Approve this prompt for Runway renders'}
             data-testid={`image-prompt-approve-${shot.shot_number}`}
             className="flex items-center gap-1.5 rounded-md border border-emerald-400/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-100 hover:bg-emerald-500/15 disabled:opacity-40"
@@ -235,6 +203,7 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
               type="button"
               onClick={() => void run('reapprove')}
               disabled={disabled || busy !== null || !reapproveConfirmed || draftOverLimit}
+              aria-busy={busy === 'reapprove'}
               data-testid={`image-prompt-reapprove-${shot.shot_number}`}
               title="Re-anchor this approved prompt to the rebuilt board text. The prompt itself is untouched."
               className="flex items-center gap-1.5 rounded-md border border-sky-400/40 bg-sky-500/10 px-3 py-1.5 text-[11px] font-medium text-sky-100 hover:bg-sky-500/15 disabled:opacity-40"
@@ -248,7 +217,7 @@ export default function StoryboardImagePromptPanel({ blueprintId, shot, entry, d
       {draftOverLimit && (
         <p className="text-[11px] leading-relaxed text-rose-300" role="status" data-testid={`image-prompt-overlimit-${shot.shot_number}`}>{saveDisabledReason}</p>
       )}
-      {error && <p className="text-[11px] leading-relaxed text-rose-300" role="alert">{error}</p>}
+      {error && <p className="text-xs leading-relaxed text-rose-300" role="alert">{error}</p>}
     </div>
   )
 }

@@ -52,7 +52,7 @@ function ProviderStatusBadge({
   return (
     <div className="flex items-center gap-1.5" data-testid="provider-status-badge">
       <span
-        className={`rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] ${
+        className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] ${
           isHosted
             ? 'border-emerald-400/50 bg-emerald-500/12 text-emerald-200'
             : 'border-zinc-600/50 bg-zinc-700/30 text-zinc-400'
@@ -66,13 +66,13 @@ function ProviderStatusBadge({
         <div className="relative">
           <button
             type="button"
-            className="text-[9px] text-zinc-500 hover:text-zinc-300"
+            className="text-[10px] text-zinc-500 hover:text-zinc-300"
             data-testid="missing-requirements-trigger"
           >
             ⚠
           </button>
           <div
-            className="absolute bottom-full left-0 z-10 mb-1 w-48 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[9px] text-zinc-300 shadow-lg"
+            className="absolute bottom-full left-0 z-10 mb-1 w-48 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[10px] text-zinc-300 shadow-lg"
             data-testid="missing-requirements-tooltip"
           >
             <div className="mb-0.5 font-semibold text-zinc-400">Needs:</div>
@@ -86,7 +86,7 @@ function ProviderStatusBadge({
       {canSwitchToHosted && (
         <button
           type="button"
-          className="text-[9px] text-zinc-500 underline-offset-2 hover:text-cyan-300 hover:underline"
+          className="text-[10px] text-zinc-500 underline-offset-2 hover:text-cyan-300 hover:underline"
           data-testid="switch-to-hosted-link"
         >
           Switch to Hosted

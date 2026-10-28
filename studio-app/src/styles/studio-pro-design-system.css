@@ -10,7 +10,7 @@
 
 :root {
   /* Font families */
-  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-ui: 'Geist', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   
   /* Typography scale */

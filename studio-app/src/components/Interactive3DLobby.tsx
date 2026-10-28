@@ -2,25 +2,10 @@ import { Component, Suspense, useEffect, useRef, useState, type ReactNode } from
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, OrbitControls, useGLTF } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import SpatialStudioCanvas, { SPATIAL_PORTALS } from './SpatialStudioCanvas'
+import SpatialStudioCanvas from './SpatialStudioCanvas'
+import { SPATIAL_PORTALS } from '../lib/spatialPortals'
+import { LOBBY_MODEL_URL, LOBBY_ROOMS, isLobbyModelAvailable } from '../lib/lobbyRooms'
 import { getProceduralRoomStyle } from '../lib/proceduralBackdrops'
-
-/**
- * Designated drop-in for custom Blender exports.
- * Place `studio_lobby.glb` (or `.gltf`) in `studio-app/public/models/`.
- * When present, it renders with HDRI environment lighting; otherwise the
- * tactical procedural soundstage below is shown gracefully.
- */
-export const LOBBY_MODEL_URL = '/models/studio_lobby.glb'
-
-export async function isLobbyModelAvailable(url: string = LOBBY_MODEL_URL): Promise<boolean> {
-  try {
-    const res = await fetch(url, { method: 'HEAD' })
-    return res.ok
-  } catch {
-    return false
-  }
-}
 
 /** Renders a user-supplied GLB/GLTF lobby model. Must sit inside Suspense + error boundary. */
 function LobbyCustomModel({ url }: { url: string }) {
@@ -44,41 +29,6 @@ class LobbyModelErrorBoundary extends Component<{ children: ReactNode; onError?:
     return this.props.children
   }
 }
-
-export interface LobbyRoom {
-  id: string
-  label: string
-  description: string
-  to: string
-  color: string
-  position: [number, number, number]
-}
-
-const RADIUS = 5.2
-
-function polar(index: number, total: number, y: number): [number, number, number] {
-  const angle = (index / total) * Math.PI * 2 - Math.PI / 2
-  return [Math.cos(angle) * RADIUS, y, Math.sin(angle) * RADIUS]
-}
-
-// Tactical directory — the 12 soundstage bays from the ANIMATION_8 spec.
-// Routes mirror the existing 2D room paths in studio-app/src/routes.tsx
-// exactly — no room load logic is touched. Backend routes + studio.db
-// isolation are untouched; these are navigation targets only.
-export const LOBBY_ROOMS: LobbyRoom[] = [
-  { id: 'atrium', label: 'The Atrium', description: 'Glass entry pavilion', to: '/studio', color: '#e0e7ff', position: polar(0, 12, 1.1) },
-  { id: 'gate', label: 'Gate Intake', description: 'Holographic orb vessel', to: '/studio/gate', color: '#38bdf8', position: polar(1, 12, 1.1) },
-  { id: 'page', label: 'Page', description: "Screenwriter's office", to: '/studio/page', color: '#f59e0b', position: polar(2, 12, 1.1) },
-  { id: 'board', label: 'Board', description: 'Narrative shot wall', to: '/studio/board', color: '#ec4899', position: polar(3, 12, 1.1) },
-  { id: 'previs', label: 'Previs Bay', description: 'Virtual production stage', to: '/studio/previs', color: '#a855f7', position: polar(4, 12, 1.0) },
-  { id: 'screening', label: 'Screening', description: 'Cinema 4K DCP review', to: '/studio/screening-room', color: '#ffffff', position: polar(5, 12, 1.1) },
-  { id: 'universe', label: 'Universe', description: 'Spatial constellation graph', to: '/studio/universe-graph', color: '#818cf8', position: polar(6, 12, 1.1) },
-  { id: 'vault', label: 'The Vault', description: 'Spatial helix cold store', to: '/studio/archive', color: '#38bdf8', position: polar(7, 12, 1.1) },
-  { id: 'production', label: 'Production Desk', description: 'Command telemetry desk', to: '/studio/production-desk', color: '#2dd4bf', position: polar(8, 12, 1.1) },
-  { id: 'integrity', label: 'Integrity Engine', description: 'Laser quarantine chamber', to: '/studio/integrity', color: '#10b981', position: polar(9, 12, 1.1) },
-  { id: 'reference', label: 'Reference Atelier', description: 'Visual dev mood boards', to: '/studio/reference-space', color: '#f43f5e', position: polar(10, 12, 1.1) },
-  { id: 'project', label: 'Project Room', description: 'Focus enclave workstation', to: '/studio/slate', color: '#8b5cf6', position: polar(11, 12, 1.1) },
-]
 
 function supportsWebGL(): boolean {
   try {
@@ -111,8 +61,10 @@ function CameraRig({ controlsRef, onNavigate }: { controlsRef: React.RefObject<O
     window.addEventListener('mousemove', move)
     return () => window.removeEventListener('mousemove', move)
   }, [])
-  useFrame(() => {
-    camera.rotation.z += (pointer.current.x * 0.01 - camera.rotation.z) * 0.02
+  useFrame((state) => {
+    // Read the camera from the frame state rather than mutating the value
+    // returned by useThree() — React Compiler forbids modifying hook results.
+    state.camera.rotation.z += (pointer.current.x * 0.01 - state.camera.rotation.z) * 0.02
   })
   useEffect(() => {
     const recenter = () => {
@@ -300,7 +252,7 @@ export default function Interactive3DLobby({ onNavigate }: Interactive3DLobbyPro
       <div aria-hidden="true" className="pointer-events-none absolute right-2 top-2 z-10 h-3 w-3 border-r-2 border-t-2 border-purple-500/40" />
       <div aria-hidden="true" className="pointer-events-none absolute bottom-8 left-2 z-10 h-3 w-3 border-b-2 border-l-2 border-purple-500/40" />
       {/* Quick room presets */}
-      <div className="absolute bottom-10 left-4 z-10 flex items-center space-x-1.5 rounded border border-purple-950 bg-[#070312]/80 p-1.5 font-mono text-[9px] text-purple-300/70 backdrop-blur">
+      <div className="absolute bottom-10 left-4 z-10 flex items-center space-x-1.5 rounded border border-purple-950 bg-[#070312]/80 p-1.5 font-mono text-[10px] text-purple-300/70 backdrop-blur">
         <span className="px-1 font-semibold text-purple-400">PRESETS:</span>
         {quickRoutes.map((route) => (
           <button

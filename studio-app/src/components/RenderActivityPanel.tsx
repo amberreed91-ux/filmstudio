@@ -106,7 +106,7 @@ export default function RenderActivityPanel({ roomName }: { roomName: 'Lobby' | 
             <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[11px] text-zinc-300">
               <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">Job ID</span>
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <div className="mt-1 truncate font-mono text-[9px] text-zinc-400">{(activity as any).jobId || 'n/a'}</div>
+              <div className="mt-1 truncate font-mono text-[10px] text-zinc-400">{(activity as any).jobId || 'n/a'}</div>
             </div>
           )}
         </div>

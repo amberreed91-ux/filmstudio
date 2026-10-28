@@ -19,7 +19,9 @@ import {
   type CharacterRecord,
   type Scene,
 } from '../lib/studioApi'
-import { dossierStorageKey } from './GateRoom'
+import { dossierStorageKey } from '../lib/dossierStorage'
+
+type SceneDraft = { sceneId: string; text: string }
 
 export default function PageRoom() {
   const [searchParams] = useSearchParams()
@@ -29,65 +31,78 @@ export default function PageRoom() {
   const accent = getProceduralRoomStyle('page').tokens.accent
 
   const [scenes, setScenes] = useState<Scene[]>([])
-  const [characters, setCharacters] = useState<CharacterRecord[]>([])
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState('')
+  const [characters, setCharacters] = useState<{ projectId: string; items: CharacterRecord[] }>({
+    projectId: '',
+    items: [],
+  })
+  // Load state is keyed by project so a project switch reads as loading
+  // without a synchronous state reset inside the effect.
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<{ projectId: string; message: string } | null>(null)
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null)
-  const [draft, setDraft] = useState('')
+  // Drafts and save messages are tagged with their scene, so switching scenes
+  // shows that scene's text without a reset effect.
+  const [draftState, setDraftState] = useState<SceneDraft | null>(null)
   const [saving, setSaving] = useState(false)
-  const [saveMessage, setSaveMessage] = useState('')
-  const [intakeBrief, setIntakeBrief] = useState<{ format: string; genre: string; brief: string } | null>(null)
+  const [saveMessage, setSaveMessage] = useState<SceneDraft | null>(null)
+
+  const intakeBrief = useMemo(() => {
+    if (!projectId) return null
+    try {
+      const raw = sessionStorage.getItem(dossierStorageKey(projectId))
+      return raw ? (JSON.parse(raw) as { format: string; genre: string; brief: string }) : null
+    } catch {
+      return null
+    }
+  }, [projectId])
 
   useEffect(() => {
     if (!projectId) return
     let cancelled = false
-    setLoading(true)
-    setLoadError('')
-    setSelectedSceneId(null)
-    try {
-      const raw = sessionStorage.getItem(dossierStorageKey(projectId))
-      setIntakeBrief(raw ? (JSON.parse(raw) as { format: string; genre: string; brief: string }) : null)
-    } catch {
-      setIntakeBrief(null)
-    }
     void Promise.all([listScenes(projectId), listCharacters(projectId)]).then(([sceneResult, characterResult]) => {
       if (cancelled) return
       if (sceneResult.error) {
-        setLoadError(sceneResult.error)
+        setLoadError({ projectId, message: sceneResult.error })
+        setScenes([])
       } else {
         setScenes(sceneResult.scenes)
-        setSelectedSceneId(sceneResult.scenes[0]?.scene_id ?? null)
+        setLoadError(null)
       }
-      if (!characterResult.error) setCharacters(characterResult.characters)
-      setLoading(false)
+      if (!characterResult.error) setCharacters({ projectId, items: characterResult.characters })
+      setLoadedProjectId(projectId)
     })
     return () => {
       cancelled = true
     }
   }, [projectId])
 
+  const loading = Boolean(projectId) && loadedProjectId !== projectId
+  const errorMessage = loadError?.projectId === projectId ? loadError.message : ''
+  const characterList = characters.projectId === projectId ? characters.items : []
+
   const selectedScene = useMemo(
-    () => scenes.find((scene) => scene.scene_id === selectedSceneId) ?? null,
+    () => scenes.find((scene) => scene.scene_id === selectedSceneId) ?? scenes[0] ?? null,
     [scenes, selectedSceneId],
   )
 
-  useEffect(() => {
-    setDraft(selectedScene ? (selectedScene.description || selectedScene.text || '') : '')
-    setSaveMessage('')
-  }, [selectedScene])
+  const sceneId = selectedScene?.scene_id ?? null
+  const draft = draftState && draftState.sceneId === sceneId
+    ? draftState.text
+    : (selectedScene?.description || selectedScene?.text || '')
+  const saveMessageText = saveMessage && saveMessage.sceneId === sceneId ? saveMessage.text : ''
 
   async function handleSave() {
     if (!projectId || !selectedScene) return
     setSaving(true)
-    setSaveMessage('')
     const result = await updateScene(projectId, selectedScene.scene_id, { description: draft })
     if (result.error || !result.scene) {
-      setSaveMessage(result.error || 'Could not save this scene.')
+      setSaveMessage({ sceneId: selectedScene.scene_id, text: result.error || 'Could not save this scene.' })
     } else {
       setScenes((previous) =>
         previous.map((scene) => (scene.scene_id === result.scene!.scene_id ? result.scene! : scene)),
       )
-      setSaveMessage('Saved to the screenplay.')
+      setDraftState(null)
+      setSaveMessage({ sceneId: selectedScene.scene_id, text: 'Saved to the screenplay.' })
     }
     setSaving(false)
   }
@@ -121,9 +136,9 @@ export default function PageRoom() {
             <GlassPanel accent={accent} testid="page-loading">
               <p className="text-sm text-zinc-400">Unrolling the screenplay…</p>
             </GlassPanel>
-          ) : loadError ? (
+          ) : errorMessage ? (
             <GlassPanel accent={accent} testid="page-error">
-              <p className="text-sm text-rose-200">{loadError}</p>
+              <p className="text-sm text-rose-200">{errorMessage}</p>
             </GlassPanel>
           ) : (
             <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)_280px]">
@@ -140,13 +155,17 @@ export default function PageRoom() {
                 ) : (
                   <ul data-testid="page-scene-list" className="max-h-[480px] space-y-1.5 overflow-y-auto">
                     {scenes.map((scene, index) => {
-                      const active = scene.scene_id === selectedSceneId
+                      const active = scene.scene_id === selectedScene?.scene_id
                       return (
                         <li key={scene.scene_id}>
                           <button
                             type="button"
                             data-testid={`page-scene-${scene.scene_id}`}
-                            onClick={() => setSelectedSceneId(scene.scene_id)}
+                            onClick={() => {
+                              setSelectedSceneId(scene.scene_id)
+                              setDraftState(null)
+                              setSaveMessage(null)
+                            }}
                             className="w-full rounded-lg border p-2.5 text-left transition-all duration-150"
                             style={{
                               borderColor: active ? `${accent}88` : 'rgba(255,255,255,0.08)',
@@ -179,7 +198,9 @@ export default function PageRoom() {
                       accent={accent}
                       data-testid="page-editor"
                       value={draft}
-                      onChange={(event) => setDraft(event.target.value)}
+                      onChange={(event) =>
+                        setDraftState({ sceneId: selectedScene.scene_id, text: event.target.value })
+                      }
                       className="min-h-[320px] font-mono leading-7"
                       placeholder="Write the scene…"
                     />
@@ -189,15 +210,16 @@ export default function PageRoom() {
                         data-testid="page-save"
                         onClick={() => void handleSave()}
                         disabled={saving}
+                        aria-busy={saving || undefined}
                         className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-zinc-50 transition-all hover:scale-[1.02] disabled:opacity-50"
                         style={{ borderColor: `${accent}88`, background: `${accent}22` }}
                       >
                         <Save size={14} />
                         {saving ? 'Saving…' : 'Save scene'}
                       </button>
-                      {saveMessage && (
+                      {saveMessageText && (
                         <span data-testid="page-save-message" role="status" className="text-xs text-zinc-300">
-                          {saveMessage}
+                          {saveMessageText}
                         </span>
                       )}
                     </div>
@@ -216,14 +238,14 @@ export default function PageRoom() {
                   <div className="mb-3 flex items-center gap-2">
                     <Users size={15} style={{ color: accent }} />
                     <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-200">
-                      Characters · {characters.length}
+                      Characters · {characterList.length}
                     </h2>
                   </div>
-                  {characters.length === 0 ? (
+                  {characterList.length === 0 ? (
                     <p className="text-xs leading-5 text-zinc-500">No character profiles filed for this film.</p>
                   ) : (
                     <ul data-testid="page-characters" className="space-y-2">
-                      {characters.map((character) => (
+                      {characterList.map((character) => (
                         <li
                           key={character.id}
                           data-testid={`page-character-${character.id}`}
@@ -279,7 +301,7 @@ export default function PageRoom() {
                       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
                         Intake brief · {intakeBrief.format} · {intakeBrief.genre}
                       </p>
-                      <p className="mt-1 text-[11px] leading-4 text-zinc-300">{intakeBrief.brief}</p>
+                      <p className="mt-1 text-xs leading-4 text-zinc-300">{intakeBrief.brief}</p>
                     </div>
                   )}
                 </div>

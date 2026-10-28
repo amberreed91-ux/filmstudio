@@ -45,6 +45,22 @@ jobs:
         run: |
           cd studio-app
           npm run typecheck
+      - name: Lint
+        run: |
+          cd studio-app
+          npm run lint
+      - name: Type-scale check
+        run: |
+          cd studio-app
+          npm run check:type-scale
+      - name: Button guard self-test
+        run: |
+          cd studio-app
+          npm run check:buttons:self-test
+      - name: Button conventions check
+        run: |
+          cd studio-app
+          npm run check:buttons
       - name: Unit tests
         run: |
           cd studio-app

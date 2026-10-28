@@ -2,8 +2,8 @@
 // The ready-state component test and the ready screenshot MUST use only this
 // fixture for board + gate data (never hand-built inline objects, never live
 // data). Plain language, no scores, no percentages, no "ready to send".
-import type { DeskGateSummary } from '../ProductionDesk'
-import type { ShotIntegrityGates } from '../ProductionIntegrityEngine'
+import type { DeskGateSummary } from '../../lib/deskGate'
+import type { ShotIntegrityGates } from '../../lib/productionIntegrity'
 
 export const ENGINE_BOARD_READY_FIXTURE_LABEL = 'engine-board-ready-fixture'
 

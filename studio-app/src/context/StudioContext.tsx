@@ -146,7 +146,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function refreshOverview() {
+  const refreshOverview = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -191,7 +191,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   async function loadProject(projectId: string, options?: { sessionId?: string | null }) {
     if (!projectId) return
@@ -471,7 +471,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       currentPollingIntervals.forEach(interval => clearInterval(interval))
       currentPollingIntervals.clear()
     }
-  }, [])
+  }, [loadProviders, refreshOverview])
 
   return <StudioContext.Provider value={value}>{children}</StudioContext.Provider>
 }

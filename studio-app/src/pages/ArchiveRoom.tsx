@@ -515,7 +515,7 @@ export default function ArchiveRoom() {
                         </div>
                       )}
                       <span
-                        className={`status-chip absolute right-2 top-2 z-10 rounded border px-1.5 py-0.5 text-[8px] font-bold ${statusBadgeClass(film.status)}`}
+                        className={`status-chip absolute right-2 top-2 z-10 rounded border px-1.5 py-0.5 text-[10px] font-bold ${statusBadgeClass(film.status)}`}
                       >
                         {film.status === 'complete' ? 'Scenes approved' : film.status.replace('_', ' ').toUpperCase()}
                       </span>
@@ -531,7 +531,7 @@ export default function ArchiveRoom() {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleScreen(film) }}
-                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02]"
+                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02]"
                             style={{ color: 'var(--color-primary)' }}
                           >
                             <Play size={12} />
@@ -541,7 +541,8 @@ export default function ArchiveRoom() {
                             type="button"
                             onClick={(e) => { e.stopPropagation(); void handleExport(film) }}
                             disabled={exporting === film.project.project_id}
-                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                            aria-busy={exporting === film.project.project_id}
+                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02] disabled:opacity-50"
                             style={{ color: 'var(--color-on-surface-variant)' }}
                           >
                             {exporting === film.project.project_id ? (
@@ -554,7 +555,7 @@ export default function ArchiveRoom() {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setSelectedFilm(film) }}
-                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02]"
+                            className="glass-panel flex items-center gap-1 rounded px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02]"
                             style={{ color: 'var(--color-on-surface-variant)' }}
                           >
                             <Edit3 size={12} />
@@ -564,7 +565,7 @@ export default function ArchiveRoom() {
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setShowArchiveConfirm(film) }}
                             disabled={archiving === film.project.project_id}
-                            className="flex items-center gap-1 rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02] disabled:opacity-50"
+                            className="flex items-center gap-1 rounded px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-all hover:scale-[1.02] disabled:opacity-50"
                             style={{ background: 'rgba(244,63,94,0.1)', color: 'var(--color-error)' }}
                           >
                             {archiving === film.project.project_id ? (
@@ -617,7 +618,7 @@ export default function ArchiveRoom() {
                       key={filter}
                       type="button"
                       onClick={() => setAssetFilter(filter)}
-                      className={`status-chip rounded border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] transition-all ${
+                      className={`status-chip rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] transition-all ${
                         assetFilter === filter ? 'border-primary/40 bg-primary/10 text-primary' : ''
                       }`}
                       style={{
@@ -673,14 +674,14 @@ export default function ArchiveRoom() {
                           </div>
                           {/* Filename */}
                           <p
-                            className="mt-1.5 w-full truncate text-[9px] font-mono"
+                            className="mt-1.5 w-full truncate text-[10px] font-mono"
                             style={{ color: 'var(--color-on-surface)' }}
                           >
                             {asset.filename || asset.title || asset.asset_id}
                           </p>
                           {/* Badge */}
                           <span
-                            className={`status-chip mt-0.5 rounded px-1.5 py-0.5 text-[7px] font-bold ${badge.className}`}
+                            className={`status-chip mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold ${badge.className}`}
                           >
                             {badge.label}
                           </span>
@@ -707,6 +708,7 @@ export default function ArchiveRoom() {
                     type="button"
                     onClick={() => void handleReadinessScan()}
                     disabled={scanning}
+                    aria-busy={scanning}
                     className="glass-panel flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50"
                     style={{ color: 'var(--color-primary)' }}
                   >
@@ -717,6 +719,7 @@ export default function ArchiveRoom() {
                     type="button"
                     onClick={() => void handlePublish()}
                     disabled={publishing}
+                    aria-busy={publishing}
                     className="glass-panel flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50"
                     style={{ color: 'var(--color-on-surface-variant)' }}
                   >
@@ -785,6 +788,7 @@ export default function ArchiveRoom() {
                   type="button"
                   onClick={() => void handleArchive(showArchiveConfirm)}
                   disabled={archiving === showArchiveConfirm.project.project_id}
+                  aria-busy={archiving === showArchiveConfirm.project.project_id}
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50"
                   style={{
                     background: 'rgba(244,63,94,0.15)',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Settings, MoreHorizontal, TrendingUp, RefreshCw } from 'lucide-react'
+import { Settings, MoreHorizontal, TrendingUp, RefreshCw, Loader2 } from 'lucide-react'
 import { useStudio } from '../context/StudioContext'
 import { getProductionQueueSummary, retryRenderJob, setRenderMode, type ProductionQueueSummary } from '../lib/studioApi'
 import StudioShell from '../components/StudioShell'
@@ -41,7 +41,7 @@ function ProviderCard({ provider, onMore }: { provider: Provider; onMore?: (prov
           {isFeatured && (
             <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{provider.jobs}</span>
           )}
-          <button className="p-1 rounded hover:bg-white/5" onClick={() => onMore?.(provider)}>
+          <button type="button" className="p-1 rounded hover:bg-white/5" onClick={() => onMore?.(provider)}>
             <MoreHorizontal size={12} style={{ color: 'var(--text-muted)' }} />
           </button>
         </div>
@@ -110,6 +110,8 @@ export default function Cost() {
     return stored ? JSON.parse(stored).speedPriority || 75 : 75
   })
   const [notice, setNotice] = useState<string | null>(null)
+  const [retryingTopJob, setRetryingTopJob] = useState(false)
+  const [applyingRenderMode, setApplyingRenderMode] = useState(false)
   const [queueSummary, setQueueSummary] = useState<ProductionQueueSummary | null>(null)
   const tabs = ['Dashboard', 'Queue', 'Providers', 'Settings']
   const { project, overview } = useStudio()
@@ -175,18 +177,22 @@ export default function Cost() {
   }, [activeProject?.project_id])
 
   async function handleRetryTopJob() {
-    if (!activeProject?.project_id || !activeRenderJob) return
+    if (!activeProject?.project_id || !activeRenderJob || retryingTopJob) return
+    setRetryingTopJob(true)
     setNotice(`Retrying ${activeRenderJob.renderId}...`)
     try {
       await retryRenderJob(activeProject.project_id, activeRenderJob.renderId)
       setNotice(`Retry queued for ${activeRenderJob.renderId}.`)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Retry failed.')
+    } finally {
+      setRetryingTopJob(false)
     }
   }
 
   async function handleApplyRenderMode() {
-    if (!activeProject?.project_id) return
+    if (!activeProject?.project_id || applyingRenderMode) return
+    setApplyingRenderMode(true)
     setNotice('Applying render mode...')
     try {
       const nextLiveMode = speedPriority >= 50
@@ -194,6 +200,8 @@ export default function Cost() {
       setNotice(nextLiveMode ? 'Live render mode enabled.' : 'Planning mode restored.')
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Render mode update failed.')
+    } finally {
+      setApplyingRenderMode(false)
     }
   }
 
@@ -229,7 +237,7 @@ export default function Cost() {
             </div>
             <nav className="flex items-center gap-1">
               {tabs.map(tab => (
-                <button
+                <button type="button"
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className="px-4 py-1.5 text-sm rounded transition-all"
@@ -338,8 +346,8 @@ export default function Cost() {
               <div className="mt-4 rounded-lg p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Selected Render Job</h3>
-                  <button className="text-xs px-2 py-0.5 rounded" onClick={handleRetryTopJob} style={{ background: 'rgba(0,200,255,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(0,200,255,0.25)' }}>
-                    <RefreshCw size={11} className="inline mr-1" />
+                  <button type="button" className="text-xs px-2 py-0.5 rounded disabled:opacity-50" onClick={() => void handleRetryTopJob()} disabled={retryingTopJob} aria-busy={retryingTopJob} style={{ background: 'rgba(0,200,255,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(0,200,255,0.25)' }}>
+                    {retryingTopJob ? <Loader2 size={11} className="inline mr-1 animate-spin" /> : <RefreshCw size={11} className="inline mr-1" />}
                     Retry Top Job
                   </button>
                 </div>
@@ -392,8 +400,8 @@ export default function Cost() {
                         {` `}
                         {speedPriority >= 50 ? 'Apply will request live mode.' : 'Apply will request planning mode.'}
                       </div>
-                      <button className="btn-primary text-xs px-3 py-1.5" onClick={() => void handleApplyRenderMode()}>
-                        Apply
+                      <button type="button" className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50" onClick={() => void handleApplyRenderMode()} disabled={applyingRenderMode} aria-busy={applyingRenderMode}>
+                        {applyingRenderMode ? 'Applying…' : 'Apply'}
                       </button>
                     </div>
                   </div>

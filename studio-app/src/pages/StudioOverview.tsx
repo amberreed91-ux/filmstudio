@@ -62,6 +62,14 @@ export default function StudioOverview() {
   const requestedProjectLoadRef = useRef('')
   const [exportMessage, setExportMessage] = useState('')
   const [projectSaveMessage, setProjectSaveMessage] = useState('')
+  const [projectSaveError, setProjectSaveError] = useState('')
+  // In-flight guard — a double click would create two projects.
+  const [creatingProject, setCreatingProject] = useState(false)
+  const createProjectInFlightRef = useRef(false)
+  const [exporting, setExporting] = useState(false)
+  const exportInFlightRef = useRef(false)
+  const [migrating, setMigrating] = useState(false)
+  const migrateInFlightRef = useRef(false)
   const [overviewTab, setOverviewTab] = useState<'activity' | 'issues' | 'rooms' | 'memory'>('activity')
   const [persistedProjects, setPersistedProjects] = useState<Array<{ project_id: string; title: string }>>([])
   const [studioIntelligence, setStudioIntelligence] = useState<{
@@ -323,10 +331,10 @@ export default function StudioOverview() {
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-200">{label}</div>
         <div className="mt-2 space-y-2">
           {sortedRows.length === 0 ? (
-            <div className="text-[11px] text-zinc-500">No patterns yet</div>
+            <div className="text-xs text-zinc-500">No patterns yet</div>
           ) : (
             sortedRows.slice(0, 3).map((row, index) => (
-              <div key={`${label}-${index}`} className="rounded border border-white/10 bg-zinc-900/60 p-2 text-[11px]">
+              <div key={`${label}-${index}`} className="rounded border border-white/10 bg-zinc-900/60 p-2 text-xs">
                 <div className="text-zinc-100">{String(row.pattern || 'unknown')}</div>
                 <div className="text-cyan-200">confidence: {Number(row.confidence || 0).toFixed(2)}</div>
                 <div className="text-zinc-400">source: {String(row.source_reference || 'unknown')}</div>
@@ -484,22 +492,43 @@ export default function StudioOverview() {
               ) : null}
               <button
                 type="button"
+                disabled={creatingProject}
+                aria-busy={creatingProject || undefined}
                 onClick={async () => {
-                  const created = await createProject({ title: `Studio Project ${new Date().toLocaleDateString()}` })
-                  if (!created.project?.project_id) return
-                  localStorage.setItem('studio:activeProjectId', created.project.project_id)
-                  setProjectSaveMessage('Project created')
-                  await loadProject(created.project.project_id)
-                  const response = await listProjects()
-                  setPersistedProjects((response.projects || []).map((p) => ({ project_id: p.project_id, title: p.title || p.project_id })))
+                  if (createProjectInFlightRef.current) return
+                  createProjectInFlightRef.current = true
+                  setCreatingProject(true)
+                  setProjectSaveError('')
+                  try {
+                    const created = await createProject({ title: `Studio Project ${new Date().toLocaleDateString()}` })
+                    if (!created.project?.project_id) {
+                      setProjectSaveError('Unable to create project')
+                      return
+                    }
+                    localStorage.setItem('studio:activeProjectId', created.project.project_id)
+                    setProjectSaveMessage('Project created')
+                    await loadProject(created.project.project_id)
+                    const response = await listProjects()
+                    setPersistedProjects((response.projects || []).map((p) => ({ project_id: p.project_id, title: p.title || p.project_id })))
+                  } catch (err) {
+                    setProjectSaveError(err instanceof Error ? err.message : 'Unable to create project')
+                  } finally {
+                    createProjectInFlightRef.current = false
+                    setCreatingProject(false)
+                  }
                 }}
-                className="liquid-btn mt-3 w-full"
+                className="liquid-btn mt-3 w-full disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Create New Project
+                {creatingProject ? 'Creating…' : 'Create New Project'}
               </button>
               <button
                 type="button"
+                disabled={exporting}
+                aria-busy={exporting || undefined}
                 onClick={async () => {
+                  if (exportInFlightRef.current) return
+                  exportInFlightRef.current = true
+                  setExporting(true)
                   const safeProjectId = activeProjectId || 'local_project'
                   try {
                     const exported = await fetchExportPackage(safeProjectId, 'pitch-pack')
@@ -509,14 +538,18 @@ export default function StudioOverview() {
                     const fallback = buildLocalFallbackExport('pitch-pack')
                     downloadJson(`${safeProjectId}-pitch-pack-fallback.json`, fallback)
                     setExportMessage('Export created (local fallback)')
+                  } finally {
+                    exportInFlightRef.current = false
+                    setExporting(false)
                   }
                 }}
-                className="mt-2 w-full rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-amber-200 transition hover:border-amber-300/30 hover:bg-white/[0.06]"
+                className="mt-2 w-full rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-amber-200 transition hover:border-amber-300/30 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Export Pitch Pack
+                {exporting ? 'Exporting…' : 'Export Pitch Pack'}
               </button>
               {exportMessage ? <div className="mt-2 text-xs text-zinc-400">{exportMessage}</div> : null}
               {projectSaveMessage ? <div className="mt-2 text-xs text-emerald-400">{projectSaveMessage}</div> : null}
+              {projectSaveError ? <div className="mt-2 text-xs text-rose-300">{projectSaveError}</div> : null}
             </div>
           </section>
 
@@ -529,23 +562,36 @@ export default function StudioOverview() {
                 <div className="mt-2 text-sm text-zinc-200">Save this local film as a project</div>
                 <button
                   type="button"
+                  disabled={migrating}
+                  aria-busy={migrating || undefined}
                   onClick={async () => {
-                    const script = localStorage.getItem('studio:lastScript') || ''
-                    const created = await createProject({ title: 'Migrated Local Film' })
-                    if (!created.project?.project_id) {
-                      setProjectSaveMessage('Unable to create project for migration')
-                      return
+                    if (migrateInFlightRef.current) return
+                    migrateInFlightRef.current = true
+                    setMigrating(true)
+                    setProjectSaveError('')
+                    try {
+                      const script = localStorage.getItem('studio:lastScript') || ''
+                      const created = await createProject({ title: 'Migrated Local Film' })
+                      if (!created.project?.project_id) {
+                        setProjectSaveError('Unable to create project for migration')
+                        return
+                      }
+                      localStorage.setItem('studio:activeProjectId', created.project.project_id)
+                      if (script.trim()) {
+                        await generateScenes(created.project.project_id, script)
+                      }
+                      setProjectSaveMessage('Local film saved to project')
+                      await loadProject(created.project.project_id)
+                    } catch (err) {
+                      setProjectSaveError(err instanceof Error ? err.message : 'Unable to migrate local film')
+                    } finally {
+                      migrateInFlightRef.current = false
+                      setMigrating(false)
                     }
-                    localStorage.setItem('studio:activeProjectId', created.project.project_id)
-                    if (script.trim()) {
-                      await generateScenes(created.project.project_id, script)
-                    }
-                    setProjectSaveMessage('Local film saved to project')
-                    await loadProject(created.project.project_id)
                   }}
-                  className="liquid-btn mt-3"
+                  className="liquid-btn mt-3 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Save this local film as a project
+                  {migrating ? 'Saving…' : 'Save this local film as a project'}
                 </button>
               </div>
             </section>

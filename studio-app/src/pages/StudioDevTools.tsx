@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import StudioShell from '../components/StudioShell'
 import SandboxShortFilmPanel from '../components/SandboxShortFilmPanel'
 import RenderActivityPanel from '../components/RenderActivityPanel'
@@ -80,6 +81,13 @@ export default function StudioDevTools() {
   const [extractingAssetId, setExtractingAssetId] = useState('')
   const [detectingAssetId, setDetectingAssetId] = useState('')
   const [ingestingAssetId, setIngestingAssetId] = useState('')
+  const [assetsLoading, setAssetsLoading] = useState(false)
+  const [panelAction, setPanelAction] = useState('')
+  const [relatedLoadingId, setRelatedLoadingId] = useState('')
+  const [memorySearchLoading, setMemorySearchLoading] = useState(false)
+  const [similarLoading, setSimilarLoading] = useState(false)
+  const [moodLoading, setMoodLoading] = useState(false)
+  const [styleMatchLoading, setStyleMatchLoading] = useState(false)
   const [activeTabByAsset, setActiveTabByAsset] = useState<Record<string, 'timeline' | 'keyframes' | 'memory' | 'commentary'>>({})
   const [memoryQuery, setMemoryQuery] = useState('')
   const [memorySearchResults, setMemorySearchResults] = useState<SceneMemory[]>([])
@@ -126,8 +134,9 @@ export default function StudioDevTools() {
   const devModeEnabled = isStudioDevMode()
   const isProduction = import.meta.env.PROD
 
-  async function loadAssets() {
+  const loadAssets = useCallback(async () => {
     if (!projectId) return
+    setAssetsLoading(true)
     setAssetError('')
     try {
       const result = await listVideoAssetsForProject(projectId)
@@ -135,10 +144,12 @@ export default function StudioDevTools() {
     } catch (err) {
       setAssetError(err instanceof Error ? err.message : 'Failed to load video assets')
       setLastUiError(err instanceof Error ? err.message : 'Failed to load assets')
+    } finally {
+      setAssetsLoading(false)
     }
-  }
+  }, [projectId])
 
-  async function loadDiagnostics() {
+  const loadDiagnostics = useCallback(async () => {
     if (!projectId) return
     setDiagnosticsLoading(true)
     setDiagnosticsError('')
@@ -156,43 +167,43 @@ export default function StudioDevTools() {
     } finally {
       setDiagnosticsLoading(false)
     }
-  }
+  }, [projectId])
 
-  async function loadKeyframes(assetId: string) {
+  const loadKeyframes = useCallback(async (assetId: string) => {
     try {
       const result = await listVideoAssetKeyframes(assetId)
       setKeyframesByAsset((prev) => ({ ...prev, [assetId]: result.keyframes || [] }))
     } catch {
       setKeyframesByAsset((prev) => ({ ...prev, [assetId]: [] }))
     }
-  }
+  }, [])
 
-  async function loadShots(assetId: string) {
+  const loadShots = useCallback(async (assetId: string) => {
     try {
       const result = await listVideoAssetShots(assetId)
       setShotsByAsset((prev) => ({ ...prev, [assetId]: result.shots || [] }))
     } catch {
       setShotsByAsset((prev) => ({ ...prev, [assetId]: [] }))
     }
-  }
+  }, [])
 
-  async function loadMemories(assetId: string) {
+  const loadMemories = useCallback(async (assetId: string) => {
     try {
       const result = await listVideoAssetSceneMemory(assetId)
       setMemoriesByAsset((prev) => ({ ...prev, [assetId]: result.memories || [] }))
     } catch {
       setMemoriesByAsset((prev) => ({ ...prev, [assetId]: [] }))
     }
-  }
+  }, [])
 
-  async function loadCommentary(assetId: string) {
+  const loadCommentary = useCallback(async (assetId: string) => {
     try {
       const result = await listDirectorCommentary(assetId)
       setCommentaryByAsset((prev) => ({ ...prev, [assetId]: result.commentary || [] }))
     } catch {
       setCommentaryByAsset((prev) => ({ ...prev, [assetId]: [] }))
     }
-  }
+  }, [])
 
   async function extractKeyframes(assetId: string, overwrite = false) {
     setExtractingAssetId(assetId)
@@ -256,24 +267,30 @@ export default function StudioDevTools() {
   }
 
   async function runMemorySearch() {
+    setMemorySearchLoading(true)
     try {
       const result = await searchSceneMemories(memoryQuery, 20)
       setMemorySearchResults(result.memories || [])
     } catch {
       setMemorySearchResults([])
+    } finally {
+      setMemorySearchLoading(false)
     }
   }
 
   async function loadRelated(memoryId: string) {
+    setRelatedLoadingId(memoryId)
     try {
       const result = await relatedSceneMemories(memoryId, 5)
       setRelatedByMemory((prev) => ({ ...prev, [memoryId]: result.memories || [] }))
     } catch {
       setRelatedByMemory((prev) => ({ ...prev, [memoryId]: [] }))
+    } finally {
+      setRelatedLoadingId('')
     }
   }
 
-  async function loadContinuityIssues() {
+  const loadContinuityIssues = useCallback(async () => {
     if (!projectId) return
     try {
       const result = await listProjectContinuityIssues(projectId)
@@ -281,9 +298,9 @@ export default function StudioDevTools() {
     } catch {
       setContinuityIssues([])
     }
-  }
+  }, [projectId])
 
-  async function loadStyleDNA() {
+  const loadStyleDNA = useCallback(async () => {
     if (!projectId) return
     try {
       const [signaturesResult, patternsResult] = await Promise.all([
@@ -296,7 +313,7 @@ export default function StudioDevTools() {
       setStyleSignatures([])
       setStylePatternSummary(null)
     }
-  }
+  }, [projectId])
 
   async function buildStyleSignature() {
     if (!projectId) return
@@ -319,12 +336,15 @@ export default function StudioDevTools() {
       setRegisterMessage('Need at least two style signatures to compare.')
       return
     }
+    setPanelAction('compare')
     try {
       const result = await compareStyleSignatures(styleSignatures[0].signature_id, styleSignatures[1].signature_id)
       setStyleComparison(result)
     } catch (err) {
       setStyleComparison(null)
       setRegisterMessage(err instanceof Error ? err.message : 'Failed to compare style signatures')
+    } finally {
+      setPanelAction('')
     }
   }
 
@@ -361,14 +381,19 @@ export default function StudioDevTools() {
 
   async function registerDemoFrameAnalysis(assetId: string) {
     const frame = keyframesByAsset[assetId]?.[0]
-    await registerFrameAnalysis(assetId, {
-      keyframe_id: frame?.keyframe_id,
-      caption: 'Framing pass with implied tension in negative space.',
-      mood_tags: ['tense', 'reflective'],
-      lighting_tags: ['low-key'],
-      camera_tags: ['static', 'medium shot'],
-      metadata: { source: 'devtools_demo' },
-    })
+    setPanelAction(`demo:${assetId}`)
+    try {
+      await registerFrameAnalysis(assetId, {
+        keyframe_id: frame?.keyframe_id,
+        caption: 'Framing pass with implied tension in negative space.',
+        mood_tags: ['tense', 'reflective'],
+        lighting_tags: ['low-key'],
+        camera_tags: ['static', 'medium shot'],
+        metadata: { source: 'devtools_demo' },
+      })
+    } finally {
+      setPanelAction('')
+    }
   }
 
   async function findSimilarScenes() {
@@ -376,34 +401,44 @@ export default function StudioDevTools() {
       setSimilarResults([])
       return
     }
+    setSimilarLoading(true)
     try {
       const result = await searchSimilarScenes(similarMemoryId.trim(), 10)
       setSimilarResults(result.results || [])
     } catch {
       setSimilarResults([])
+    } finally {
+      setSimilarLoading(false)
     }
   }
 
   async function findByMood() {
+    setMoodLoading(true)
     try {
       const result = await searchScenesByMood(moodQuery, 20)
       setMoodResults(result.memories || [])
     } catch {
       setMoodResults([])
+    } finally {
+      setMoodLoading(false)
     }
   }
 
   async function findByVisualStyle() {
+    setStyleMatchLoading(true)
     try {
       const result = await searchScenesByVisualStyle(styleQuery, 20)
       setStyleResults(result.memories || [])
     } catch {
       setStyleResults([])
+    } finally {
+      setStyleMatchLoading(false)
     }
   }
 
   async function registerLatestFinalPackageOutput() {
     if (!projectId) return
+    setPanelAction('register')
     setRegisterMessage('')
     try {
       const packages = await listFinalShortFilmPackagesForProject(projectId)
@@ -422,6 +457,8 @@ export default function StudioDevTools() {
       await loadAssets()
     } catch (err) {
       setRegisterMessage(err instanceof Error ? err.message : 'Failed to register latest final package output')
+    } finally {
+      setPanelAction('')
     }
   }
 
@@ -430,7 +467,7 @@ export default function StudioDevTools() {
     void loadContinuityIssues()
     void loadStyleDNA()
     void loadDiagnostics()
-  }, [projectId])
+  }, [loadAssets, loadContinuityIssues, loadStyleDNA, loadDiagnostics])
 
   useEffect(() => {
     assets.forEach((asset) => {
@@ -439,7 +476,7 @@ export default function StudioDevTools() {
       void loadMemories(asset.asset_id)
       void loadCommentary(asset.asset_id)
     })
-  }, [assets])
+  }, [assets, loadKeyframes, loadShots, loadMemories, loadCommentary])
 
   useEffect(() => {
     if (!autoRefreshDiagnostics) return
@@ -447,7 +484,7 @@ export default function StudioDevTools() {
       void loadDiagnostics()
     }, 7000)
     return () => window.clearInterval(interval)
-  }, [autoRefreshDiagnostics, projectId])
+  }, [autoRefreshDiagnostics, loadDiagnostics])
 
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
@@ -481,15 +518,21 @@ export default function StudioDevTools() {
               <button
                 type="button"
                 onClick={registerLatestFinalPackageOutput}
-                className="rounded-lg border border-cyan-300/55 bg-cyan-500/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100"
+                disabled={panelAction === 'register'}
+                aria-busy={panelAction === 'register'}
+                className="rounded-lg border border-cyan-300/55 bg-cyan-500/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100 disabled:opacity-50"
               >
+                {panelAction === 'register' ? <Loader2 size={12} className="mr-1.5 inline animate-spin" /> : null}
                 Register Latest Final Package Output
               </button>
               <button
                 type="button"
                 onClick={loadAssets}
-                className="rounded-lg border border-zinc-500/55 bg-zinc-700/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100"
+                disabled={assetsLoading}
+                aria-busy={assetsLoading}
+                className="rounded-lg border border-zinc-500/55 bg-zinc-700/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100 disabled:opacity-50"
               >
+                {assetsLoading ? <Loader2 size={12} className="mr-1.5 inline animate-spin" /> : null}
                 Refresh Video Assets
               </button>
             </div>
@@ -514,8 +557,11 @@ export default function StudioDevTools() {
                 <button
                   type="button"
                   onClick={() => void loadDiagnostics()}
-                  className="rounded border border-amber-300/55 bg-amber-500/18 px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-amber-100"
+                  disabled={diagnosticsLoading}
+                  aria-busy={diagnosticsLoading}
+                  className="rounded border border-amber-300/55 bg-amber-500/18 px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-amber-100 disabled:opacity-50"
                 >
+                  {diagnosticsLoading ? <Loader2 size={10} className="mr-1 inline animate-spin" /> : null}
                   Refresh
                 </button>
               </div>
@@ -628,6 +674,7 @@ export default function StudioDevTools() {
                         type="button"
                         onClick={() => void extractKeyframes(asset.asset_id, false)}
                         disabled={extractingAssetId === asset.asset_id}
+                        aria-busy={extractingAssetId === asset.asset_id}
                         className="rounded border border-cyan-300/55 bg-cyan-500/18 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-100 disabled:opacity-60"
                       >
                         Extract Keyframes
@@ -636,6 +683,7 @@ export default function StudioDevTools() {
                         type="button"
                         onClick={() => void extractKeyframes(asset.asset_id, true)}
                         disabled={extractingAssetId === asset.asset_id}
+                        aria-busy={extractingAssetId === asset.asset_id}
                         className="rounded border border-zinc-400/55 bg-zinc-700/35 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-100 disabled:opacity-60"
                       >
                         Re-Extract (Overwrite)
@@ -644,6 +692,7 @@ export default function StudioDevTools() {
                         type="button"
                         onClick={() => void detectShots(asset.asset_id, true)}
                         disabled={detectingAssetId === asset.asset_id}
+                        aria-busy={detectingAssetId === asset.asset_id}
                         className="rounded border border-amber-300/55 bg-amber-500/18 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-100 disabled:opacity-60"
                       >
                         Detect Shots
@@ -652,6 +701,7 @@ export default function StudioDevTools() {
                         type="button"
                         onClick={() => void ingestMemory(asset.asset_id)}
                         disabled={ingestingAssetId === asset.asset_id}
+                        aria-busy={ingestingAssetId === asset.asset_id}
                         className="rounded border border-fuchsia-300/55 bg-fuchsia-500/18 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-fuchsia-100 disabled:opacity-60"
                       >
                         Ingest Scene Memory
@@ -660,6 +710,7 @@ export default function StudioDevTools() {
                         type="button"
                         onClick={() => void generateCommentaryForAsset(asset.asset_id)}
                         disabled={commentaryLoadingAssetId === asset.asset_id}
+                        aria-busy={commentaryLoadingAssetId === asset.asset_id}
                         className="rounded border border-sky-300/55 bg-sky-500/18 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-sky-100 disabled:opacity-60"
                       >
                         Generate Commentary
@@ -667,8 +718,11 @@ export default function StudioDevTools() {
                       <button
                         type="button"
                         onClick={() => void registerDemoFrameAnalysis(asset.asset_id)}
-                        className="rounded border border-emerald-300/55 bg-emerald-500/18 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100"
+                        disabled={panelAction === `demo:${asset.asset_id}`}
+                        aria-busy={panelAction === `demo:${asset.asset_id}`}
+                        className="rounded border border-emerald-300/55 bg-emerald-500/18 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100 disabled:opacity-50"
                       >
+                        {panelAction === `demo:${asset.asset_id}` ? <Loader2 size={10} className="mr-1 inline animate-spin" /> : null}
                         Register Frame Analysis
                       </button>
                       <button
@@ -752,8 +806,11 @@ export default function StudioDevTools() {
                               <button
                                 type="button"
                                 onClick={() => void loadRelated(memory.memory_id)}
-                                className="mt-2 rounded border border-fuchsia-300/40 bg-fuchsia-500/15 px-2 py-1 text-[10px] text-fuchsia-100"
+                                disabled={relatedLoadingId === memory.memory_id}
+                                aria-busy={relatedLoadingId === memory.memory_id}
+                                className="mt-2 rounded border border-fuchsia-300/40 bg-fuchsia-500/15 px-2 py-1 text-[10px] text-fuchsia-100 disabled:opacity-50"
                               >
+                                {relatedLoadingId === memory.memory_id ? <Loader2 size={10} className="mr-1 inline animate-spin" /> : null}
                                 Related Memories
                               </button>
                               {(relatedByMemory[memory.memory_id] || []).length > 0 ? (
@@ -814,8 +871,11 @@ export default function StudioDevTools() {
                 <button
                   type="button"
                   onClick={() => void runMemorySearch()}
-                  className="rounded border border-fuchsia-300/40 bg-fuchsia-500/15 px-2 py-1 text-[10px] text-fuchsia-100"
+                  disabled={memorySearchLoading}
+                  aria-busy={memorySearchLoading}
+                  className="rounded border border-fuchsia-300/40 bg-fuchsia-500/15 px-2 py-1 text-[10px] text-fuchsia-100 disabled:opacity-50"
                 >
+                  {memorySearchLoading ? <Loader2 size={10} className="mr-1 inline animate-spin" /> : null}
                   Search
                 </button>
               </div>
@@ -834,6 +894,7 @@ export default function StudioDevTools() {
                   type="button"
                   onClick={() => void analyzeContinuity()}
                   disabled={continuityLoading}
+                  aria-busy={continuityLoading}
                   className="rounded border border-amber-300/40 bg-amber-500/15 px-2 py-1 text-[10px] text-amber-100 disabled:opacity-60"
                 >
                   Analyze Continuity
@@ -867,8 +928,11 @@ export default function StudioDevTools() {
                 <button
                   type="button"
                   onClick={() => void findSimilarScenes()}
-                  className="rounded border border-cyan-300/40 bg-cyan-500/15 px-2 py-1 text-[10px] text-cyan-100"
+                  disabled={similarLoading}
+                  aria-busy={similarLoading}
+                  className="rounded border border-cyan-300/40 bg-cyan-500/15 px-2 py-1 text-[10px] text-cyan-100 disabled:opacity-50"
                 >
+                  {similarLoading ? <Loader2 size={10} className="mr-1 inline animate-spin" /> : null}
                   Similar
                 </button>
                 <input
@@ -880,8 +944,11 @@ export default function StudioDevTools() {
                 <button
                   type="button"
                   onClick={() => void findByMood()}
-                  className="rounded border border-cyan-300/40 bg-cyan-500/15 px-2 py-1 text-[10px] text-cyan-100"
+                  disabled={moodLoading}
+                  aria-busy={moodLoading}
+                  className="rounded border border-cyan-300/40 bg-cyan-500/15 px-2 py-1 text-[10px] text-cyan-100 disabled:opacity-50"
                 >
+                  {moodLoading ? <Loader2 size={10} className="mr-1 inline animate-spin" /> : null}
                   By Mood
                 </button>
                 <input
@@ -893,8 +960,11 @@ export default function StudioDevTools() {
                 <button
                   type="button"
                   onClick={() => void findByVisualStyle()}
-                  className="rounded border border-cyan-300/40 bg-cyan-500/15 px-2 py-1 text-[10px] text-cyan-100"
+                  disabled={styleMatchLoading}
+                  aria-busy={styleMatchLoading}
+                  className="rounded border border-cyan-300/40 bg-cyan-500/15 px-2 py-1 text-[10px] text-cyan-100 disabled:opacity-50"
                 >
+                  {styleMatchLoading ? <Loader2 size={10} className="mr-1 inline animate-spin" /> : null}
                   By Style
                 </button>
               </div>
@@ -916,6 +986,7 @@ export default function StudioDevTools() {
                     type="button"
                     onClick={() => void buildStyleSignature()}
                     disabled={styleLearningLoading}
+                    aria-busy={styleLearningLoading}
                     className="rounded border border-lime-300/40 bg-lime-500/15 px-2 py-1 text-[10px] text-lime-100 disabled:opacity-60"
                   >
                     Build Signature
@@ -923,8 +994,11 @@ export default function StudioDevTools() {
                   <button
                     type="button"
                     onClick={() => void compareLatestSignatures()}
-                    className="rounded border border-lime-300/40 bg-lime-500/15 px-2 py-1 text-[10px] text-lime-100"
+                    disabled={panelAction === 'compare'}
+                    aria-busy={panelAction === 'compare'}
+                    className="rounded border border-lime-300/40 bg-lime-500/15 px-2 py-1 text-[10px] text-lime-100 disabled:opacity-50"
                   >
+                    {panelAction === 'compare' ? <Loader2 size={10} className="mr-1 inline animate-spin" /> : null}
                     Compare Latest Two
                   </button>
                 </div>

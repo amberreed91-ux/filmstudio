@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 
 afterEach(cleanup)
-import EvidenceAuditDrawer, { hashLogEntry } from './EvidenceAuditDrawer'
+import EvidenceAuditDrawer from './EvidenceAuditDrawer'
+import { hashLogEntry } from '../lib/evidenceLog'
 import type { GateStage } from '../lib/pipelineGateFlow'
 
 function stage(over: Partial<GateStage> = {}): GateStage {

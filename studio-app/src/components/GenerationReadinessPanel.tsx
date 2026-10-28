@@ -81,18 +81,18 @@ function CameraProvenanceLine({ instruction }: { instruction: GenerationPrefligh
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       {dimension && <span className="text-[10px] uppercase tracking-wide text-zinc-500">{dimension}</span>}
-      <span className="text-[11px] text-zinc-200">{value || 'Unspecified'}</span>
+      <span className="text-xs text-zinc-200">{value || 'Unspecified'}</span>
       {aiSuggested ? (
         <span
           data-testid="camera-ai-suggested"
-          className="rounded border border-amber-300/40 bg-amber-300/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-amber-200"
+          className="rounded border border-amber-300/40 bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200"
         >
           AI suggestion awaiting approval — not renderable
         </span>
       ) : unspecified ? (
-        <span className="text-[9px] uppercase tracking-wide text-zinc-500">No decision recorded</span>
+        <span className="text-[10px] uppercase tracking-wide text-zinc-500">No decision recorded</span>
       ) : source ? (
-        <span className="rounded border border-white/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-zinc-400">
+        <span className="rounded border border-white/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
           {source.replace(/_/g, ' ')}
         </span>
       ) : null}
@@ -130,18 +130,18 @@ function ShotPlanSection({
             {shot.shot_version && shot.shot_version !== 'absent' ? ` · shot v ${shot.shot_version}` : ''}
           </span>
         </span>
-        <span className="text-[10px] text-zinc-500">{expanded ? 'Hide details' : 'Review details'}</span>
+        <span className="text-xs text-zinc-500">{expanded ? 'Hide details' : 'Review details'}</span>
       </button>
       {expanded && (
         <div className="space-y-2 border-t border-white/10 px-3 py-2">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Prompt (sent verbatim)</p>
             {prompt ? (
-              <p data-testid={`shot-prompt-${order}`} className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-zinc-300">
+              <p data-testid={`shot-prompt-${order}`} className="whitespace-pre-wrap break-words text-xs leading-relaxed text-zinc-300">
                 {prompt}
               </p>
             ) : (
-              <p data-testid={`shot-prompt-${order}`} className="text-[11px] text-zinc-400">Prompt unavailable</p>
+              <p data-testid={`shot-prompt-${order}`} className="text-xs text-zinc-400">Prompt unavailable</p>
             )}
           </div>
           <div>
@@ -161,15 +161,15 @@ function ShotPlanSection({
             {references.length > 0 ? (
               <ul className="space-y-0.5">
                 {references.map((url) => (
-                  <li key={url} className="break-all text-[11px] text-zinc-300">
+                  <li key={url} className="break-all text-xs text-zinc-300">
                     {url.startsWith('data:') ? '(inline image reference)' : url}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-[11px] text-zinc-400">No references attached to this shot</p>
+              <p className="text-xs text-zinc-400">No references attached to this shot</p>
             )}
-            <p className="text-[10px] text-zinc-500">Reference version: {shot.reference_version || 'none'}</p>
+            <p className="text-xs text-zinc-500">Reference version: {shot.reference_version || 'none'}</p>
           </div>
           <p className="text-[10px] text-zinc-500">
             {shot.storyboard_shot_id ? `Storyboard shot: ${shot.storyboard_shot_id} · ` : ''}
@@ -232,12 +232,11 @@ function SingleTakeDialog({
   // so a same-tick second click is stopped here, synchronously. The
   // idempotency key the parent sends covers anything past this point.
   const confirmingRef = useRef(false)
-  const [confirming, setConfirming] = useState(false)
+  // The parent's busy flag is the in-flight truth for the confirm button. The
+  // ref only closes the same-tick gap before that flag re-renders; it is
+  // cleared once the parent reports the submission finished.
   useEffect(() => {
-    if (!busy) {
-      confirmingRef.current = false
-      setConfirming(false)
-    }
+    if (!busy) confirmingRef.current = false
   }, [busy])
   return (
     <div className="mt-2" data-testid="single-take-dialog">
@@ -263,7 +262,7 @@ function SingleTakeDialog({
           </label>
         ))}
         {selectable.length === 0 ? (
-          <p className="text-[10px] text-amber-200">No ready shots are available — resolve the blockers above first.</p>
+          <p className="text-xs text-amber-200">No ready shots are available — resolve the blockers above first.</p>
         ) : null}
       </div>
       {selected && (
@@ -312,11 +311,11 @@ function SingleTakeDialog({
           </label>
           <button
             type="button"
-            disabled={!spendConfirmed || busy || confirming}
+            disabled={!spendConfirmed || busy}
+            aria-busy={busy || undefined}
             onClick={() => {
-              if (confirmingRef.current) return
+              if (confirmingRef.current || busy) return
               confirmingRef.current = true
-              setConfirming(true)
               onConfirm(String(selected.storyboard_shot_id))
             }}
             className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 disabled:opacity-40"
@@ -479,6 +478,7 @@ export default function GenerationReadinessPanel({
           data-testid="preflight-recheck"
           onClick={() => void check()}
           disabled={checking}
+          aria-busy={checking}
           className="inline-flex items-center gap-1 rounded border border-white/15 px-2 py-1 text-[10px] text-zinc-300 disabled:opacity-50"
         >
           {checking ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
@@ -498,7 +498,7 @@ export default function GenerationReadinessPanel({
           <p className="flex items-center gap-2 text-xs font-medium text-rose-200">
             <AlertTriangle size={13} /> Generation preflight is unavailable
           </p>
-          <p className="mt-1 break-words text-[11px] text-rose-200/80">{error}</p>
+          <p className="mt-1 break-words text-xs text-rose-200/80">{error}</p>
           <p className="mt-1 text-[11px] text-zinc-400">
             The backend could not be reached, so generation stays disabled. Nothing has been spent.
           </p>
@@ -515,9 +515,11 @@ export default function GenerationReadinessPanel({
           </p>
           <button
             type="button"
-            data-testid="preflight-recheck-stale"
-            onClick={() => void check()}
-            className="mt-2 inline-flex items-center gap-1 rounded border border-amber-300/40 px-2 py-1 text-[11px] text-amber-100"
+          data-testid="preflight-recheck-stale"
+          onClick={() => void check()}
+          disabled={checking}
+          aria-busy={checking}
+          className="mt-2 inline-flex items-center gap-1 rounded border border-amber-300/40 px-2 py-1 text-[11px] text-amber-100"
           >
             <RefreshCw size={11} /> Re-run preflight
           </button>
@@ -541,7 +543,7 @@ export default function GenerationReadinessPanel({
             </p>
 
             {!batchBlocked ? (
-              <div data-testid="preflight-plan" className="mt-2 space-y-1 text-[11px] text-zinc-300">
+              <div data-testid="preflight-plan" className="mt-2 space-y-1 text-xs text-zinc-300">
                 <p className="text-xs font-medium text-emerald-100">Ready to Generate</p>
                 {renderProviderLabel && (
                   <p data-testid="preflight-provider">
@@ -569,7 +571,7 @@ export default function GenerationReadinessPanel({
             ) : (
               <div data-testid="preflight-blockers" className="mt-2 space-y-2">
                 {aggregateBlockers.length === 0 ? (
-                  <p className="text-[11px] text-rose-200/80">Generation is blocked by the backend preflight.</p>
+                  <p className="text-xs text-rose-200/80">Generation is blocked by the backend preflight.</p>
                 ) : (
                   <ul className="space-y-1.5">
                     {aggregateBlockers.map((raw, idx) => (
@@ -577,7 +579,7 @@ export default function GenerationReadinessPanel({
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-200/80">
                           {blockerCategory(raw)}
                         </p>
-                        <p className="mt-0.5 break-words text-[11px] leading-relaxed text-zinc-200">{friendlyRefusalError(raw, raw)}</p>
+                        <p className="mt-0.5 break-words text-xs leading-relaxed text-zinc-200">{friendlyRefusalError(raw, raw)}</p>
                       </li>
                     ))}
                   </ul>
@@ -645,14 +647,14 @@ export default function GenerationReadinessPanel({
                           : 'border-rose-400/25 bg-rose-500/5'
                       }`}
                     >
-                      <p className={`flex items-center gap-1.5 text-[11px] font-medium ${shotBlockers.length === 0 ? 'text-emerald-200' : 'text-rose-200'}`}>
+                      <p className={`flex items-center gap-1.5 text-xs font-medium ${shotBlockers.length === 0 ? 'text-emerald-200' : 'text-rose-200'}`}>
                         {shotBlockers.length === 0 ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
                         Shot {order} {shotBlockers.length === 0 ? '· Ready' : '· Blocked'}
                       </p>
                       {shotBlockers.length > 0 && (
                         <ul className="mt-0.5 space-y-0.5">
                           {shotBlockers.map((raw, idx) => (
-                            <li key={`${idx}-${raw.slice(0, 24)}`} className="break-words text-[11px] leading-relaxed text-zinc-300">
+                            <li key={`${idx}-${raw.slice(0, 24)}`} className="break-words text-xs leading-relaxed text-zinc-300">
                               {friendlyRefusalError(raw, raw)}
                             </li>
                           ))}
@@ -697,7 +699,7 @@ export default function GenerationReadinessPanel({
             aria-expanded={takeOpen}
           >
             <span className="text-xs font-medium text-zinc-200">Render a single take…</span>
-            <span className="text-[10px] text-zinc-500">{takeOpen ? 'Hide' : 'Pick one frozen shot'}</span>
+            <span className="text-xs text-zinc-500">{takeOpen ? 'Hide' : 'Pick one frozen shot'}</span>
           </button>
           {takeOpen && (
             <SingleTakeDialog
@@ -728,6 +730,7 @@ export default function GenerationReadinessPanel({
           data-testid="preflight-generate"
           onClick={() => void handleGenerateClick()}
           disabled={!generateAllowed || Boolean(generateBusy)}
+          aria-busy={Boolean(generateBusy)}
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
           style={{
             borderColor: 'rgba(34,211,238,0.35)',

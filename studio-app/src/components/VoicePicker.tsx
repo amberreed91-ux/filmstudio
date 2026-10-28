@@ -304,6 +304,7 @@ export default function VoicePicker({
               type="button"
               onClick={handleClear}
               disabled={assigningId !== null}
+              aria-busy={assigningId === 'clear'}
               className="rounded-md border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-200 transition-all hover:scale-[1.02] disabled:opacity-50"
             >
               {assigningId === 'clear' ? 'Clearing...' : 'Clear'}
@@ -347,12 +348,13 @@ export default function VoicePicker({
                 >
                   <div>
                     <div className="text-sm font-medium text-zinc-100">{voice.name}</div>
-                    <div className="mt-0.5 text-[11px] text-zinc-500">{voice.description}</div>
+                    <div className="mt-0.5 text-xs text-zinc-500">{voice.description}</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleAssignProviderVoice(voice.voice_id, voice.name, voice.source_type)}
                     disabled={isAssigning}
+                    aria-busy={isAssigning}
                     className="flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200 disabled:opacity-50"
                   >
                     {isAssigned ? <Check size={12} /> : isAssigning ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
@@ -392,6 +394,7 @@ export default function VoicePicker({
                 type="button"
                 onClick={() => handleAssignProviderVoice(manualVoiceId, manualVoiceName, currentSourceType || 'voice_design', manualStylePrompt)}
                 disabled={assigningId === manualVoiceId}
+                aria-busy={assigningId === manualVoiceId}
                 className="mt-2 flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/12 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200 disabled:opacity-50"
               >
                 {assigningId === manualVoiceId ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
@@ -426,6 +429,7 @@ export default function VoicePicker({
               type="button"
               onClick={() => handleAssignProviderVoice(manualVoiceId, manualVoiceName, 'clone')}
               disabled={assigningId === manualVoiceId}
+              aria-busy={assigningId === manualVoiceId}
               className="mt-2 flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/12 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200 disabled:opacity-50"
             >
               {assigningId === manualVoiceId ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
@@ -546,22 +550,22 @@ export default function VoicePicker({
                       </div>
                       <div className="flex flex-wrap gap-1.5 mt-0.5">
                         {voice.labels.gender && (
-                          <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.1em] text-zinc-400">
+                          <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-zinc-400">
                             {voice.labels.gender}
                           </span>
                         )}
                         {voice.labels.age && (
-                          <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.1em] text-zinc-400">
+                          <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-zinc-400">
                             {voice.labels.age}
                           </span>
                         )}
                         {voice.labels.accent && (
-                          <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.1em] text-zinc-400">
+                          <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-zinc-400">
                             {voice.labels.accent}
                           </span>
                         )}
                         {voice.category && (
-                          <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.1em] text-zinc-500">
+                          <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-zinc-500">
                             {voice.category}
                           </span>
                         )}
@@ -576,10 +580,11 @@ export default function VoicePicker({
                       Assigned
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleAssignElevenLabs(voice)}
-                      disabled={isAssigning}
+            <button
+              type="button"
+              onClick={() => handleAssignElevenLabs(voice)}
+              disabled={isAssigning}
+              aria-busy={isAssigning}
                       className="flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200 transition-all hover:scale-[1.02] disabled:opacity-50"
                     >
                       {isAssigning ? (

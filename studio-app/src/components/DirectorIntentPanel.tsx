@@ -145,9 +145,11 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
     return (
       <div className="p-6 text-center text-red-400">
         <div>{error}</div>
-        <button
+        <button type="button"
           onClick={loadIntent}
-          className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+          disabled={loading}
+          aria-busy={loading}
+          className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm disabled:opacity-50"
         >
           Retry
         </button>
@@ -226,7 +228,7 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
               placeholder="e.g., Arrival, Blade Runner 2049"
               className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
             />
-            <button
+            <button type="button"
               onClick={handleAddToneReference}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
             >
@@ -241,7 +243,7 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
                   className="px-3 py-1 bg-slate-700 text-slate-300 rounded text-sm flex items-center gap-2"
                 >
                   {ref}
-                  <button
+                  <button type="button"
                     onClick={() => handleRemoveToneReference(i)}
                     className="text-slate-500 hover:text-slate-300"
                   >
@@ -287,7 +289,7 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
               placeholder="e.g., Deakins lighting, handheld intimacy"
               className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
             />
-            <button
+            <button type="button"
               onClick={handleAddVisualReference}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
             >
@@ -302,7 +304,7 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
                   className="px-3 py-1 bg-slate-700 text-slate-300 rounded text-sm flex items-center gap-2"
                 >
                   {ref}
-                  <button
+                  <button type="button"
                     onClick={() => handleRemoveVisualReference(i)}
                     className="text-slate-500 hover:text-slate-300"
                   >
@@ -348,7 +350,7 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
               placeholder="e.g., Heavy exposition, melodrama"
               className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
             />
-            <button
+            <button type="button"
               onClick={handleAddWhatToAvoid}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
             >
@@ -363,7 +365,7 @@ export function DirectorIntentPanel({ projectId }: DirectorIntentPanelProps) {
                   className="px-3 py-1 bg-slate-700 text-slate-300 rounded text-sm flex items-center gap-2"
                 >
                   {item}
-                  <button
+                  <button type="button"
                     onClick={() => handleRemoveWhatToAvoid(i)}
                     className="text-slate-500 hover:text-slate-300"
                   >

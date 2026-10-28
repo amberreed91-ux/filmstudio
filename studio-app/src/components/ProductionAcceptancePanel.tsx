@@ -81,6 +81,7 @@ export default function ProductionAcceptancePanel({
           type="button"
           onClick={handleRunAcceptance}
           disabled={loading || !projectId}
+          aria-busy={loading}
           className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-50"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}

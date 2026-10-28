@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeftRight,
@@ -141,6 +141,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={handleCreate}
             disabled={creating || !title.trim()}
+            aria-busy={creating}
             className="flex-1 rounded-lg py-2 text-sm font-bold uppercase tracking-[0.12em] transition-all disabled:opacity-50"
             style={{
               background: 'linear-gradient(135deg, rgba(255,209,101,0.25), rgba(255,209,101,0.1))',
@@ -173,6 +174,8 @@ export default function StudioLanding() {
   const { project, overview, activeProjectId, setActiveProject } = useStudio()
   const { activity } = useRenderActivity()
   const [showNewProject, setShowNewProject] = useState(false)
+  const [continuing, setContinuing] = useState(false)
+  const continueInFlightRef = useRef(false)
   const [health, setHealth] = useState<BackendHealth | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
   const [queueSummary, setQueueSummary] = useState<ProductionQueueSummary | null>(null)
@@ -327,13 +330,23 @@ export default function StudioLanding() {
               {/* Continue Film */}
               <button
                 type="button"
+                disabled={continuing}
+                aria-busy={continuing || undefined}
                 onClick={async () => {
-                  const projectId = activeProjectId || (overview?.projects?.[0]?.project_id) || (project?.project_id)
-                  if (projectId) {
-                    await setActiveProject(projectId)
-                    navigate(`/studio/overview?project_id=${projectId}`)
-                  } else {
-                    navigate('/studio')
+                  if (continueInFlightRef.current) return
+                  continueInFlightRef.current = true
+                  setContinuing(true)
+                  try {
+                    const projectId = activeProjectId || (overview?.projects?.[0]?.project_id) || (project?.project_id)
+                    if (projectId) {
+                      await setActiveProject(projectId)
+                      navigate(`/studio/overview?project_id=${projectId}`)
+                    } else {
+                      navigate('/studio')
+                    }
+                  } finally {
+                    continueInFlightRef.current = false
+                    setContinuing(false)
                   }
                 }}
               className="w-full rounded-full py-5 flex items-center justify-center gap-4 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
@@ -353,7 +366,7 @@ export default function StudioLanding() {
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
               </svg>
               <span className="text-2xl font-bold" style={{ fontFamily: 'Geist, sans-serif', fontWeight: 700, color: '#ffd165', letterSpacing: '-0.02em' }}>
-                CONTINUE FILM
+                {continuing ? 'OPENING…' : 'CONTINUE FILM'}
               </span>
             </button>
 
@@ -423,7 +436,7 @@ export default function StudioLanding() {
                       {agent.icon}
                       <div className="flex flex-col">
                         <span className="text-xs font-semibold" style={{ color: '#e5e2e1' }}>{agent.name}</span>
-                        <span className="text-[10px]" style={{ color: '#9b8f79' }}>{agent.role}</span>
+                        <span className="text-xs" style={{ color: '#9b8f79' }}>{agent.role}</span>
                       </div>
                     </div>
                     {/* FIX 4: ACTIVE/IDLE badges with JetBrains Mono, 10px, 700 weight, uppercase, 0.1em letter-spacing */}

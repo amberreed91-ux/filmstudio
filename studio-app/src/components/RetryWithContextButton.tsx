@@ -56,7 +56,7 @@ export default function RetryWithContextButton({
           Manual review recommended
         </div>
         {retryAdvisory && (
-          <div className="text-[9px] text-zinc-500" data-testid="retry-advisory">
+          <div className="text-[10px] text-zinc-500" data-testid="retry-advisory">
             {retryAdvisory}
           </div>
         )}
@@ -75,13 +75,14 @@ export default function RetryWithContextButton({
         type="button"
         onClick={handleRetry}
         disabled={retrying}
+        aria-busy={retrying}
         className="rounded border border-cyan-400/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-cyan-100 disabled:opacity-40"
         data-testid="retry-with-context-button"
       >
         {label}
       </button>
       {error && (
-        <div className="text-[9px] text-rose-400" data-testid="retry-error">
+        <div className="text-[10px] text-rose-400" data-testid="retry-error">
           {error}
         </div>
       )}

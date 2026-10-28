@@ -24,6 +24,7 @@ import {
   Home,
   LayoutGrid,
   Box,
+  Loader2,
 } from 'lucide-react'
 import { lazyLoad } from './LazyLoad'
 import { useRenderActivity } from '../context/RenderActivityContext'
@@ -103,7 +104,7 @@ export function TabGroup<T extends string>({
           type="button"
           onClick={() => onChange(option.id)}
           className={`rounded-md border px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] transition-colors ${
-            value === option.id ? 'border-cyan-300/60 bg-cyan-500/14 text-cyan-100' : 'border-zinc-700 bg-zinc-900/60 text-zinc-400'
+            value === option.id ? 'border-amber-300/50 bg-amber-300/10 text-amber-100' : 'border-zinc-700 bg-zinc-900/60 text-zinc-400'
           }`}
         >
           {option.label}
@@ -221,7 +222,7 @@ interface RoomNavItem {
 /* ─── Persistent lobby navigation — always visible across all studio pages ─
  * Studio Workspace -> /studio · 2D Lobby -> /studio/lobby · 3D Lobby -> /studio/lobby-3d
  * Rendered as a dedicated cluster above the room rail so users never type URLs. */
-export const LOBBY_NAV_ITEMS: RoomNavItem[] = [
+const LOBBY_NAV_ITEMS: RoomNavItem[] = [
   { key: 'studio-workspace', label: 'Studio Workspace', stitchName: 'Studio Workspace', icon: <Home size={20} />, to: '/studio' },
   { key: 'lobby-2d', label: '2D Lobby', stitchName: '2D Lobby', icon: <LayoutGrid size={20} />, to: '/studio/lobby' },
   { key: 'lobby-3d', label: '3D Lobby', stitchName: '3D Lobby', icon: <Box size={20} />, to: '/studio/lobby-3d' },
@@ -323,9 +324,16 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
   })
   const productionContext = { projectId: activeProjectId, sceneId: routeSearch.get('scene') || routeSearch.get('scene_id'), shotNumber: Number.parseInt(routeSearch.get('shot') || '', 10) || null }
   const roomUrl = (path: string) => withProductionContext(path, productionContext)
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
   const navigateToRoom = async (path: string) => {
-    if (beforeNavigate && !(await beforeNavigate())) return
-    navigate(roomUrl(path))
+    if (navigatingTo) return
+    setNavigatingTo(path)
+    try {
+      if (beforeNavigate && !(await beforeNavigate())) return
+      navigate(roomUrl(path))
+    } finally {
+      setNavigatingTo(null)
+    }
   }
   useEffect(() => {
     if (activeProjectId) persistActiveProjectId(activeProjectId)
@@ -475,6 +483,8 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
                   <button
                     type="button"
                     onClick={() => void navigateToRoom(room.to)}
+                    disabled={navigatingTo !== null}
+                    aria-busy={navigatingTo === room.to}
                     aria-label={room.stitchName}
                     aria-current={isActive ? 'page' : undefined}
                     data-testid={`lobby-nav-${room.key}`}
@@ -488,7 +498,7 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
                         : 'text-amber-100/85 hover:text-amber-100 hover:bg-white/10 hover:ring-1 hover:ring-inset hover:ring-amber-200/30'
                     }`}
                   >
-                    {room.icon}
+                    {navigatingTo === room.to ? <Loader2 size={16} className="animate-spin" /> : room.icon}
                   </button>
                   {hoveredRoom === room.key && (
                     <div
@@ -517,6 +527,8 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
                   <button
                     type="button"
                     onClick={() => void navigateToRoom(room.to)}
+                    disabled={navigatingTo !== null}
+                    aria-busy={navigatingTo === room.to}
                     aria-label={room.stitchName}
                     aria-current={isActive ? 'page' : undefined}
                     onMouseEnter={() => setHoveredRoom(room.key)}
@@ -525,11 +537,11 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
                     onBlur={() => setHoveredRoom(null)}
                     className={`flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-full transition-all duration-200 ${
                       isActive
-                        ? 'bg-[#03b5d3] text-[#003640] scale-110 shadow-[0_0_22px_rgba(76,215,246,0.6)] ring-1 ring-inset ring-white/40'
+                        ? 'bg-[#ffd165] text-[#3a2c00] scale-110 shadow-[0_0_22px_rgba(255,209,101,0.6)] ring-1 ring-inset ring-white/40'
                         : 'text-amber-100/85 hover:text-amber-100 hover:bg-white/10 hover:ring-1 hover:ring-inset hover:ring-amber-200/30'
                     }`}
                   >
-                    {room.icon}
+                    {navigatingTo === room.to ? <Loader2 size={16} className="animate-spin" /> : room.icon}
                   </button>
                   {hoveredRoom === room.key && (
                     <div
@@ -666,7 +678,7 @@ export default function StudioShell({ title, transparent, children, beforeNaviga
             </header>
           )}
 
-          {isStudioRoute && <nav aria-label="Studio rooms on mobile" className="border-y border-white/10 px-4 py-2 md:hidden"><details><summary className="cursor-pointer text-xs text-zinc-300">Rooms <span className="ml-2 text-zinc-500">{activeTitle}</span></summary><div className="grid grid-cols-2 gap-2 pb-2 pt-3">{[...LOBBY_NAV_ITEMS, ...ROOM_NAV_ITEMS].map((room) => <button type="button" key={room.key} onClick={() => void navigateToRoom(room.to)} aria-label={room.stitchName} className="flex items-center gap-2 rounded border border-white/10 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5">{room.icon}<span>{room.stitchName}</span></button>)}</div></details></nav>}
+          {isStudioRoute && <nav aria-label="Studio rooms on mobile" className="border-y border-white/10 px-4 py-2 md:hidden"><details><summary className="cursor-pointer text-xs text-zinc-300">Rooms <span className="ml-2 text-zinc-500">{activeTitle}</span></summary><div className="grid grid-cols-2 gap-2 pb-2 pt-3">{[...LOBBY_NAV_ITEMS, ...ROOM_NAV_ITEMS].map((room) => <button type="button" key={room.key} onClick={() => void navigateToRoom(room.to)} disabled={navigatingTo !== null} aria-busy={navigatingTo === room.to} aria-label={room.stitchName} className="flex items-center gap-2 rounded border border-white/10 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5 disabled:opacity-50">{navigatingTo === room.to ? <Loader2 size={16} className="animate-spin" /> : room.icon}<span>{room.stitchName}</span></button>)}</div></details></nav>}
 
           <ProductionJourneyGuide pathname={location.pathname} context={productionContext} beforeNavigate={beforeNavigate} />
 

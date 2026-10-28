@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Type, Clapperboard, Camera, Film, Clipboard, MessageSquare, AlertTriangle, CheckCircle2, Save, X } from 'lucide-react'
+import { Type, Clapperboard, Camera, Film, Clipboard, MessageSquare, AlertTriangle, CheckCircle2, Loader2, Save, X } from 'lucide-react'
 import type { CoDirectorDebateEntry, AgentResponse } from '../types/directorMemory'
 import { debateAction } from '../lib/studioApi'
 
@@ -63,18 +63,21 @@ export default function DirectorDebatePanel({
           </div>
           <div className="flex items-center gap-4">
             {!debate.is_saved && (
-              <button
+              <button type="button"
                 onClick={() => handleAction('save')}
                 disabled={loading}
-                className="flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-white transition-colors"
+                aria-busy={loading}
+                className="flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
               >
-                <Save size={14} />
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                 Save to Notes
               </button>
             )}
-            <button
+            <button type="button"
               onClick={() => handleAction('dismiss')}
-              className="text-zinc-500 hover:text-white transition-colors"
+              disabled={loading}
+              aria-busy={loading}
+              className="text-zinc-500 hover:text-white transition-colors disabled:opacity-50"
             >
               <X size={20} />
             </button>
@@ -152,23 +155,23 @@ function AgentCard({ agent }: { agent: AgentResponse }) {
         </div>
         <div>
           <h3 className="text-[10px] font-bold text-white uppercase tracking-wider">{agent.agent_name}</h3>
-          <p className="text-[9px] text-zinc-500 leading-tight">{agent.perspective}</p>
+          <p className="text-xs text-zinc-500 leading-tight">{agent.perspective}</p>
         </div>
       </div>
       
       <div className="space-y-3 flex-1">
         <div>
-          <div className="text-[8px] uppercase font-bold text-indigo-400/80 mb-1">Position</div>
+          <div className="text-[10px] uppercase font-bold text-indigo-400/80 mb-1">Position</div>
           <p className="text-xs font-medium text-zinc-200">{agent.position}</p>
         </div>
         
         <div>
-          <div className="text-[8px] uppercase font-bold text-zinc-500 mb-1">Reasoning</div>
-          <p className="text-[11px] leading-relaxed text-zinc-400">{agent.reasoning}</p>
+          <div className="text-[10px] uppercase font-bold text-zinc-500 mb-1">Reasoning</div>
+          <p className="text-xs leading-relaxed text-zinc-400">{agent.reasoning}</p>
         </div>
 
         <div className="pt-2 mt-auto border-t border-white/5">
-          <div className="text-[8px] uppercase font-bold text-emerald-500/80 mb-1">Recommendation</div>
+          <div className="text-[10px] uppercase font-bold text-emerald-500/80 mb-1">Recommendation</div>
           <p className="text-xs text-zinc-300 italic">"{agent.recommendation}"</p>
         </div>
       </div>

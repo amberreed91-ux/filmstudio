@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { RadioTower } from 'lucide-react'
 import { useRenderActivity } from '../context/RenderActivityContext'
 import CinematicLoading from './CinematicLoading'
@@ -38,17 +38,11 @@ export default function DirectorConsole({
   const [emotionalTone, setEmotionalTone] = useState('uneasy')
   const [pacing, setPacing] = useState('measured')
   const [cameraStyle, setCameraStyle] = useState('slow-dolly')
-  const [provider, setProvider] = useState(defaultProvider || providers[0]?.id || 'mock')
+  // The console starts on the project's default provider and follows it
+  // until the creator explicitly picks one.
+  const [providerChoice, setProviderChoice] = useState<string | null>(null)
+  const provider = providerChoice ?? defaultProvider ?? providers[0]?.id ?? 'mock'
   const [collaborationMode, setCollaborationMode] = useState<'passive' | 'advisory' | 'collaborative' | 'experimental'>('advisory')
-
-  const initialProviderRef = useRef(defaultProvider)
-  useEffect(() => {
-    if (!defaultProvider) return
-    if (!initialProviderRef.current) {
-      initialProviderRef.current = defaultProvider
-    }
-    setProvider((prev) => prev || defaultProvider)
-  }, [defaultProvider])
 
   const liveStatusText = useMemo(() => {
     if (!activity) return 'Idle'
@@ -107,7 +101,7 @@ export default function DirectorConsole({
           </label>
           <label className="director-console-control">
             <span className="director-console-label">Provider</span>
-            <select value={provider} onChange={(event) => setProvider(event.target.value)} className="director-console-input">
+            <select value={provider} onChange={(event) => setProviderChoice(event.target.value)} className="director-console-input">
               {providers.map((item) => (
                 <option key={item.id} value={item.id}>{item.label}</option>
               ))}

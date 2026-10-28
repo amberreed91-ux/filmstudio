@@ -37,7 +37,7 @@ function PlanSummary({ plan }: { plan: PerformanceAudioPlan }) {
           <span className={`rounded border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${readinessClass(plan.readiness_label)}`}>
             {label(plan.readiness_label)}
           </span>
-          {plan.stale ? <span className="rounded border border-zinc-600 px-2 py-1 text-[11px] text-zinc-400">Stale</span> : null}
+          {plan.stale ? <span className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-400">Stale</span> : null}
         </div>
         <p className="mt-2 text-sm text-zinc-300">{plan.summary}</p>
         {plan.blockers.length ? (

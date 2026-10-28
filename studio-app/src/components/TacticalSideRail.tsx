@@ -104,14 +104,14 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
       <div className="custom-scroll flex-1 space-y-3.5 overflow-y-auto p-3 text-[10px]">
         {/* Global project context */}
         <div className="space-y-1.5 rounded border border-purple-900/40 bg-[#0b061c] p-2.5">
-          <div className="text-[9px] font-bold uppercase tracking-widest text-purple-400/80">GLOBAL PROJECT CONTEXT</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-purple-400/80">GLOBAL PROJECT CONTEXT</div>
           <div className="flex cursor-pointer items-center justify-between rounded border border-purple-800/40 bg-[#12082b] px-2.5 py-1.5 transition hover:border-purple-500/50">
             <span data-testid="tactical-project-context" className="truncate font-medium text-slate-200">
               {projectId ? `Active project ${projectId}` : 'Active project context ...'}
             </span>
             <span
               data-testid="tactical-live-badge"
-              className={`rounded border px-1.5 py-0.5 text-[9px] font-bold ${live ? 'border-emerald-600/50 bg-emerald-900/80 text-emerald-200' : 'border-purple-600/50 bg-purple-900/80 text-purple-200'}`}
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${live ? 'border-emerald-600/50 bg-emerald-900/80 text-emerald-200' : 'border-purple-600/50 bg-purple-900/80 text-purple-200'}`}
             >
               {live ? 'LIVE' : 'STAGING'}
             </span>
@@ -121,31 +121,31 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
         <div className="space-y-3 rounded border border-purple-900/40 bg-[#0b061c] p-2.5">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-[9px] font-bold uppercase tracking-wider text-purple-400/80">RENDER QUEUE COUNT</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400/80">RENDER QUEUE COUNT</div>
               <div className="mt-0.5 flex items-baseline space-x-2">
                 <span data-testid="tactical-active-slots" className="text-xl font-extrabold text-white">
                   {telemetry.loading && !live ? '—' : activeSlots.toLocaleString()}
                 </span>
-                <span className="text-[9px] text-slate-400">Active Slots</span>
+                <span className="text-[10px] text-slate-400">Active Slots</span>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[9px] font-bold uppercase tracking-wider text-purple-400/80">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400/80">
                 {liveSpend ? 'CR SPEND · RECORD' : 'CR BALANCE'}
               </div>
               <div className="mt-0.5 text-sm font-extrabold text-emerald-400">
                 {liveSpend ? (
                   <span data-testid="tactical-cr-spend">
-                    {(liveSpend.realized + liveSpend.estimated).toLocaleString()} <span className="text-[9px] text-slate-400">CR</span>
+                    {(liveSpend.realized + liveSpend.estimated).toLocaleString()} <span className="text-[10px] text-slate-400">CR</span>
                   </span>
                 ) : live ? (
-                  <span data-testid="tactical-cr-empty">— <span className="text-[9px] font-normal text-slate-400">no spend on record</span></span>
+                  <span data-testid="tactical-cr-empty">— <span className="text-[10px] font-normal text-slate-400">no spend on record</span></span>
                 ) : (
-                  <span>{STAGING_CR} <span className="text-[9px] text-slate-400">CR</span></span>
+                  <span>{STAGING_CR} <span className="text-[10px] text-slate-400">CR</span></span>
                 )}
               </div>
               {liveSpend ? (
-                <div className="mt-0.5 text-[9px] text-slate-500">
+                <div className="mt-0.5 text-[10px] text-slate-500">
                   {liveSpend.realizedJobs} realized · {liveSpend.estimatedOnlyJobs} estimated
                 </div>
               ) : null}
@@ -161,7 +161,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
                 style={{ width: `${gaugePct}%` }}
               />
             </div>
-            <div className="flex justify-between text-[9px] text-slate-400">
+            <div className="flex justify-between text-[10px] text-slate-400">
               <span>PORT 8010</span>
               <span data-testid="tactical-port-status" className={`font-bold ${telemetry.healthy ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {telemetry.healthy ? 'ONLINE' : 'OFFLINE'}
@@ -171,7 +171,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
         </div>
         {/* Room directory live feeds */}
         <div className="space-y-1.5">
-          <div className="flex justify-between px-0.5 text-[9px] font-bold uppercase tracking-widest text-purple-400/80">
+          <div className="flex justify-between px-0.5 text-[10px] font-bold uppercase tracking-widest text-purple-400/80">
             <span>ROOM DIRECTORY</span>
             <span className="text-purple-300">FEED NODES</span>
           </div>
@@ -187,9 +187,9 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
                 >
                   <span className="text-[11px] font-bold text-slate-200 transition group-hover:text-purple-300">
                     {feed.title}
-                    <span className="mt-0.5 block text-[9px] font-normal text-slate-400">{feed.code}</span>
+                    <span className="mt-0.5 block text-[10px] font-normal text-slate-400">{feed.code}</span>
                   </span>
-                  <span className="text-[9px] text-slate-400">{feed.status}</span>
+                  <span className="text-[10px] text-slate-400">{feed.status}</span>
                 </button>
               ))
             ) : (
@@ -203,9 +203,9 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
                 >
                   <span className="text-[11px] font-bold text-slate-200 transition group-hover:text-purple-300">
                     {feed.title}
-                    <span className="mt-0.5 block text-[9px] font-normal text-slate-400">{feed.code}</span>
+                    <span className="mt-0.5 block text-[10px] font-normal text-slate-400">{feed.code}</span>
                   </span>
-                  <span className="text-[9px] text-slate-400">{feed.status}</span>
+                  <span className="text-[10px] text-slate-400">{feed.status}</span>
                 </button>
               ))
             )}
@@ -213,7 +213,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
         </div>
         {/* System controls */}
         <div className="space-y-1.5 pt-1">
-          <div className="flex justify-between px-0.5 text-[9px] font-bold uppercase tracking-widest text-purple-400/80">
+          <div className="flex justify-between px-0.5 text-[10px] font-bold uppercase tracking-widest text-purple-400/80">
             <span>SYSTEM CONTROLS</span>
             <span className="text-purple-400">2D TRIGGERS</span>
           </div>
@@ -226,7 +226,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
               <span className="font-bold">RIG CALIBRATION</span>
               <span
                 data-testid="rig-status"
-                className={`rounded px-1 text-[9px] font-bold ${rigBusy ? 'animate-pulse bg-yellow-950 text-yellow-300' : rigStatus === 'READY' ? 'bg-purple-950 text-purple-300' : 'bg-emerald-950 text-emerald-400'}`}
+                className={`rounded px-1 text-[10px] font-bold ${rigBusy ? 'animate-pulse bg-yellow-950 text-yellow-300' : rigStatus === 'READY' ? 'bg-purple-950 text-purple-300' : 'bg-emerald-950 text-emerald-400'}`}
               >
                 {rigStatus}
               </span>
@@ -237,7 +237,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
               className="flex w-full items-center justify-between rounded border border-purple-800/40 bg-[#0e0824] px-3 py-1.5 text-purple-200 transition hover:border-purple-500 hover:text-white"
             >
               <span className="font-bold">LOBBY RE-CENTER</span>
-              <span className="font-mono text-[9px] text-cyan-300">0.0.0</span>
+              <span className="font-mono text-[10px] text-cyan-300">0.0.0</span>
             </button>
             <button
               type="button"
@@ -245,7 +245,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
               className="flex w-full items-center justify-between rounded border border-purple-800/40 bg-[#0e0824] px-3 py-1.5 text-purple-200 transition hover:border-purple-500 hover:text-white"
             >
               <span className="font-bold">DAG INTEGRITY</span>
-              <span data-testid="dag-status" className="rounded bg-emerald-950/60 px-1 text-[9px] font-bold text-emerald-400">
+              <span data-testid="dag-status" className="rounded bg-emerald-950/60 px-1 text-[10px] font-bold text-emerald-400">
                 {dagStatus}
               </span>
             </button>
@@ -255,14 +255,14 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
               className="flex w-full items-center justify-between rounded border border-purple-800/40 bg-[#0e0824] px-3 py-1.5 text-purple-200 transition hover:border-purple-500 hover:text-white"
             >
               <span className="font-bold">DOWNLOAD COMPONENT SPECS</span>
-              <span className="font-mono text-[9px] text-slate-400">XML</span>
+              <span className="font-mono text-[10px] text-slate-400">XML</span>
             </button>
           </div>
         </div>
         {/* Telemetry override + diagnostic logs */}
         <div className="space-y-2 border-t border-purple-950/60 pt-1">
           <div className="flex items-center justify-between px-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-purple-400">TELEMETRY OVERRIDE</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400">TELEMETRY OVERRIDE</span>
             <button
               type="button"
               role="switch"
@@ -277,7 +277,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
               />
             </button>
           </div>
-          <div className="space-y-0.5 rounded border border-purple-950 bg-[#05020c] p-2 font-mono text-[9px] text-slate-400">
+          <div className="space-y-0.5 rounded border border-purple-950 bg-[#05020c] p-2 font-mono text-[10px] text-slate-400">
             <div className="font-bold text-purple-400/80">Diagnostic sub-logs:</div>
             <div data-testid="specs-log" className="text-emerald-400/90">{specsLog}</div>
             <div className="text-slate-400">&gt; Diagnostry overr10 ... {telemetryOverride ? 'ACTIVE' : 'STANDBY'}</div>

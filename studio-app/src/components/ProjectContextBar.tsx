@@ -305,6 +305,7 @@ function ShareModal({ project, onClose, onShareComplete }: ShareModalProps) {
             type="button"
             onClick={handleShareWithCollaborator}
             disabled={isSharing || !email.trim()}
+            aria-busy={isSharing}
             style={{
               width: '100%',
               padding: '10px 16px',
@@ -324,6 +325,7 @@ function ShareModal({ project, onClose, onShareComplete }: ShareModalProps) {
             type="button"
             onClick={handleGenerateShareLink}
             disabled={isSharing}
+            aria-busy={isSharing}
             style={{
               width: '100%',
               padding: '10px 16px',
@@ -337,7 +339,7 @@ function ShareModal({ project, onClose, onShareComplete }: ShareModalProps) {
               marginTop: '8px',
             }}
           >
-            Or just generate a shareable link
+            {isSharing ? 'Generating link…' : 'Or just generate a shareable link'}
           </button>
         </>
       ) : (

@@ -1,7 +1,8 @@
-import { GATE_TONE_CLASS, type GateTone } from '../status/gateTones'
+import { GATE_TONE_CLASS } from '../status/gateTones'
 import TechDetailsDrawer from '../status/TechDetailsDrawer'
 import DeliveryTag from './DeliveryTag'
 import type { BoardAsset } from '../../lib/referenceBoardApi'
+import { boardCardState } from '../../lib/referenceBoardState'
 import { buildStudioApiUrl } from '../../lib/studioApi'
 
 function thumbSrc(imageUrl: string | null | undefined): string | null {
@@ -9,23 +10,6 @@ function thumbSrc(imageUrl: string | null | undefined): string | null {
   const trimmed = imageUrl.trim()
   if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:')) return trimmed
   return buildStudioApiUrl(trimmed)
-}
-
-export type BoardCardState = { chip: string; tone: GateTone; reason: string }
-
-/** Plain-language card state. Jargon stays in the details drawer. */
-export function boardCardState(asset: BoardAsset): BoardCardState {
-  const approved = asset.approval_state === 'approved'
-  if (asset.canonical && approved) {
-    return { chip: 'Settled', tone: 'ok', reason: 'This is the settled look. Keep using it.' }
-  }
-  if (asset.canonical) {
-    return { chip: 'Needs a look', tone: 'waiting', reason: 'This settled choice needs a look before use.' }
-  }
-  if (approved) {
-    return { chip: 'Supports the story', tone: 'ok', reason: 'Approved support. It does not replace the settled choice.' }
-  }
-  return { chip: 'Needs a look', tone: 'waiting', reason: 'Waiting ones need a yes.' }
 }
 
 function plainName(asset: BoardAsset): string {

@@ -657,7 +657,7 @@ export default function PrevisRoom() {
   }, [selectedSceneId, searchParams, setSearchParams, location.state])
   const [coDirectorNoteApplied, setCoDirectorNoteApplied] = useState(false)
   const [, setFocusedSceneId] = useState<string | null>(null)
-  const [, setEnhancingPrompt] = useState(false)
+  const [enhancingPrompt, setEnhancingPrompt] = useState(false)
   const [rendering, setRendering] = useState(false)
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
   // Opt-in trained visual identity for the next take. Null (default) leaves the
@@ -696,6 +696,7 @@ export default function PrevisRoom() {
   // ── Seed management ────────────────────────────────────────────────────────
   const [storyboardSeed, setStoryboardSeed] = useState<number | null>(null)
   const [seedLocked, setSeedLocked] = useState(false)
+  const [seedLockSaving, setSeedLockSaving] = useState(false)
   const [storyboardProvider, setStoryboardProvider] = useState<StoryboardImageProvider>('runway')
   const [storyboardImagesByShot, setStoryboardImagesByShot] = useState<Record<number, string>>({})
   const [storyboardImageStates, setStoryboardImageStates] = useState<Record<number, StoryboardLoadState>>({})
@@ -764,7 +765,7 @@ export default function PrevisRoom() {
   // Adopt recommendations through adoptShotCount (previsPlanning.ts, with
   // tests): the shot strip, camera planner, and render step must agree on
   // the count — and a manual count is never shrunk by a new recommendation.
-  const [, setLoadingShotCount] = useState(false)
+  const [loadingShotCount, setLoadingShotCount] = useState(false)
   // Adopts the recommended count so the shot strip, camera planner, and render
   // step all agree with it instead of the UI saying "3 shots recommended" while
   // planning cameras for only the one shot that exists so far.
@@ -1551,7 +1552,7 @@ export default function PrevisRoom() {
     })
     // searchParams excluded: identity churns every render; the note window is
     // handled by the per-scene key above and the reset effect's flag guard.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selectedSceneId, scenes, activeShotNumber, totalShots])
 
   // ── Update prompt when shot number changes ─────────────────────────────────
@@ -1580,7 +1581,7 @@ export default function PrevisRoom() {
     setSceneCameraPlan(null)
     // searchParams excluded: identity churns every render and the effect is
     // bounded by the project/scene/shot key above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [activeShotNumber, selectedSceneId, scenes, totalShots, effectiveProjectId])
 
   // Shot arrival always syncs the take box to the approved image prompt.
@@ -1846,6 +1847,12 @@ export default function PrevisRoom() {
     setConfirmDeleteKey(null)
   }, [])
 
+  // In-flight delete guard. A second click on "Confirm delete?" while the
+  // request is still open would issue a second DELETE for the same job.
+  const [pendingDeleteJobId, setPendingDeleteJobId] = useState<string | null>(null)
+  const [pendingShotDeleteId, setPendingShotDeleteId] = useState<string | null>(null)
+  const deleteInFlightRef = useRef(false)
+
   // ── Delete render job ────────────────────────────────────────────────────
   const removeTakeFromState = useCallback((jobId: string) => {
     setRenderHistory((prev) => {
@@ -1864,6 +1871,9 @@ export default function PrevisRoom() {
   }, [])
 
   const handleDeleteRender = useCallback(async (jobId: string) => {
+    if (deleteInFlightRef.current) return
+    deleteInFlightRef.current = true
+    setPendingDeleteJobId(jobId)
     try {
       await deleteRenderJob(jobId)
       removeTakeFromState(jobId)
@@ -1879,10 +1889,16 @@ export default function PrevisRoom() {
         return
       }
       setError(message)
+    } finally {
+      deleteInFlightRef.current = false
+      setPendingDeleteJobId(null)
     }
   }, [removeTakeFromState, armDelete, disarmDelete])
 
   const handleCancelAndDeleteRender = useCallback(async (jobId: string) => {
+    if (deleteInFlightRef.current) return
+    deleteInFlightRef.current = true
+    setPendingDeleteJobId(jobId)
     try {
       await cancelRenderJob(jobId)
       await deleteRenderJob(jobId)
@@ -1891,11 +1907,15 @@ export default function PrevisRoom() {
       setSuccess('Take cancelled and deleted')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete take')
+    } finally {
+      deleteInFlightRef.current = false
+      setPendingDeleteJobId(null)
     }
   }, [removeTakeFromState, disarmDelete])
 
   // ── Delete storyboard shot ───────────────────────────────────────────────
   const handleDeleteStoryboardShot = useCallback(async () => {
+    if (deleteInFlightRef.current) return
     if (!effectiveProjectId || !selectedSceneId) {
       setError('Select a scene first')
       return
@@ -1908,6 +1928,8 @@ export default function PrevisRoom() {
       return
     }
     setError('')
+    deleteInFlightRef.current = true
+    setPendingShotDeleteId(shot.storyboard_shot_id)
     try {
       await deleteStoryboardShot(shot.blueprint_id, shot.storyboard_shot_id)
       const result = await getStoryboardBlueprint(effectiveProjectId, selectedSceneId)
@@ -1921,6 +1943,9 @@ export default function PrevisRoom() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete shot')
+    } finally {
+      deleteInFlightRef.current = false
+      setPendingShotDeleteId(null)
     }
   }, [effectiveProjectId, selectedSceneId, activeBlueprintShot, storyboardBlueprint?.shots.length, directionScope, disarmDelete, bumpPreflightRevision])
 
@@ -2328,7 +2353,7 @@ export default function PrevisRoom() {
     } finally {
       setContinuityActionRunning(null)
     }
-  }, [handleGenerateStoryboardForShot, selectedScene, storyboardBlueprint])
+  }, [handleGenerateStoryboardForShot, selectedScene, storyboardBlueprint, bumpPreflightRevision])
 
   const handleApproveStoryboardBlueprint = useCallback(async () => {
     const blueprint = storyboardBlueprint?.blueprint
@@ -2357,7 +2382,8 @@ export default function PrevisRoom() {
 
   // ── Handle Toggle Seed Lock ────────────────────────────────────────────────
   const handleToggleSeedLock = useCallback(async () => {
-    if (!selectedSceneId || !effectiveProjectId) return
+    if (!selectedSceneId || !effectiveProjectId || seedLockSaving) return
+    setSeedLockSaving(true)
     try {
       const result = await togglePrevisSeedLock(effectiveProjectId, selectedSceneId, !seedLocked)
       setSeedLocked(result.locked)
@@ -2367,8 +2393,10 @@ export default function PrevisRoom() {
       setSuccess(result.locked ? 'Seed locked' : 'Seed unlocked')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update seed lock')
+    } finally {
+      setSeedLockSaving(false)
     }
-  }, [selectedSceneId, effectiveProjectId, seedLocked])
+  }, [selectedSceneId, effectiveProjectId, seedLocked, seedLockSaving])
 
   // Navigation changes presentation only; production state and panels remain mounted.
   const currentStep = PREVIS_STEPS.find((step) => step.id === activeStep) || PREVIS_STEPS[0]
@@ -2466,7 +2494,7 @@ export default function PrevisRoom() {
               {shotNumbers.map((n) => (
                 <button type="button" key={n} onClick={() => handleSelectShot(n)} aria-pressed={activeShotNumber === n}
                   className={`rounded-md border px-3 py-2 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-amber-200 ${activeShotNumber === n ? 'border-amber-300/50 bg-amber-300/10 text-amber-100' : 'border-white/10 text-zinc-400 hover:border-white/30 hover:text-zinc-200'}`}>
-                  <span className="font-medium">Shot {n}</span><span className="ml-2 hidden text-[10px] opacity-70 sm:inline">{getShotTypeLabel(n)}</span>
+                  <span className="font-medium">Shot {n}</span><span className="ml-2 hidden text-xs opacity-70 sm:inline">{getShotTypeLabel(n)}</span>
                 </button>
               ))}
               <button type="button" onClick={handleAddShot} disabled={!selectedSceneId} className="rounded-md border border-dashed border-white/20 px-3 py-2 text-xs text-zinc-300 hover:border-white/40 disabled:opacity-40">+ Add shot</button>
@@ -2491,10 +2519,10 @@ export default function PrevisRoom() {
                 <span className="flex items-center gap-2">
                   <span>{activeBlueprintShot?.render_contract.aspect_ratio || '16:9'}</span>
                   {previewTakeJobId && (confirmDeleteKey === `take:${previewTakeJobId}`
-                    ? <button type="button" onClick={() => void handleDeleteRender(previewTakeJobId)} className="text-[11px] text-rose-300 hover:text-rose-200" aria-label={`Confirm delete take ${activeTakeNumber}`}>Confirm delete?</button>
+                    ? <button type="button" onClick={() => void handleDeleteRender(previewTakeJobId)} disabled={pendingDeleteJobId === previewTakeJobId} aria-busy={pendingDeleteJobId === previewTakeJobId || undefined} className="text-xs text-rose-300 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Confirm delete take ${activeTakeNumber}`}>{pendingDeleteJobId === previewTakeJobId ? 'Deleting…' : 'Confirm delete?'}</button>
                     : confirmDeleteKey === `cancel:${previewTakeJobId}`
-                    ? <button type="button" onClick={() => void handleCancelAndDeleteRender(previewTakeJobId)} className="text-[11px] text-amber-200 hover:text-amber-100" aria-label="Cancel rendering and delete take">Cancel & delete?</button>
-                    : <button type="button" onClick={() => armDelete(`take:${previewTakeJobId}`)} className="text-[11px] text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${activeTakeNumber}`}>Delete take</button>)}
+                    ? <button type="button" onClick={() => void handleCancelAndDeleteRender(previewTakeJobId)} disabled={pendingDeleteJobId === previewTakeJobId} aria-busy={pendingDeleteJobId === previewTakeJobId || undefined} className="text-[11px] text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Cancel rendering and delete take">{pendingDeleteJobId === previewTakeJobId ? 'Cancelling…' : 'Cancel & delete?'}</button>
+                    : <button type="button" onClick={() => armDelete(`take:${previewTakeJobId}`)} className="text-xs text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${activeTakeNumber}`}>Delete take</button>)}
                 </span>
               </div>
                             {/* ── PREVIEW PANEL ─────────────────────────────────────────── */}
@@ -2584,7 +2612,6 @@ export default function PrevisRoom() {
 
             <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.025] p-4 sm:p-6">
               <div className="mb-5 border-b border-white/10 pb-4">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200/80">Step {PREVIS_STEPS.findIndex((step) => step.id === activeStep) + 1} of 4</p>
                 <h2 ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-6 text-xl font-medium text-zinc-100 focus-visible:rounded focus-visible:outline-2 focus-visible:outline-amber-200">{currentStep.title}</h2>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">{currentStep.guidance}</p>
               </div>
@@ -2639,7 +2666,7 @@ export default function PrevisRoom() {
                       ['rationale', 'Why this shot matters'],
                     ] as Array<[Exclude<keyof ShotPlanningDetails, 'lens' | 'focal_length' | 'aperture'>, string]>).map(([field, label]) => (
                       <label key={field} className={field === 'rationale' ? 'xl:col-span-2' : ''}>
-                        <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-on-surface-variant)' }}>
                           {label}
                         </span>
                         <textarea
@@ -2661,9 +2688,9 @@ export default function PrevisRoom() {
                   <summary className="cursor-pointer text-xs font-medium text-zinc-300">Planning assistance <span className="ml-1 text-zinc-500">· optional</span></summary>
                   <div className="mt-3 space-y-4">
                     <p className="text-xs leading-relaxed text-zinc-400">Get a suggested shot count or stage the scene, then decide which suggestions to use.</p>
-                    <button type="button" onClick={handleRecommendShotCount} disabled={!selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Camera size={14} /> Recommend shot count</button>
+                    <button type="button" onClick={handleRecommendShotCount} disabled={!selectedSceneId || loadingShotCount} aria-busy={loadingShotCount || undefined} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40">{loadingShotCount ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}{loadingShotCount ? 'Recommending…' : 'Recommend shot count'}</button>
                     {shotRecommendation && <p className="rounded-md bg-white/5 p-3 text-xs leading-relaxed text-zinc-300">{shotRecommendation}</p>}
-                    <button type="button" onClick={handleRecommendSceneCameras} disabled={!selectedSceneId || recommendingSceneCameras} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Camera size={14} /> {recommendingSceneCameras ? 'Planning…' : `Suggest cameras for all ${totalShots} shot${totalShots === 1 ? '' : 's'}`}</button>
+                    <button type="button" onClick={handleRecommendSceneCameras} disabled={!selectedSceneId || recommendingSceneCameras} aria-busy={recommendingSceneCameras || undefined} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Camera size={14} /> {recommendingSceneCameras ? 'Planning…' : `Suggest cameras for all ${totalShots} shot${totalShots === 1 ? '' : 's'}`}</button>
                     {cameraRecommendation && (
                       <div className="space-y-2 rounded-md bg-white/5 p-3">
                         <p className="text-xs font-medium text-zinc-200">Shot {activeShotNumber} · {cameraRecommendation.preset_label} · {cameraRecommendation.framing} · {cameraRecommendation.focal_length} · {cameraRecommendation.aperture}</p>
@@ -2680,7 +2707,7 @@ export default function PrevisRoom() {
                               <button type="button" onClick={() => selectSceneCameraSuggestion(index + 1, rec)} title="Select this shot in the room" className="min-w-0 text-left text-xs font-medium text-zinc-200 hover:text-amber-100">Shot {index + 1} · {rec.preset_label} · {rec.framing} · {rec.focal_length} · {rec.aperture}</button>
                               <button type="button" onClick={() => applySceneCamera(rec, index + 1)} className="shrink-0 rounded-md border border-white/20 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/5">Use for Shot {index + 1}</button>
                             </div>
-                            <p className="text-[11px] leading-relaxed text-zinc-400">{rec.why}</p>
+                            <p className="text-xs leading-relaxed text-zinc-400">{rec.why}</p>
                           </div>
                         ))}
                         <button type="button" onClick={applyAllSceneCameras} className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-200/40 px-3 py-2 text-xs text-amber-100 hover:bg-amber-200/10">Use all {sceneCameraPlan.total_shots} camera{sceneCameraPlan.total_shots === 1 ? '' : 's'}</button>
@@ -2701,21 +2728,21 @@ export default function PrevisRoom() {
                 <ol className="border-t border-white/10 pt-5">
                   <li hidden={currentStoryboardStage !== 'frame'} className="space-y-3">
                     <div><h3 className="text-sm font-medium text-zinc-100">1. Create the frame</h3><p className="mt-1 text-xs leading-relaxed text-zinc-400">Start with the composition you want this shot to follow.</p></div>
-                    <button type="button" onClick={() => { setStoryboardStage(null); void handleGenerateStoryboard() }} disabled={loading || !selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-200/35 bg-amber-200/10 px-4 py-2.5 text-xs font-medium text-amber-100 hover:bg-amber-200/15 disabled:opacity-40">{loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}{currentStoryboardImageUrl ? 'Generate a new storyboard frame' : 'Generate storyboard frame'}</button>
+                    <button type="button" onClick={() => { setStoryboardStage(null); void handleGenerateStoryboard() }} disabled={loading || !selectedSceneId} aria-busy={loading || undefined} className="flex w-full items-center justify-center gap-2 rounded-md border border-amber-200/35 bg-amber-200/10 px-4 py-2.5 text-xs font-medium text-amber-100 hover:bg-amber-200/15 disabled:opacity-40">{loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}{currentStoryboardImageUrl ? 'Generate a new storyboard frame' : 'Generate storyboard frame'}</button>
                     <details className="border-b border-white/10 pb-3">
                       <summary className="cursor-pointer text-xs text-zinc-400">Image settings <span className="ml-1 text-zinc-500">· {storyboardProvider === 'runway' ? 'Runway' : 'Legacy'}{seedLocked ? ' · seed locked' : ''}</span></summary>
                       <div className="mt-3 space-y-3">
                         <label className="block text-xs text-zinc-300">Image model<select aria-label="Storyboard image model" value={storyboardProvider} onChange={(event) => setStoryboardProvider(event.target.value as StoryboardImageProvider)} className="mt-2 w-full rounded-md border border-white/15 bg-zinc-950 px-3 py-2 text-sm"><option value="runway">Runway</option><option value="pollinations">Legacy</option></select></label>
-                        {storyboardSeed !== null ? <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-xs text-zinc-400">Image seed: {storyboardSeed}</span><button type="button" onClick={handleToggleSeedLock} aria-pressed={seedLocked} className="flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-xs text-zinc-200" title={seedLocked ? 'Unlock storyboard image seed' : 'Lock storyboard image seed; video takes use a separate render seed'}>{seedLocked ? <Lock size={13} /> : <LockOpen size={13} />}{seedLocked ? 'Seed locked' : 'Lock image seed'}</button></div> : <p className="text-xs text-zinc-500">The image seed appears after a storyboard is generated.</p>}
+                        {storyboardSeed !== null ? <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-xs text-zinc-400">Image seed: {storyboardSeed}</span><button type="button" onClick={handleToggleSeedLock} disabled={seedLockSaving} aria-busy={seedLockSaving || undefined} aria-pressed={seedLocked} className="flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-xs text-zinc-200 disabled:opacity-50" title={seedLocked ? 'Unlock storyboard image seed' : 'Lock storyboard image seed; video takes use a separate render seed'}>{seedLockSaving ? <Loader2 size={13} className="animate-spin" /> : seedLocked ? <Lock size={13} /> : <LockOpen size={13} />}{seedLockSaving ? 'Saving…' : seedLocked ? 'Seed locked' : 'Lock image seed'}</button></div> : <p className="text-xs text-zinc-500">The image seed appears after a storyboard is generated.</p>}
                       </div>
                     </details>
                     {currentStoryboardImageUrl && <button type="button" onClick={() => setStoryboardStage(storyboardBlueprint?.version ? 'continuity' : 'blueprint')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-3 py-2 text-sm font-medium text-zinc-950">Use this frame <ChevronRight size={15} /></button>}
                   </li>
                   <li hidden={currentStoryboardStage !== 'blueprint'} className="space-y-3">
                     <div><h3 className="text-sm font-medium text-zinc-100">2. Build the scene blueprint</h3><p className="mt-1 text-xs leading-relaxed text-zinc-400">Collect the scene’s shots into the plan you will review and approve.</p></div>
-                    <button type="button" onClick={() => { setStoryboardStage(null); void handleCreateStoryboardBlueprint() }} disabled={!selectedSceneId || blueprintLoading} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-4 py-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40">{blueprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}Build storyboard blueprint</button>
+                    <button type="button" onClick={() => { setStoryboardStage(null); void handleCreateStoryboardBlueprint() }} disabled={!selectedSceneId || blueprintLoading} aria-busy={blueprintLoading || undefined} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-4 py-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40">{blueprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}Build storyboard blueprint</button>
                     <p className="text-xs text-zinc-400">Blueprint: <span className="text-zinc-200">{blueprintLoading ? 'loading' : storyboardBlueprint?.blueprint.status || 'not built'}</span></p>
-                    {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}{confirmDeleteKey === `shot:${activeBlueprintShot.storyboard_shot_id}` ? <button type="button" onClick={() => void handleDeleteStoryboardShot()} className="text-[11px] text-rose-300 hover:text-rose-200" aria-label={`Confirm delete shot ${activeBlueprintShot.shot_number}`}>Confirm delete shot {activeBlueprintShot.shot_number}? Takes stay in history.</button> : <button type="button" onClick={() => armDelete(`shot:${activeBlueprintShot.storyboard_shot_id}`)} disabled={(storyboardBlueprint?.shots.length ?? 1) <= 1 || storyboardApproved} title={(storyboardBlueprint?.shots.length ?? 1) <= 1 ? 'A storyboard must keep at least one shot — add another shot first, or generate a new frame to replace this one' : storyboardApproved ? 'Unapprove the storyboard to edit its shots' : `Delete shot ${activeBlueprintShot.shot_number}`} className="text-[11px] text-zinc-500 hover:text-rose-300 disabled:opacity-40" aria-label={`Delete shot ${activeBlueprintShot.shot_number}`}>Delete shot {activeBlueprintShot.shot_number}</button>}</div></details>}
+                    {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}{confirmDeleteKey === `shot:${activeBlueprintShot.storyboard_shot_id}` ? <button type="button" onClick={() => void handleDeleteStoryboardShot()} disabled={pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id} aria-busy={pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id || undefined} className="text-xs text-rose-300 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Confirm delete shot ${activeBlueprintShot.shot_number}`}>{pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id ? 'Deleting…' : `Confirm delete shot ${activeBlueprintShot.shot_number}? Takes stay in history.`}</button> : <button type="button" onClick={() => armDelete(`shot:${activeBlueprintShot.storyboard_shot_id}`)} disabled={(storyboardBlueprint?.shots.length ?? 1) <= 1 || storyboardApproved} title={(storyboardBlueprint?.shots.length ?? 1) <= 1 ? 'A storyboard must keep at least one shot — add another shot first, or generate a new frame to replace this one' : storyboardApproved ? 'Unapprove the storyboard to edit its shots' : `Delete shot ${activeBlueprintShot.shot_number}`} className="text-[11px] text-zinc-500 hover:text-rose-300 disabled:opacity-40" aria-label={`Delete shot ${activeBlueprintShot.shot_number}`}>Delete shot {activeBlueprintShot.shot_number}</button>}</div></details>}
                     {storyboardBlueprint?.blueprint && storyboardBlueprint?.version && effectiveProjectId && selectedSceneId && (
                       <PromptRebuildPanel
                         blueprintId={storyboardBlueprint.blueprint.blueprint_id}
@@ -2775,7 +2802,7 @@ export default function PrevisRoom() {
                             }
                           }}
                         />
-                        <p className="text-[11px] leading-relaxed text-zinc-500">Each camera decision is approved one shot at a time. Approving one shot never approves the others.</p>
+                        <p className="text-xs leading-relaxed text-zinc-500">Each camera decision is approved one shot at a time. Approving one shot never approves the others.</p>
                       </div>
                     )}
                     {storyboardBlueprint?.version && <button type="button" onClick={() => setStoryboardStage('continuity')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-3 py-2 text-sm font-medium text-zinc-950">Continue to continuity <ChevronRight size={15} /></button>}
@@ -2798,6 +2825,7 @@ export default function PrevisRoom() {
                     type="button"
                     onClick={() => { setStoryboardStage(null); void handleRunContinuityReview() }}
                     disabled={!storyboardBlueprint?.version || continuityReviewRunning}
+                    aria-busy={continuityReviewRunning || undefined}
                     className="flex w-full items-center justify-center gap-2 rounded-lg border px-2 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ borderColor: 'rgba(125,211,252,0.28)', color: 'rgb(186,230,253)', background: 'rgba(14,165,233,0.08)' }}
                   >
@@ -2841,6 +2869,7 @@ export default function PrevisRoom() {
                                 type="button"
                                 onClick={() => void handleContinuityIssueAction(issue, action)}
                                 disabled={continuityActionRunning !== null || loading}
+                                aria-busy={continuityActionRunning === `${issue.issue_id}-${action}` || undefined}
                                 className="flex min-h-11 items-center justify-center gap-1 rounded border px-1 py-1 text-[11px] uppercase tracking-[0.06em] disabled:cursor-not-allowed disabled:opacity-50"
                                 style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--color-on-surface-variant)' }}
                               >
@@ -2864,7 +2893,7 @@ export default function PrevisRoom() {
                   <li hidden={currentStoryboardStage !== 'approve'} className="space-y-3">
                     <h3 className="text-sm font-medium text-zinc-100">4. Approve the blueprint</h3>
                     <p className="text-xs leading-relaxed text-zinc-400">{storyboardApproved ? 'This storyboard is approved for production.' : !storyboardBlueprint?.version ? 'Build the blueprint first, then run its continuity review.' : !continuityReviewComplete ? 'Run the continuity review before approving this blueprint.' : 'Review the frame and any continuity notes, then approve when it matches your intention.'}</p>
-                    <button type="button" onClick={() => void handleApproveStoryboardBlueprint()} disabled={!storyboardBlueprint?.version || !continuityReviewComplete || blueprintApproving || storyboardApproved} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">{blueprintApproving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}{storyboardApproved ? 'Storyboard approved' : 'Approve storyboard'}</button>
+                    <button type="button" onClick={() => void handleApproveStoryboardBlueprint()} disabled={!storyboardBlueprint?.version || !continuityReviewComplete || blueprintApproving || storyboardApproved} aria-busy={blueprintApproving || undefined} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500">{blueprintApproving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}{storyboardApproved ? 'Storyboard approved' : 'Approve storyboard'}</button>
                     {storyboardApproved && <button type="button" onClick={() => advanceToStep('render')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100">Continue to rendering <ChevronRight size={15} /></button>}
                   </li>
                 </ol>
@@ -2911,7 +2940,7 @@ export default function PrevisRoom() {
                 <div className="mt-2 p-2 bg-white/5 rounded border border-white/10">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs text-white/40 uppercase">Original</span>
-                    <button
+                    <button type="button"
                       onClick={() => { setPromptText(originalPrompt); setOriginalPrompt(''); }}
                       className="text-xs text-amber-400 hover:text-amber-300"
                     >
@@ -2951,7 +2980,7 @@ export default function PrevisRoom() {
                   ))}
                 </div>
                 {genConfig.duration >= 12 && (
-                  <div className="mt-1 text-[10px] text-warning">Longer takes can take more time to render.</div>
+                  <div className="mt-1 text-xs text-warning">Longer takes can take more time to render.</div>
                 )}
                 <details className="mt-3 border-t border-white/10 pt-3">
                   <summary className="cursor-pointer text-xs text-zinc-300">Help choosing a duration</summary>
@@ -2959,6 +2988,7 @@ export default function PrevisRoom() {
                   type="button"
                   onClick={handleRecommendSettings}
                   disabled={!selectedSceneId || recommendingSettings}
+                  aria-busy={recommendingSettings || undefined}
                   className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:opacity-50"
                   style={{ borderColor: 'rgba(255,209,101,0.25)', color: 'var(--color-primary)', background: 'rgba(255,209,101,0.08)' }}
                 >
@@ -2973,11 +3003,11 @@ export default function PrevisRoom() {
                     <p className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
                       {settingsRecommendation.reasoning}
                     </p>
-                    <p className="mt-1 text-[9px] leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+                    <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
                       {settingsRecommendation.duration_constraint.advisory}
                     </p>
                     {!settingsRecommendation.duration_constraint.supports_custom_duration && (
-                      <div className="mt-1 text-[9px]" style={{ color: 'var(--color-secondary)' }}>
+                      <div className="mt-1 text-xs" style={{ color: 'var(--color-secondary)' }}>
                         Nearest available option: {settingsRecommendation.duration_constraint.nearest_valid_duration_seconds}s
                       </div>
                     )}
@@ -3261,7 +3291,7 @@ export default function PrevisRoom() {
               </div>
 
 
-                    <div className="border-t border-white/10 pt-4"><p className="mb-2 text-xs leading-relaxed text-zinc-400">Prompt assistance can rewrite your direction. Review the result before rendering.</p><button type="button" onClick={handleEnhancePrompt} disabled={!selectedSceneId} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40"><Sparkles size={13} /> AI enhance prompt</button></div>
+                    <div className="border-t border-white/10 pt-4"><p className="mb-2 text-xs leading-relaxed text-zinc-400">Prompt assistance can rewrite your direction. Review the result before rendering.</p><button type="button" onClick={handleEnhancePrompt} disabled={!selectedSceneId || enhancingPrompt} aria-busy={enhancingPrompt || undefined} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-40">{enhancingPrompt ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}{enhancingPrompt ? 'Enhancing prompt…' : 'AI enhance prompt'}</button></div>
                   </div>
                 </details>
                 {effectiveProjectId && <TrainedIdentityPicker projectId={effectiveProjectId} scene={selectedScene} selectedModelId={shotVisualModelId} onSelect={setShotVisualModelId} disabled={rendering} refreshKey={identitiesRefreshKey} />}
@@ -3280,6 +3310,7 @@ export default function PrevisRoom() {
                     type="button"
                     data-testid="render-take-button"
                     onClick={handleInitializeRender}
+                    aria-busy={rendering || undefined}
                     disabled={
                       rendering
                       || !selectedSceneId
@@ -3316,17 +3347,17 @@ export default function PrevisRoom() {
                         <span className="flex flex-wrap items-center justify-between gap-1 px-2 py-2 text-xs text-zinc-200">Take {take.take_number}{activeTakeNumber === take.take_number && <span className="text-[10px] text-amber-200">Previewing</span>}</span>
                       </button>
                       {take.jobId && (confirmDeleteKey === `cancel:${take.jobId}`
-                        ? <button type="button" onClick={() => void handleCancelAndDeleteRender(take.jobId!)} className="text-[11px] text-amber-200 hover:text-amber-100" aria-label="Cancel rendering and delete take">Rendering — cancel & delete?</button>
+                        ? <button type="button" onClick={() => void handleCancelAndDeleteRender(take.jobId!)} disabled={pendingDeleteJobId === take.jobId} aria-busy={pendingDeleteJobId === take.jobId || undefined} className="text-[11px] text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Cancel rendering and delete take">{pendingDeleteJobId === take.jobId ? 'Cancelling…' : 'Rendering — cancel & delete?'}</button>
                         : confirmDeleteKey === `take:${take.jobId}`
-                        ? <button type="button" onClick={() => void handleDeleteRender(take.jobId!)} className="text-[11px] text-rose-300 hover:text-rose-200" aria-label={`Confirm delete take ${take.take_number}`}>Confirm delete?</button>
-                        : <button type="button" onClick={() => armDelete(`take:${take.jobId!}`)} className="text-[11px] text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${take.take_number}`}>Delete take</button>)}
+                        ? <button type="button" onClick={() => void handleDeleteRender(take.jobId!)} disabled={pendingDeleteJobId === take.jobId} aria-busy={pendingDeleteJobId === take.jobId || undefined} className="text-xs text-rose-300 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Confirm delete take ${take.take_number}`}>{pendingDeleteJobId === take.jobId ? 'Deleting…' : 'Confirm delete?'}</button>
+                        : <button type="button" onClick={() => armDelete(`take:${take.jobId!}`)} className="text-xs text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${take.take_number}`}>Delete take</button>)}
                     </div>)}
                   </div> : <div className="mt-3 rounded-md border border-dashed border-white/15 p-4 text-xs leading-relaxed text-zinc-400">No takes for this shot yet. Render a take in step 3, then return here to review it.</div>}
                 </div>
                 <div className="border-t border-white/10 pt-4">
                   <h3 className="text-sm font-medium text-zinc-100">Assemble your scene</h3>
                   <p className="mb-3 mt-1 text-xs leading-relaxed text-zinc-400">Uses the latest completed take for each shot. Previewing an older take does not change the assembly.</p>
-                  {canCompose && !composedUrl ? <button type="button" onClick={handleCompose} disabled={composing} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:opacity-50">{composing ? <Loader2 size={15} className="animate-spin" /> : <Layers size={15} />}{composing ? 'Assembling scene…' : 'Assemble scene'}</button> : composedUrl ? <div className="space-y-3"><p className="flex items-center gap-2 text-xs text-emerald-300"><CheckCircle2 size={14} /> Scene assembled</p><button type="button" onClick={() => navigate(withProductionContext('/studio/screening-room', { projectId: effectiveProjectId, sceneId: selectedSceneId, shotNumber: activeShotNumber }))} className="w-full rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100">Open Screening</button></div> : <p className="rounded-md bg-white/5 px-3 py-3 text-xs leading-relaxed text-zinc-400">{shotNumbers.length < 2 ? 'Add another shot, then render its take to assemble a scene.' : 'Assembly becomes available when at least two shots have completed videos.'}</p>}
+                  {canCompose && !composedUrl ? <button type="button" onClick={handleCompose} disabled={composing} aria-busy={composing || undefined} className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100 disabled:opacity-50">{composing ? <Loader2 size={15} className="animate-spin" /> : <Layers size={15} />}{composing ? 'Assembling scene…' : 'Assemble scene'}</button> : composedUrl ? <div className="space-y-3"><p className="flex items-center gap-2 text-xs text-emerald-300"><CheckCircle2 size={14} /> Scene assembled</p><button type="button" onClick={() => navigate(withProductionContext('/studio/screening-room', { projectId: effectiveProjectId, sceneId: selectedSceneId, shotNumber: activeShotNumber }))} className="w-full rounded-md bg-amber-200 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-amber-100">Open Screening</button></div> : <p className="rounded-md bg-white/5 px-3 py-3 text-xs leading-relaxed text-zinc-400">{shotNumbers.length < 2 ? 'Add another shot, then render its take to assemble a scene.' : 'Assembly becomes available when at least two shots have completed videos.'}</p>}
                 </div>
                 <details className="rounded-lg border border-white/10 p-3"><summary className="cursor-pointer text-xs font-medium text-zinc-300">Render history and retries</summary><div className="mt-3">            {/* Render History */}
             <div className="glass-panel rounded-xl p-4">
@@ -3369,11 +3400,11 @@ export default function PrevisRoom() {
                           <div className="truncate text-[11px] font-medium" style={{ color: 'var(--color-on-surface)' }}>
                             {entry.sceneName}
                           </div>
-                          <div className="flex items-center gap-2 text-[9px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--color-on-surface-variant)' }}>
                             <Clock size={10} />
                             {entry.duration}s
                             <span
-                              className="status-chip rounded px-1 py-0.5 text-[8px] font-bold"
+                              className="status-chip rounded px-1 py-0.5 text-[10px] font-bold"
                               style={{
                                 background: 'rgba(76,215,246,0.1)',
                                 color: 'var(--color-secondary)',
@@ -3397,9 +3428,13 @@ export default function PrevisRoom() {
                         <button
                           type="button"
                           onClick={() => confirmDeleteKey === `cancel:${entry.jobId}` ? void handleCancelAndDeleteRender(entry.jobId) : void handleDeleteRender(entry.jobId)}
-                          className="mt-1 flex w-full items-center justify-center rounded border border-rose-400/40 px-2 py-1 text-[10px] text-rose-300 hover:bg-rose-500/10"
+                          disabled={pendingDeleteJobId === entry.jobId}
+                          aria-busy={pendingDeleteJobId === entry.jobId || undefined}
+                          className="mt-1 flex w-full items-center justify-center rounded border border-rose-400/40 px-2 py-1 text-[10px] text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {confirmDeleteKey === `cancel:${entry.jobId}` ? 'Rendering — cancel & delete?' : `Confirm delete ${entry.sceneName}?`}
+                          {pendingDeleteJobId === entry.jobId
+                            ? 'Deleting…'
+                            : confirmDeleteKey === `cancel:${entry.jobId}` ? 'Rendering — cancel & delete?' : `Confirm delete ${entry.sceneName}?`}
                         </button>
                       )}
                       {entry.status === 'complete' && entry.hasPromptSlots && (
@@ -3407,7 +3442,8 @@ export default function PrevisRoom() {
                           type="button"
                           onClick={() => void handleAdherenceRetry(entry.jobId)}
                           disabled={adherenceRetryingJobId === entry.jobId}
-                          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-wait disabled:opacity-60"
+                          aria-busy={adherenceRetryingJobId === entry.jobId || undefined}
+                          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-wait disabled:opacity-60"
                           style={{
                             borderColor: 'rgba(34,211,238,0.28)',
                             color: 'var(--color-secondary)',
@@ -3607,7 +3643,7 @@ export default function PrevisRoom() {
                       <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>
                         {note.text}
                       </p>
-                      <p className="mt-1 text-[9px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                      <p className="mt-1 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
                         {new Date(note.timestamp).toLocaleTimeString()}
                       </p>
                     </div>
@@ -3644,7 +3680,7 @@ export default function PrevisRoom() {
                 </div>
               </div>
               {lastHealthCheck && (
-                <div className="mt-1 text-[9px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                <div className="mt-1 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
                   Last checked: {lastHealthCheck.toLocaleTimeString()}
                 </div>
               )}

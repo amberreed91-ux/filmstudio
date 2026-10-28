@@ -61,7 +61,15 @@ export default function AICrewPresence({ compact = true, projectId }: { compact?
           ) : error ? (
             <div role="status" className="space-y-2">
               <p className="text-xs leading-relaxed text-zinc-400">{error}</p>
-              <button type="button" onClick={() => void refresh()} className="min-h-11 text-xs text-amber-200">Check again</button>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={loading}
+                aria-busy={loading}
+                className="min-h-11 text-xs text-amber-200 disabled:opacity-40"
+              >
+                {loading ? 'Checking…' : 'Check again'}
+              </button>
             </div>
           ) : agents.length === 0 ? (
             <p className="text-xs leading-relaxed text-zinc-500">{projectId ? 'No department activity has been reported.' : 'Open a film to see its crew status.'}</p>

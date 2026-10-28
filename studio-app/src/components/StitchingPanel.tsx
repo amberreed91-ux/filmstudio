@@ -24,6 +24,7 @@ const POLL_INTERVAL_MS = 2500
 export default function StitchingPanel({ projectId, approvedSceneCount }: Props) {
   const [job, setJob] = useState<StitchJob | null>(null)
   const [loading, setLoading] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -101,7 +102,8 @@ export default function StitchingPanel({ projectId, approvedSceneCount }: Props)
   }
 
   async function handleDownload() {
-    if (!projectId) return
+    if (!projectId || downloading) return
+    setDownloading(true)
     try {
       const res = await getStitchDownload(projectId)
       if (res?.download_url) {
@@ -115,6 +117,8 @@ export default function StitchingPanel({ projectId, approvedSceneCount }: Props)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Download failed')
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -136,13 +140,13 @@ export default function StitchingPanel({ projectId, approvedSceneCount }: Props)
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-teal-400">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-400">
             Film Assembly
           </div>
           <h3 className="mt-0.5 text-sm font-semibold text-zinc-100">Stitch Film</h3>
         </div>
         {job?.mock_mode && (
-          <span className="rounded border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-300">
+          <span className="rounded border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-300">
             Mock Mode
           </span>
         )}
@@ -229,6 +233,7 @@ export default function StitchingPanel({ projectId, approvedSceneCount }: Props)
           type="button"
           onClick={() => void handleStitch()}
           disabled={loading || isRunning || approvedSceneCount === 0}
+          aria-busy={loading || isRunning}
           className="rounded-lg border border-teal-400/50 bg-teal-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-teal-100 transition hover:border-teal-300/70 hover:bg-teal-500/25 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isRunning ? 'Stitching…' : isComplete ? 'Re-Stitch Film' : 'Stitch Film'}
@@ -238,6 +243,8 @@ export default function StitchingPanel({ projectId, approvedSceneCount }: Props)
           <button
             type="button"
             onClick={() => void handleDownload()}
+            disabled={downloading}
+            aria-busy={downloading}
             className="rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:border-emerald-300/70 hover:bg-emerald-500/25"
           >
             Download Final Film

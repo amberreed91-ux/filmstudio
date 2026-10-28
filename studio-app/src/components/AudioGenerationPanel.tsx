@@ -121,7 +121,9 @@ function TrackCard({ trackKey, result, onRegenerate, regenerating }: TrackCardPr
             type="button"
             onClick={() => onRegenerate(trackKey)}
             disabled={regenerating}
-            className="rounded border border-zinc-600/50 bg-zinc-800/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-300 hover:border-cyan-400/50 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+            aria-busy={regenerating}
+            aria-label={`Regenerate ${TRACK_LABELS[trackKey]} audio`}
+            className="rounded border border-zinc-600/50 bg-zinc-800/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300 hover:border-cyan-400/50 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
           >
             {regenerating ? '…' : '↺'}
           </button>
@@ -130,7 +132,7 @@ function TrackCard({ trackKey, result, onRegenerate, regenerating }: TrackCardPr
 
       {/* Advisory / prompt */}
       {result?.advisory && (
-        <p className="text-[10px] text-zinc-400 leading-relaxed">{result.advisory}</p>
+        <p className="text-xs text-zinc-400 leading-relaxed">{result.advisory}</p>
       )}
       {result?.prompt_used && (
         <p className="text-[10px] text-zinc-500 italic truncate" title={result.prompt_used}>
@@ -143,7 +145,7 @@ function TrackCard({ trackKey, result, onRegenerate, regenerating }: TrackCardPr
         </p>
       )}
       {result?.error && (
-        <p className="text-[10px] text-rose-300">{result.error}</p>
+        <p className="text-xs text-rose-300">{result.error}</p>
       )}
 
       {/* Audio player */}
@@ -276,7 +278,7 @@ export default function AudioGenerationPanel({
             🎧 Audio Generation
           </h4>
           {isMock && (
-            <p className="mt-0.5 text-[9px] text-cyan-300 uppercase tracking-[0.1em]">
+            <p className="mt-0.5 text-[10px] text-cyan-300 uppercase tracking-[0.1em]">
               Mock mode — models not installed
             </p>
           )}
@@ -285,6 +287,7 @@ export default function AudioGenerationPanel({
           type="button"
           onClick={handleGenerateAll}
           disabled={generating}
+          aria-busy={generating}
           className="rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-cyan-100 hover:bg-cyan-500/25 hover:border-cyan-300/60 disabled:cursor-not-allowed disabled:opacity-50 transition-all"
         >
           {generating ? 'Generating…' : 'Generate Audio'}
@@ -310,7 +313,7 @@ export default function AudioGenerationPanel({
             </p>
           )}
           {soundAdvisory.silence_flag && (
-            <p className="text-[10px] text-amber-300">⚠ Silence flag — intentional silence</p>
+            <p className="text-xs text-amber-300">⚠ Silence flag — intentional silence</p>
           )}
         </div>
       )}
@@ -324,7 +327,7 @@ export default function AudioGenerationPanel({
 
       {/* Job advisory */}
       {job?.advisory && !error && (
-        <p className="text-[10px] text-zinc-400">{job.advisory}</p>
+        <p className="text-xs text-zinc-400">{job.advisory}</p>
       )}
 
       {/* Track cards */}

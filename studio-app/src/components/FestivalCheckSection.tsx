@@ -91,9 +91,10 @@ export function FestivalCheckSection({ projectId, packageId }: FestivalCheckSect
       </div>
 
       {/* Run Check Button */}
-      <button
+      <button type="button"
         onClick={runCheck}
         disabled={loading}
+        aria-busy={loading}
         className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
       >
         {loading ? "Checking..." : "Run Check"}

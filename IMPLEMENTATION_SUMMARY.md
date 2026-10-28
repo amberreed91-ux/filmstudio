@@ -1,6 +1,13 @@
 # Implementation Summary - UI Redesign & Previs Images
 
-## Status: PARTIAL - Core Infrastructure Complete
+> **LEGACY — historical record. Do not implement from this file.**
+> References below to `components/TopNav.tsx` and `styles/design-system.css`
+> describe removed code: `TopNav.tsx` was never imported and was deleted, the
+> stylesheet was never loaded and was deleted, and the purple palette is no
+> longer the product accent. See [UI_UPGRADE_PLAN.md](UI_UPGRADE_PLAN.md) for
+> the live design system and conventions.
+
+## Status: PARTIAL - Core Infrastructure Complete (superseded)
 
 This document tracks the implementation of two major features:
 1. Core visual design system changes
@@ -25,10 +32,11 @@ This document tracks the implementation of two major features:
 
 ### 🔄 IN PROGRESS
 
-#### 2. Navigation Component Updates
-**File**: `studio-app/src/components/TopNav.tsx`
+#### 2. Navigation Component Updates — OBSOLETE
+**File**: `studio-app/src/components/TopNav.tsx` — **deleted** (unused).
 
-Current state uses inline styles with CSS variables. Needs migration to design system classes:
+This section is kept only as a historical record. Do not recreate TopNav or the
+`.studio-nav` migration it describes; the live navigation is `StudioShell.tsx`.
 
 ```tsx
 // CURRENT (inline styles)

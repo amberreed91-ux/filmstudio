@@ -16,7 +16,7 @@ type Props = {
  */
 export default function RenderSparkline({ samples, label, height = 36, className = '' }: Props) {
   if (samples.length === 0) {
-    return <p className="text-[11px] text-zinc-500">No completed render durations are recorded yet.</p>
+    return <p className="text-xs text-zinc-500">No completed render durations are recorded yet.</p>
   }
 
   const width = 160

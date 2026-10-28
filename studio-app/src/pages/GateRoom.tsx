@@ -15,13 +15,10 @@ import {
 import { getProceduralRoomStyle } from '../lib/proceduralBackdrops'
 import { useStudio } from '../context/StudioContext'
 import { createProject, listProjects, type PersistedProjectState } from '../lib/studioApi'
+import { dossierStorageKey } from '../lib/dossierStorage'
 
 const FORMATS = ['Short Film', 'Feature', 'Series Pilot', 'Music Video', 'Commercial']
 const GENRES = ['Drama', 'Sci-Fi', 'Thriller', 'Comedy', 'Horror', 'Documentary', 'Experimental', 'Animation']
-
-export function dossierStorageKey(projectId: string): string {
-  return `gate:dossier:${projectId}`
-}
 
 export default function GateRoom() {
   const navigate = useNavigate()

@@ -30,7 +30,7 @@ describe('CanonicalWorkflowPanel', () => {
   it('uses server-resolved script context to enable an older saved film', () => {
     state.sceneContext = { scriptId: 'script_saved', sequenceId: '', beatIds: [] }
     const html = renderToStaticMarkup(<CanonicalWorkflowPanel projectId="project-1" sceneId="scene-2" sceneContext={{ scriptId: '', sequenceId: '', beatIds: [] }} surface="previs" />)
-    expect(html).toMatch(/<button type="button" class="[^"]*">Start approved production thread<\/button>/)
+    expect(html).toMatch(/<button type="button"[^>]*>Start approved production thread<\/button>/)
     expect(html).not.toContain('Save this film')
   })
 
@@ -62,6 +62,6 @@ describe('CanonicalWorkflowPanel', () => {
     expect(html).toContain('data-scene-id="scene-2"')
     expect(html).toContain('data-workflow-status="not_started"')
     expect(html).toContain('Start approved production thread')
-    expect(html).toMatch(/<button type="button" class="[^"]*">Start approved production thread<\/button>/)
+    expect(html).toMatch(/<button type="button"[^>]*>Start approved production thread<\/button>/)
   })
 })

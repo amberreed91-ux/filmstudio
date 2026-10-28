@@ -228,6 +228,7 @@ export default function ReferenceImageGenerator({ projectId, target, shots, onBo
             type="button"
             onClick={() => void generator.generate({ mode, prompt, aspectRatio, stylePreset, lightingPreset, seed })}
             disabled={!canGenerate}
+            aria-busy={generator.generating}
             className="inline-flex min-h-9 items-center gap-2 rounded-md border border-amber-200/40 bg-amber-200/10 px-3 text-xs font-medium text-amber-100 transition-colors hover:border-amber-200/60 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {generator.generating ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
@@ -235,7 +236,7 @@ export default function ReferenceImageGenerator({ projectId, target, shots, onBo
           </button>
         </div>
 
-        {seedInvalid ? <p role="alert" className="text-[11px] text-rose-200">Seed must be a whole number between 0 and 2147483647, or empty to let the studio draw one.</p> : null}
+        {seedInvalid ? <p role="alert" className="text-xs text-rose-200">Seed must be a whole number between 0 and 2147483647, or empty to let the studio draw one.</p> : null}
         {generator.presetsError ? <p role="status" className="text-[11px] text-amber-200/90">{generator.presetsError} You can still generate from your prompt alone.</p> : null}
         {generator.error ? <p role="alert" className="rounded-md border border-rose-400/30 bg-rose-500/10 p-3 text-sm text-rose-200">{generator.error}</p> : null}
         {generator.notice && !generator.error ? <p role="status" className="rounded-md border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{generator.notice}</p> : null}
@@ -277,7 +278,7 @@ export default function ReferenceImageGenerator({ projectId, target, shots, onBo
                       <span>seed {image.seed}</span>
                       <span className="normal-case tracking-normal">{image.provider}</span>
                     </p>
-                    <p className="line-clamp-2 text-[11px] leading-snug text-zinc-400">{image.prompt.split('\n')[0]}</p>
+                    <p className="line-clamp-2 text-xs leading-snug text-zinc-400">{image.prompt.split('\n')[0]}</p>
                     <label className="block text-[10px] uppercase tracking-[0.1em] text-zinc-500">
                       Shot
                       <select
@@ -309,6 +310,7 @@ export default function ReferenceImageGenerator({ projectId, target, shots, onBo
                         type="button"
                         onClick={() => void handleBind(image)}
                         disabled={!bindTarget || generator.binding || shotOptions.length === 0}
+                        aria-busy={generator.binding}
                         className="inline-flex w-full min-h-9 flex-1 items-center justify-center gap-1.5 rounded border border-cyan-300/30 px-2 text-[11px] font-medium text-cyan-200 transition-colors hover:border-cyan-200/60 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {generator.binding ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
@@ -325,14 +327,14 @@ export default function ReferenceImageGenerator({ projectId, target, shots, onBo
                       onClose={() => setInspected(null)}
                       onConfirm={(shotId) => void handleModalConfirm(shotId)}
                     />
-                    <p className="text-[10px] leading-snug text-zinc-600">Binding registers a candidate with shot provenance. Approval stays explicit.</p>
+                    <p className="text-xs leading-snug text-zinc-600">Binding registers a candidate with shot provenance. Approval stays explicit.</p>
                   </figcaption>
                 </figure>
               )
             })}
           </div>
         )}
-        {generator.results.length >= MAX_GENERATED_STILLS ? <p className="text-[11px] text-zinc-500">Showing the {MAX_GENERATED_STILLS} most recent stills from this session.</p> : null}
+        {generator.results.length >= MAX_GENERATED_STILLS ? <p className="text-xs text-zinc-500">Showing the {MAX_GENERATED_STILLS} most recent stills from this session.</p> : null}
       </div>
     </section>
   )

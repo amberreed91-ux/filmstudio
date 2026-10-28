@@ -178,7 +178,8 @@ export default function EditorialIntelligencePanel({
           type="button"
           onClick={onReadCut}
           disabled={loading || !projectId}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10 disabled:opacity-50"
+          aria-busy={loading}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-all hover:bg-white/10 disabled:opacity-50"
           style={{ color: 'var(--color-on-surface-variant)' }}
         >
           {loading ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />}
@@ -193,6 +194,7 @@ export default function EditorialIntelligencePanel({
             type="button"
             onClick={() => void onApproveCut()}
             disabled={approvingCut || filmCut.status === 'approved'}
+            aria-busy={approvingCut}
             className="rounded border border-amber-400/40 px-2 py-1 font-bold text-amber-200 disabled:opacity-50"
           >
             {approvingCut ? 'Approving…' : filmCut.status === 'approved' ? 'Approved' : 'Approve Cut'}
@@ -232,13 +234,13 @@ export default function EditorialIntelligencePanel({
               <div key={diagnostic.diagnostic_id} className="rounded-lg border border-white/10 bg-black/20 p-2">
                 <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200">Pacing</div>
                 <p className="mt-1 text-xs text-zinc-200">{diagnostic.read}</p>
-                {diagnostic.recommendation ? <p className="mt-1 text-[11px] text-zinc-400">{diagnostic.recommendation}</p> : null}
+                {diagnostic.recommendation ? <p className="mt-1 text-xs text-zinc-400">{diagnostic.recommendation}</p> : null}
               </div>
             ))}
             <div className="rounded-lg border border-white/10 bg-black/20 p-2">
               <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-fuchsia-200">Emotional Flow</div>
               <p className="mt-1 text-xs text-zinc-200">{analysis.emotional_flow.read}</p>
-              <p className="mt-1 text-[11px] text-zinc-400">{analysis.emotional_flow.emotional_residue}</p>
+              <p className="mt-1 text-xs text-zinc-400">{analysis.emotional_flow.emotional_residue}</p>
             </div>
           </div>
 
@@ -247,7 +249,7 @@ export default function EditorialIntelligencePanel({
               <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">Transitions</div>
               <div className="mt-2 space-y-2">
                 {analysis.transition_advisories.slice(0, 3).map((advisory) => (
-                  <div key={advisory.transition_id} className="rounded border border-white/10 bg-white/5 p-2 text-[11px] text-zinc-300">
+                  <div key={advisory.transition_id} className="rounded border border-white/10 bg-white/5 p-2 text-xs text-zinc-300">
                     <div className="font-semibold text-zinc-100">
                       {advisory.from_scene_id || 'scene'} to {advisory.to_scene_id || 'scene'}: {advisory.recommended_transition_type.replace(/_/g, ' ')}
                     </div>
@@ -273,7 +275,7 @@ export default function EditorialIntelligencePanel({
               {analysis.edit_decisions.slice(0, 4).map((decision) => {
                 const selectable = stitchableDecisionIds.includes(decision.decision_id) || decision.decision_type === 'reorder_scene'
                 return (
-                  <label key={decision.decision_id} className="flex gap-2 rounded border border-white/10 bg-white/5 p-2 text-[11px] text-zinc-300">
+                  <label key={decision.decision_id} className="flex gap-2 rounded border border-white/10 bg-white/5 p-2 text-xs text-zinc-300">
                     <input
                       type="checkbox"
                       checked={selected.includes(decision.decision_id)}
@@ -300,6 +302,7 @@ export default function EditorialIntelligencePanel({
               type="button"
               onClick={onApplyToNextStitch}
               disabled={!canApplyToStitch || applying}
+              aria-busy={applying}
               className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-100 transition-all hover:bg-emerald-500/20 disabled:opacity-50"
             >
               {applying ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
@@ -309,6 +312,7 @@ export default function EditorialIntelligencePanel({
               type="button"
               onClick={() => void onApplyCutRevision()}
               disabled={!canApplyCutRevision || applying}
+              aria-busy={applying}
               className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100 transition-all hover:bg-amber-500/20 disabled:opacity-50"
             >
               {applying ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />}

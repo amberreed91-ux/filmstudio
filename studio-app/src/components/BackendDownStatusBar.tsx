@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { WifiOff, RefreshCw } from 'lucide-react'
 import { STUDIO_API_BASE } from '../lib/studioApi'
@@ -10,9 +10,11 @@ export default function BackendDownStatusBar() {
   const [checking, setChecking] = useState(false)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const mountedRef = useRef(true)
+  const checkingRef = useRef(false)
 
-  const checkHealth = async () => {
-    if (checking) return
+  const checkHealth = useCallback(async () => {
+    if (checkingRef.current) return
+    checkingRef.current = true
     setChecking(true)
     try {
       const res = await fetch(`${STUDIO_API_BASE}/health`, {
@@ -32,11 +34,12 @@ export default function BackendDownStatusBar() {
         setOffline(true)
       }
     } finally {
+      checkingRef.current = false
       if (mountedRef.current) {
         setChecking(false)
       }
     }
-  }
+  }, [])
 
   useEffect(() => {
     mountedRef.current = true
@@ -52,7 +55,7 @@ export default function BackendDownStatusBar() {
         clearInterval(pollingRef.current)
       }
     }
-  }, [])
+  }, [checkHealth])
 
   const handleRefresh = () => {
     checkHealth()

@@ -81,13 +81,14 @@ import { installJsdomPolyfills } from '../test/jsdomPolyfills'
 
 installJsdomPolyfills()
 
-// MemoryRouter keeps history in memory (window.location never changes).
-const currentLocation: { search: string } = { search: '' }
+// MemoryRouter keeps history in memory (window.location never changes), so
+// render the router's search into a probe node and read it from the DOM.
 function LocationProbe() {
   const location = useLocation()
-  currentLocation.search = location.search
-  return null
+  return createElement('div', { 'data-testid': 'location-probe' }, location.search)
 }
+
+const latestSearch = () => screen.getByTestId('location-probe').textContent ?? ''
 
 const SCENES = [
   { scene_id: 'scene_001', scene_name: 'Opening', heading: 'INT. ROOM', description: 'Maya walks home.', location: 'Room', time_of_day: 'NIGHT', emotional_tone: 'uneasy', characters: [], notes: '', text: 'INT. ROOM — NIGHT. Maya walks home.', created_at: '', updated_at: '', status: '' },
@@ -201,7 +202,7 @@ describe('Previs: arriving via APPLY TO SHOT (?codirector_note=…)', () => {
     await waitFor(() => expect(prompt.value).toMatch(/Co-Director: Hold the wide a beat longer/))
 
     // THE REGRESSION: the param must be consumed, not left in the URL.
-    await waitFor(() => expect(currentLocation.search).not.toContain('codirector_note'))
+    await waitFor(() => expect(latestSearch()).not.toContain('codirector_note'))
 
     // And a later scene switch works (the original bug: nothing happened).
     await selectScene(user, 'scene_002')

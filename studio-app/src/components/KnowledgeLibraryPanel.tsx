@@ -172,6 +172,7 @@ export default function KnowledgeLibraryPanel({ projectId }: KnowledgeLibraryPan
           type="button"
           onClick={() => void refresh()}
           disabled={isBusy}
+          aria-busy={busy === 'refresh'}
           className="rounded-lg border border-white/10 p-2 transition-all hover:bg-white/10 disabled:opacity-50"
           title="Refresh knowledge library"
         >
@@ -216,6 +217,7 @@ export default function KnowledgeLibraryPanel({ projectId }: KnowledgeLibraryPan
           type="button"
           onClick={() => void handleRegisterBible()}
           disabled={isBusy}
+          aria-busy={busy === 'register'}
           className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50"
           style={{ background: 'rgba(255,209,101,0.15)', color: 'var(--color-primary)', border: '1px solid rgba(255,209,101,0.3)' }}
         >
@@ -261,6 +263,7 @@ export default function KnowledgeLibraryPanel({ projectId }: KnowledgeLibraryPan
           type="button"
           onClick={() => void handleRebuild()}
           disabled={isBusy}
+          aria-busy={busy === 'rebuild'}
           className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-all hover:bg-white/10 disabled:opacity-50"
           style={{ color: 'var(--color-on-surface)' }}
         >
@@ -293,6 +296,7 @@ export default function KnowledgeLibraryPanel({ projectId }: KnowledgeLibraryPan
             type="button"
             onClick={() => void handleContext()}
             disabled={isBusy}
+            aria-busy={busy === 'context'}
             className="rounded-lg border border-white/10 px-3 py-2 transition-all hover:bg-white/10 disabled:opacity-50"
             title="Build context pack"
           >
@@ -343,7 +347,7 @@ export default function KnowledgeLibraryPanel({ projectId }: KnowledgeLibraryPan
                 {sourceLabel(atom.authority_level)}
               </span>
             </div>
-            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>{atom.summary || atom.canonical_text}</p>
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--color-on-surface)' }}>{atom.summary || atom.canonical_text}</p>
           </div>
         ))}
       </div></div></details>
@@ -355,7 +359,7 @@ export default function KnowledgeLibraryPanel({ projectId }: KnowledgeLibraryPan
           </div>
           <div className="space-y-1.5">
             {contextPack.atoms.slice(0, 5).map((atom) => (
-              <p key={atom.atom_id} className="text-[11px]" style={{ color: 'var(--color-on-surface)' }}>
+              <p key={atom.atom_id} className="text-xs" style={{ color: 'var(--color-on-surface)' }}>
                 {atom.summary || atom.canonical_text}
               </p>
             ))}

@@ -32,32 +32,28 @@ export default function CoDirectorCollaborationPanel({
   room: 'director' | 'screening' | 'writer'
 }) {
   const root = asRecord(workflow)
-  const collaboration = asRecord(root?.collaboration)
   const mode = normalizeMode(root?.mode || root?.current_mode)
 
-  const disagreementRows = asStringList(collaboration?.creative_disagreements)
-  const alternateRows = asStringList(collaboration?.alternate_scene_suggestions)
-  const visualRows = asStringList(collaboration?.visual_experiments)
-  const thematicRows = asStringList(collaboration?.thematic_proposals)
-
-  const hasLive = disagreementRows.length > 0 || alternateRows.length > 0 || visualRows.length > 0 || thematicRows.length > 0
-
+  // Parse the collaboration payload once per workflow object. Deriving the
+  // lists inside the memo keeps the memo dependency stable — parsing them
+  // outside created fresh arrays every render, which defeated the memo.
   const display = useMemo(() => {
-    if (hasLive) {
+    const collaboration = asRecord(asRecord(workflow)?.collaboration)
+    const disagreements = asStringList(collaboration?.creative_disagreements)
+    const alternates = asStringList(collaboration?.alternate_scene_suggestions)
+    const visuals = asStringList(collaboration?.visual_experiments)
+    const themes = asStringList(collaboration?.thematic_proposals)
+    const hasLive = disagreements.length > 0 || alternates.length > 0 || visuals.length > 0 || themes.length > 0
+    if (!hasLive) {
       return {
-        disagreements: disagreementRows,
-        alternates: alternateRows,
-        visuals: visualRows,
-        themes: thematicRows,
+        disagreements: [],
+        alternates: [],
+        visuals: [],
+        themes: [],
       }
     }
-    return {
-      disagreements: [],
-      alternates: [],
-      visuals: [],
-      themes: [],
-    }
-  }, [alternateRows, disagreementRows, hasLive, thematicRows, visualRows])
+    return { disagreements, alternates, visuals, themes }
+  }, [workflow])
 
   return (
     <section className="co-director-collab-panel" data-testid={`co-director-collab-${room}`}>

@@ -2,6 +2,7 @@ import { Component, Suspense, useMemo, useRef, useState, type ReactNode } from '
 import { useFrame } from '@react-three/fiber'
 import { Html, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
+import { SPATIAL_PORTALS, type SpatialPortal } from '../lib/spatialPortals'
 
 /** Dedicated 3D room mesh — drop a Blender export at this path to replace procedural geometry. */
 export const STUDIO_LOBBY_MODEL_URL = '/models/studio_lobby.glb'
@@ -25,45 +26,13 @@ export const PORTAL_GLOW_VIOLET = '#6D28D9'
  * their own Canvas, keeping camera controls and overlays in one place.
  */
 
-export interface SpatialPortal {
-  key: string
-  label: string
-  sub: string
-  to: string
-  color: string
-  angle: number
-  position: [number, number, number]
-}
-
+/** Portal ring radius — matches the bay positions in lib/spatialPortals. */
 const PORTAL_RADIUS = 6.4
-
-function portalPosition(angle: number): [number, number, number] {
-  return [Math.cos(angle) * PORTAL_RADIUS, 0, Math.sin(angle) * PORTAL_RADIUS]
-}
 
 function portalRotation(position: [number, number, number]): number {
   // Face the bay toward the stage center.
   return Math.atan2(-position[0], -position[2])
 }
-
-// 12 tactical room bays. Angles mirror the standalone ANIMATION_8 staging;
-// `to` values mirror real APP_ROUTES paths in studio-app/src/routes.tsx so
-// selection navigates into existing 2D rooms. Backend routes + studio.db
-// isolation are untouched — these are navigation targets only.
-export const SPATIAL_PORTALS: SpatialPortal[] = [
-  { key: 'atrium', label: 'The Atrium', sub: 'glass entry pavilion', to: '/studio', color: '#e0e7ff', angle: -Math.PI * 0.64, position: portalPosition(-Math.PI * 0.64) },
-  { key: 'gate', label: 'Gate Intake', sub: 'holographic orb vessel', to: '/studio/gate', color: '#38bdf8', angle: -Math.PI * 0.45, position: portalPosition(-Math.PI * 0.45) },
-  { key: 'page', label: 'Page', sub: "screenwriter's office", to: '/studio/page', color: '#f59e0b', angle: -Math.PI * 0.3, position: portalPosition(-Math.PI * 0.3) },
-  { key: 'board', label: 'Board', sub: 'narrative shot wall', to: '/studio/board', color: '#ec4899', angle: -Math.PI * 0.15, position: portalPosition(-Math.PI * 0.15) },
-  { key: 'previs', label: 'Previs Bay', sub: 'virtual production stage', to: '/studio/previs', color: '#a855f7', angle: 0.0, position: portalPosition(0.0) },
-  { key: 'screening', label: 'Screening', sub: 'cinema 4K DCP review', to: '/studio/screening-room', color: '#ffffff', angle: Math.PI * 0.16, position: portalPosition(Math.PI * 0.16) },
-  { key: 'universe', label: 'Universe', sub: 'spatial constellation graph', to: '/studio/universe-graph', color: '#818cf8', angle: Math.PI * 0.32, position: portalPosition(Math.PI * 0.32) },
-  { key: 'vault', label: 'The Vault', sub: 'spatial helix cold store', to: '/studio/archive', color: '#38bdf8', angle: Math.PI * 0.48, position: portalPosition(Math.PI * 0.48) },
-  { key: 'production', label: 'Production Desk', sub: 'command telemetry desk', to: '/studio/production-desk', color: '#2dd4bf', angle: Math.PI * 0.64, position: portalPosition(Math.PI * 0.64) },
-  { key: 'integrity', label: 'Integrity Engine', sub: 'laser quarantine chamber', to: '/studio/integrity', color: '#10b981', angle: Math.PI * 0.82, position: portalPosition(Math.PI * 0.82) },
-  { key: 'reference', label: 'Reference Atelier', sub: 'visual dev mood boards', to: '/studio/reference-space', color: '#f43f5e', angle: Math.PI * 0.98, position: portalPosition(Math.PI * 0.98) },
-  { key: 'project', label: 'Project Room', sub: 'focus enclave workstation', to: '/studio/slate', color: '#8b5cf6', angle: -Math.PI * 0.82, position: portalPosition(-Math.PI * 0.82) },
-]
 
 function StudioLighting({ centerRef }: { centerRef: React.RefObject<THREE.PointLight | null> }) {
   return (
@@ -95,16 +64,24 @@ function StudioLighting({ centerRef }: { centerRef: React.RefObject<THREE.PointL
   )
 }
 
+/** Stable [0, 1) pseudo-random value — pure, so render-time scatter is deterministic. */
+function seededUnit(index: number, salt: number): number {
+  const x = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453
+  return x - Math.floor(x)
+}
+
 /** Volumetric-feel dust motes drifting through the violet key light. */
 function AmbientDust({ count = AMBIENT_DUST_COUNT }: { count?: number }) {
   const group = useRef<THREE.Points>(null)
   const positions = useMemo(() => {
     const points = new Float32Array(count * 3)
     for (let index = 0; index < count; index += 1) {
-      const radius = 2 + Math.random() * 9
-      const angle = Math.random() * Math.PI * 2
+      // Deterministic scatter: render must stay pure (no Math.random), so the
+      // dust field is generated from a stable per-index hash instead.
+      const radius = 2 + seededUnit(index, 1) * 9
+      const angle = seededUnit(index, 2) * Math.PI * 2
       points[index * 3] = Math.cos(angle) * radius
-      points[index * 3 + 1] = 0.2 + Math.random() * 6
+      points[index * 3 + 1] = 0.2 + seededUnit(index, 3) * 6
       points[index * 3 + 2] = Math.sin(angle) * radius
     }
     return points
@@ -316,22 +293,23 @@ function FFMonogramPedestal() {
 
 /** Celestial constellation node graph (universe bay) — hooks live at this
  *  component's top level so RoomProp's switch never calls hooks conditionally. */
+const UNIVERSE_NODES: ReadonlyArray<[number, number, number]> = [
+  [-0.55, 0.55, -0.35], [-0.25, 0.95, 0.25], [0.05, 0.6, -0.5],
+  [0.5, 1.05, 0.12], [0.38, 0.55, 0.42], [-0.42, 1.0, -0.18],
+]
+
 function UniverseConstellation() {
-  const nodes: Array<[number, number, number]> = [
-    [-0.55, 0.55, -0.35], [-0.25, 0.95, 0.25], [0.05, 0.6, -0.5],
-    [0.5, 1.05, 0.12], [0.38, 0.55, 0.42], [-0.42, 1.0, -0.18],
-  ]
   const linePositions = useMemo(() => {
     const pairs = [[0, 1], [1, 3], [3, 4], [4, 2], [2, 0], [1, 5], [5, 3]]
     const flat: number[] = []
     pairs.forEach(([a, b]) => {
-      flat.push(...nodes[a], ...nodes[b])
+      flat.push(...UNIVERSE_NODES[a], ...UNIVERSE_NODES[b])
     })
     return new Float32Array(flat)
   }, [])
   return (
     <group>
-      {nodes.map((p, i) => (
+      {UNIVERSE_NODES.map((p, i) => (
         <mesh key={i} position={p}>
           <sphereGeometry args={[0.085, 12, 12]} />
           <meshBasicMaterial color={i % 2 === 0 ? '#818cf8' : '#38bdf8'} />
@@ -826,7 +804,7 @@ function LaserConduits() {
       {lineGeoms.map((geom, i) => (
         // DEFERRED: SVG <line> typing; resolve in 3D studio redesign (post-roadmap)
         // NOTE: @ts-expect-error masks ALL errors on the next line; recheck line 827 when the 3D redesign lands.
-        // @ts-expect-error
+        // @ts-expect-error -- R3F's <line> conflicts with the DOM SVG line element's JSX typings; the three.js geometry prop is valid at runtime.
         <line key={SPATIAL_PORTALS[i].key} geometry={geom}>
           <lineBasicMaterial color="#a855f7" transparent opacity={0.7} />
         </line>

@@ -88,7 +88,7 @@
   body {
     background-color: #040810;
     color: #e8edf5;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Geist', system-ui, sans-serif;
   }
 
   /* Utility classes */
@@ -178,8 +178,14 @@
 
 /* Legacy variables - will be gradually migrated to design system */
 :root {
-  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Font stacks must name fonts the app actually loads (see index.html):
+     Space Grotesk (display/headings), Geist (body/UI), JetBrains Mono
+     (telemetry). 'Inter' was never loaded, so every glyph silently fell
+     back to system-ui while Geist and Space Grotesk were downloaded and
+     left unused. This block also overrides the @theme --font-body value,
+     so it must stay in sync with it. */
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-body: 'Geist', system-ui, -apple-system, sans-serif;
   --brand-cyan-100: #d5f6f3;
   --brand-cyan-300: #7ad6d1;
   --brand-amber-200: #efcc93;
@@ -219,6 +225,30 @@
   --accent-orange: #b88762;
   --accent-amber: #d6a95c;
   --accent-red-soft: #d08383;
+  /* ── Type scale ─────────────────────────────────────────────────────────
+     10px  micro-label  uppercase + tracked labels, chips, telemetry codes
+     11px  meta        captions, timestamps, secondary metadata
+     12px  body        descriptions, advisories, button labels (= text-xs)
+     14px+ emphasis and headings
+
+     RULE: never render a sentence below 12px. Sizes under 11px are reserved
+     for uppercase micro-labels and monospace telemetry codes — never prose.
+     Enforced by `npm run check:type-scale` (studio-app/check_type_scale.cjs). */
+  --type-micro-label: 10px;
+  --type-meta: 11px;
+  --type-body: 12px;
+  /* ── Semantic tokens ───────────────────────────────────────────────────
+     These were referenced by live components but were only defined in a
+     legacy stylesheet that was never imported. At runtime they resolved to
+     nothing, which silently dropped borders, backgrounds and text colors
+     (e.g. the Dashboard "Open Workspace" CTA rendered with a transparent
+     background and near-black text). Defined here so every `var(--x)`
+     reference resolves. */
+  --accent: #ffd165;        /* primary action — pale gold; pairs with --bg-primary text */
+  --success: #10b981;       /* passed / verified */
+  --warning: #f59e0b;       /* attention / caution — distinct from the CTA gold */
+  --accent-blue: #5b8dd9;   /* informational severity */
+  --color-tertiary: #34d399;
   --panel-shadow: 0 20px 44px rgba(0, 0, 0, 0.42);
   --studio-space-xs: 6px;
   --studio-space-sm: 10px;
@@ -244,7 +274,7 @@ html {
 body {
   background: var(--bg-void);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Geist', system-ui, sans-serif;
   font-size: 13px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -390,10 +420,17 @@ input, textarea, select {
   transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   opacity: 0.95;
   transform: translateY(-1px);
   box-shadow: 0 0 24px rgba(214, 169, 92, 0.24);
+}
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-ghost {
@@ -409,10 +446,18 @@ input, textarea, select {
   transition: all 0.2s ease;
 }
 
-.btn-ghost:hover {
+.btn-ghost:hover:not(:disabled) {
   border-color: rgba(214, 169, 92, 0.48);
   background: rgba(214, 169, 92, 0.08);
   color: var(--text-primary);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--text-secondary);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 h1, h2, h3, h4 {

@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from '@react-three/fiber'
-import { useRef, useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { PerspectiveCamera } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -9,19 +9,31 @@ import * as THREE from 'three'
  * silhouette bookshelves in the background, and drifting dust motes.
  */
 
+/** Stable [0, 1) pseudo-random value — pure, so the dust scatter is deterministic. */
+function seededUnit(index: number, salt: number): number {
+  const x = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453
+  return x - Math.floor(x)
+}
+
+// Decorative dust field is generated once at module scope so render stays pure
+// (no Math.random during render) and the layout is identical between mounts.
+const DUST_COUNT = 25
+const DUST_POSITIONS = (() => {
+  const pos = new Float32Array(DUST_COUNT * 3)
+  for (let i = 0; i < DUST_COUNT; i++) {
+    pos[i * 3]     = (seededUnit(i, 1) - 0.5) * 8
+    pos[i * 3 + 1] = seededUnit(i, 2) * 5
+    pos[i * 3 + 2] = (seededUnit(i, 3) - 0.5) * 4 - 2
+  }
+  return pos
+})()
+
 function DustMotes() {
   const ref = useRef<THREE.Points>(null)
-  const count = 25
-
-  const positions = useMemo(() => {
-    const pos = new Float32Array(count * 3)
-    for (let i = 0; i < count; i++) {
-      pos[i * 3]     = (Math.random() - 0.5) * 8
-      pos[i * 3 + 1] = Math.random() * 5
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 4 - 2
-    }
-    return pos
-  }, [])
+  const count = DUST_COUNT
+  // Copy the deterministic layout so the drift animation never mutates the
+  // shared module constant and every mount starts from the same field.
+  const positions = useMemo(() => DUST_POSITIONS.slice(), [])
 
   useFrame(() => {
     if (!ref.current) return

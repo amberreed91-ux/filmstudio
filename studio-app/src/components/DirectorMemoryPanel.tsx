@@ -237,7 +237,7 @@ export default function DirectorMemoryPanel({ projectId }: DirectorMemoryPanelPr
 
       <div className="mt-3">
         {loading ? (
-          <div className="text-[11px] text-zinc-400">Loading memory…</div>
+          <div className="text-xs text-zinc-400">Loading memory…</div>
         ) : entries.length === 0 ? (
           <div className="rounded border border-white/10 bg-black/25 px-3 py-3 text-[11px] text-zinc-400">
             No {TAB_LABELS[activeTab].toLowerCase()} captured yet. Add one below — entries persist
@@ -255,7 +255,7 @@ export default function DirectorMemoryPanel({ projectId }: DirectorMemoryPanelPr
                     <div className="truncate text-xs font-semibold text-zinc-100">
                       {entryHeadline(entry)}
                     </div>
-                    <div className="mt-1 text-[11px] text-zinc-400">{entryDetail(entry)}</div>
+                    <div className="mt-1 text-xs text-zinc-400">{entryDetail(entry)}</div>
                     <div className="mt-1 text-[10px] uppercase tracking-[0.1em] text-zinc-500">
                       defined {new Date(entry.saved_at).toLocaleDateString()}
                     </div>
@@ -264,6 +264,7 @@ export default function DirectorMemoryPanel({ projectId }: DirectorMemoryPanelPr
                     type="button"
                     onClick={() => void handleDelete(entry.entry_id)}
                     disabled={submitting}
+                    aria-busy={submitting}
                     className="rounded border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-300 hover:bg-white/10 disabled:opacity-50"
                   >
                     Forget

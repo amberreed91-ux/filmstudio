@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { GateStage } from '../lib/pipelineGateFlow'
 import { gateStageStateLabel } from '../lib/pipelineGateFlow'
+import { hashLogEntry } from '../lib/evidenceLog'
 
 /**
  * Evidence audit drawer for the Production Integrity Engine.
@@ -16,16 +17,6 @@ const DRAWER_TONE: Record<GateStage['state'], string> = {
   fail_closed: 'border-rose-400/45 bg-rose-400/5 text-rose-200',
   not_established: 'border-white/15 bg-white/[0.02] text-zinc-400',
   unavailable: 'border-white/15 bg-white/[0.02] text-zinc-500',
-}
-
-/** Deterministic, dependency-free hash for display-only log identity. */
-export function hashLogEntry(id: string, detail: string): string {
-  const input = `${id}::${detail}`
-  let hash = 5381
-  for (let i = 0; i < input.length; i += 1) {
-    hash = ((hash << 5) + hash + input.charCodeAt(i)) >>> 0
-  }
-  return `sha-${hash.toString(16).padStart(8, '0')}`
 }
 
 function isNormalizationLog(label: string, detail: string): boolean {
@@ -124,7 +115,7 @@ export default function EvidenceAuditDrawer({ stage, onClose, projectId = '' }: 
           ) : null}
         </div>
       ) : (
-        <p className="mt-2 text-[11px] text-zinc-500">No fail-closed log is recorded for this stage.</p>
+        <p className="mt-2 text-xs text-zinc-500">No fail-closed log is recorded for this stage.</p>
       )}
 
       {normalizationLogs.length > 0 ? (

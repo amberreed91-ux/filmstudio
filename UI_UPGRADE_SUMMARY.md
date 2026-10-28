@@ -1,6 +1,14 @@
 # Studio App UI/UX Upgrade - Implementation Summary
 
-## Status: Foundation Complete ✅
+> **LEGACY — historical record. Do not implement from this file.**
+> This summary describes the first purple design-system attempt. Its stylesheet
+> (`studio-app/src/styles/design-system.css`) was never imported and has been
+> deleted, and the purple accent is no longer the product accent. See
+> [UI_UPGRADE_PLAN.md](UI_UPGRADE_PLAN.md) for the live gold system, typography
+> floors, async-button contract, and CI gates. Do not recreate the removed
+> stylesheet or palette.
+
+## Status: Foundation Complete ✅ (superseded)
 
 The comprehensive UI/UX upgrade foundation has been successfully implemented. All functionality preserved, all tests passing.
 
@@ -299,17 +307,16 @@ The foundation is complete. The design system is ready to be applied component-b
 
 ## Files Modified
 
-1. `/studio-app/src/styles/design-system.css` - **Created**
-2. `/studio-app/src/index.css` - **Updated** (imported design system, updated body styles)
+1. `/studio-app/src/styles/design-system.css` - **Removed** (was created but never imported; superseded by `studio-pro-design-system.css`)
+2. `/studio-app/src/index.css` - **Updated** (live tokens and imports)
 3. `/UI_UPGRADE_PLAN.md` - **Created** (implementation roadmap)
 4. `/UI_UPGRADE_SUMMARY.md` - **Created** (this file)
 
 ## Verification
 
-### Design System Loaded
-✅ CSS file created and imported
-✅ Variables available globally
-✅ Classes ready to use
+### Design System Loaded (historical claim — no longer true)
+❌ `design-system.css` was never imported and has been removed
+✅ Variables now live in `src/index.css` and resolve at runtime
 
 ### No Regressions
 ✅ All 525 tests passing

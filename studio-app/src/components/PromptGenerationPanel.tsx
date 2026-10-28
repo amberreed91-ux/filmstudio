@@ -78,7 +78,7 @@ export function PromptGenerationPanel({ projectId }: PromptGenerationPanelProps)
         <p className="text-red-400 text-sm">
           Failed to generate prompts. {error instanceof Error ? error.message : 'Unknown error'}
         </p>
-        <button
+        <button type="button"
           onClick={() => refetch()}
           className="mt-2 text-xs text-red-300 hover:text-red-200 underline"
         >
@@ -204,13 +204,13 @@ export function PromptGenerationPanel({ projectId }: PromptGenerationPanelProps)
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-700">
                 {isEditing ? (
                   <>
-                    <button
+                    <button type="button"
                       onClick={() => handleCancel(prompt.scene_id)}
                       className="px-3 py-1 text-xs text-zinc-400 hover:text-zinc-200"
                     >
                       Cancel
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => handleSave(prompt.scene_id)}
                       className="px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-500"
                     >
@@ -219,13 +219,13 @@ export function PromptGenerationPanel({ projectId }: PromptGenerationPanelProps)
                   </>
                 ) : (
                   <>
-                    <button
+                    <button type="button"
                       onClick={() => handleEdit(prompt.scene_id, prompt.enhanced_prompt)}
                       className="px-3 py-1 text-xs text-zinc-400 hover:text-zinc-200"
                     >
                       Edit Prompt
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(prompt.enhanced_prompt);
                       }}
@@ -243,7 +243,7 @@ export function PromptGenerationPanel({ projectId }: PromptGenerationPanelProps)
 
       {/* Regenerate Button */}
       <div className="flex justify-center pt-4">
-        <button
+        <button type="button"
           onClick={() => refetch()}
           className="px-4 py-2 text-sm rounded bg-zinc-700 text-zinc-200 hover:bg-zinc-600"
         >

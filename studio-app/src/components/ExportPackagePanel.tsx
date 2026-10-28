@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { studioApi } from "../lib/studioApi";
 import type { ExportPackage, ExportPackageSummary } from "../lib/studioApi";
 import { FestivalCheckSection } from "./FestivalCheckSection";
@@ -13,6 +14,7 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
   const [pastPackages, setPastPackages] = useState<ExportPackageSummary[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingPackageId, setLoadingPackageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   
@@ -21,18 +23,18 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
   const [includeRenderLineage, setIncludeRenderLineage] = useState(true);
   const [includeDirectorNotes, setIncludeDirectorNotes] = useState(true);
 
-  useEffect(() => {
-    loadPastPackages();
-  }, [projectId]);
-
-  const loadPastPackages = async () => {
+  const loadPastPackages = useCallback(async () => {
     try {
       const result = await studioApi.listExportPackages(projectId, 5);
       setPastPackages(result.packages || []);
     } catch (err) {
       console.error("Failed to load past packages:", err);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    loadPastPackages();
+  }, [loadPastPackages]);
 
   const buildPackage = async () => {
     setLoading(true);
@@ -56,6 +58,7 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
 
   const loadPackage = async (packageId: string) => {
     setLoading(true);
+    setLoadingPackageId(packageId);
     setError(null);
     try {
       const pkg = await studioApi.getExportPackage(projectId, packageId);
@@ -65,6 +68,7 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
       setError(err instanceof Error ? err.message : "Failed to load package");
     } finally {
       setLoading(false);
+      setLoadingPackageId(null);
     }
   };
 
@@ -104,7 +108,7 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
               Complete film package with manifest, continuity report, and render lineage
             </p>
           </div>
-          <button
+          <button type="button"
             onClick={() => setShowOptions(!showOptions)}
             disabled={loading}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
@@ -161,14 +165,16 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
+                <button type="button"
                   onClick={buildPackage}
                   disabled={loading}
+                  aria-busy={loading}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
                 >
-                  Build Package
+                  {loading ? <Loader2 size={14} className="mr-1.5 inline animate-spin" /> : null}
+                  {loading ? "Building..." : "Build Package"}
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setShowOptions(false)}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm font-medium transition-colors"
                 >
@@ -242,7 +248,7 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
               <div className="px-6 py-4 space-y-3">
                 <h3 className="text-sm font-semibold text-slate-300 mb-3">Download Options</h3>
                 
-                <button
+                <button type="button"
                   onClick={copyManifestJson}
                   className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm font-medium transition-colors text-left"
                 >
@@ -250,7 +256,7 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
                 </button>
 
                 {currentPackage.continuity_report && (
-                  <button
+                  <button type="button"
                     onClick={downloadContinuityReport}
                     className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm font-medium transition-colors text-left"
                   >
@@ -259,7 +265,7 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
                 )}
 
                 {currentPackage.stitched_film_url && (
-                  <button
+                  <button type="button"
                     onClick={openFilm}
                     className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors text-left"
                   >
@@ -322,9 +328,11 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
               <h3 className="text-sm font-semibold text-slate-300 mb-3">Past Exports</h3>
               <div className="space-y-2">
                 {pastPackages.map((pkg) => (
-                  <button
+                  <button type="button"
                     key={pkg.package_id}
                     onClick={() => loadPackage(pkg.package_id)}
+                    disabled={loading || loadingPackageId !== null}
+                    aria-busy={loadingPackageId === pkg.package_id}
                     className={`w-full text-left px-4 py-3 rounded-md border transition-colors ${
                       selectedPackageId === pkg.package_id
                         ? "bg-slate-700 border-slate-600"
@@ -339,6 +347,11 @@ export function ExportPackagePanel({ projectId }: ExportPackagePanelProps) {
                         <div className="text-xs text-slate-500 mt-1">
                           {new Date(pkg.created_at).toLocaleString()}
                         </div>
+                        {loadingPackageId === pkg.package_id ? (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
+                            <Loader2 size={11} className="animate-spin" /> Loading package…
+                          </div>
+                        ) : null}
                       </div>
                       <div className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400">
                         {pkg.status}

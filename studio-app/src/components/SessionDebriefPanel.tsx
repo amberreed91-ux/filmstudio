@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { studioApi } from "../lib/studioApi";
 import type { SessionDebrief, SessionDebriefSummary } from "../lib/studioApi";
 
@@ -11,21 +11,22 @@ export function SessionDebriefPanel({ projectId }: SessionDebriefPanelProps) {
   const [pastDebriefs, setPastDebriefs] = useState<SessionDebriefSummary[]>([]);
   const [selectedDebriefId, setSelectedDebriefId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingDebriefId, setLoadingDebriefId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
-  useEffect(() => {
-    loadPastDebriefs();
-  }, [projectId]);
-
-  const loadPastDebriefs = async () => {
+  const loadPastDebriefs = useCallback(async () => {
     try {
       const result = await studioApi.listSessionDebriefs(projectId, 5);
       setPastDebriefs(result.debriefs || []);
     } catch (err) {
       console.error("Failed to load past debriefs:", err);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    loadPastDebriefs();
+  }, [loadPastDebriefs]);
 
   const generateNewDebrief = async () => {
     setLoading(true);
@@ -51,7 +52,7 @@ export function SessionDebriefPanel({ projectId }: SessionDebriefPanelProps) {
   };
 
   const loadDebrief = async (debriefId: string) => {
-    setLoading(true);
+    setLoadingDebriefId(debriefId);
     setError(null);
     try {
       const debrief = await studioApi.getSessionDebrief(projectId, debriefId);
@@ -60,7 +61,7 @@ export function SessionDebriefPanel({ projectId }: SessionDebriefPanelProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load debrief");
     } finally {
-      setLoading(false);
+      setLoadingDebriefId(null);
     }
   };
 
@@ -108,9 +109,10 @@ ${currentDebrief.advisory}
               One-page summary of what was decided, what changed, and what's next
             </p>
           </div>
-          <button
+          <button type="button"
             onClick={generateNewDebrief}
             disabled={loading}
+            aria-busy={loading}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
           >
             {loading ? "Generating..." : "Generate Debrief"}
@@ -141,7 +143,7 @@ ${currentDebrief.advisory}
                     Generated {new Date(currentDebrief.generated_at).toLocaleString()}
                   </div>
                 </div>
-                <button
+                <button type="button"
                   onClick={exportAsText}
                   className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-medium transition-colors"
                 >
@@ -272,10 +274,12 @@ ${currentDebrief.advisory}
               </h3>
               <div className="space-y-2">
                 {pastDebriefs.map((debrief) => (
-                  <button
+                  <button type="button"
                     key={debrief.id}
                     onClick={() => loadDebrief(debrief.id)}
-                    className={`w-full text-left px-4 py-3 rounded-md border transition-colors ${
+                    disabled={loadingDebriefId === debrief.id}
+                    aria-busy={loadingDebriefId === debrief.id}
+                    className={`w-full text-left px-4 py-3 rounded-md border transition-colors disabled:opacity-50 ${
                       selectedDebriefId === debrief.id
                         ? "bg-slate-700 border-slate-600"
                         : "bg-slate-800 border-slate-700 hover:bg-slate-750"

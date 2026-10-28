@@ -6,14 +6,13 @@ import ProjectContextBar from '../components/ProjectContextBar'
 import ProjectGuard from '../components/ProjectGuard'
 import { RoomBackdrop } from '../components/RoomCinematicChrome'
 import { getProceduralRoomStyle } from '../lib/proceduralBackdrops'
-import ShotGateChips, { type ShotGateInput } from '../components/status/ShotGateChips'
+import ShotGateChips from '../components/status/ShotGateChips'
 import NextActionLine from '../components/status/NextActionLine'
 import VerdictStrip, { type VerdictStage } from '../components/status/VerdictStrip'
 import TechDetailsDrawer, { BlockerList } from '../components/status/TechDetailsDrawer'
 import { useProjectRouteContext } from '../hooks/useProjectRouteContext'
 import { useStudio } from '../context/StudioContext'
 import {
-  fetchJson,
   getAssemblyStatus,
   getCurrentFilmCut,
   getScreeningManifest,
@@ -26,116 +25,20 @@ import {
   type DeskGateScene,
   type DeskGateShot,
   type DeskGateSummary,
-} from './ProductionDesk'
+} from '../lib/deskGate'
+import {
+  blockedGates,
+  engineGateNext,
+  gatesToChipInput,
+  getShotIntegrityGates,
+  isShotReady,
+  type ShotIntegrityGates,
+} from '../lib/productionIntegrity'
 
 // ── Per-shot integrity gates (one GET per shot, read-only) ──────────────────
 // Shape mirrors GET /api/f51/studio/projects/{id}/shots/{shotId}/integrity-gates.
 // The Engine only reads these payloads; it never prepares, submits, confirms,
 // prices, or cancels anything through them.
-
-export type IntegrityGateState = 'pass' | 'blocked' | 'cant_check' | 'not_yet'
-
-export type IntegrityGate = {
-  state: IntegrityGateState
-  label: string
-  detail: string
-}
-
-export type ShotIntegrityGates = {
-  project_id: string
-  shot_id: string
-  scene_id: string
-  gates: Record<string, IntegrityGate>
-  spend: { estimated_credits: number | null; cost_status?: string | null }
-  duplicate: { runway_task_id: string | null }
-  binding_digest: string | null
-  latest_job_id: string | null
-  latest_job_status: string | null
-  next_action: string
-  blockers: string[]
-}
-
-export const INTEGRITY_GATE_ORDER = [
-  'image',
-  'words',
-  'look',
-  'settled',
-  'contract',
-  'preflight',
-  'spend',
-  'duplicate',
-] as const
-
-export async function getShotIntegrityGates(projectId: string, shotId: string): Promise<ShotIntegrityGates> {
-  return fetchJson<ShotIntegrityGates>(
-    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/integrity-gates`,
-  )
-}
-
-/** Map one integrity-gates payload (+ its Desk row) onto the shared five chips. */
-export function gatesToChipInput(gates: ShotIntegrityGates | null, row?: DeskGateShot): ShotGateInput {
-  const stateOf = (name: string): IntegrityGateState => gates?.gates?.[name]?.state ?? 'not_yet'
-  const look = stateOf('look')
-  const settled = stateOf('settled')
-  return {
-    d4_ready: stateOf('image') === 'pass',
-    d6_ready: stateOf('words') === 'pass',
-    setting_anchor: look === 'pass' ? 'set' : look === 'blocked' ? 'blocked' : 'unknown',
-    binding_confirmation:
-      settled === 'pass' ? 'confirmed' : settled === 'blocked' ? 'stale' : 'missing',
-    has_media: row?.has_media ?? false,
-    latest_job_status: row?.latest_job_status ?? gates?.latest_job_status ?? null,
-  }
-}
-
-type EngineGateNext = { label: string; to: string | null; plain?: string }
-
-/** One plain next step per blocked gate. Links are navigation only. */
-export function engineGateNext(
-  gateName: string,
-  projectId: string,
-): EngineGateNext {
-  const q = encodeURIComponent(projectId || '')
-  const previs = `/studio/previs?project_id=${q}`
-  const vault = `/studio/vault?project_id=${q}`
-  const desk = `/studio/production-desk?project_id=${q}`
-  const board = `/studio/production-board?project_id=${q}`
-  switch (gateName) {
-    case 'image':
-      return { label: 'Open Previs to approve the image prompts', to: previs }
-    case 'words':
-      return { label: 'Open Previs to approve the send text', to: previs }
-    case 'look':
-      return { label: 'Open the Vault to settle the setting look', to: vault }
-    case 'settled':
-      return { label: 'Confirm this binding on the Desk', to: desk }
-    case 'contract':
-    case 'preflight':
-      return { label: 'Prepare the scene in Previs', to: previs }
-    case 'spend':
-      return {
-        label: '',
-        to: null,
-        plain: 'Wait for a recorded price — this view never prices a shot itself.',
-      }
-    case 'duplicate':
-      return { label: 'Check the scene board before retrying', to: board }
-    default:
-      return { label: 'Check the scene board', to: board }
-  }
-}
-
-function blockedGates(gates: ShotIntegrityGates | null): string[] {
-  if (!gates) return []
-  return INTEGRITY_GATE_ORDER.filter((name) => gates.gates?.[name]?.state === 'blocked')
-}
-
-/** A shot is ready only when every gate passes and finished media is saved. */
-export function isShotReady(gates: ShotIntegrityGates | null, row?: DeskGateShot): boolean {
-  if (!gates) return false
-  const allPass = INTEGRITY_GATE_ORDER.every((name) => gates.gates?.[name]?.state === 'pass')
-  return allPass && (row?.has_media ?? false)
-}
 
 type LoadState<T> = { status: 'loading' } | { status: 'unavailable'; message: string } | { status: 'loaded'; value: T }
 
@@ -193,7 +96,7 @@ function ShotCard({
       }`}
     >
       <p className="font-mono text-xs text-zinc-300">{shot.shot_id}</p>
-      <p className="mt-0.5 text-[11px] text-zinc-500">{scene.scene_name || scene.scene_id}</p>
+      <p className="mt-0.5 text-xs text-zinc-500">{scene.scene_name || scene.scene_id}</p>
       <div className="mt-2">
         <ShotGateChips shot={gatesToChipInput(gates, shot)} />
       </div>
@@ -334,13 +237,16 @@ function EngineEvidence({
     ])
   }, [projectId])
 
+  // The route remounts this component per project (key on projectId), so
+  // state starts empty for each film. Refresh keeps the last evidence on
+  // screen while it reloads rather than blanking the console.
   useEffect(() => {
-    setBoard(empty())
-    setGatesByShot({})
-    setCut(empty())
-    setDelivery(empty())
-    setScreening(empty())
-    void load()
+    // Kick the read off the effect body: `load` owns the async state updates,
+    // and the console stays on its loading view until the first payload lands.
+    const pending = Promise.resolve().then(load)
+    return () => {
+      void pending
+    }
   }, [load])
 
   const scenes = board.status === 'loaded' ? board.value.scenes : []
@@ -433,6 +339,7 @@ function EngineEvidence({
                     void load().finally(() => setRefreshing(false))
                   }}
                   disabled={!projectId || refreshing}
+                  aria-busy={refreshing}
                   className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/15 px-4 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}

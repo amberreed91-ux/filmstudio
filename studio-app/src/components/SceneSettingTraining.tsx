@@ -46,7 +46,7 @@ export default function SceneSettingTraining({ projectId, scene, onIdentityTrain
         <MapPin size={15} className="mt-0.5 shrink-0 text-zinc-400" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-zinc-200">Setting identity</p>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">{settingName}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{settingName}</p>
         </div>
       </div>
 
@@ -54,7 +54,7 @@ export default function SceneSettingTraining({ projectId, scene, onIdentityTrain
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-emerald-400/25 bg-emerald-500/[0.06] px-3 py-2.5">
           <div className="min-w-0">
             <p className="truncate font-mono text-xs text-zinc-100">{existing.trigger_word}</p>
-            <p className="mt-0.5 text-[11px] text-zinc-400">{existing.provider} · {existing.provider_model}</p>
+            <p className="mt-0.5 text-xs text-zinc-400">{existing.provider} · {existing.provider_model}</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200"><Check size={11} />Ready</span>

@@ -36,18 +36,31 @@ export default function ReferenceBinderModal({
   onClose,
   onConfirm,
 }: Props) {
-  const [shotId, setShotId] = useState(initialShotId)
-  const [acknowledged, setAcknowledged] = useState(false)
-
-  useEffect(() => {
-    setShotId(initialShotId)
-    setAcknowledged(false)
-  }, [image, initialShotId])
+  // Choices belong to the candidate currently under inspection. Tagging them
+  // with that candidate means opening another still starts clean without a
+  // state-reset effect.
+  const [choiceState, setChoiceState] = useState<{ image: GeneratedPrevisImage; initialShotId: string; shotId: string; acknowledged: boolean } | null>(null)
+  const choice = choiceState && image && choiceState.image === image && choiceState.initialShotId === initialShotId
+    ? choiceState
+    : null
+  const shotId = choice?.shotId ?? initialShotId
+  const acknowledged = choice?.acknowledged ?? false
+  const setShotId = (next: string) => {
+    if (!image) return
+    setChoiceState({ image, initialShotId, shotId: next, acknowledged })
+  }
+  const setAcknowledged = (next: boolean) => {
+    if (!image) return
+    setChoiceState({ image, initialShotId, shotId, acknowledged: next })
+  }
 
   useEffect(() => {
     if (!image) return
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        setChoiceState(null)
+        onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -67,12 +80,8 @@ export default function ReferenceBinderModal({
       aria-label="Inspect candidate still"
       data-testid="reference-binder-modal"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={onClose}
     >
-      <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border-2 border-[#1E293B] bg-[#0B0F17]/92 p-5 text-[#CBD5E1] shadow-[0_0_60px_rgba(109,40,217,0.35)] backdrop-blur-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border-2 border-[#1E293B] bg-[#0B0F17]/92 p-5 text-[#CBD5E1] shadow-[0_0_60px_rgba(109,40,217,0.35)] backdrop-blur-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-zinc-100">Inspect candidate still</h2>
@@ -82,7 +91,10 @@ export default function ReferenceBinderModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              setChoiceState(null)
+              onClose()
+            }}
             aria-label="Close candidate inspector"
             className="rounded border border-white/15 p-1.5 text-zinc-300 hover:border-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F17]"
           >

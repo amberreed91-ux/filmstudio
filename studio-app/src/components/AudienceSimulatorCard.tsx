@@ -66,9 +66,10 @@ ${simulation.audience_reactions.map(r => `[${r.audience_type}]\nReaction: ${r.li
         <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-100">
           Emotional Audience Simulation
         </h3>
-        <button
+        <button type="button"
           onClick={handleSave}
           disabled={isSaving || saveStatus === 'success'}
+          aria-busy={isSaving}
           className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-all ${
             saveStatus === 'success'
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
@@ -91,7 +92,7 @@ ${simulation.audience_reactions.map(r => `[${r.audience_type}]\nReaction: ${r.li
             <p className="mt-2 text-[12px] leading-relaxed text-zinc-400">
               <span className="font-semibold text-zinc-300">Reasoning:</span> {reaction.reasoning}
             </p>
-            <div className="mt-3 rounded border border-amber-900/30 bg-amber-950/20 px-2 py-2 text-[11px] text-amber-200/80">
+            <div className="mt-3 rounded border border-amber-900/30 bg-amber-950/20 px-2 py-2 text-xs text-amber-200/80">
               <span className="font-bold uppercase tracking-tighter">Watch out:</span> {reaction.watch_out}
             </div>
           </div>

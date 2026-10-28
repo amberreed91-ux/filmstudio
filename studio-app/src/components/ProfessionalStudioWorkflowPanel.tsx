@@ -38,6 +38,7 @@ export default function ProfessionalStudioWorkflowPanel({
 }: Props) {
   const [summary, setSummary] = useState<StudioWorkflowSummary | null>(initialSummary)
   const [busyGateId, setBusyGateId] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
 
   const gates = useMemo(() => summary?.active_gates || [], [summary?.active_gates])
@@ -47,11 +48,14 @@ export default function ProfessionalStudioWorkflowPanel({
 
   async function refresh() {
     if (!projectId) return
+    setRefreshing(true)
     try {
       setError('')
       setSummary(await getProjectWorkflow(projectId))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Workflow unavailable')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -94,7 +98,8 @@ export default function ProfessionalStudioWorkflowPanel({
           type="button"
           className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
           onClick={() => void refresh()}
-          disabled={!projectId}
+          disabled={!projectId || refreshing}
+          aria-busy={refreshing}
           aria-label="Refresh workflow"
           title="Refresh workflow"
         >
@@ -148,6 +153,7 @@ export default function ProfessionalStudioWorkflowPanel({
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-current/30 bg-black/20 disabled:opacity-40"
                     onClick={() => void decide(gate, 'approve')}
                     disabled={!allowed || gate.status === 'blocked' || Boolean(busyGateId)}
+                    aria-busy={busyGateId === gate.gate_id}
                     aria-label="Approve gate"
                     title="Approve gate"
                   >
@@ -158,6 +164,7 @@ export default function ProfessionalStudioWorkflowPanel({
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-current/30 bg-black/20 disabled:opacity-40"
                     onClick={() => void decide(gate, 'request_changes')}
                     disabled={!allowed || Boolean(busyGateId)}
+                    aria-busy={busyGateId === gate.gate_id}
                     aria-label="Request changes"
                     title="Request changes"
                   >

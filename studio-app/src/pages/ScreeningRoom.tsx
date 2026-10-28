@@ -234,7 +234,10 @@ export default function ScreeningRoom() {
 
   // ── Export state ──────────────────────────────────────────────────────────
   const [exporting, setExporting] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+  const [noteAction, setNoteAction] = useState<'apply' | 'page' | 'memory' | null>(null)
+  const [applyingAudioBrief, setApplyingAudioBrief] = useState(false)
   const [finalPackage, setFinalPackage] = useState<FinalShortFilmPackage | null>(null)
   const [acceptanceReport, setAcceptanceReport] = useState<ProductionAcceptanceReport | null>(null)
   const [acceptanceLoading, setAcceptanceLoading] = useState(false)
@@ -952,12 +955,15 @@ export default function ScreeningRoom() {
 
   const handleShare = useCallback(async () => {
     const shareUrl = `${window.location.origin}/studio/screening-room?project_id=${effectiveProjectId}`
+    setSharing(true)
     try {
       await navigator.clipboard.writeText(shareUrl)
       setShareCopied(true)
       setTimeout(() => setShareCopied(false), 2000)
     } catch {
       setError('Failed to copy share link')
+    } finally {
+      setSharing(false)
     }
   }, [effectiveProjectId])
 
@@ -1087,6 +1093,7 @@ export default function ScreeningRoom() {
   const handleSendToPage = useCallback(async () => {
     if (!effectiveProjectId || !activeTake?.sceneId || coDirectorNotes.length === 0) return
     const note = coDirectorNotes[0]
+    setNoteAction('page')
     try {
       const result = await updateScene(effectiveProjectId, activeTake.sceneId, { notes: note.text })
       if (result.error) {
@@ -1096,12 +1103,15 @@ export default function ScreeningRoom() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save note to scene')
+    } finally {
+      setNoteAction(null)
     }
   }, [effectiveProjectId, activeTake, coDirectorNotes])
 
   const handleSaveToMemory = useCallback(async () => {
     if (!effectiveProjectId || !activeTake?.sceneId || coDirectorNotes.length === 0) return
     const note = coDirectorNotes[0]
+    setNoteAction('memory')
     try {
       await saveCreativeDecisionMemory(effectiveProjectId, {
         project_id: effectiveProjectId,
@@ -1119,6 +1129,8 @@ export default function ScreeningRoom() {
       setSuccess("Saved to Director's Memory")
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save to memory')
+    } finally {
+      setNoteAction(null)
     }
   }, [effectiveProjectId, activeTake, coDirectorNotes])
 
@@ -1131,7 +1143,12 @@ export default function ScreeningRoom() {
       shot: String(activeShotNumber),
       codirector_note: note.text,
     })
-    navigate(`/studio/previs?${params.toString()}`)
+    setNoteAction('apply')
+    try {
+      navigate(`/studio/previs?${params.toString()}`)
+    } finally {
+      setNoteAction(null)
+    }
   }, [effectiveProjectId, activeTake, coDirectorNotes, activeShotNumber, navigate])
 
   // ── Audio direction handlers ──────────────────────────────────────────────
@@ -1150,16 +1167,19 @@ export default function ScreeningRoom() {
   }, [effectiveProjectId, activeTake?.sceneId, audioBriefLoading])
 
   const handleApplyAudioBrief = useCallback(async () => {
-    if (!effectiveProjectId || !activeTake?.sceneId || !audioBrief) return
+    if (!effectiveProjectId || !activeTake?.sceneId || !audioBrief || applyingAudioBrief) return
     setError('')
     setSuccess('')
+    setApplyingAudioBrief(true)
     try {
       await applyAudioBrief(effectiveProjectId, activeTake.sceneId)
       setSuccess('Audio direction queued for scene')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to apply audio direction')
+    } finally {
+      setApplyingAudioBrief(false)
     }
-  }, [effectiveProjectId, activeTake?.sceneId, audioBrief])
+  }, [effectiveProjectId, activeTake?.sceneId, audioBrief, applyingAudioBrief])
 
   // ── Poster handlers ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1303,8 +1323,8 @@ export default function ScreeningRoom() {
                   {viewingWholeFilm && screeningApprovalTarget?.cut_freshness && screeningApprovalTarget.cut_freshness.status !== 'current' && <p role="status" className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">{screeningApprovalTarget.cut_freshness.reason}</p>}
                   {!viewingWholeFilm && previewScope === 'shot' && activeRenderJob && <div className="space-y-2 rounded-lg border border-white/10 p-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" className={buttonClass} disabled={takeSelection.busy || !activeRenderJob.output_payload?.asset_url || chosenJobId === activeRenderJob.id} onClick={() => void takeSelection.save(activeShotNumber, activeRenderJob.id)}>{takeSelection.busy ? 'Saving…' : chosenJobId === activeRenderJob.id ? 'Chosen for the cut' : 'Use this take for the cut'}</button>
-                      {chosenJobId && <button type="button" className={buttonClass} disabled={takeSelection.busy} onClick={() => void takeSelection.save(activeShotNumber, null)}>Clear take choice</button>}
+                      <button type="button" className={buttonClass} disabled={takeSelection.busy || !activeRenderJob.output_payload?.asset_url || chosenJobId === activeRenderJob.id} aria-busy={takeSelection.busy || undefined} onClick={() => void takeSelection.save(activeShotNumber, activeRenderJob.id)}>{takeSelection.busy ? 'Saving…' : chosenJobId === activeRenderJob.id ? 'Chosen for the cut' : 'Use this take for the cut'}</button>
+                      {chosenJobId && <button type="button" className={buttonClass} disabled={takeSelection.busy} aria-busy={takeSelection.busy || undefined} onClick={() => void takeSelection.save(activeShotNumber, null)}>Clear take choice</button>}
                       {comparisonTakes.length > 1 && <button type="button" className={buttonClass} onClick={() => setIsCompareOpen(true)}>Compare takes</button>}
                     </div>
                     <p className="text-xs leading-relaxed text-zinc-400">Before choosing, compare the previous shot’s ending with this opening: prop ownership, eyeline, costume, light and action. Check where the dialogue belongs.</p>
@@ -1313,7 +1333,6 @@ export default function ScreeningRoom() {
                   </div>}
                 </div>
                 <div className="min-w-0 border-t border-white/10 pt-5 xl:border-t-0 xl:border-l xl:pl-7 xl:pt-0">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200/80">Theatre · {stepIndex + 1} of 4</p>
                   <h2 ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-6 text-xl font-medium text-zinc-100 focus-visible:outline-2 focus-visible:outline-amber-200">{currentStep.title}</h2>
                   <p className="mb-5 mt-1 text-sm leading-relaxed text-zinc-400">{currentStep.description}</p>
 
@@ -1331,7 +1350,7 @@ export default function ScreeningRoom() {
                       <div className="mt-3 space-y-3 text-sm leading-relaxed text-zinc-400">
                         <p>Assemble the saved scene compositions into one film. Assemble individual scenes in Previs first.</p>
                         {assemblyStatus && <p className="text-xs text-zinc-300">{assemblyStatus.scenes_with_compositions} of {assemblyStatus.scenes_total} scenes have compositions{assemblyStatus.film_assembled ? ' · Film assembled' : ''}.</p>}
-                        {!assemblyStatus?.film_assembled ? <button type="button" onClick={handleAssembleFilm} disabled={assembling || scenes.length === 0} className={buttonClass}>{assembling ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{assembling ? 'Assembling film…' : assemblyStatus?.film_outdated ? 'Rebuild film with current choices' : 'Assemble film'}</button> : <div className="space-y-2"><p className="flex items-center gap-2 text-emerald-300"><CheckCircle2 size={15} />A saved film is ready to watch.</p><button type="button" className={buttonClass} disabled={assembling} onClick={handleAssembleFilm}>{assembling ? 'Assembling film…' : 'Rebuild film'}</button></div>}
+                        {!assemblyStatus?.film_assembled ? <button type="button" onClick={handleAssembleFilm} disabled={assembling || scenes.length === 0} aria-busy={assembling || undefined} className={buttonClass}>{assembling ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{assembling ? 'Assembling film…' : assemblyStatus?.film_outdated ? 'Rebuild film with current choices' : 'Assemble film'}</button> : <div className="space-y-2"><p className="flex items-center gap-2 text-emerald-300"><CheckCircle2 size={15} />A saved film is ready to watch.</p><button type="button" className={buttonClass} disabled={assembling} aria-busy={assembling || undefined} onClick={handleAssembleFilm}>{assembling ? 'Assembling film…' : 'Rebuild film'}</button></div>}
                       </div>
                     </details>
                   </section>
@@ -1344,8 +1363,8 @@ export default function ScreeningRoom() {
                     <div className="space-y-3 border-t border-white/10 pt-4">
                       <h3 className="flex items-center gap-2 text-sm font-medium text-zinc-200"><Brain size={16} className="text-amber-200/80" />Co-director notes</h3>
                       {coDirectorNotes.length ? coDirectorNotes.map((note) => <p key={note.id} className="text-sm leading-relaxed text-zinc-300">{note.text}</p>) : <p className="text-sm leading-relaxed text-zinc-400">Request a specific perspective when you want a second pair of eyes.</p>}
-                      <button type="button" onClick={handleRequestNotes} disabled={requestingNotes || !effectiveProjectId || !activeTake?.sceneId} className={buttonClass}>{requestingNotes ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}{requestingNotes ? 'Requesting notes…' : 'Request a note'}</button>
-                      {coDirectorNotes.length > 0 && <div className="flex flex-col gap-2"><button type="button" onClick={handleApplyToShot} className={buttonClass}>Take this note to Previs<ChevronRight size={15} /></button><button type="button" onClick={handleSendToPage} className={buttonClass}>Save note to this scene in The Page</button><button type="button" onClick={handleSaveToMemory} className={buttonClass}>Save this decision to project memory</button></div>}
+                      <button type="button" onClick={handleRequestNotes} disabled={requestingNotes || !effectiveProjectId || !activeTake?.sceneId} aria-busy={requestingNotes || undefined} className={buttonClass}>{requestingNotes ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}{requestingNotes ? 'Requesting notes…' : 'Request a note'}</button>
+                      {coDirectorNotes.length > 0 && <div className="flex flex-col gap-2"><button type="button" onClick={handleApplyToShot} disabled={noteAction !== null} aria-busy={noteAction === 'apply' || undefined} className={buttonClass}>Take this note to Previs<ChevronRight size={15} /></button><button type="button" onClick={handleSendToPage} disabled={noteAction !== null} aria-busy={noteAction === 'page' || undefined} className={buttonClass}>Save note to this scene in The Page</button><button type="button" onClick={handleSaveToMemory} disabled={noteAction !== null} aria-busy={noteAction === 'memory' || undefined} className={buttonClass}>Save this decision to project memory</button></div>}
                     </div>
                     <details className={disclosureClass}>
                       <summary className={summaryClass}>Audience perspective</summary>
@@ -1353,15 +1372,15 @@ export default function ScreeningRoom() {
                         <p className="text-xs leading-relaxed text-zinc-400">An optional interpretation of the scene, for you to consider.</p>
                         <div className="flex flex-wrap gap-2" role="group" aria-label="Audience perspective">{AUDIENCE_SEGMENTS.map((segment) => <button key={segment.key} type="button" aria-pressed={audienceSegment === segment.key} onClick={() => setAudienceSegment(segment.key)} className={`min-h-10 rounded border px-3 py-2 text-xs focus-visible:outline-2 focus-visible:outline-amber-200 ${audienceSegment === segment.key ? 'border-amber-200/40 bg-amber-200/5 text-amber-100' : 'border-white/10 text-zinc-400 hover:text-zinc-200'}`}>{segment.key === 'genre_fan' ? 'Genre fan' : segment.key === 'cinephile' ? 'Cinephile' : 'General'}</button>)}</div>
                         {selectedReaction ? <div className="space-y-2 text-sm leading-relaxed text-zinc-300"><p>{selectedReaction.likely_reaction}</p><p className="text-zinc-400">{selectedReaction.reasoning}</p>{selectedReaction.watch_out && <p className="border-l border-amber-200/40 pl-3 text-amber-100/80">{selectedReaction.watch_out}</p>}</div> : <p className="text-sm text-zinc-400">Run a local simulation to explore this audience’s perspective.</p>}
-                        <button type="button" onClick={handleSimulate} disabled={simulating || !effectiveProjectId} className={buttonClass}>{simulating ? <Loader2 size={15} className="animate-spin" /> : <Users size={15} />}{simulating ? 'Simulating…' : 'Simulate locally'}</button>
-                        <details className="border-t border-white/10 pt-3"><summary className={summaryClass}>External scene analysis</summary><div className="mt-3 space-y-3"><p className="text-xs leading-relaxed text-zinc-400">{activeEmotionAnalysis ? 'A saved scene analysis is available. Use the written audience perspective and your own viewing to guide revisions.' : 'No external scene analysis has been saved for this scene.'}</p><button type="button" onClick={handleAnalyzeActiveScene} disabled={emotionAnalysisLoading || !effectiveProjectId || !activeTake?.sceneId} className={buttonClass}>{emotionAnalysisLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}<span className="text-xs">{emotionAnalysisLoading ? 'Analyzing active scene…' : 'ANALYZE ACTIVE SCENE · QWEN'}</span></button><p className="text-xs leading-relaxed text-zinc-500">External AI call. Results are cached until the scene or tone context changes.</p></div></details>
+                        <button type="button" onClick={handleSimulate} disabled={simulating || !effectiveProjectId} aria-busy={simulating || undefined} className={buttonClass}>{simulating ? <Loader2 size={15} className="animate-spin" /> : <Users size={15} />}{simulating ? 'Simulating…' : 'Simulate locally'}</button>
+                        <details className="border-t border-white/10 pt-3"><summary className={summaryClass}>External scene analysis</summary><div className="mt-3 space-y-3"><p className="text-xs leading-relaxed text-zinc-400">{activeEmotionAnalysis ? 'A saved scene analysis is available. Use the written audience perspective and your own viewing to guide revisions.' : 'No external scene analysis has been saved for this scene.'}</p><button type="button" onClick={handleAnalyzeActiveScene} disabled={emotionAnalysisLoading || !effectiveProjectId || !activeTake?.sceneId} aria-busy={emotionAnalysisLoading || undefined} className={buttonClass}>{emotionAnalysisLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}<span className="text-xs">{emotionAnalysisLoading ? 'Analyzing active scene…' : 'ANALYZE ACTIVE SCENE · QWEN'}</span></button><p className="text-xs leading-relaxed text-zinc-500">External AI call. Results are cached until the scene or tone context changes.</p></div></details>
                       </div>
                     </details>
                     <details className={disclosureClass}>
                       <summary className={summaryClass}>Audio direction</summary>
                       <div className="mt-4 space-y-3">
-                        {audioBriefLoading ? <p className="flex items-center gap-2 text-sm text-zinc-400"><Loader2 size={15} className="animate-spin" />Loading the brief…</p> : audioBrief ? <div className="space-y-3 text-sm leading-relaxed text-zinc-300"><p className="text-amber-100/80">{audioBrief.mood}{audioBrief.silence_flag ? ' · Silence' : ''}</p>{'tempo' in audioBrief && <p className="text-xs text-zinc-400">Tempo: {String(audioBrief.tempo)}</p>}{'instrumentation' in audioBrief && <p className="text-xs text-zinc-400">Instrumentation: {String(audioBrief.instrumentation)}</p>}<div><h4 className="mb-1 text-xs font-semibold text-zinc-400">Music direction</h4><p>{audioBrief.score_notes}</p></div><div><h4 className="mb-1 text-xs font-semibold text-zinc-400">Ambient sound</h4><p>{audioBrief.ambient_notes}</p></div><button type="button" onClick={handleApplyAudioBrief} className={buttonClass}>Apply audio direction to scene</button></div> : <p className="text-sm text-zinc-400">No audio direction for this scene yet.</p>}
-                        <button type="button" onClick={handleGenerateBrief} disabled={audioBriefLoading || !effectiveProjectId || !activeTake?.sceneId} className={buttonClass}><Volume2 size={15} />{audioBriefLoading ? 'Loading brief…' : 'Request audio brief'}</button>
+                        {audioBriefLoading ? <p className="flex items-center gap-2 text-sm text-zinc-400"><Loader2 size={15} className="animate-spin" />Loading the brief…</p> : audioBrief ? <div className="space-y-3 text-sm leading-relaxed text-zinc-300"><p className="text-amber-100/80">{audioBrief.mood}{audioBrief.silence_flag ? ' · Silence' : ''}</p>{'tempo' in audioBrief && <p className="text-xs text-zinc-400">Tempo: {String(audioBrief.tempo)}</p>}{'instrumentation' in audioBrief && <p className="text-xs text-zinc-400">Instrumentation: {String(audioBrief.instrumentation)}</p>}<div><h4 className="mb-1 text-xs font-semibold text-zinc-400">Music direction</h4><p>{audioBrief.score_notes}</p></div><div><h4 className="mb-1 text-xs font-semibold text-zinc-400">Ambient sound</h4><p>{audioBrief.ambient_notes}</p></div><button type="button" onClick={handleApplyAudioBrief} disabled={applyingAudioBrief} aria-busy={applyingAudioBrief || undefined} className={buttonClass}>{applyingAudioBrief ? 'Applying audio direction…' : 'Apply audio direction to scene'}</button></div> : <p className="text-sm text-zinc-400">No audio direction for this scene yet.</p>}
+                        <button type="button" onClick={handleGenerateBrief} disabled={audioBriefLoading || !effectiveProjectId || !activeTake?.sceneId} aria-busy={audioBriefLoading || undefined} className={buttonClass}><Volume2 size={15} />{audioBriefLoading ? 'Loading brief…' : 'Request audio brief'}</button>
                       </div>
                     </details>
                     <details className={disclosureClass}><summary className={summaryClass}>Specialist review tools</summary><div className="mt-4 space-y-3">                  <details className={disclosureClass}><summary className={summaryClass}>Editing and rhythm</summary><div className="mt-4"><EditorialIntelligencePanel
@@ -1448,16 +1467,16 @@ export default function ScreeningRoom() {
                   </section>
 
                   <section id="theatre-step-approve" aria-label="Approve the screening output" hidden={activeStep !== 'approve'} className="space-y-4">
-                    <div className="space-y-3"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Approval applies to</p><p className="text-lg text-zinc-100">{activeVideoUrl ? outputScope : 'No playable output selected'}</p><p className="text-sm leading-relaxed text-zinc-400">Approve the output currently in the player. Earlier approvals remain in its history.</p>{screeningApprovalTarget?.cut_freshness && screeningApprovalTarget.cut_freshness.status !== 'current' && <p role="status" className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">{screeningApprovalTarget.approved ? 'Approval belongs to this saved export. ' : ''}{screeningApprovalTarget.cut_freshness.reason}</p>}{screeningApprovalTarget ? <><p className="text-sm text-zinc-300">{screeningApprovalTarget.approved ? 'This output is already approved.' : 'This output is awaiting your decision.'}</p><button type="button" onClick={() => void handleApproveScreeningOutput()} disabled={approvingScreeningOutput || screeningApprovalTarget.approved} className={primaryButtonClass}>{approvingScreeningOutput ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}{approvingScreeningOutput ? 'Approving…' : screeningApprovalTarget.approved ? 'Output approved' : screeningApprovalTarget.output_type === 'final' ? 'Approve final film output' : 'Approve this output'}</button></> : <p className="rounded-md border border-dashed border-white/15 p-3 text-sm leading-relaxed text-zinc-400">{activeVideoUrl ? 'This file has no matching screening approval record yet. Choose a registered shot, scene, or final output to approve.' : 'Choose a rendered output in Watch before recording an approval.'}</p>}</div>
+                    <div className="space-y-3"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Approval applies to</p><p className="text-lg text-zinc-100">{activeVideoUrl ? outputScope : 'No playable output selected'}</p><p className="text-sm leading-relaxed text-zinc-400">Approve the output currently in the player. Earlier approvals remain in its history.</p>{screeningApprovalTarget?.cut_freshness && screeningApprovalTarget.cut_freshness.status !== 'current' && <p role="status" className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">{screeningApprovalTarget.approved ? 'Approval belongs to this saved export. ' : ''}{screeningApprovalTarget.cut_freshness.reason}</p>}{screeningApprovalTarget ? <><p className="text-sm text-zinc-300">{screeningApprovalTarget.approved ? 'This output is already approved.' : 'This output is awaiting your decision.'}</p><button type="button" onClick={() => void handleApproveScreeningOutput()} disabled={approvingScreeningOutput || screeningApprovalTarget.approved} aria-busy={approvingScreeningOutput || undefined} className={primaryButtonClass}>{approvingScreeningOutput ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}{approvingScreeningOutput ? 'Approving…' : screeningApprovalTarget.approved ? 'Output approved' : screeningApprovalTarget.output_type === 'final' ? 'Approve final film output' : 'Approve this output'}</button></> : <p className="rounded-md border border-dashed border-white/15 p-3 text-sm leading-relaxed text-zinc-400">{activeVideoUrl ? 'This file has no matching screening approval record yet. Choose a registered shot, scene, or final output to approve.' : 'Choose a rendered output in Watch before recording an approval.'}</p>}</div>
                     <details className={disclosureClass}><summary className={summaryClass}>Production acceptance checks</summary><div className="mt-4"><ProductionAcceptancePanel projectId={effectiveProjectId} finalPackage={finalPackage} report={acceptanceReport} onReport={setAcceptanceReport} loading={acceptanceLoading} setLoading={setAcceptanceLoading} error={acceptanceError} setError={setAcceptanceError} /></div></details>
                     <details className={disclosureClass}><summary className={summaryClass}>Production handoff</summary><p className="mt-3 text-xs leading-relaxed text-zinc-400">The Canonical Production Thread tracks its own production and review gates. Screening approval above records your choice of this media output.</p><div className="mt-4 min-w-0">{effectiveProjectId && canonicalSceneId ? <CanonicalWorkflowPanel projectId={effectiveProjectId} sceneId={canonicalSceneId} sceneContext={canonicalSceneContext} surface="screening" /> : <p className="text-sm text-zinc-400">Select a scene to open its production thread.</p>}</div></details>
                   </section>
 
                   <section id="theatre-step-deliver" aria-label="Deliver the film" hidden={activeStep !== 'deliver'} className="space-y-4">
-                    <div className="space-y-3"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Download from the player</p><p className="text-lg text-zinc-100">{activeVideoUrl ? outputScope : 'No video selected'}</p><p className="text-sm leading-relaxed text-zinc-400">{viewingWholeFilm ? 'Download the full film you are watching.' : fullFilmAvailable ? 'This downloads the current preview. To download the whole movie, choose Watch full film in the Watch step first.' : 'This downloads the current preview. Your full film is not assembled yet. Open Watch → Prepare the full film to assemble the saved scenes first.'}</p><button type="button" onClick={handleExportMp4} disabled={exporting || !activeVideoUrl} className={primaryButtonClass}>{exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}{exporting ? 'Preparing download…' : viewingWholeFilm ? 'Download film MP4' : 'Download preview MP4'}</button></div>
-                    <div className="space-y-2 border-t border-white/10 pt-4"><button type="button" onClick={handleShare} className={buttonClass}>{shareCopied ? <CheckCircle2 size={15} /> : <Share2 size={15} />}{shareCopied ? 'Link copied' : 'Copy screening link'}</button><p className="text-xs leading-relaxed text-zinc-500">Copies this project’s studio page address. The viewer needs access to this studio.</p></div>
-                    <details className={disclosureClass}><summary className={summaryClass}>Final package and export manifest</summary><div className="mt-4 space-y-3 text-sm leading-relaxed text-zinc-400"><p>Create the final package from the project’s prepared scene outputs. The export manifest contains delivery metadata and media links.</p>{finalPackage ? <><p className="flex items-center gap-2 text-emerald-300"><CheckCircle2 size={15} />Final package available</p><button type="button" onClick={handleDownloadFinalPackage} disabled={exporting} className={buttonClass}><Download size={15} />Export manifest (JSON)</button><p className="text-xs text-zinc-500">The manifest is a JSON document. Use the MP4 download above for the video itself.</p></> : <><button type="button" onClick={handleStitchFilm} disabled={stitching || !effectiveProjectId || !scenes.length} className={buttonClass}>{stitching ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{stitching ? 'Stitching film…' : 'Stitch final film'}</button><p className="text-xs text-zinc-500">Prepare scene outputs before stitching. This action does not add a soundtrack.</p></>}</div></details>
-                    <details className={disclosureClass}><summary className={summaryClass}>Film poster</summary><div className="mt-4 space-y-3">{posterLoading ? <p className="text-sm text-zinc-400">Loading poster…</p> : posterUrl ? <img src={posterUrl} alt={`${activeProject?.title || 'Film'} poster`} className="max-h-[420px] max-w-full rounded-md object-contain" /> : <p className="text-sm text-zinc-400">No poster generated yet.</p>}<button type="button" onClick={handleGeneratePoster} disabled={posterGenerating || !effectiveProjectId} className={buttonClass}>{posterGenerating ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{posterGenerating ? 'Generating poster…' : 'Generate poster'}</button></div></details>
+                    <div className="space-y-3"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Download from the player</p><p className="text-lg text-zinc-100">{activeVideoUrl ? outputScope : 'No video selected'}</p><p className="text-sm leading-relaxed text-zinc-400">{viewingWholeFilm ? 'Download the full film you are watching.' : fullFilmAvailable ? 'This downloads the current preview. To download the whole movie, choose Watch full film in the Watch step first.' : 'This downloads the current preview. Your full film is not assembled yet. Open Watch → Prepare the full film to assemble the saved scenes first.'}</p><button type="button" onClick={handleExportMp4} disabled={exporting || !activeVideoUrl} aria-busy={exporting || undefined} className={primaryButtonClass}>{exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}{exporting ? 'Preparing download…' : viewingWholeFilm ? 'Download film MP4' : 'Download preview MP4'}</button></div>
+                    <div className="space-y-2 border-t border-white/10 pt-4"><button type="button" onClick={handleShare} disabled={sharing} aria-busy={sharing || undefined} className={buttonClass}>{shareCopied ? <CheckCircle2 size={15} /> : sharing ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}{shareCopied ? 'Link copied' : sharing ? 'Copying link…' : 'Copy screening link'}</button><p className="text-xs leading-relaxed text-zinc-500">Copies this project’s studio page address. The viewer needs access to this studio.</p></div>
+                    <details className={disclosureClass}><summary className={summaryClass}>Final package and export manifest</summary><div className="mt-4 space-y-3 text-sm leading-relaxed text-zinc-400"><p>Create the final package from the project’s prepared scene outputs. The export manifest contains delivery metadata and media links.</p>{finalPackage ? <><p className="flex items-center gap-2 text-emerald-300"><CheckCircle2 size={15} />Final package available</p><button type="button" onClick={handleDownloadFinalPackage} disabled={exporting} aria-busy={exporting || undefined} className={buttonClass}><Download size={15} />Export manifest (JSON)</button><p className="text-xs text-zinc-500">The manifest is a JSON document. Use the MP4 download above for the video itself.</p></> : <><button type="button" onClick={handleStitchFilm} disabled={stitching || !effectiveProjectId || !scenes.length} aria-busy={stitching || undefined} className={buttonClass}>{stitching ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{stitching ? 'Stitching film…' : 'Stitch final film'}</button><p className="text-xs text-zinc-500">Prepare scene outputs before stitching. This action does not add a soundtrack.</p></>}</div></details>
+                    <details className={disclosureClass}><summary className={summaryClass}>Film poster</summary><div className="mt-4 space-y-3">{posterLoading ? <p className="text-sm text-zinc-400">Loading poster…</p> : posterUrl ? <img src={posterUrl} alt={`${activeProject?.title || 'Film'} poster`} className="max-h-[420px] max-w-full rounded-md object-contain" /> : <p className="text-sm text-zinc-400">No poster generated yet.</p>}<button type="button" onClick={handleGeneratePoster} disabled={posterGenerating || !effectiveProjectId} aria-busy={posterGenerating || undefined} className={buttonClass}>{posterGenerating ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}{posterGenerating ? 'Generating poster…' : 'Generate poster'}</button></div></details>
                   </section>
                   {nextStep && <div className="mt-6 border-t border-white/10 pt-4"><button type="button" onClick={advanceStep} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-md px-2 text-sm font-medium text-amber-100 hover:bg-amber-200/5 focus-visible:outline-2 focus-visible:outline-amber-200">Next: {nextStep.title}<ChevronRight size={16} /></button></div>}
                 </div>

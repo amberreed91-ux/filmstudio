@@ -119,16 +119,19 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
   }, [perform, run?.run_id])
 
   const revisionSubmitted = run ? isRevisionSubmitted(run) : false
+  const activeRunId = run?.run_id
+  const activeRunStatus = run?.status
+  const shouldPoll = run ? isCanonicalPollingStatus(run) : false
 
   useEffect(() => {
-    if (!run || !isCanonicalPollingStatus(run)) {
+    if (!activeRunId || !activeRunStatus || !shouldPoll) {
       setPolling(false)
       return
     }
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
     const startedAt = Date.now()
-    const runId = run.run_id
+    const runId = activeRunId
     setPolling(true)
 
     const poll = async () => {
@@ -143,7 +146,7 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
       }
       actionRef.current = true
       try {
-        const response = run.status === 'render_queued'
+        const response = activeRunStatus === 'render_queued'
           ? await renderCanonicalProductionPackage(runId)
           : await renderCanonicalRevision(runId)
         if (cancelled) return
@@ -168,7 +171,7 @@ export function useCanonicalWorkflow(projectId: string, sceneId: string) {
       if (timer) clearTimeout(timer)
       setPolling(false)
     }
-  }, [accept, revisionSubmitted, run?.run_id, run?.status])
+  }, [accept, activeRunId, activeRunStatus, revisionSubmitted, shouldPoll])
 
   return {
     run,

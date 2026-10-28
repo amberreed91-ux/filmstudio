@@ -29,7 +29,7 @@ export function StudioSessionGate({ children }: { children: ReactNode }) {
       {register && <label className="block">Email<input name="email" type="email" autoComplete="email" required className="mt-2 w-full rounded border border-zinc-700 bg-zinc-900 p-3" /></label>}
       <label className="block">Password<input name="password" type="password" autoComplete={register ? 'new-password' : 'current-password'} required className="mt-2 w-full rounded border border-zinc-700 bg-zinc-900 p-3" /></label>
       {error && <p role="alert" className="text-red-300">{error}</p>}
-      <button disabled={busy} className="w-full rounded bg-amber-200 p-3 text-zinc-950 disabled:opacity-50">{busy ? 'Opening…' : register ? 'Create account' : 'Sign in'}</button>
+      <button type="submit" disabled={busy} aria-busy={busy || undefined} className="w-full rounded bg-amber-200 p-3 text-zinc-950 disabled:opacity-50">{busy ? 'Opening…' : register ? 'Create account' : 'Sign in'}</button>
       <button type="button" className="text-sm text-zinc-300 underline" onClick={() => setRegister(!register)}>{register ? 'Use an existing account' : 'Create an account'}</button>
     </form>
   </main>

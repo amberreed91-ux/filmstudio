@@ -4,7 +4,8 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import StoryboardImagePromptPanel, { removedSummary, stateLabel } from './StoryboardImagePromptPanel'
+import StoryboardImagePromptPanel from './StoryboardImagePromptPanel'
+import { removedSummary, stateLabel } from '../lib/storyboardPromptCopy'
 import {
   approveShotImagePrompt,
   editShotImagePrompt,

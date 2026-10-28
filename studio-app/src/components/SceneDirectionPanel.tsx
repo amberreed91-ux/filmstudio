@@ -175,7 +175,7 @@ function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, 
                 return (
                   <th key={shot.shot_id} scope="col" data-testid={`coverage-grid-column-${shot.shot_number}`} data-empty={empty ? 'true' : 'false'} className="min-w-16 px-1 py-2 text-center">
                     <span className="block font-medium text-zinc-100">Shot {shot.shot_number}</span>
-                    <span className={`block text-[11px] ${empty ? 'text-rose-200' : 'text-emerald-200'}`}>{empty ? 'Needs a line' : `${counts[index]} ${counts[index] === 1 ? 'line' : 'lines'}`}</span>
+                    <span className={`block text-xs ${empty ? 'text-rose-200' : 'text-emerald-200'}`}>{empty ? 'Needs a line' : `${counts[index]} ${counts[index] === 1 ? 'line' : 'lines'}`}</span>
                   </th>
                 )
               })}
@@ -187,7 +187,7 @@ function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, 
               if (decision?.status === 'EXPLICITLY_OMITTED') {
                 return (
                   <tr key={unit.obligation_id} data-testid={`coverage-grid-row-${unit.obligation_id}`} className="border-b border-white/5 opacity-50">
-                    <td className="px-2 py-2 text-zinc-400">{unit.source_text} <span className="text-[11px]">· skipped on purpose</span></td>
+                    <td className="px-2 py-2 text-zinc-400">{unit.source_text} <span className="text-xs">· skipped on purpose</span></td>
                     <td colSpan={shots.length || 1} />
                   </tr>
                 )
@@ -213,7 +213,7 @@ function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, 
               if (decision?.status === 'EXPLICITLY_OMITTED') {
                 return (
                   <tr key={line.line_id} data-testid={`coverage-grid-row-${line.line_id}`} className="border-b border-white/5 opacity-50">
-                    <td className="px-2 py-2 text-zinc-400">{line.character ? `${line.character} · ` : ''}{line.text} <span className="text-[11px]">· skipped on purpose</span></td>
+                    <td className="px-2 py-2 text-zinc-400">{line.character ? `${line.character} · ` : ''}{line.text} <span className="text-xs">· skipped on purpose</span></td>
                     <td colSpan={shots.length || 1} />
                   </tr>
                 )
@@ -253,7 +253,7 @@ function CoverageGrid({ data, busy, saveNotice, showSavedVersion, savedVersion, 
       <div className="space-y-1">
         <button type="button" disabled={busy} onClick={onSave} className="min-h-11 rounded-md bg-amber-200 px-4 py-2 text-sm font-medium text-zinc-950 disabled:opacity-40">{busy ? 'Saving…' : 'Save as new draft'}</button>
         {saveNotice && <p data-testid="coverage-grid-notice" role="status" className="text-xs text-amber-200">{saveNotice}</p>}
-        <p className="text-[11px] text-zinc-400">Saving never changes your approved version.</p>
+        <p className="text-xs text-zinc-400">Saving never changes your approved version.</p>
         {showSavedVersion && <p data-testid="save-success" role="status" className="text-xs text-emerald-200">Saved as new draft {savedVersion}. Approved image prompts carry over where the shot text did not change.</p>}
       </div>
     </section>
@@ -337,7 +337,7 @@ function VoGroupBox({ data }: { data: SceneDirection }) {
       })}
       <p className="text-xs text-zinc-300">Spoken-dialogue block · one unit that stays together · {togetherShot ? `together on Shot ${togetherShot}` : assignedShots.length === 0 ? 'no shot yet — assign every spoken line to the same shot in section B' : 'split across shots — bring every spoken line onto one shot in section B'}</p>
       <ul className="space-y-1">
-        {spokenOwners.map(({ line, shotId }) => <li key={line.line_id} className="text-[11px] text-zinc-400">{line.line_id} · {line.character} · {shotId ? `Shot ${shotNumberOf(data, shotId) ?? shotId}` : 'no shot yet'}</li>)}
+        {spokenOwners.map(({ line, shotId }) => <li key={line.line_id} className="text-xs text-zinc-400">{line.line_id} · {line.character} · {shotId ? `Shot ${shotNumberOf(data, shotId) ?? shotId}` : 'no shot yet'}</li>)}
       </ul>
     </div>
   )
@@ -461,14 +461,14 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
                 {eligibleOptions.map(option => <option key={option.ref_id} value={option.ref_id}>{option.ref_id} · {option.target_type}/{option.target_id} · {option.kind} · {option.approval_state}{option.canonical ? ' · canonical' : ''}</option>)}
               </select></label>
               {eligibleOptions.length === 0 && data.canonical_setting_id && <p role="status" className="text-xs text-amber-200">No approved references are registered for {data.canonical_setting_id} yet, so there is nothing to choose. In Setting authority above, register the image as a candidate for that exact setting, then approve it and designate it canonical — it will appear here as a choice. References approved for a different setting never appear here.</p>}
-              {data.setting_reference_decision && <p className="text-[11px] text-zinc-400">Selected exact reference ID: <code>{data.setting_reference_decision.reference_id}</code></p>}
+              {data.setting_reference_decision && <p className="text-xs text-zinc-400">Selected exact reference ID: <code>{data.setting_reference_decision.reference_id}</code></p>}
             </section>
 
             <section className="space-y-2 rounded-md border border-white/10 p-3">
               <h3 className="text-sm font-medium text-zinc-100">Approved shots in this scene</h3>
               <p className="text-xs text-zinc-400">Shot identity is read-only here. A shot existing never resolves an obligation.</p>
               <ul className="flex flex-wrap gap-2">
-                {data.shots.map(item => <li key={item.shot_id} className="rounded border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-zinc-300"><code>{item.shot_id}</code> · Shot {item.shot_number}{item.locked ? ' · locked' : ''}</li>)}
+                {data.shots.map(item => <li key={item.shot_id} className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-zinc-300"><code>{item.shot_id}</code> · Shot {item.shot_number}{item.locked ? ' · locked' : ''}</li>)}
               </ul>
             </section>
 
@@ -495,7 +495,7 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
                   <div className="h-1.5 w-full overflow-hidden rounded bg-white/10"><div className="h-1.5 rounded bg-amber-200 transition-all" style={{ width: `${totalCount ? Math.round((resolvedCount / totalCount) * 100) : 0}%` }} /></div>
                 </div>
                 <nav aria-label="Coverage sections" className="flex flex-wrap gap-2">
-                  {sectionCounts.map(section => <span key={section.key} data-testid={`coverage-tab-${section.key}`} className="rounded border border-white/15 px-2 py-1 text-[11px] text-zinc-300">{section.label} · {section.count} obligations · {section.resolved} resolved</span>)}
+                  {sectionCounts.map(section => <span key={section.key} data-testid={`coverage-tab-${section.key}`} className="rounded border border-white/15 px-2 py-1 text-xs text-zinc-300">{section.label} · {section.count} obligations · {section.resolved} resolved</span>)}
                 </nav>
                 <p className="text-xs text-zinc-400">Every obligation stays UNRESOLVED until you choose a decision yourself. Opening this page, saving a reference, or a shot merely existing never resolves anything.</p>
                 {unassigned > 0 && <p role="status" className="text-xs text-amber-200">{unassigned} dialogue {unassigned === 1 ? 'line is' : 'lines are'} unresolved.</p>}
@@ -548,7 +548,7 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
                   <h5 className="text-xs font-medium text-zinc-100">Lines with no shot · {unassignedContent.length}</h5>
                   {unassignedContent.length === 0
                     ? <p className="mt-1 text-xs text-zinc-400">Every content line currently names a shot.</p>
-                    : <ul className="mt-1 space-y-1">{unassignedContent.map(row => <li key={row.obligation_id} className="text-[11px] text-zinc-400">{row.obligation_id} — assign it in section A above, or bring it onto a card with “Move a line here”.</li>)}</ul>}
+                    : <ul className="mt-1 space-y-1">{unassignedContent.map(row => <li key={row.obligation_id} className="text-xs text-zinc-400">{row.obligation_id} — assign it in section A above, or bring it onto a card with “Move a line here”.</li>)}</ul>}
                 </div>
                 {data.shots.map(item => {
                   const decision = decisionFor(data, 'shot_content', item.shot_id)
@@ -562,7 +562,7 @@ export function SceneDirectionPanel({ projectId, sceneId, versionId, activeShotN
                     {owned.length > 0 && <ul className="space-y-1">{owned.map(row => {
                       const unit = data.coverage_obligations.find(candidate => candidate.obligation_type === 'content' && candidate.obligation_id === row.obligation_id)
                       const isVoCue = unit ? VO_CUE_PATTERN.test(unit.source_text) : false
-                      return <li key={row.obligation_id} className="text-[11px] text-zinc-400">{row.obligation_id}{unit ? ` — “${unit.source_text.slice(0, 80)}”` : ''}{isVoCue ? ' · V.O. cue' : ''}</li>
+                      return <li key={row.obligation_id} className="text-xs text-zinc-400">{row.obligation_id}{unit ? ` — “${unit.source_text.slice(0, 80)}”` : ''}{isVoCue ? ' · V.O. cue' : ''}</li>
                     })}</ul>}
                     {boardState === 'needs-line' && <p role="status" className="text-xs leading-relaxed text-rose-200">Needs a line — this {shotKindLabel(item.shot_kind)} cannot be silent, so intentional silence is not offered here. Assign a line in section A above, or move a line here.</p>}
                     {boardState === 'silence-allowed' && <>

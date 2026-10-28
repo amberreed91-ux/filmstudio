@@ -43,7 +43,7 @@ export default function ProjectGuard({ children }: ProjectGuardProps) {
         <p style={{ color: '#4a5568', fontSize: '13px' }}>
           Go to Home to start or continue a film
         </p>
-        <button
+        <button type="button"
           onClick={() => navigate('/studio/lobby')}
           style={{
             padding: '10px 20px',

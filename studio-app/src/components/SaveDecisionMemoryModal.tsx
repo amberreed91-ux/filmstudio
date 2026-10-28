@@ -176,6 +176,7 @@ export default function SaveDecisionMemoryModal(props: SaveDecisionMemoryModalPr
             type="button"
             onClick={handleSave}
             disabled={isSaving || !userNote.trim()}
+            aria-busy={isSaving}
             className="rounded-md border border-fuchsia-400/45 bg-fuchsia-500/14 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-fuchsia-100 disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save to Project Memory'}

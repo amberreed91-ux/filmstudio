@@ -1,193 +1,218 @@
 # Studio App UI/UX Upgrade Plan
 
-## Overview
-Transform the studio app into a high-end, cinematic post-production suite with dark, editorial aesthetics.
+**Status:** active · **Last aligned:** 2026-10-28 · **Scope:** `studio-app`
 
-## Design System Created ✅
-- `/studio-app/src/styles/design-system.css` - Complete design system with:
-  - Color palette (deep navy blacks, purple accents)
-  - Typography system (Inter font, proper sizing)
-  - Component styles (cards, buttons, badges, panels)
-  - Utility classes
-  - Animations and transitions
+This is the source of truth for visual work in the studio. It replaces the
+earlier design-system attempt: that stylesheet was never imported and has been
+deleted, and its accent is no longer the product accent. Do not recreate or
+import it.
 
-## Implementation Status
+---
 
-### Phase 1: Foundation ✅
-- [x] Create design system CSS
-- [x] Import design system into index.css
-- [x] Update body background to deep navy black
-- [x] Update scrollbar styling
+## 1. Source of truth
 
-### Phase 2: Global Navigation (TODO)
-Components to update:
-- Main navigation/router
-- Room switcher
-- Project header
-- Session debrief icon
+| Concern | Location |
+|---|---|
+| Live stylesheet | `src/styles/studio-pro-design-system.css` (imported by `src/index.css`) |
+| Base tokens + semantic fills | `src/index.css` → `@theme` and `@layer base` |
+| Secondary tokens | `src/styles/design-tokens.css`, `src/styles/cinematic.css` |
+| Button primitive | `src/components/ui/Button.tsx` |
+| Type-scale guard | `check_type_scale.cjs` |
+| Button/async guard | `check_button_conventions.cjs` + `check_button_conventions.self-test.cjs` |
+| Room registry | `src/routes.tsx` (`placement: primary` is the creator's critical path) |
 
-Changes needed:
-- Replace tab bars with left sidebar or slim top nav
-- Room names: Study, Writer, Previs, Production, Screening, Crew
-- Current room: accent left border (#a78bfa), not background fill
-- Project name at top (truncated if long)
-- Director Intent summary (1-line: genre + emotional target)
-- Session Debrief icon (clock/document) - quiet, not primary
+If a token is missing, add it to `src/index.css`. Never create a second
+design-system stylesheet; two sources of truth for tokens is what caused the
+silent transparent-background bug this plan exists to prevent.
 
-### Phase 3: Cards and Panels (TODO)
-Apply to all card/panel components:
-- Background: #0f172a
-- Border: #1e293b
-- Border-radius: 8px
-- Hover: border shifts to #334155
-- No box shadows - use border + background contrast
-- Panel headers: uppercase dimmed label above larger title
-- 20px padding inside panels
-- Section dividers: 1px #1e293b line
+---
 
-Components to update:
-- All `.glass-panel` and `.glass-card` classes
-- All `.cinematic-panel` classes
-- Scene cards
-- Intelligence panels
-- Export panels
-- Pitch deck panels
+## 2. Color system
 
-### Phase 4: Buttons (TODO)
-Update all button styles:
-- Primary: bg #a78bfa, color #0f172a, no border
-- Secondary: bg transparent, border #334155, color #94a3b8
-- Destructive: bg transparent, border #f87171, color #f87171
-- Ghost: no border, no bg, color #475569, hover #94a3b8
-- All: border-radius 5px, font-weight 600, letter-spacing 0.06em, uppercase
-- Disabled: opacity 0.4, cursor not-allowed
-- Active: scale(0.97)
+The product accent is **pale gold** (`--accent`). No other accent may drive a
+primary action; atmospheric hues from procedural backdrops
+(`lib/proceduralBackdrops.ts`, `SpatialStudioCanvas`) are scenery, not UI color.
 
-Components to update:
-- All `.btn-primary`, `.btn-ghost` classes
-- Render buttons
-- Export buttons
-- Generate buttons
-- Action buttons throughout
+| Token | Value | Use |
+|---|---|---|
+| `--accent` | `#ffd165` | Primary action, active selection, focus ring |
+| `--success` | `#10b981` | Passed, verified, saved |
+| `--warning` | `#f59e0b` | Attention, caution, not-yet |
+| `--accent-blue` | `#5b8dd9` | Informational severity, mono readouts |
+| `--color-tertiary` | `#34d399` | Secondary confirmation |
+| `--bg-primary` | `#080f1a` | App background |
+| `--bg-secondary` | `#0d1526` | Panels |
+| `--bg-elevated` | `#111d2e` | Cards, raised surfaces |
+| `--border-subtle` | `#1a2744` | Hairlines |
+| `--text-primary` | `#e8edf5` | Primary copy |
+| `--text-secondary` | `#8896b0` | Secondary copy |
+| `--text-dimmed` | `#4a5568` | Metadata only |
 
-### Phase 5: Intelligence Panels (TODO)
-Components: Timeline, Continuity, Editorial, DNA, Arc
+Rules:
+- Gold is for one primary action per surface. Never use gold for warnings.
+- Status color is never the only signal: pair it with a word ("approved",
+  "needs attention", "not yet").
+- No numeric health scores, percentages, or 0–100 ratings in UI copy. See
+  `AGENTS.md` co-director rules.
 
-Changes:
-- Consistent header: dimmed uppercase label + larger title + action button right
-- Advisory content: 13px, color #cbd5e1, 1.6 line-height
-- Uncertainty notes: italic, color #475569
-- Section labels: 10px uppercase #475569, 5px margin-bottom
-- Expandable sections: chevron, smooth height transition
-- NO scores, NO progress bars, NO percentages
+---
 
-### Phase 6: Screening Room (TODO)
-Changes:
-- Video player: 60% viewport height minimum
-- Intelligence panels: below or collapsible right sidebar
-- Tab pills (not full tab bars):
-  - Active: bg #1e293b, color #f1f5f9
-  - Inactive: no bg, color #475569
+## 3. Typography scale
 
-### Phase 7: Production Board (TODO)
-Changes:
-- Scene cards: clean grid or list (user toggle)
-- Each card: scene title, status badge, shot count, provider badge, last render status
-- Status badges: use color system (never text-only)
-- Render progress: thin line at bottom, accent color, no percentage text
-- Cascade warning: amber left border, not full alert box
+| Step | Size | Use |
+|---|---|---|
+| micro-label | `10px` | Uppercase + tracked labels, chips, monospace telemetry |
+| meta | `11px` | Captions, timestamps, secondary metadata |
+| body | `12px` | Descriptions, advisories, button labels (`text-xs`) |
+| emphasis | `14px+` | Headings and room titles |
 
-### Phase 8: Empty States (TODO)
-Apply everywhere:
-- Icon: simple geometric shape (circle outline ◌)
-- Headline: what this space will show
-- Subtext: single next action needed
-- Never show raw API states
-- Loading: subtle pulse animation, no spinning icons
+Hard rules (enforced by `npm run check:type-scale`):
+1. **10px is a hard floor.** Anything below fails the build. The only
+   allowlisted exception is the 9px single letter inside the 12×12 keycap in
+   `components/Interactive3DLobby.tsx`.
+2. **Never render a sentence below 12px.** 10–11px is reserved for uppercase
+   labels, monospace codes, chips, and truncation — not prose.
+3. **Allowed hidden-surface exception:** `pages/StudioDevTools.tsx` (internal,
+   non-product tooling) is reported but not blocking while it carries dense
+   diagnostics. This exception must never be copied into a creator-facing room.
+4. Use the named steps (`text-xs`, `text-sm`, `text-[11px]`) instead of new
+   arbitrary sizes. Add a token before adding a number.
 
-### Phase 9: Micro-interactions (TODO)
-- All transitions: 150-200ms ease
-- Hover states on all interactive elements
-- Button press: scale(0.97)
-- Panel expand/collapse: height transition
-- Toast notifications: slide from bottom right, auto-dismiss 6s
+The guard prints non-blocking "reading text under 12px" warnings so the backlog
+is visible; drive it to zero in creator-facing surfaces.
 
-### Phase 10: Responsive (TODO)
-- Minimum width: 1024px
-- Below 1024px: "best experienced on desktop" message
-- No mobile-first breakage
+---
 
-## Color System Reference
+## 4. Button and async conventions
 
-```css
---bg-primary: #080f1a       /* Deep navy black */
---bg-secondary: #0f172a     /* Slightly lighter */
---bg-elevated: #1e293b      /* Cards, panels */
---border-subtle: #1e293b
---border-default: #334155
---text-primary: #f1f5f9
---text-secondary: #94a3b8
---text-dimmed: #475569
---accent: #a78bfa           /* Purple - intelligence/advisory */
---positive: #4ade80
---warning: #facc15
---caution: #fb923c
---elevated-risk: #f87171    /* Never "error" */
+Enforced by `check_button_conventions.cjs`.
+
+### 4.1 Every button declares a type
+
+```tsx
+<button type="button" onClick={open}>Options</button>
 ```
 
-## Typography Reference
+Omitting `type` makes the button default to `submit` and silently submit a
+surrounding form. There are no exceptions; the guard fails the build on an
+untyped button anywhere under `src/`.
 
-```css
---font-ui: 'Inter', system-ui
---text-xs: 10px
---text-sm: 11px
---text-base: 13px
---text-md: 14px
---text-lg: 16px
---text-xl: 18px
---text-2xl: 24px
---text-3xl: 30px
+### 4.2 Every async action reports in-flight state
+
+An async button must, while the action is pending:
+
+| Requirement | Implementation |
+|---|---|
+| Assistive-tech signal | `aria-busy={pending || undefined}` |
+| Re-entry protection | `disabled={pending}` (widen existing disabled conditions, never remove them) |
+| Visible feedback | Spinner (`Loader2` with `animate-spin`) or a label change ("Saving…", "Generating…") |
+| Stable layout | Keep the button label/width from collapsing mid-flight |
+
+```tsx
+<button
+  type="button"
+  onClick={() => void save()}
+  disabled={saving}
+  aria-busy={saving || undefined}
+>
+  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+  {saving ? 'Saving…' : 'Save'}
+</button>
 ```
 
-Display/headlines: letter-spacing 0.02em
-Labels/badges: uppercase, 0.1em letter-spacing, 10-11px
-Body: 13-14px, 1.6 line-height
-Never below 10px
+Prefer the primitive: `<Button loading={saving} loadingLabel="Saving…">Save</Button>`
+already does all of the above.
 
-## Implementation Notes
+Async detection covers inline `async`/`await`, the `void promise()` intent
+marker, direct handler references, and handlers declared async in the same
+file. The guard's default is **fatal repo-wide**; the legacy backlog report was
+removed once the migration finished. Do not add an allowlist to dodge it — add
+the pending state.
 
-1. **Preserve Functionality**: All changes are purely visual - no logic changes
-2. **Test After Each Phase**: Run `npm test -- --run` to ensure no regressions
-3. **Gradual Migration**: Can coexist with existing styles during transition
-4. **Component-by-Component**: Update one component at a time, test, commit
-5. **Use Design System Classes**: Prefer `.card`, `.btn-primary`, etc. from design-system.css
+### 4.3 What "async" means here
 
-## Next Steps
+Anything that awaits a fetch, provider call, file read/write, or state mutation
+that can fail or take longer than one frame. Purely local setters (open a
+drawer, switch a tab) do not need busy state.
 
-1. Update main navigation/routing component
-2. Update all card components to use new `.card` class
-3. Update all buttons to use new button classes
-4. Update intelligence panels
-5. Update screening room
-6. Update production board
-7. Update empty states throughout
-8. Add micro-interactions
-9. Add responsive message
-10. Final testing and polish
+---
 
-## Testing Strategy
+## 5. Quality gates
 
-After each component update:
+| Command | Gate |
+|---|---|
+| `npm run check:type-scale` | 10px floor; reports sub-12px prose |
+| `npm run check:buttons` | explicit `type`; async `aria-busy` + `disabled` |
+| `npm run check:buttons:self-test` | proves the guard still catches regressions |
+| `npm run typecheck` | `tsc -b --force` |
+| `npm run lint` | ESLint, zero errors **and** zero warnings |
+| `npm test -- --run` | Vitest suite |
+| `npm run build` | production build |
+
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, both guards, the guard
+self-test, and the unit suite on every push and PR; run the production build
+before shipping. A red guard is a red build; fix the surface, not the guard.
+
+---
+
+## 6. Current state (2026-10-28)
+
+Done:
+- Type-scale sweep across creator-facing text and the 10px floor guard.
+- Explicit `type` added to every button repo-wide; button guard wired into CI
+  with a self-test.
+- In-flight `aria-busy` + disabled state on **every** async action under
+  `src/` (231 actions); the guard is fatal repo-wide with no backlog allowance.
+  This includes the shared panels: Export, Canonical Workflow, Production
+  Queue, Voice Picker, Knowledge Library, Reference Image Generator,
+  Generation Readiness, Storyboard Image Prompt, and the collaboration family.
+- Dead code removed: the unused top-nav component and the old unimported design-system stylesheet.
+- Token definitions consolidated in `src/index.css` so `var(--x)` always
+  resolves.
+- ESLint at zero errors and zero warnings; `npm run lint`
+  (`eslint . --max-warnings 0`) is a blocking CI gate.
+- `react-refresh`, React Compiler purity/memoization, effect dependency, and
+  `set-state-in-effect` issues resolved repo-wide; helper functions moved into
+  `src/lib/*` so component modules export components only.
+
+Open:
+1. **Visual regression baseline.** Playwright is installed; add screenshot
+   checks for the primary rooms and use
+   `reports/ui-audit-2026-10-28/` as the reference set.
+2. **Handoff polish.** One status vocabulary and one empty-state pattern across
+   Previs → Scenes → Watch → Production Desk.
+3. **Type-scale backlog.** Clear the remaining sub-12px reading-text warnings in
+   `RenderPromptScopeNote`, `TacticalSideRail`, `PrevisRoom`, and
+   `SceneContinuityPanel`; keep `StudioDevTools` allowlisted with its reason.
+4. **Co-director presentation.** Keep rendering advisory voice (no scores, no
+   generic praise) consistent across the rooms; see `AGENTS.md`.
+
+---
+
+## 7. Working rules for agents and contributors
+
+1. Preserve behavior. Visual/accessibility changes must not alter workflow
+   logic, gating, or persistence.
+2. Edit the live stylesheet or `index.css`; never add a parallel design system.
+3. Do not suppress guards (`eslint-disable`, allowlists, skipped tests). Fix
+   the cause.
+4. Test after each room-level pass, not only at the end.
+5. Prefer one clear primary action per surface; quiet everything else.
+6. Legacy documents (`UI_UPGRADE_SUMMARY.md`, `IMPLEMENTATION_SUMMARY.md`) are
+   historical records. They describe removed code and must not be used as
+   implementation guidance.
+
+---
+
+## 8. Verification sequence
+
 ```bash
-npm test -- --run
+cd studio-app
+node check_button_conventions.cjs
+npm run typecheck
+npm run lint
+npm run test -- --run
+npm run build
 ```
 
-Ensure all 525+ tests still pass.
-
-## Reference Aesthetic
-
-- **A24 Website**: Clean, editorial, sophisticated
-- **Blackmagic DaVinci Resolve**: Professional, dark, focused
-- **Film Festival Program**: Curated, intentional, high-end
-
-The goal is to create something a director would actually want to sit in front of - not a SaaS dashboard, not a developer tool, but a professional creative suite.
+All five must exit `0` before a UI pass is considered complete.

@@ -74,6 +74,7 @@ export default function StudioBrainExecutivePanel({ projectId }: { projectId: st
             type="button"
             className="rounded-lg border border-emerald-300/40 bg-emerald-400/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 disabled:opacity-50"
             disabled={loading || !projectId}
+            aria-busy={loading}
             onClick={() => run('Opening Studio Brain session...', () => createStudioBrainSession(projectId))}
           >
             Open
@@ -82,6 +83,7 @@ export default function StudioBrainExecutivePanel({ projectId }: { projectId: st
             type="button"
             className="rounded-lg border border-zinc-500/50 bg-zinc-900/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100 disabled:opacity-50"
             disabled={loading || !sessionId}
+            aria-busy={loading}
             onClick={() => run('Refreshing department signals...', () => refreshStudioBrainSignals(projectId, sessionId))}
           >
             Signals
@@ -90,6 +92,7 @@ export default function StudioBrainExecutivePanel({ projectId }: { projectId: st
             type="button"
             className="rounded-lg border border-zinc-500/50 bg-zinc-900/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100 disabled:opacity-50"
             disabled={loading || !sessionId}
+            aria-busy={loading}
             onClick={() => run('Planning production move...', () => generateStudioBrainPlan(projectId, sessionId))}
           >
             Plan
@@ -98,6 +101,7 @@ export default function StudioBrainExecutivePanel({ projectId }: { projectId: st
             type="button"
             className="rounded-lg border border-zinc-500/50 bg-zinc-900/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100 disabled:opacity-50"
             disabled={loading || !sessionId}
+            aria-busy={loading}
             onClick={() => run('Inspecting conflicts...', () => detectStudioBrainConflicts(projectId, sessionId))}
           >
             Conflicts
@@ -106,6 +110,7 @@ export default function StudioBrainExecutivePanel({ projectId }: { projectId: st
             type="button"
             className="rounded-lg border border-zinc-500/50 bg-zinc-900/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-100 disabled:opacity-50"
             disabled={loading || !sessionId}
+            aria-busy={loading}
             onClick={() => run('Preparing directives...', () => proposeStudioBrainDirectives(projectId, sessionId))}
           >
             Directives

@@ -178,7 +178,7 @@ describe('authenticated Creator Workspace development routing', () => {
     const config = await readFile(new URL('../vite.creator-workspace-authenticated.config.ts', import.meta.url), 'utf8')
     const routing = await readFile(new URL('../creatorWorkspaceRouting.ts', import.meta.url), 'utf8')
 
-    expect(config).not.toMatch(/backendSupervisorPlugin|from ['\"]\.\/backendSupervisor|main\.py|DatabaseStorage|project_store|recovery|worker|8010/i)
+    expect(config).not.toMatch(/backendSupervisorPlugin|from ['"]\.\/backendSupervisor|main\.py|DatabaseStorage|project_store|recovery|worker|8010/i)
     expect(config).not.toContain("'/api':")
     expect(routing).toContain('validateCreatorWorkspaceRuntimeTarget')
     expect(routing).not.toMatch(/(?:x-session-token|authorization|access_user_id|user_id|ownership|bypass.?auth|hardcoded user)/i)

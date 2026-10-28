@@ -64,7 +64,7 @@ export default function SceneEmotionalGuidancePanel({
 
   if (!hasContent) {
     if (loading) {
-      return <p className="text-[11px] text-zinc-400">Reading the scene’s emotional work…</p>
+      return <p className="text-xs text-zinc-400">Reading the scene’s emotional work…</p>
     }
     return null
   }

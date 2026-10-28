@@ -80,7 +80,7 @@ function MotifRow({ motif, allSceneIds }: { motif: MotifThread; allSceneIds: str
           ))}
         </div>
         <span
-          className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] ${motifStatusStyle(motif.status)}`}
+          className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] ${motifStatusStyle(motif.status)}`}
           data-testid={`motif-status-${motif.status}`}
         >
           {motif.status}
@@ -91,7 +91,7 @@ function MotifRow({ motif, allSceneIds }: { motif: MotifThread; allSceneIds: str
         <div className="mt-2 space-y-1.5 pl-0.5">
           <div className="text-[10px] text-zinc-300">{motif.thread_read}</div>
           {motif.uncertainty_note && (
-            <div className="text-[9px] text-zinc-500">· {motif.uncertainty_note}</div>
+            <div className="text-[10px] text-zinc-500">· {motif.uncertainty_note}</div>
           )}
         </div>
       )}

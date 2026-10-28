@@ -113,7 +113,7 @@ export default function DemoMissionChecklist({ projectId, data }: { projectId: s
                 {statusText(item.ready)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-zinc-100">{item.explanation}</p>
+            <p className="mt-1 text-xs text-zinc-100">{item.explanation}</p>
             {item.ctaLabel && item.ctaPath ? (
               <Link to={item.ctaPath} className="mt-2 inline-flex rounded border border-current/45 px-2 py-1 text-[10px] uppercase tracking-[0.1em] no-underline">
                 {item.ctaLabel}

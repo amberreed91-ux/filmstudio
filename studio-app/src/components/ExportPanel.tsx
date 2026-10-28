@@ -50,6 +50,7 @@ export default function ExportPanel({
   // -------------------------------------------------------------------------
   const [job, setJob] = useState<ExportJob | null>(null)
   const [loading, setLoading] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -133,6 +134,7 @@ export default function ExportPanel({
 
   async function handleDownload() {
     if (!projectId) return
+    setDownloading(true)
     try {
       const res = await getExportDownload(projectId)
       if (res?.download_url) {
@@ -146,6 +148,8 @@ export default function ExportPanel({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Download failed')
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -174,19 +178,19 @@ export default function ExportPanel({
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-violet-400">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-400">
             Final Export
           </div>
           <h3 className="mt-0.5 text-sm font-semibold text-zinc-100">Package &amp; Download</h3>
         </div>
         <div className="flex items-center gap-2">
           {job?.mock_mode && (
-            <span className="rounded border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-300">
+            <span className="rounded border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-300">
               Mock Mode
             </span>
           )}
           {!stitchComplete && (
-            <span className="rounded border border-zinc-600/50 bg-zinc-800/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+            <span className="rounded border border-zinc-600/50 bg-zinc-800/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
               Stitch first
             </span>
           )}
@@ -216,7 +220,7 @@ export default function ExportPanel({
           <div className="flex items-center justify-between rounded border border-zinc-700/50 bg-zinc-800/30 px-3 py-2">
             <div>
               <div className="text-xs font-medium text-zinc-200">Title Card</div>
-              <div className="text-[10px] text-zinc-500">Black bg, film title + director, fade in/out</div>
+              <div className="text-xs text-zinc-500">Black bg, film title + director, fade in/out</div>
             </div>
             <button
               type="button"
@@ -251,7 +255,7 @@ export default function ExportPanel({
           <div className="flex items-center justify-between rounded border border-zinc-700/50 bg-zinc-800/30 px-3 py-2">
             <div>
               <div className="text-xs font-medium text-zinc-200">End Card</div>
-              <div className="text-[10px] text-zinc-500">"FIN" + film title on black</div>
+              <div className="text-xs text-zinc-500">"FIN" + film title on black</div>
             </div>
             <button
               type="button"
@@ -393,6 +397,7 @@ export default function ExportPanel({
           type="button"
           onClick={() => void handleExport()}
           disabled={loading || isRunning || !stitchComplete}
+          aria-busy={loading || isRunning}
           className="rounded-lg border border-violet-400/50 bg-violet-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-violet-100 transition hover:border-violet-300/70 hover:bg-violet-500/25 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isRunning ? 'Exporting…' : isComplete ? 'Re-Export Film' : 'Export Film'}
@@ -402,9 +407,11 @@ export default function ExportPanel({
           <button
             type="button"
             onClick={() => void handleDownload()}
-            className="rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:border-emerald-300/70 hover:bg-emerald-500/25"
+            disabled={downloading}
+            aria-busy={downloading}
+            className="rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:border-emerald-300/70 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Download
+            {downloading ? 'Downloading…' : 'Download'}
           </button>
         )}
 

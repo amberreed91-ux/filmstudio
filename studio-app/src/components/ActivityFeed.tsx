@@ -229,7 +229,7 @@ function ActivityItem({ activity, projectId, isLast = false }: ActivityItemProps
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-zinc-300">{activity.author}</span>
-            <span className="text-[10px] text-zinc-500">{formatActivityTime(activity.timestamp)}</span>
+            <span className="text-xs text-zinc-500">{formatActivityTime(activity.timestamp)}</span>
           </div>
           <p className="text-sm text-zinc-400 mt-0.5">
             {actionLabel} {activity.action}

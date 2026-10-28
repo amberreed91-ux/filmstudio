@@ -64,31 +64,31 @@ export default function WorkflowLauncher({ projectId, onWorkflowComplete }: Work
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [error, setError] = useState<string | null>(null)
 
-  // Load available workflows
+  // Load available workflows and this project's executions
   useEffect(() => {
-    loadWorkflows()
-    loadExecutions()
-  }, [])
-
-  const loadWorkflows = async () => {
-    try {
-      const response = await fetch(`${STUDIO_API_BASE}/api/workflows/definitions`)
-      const data = await response.json()
-      setWorkflows(data)
-    } catch (err) {
-      console.error('Failed to load workflows:', err)
+    const loadWorkflows = async () => {
+      try {
+        const response = await fetch(`${STUDIO_API_BASE}/api/workflows/definitions`)
+        const data = await response.json()
+        setWorkflows(data)
+      } catch (err) {
+        console.error('Failed to load workflows:', err)
+      }
     }
-  }
 
-  const loadExecutions = async () => {
-    try {
-      const response = await fetch(`${STUDIO_API_BASE}/api/workflows/executions?project_id=${projectId}`)
-      const data = await response.json()
-      setExecutions(data)
-    } catch (err) {
-      console.error('Failed to load executions:', err)
+    const loadExecutions = async () => {
+      try {
+        const response = await fetch(`${STUDIO_API_BASE}/api/workflows/executions?project_id=${projectId}`)
+        const data = await response.json()
+        setExecutions(data)
+      } catch (err) {
+        console.error('Failed to load executions:', err)
+      }
     }
-  }
+
+    void loadWorkflows()
+    void loadExecutions()
+  }, [projectId])
 
   const handleWorkflowSelect = (workflow: WorkflowDefinition) => {
     setSelectedWorkflow(workflow)
@@ -330,16 +330,17 @@ export default function WorkflowLauncher({ projectId, onWorkflowComplete }: Work
             )}
 
             <div className="flex justify-end space-x-3">
-              <button
+              <button type="button"
                 onClick={() => setShowForm(false)}
                 disabled={isExecuting}
                 className="px-4 py-2 bg-zinc-700/50 text-zinc-300 rounded-lg hover:bg-zinc-700/70 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={handleExecute}
                 disabled={isExecuting}
+                aria-busy={isExecuting}
                 className="px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors disabled:opacity-50 flex items-center space-x-2"
               >
                 {isExecuting && <Loader2 className="w-4 h-4 animate-spin" />}

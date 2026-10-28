@@ -25,16 +25,21 @@ type Props = {
  * parent so this modal never touches storage directly.
  */
 export default function DossierEditorModal({ open, initial, saving = false, onClose, onSave }: Props) {
-  const [draft, setDraft] = useState<DossierDraft>(initial)
-
-  useEffect(() => {
-    if (open) setDraft(initial)
-  }, [open, initial])
+  // The draft is tagged with the dossier it was started from, so reopening
+  // the modal on different values starts fresh without a reset effect.
+  const initialKey = [initial.title, initial.format, initial.genre, initial.brief].join('\u0000')
+  const [draftState, setDraftState] = useState<{ key: string; draft: DossierDraft } | null>(null)
+  const draft = draftState?.key === initialKey ? draftState.draft : initial
+  const setDraft = (update: (previous: DossierDraft) => DossierDraft) =>
+    setDraftState({ key: initialKey, draft: update(draft) })
 
   useEffect(() => {
     if (!open) return
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        setDraftState(null)
+        onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -52,12 +57,8 @@ export default function DossierEditorModal({ open, initial, saving = false, onCl
       aria-label="Edit project dossier"
       data-testid="dossier-editor-modal"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={onClose}
     >
-      <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border-2 border-[#1E293B] bg-[#0B0F17]/92 p-5 text-[#CBD5E1] shadow-[0_0_60px_rgba(109,40,217,0.35)] backdrop-blur-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border-2 border-[#1E293B] bg-[#0B0F17]/92 p-5 text-[#CBD5E1] shadow-[0_0_60px_rgba(109,40,217,0.35)] backdrop-blur-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-[#CBD5E1]">Edit project dossier</h2>
@@ -65,7 +66,10 @@ export default function DossierEditorModal({ open, initial, saving = false, onCl
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              setDraftState(null)
+              onClose()
+            }}
             aria-label="Close dossier editor"
             className="rounded border border-white/15 p-1.5 text-[#CBD5E1] hover:border-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F17]"
           >
@@ -118,7 +122,10 @@ export default function DossierEditorModal({ open, initial, saving = false, onCl
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              setDraftState(null)
+              onClose()
+            }}
             disabled={saving}
             className="rounded-md border border-white/15 px-3 py-2 text-xs text-[#CBD5E1] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F17]"
           >

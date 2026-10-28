@@ -108,14 +108,14 @@ export default function MultiUserCollaborationPanel({ projectId, room, sceneId }
     <section className="collab-panel" data-testid={`collab-panel-${room}`}>
       <div className="collab-panel-head">
         <div className="collab-panel-title">Multi-User Collaboration</div>
-        <button type="button" className="collab-mini-btn" onClick={() => void refresh()} disabled={busy}>Sync</button>
+        <button type="button" className="collab-mini-btn" onClick={() => void refresh()} disabled={busy} aria-busy={busy}>Sync</button>
       </div>
       <div className="collab-panel-sub">Shared room: {state?.shared_room || room} · Session: {state?.session_id || 'not started'}</div>
 
       <div className="collab-vote-row">
-        <button type="button" className="collab-vote-btn" onClick={() => void vote('approve')} disabled={busy}>Approve ({votes.approve})</button>
-        <button type="button" className="collab-vote-btn" onClick={() => void vote('revise')} disabled={busy}>Revise ({votes.revise})</button>
-        <button type="button" className="collab-vote-btn" onClick={() => void vote('regenerate')} disabled={busy}>Regenerate ({votes.regenerate})</button>
+        <button type="button" className="collab-vote-btn" onClick={() => void vote('approve')} disabled={busy} aria-busy={busy}>Approve ({votes.approve})</button>
+        <button type="button" className="collab-vote-btn" onClick={() => void vote('revise')} disabled={busy} aria-busy={busy}>Revise ({votes.revise})</button>
+        <button type="button" className="collab-vote-btn" onClick={() => void vote('regenerate')} disabled={busy} aria-busy={busy}>Regenerate ({votes.regenerate})</button>
       </div>
 
       <div className="collab-comment-box">
@@ -125,7 +125,7 @@ export default function MultiUserCollaborationPanel({ projectId, room, sceneId }
           placeholder="Live comment..."
           className="collab-input"
         />
-        <button type="button" className="collab-mini-btn" onClick={() => void sendComment()} disabled={busy || !commentText.trim()}>Send</button>
+        <button type="button" className="collab-mini-btn" onClick={() => void sendComment()} disabled={busy || !commentText.trim()} aria-busy={busy}>Send</button>
       </div>
 
       <div className="collab-comment-box">
@@ -135,7 +135,7 @@ export default function MultiUserCollaborationPanel({ projectId, room, sceneId }
           placeholder="Co-direction note..."
           className="collab-input"
         />
-        <button type="button" className="collab-mini-btn" onClick={() => void addCoDirectionNote()} disabled={busy || !note.trim()}>Add</button>
+        <button type="button" className="collab-mini-btn" onClick={() => void addCoDirectionNote()} disabled={busy || !note.trim()} aria-busy={busy}>Add</button>
       </div>
 
       <div className="collab-feed">

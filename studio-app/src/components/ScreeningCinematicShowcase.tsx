@@ -544,6 +544,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                 type="button"
                 onClick={handleManualDebate}
                 disabled={triggeringDebate}
+                aria-busy={triggeringDebate}
                 className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 hover:text-indigo-300"
               >
                 Discuss
@@ -595,6 +596,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
               type="button"
               onClick={handleManualDebate}
               disabled={triggeringDebate || props.revisions.length < 2}
+              aria-busy={triggeringDebate}
               className="rounded-md border border-indigo-500/45 bg-indigo-500/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100"
             >
               {triggeringDebate ? 'Preparing Debate...' : 'Debate this Comparison'}
@@ -610,7 +612,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                   setRevisionEmphasis('emotional_residue')
                   setSessionTasteCleared(false)
                 }}
-                className={`rounded px-2.5 py-1 text-[11px] ${revisionEmphasis === 'emotional_residue' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+                className={`rounded px-2.5 py-1 text-xs ${revisionEmphasis === 'emotional_residue' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
               >
                 Emotional Residue
               </button>
@@ -620,7 +622,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                   setRevisionEmphasis('structural_clarity')
                   setSessionTasteCleared(false)
                 }}
-                className={`rounded px-2.5 py-1 text-[11px] ${revisionEmphasis === 'structural_clarity' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+                className={`rounded px-2.5 py-1 text-xs ${revisionEmphasis === 'structural_clarity' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
               >
                 Structural Clarity
               </button>
@@ -631,9 +633,9 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
             <div className="mt-2 rounded-md border border-white/10 bg-zinc-900/40 px-2 py-1.5" data-testid="emerging-taste-read">
               <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Emerging Taste Read</div>
               {tasteMemory.hasEnoughData() ? (
-                <p className="mt-1 text-[11px] text-zinc-400">{tasteMemory.getTendencyMessage()}</p>
+                <p className="mt-1 text-xs text-zinc-400">{tasteMemory.getTendencyMessage()}</p>
               ) : (
-                <p className="mt-1 text-[11px] text-zinc-400">{tasteRead}</p>
+                <p className="mt-1 text-xs text-zinc-400">{tasteRead}</p>
               )}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -666,16 +668,16 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                     <p className="mt-1 text-[11px] text-zinc-300">
                       Confidence: <span className="text-zinc-100 capitalize">{tasteMemory.confidence}</span>
                     </p>
-                    <p className="mt-1 text-[11px] text-zinc-400">{tasteMemory.getTendencyMessage()}</p>
-                    <p className="mt-1 text-[11px] text-zinc-500">The Studio is treating this as a temporary creative read, not a permanent profile.</p>
+                    <p className="mt-1 text-xs text-zinc-400">{tasteMemory.getTendencyMessage()}</p>
+                    <p className="mt-1 text-xs text-zinc-500">The Studio is treating this as a temporary creative read, not a permanent profile.</p>
                   </>
                 ) : (
                   <>
                     <p className="mt-1 text-[11px] text-zinc-300">
                       Current axis: <span className="text-zinc-100">Emerging</span>
                     </p>
-                    <p className="mt-1 text-[11px] text-zinc-400">The Studio is still observing your creative choices to understand your tendencies.</p>
-                    <p className="mt-1 text-[11px] text-zinc-500">The Studio is treating this as a temporary creative read, not a permanent profile.</p>
+                    <p className="mt-1 text-xs text-zinc-400">The Studio is still observing your creative choices to understand your tendencies.</p>
+                    <p className="mt-1 text-xs text-zinc-500">The Studio is treating this as a temporary creative read, not a permanent profile.</p>
                   </>
                 )}
               </div>
@@ -744,11 +746,11 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                   {saveMemoryError}
                 </div>
               )}
-              <p className="mt-2 text-[11px] text-zinc-500">This journal is session-only and not saved.</p>
+              <p className="mt-2 text-xs text-zinc-500">This journal is session-only and not saved.</p>
               <div className="mt-2 space-y-1.5" data-testid="cut-decision-journal-notes">
                 {journalNotes.length > 0 ? journalNotes.map((note, index) => (
                   <div key={`${index}-${note.slice(0, 16)}`} className="rounded border border-white/10 bg-zinc-900/50 px-2 py-1">
-                    <p className="text-[11px] text-zinc-300">{note}</p>
+                    <p className="text-xs text-zinc-300">{note}</p>
                     <button
                       type="button"
                       onClick={() => setCandidateMemories((current) => markCandidateMemory(current, note, revisionEmphasis))}
@@ -758,17 +760,17 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                     </button>
                   </div>
                 )) : (
-                  <p className="text-[11px] text-zinc-500">No session notes yet.</p>
+                  <p className="text-xs text-zinc-500">No session notes yet.</p>
                 )}
               </div>
               <div className="mt-3 rounded border border-white/10 bg-zinc-900/35 px-2 py-2" data-testid="candidate-project-memories">
                 <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Candidate Project Memories</div>
-                <p className="mt-1 text-[11px] text-zinc-500">Candidate memories are not saved permanently.</p>
-                <p className="text-[11px] text-zinc-500">The Studio is waiting for explicit save approval.</p>
+                <p className="mt-1 text-xs text-zinc-500">Candidate memories are not saved permanently.</p>
+                <p className="text-xs text-zinc-500">The Studio is waiting for explicit save approval.</p>
                 <div className="mt-2 space-y-1.5">
                   {candidateMemories.length > 0 ? candidateMemories.map((candidate) => (
                     <div key={candidate.id} className="rounded border border-white/10 bg-zinc-900/60 px-2 py-1.5">
-                      <p className="text-[11px] text-zinc-200">{candidate.note}</p>
+                      <p className="text-xs text-zinc-200">{candidate.note}</p>
                       <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                         Axis: {candidate.inferredTradeoffAxis === 'emotional_residue' ? 'Emotional Residue' : 'Structural Clarity'} · Session #{candidate.sessionOrder}
                       </p>
@@ -781,7 +783,7 @@ export default function ScreeningCinematicShowcase(props: ScreeningCinematicShow
                       </button>
                     </div>
                   )) : (
-                    <p className="text-[11px] text-zinc-500">No candidate memories marked yet.</p>
+                    <p className="text-xs text-zinc-500">No candidate memories marked yet.</p>
                   )}
                 </div>
                 <button

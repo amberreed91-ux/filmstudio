@@ -89,7 +89,7 @@ export default function AssetIntelligenceCard({
 
       {/* Action Button */}
       {onActionClick && (
-        <button
+        <button type="button"
           onClick={() => onActionClick(assetId)}
           className="w-full px-3 py-2 text-xs font-medium bg-blue-600/20 border border-blue-500/40 rounded text-blue-300 hover:bg-blue-600/30 hover:border-blue-500/60 transition-colors"
         >

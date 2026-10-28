@@ -76,7 +76,7 @@ export default function TakeComparisonDrawer({ open, takes, selectedId, onSelect
                     {take.imageUrl ? (
                       <img src={take.imageUrl} alt={`${take.label} still`} className="mt-2 aspect-video w-full rounded-lg border border-[#1E293B] object-cover" />
                     ) : null}
-                    {take.note ? <span className="mt-2 block text-[11px] leading-relaxed text-[#CBD5E1]/75">{take.note}</span> : null}
+                    {take.note ? <span className="mt-2 block text-xs leading-relaxed text-[#CBD5E1]/75">{take.note}</span> : null}
                   </button>
                 </li>
               )

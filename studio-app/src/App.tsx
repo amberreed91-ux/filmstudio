@@ -76,14 +76,14 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
               {this.state.error?.message || 'An unexpected error occurred in the application.'}
             </div>
             <div className="flex gap-2 justify-center">
-              <button
+              <button type="button"
                 className="text-sm px-4 py-2 rounded-lg cursor-pointer"
                 style={{ background: 'rgba(0,200,255,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(0,200,255,0.3)' }}
                 onClick={() => this.setState({ hasError: false, error: null })}
               >
                 Try Again
               </button>
-              <button
+              <button type="button"
                 className="text-sm px-4 py-2 rounded-lg cursor-pointer"
                 style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.1)' }}
                 onClick={() => window.location.reload()}

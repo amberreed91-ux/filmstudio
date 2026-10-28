@@ -32,7 +32,7 @@ export const AudienceSimulatorModal: React.FC<AudienceSimulatorModalProps> = ({
         className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto" 
         onClick={e => e.stopPropagation()}
       >
-        <button 
+        <button type="button" 
           onClick={onClose}
           className="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
         >

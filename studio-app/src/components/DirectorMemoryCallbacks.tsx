@@ -21,26 +21,33 @@ export default function DirectorMemoryCallbacks({
   scene,
   sceneIndex,
 }: DirectorMemoryCallbacksProps) {
-  const [callbacks, setCallbacks] = useState<DirectorMemoryCallback[]>([])
-  const [loading, setLoading] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
+  // One scan result per scene. Tagging the result with the scene it belongs
+  // to means a scene switch reads as loading until its own scan lands, with
+  // no synchronous state reset inside the effect.
+  type ScanState =
+    | { scene: Record<string, unknown>; projectId: string; sceneIndex: number | undefined; status: 'ready'; callbacks: DirectorMemoryCallback[] }
+    | { scene: Record<string, unknown>; projectId: string; sceneIndex: number | undefined; status: 'error'; message: string }
+  const [scan, setScan] = useState<ScanState | null>(null)
 
   useEffect(() => {
     let cancelled = false
     if (!projectId || !scene) return
-    setLoading(true)
-    setError(null)
     scanSceneForDirectorMemory(projectId, scene, sceneIndex)
       .then((result) => {
-        if (!cancelled) setCallbacks(result.callbacks ?? [])
+        if (!cancelled) {
+          setScan({ scene, projectId, sceneIndex, status: 'ready', callbacks: result.callbacks ?? [] })
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setError(error instanceof Error ? error.message : 'Failed to scan memory')
+          setScan({
+            scene,
+            projectId,
+            sceneIndex,
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Failed to scan memory',
+          })
         }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
@@ -48,18 +55,22 @@ export default function DirectorMemoryCallbacks({
   }, [projectId, scene, sceneIndex])
 
   if (!scene) return null
-  if (loading) {
+  const current = scan && scan.scene === scene && scan.projectId === projectId && scan.sceneIndex === sceneIndex
+    ? scan
+    : null
+  if (!current) {
     return (
-      <div className="text-[11px] text-zinc-400">Consulting director's memory…</div>
+      <div className="text-xs text-zinc-400">Consulting director's memory…</div>
     )
   }
-  if (error) {
+  if (current.status === 'error') {
     return (
       <div className="rounded border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-100">
-        {error}
+        {current.message}
       </div>
     )
   }
+  const callbacks = current.callbacks
   if (callbacks.length === 0) return null
 
   return (

@@ -445,7 +445,7 @@ const UniverseGraphPage: React.FC = () => {
             </div>
           </header>
 
-          {error && <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"><span>{error || projectError}</span><button type="button" onClick={() => void loadData()} className="rounded border border-rose-300/30 px-3 py-1.5 hover:bg-white/5">Try again</button></div>}
+          {error && <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"><span>{error || projectError}</span><button type="button" onClick={() => void loadData()} disabled={loading} aria-busy={loading} className="rounded border border-rose-300/30 px-3 py-1.5 hover:bg-white/5 disabled:opacity-50">{loading ? 'Trying again…' : 'Try again'}</button></div>}
           {success && <div role="status" className="mb-4 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div>}
 
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_350px]">
@@ -460,7 +460,7 @@ const UniverseGraphPage: React.FC = () => {
                 <div className="flex flex-wrap gap-x-4 gap-y-2">
                   {NODE_TYPE_LEGEND.map(({ key, label, style }) => <span key={key} className="flex items-center gap-1.5 text-[11px] text-[#b6c3ce]"><span className="h-1.5 w-1.5 rounded-full" style={{ background: style.fill }} />{label}</span>)}
                 </div>
-                <span className="text-[11px] text-[#8499ab]">Connections from your project</span>
+                <span className="text-xs text-[#8499ab]">Connections from your project</span>
               </div>
             </section>
 
@@ -471,7 +471,7 @@ const UniverseGraphPage: React.FC = () => {
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg border border-white/15 bg-[#192a3a] text-[#dfc494]">{selectedNode.node_type === 'character' ? <UserRound size={23} /> : selectedNode.node_type === 'location' ? <MapPin size={23} /> : selectedNode.node_type === 'object' ? <Box size={23} /> : <BookOpen size={23} />}</div>
                   <p className="mb-1.5 text-xs capitalize text-[#c7af82]">{selectedNode.node_type} · Atlas entry</p>
                   <h2 id="universe-detail-title" className="break-words pr-1 text-2xl font-medium leading-tight tracking-tight text-[#f0e8db]">{selectedNode.name}</h2>
-                  {selectedNode.universe_tags.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{selectedNode.universe_tags.map((tag) => <span key={tag} className="max-w-full break-words rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-[#b9c8d5]">{ROLE_LABELS[tag as CharacterRole] || tag}</span>)}</div>}
+                  {selectedNode.universe_tags.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{selectedNode.universe_tags.map((tag) => <span key={tag} className="max-w-full break-words rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-[#b9c8d5]">{ROLE_LABELS[tag as CharacterRole] || tag}</span>)}</div>}
                 </div>
                 <div className="space-y-5 p-5">
                   <p className="whitespace-pre-wrap break-words text-sm leading-6 text-[#bfccd8]">{selectedNode.description || 'No description yet. Add the details that define this part of your world.'}</p>
@@ -489,7 +489,7 @@ const UniverseGraphPage: React.FC = () => {
                   <button type="button" onClick={openEditModal} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-xs font-medium text-[#d6e0e8] hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-amber-200"><Edit3 size={13} /> Edit details</button>
                   <details className="border-t border-white/10 pt-3 text-xs text-[#a4b8c9]"><summary className="cursor-pointer py-1 focus-visible:outline-2 focus-visible:outline-amber-200">More entry actions</summary>
                     <div className="space-y-2 pt-3">
-                      {selectedNode.node_type === 'character' && <button type="button" onClick={handleSimulateMind} disabled={simulating} className="flex min-h-10 w-full items-center justify-center gap-2 rounded border border-[#8da9be]/25 px-3 py-2 text-xs text-[#b8cedf] hover:bg-white/5 disabled:opacity-50">{simulating ? <Loader2 size={13} className="animate-spin" /> : <Brain size={13} />} Simulate mind</button>}
+                      {selectedNode.node_type === 'character' && <button type="button" onClick={handleSimulateMind} disabled={simulating} aria-busy={simulating} className="flex min-h-10 w-full items-center justify-center gap-2 rounded border border-[#8da9be]/25 px-3 py-2 text-xs text-[#b8cedf] hover:bg-white/5 disabled:opacity-50">{simulating ? <Loader2 size={13} className="animate-spin" /> : <Brain size={13} />} Simulate mind</button>}
                       <button type="button" onClick={() => setShowDeleteConfirm(true)} className="flex min-h-10 w-full items-center justify-center gap-2 rounded px-3 py-2 text-xs text-rose-300 hover:bg-rose-400/10"><Trash2 size={13} /> Delete entry</button>
                     </div>
                   </details>
@@ -501,11 +501,11 @@ const UniverseGraphPage: React.FC = () => {
                   <div className="flex items-center justify-between"><h2 id="universe-atlas-title" className="flex items-center gap-2 text-base font-medium tracking-tight text-[#e8e5de]"><BookOpen size={16} className="text-[#cdb586]" /> Story atlas</h2><span className="font-mono text-[11px] text-[#92a8ba]">{data?.nodes.length || 0} entries</span></div>
                   <div className="relative"><Search size={15} className="pointer-events-none absolute left-3 top-3 text-[#8ba1b4]" /><input data-testid="universe-search" type="search" aria-label="Search story atlas" placeholder="Find a person, place or idea" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="min-h-10 w-full rounded-md border border-[#6d899f]/25 bg-[#060e18] py-2 pl-9 pr-3 text-xs text-[#e1e8ee] placeholder:text-[#8ca1b3] focus:border-[#d5b981] focus:outline-none" /></div>
                   <div role="group" aria-label="Entity types" className="flex flex-wrap gap-1">
-                    {([{ value: 'all', label: 'All' }, { value: 'character', label: 'Characters' }, { value: 'location', label: 'Locations' }, { value: 'object', label: 'Objects' }, { value: 'lore', label: 'Lore' }] as const).map(({ value, label }) => <button type="button" key={value} aria-pressed={category === value} onClick={() => setCategory(value)} className={`rounded px-2.5 py-1.5 text-[11px] transition-colors focus-visible:outline-2 focus-visible:outline-amber-200 ${category === value ? 'bg-[#d5bd8d]/15 text-[#e1cba4]' : 'text-[#a9bac9] hover:bg-white/5'}`}>{label}</button>)}
+                    {([{ value: 'all', label: 'All' }, { value: 'character', label: 'Characters' }, { value: 'location', label: 'Locations' }, { value: 'object', label: 'Objects' }, { value: 'lore', label: 'Lore' }] as const).map(({ value, label }) => <button type="button" key={value} aria-pressed={category === value} onClick={() => setCategory(value)} className={`rounded px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-amber-200 ${category === value ? 'bg-[#d5bd8d]/15 text-[#e1cba4]' : 'text-[#a9bac9] hover:bg-white/5'}`}>{label}</button>)}
                   </div>
-                  <div className="flex items-center gap-3"><label htmlFor="universe-role-filter" className="shrink-0 text-[11px] text-[#90a6b8]">Character role</label><select id="universe-role-filter" aria-label="Character role filter" value={filterMode} onChange={(event) => setFilterMode(event.target.value as FilterMode)} className="min-w-0 flex-1 rounded border border-white/10 bg-[#101c29] px-2 py-1.5 text-[11px] text-[#c5d3de] focus:outline-2 focus:outline-amber-200"><option value="all">All roles</option><option value="protagonists">Protagonists</option><option value="antagonists">Antagonists</option></select></div>
+                  <div className="flex items-center gap-3"><label htmlFor="universe-role-filter" className="shrink-0 text-xs text-[#90a6b8]">Character role</label><select id="universe-role-filter" aria-label="Character role filter" value={filterMode} onChange={(event) => setFilterMode(event.target.value as FilterMode)} className="min-w-0 flex-1 rounded border border-white/10 bg-[#101c29] px-2 py-1.5 text-xs text-[#c5d3de] focus:outline-2 focus:outline-amber-200"><option value="all">All roles</option><option value="protagonists">Protagonists</option><option value="antagonists">Antagonists</option></select></div>
                 </div>
-                <p className="px-5 pt-3 text-[11px] text-[#90a6b8]" aria-live="polite">{filteredNodes.length} {filteredNodes.length === 1 ? 'entry' : 'entries'} in this view</p>
+                <p className="px-5 pt-3 text-xs text-[#90a6b8]" aria-live="polite">{filteredNodes.length} {filteredNodes.length === 1 ? 'entry' : 'entries'} in this view</p>
                 <div className={`${detailPanelOpen ? 'max-h-[330px]' : 'max-h-[460px]'} overflow-y-auto p-2`}>
                   {filteredNodes.map((node) => { const selected = detailPanelOpen && selectedNode?.node_id === node.node_id; const style = getNodeTypeStyle(node.node_type); return <button type="button" key={node.node_id} data-testid={`universe-node-${node.node_id}`} aria-pressed={selected} onClick={() => handleNodeClick(node)} className={`group flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-amber-200 ${selected ? 'border-[#cab181]/35 bg-[#cab181]/10' : 'border-transparent hover:bg-[#1a2a3b]/60'}`}>
                     <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded border border-white/10 bg-[#172534]" style={{ color: style.fill }}>{node.node_type === 'character' ? <UserRound size={15} /> : node.node_type === 'location' ? <MapPin size={15} /> : node.node_type === 'object' ? <Box size={15} /> : <BookOpen size={15} />}</span>
@@ -522,14 +522,14 @@ const UniverseGraphPage: React.FC = () => {
               <summary className="cursor-pointer py-1 font-medium text-[#c8d4df] focus-visible:outline-2 focus-visible:outline-amber-200">Universe tools</summary>
               <p className="mt-3 text-xs leading-5 text-[#91a9bb]">Refresh your atlas, bring in details from your scenes, or export your world bible.</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={() => void loadData()} disabled={loading} className="flex min-h-10 items-center gap-2 rounded border border-white/15 px-3 py-2 hover:bg-white/5 disabled:opacity-50"><RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh atlas</button>
-                <button type="button" onClick={handleAutoPopulate} disabled={loading} className="flex min-h-10 items-center gap-2 rounded border border-white/15 px-3 py-2 hover:bg-white/5 disabled:opacity-50"><Plus size={13} /> Auto-populate from scenes</button>
-                <button type="button" onClick={handleExportGraph} disabled={isExporting} className="flex min-h-10 items-center gap-2 rounded border border-white/15 px-3 py-2 hover:bg-white/5 disabled:opacity-50">{isExporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Export world bible</button>
+                <button type="button" onClick={() => void loadData()} disabled={loading} aria-busy={loading} className="flex min-h-10 items-center gap-2 rounded border border-white/15 px-3 py-2 hover:bg-white/5 disabled:opacity-50"><RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh atlas</button>
+                <button type="button" onClick={handleAutoPopulate} disabled={loading} aria-busy={loading} className="flex min-h-10 items-center gap-2 rounded border border-white/15 px-3 py-2 hover:bg-white/5 disabled:opacity-50"><Plus size={13} /> Auto-populate from scenes</button>
+                <button type="button" onClick={handleExportGraph} disabled={isExporting} aria-busy={isExporting} className="flex min-h-10 items-center gap-2 rounded border border-white/15 px-3 py-2 hover:bg-white/5 disabled:opacity-50">{isExporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Export world bible</button>
               </div>
             </details>
             {absences && absences.absences.length > 0 && <details className="rounded-lg border border-[#c1a477]/25 bg-[#b39562]/[0.04] px-4 py-3 text-xs text-[#b4c5d3]">
               <summary className="cursor-pointer py-1 font-medium text-[#d6c29d] focus-visible:outline-2 focus-visible:outline-amber-200">Continuity notes · {absences.absences.length} {absences.absences.length === 1 ? 'absence' : 'absences'}</summary>
-              <div className="mt-3 space-y-4">{absences.absences.map((absence) => <div key={absence.node_id}><p className="font-medium text-[#d6dfe7]">{absence.name}</p><p className="mt-1 text-xs leading-5 text-[#a0b4c4]">{absence.advisory}</p>{absence.last_seen_scene && <p className="mt-1 text-[11px] text-[#829aab]">Last seen: {absence.last_seen_scene}</p>}</div>)}</div>
+              <div className="mt-3 space-y-4">{absences.absences.map((absence) => <div key={absence.node_id}><p className="font-medium text-[#d6dfe7]">{absence.name}</p><p className="mt-1 text-xs leading-5 text-[#a0b4c4]">{absence.advisory}</p>{absence.last_seen_scene && <p className="mt-1 text-xs text-[#829aab]">Last seen: {absence.last_seen_scene}</p>}</div>)}</div>
             </details>}
           </div>
         </div>
@@ -599,6 +599,7 @@ const UniverseGraphPage: React.FC = () => {
                   type="button"
                   onClick={handleCreateCharacter}
                   disabled={creating || !charForm.name.trim()}
+                  aria-busy={creating}
                   className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50"
                   style={{
                     background: 'rgba(255,209,101,0.15)',
@@ -688,6 +689,7 @@ const UniverseGraphPage: React.FC = () => {
                   type="button"
                   onClick={handleCreateRelationship}
                   disabled={creating || !relForm.fromNode || !relForm.toNode || relForm.fromNode === relForm.toNode}
+                  aria-busy={creating}
                   className="glass-panel flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50"
                   style={{ color: 'var(--color-secondary)' }}
                 >
@@ -763,6 +765,7 @@ const UniverseGraphPage: React.FC = () => {
                   type="button"
                   onClick={handleEditNode}
                   disabled={creating}
+                  aria-busy={creating}
                   className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] transition-all hover:scale-[1.01] disabled:opacity-50"
                   style={{
                     background: 'rgba(255,209,101,0.15)',
@@ -805,6 +808,7 @@ const UniverseGraphPage: React.FC = () => {
                   type="button"
                   onClick={handleDeleteNode}
                   disabled={creating}
+                  aria-busy={creating}
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-all hover:scale-[1.01] disabled:opacity-50"
                   style={{
                     background: 'rgba(244,63,94,0.15)',

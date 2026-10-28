@@ -306,17 +306,21 @@ function edgeWaveformBars(seed: string, count = 48): number[] {
 function EdgeStreamBox({ jobId, shotLabel, deliveryUrl, isVideo }: { jobId: string; shotLabel: string; deliveryUrl: string; isVideo: boolean }) {
   const mediaRef = useRef<HTMLVideoElement | null>(null)
   const [playing, setPlaying] = useState(false)
+  const [toggling, setToggling] = useState(false)
   const bars = useMemo(() => edgeWaveformBars(`${jobId}${deliveryUrl}`), [jobId, deliveryUrl])
 
   async function togglePlayback() {
     const media = mediaRef.current
-    if (!media) return
+    if (!media || toggling) return
     if (media.paused) {
+      setToggling(true)
       try {
         await media.play()
         setPlaying(true)
       } catch {
         setPlaying(false)
+      } finally {
+        setToggling(false)
       }
     } else {
       media.pause()
@@ -342,7 +346,7 @@ function EdgeStreamBox({ jobId, shotLabel, deliveryUrl, isVideo }: { jobId: stri
           />
         </div>
       ) : (
-        <p className="mt-2 text-[11px] text-zinc-500">Stream playback is available for video or audio deliveries; this record carries a non-stream asset.</p>
+        <p className="mt-2 text-xs text-zinc-500">Stream playback is available for video or audio deliveries; this record carries a non-stream asset.</p>
       )}
       <div
         role="img"
@@ -358,14 +362,15 @@ function EdgeStreamBox({ jobId, shotLabel, deliveryUrl, isVideo }: { jobId: stri
         <button
           type="button"
           onClick={() => void togglePlayback()}
-          disabled={!isVideo}
+          disabled={!isVideo || toggling}
+          aria-busy={toggling}
           aria-label={playing ? `Pause edge stream for ${shotLabel}` : `Play edge stream for ${shotLabel}`}
           data-testid="job-inspector-edge-play"
           className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-sky-300/40 bg-sky-500/15 px-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-sky-100 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {playing ? 'Pause' : 'Play'}
+          {toggling ? 'Loading…' : playing ? 'Pause' : 'Play'}
         </button>
-        <p className="text-[10px] leading-snug text-zinc-500">Strip is illustrative, hashed locally from the delivery record — not measured audio.</p>
+        <p className="text-xs leading-snug text-zinc-500">Strip is illustrative, hashed locally from the delivery record — not measured audio.</p>
       </div>
     </div>
   )
@@ -400,7 +405,7 @@ function BitrateClampBox({ job }: { job: RenderJob }) {
           {warnings.slice(0, 6).map((warning) => <li key={warning} className="break-all">{warning}</li>)}
         </ul>
       ) : (
-        <p className="mt-2 text-[11px] text-zinc-500">No clamping adjustments are recorded for this job.</p>
+        <p className="mt-2 text-xs text-zinc-500">No clamping adjustments are recorded for this job.</p>
       )}
     </div>
   )
@@ -500,7 +505,7 @@ export function JobInspectorDrawer({ job, projectId, onClose }: { job: RenderJob
           <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Bitrate clamping</h3>
           <BitrateClampBox job={job} />
         </section>
-        <p className="border-t border-white/10 pt-3 text-[11px] text-zinc-500">Retry, cancellation, and recovery run from the scene board behind backend authorizations. <Link to={boardHref} className="text-cyan-200">Open scene board</Link></p>
+        <p className="border-t border-white/10 pt-3 text-xs text-zinc-500">Retry, cancellation, and recovery run from the scene board behind backend authorizations. <Link to={boardHref} className="text-cyan-200">Open scene board</Link></p>
       </div>
     </div>
   )

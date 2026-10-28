@@ -46,11 +46,11 @@ function ConfirmDiff({ item, shotLabel }: { item: PromptRebuildConfirmItem; shot
         <div className="mt-2 grid gap-2 md:grid-cols-2">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Before</p>
-            <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300">{item.before}</p>
+            <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-xs leading-relaxed text-zinc-300">{item.before}</p>
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">After</p>
-            <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300">{item.after}</p>
+            <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 text-xs leading-relaxed text-zinc-300">{item.after}</p>
           </div>
         </div>
       )}
@@ -96,6 +96,7 @@ export default function PromptRebuildPanel({ blueprintId, versionId, versionStat
           type="button"
           onClick={() => void run([])}
           disabled={disabled || busy}
+          aria-busy={busy}
           data-testid="prompt-rebuild-run"
           className="flex items-center gap-1.5 rounded-md border border-white/15 px-3 py-1.5 text-[11px] text-zinc-200 hover:bg-white/5 disabled:opacity-40"
         >
@@ -109,7 +110,7 @@ export default function PromptRebuildPanel({ blueprintId, versionId, versionStat
           : 'This version is a draft, so rebuilding updates its shots in place — no new version.'}
         {' '}Only the canonical board text changes; cameras, coverage, and structured parameters are preserved.
       </p>
-      {error && <p className="text-[11px] leading-relaxed text-rose-300" role="alert">{error}</p>}
+      {error && <p className="text-xs leading-relaxed text-rose-300" role="alert">{error}</p>}
       {summary && (
         <div className="space-y-2" data-testid="prompt-rebuild-summary">
           {summary.cloned_from_version_id && (
@@ -121,7 +122,7 @@ export default function PromptRebuildPanel({ blueprintId, versionId, versionStat
           {summary.rebuilt.length > 0 && (
             <ul className="space-y-1">
               {summary.rebuilt.map((item) => (
-                <li key={item.shot_id} className="flex items-start gap-1.5 text-[11px] leading-relaxed text-zinc-300">
+                <li key={item.shot_id} className="flex items-start gap-1.5 text-xs leading-relaxed text-zinc-300">
                   <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-300" />
                   <span>
                     {shotNumberOf(shots, item.shot_id)} rebuilt
@@ -170,6 +171,7 @@ export default function PromptRebuildPanel({ blueprintId, versionId, versionStat
                 type="button"
                 onClick={() => void run(confirmedIds)}
                 disabled={disabled || busy || confirmedIds.length === 0}
+                aria-busy={busy}
                 data-testid="prompt-rebuild-confirmed"
                 className="flex items-center gap-1.5 rounded-md border border-amber-200/40 px-3 py-1.5 text-[11px] font-medium text-amber-100 hover:bg-amber-200/10 disabled:opacity-40"
               >

@@ -466,7 +466,7 @@ export function ProjectWorkspaceBody({
                   <div className="grid grid-cols-2 gap-2 mt-3">
                     {agent.recentContributions.map((contribution) => (
                       <div key={contribution.id} className="rounded-lg p-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                        <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{contribution.focus}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{contribution.focus}</div>
                         <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{contribution.comment}</div>
                       </div>
                     ))}
@@ -500,7 +500,7 @@ export function ProjectWorkspaceBody({
                   <div className="space-y-2 mt-3">
                     {thread.comments.map((comment) => (
                       <div key={comment.id} className="rounded-lg p-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                        <div className="text-[11px]" style={{ color: 'var(--accent-cyan)' }}>{comment.department}</div>
+                        <div className="text-xs" style={{ color: 'var(--accent-cyan)' }}>{comment.department}</div>
                         <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{comment.comment}</div>
                       </div>
                     ))}
@@ -700,7 +700,7 @@ export function ProjectWorkspaceBody({
                 {workspaceState.leadershipNotes.map((note) => (
                   <div key={note.id} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
                     <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{note.text}</div>
-                    <div className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>{new Date(note.createdAt).toLocaleString()}</div>
+                    <div className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>{new Date(note.createdAt).toLocaleString()}</div>
                   </div>
                 ))}
               </div>
@@ -747,7 +747,7 @@ export function ProjectWorkspaceBody({
                       ['Needs Care', queueCounts.failed],
                     ].map(([label, value]) => (
                       <div key={label} className="rounded-lg p-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                        <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</div>
                         <div className="text-xs mt-1" style={{ color: 'var(--text-primary)' }}>{value}</div>
                       </div>
                     ))}

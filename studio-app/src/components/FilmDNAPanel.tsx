@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from "react";
+import { useCallback, useEffect, useState, Fragment } from "react";
 import { studioApi } from "../lib/studioApi";
 import type { CharacterJourney, ArcCompleteness } from "../lib/studioApi";
 
@@ -80,7 +80,7 @@ function CharacterJourneyTimeline({ character }: { character: CharacterJourney }
 
   return (
     <div className="border-b border-slate-700 last:border-0">
-      <button
+      <button type="button"
         onClick={() => setExpanded(!expanded)}
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-800/30 transition-colors text-left"
       >
@@ -152,7 +152,7 @@ export function FilmDNAPanel({ projectId }: FilmDNAPanelProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadDNA = async () => {
+  const loadDNA = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -163,7 +163,7 @@ export function FilmDNAPanel({ projectId }: FilmDNAPanelProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
   const handleRefresh = async () => {
     try {
@@ -182,7 +182,7 @@ export function FilmDNAPanel({ projectId }: FilmDNAPanelProps) {
 
   useEffect(() => {
     loadDNA();
-  }, [projectId]);
+  }, [loadDNA]);
 
   if (loading) {
     return (
@@ -196,11 +196,13 @@ export function FilmDNAPanel({ projectId }: FilmDNAPanelProps) {
     return (
       <div className="p-6 text-center text-red-400">
         <div>{error}</div>
-        <button
+        <button type="button"
           onClick={loadDNA}
-          className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+          disabled={loading}
+          aria-busy={loading}
+          className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm disabled:opacity-50"
         >
-          Retry
+          {loading ? "Retrying..." : "Retry"}
         </button>
       </div>
     );
@@ -246,9 +248,10 @@ export function FilmDNAPanel({ projectId }: FilmDNAPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-slate-200">Film DNA</h3>
-        <button
+        <button type="button"
           onClick={handleRefresh}
           disabled={refreshing}
+          aria-busy={refreshing}
           className="px-3 py-1 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 rounded text-sm transition-colors"
         >
           {refreshing ? "Refreshing..." : "Refresh DNA"}

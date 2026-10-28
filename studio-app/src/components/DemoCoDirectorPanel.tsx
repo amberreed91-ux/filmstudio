@@ -106,9 +106,9 @@ export default function DemoCoDirectorPanel({ projectId, data }: { projectId: st
 
         <div className="rounded-lg border border-white/15 bg-black/25 p-3">
           <div className="text-[10px] uppercase tracking-[0.12em] text-cyan-100">Co-Director Read</div>
-          <p className="mt-2 text-[11px] text-zinc-100">{describeReadiness(data.decisionGate)}</p>
-          <p className="mt-2 text-[11px] text-zinc-200">{describeSignal(data)}</p>
-          <p className="mt-2 text-[11px] text-cyan-100">{describeNextMove(data.decisionGate)}</p>
+          <p className="mt-2 text-xs text-zinc-100">{describeReadiness(data.decisionGate)}</p>
+          <p className="mt-2 text-xs text-zinc-200">{describeSignal(data)}</p>
+          <p className="mt-2 text-xs text-cyan-100">{describeNextMove(data.decisionGate)}</p>
         </div>
       </div>
 
@@ -135,7 +135,7 @@ export default function DemoCoDirectorPanel({ projectId, data }: { projectId: st
           Open Screening Room
         </Link>
       </div>
-      <p className="mt-2 text-[11px] text-violet-100">{nextRoom.explanation}</p>
+      <p className="mt-2 text-xs text-violet-100">{nextRoom.explanation}</p>
 
       {(data.continuityIssuesCount ?? 0) > 0 || (data.styleDriftIssuesCount ?? 0) > 0 || !data.hasDirectorSignature ? (
         <p className="mt-2 text-[11px] text-zinc-300">

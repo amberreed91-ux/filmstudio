@@ -118,7 +118,7 @@ function StoryNode({ node, position, selected, connected, subdued, showLabel, on
     <Html center position={[0, -radius - 0.27, 0]} zIndexRange={[12, 0]} style={{ pointerEvents: 'none' }}>
       <div className={`${showLabel ? 'block' : 'hidden'} ${selected ? '' : 'max-sm:hidden'} w-[112px] text-center`}
         style={{ opacity: subdued ? 0.4 : 1 }}>
-        <span className={`inline-block max-w-full rounded px-1.5 py-1 text-[11px] leading-[1.35] ${selected ? 'bg-[#111923]/95 text-[#f5ddb2]' : 'bg-[#070e16]/80 text-[#dde5ed]'}`}>
+        <span className={`inline-block max-w-full rounded px-1.5 py-1 text-xs leading-[1.35] ${selected ? 'bg-[#111923]/95 text-[#f5ddb2]' : 'bg-[#070e16]/80 text-[#dde5ed]'}`}>
           <span className="line-clamp-2 break-words">{node.name}</span>
         </span>
       </div>
@@ -247,14 +247,14 @@ const UniverseGraph3D: React.FC<UniverseGraph3DProps> = (props) => {
     </Canvas> : <MapFallback />}
     <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 bg-gradient-to-b from-[#060c14]/80 to-transparent p-4 sm:p-5">
       <div><div className="flex items-center gap-2 text-xs font-medium text-[#e5d3af]"><Compass size={14} /> Constellation view</div>
-        <p className="mt-1 max-w-[230px] text-[11px] leading-5 text-[#b4c3d1]">Every point belongs to your story.</p></div>
+        <p className="mt-1 max-w-[230px] text-xs leading-5 text-[#b4c3d1]">Every point belongs to your story.</p></div>
       <span className="mt-1 font-mono text-[10px] text-[#adc0ce]">{props.nodes.length} entries</span>
     </div>
     {props.nodes.length === 0 && webglAvailable && <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center p-8 text-center">
       <p className="max-w-xs rounded-lg bg-[#070e17]/90 px-5 py-4 text-sm leading-6 text-[#d7e0e8]">No entries in this view. Change the atlas filters or add your first character.</p>
     </div>}
     <div className="absolute inset-x-0 bottom-0 z-20 flex flex-wrap items-end justify-between gap-3 bg-gradient-to-t from-[#060c14] to-transparent p-4 sm:p-5">
-      <p className="basis-full text-[11px] leading-5 text-[#b4c3d1] sm:max-w-[180px] sm:basis-auto">Drag to orbit · Scroll to zoom<br /><span className="text-[#879dac]">Select a point or an atlas entry</span></p>
+      <p className="basis-full text-xs leading-5 text-[#b4c3d1] sm:max-w-[180px] sm:basis-auto">Drag to orbit · Scroll to zoom<br /><span className="text-[#879dac]">Select a point or an atlas entry</span></p>
       <div className="flex gap-1 rounded-lg border border-white/15 bg-[#101a25]/95 p-1">
         {([{ type: 'in', label: 'Zoom in', icon: Plus }, { type: 'out', label: 'Zoom out', icon: Minus }, { type: 'reset', label: 'Reset map view', icon: RotateCcw }] as const).map(({ type, label, icon: Icon }) => <button key={type} type="button" aria-label={label} title={label} onClick={() => changeView(type)} disabled={!webglAvailable} className="rounded p-2 text-[#d8e3eb] hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-amber-200 disabled:opacity-35"><Icon size={16} /></button>)}
         <span className="my-1 w-px bg-white/10" />

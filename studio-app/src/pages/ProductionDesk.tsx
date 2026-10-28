@@ -19,9 +19,7 @@ import ProjectGuard from '../components/ProjectGuard'
 import { RoomBackdrop } from '../components/RoomCinematicChrome'
 import { getProceduralRoomStyle } from '../lib/proceduralBackdrops'
 import ShotGateChips from '../components/status/ShotGateChips'
-export { shotGateChips } from '../components/status/ShotGateChips'
 import NextActionLine from '../components/status/NextActionLine'
-export { nextActionCopy, type NextActionCopy } from '../components/status/NextActionLine'
 import VerdictStrip from '../components/status/VerdictStrip'
 import TechDetailsDrawer, { BlockerList } from '../components/status/TechDetailsDrawer'
 import { useProjectRouteContext } from '../hooks/useProjectRouteContext'
@@ -30,7 +28,6 @@ import { getShotReferenceConfirmation, recordShotReferenceConfirmation, resolveS
 import { friendlyRefusalError } from '../lib/sceneMintRefusals'
 import { buildDeskConfirmedBindingState } from '../lib/confirmedBindingHandoff'
 import {
-  fetchJson,
   getAssemblyStatus,
   getCurrentFilmCut,
   getLatestProductionAcceptanceSummary,
@@ -41,62 +38,14 @@ import {
   type ScreeningManifest,
 } from '../lib/studioApi'
 
-// ── Read-only board aggregate (one GET per load) ────────────────────────────
-// Shape mirrors GET /api/f51/studio/projects/{id}/desk-gate-summary.
-// The Desk only reads this payload; it never writes, submits, or confirms
-// anything through it. Next-action buttons below are plain navigation links.
-
-export type DeskGateShot = {
-  shot_id: string
-  shot_number: number | null
-  d4_state: string
-  d4_ready: boolean
-  d6_state: string
-  d6_ready: boolean
-  setting_anchor: 'set' | 'blocked' | 'unknown'
-  approval_state: string
-  latest_job_status: string | null
-  latest_job_id: string | null
-  has_media: boolean
-  binding_confirmation: string
-  blockers: string[]
-}
-
-export type DeskGateScene = {
-  scene_id: string
-  scene_name: string
-  approval_status: string
-  board_state: string
-  shot_count?: number
-  ready_shot_count?: number
-  shots: DeskGateShot[]
-  next_action: string
-  blockers: string[]
-}
-
-export type DeskGateSummary = {
-  project_id: string
-  scene_count: number
-  scenes: DeskGateScene[]
-  next_action: string | null
-}
-
-export async function getDeskGateSummary(projectId: string): Promise<DeskGateSummary> {
-  return fetchJson<DeskGateSummary>(
-    `/api/f51/studio/projects/${encodeURIComponent(projectId)}/desk-gate-summary`,
-  )
-}
-
-// Assembly 409 ("Approve the current Film Cut before assembling") is a normal
-// waiting state, never a broken panel. The fetch wrapper surfaces the detail
-// as an Error message, so match its wording here.
-export function isWaitingOnCutApproval(message: string): boolean {
-  return /approve[^.]*film cut|film cut[^.]*approv|waiting on cut|state_error/i.test(message || '')
-}
-
-// Shared status pieces live in components/status and render in both the
-// Desk and the Integrity Engine (re-exported at the top of this file so
-// existing importers keep working unchanged).
+// Read-only board aggregate (one GET per load) lives in lib/deskGate so this
+// page exports only its component. Next-action buttons below are plain
+// navigation links.
+import {
+  getDeskGateSummary,
+  isWaitingOnCutApproval,
+  type DeskGateSummary,
+} from '../lib/deskGate'
 
 type LoadState<T> = { status: 'loading' } | { status: 'unavailable'; message: string } | { status: 'loaded'; value: T }
 
@@ -315,7 +264,7 @@ export default function ProductionDesk() {
               <h1 className="mt-1 text-3xl font-medium text-zinc-100">Production Desk</h1>
               <p className="mt-2 max-w-2xl text-sm text-zinc-400">Scene cards from the saved board state. This desk reports evidence; it does not approve or change production state.</p>
             </div>
-            <button type="button" onClick={() => void load(true)} disabled={!projectId || refreshing} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/15 px-4 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">{refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}Refresh evidence</button>
+            <button type="button" onClick={() => void load(true)} disabled={!projectId || refreshing} aria-busy={refreshing || undefined} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/15 px-4 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">{refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}Refresh evidence</button>
           </div>
           <VerdictStrip stages={stages} />
         </header>
@@ -390,6 +339,7 @@ export default function ProductionDesk() {
               type="button"
               onClick={() => void resolveBinding()}
               disabled={!projectId || !shotInput.trim() || resolving}
+              aria-busy={resolving || undefined}
               className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/15 px-4 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
             >{resolving ? <Loader2 size={15} className="animate-spin" /> : null}Resolve binding</button>
           </div>
@@ -424,6 +374,7 @@ export default function ProductionDesk() {
                 type="button"
                 onClick={() => void confirmBinding()}
                 disabled={resolving || confirming}
+                aria-busy={confirming || undefined}
                 className="inline-flex min-h-10 items-center gap-2 rounded-md border border-emerald-300/30 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-200 disabled:opacity-50"
               >{confirming ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}Confirm this binding</button>
               {confirmedCurrent && <p role="status" className="text-xs text-emerald-200">Confirmed for {confirmed?.shot_id} · digest {confirmed?.digest.slice(0, 12)}… — saved durably for this project and shot. Open Previs Bay to carry it to generation.</p>}

@@ -156,6 +156,7 @@ export default function SceneBatchRenderer({
           type="button"
           onClick={handleRenderAll}
           disabled={submitting || shots.length === 0}
+          aria-busy={submitting}
           className="rounded border border-cyan-400/40 bg-cyan-500/10 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-cyan-100 disabled:opacity-40"
           data-testid="render-all-shots-button"
         >
@@ -216,7 +217,8 @@ export default function SceneBatchRenderer({
                       type="button"
                       onClick={() => handleRetryJob(job.id)}
                       disabled={retryingJobId === job.id}
-                      className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-amber-200 disabled:opacity-40"
+                      aria-busy={retryingJobId === job.id}
+                      className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-amber-200 disabled:opacity-40"
                       data-testid="retry-shot-button"
                     >
                       {retryingJobId === job.id ? '…' : 'Retry'}

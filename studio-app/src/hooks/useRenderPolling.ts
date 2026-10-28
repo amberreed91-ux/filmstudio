@@ -79,7 +79,7 @@ export function useRenderPolling<TJob>(options: UseRenderPollingOptions<TJob>) {
         }
       }
     },
-    [isTerminal, getStatus, intervalMs, timeoutMs, getAdaptiveInterval]
+    [isTerminal, getStatus, timeoutMs, getAdaptiveInterval]
   )
 
   const stopPolling = useCallback((jobId: string) => {
@@ -88,10 +88,15 @@ export function useRenderPolling<TJob>(options: UseRenderPollingOptions<TJob>) {
   }, [])
 
   useEffect(() => {
+    // Capture the two sets this effect is responsible for so cleanup clears
+    // the same collections even if the refs are reassigned later.
+    const activeJobs = activeJobsRef.current
+    const jobIntervals = jobIntervalsRef.current
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
-      activeJobsRef.current.clear()
-      jobIntervalsRef.current.clear()
+      activeJobs.clear()
+      jobIntervals.clear()
     }
   }, [])
 

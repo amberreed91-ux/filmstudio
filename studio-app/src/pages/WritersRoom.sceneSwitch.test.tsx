@@ -109,13 +109,13 @@ const SCENES = [
 ]
 
 // MemoryRouter keeps history in memory (window.location never changes), so
-// capture the router's location for URL assertions.
-const currentLocation: { search: string } = { search: '' }
+// render the router's search into a probe node and read it from the DOM.
 function LocationProbe() {
   const location = useLocation()
-  currentLocation.search = location.search
-  return null
+  return createElement('div', { 'data-testid': 'location-probe' }, location.search)
 }
+
+const latestSearch = () => screen.getByTestId('location-probe').textContent ?? ''
 
 function mountRoom(entry = '/studio/writers-room?project_id=film_1'): void {
   // The Co-Director drawer uses react-query; give it a quiet client.
@@ -272,7 +272,7 @@ describe('The Page: scene selection and autosave recovery', () => {
     const editorAfter = screen.getByLabelText('Scene script') as HTMLTextAreaElement
     expect(editorAfter).toHaveValue('Scene two script text.')
     // URL reflects the new scene (via the router, not window.location).
-    await waitFor(() => expect(currentLocation.search).toContain('scene=scene_002'))
+    await waitFor(() => expect(latestSearch()).toContain('scene=scene_002'))
 
     pendingSave.resolve({ error: null })
     // The in-flight save still carries the edited text of the scene we LEFT.

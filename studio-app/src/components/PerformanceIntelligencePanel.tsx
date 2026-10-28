@@ -24,7 +24,7 @@ function EvidenceList({ refs }: { refs: PerformanceEvidenceRef[] }) {
         <div key={ref.evidence_id} className="rounded border border-zinc-700/60 bg-zinc-900/60 px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-cyan-300">{ref.source_type}</span>
-            <span className="text-[11px] text-zinc-500">{ref.reliability_label}</span>
+            <span className="text-xs text-zinc-500">{ref.reliability_label}</span>
           </div>
           {ref.excerpt ? <p className="mt-1 text-xs text-zinc-300">{ref.excerpt}</p> : null}
           {ref.relevance ? <p className="mt-1 text-xs text-zinc-500">{ref.relevance}</p> : null}

@@ -112,7 +112,7 @@ function ReferenceCard({
           </span>
         )}
       </span>
-      <span className="block px-2 py-2 text-[11px] capitalize text-zinc-400">{asset.kind.replace(/_/g, ' ')}</span>
+      <span className="block px-2 py-2 text-xs capitalize text-zinc-400">{asset.kind.replace(/_/g, ' ')}</span>
     </button>
   )
 }
@@ -217,6 +217,7 @@ export function VisualTrainingPanel({
         type="button"
         onClick={() => void controller.cancelTraining()}
         disabled={controller.cancelling}
+        aria-busy={controller.cancelling}
         className={secondaryButton}
       >
         {controller.cancelling ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
@@ -241,8 +242,8 @@ export function VisualTrainingPanel({
       <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">
         <p className="text-xs leading-relaxed text-zinc-300">This identity is now a reusable production asset.</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200"><Check size={12} /> Available for Previs</span>
-          <span className="inline-flex items-center gap-1.5 rounded border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200"><Check size={12} /> Available for Rendering</span>
+          <span className="inline-flex items-center gap-1.5 rounded border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200"><Check size={12} /> Available for Previs</span>
+          <span className="inline-flex items-center gap-1.5 rounded border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200"><Check size={12} /> Available for Rendering</span>
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
           It augments — never replaces — the canonical {isCharacter ? 'character' : 'scene'}. Use it intentionally per shot in Previs.

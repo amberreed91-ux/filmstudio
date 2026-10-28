@@ -128,6 +128,7 @@ export default function OneButtonShortFilmPanel() {
         <button
           type="button"
           disabled={isRunning}
+          aria-busy={isRunning}
           onClick={onGenerate}
           className="rounded-lg border border-fuchsia-300/55 bg-fuchsia-500/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-fuchsia-100 disabled:opacity-50"
         >
@@ -159,7 +160,7 @@ export default function OneButtonShortFilmPanel() {
               const jobId = typeof job.job_id === 'string' ? job.job_id : 'n/a'
               const sceneId = typeof job.scene_id === 'string' ? job.scene_id : 'unknown_scene'
               return (
-                <div key={`${jobId}-${index}`} className="rounded border border-white/10 bg-zinc-900/50 px-2 py-1.5 text-[11px] text-zinc-200">
+                <div key={`${jobId}-${index}`} className="rounded border border-white/10 bg-zinc-900/50 px-2 py-1.5 text-xs text-zinc-200">
                   <div>project_id: {lastProjectId || 'n/a'}</div>
                   <div>scene: {sceneId} • job_id: {jobId} • status: {status}</div>
                   {outputUrl ? (
@@ -185,7 +186,7 @@ export default function OneButtonShortFilmPanel() {
             <div className="mt-1 h-1.5 w-full rounded bg-zinc-800">
               <div className="h-1.5 rounded bg-fuchsia-400 transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, stage.progress || 0))}%` }} />
             </div>
-            <div className="mt-1 text-[10px] text-zinc-400">{stage.activity}</div>
+            <div className="mt-1 text-xs text-zinc-400">{stage.activity}</div>
           </div>
         ))}
       </div>

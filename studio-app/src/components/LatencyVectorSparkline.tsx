@@ -17,7 +17,7 @@ type Props = {
  */
 export default function LatencyVectorSparkline({ samples, label, height = 64, width = 280 }: Props) {
   if (samples.length === 0) {
-    return <p className="text-[11px] text-zinc-500">No latency samples are recorded in this window.</p>
+    return <p className="text-xs text-zinc-500">No latency samples are recorded in this window.</p>
   }
 
   const max = Math.max(...samples)

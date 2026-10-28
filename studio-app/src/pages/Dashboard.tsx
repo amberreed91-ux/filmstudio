@@ -110,9 +110,11 @@ const Dashboard: React.FC = () => {
             <button
               type="button"
               onClick={() => void loadApprovals()}
-              className="rounded-xl border border-amber-300/40 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:-translate-y-0.5 hover:bg-amber-400/20"
+              disabled={approvalLoading}
+              aria-busy={approvalLoading || undefined}
+              className="rounded-xl border border-amber-300/40 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:-translate-y-0.5 hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Retry
+              {approvalLoading ? 'Retrying…' : 'Retry'}
             </button>
           </div>
         </div>
@@ -203,7 +205,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <StudioPanel title="Live Approval Snapshot" subtitle={`API URL: ${APPROVAL_URL}`}>
+      <StudioPanel title="Live Approval Snapshot" subtitle="Gate decisions across loaded approvals">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-6 xl:grid-cols-12">
             <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4 md:col-span-2 xl:col-span-3">
               <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Total</div>

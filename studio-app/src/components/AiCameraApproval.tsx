@@ -106,15 +106,16 @@ export default function AiCameraApproval({ projectId, sceneId, shot, approvedBy 
       <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-300">
         <span className="font-mono text-[10px] uppercase tracking-wide text-amber-200/80">AI_SUGGESTED</span> — {framing}
       </p>
-      <ul className="mt-2 space-y-1 text-[11px] leading-relaxed text-zinc-500">
+      <ul className="mt-2 space-y-1 text-xs leading-relaxed text-zinc-500">
         <li>Approving locks this framing as the creator camera plan. No other camera values are invented.</li>
         <li className="flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0 text-amber-200/70" />Approval creates a <span className="font-medium text-zinc-300">new draft storyboard version</span>; the approved version stays untouched. Continuity review + board approval are required before rendering.</li>
       </ul>
-      {error && <p className="mt-2 text-[11px] leading-relaxed text-rose-300" role="alert">{error}</p>}
+      {error && <p className="mt-2 text-xs leading-relaxed text-rose-300" role="alert">{error}</p>}
       <button
         type="button"
         onClick={() => void approve()}
         disabled={busy}
+        aria-busy={busy}
         data-testid={`approve-ai-camera-${shot.shot_number}`}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-amber-200/40 bg-amber-200/10 px-3 py-2 text-xs font-medium text-amber-100 hover:bg-amber-200/15 disabled:cursor-not-allowed disabled:opacity-40"
       >

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Send, Trash2, User } from 'lucide-react'
+import { Loader2, Send, Trash2, User } from 'lucide-react'
 import type { SceneComment, Scene } from '../lib/studioApi'
 import { addSceneComment, deleteSceneComment } from '../lib/studioApi'
 import { useStudio } from '../context/StudioContext'
@@ -40,6 +40,7 @@ export default function CommentSection({
 }: CommentSectionProps) {
   const [newComment, setNewComment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null)
   const { activeProject } = useStudio()
 
   const comments = scene.comments || []
@@ -62,13 +63,16 @@ export default function CommentSection({
   }
 
   async function handleDeleteComment(commentId: string) {
-    if (!scene.scene_id) return
+    if (!scene.scene_id || deletingCommentId) return
 
     try {
+      setDeletingCommentId(commentId)
       await deleteSceneComment(scene.scene_id, commentId)
       onCommentDeleted?.(commentId)
     } catch (error) {
       console.error('Failed to delete comment:', error)
+    } finally {
+      setDeletingCommentId(null)
     }
   }
 
@@ -107,7 +111,7 @@ export default function CommentSection({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="text-xs font-medium text-zinc-300">{comment.author}</span>
-                <span className="text-[10px] text-zinc-500">{formatTimestamp(comment.timestamp)}</span>
+                <span className="text-xs text-zinc-500">{formatTimestamp(comment.timestamp)}</span>
               </div>
               <p className="text-sm text-zinc-300 bg-zinc-800/50 rounded px-2 py-1">{comment.text}</p>
             </div>
@@ -117,10 +121,16 @@ export default function CommentSection({
               <button
                 type="button"
                 onClick={() => handleDeleteComment(comment.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded text-zinc-500 hover:text-rose-300 hover:bg-rose-500/10 transition-all"
+                disabled={deletingCommentId === comment.id}
+                aria-busy={deletingCommentId === comment.id}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded text-zinc-500 hover:text-rose-300 hover:bg-rose-500/10 transition-all disabled:opacity-50"
                 title="Delete comment"
               >
-                <Trash2 size={12} />
+                {deletingCommentId === comment.id ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Trash2 size={12} />
+                )}
               </button>
             )}
           </div>
@@ -147,6 +157,7 @@ export default function CommentSection({
             type="button"
             onClick={() => void handleAddComment()}
             disabled={!newComment.trim() || isSubmitting}
+            aria-busy={isSubmitting}
             className="px-3 py-2 rounded-md border border-white/15 bg-zinc-800/50 text-zinc-300 hover:bg-zinc-700/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
             title="Add comment"
           >

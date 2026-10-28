@@ -58,14 +58,14 @@ export default function ProactiveCoDirectorCard({
           />
           {/* Eyebrow */}
           <span
-            className="text-[9px] font-semibold uppercase tracking-[0.22em]"
+            className="text-[10px] font-semibold uppercase tracking-[0.22em]"
             style={{ color: '#00d4aa' }}
           >
             Co-Director
           </span>
           {/* Trigger label */}
           <span
-            className="text-[9px] uppercase tracking-[0.14em] opacity-60"
+            className="text-[10px] uppercase tracking-[0.14em] opacity-60"
             style={{ color: '#00d4aa' }}
           >
             · {TRIGGER_LABELS[triggerType]}

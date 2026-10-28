@@ -31,6 +31,7 @@ export default function StudioLobby() {
   
   // Delete confirmation state
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
+  const [deletingProject, setDeletingProject] = useState(false)
   
   // Load projects on mount
   useEffect(() => {
@@ -101,26 +102,30 @@ export default function StudioLobby() {
   }
   
   async function confirmDeleteProject() {
-    if (!deletingProjectId) return
-    
-    // Call the delete API endpoint
-    const result = await deleteProject(deletingProjectId)
-    
-    if (result.error) {
-      setProjectsError(`Failed to delete project: ${result.error}`)
+    if (!deletingProjectId || deletingProject) return
+    setDeletingProject(true)
+    try {
+      // Call the delete API endpoint
+      const result = await deleteProject(deletingProjectId)
+
+      if (result.error) {
+        setProjectsError(`Failed to delete project: ${result.error}`)
+        setDeletingProjectId(null)
+        return
+      }
+
+      // Clear from sessionStorage if it's the active project
+      const activeProjectId = sessionStorage.getItem('studio:active-project-id')
+      if (activeProjectId === deletingProjectId) {
+        sessionStorage.removeItem('studio:active-project-id')
+        setActiveProject(null)
+      }
+
       setDeletingProjectId(null)
-      return
+      void loadProjectList()
+    } finally {
+      setDeletingProject(false)
     }
-    
-    // Clear from sessionStorage if it's the active project
-    const activeProjectId = sessionStorage.getItem('studio:active-project-id')
-    if (activeProjectId === deletingProjectId) {
-      sessionStorage.removeItem('studio:active-project-id')
-      setActiveProject(null)
-    }
-    
-    setDeletingProjectId(null)
-    void loadProjectList()
   }
   
   function getSceneCount(project: PersistedProjectState): number {
@@ -502,6 +507,7 @@ export default function StudioLobby() {
                   type="button"
                   onClick={() => void handleCreateNewProject()}
                   disabled={creatingProject || !newProjectTitle.trim()}
+                  aria-busy={creatingProject || undefined}
                   className="flex-1 rounded-lg border border-emerald-300/60 bg-emerald-500/22 px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-emerald-50 shadow-[0_0_26px_rgba(16,185,129,0.22)] transition-all duration-200 hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {creatingProject ? 'Creating Film...' : 'Create Film'}
@@ -537,15 +543,18 @@ export default function StudioLobby() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={confirmDeleteProject}
-                className="flex-1 rounded-lg border border-rose-400/60 bg-rose-500/20 px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-rose-100 transition-all duration-200 hover:bg-rose-500/30"
+                onClick={() => void confirmDeleteProject()}
+                disabled={deletingProject}
+                aria-busy={deletingProject || undefined}
+                className="flex-1 rounded-lg border border-rose-400/60 bg-rose-500/20 px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-rose-100 transition-all duration-200 hover:bg-rose-500/30 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Delete Film
+                {deletingProject ? 'Deleting…' : 'Delete Film'}
               </button>
               <button
                 type="button"
                 onClick={() => setDeletingProjectId(null)}
-                className="rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-zinc-300 transition-all hover:bg-zinc-700"
+                disabled={deletingProject}
+                className="rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-zinc-300 transition-all hover:bg-zinc-700 disabled:opacity-50"
               >
                 Cancel
               </button>

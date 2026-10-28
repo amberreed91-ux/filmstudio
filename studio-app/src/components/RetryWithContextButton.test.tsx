@@ -50,7 +50,7 @@ function RetryWithContextButton({
           Manual review recommended
         </div>
         {retryAdvisory && (
-          <div className="text-[9px] text-zinc-500" data-testid="retry-advisory">
+          <div className="text-[10px] text-zinc-500" data-testid="retry-advisory">
             {retryAdvisory}
           </div>
         )}

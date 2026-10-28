@@ -4,7 +4,7 @@ import StudioShell from '../components/StudioShell'
 import TacticalHudHeader from '../components/TacticalHudHeader'
 import TacticalSideRail from '../components/TacticalSideRail'
 import { readPersistedActiveProjectId, withProjectQuery } from '../lib/projectContext'
-import { LOBBY_ROOMS } from '../components/Interactive3DLobby'
+import { LOBBY_ROOMS } from '../lib/lobbyRooms'
 
 const Interactive3DLobby = lazy(() => import('../components/Interactive3DLobby'))
 

@@ -2,7 +2,7 @@
 // The ready-state component test and the ready screenshot MUST use only this
 // fixture for board data (never hand-built inline objects). Plain language,
 // no scores, no percentages.
-import type { DeskGateSummary } from '../ProductionDesk'
+import type { DeskGateSummary } from '../../lib/deskGate'
 
 export const DESK_BOARD_READY_FIXTURE_LABEL = 'desk-board-ready-fixture'
 

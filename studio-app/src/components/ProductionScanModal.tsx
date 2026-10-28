@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { X, ShieldCheck } from 'lucide-react'
 import { runProductionScan, type ProductionScanReport } from '../lib/studioApi'
 import ProductionScanReportView from './ProductionScanReport'
@@ -14,7 +14,7 @@ export default function ProductionScanModal({ projectId, isOpen, onClose }: Prod
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const performScan = async () => {
+  const performScan = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -26,7 +26,7 @@ export default function ProductionScanModal({ projectId, isOpen, onClose }: Prod
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
 
   useEffect(() => {
     if (isOpen) {
@@ -34,7 +34,7 @@ export default function ProductionScanModal({ projectId, isOpen, onClose }: Prod
     } else {
       setReport(null)
     }
-  }, [isOpen, projectId])
+  }, [isOpen, performScan])
 
   if (!isOpen) return null
 
@@ -42,7 +42,7 @@ export default function ProductionScanModal({ projectId, isOpen, onClose }: Prod
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-[#0a0f1c] border border-white/10 w-full max-w-5xl h-[85vh] rounded-xl shadow-2xl overflow-hidden flex flex-col relative">
         {/* Close button */}
-        <button 
+        <button type="button" 
           onClick={onClose}
           className="absolute top-4 right-4 z-[110] p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white print:hidden"
         >
@@ -74,11 +74,13 @@ export default function ProductionScanModal({ projectId, isOpen, onClose }: Prod
               <h3 className="text-xl font-bold">Scan Incomplete</h3>
               <p className="text-zinc-400 max-w-md">{error}</p>
             </div>
-            <button 
+            <button type="button" 
               onClick={performScan}
-              className="px-6 py-2 bg-white text-black font-bold rounded-lg hover:bg-zinc-200 transition-colors"
+              disabled={loading}
+              aria-busy={loading}
+              className="px-6 py-2 bg-white text-black font-bold rounded-lg hover:bg-zinc-200 transition-colors disabled:opacity-50"
             >
-              Try Again
+              {loading ? 'Scanning…' : 'Try Again'}
             </button>
           </div>
         )}

@@ -1,13 +1,5 @@
 import { GATE_TONE_CLASS } from '../status/gateTones'
-
-/** True for files kept on this machine (never http/data URLs). */
-export function isLocalBoardFile(imageUrl: string | null | undefined): boolean {
-  const url = (imageUrl || '').trim()
-  if (!url) return true
-  if (/^https?:\/\//i.test(url)) return false
-  if (url.startsWith('data:')) return false
-  return true
-}
+import { isLocalBoardFile } from '../../lib/referenceBoardState'
 
 /**
  * Plain-language delivery tag. "Local file" means: kept here,

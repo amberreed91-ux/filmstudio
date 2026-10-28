@@ -109,6 +109,26 @@ describe('PageRoom', () => {
     expect(await screen.findByTestId('page-save-message')).toHaveTextContent('Saved to the screenplay.')
   })
 
+  it('reports an in-flight save through aria-busy and blocks re-entry', async () => {
+    let resolveSave: (value: unknown) => void = () => {}
+    apiMocks.updateScene.mockImplementation(() => new Promise((resolve) => { resolveSave = resolve }))
+    renderPage()
+    await screen.findByTestId('page-scene-scene_001')
+    fireEvent.change(screen.getByTestId('page-editor'), { target: { value: 'Edited.' } })
+
+    const save = screen.getByTestId('page-save')
+    expect(save).not.toHaveAttribute('aria-busy')
+    fireEvent.click(save)
+
+    await waitFor(() => expect(save).toHaveAttribute('aria-busy', 'true'))
+    expect(save).toBeDisabled()
+    expect(save).toHaveTextContent('Saving…')
+
+    resolveSave({ scene: { ...SCENES[0], description: 'Edited.' } })
+    await waitFor(() => expect(save).not.toHaveAttribute('aria-busy'))
+    expect(save).not.toBeDisabled()
+  })
+
   it('asks for a film when no project is linked', async () => {
     studioState.activeProject = null
     studioState.activeProjectId = null

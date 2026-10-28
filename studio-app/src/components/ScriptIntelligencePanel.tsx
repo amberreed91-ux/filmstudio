@@ -56,7 +56,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
     <div className="border border-zinc-700 rounded-lg bg-zinc-900/50 backdrop-blur-sm">
       {/* Header - Collapsible */}
       <div className="px-4 py-3 flex items-center justify-between">
-        <button
+        <button type="button"
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-2 hover:bg-zinc-800/50 transition-colors rounded p-1 -ml-1"
           aria-label={isExpanded ? "Collapse script analysis" : "Expand script analysis"}
@@ -71,6 +71,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
           type="button"
           onClick={handleExportPDF}
           disabled={isExporting}
+          aria-busy={isExporting}
           className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-600 bg-zinc-800/50 text-zinc-200 hover:bg-zinc-700/50 hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Export scene breakdown as PDF"
         >
@@ -89,7 +90,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
         <div className="border-t border-zinc-700">
           {/* Tab Navigation */}
           <div className="flex border-b border-zinc-700 px-4">
-            <button
+            <button type="button"
               onClick={() => setActiveTab('breakdown')}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'breakdown'
@@ -102,7 +103,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
                 Scene Breakdown
               </div>
             </button>
-            <button
+            <button type="button"
               onClick={() => setActiveTab('characters')}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'characters'
@@ -115,7 +116,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
                 Character Arcs
               </div>
             </button>
-            <button
+            <button type="button"
               onClick={() => setActiveTab('prompts')}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'prompts'
@@ -128,7 +129,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
                 Prompts
               </div>
             </button>
-            <button
+            <button type="button"
               onClick={() => setActiveTab('casting')}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'casting'
@@ -141,7 +142,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
                 Casting
               </div>
             </button>
-            <button
+            <button type="button"
               onClick={() => setActiveTab('performance')}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'performance'
@@ -154,7 +155,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
                 Performance
               </div>
             </button>
-            <button
+            <button type="button"
               onClick={() => setActiveTab('transitions')}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'transitions'
@@ -167,7 +168,7 @@ export default function ScriptIntelligencePanel({ projectId, sceneCount }: Scrip
                 Transitions
               </div>
             </button>
-            <button
+            <button type="button"
               onClick={() => setActiveTab('sound')}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'sound'

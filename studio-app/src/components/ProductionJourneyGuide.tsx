@@ -85,6 +85,10 @@ export default function ProductionJourneyGuide({ pathname, context, beforeNaviga
           )}
         </div>
 
+        {/* Pipeline level only. Deliberately unnumbered: the "Stage N of 5" chip
+            above already states the position, and numbering this rail alongside
+            the in-room step tabs (1-4) made two different scales look like one.
+            The expanded "full production path" list below keeps its numbers. */}
         {index >= 0 && (
           <div className="relative z-10 mt-4 hidden items-center gap-2 lg:flex" role="list" aria-label="Production stages">
             {stages.map((stage, stageIndex) => (
@@ -98,7 +102,7 @@ export default function ProductionJourneyGuide({ pathname, context, beforeNaviga
                     stageIndex === index ? 'text-amber-100' : stageIndex < index ? 'text-emerald-200/80 hover:text-emerald-100' : 'text-zinc-500 hover:text-zinc-200'
                   }`}
                 >
-                  {stageIndex + 1}. {stage.title}
+                  {stage.title}
                 </Link>
                 {stageIndex < stages.length - 1 && <span aria-hidden="true" className="liquid-stage-line ml-2 flex-1" />}
               </div>
@@ -136,7 +140,7 @@ export default function ProductionJourneyGuide({ pathname, context, beforeNaviga
               )
             })}
           </ol>
-          <p className="relative z-10 mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 pb-1 text-[11px] text-zinc-500">
+          <p className="relative z-10 mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 pb-1 text-xs text-zinc-500">
             Supporting rooms
             <Link className="text-zinc-300 underline decoration-amber-200/40 underline-offset-4 hover:text-amber-100" to={link('/studio/universe-graph')} onClick={(event) => void follow(event, '/studio/universe-graph')}>Universe · story atlas</Link>
             <Link className="text-zinc-300 underline decoration-amber-200/40 underline-offset-4 hover:text-amber-100" to={link('/studio/production-board')} onClick={(event) => void follow(event, '/studio/production-board')}>Board · production monitor</Link>

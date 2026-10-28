@@ -49,7 +49,7 @@ function IdentityRow({
         <span className="block truncate font-mono text-xs text-zinc-100">{model.trigger_word}</span>
         <span className="mt-0.5 block truncate text-[11px] text-zinc-400">{label} · {model.provider}</span>
       </span>
-      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] ${selected ? 'border-amber-200/50 bg-amber-200/15 text-amber-100' : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'}`}>
+      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded border px-2 py-0.5 text-xs ${selected ? 'border-amber-200/50 bg-amber-200/15 text-amber-100' : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'}`}>
         {selected ? <><Check size={11} />In use</> : <>Ready · Use</>}
       </span>
     </button>
@@ -85,9 +85,9 @@ export default function TrainedIdentityPicker({
       </p>
 
       {loading ? (
-        <p className="mt-2 text-[11px] text-zinc-400">Loading identities…</p>
+        <p className="mt-2 text-xs text-zinc-400">Loading identities…</p>
       ) : error ? (
-        <p className="mt-2 text-[11px] text-zinc-400">{error}</p>
+        <p className="mt-2 text-xs text-zinc-400">{error}</p>
       ) : !hasAny ? (
         <p className="mt-2 text-[11px] leading-relaxed text-zinc-500" data-testid="trained-identity-none">
           No trained identities yet. Train a character look or this setting to reuse a consistent visual identity here.
@@ -104,7 +104,7 @@ export default function TrainedIdentityPicker({
             }`}
           >
             <span className="text-xs text-zinc-300">No trained identity</span>
-            <span className="text-[11px] text-zinc-500">{selectedModelId === null ? 'Default render' : 'Use default'}</span>
+            <span className="text-xs text-zinc-500">{selectedModelId === null ? 'Default render' : 'Use default'}</span>
           </button>
 
           {relevantSettings.map((model) => (

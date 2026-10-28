@@ -18,6 +18,7 @@ import {
   X,
   ArrowLeftRight,
   Filter,
+  Loader2,
 } from 'lucide-react'
 
 interface CoDirectorDrawerProps {
@@ -72,7 +73,7 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
   const location = useLocation()
   const [specialist, setSpecialist] = useState<Specialist>('director')
   const [context, setContext] = useState<Context>('current_scene')
-  const [input, setInput] = useState('')
+  const [inputState, setInputState] = useState<{ key: string; text: string }>({ key: '', text: '' })
   const [showContextMenu, setShowContextMenu] = useState(false)
   const threadRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -96,9 +97,11 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
   }, [messages, loading])
 
   // Input and replies belong to the selected film, scene, and specialist.
-  useEffect(() => {
-    setInput('')
-  }, [specialist, activeProjectId, activeSceneId, context])
+  // The draft is tagged with that context, so switching it clears the box
+  // without a state-reset effect.
+  const inputKey = [specialist, activeProjectId, activeSceneId, context].join('|')
+  const input = inputState.key === inputKey ? inputState.text : ''
+  const setInput = (text: string) => setInputState({ key: inputKey, text })
 
   // Close on Escape
   useEffect(() => {
@@ -342,10 +345,11 @@ export default function CoDirectorDrawer({ isOpen, onClose, activeProjectId, act
                   type="button"
                   onClick={handleSend}
                   disabled={loading || !activeProjectId || input.trim().length === 0}
+                  aria-busy={loading}
                   aria-label="Send"
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-primary text-xs font-semibold text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
                 >
-                  <Send size={14} />
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   <span className="hidden">SEND</span>
                 </button>
               </div>

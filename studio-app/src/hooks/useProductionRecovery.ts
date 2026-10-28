@@ -261,7 +261,7 @@ export function useProductionRecovery(options: UseProductionRecoveryOptions = {}
       })
       onRecoveryError?.(errorMessage)
     }
-  }, [projectId, recoveryState.isRecovering, updateRecoveryState, pollRecoveryStatus, onRecoveryComplete, onRecoveryError])
+  }, [enabled, projectId, recoveryState.isRecovering, updateRecoveryState, pollRecoveryStatus, stopPolling, onRecoveryComplete, onRecoveryError])
 
   // Safe refresh function
   const safeRefresh = useCallback(async () => {
