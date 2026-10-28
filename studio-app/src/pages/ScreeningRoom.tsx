@@ -71,6 +71,8 @@ import {
 } from '../lib/emotionAnalysisApi'
 import type { ProjectAudienceSimulation, SceneAudienceSimulation } from '../types/audienceSimulator'
 import { normalizeJobStatus } from '../lib/jobStatus'
+import { handoffStatusForPipeline, ROOM_EMPTY_STATES } from '../lib/roomHandoff'
+import RoomHandoffBadge from '../components/status/RoomHandoffBadge'
 import { sceneShotTakes } from '../lib/screeningShots'
 import { persistActiveProjectId, resolveActiveProjectId } from '../lib/projectContext'
 import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
@@ -749,6 +751,15 @@ export default function ScreeningRoom() {
     .map(([number, takes]) => ({ shotNumber: Number(number), videoUrl: takes[0].output_payload?.asset_url }))
     .sort((a, b) => a.shotNumber - b.shotNumber), [shotTakes])
 
+  // Shared handoff vocabulary: a scene with footage is ready to hand to the
+  // Desk; a stalled read is neutral, never a failure.
+  const handoffStatus = handoffStatusForPipeline({
+    sceneCount: sceneTakes.length,
+    readyCount: sceneTakes.filter((take) => Boolean(take.videoUrl)).length,
+    makingCount: loading ? 1 : 0,
+    unreadable: Boolean(error) && sceneTakes.length === 0,
+  })
+
   const activeScenePipelineAssembly = activeTake?.sceneId ? scenePipelineAssemblies[activeTake.sceneId] : undefined
 
   const activeRegisteredOutput = useMemo(() => {
@@ -1219,7 +1230,7 @@ export default function ScreeningRoom() {
   const stepIndex = steps.findIndex((step) => step.id === activeStep)
   const currentStep = steps[stepIndex]
   const nextStep = steps[stepIndex + 1]
-  const sceneEditAvailable = Boolean(activeScenePipelineAssembly?.output_url || sceneComposition?.composed_url || screeningManifest?.outputs.some((output) => output.scene_id === activeTake?.sceneId && output.output_type === 'scene' && output.media_status === 'available'))
+  const sceneEditAvailable = Boolean(activeScenePipelineAssembly?.output_url || sceneComposition?.composed_url || screeningManifest?.outputs?.some((output) => output.scene_id === activeTake?.sceneId && output.output_type === 'scene' && output.media_status === 'available'))
   const fullFilmAvailable = Boolean(screeningManifest?.current_final_output?.playback_url || assembledFilmUrl)
   const viewingWholeFilm = isFullFilm && fullFilmAvailable
   const outputScope = viewingWholeFilm
@@ -1267,6 +1278,7 @@ export default function ScreeningRoom() {
                 </div>
                 <p className="max-w-xs text-xs leading-relaxed text-zinc-400">Watch at your own pace. Notes, decisions, and delivery each have their place.</p>
               </header>
+              <div className="mb-4"><RoomHandoffBadge room="watch" status={handoffStatus} projectId={effectiveProjectId} /></div>
               <nav aria-label="Theatre production steps" className="mb-5 border-b border-white/10" data-testid="theatre-step-nav">
                 <ol className="grid grid-cols-4">
                   {steps.map((step, index) => (
@@ -1307,7 +1319,7 @@ export default function ScreeningRoom() {
                   </div>
                   <div className="overflow-hidden rounded-md border border-white/10 bg-black shadow-2xl shadow-black/35">
                     <div className="relative aspect-video w-full">
-                      {activeVideoUrl ? <video key={`${activeTake?.sceneId || ''}-shot-${activeShotNumber}-${activeVideoUrl}`} ref={videoRef} src={activeVideoUrl} className="absolute inset-0 h-full w-full object-contain" playsInline onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={handleVideoEnded} onClick={togglePlay} aria-label={`${outputScope} preview`} /> : <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 text-center">{loading ? <Loader2 size={30} className="animate-spin text-zinc-500" /> : <MonitorPlay size={32} className="text-zinc-600" />}<p className="text-sm text-zinc-300">{loading ? 'Loading your screening…' : scenes.length ? 'Your footage will appear here.' : 'Your film starts with a scene.'}</p><p className="max-w-sm text-xs leading-relaxed text-zinc-500">{loading ? 'Gathering the saved outputs for this project.' : scenes.length ? 'Render a take in Previs, then return here to watch it.' : 'Add your script in The Page, then storyboard and render in Previs.'}</p></div>}
+                      {activeVideoUrl ? <video key={`${activeTake?.sceneId || ''}-shot-${activeShotNumber}-${activeVideoUrl}`} ref={videoRef} src={activeVideoUrl} className="absolute inset-0 h-full w-full object-contain" playsInline onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={handleVideoEnded} onClick={togglePlay} aria-label={`${outputScope} preview`} /> : <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 text-center">{loading ? <Loader2 size={30} className="animate-spin text-zinc-500" /> : <MonitorPlay size={32} className="text-zinc-600" />}<p className="text-sm text-zinc-300">{loading ? 'Loading your screening…' : scenes.length ? 'Your footage will appear here.' : ROOM_EMPTY_STATES.watch.title}</p><p className="max-w-sm text-xs leading-relaxed text-zinc-500">{loading ? 'Gathering the saved outputs for this project.' : scenes.length ? 'Render a take in Previs, then return here to watch it.' : ROOM_EMPTY_STATES.watch.body}</p></div>}
                       {!isPlaying && activeVideoUrl && !showFinOverlay && <button type="button" onClick={togglePlay} aria-label="Play preview" className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/65 text-amber-100 transition-colors hover:bg-black/85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-200"><Play size={23} className="ml-0.5" /></button>}
                       {showFinOverlay && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center"><p className="text-xl font-medium text-zinc-200 sm:text-3xl">{activeProject?.title || 'Your film'}</p><p className="text-sm tracking-[0.4em] text-amber-200">FIN</p></div>}
                     </div>

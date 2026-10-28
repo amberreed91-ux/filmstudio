@@ -175,17 +175,39 @@ Done:
   `set-state-in-effect` issues resolved repo-wide; helper functions moved into
   `src/lib/*` so component modules export components only.
 
+Done since this document was last revised:
+- **Visual regression baseline.** `npm run test:visual` runs Playwright
+  screenshots for Lobby, Overview, Dashboard, Board, Previs, Scenes, and Watch
+  against stubbed studio APIs (no backend, no writes). Baselines live in
+  `studio-app/tests/visual/__screenshots__/`; the 2026-10-28 audit captures in
+  `reports/ui-audit-2026-10-28/` remain the visual intent to cross-reference.
+  Baselines are captured at 1440x900 on macOS — regenerate on the platform that
+  owns the gate rather than expecting identical rasterization on Linux.
+- **Handoff polish.** `src/lib/roomHandoff.ts` owns one status vocabulary
+  (Not started · Waiting on you · Making now · Ready · Needs attention, plus a
+  neutral Can’t check) and one empty-state shape. Previs, Scenes, Watch, and
+  the Production Desk render `RoomHandoffBadge` and `RoomEmptyState` from it.
+  “Why this shot matters” stays a single card in Previs and Watch; the Board
+  and Desk payloads do not carry shot intent yet, so the card is not faked
+  there.
+- **Type-scale backlog.** The remaining sub-12px reading text in
+  `RenderPromptScopeNote`, `TacticalSideRail`, `PrevisRoom`,
+  `SceneContinuityPanel`, the Board drag handle, Reference Space, and the
+  Universe graph now sits at `text-xs` (12px) or above. `StudioDevTools` is
+  allowlisted as an internal diagnostics console with its reason printed by
+  the guard.
+
 Open:
-1. **Visual regression baseline.** Playwright is installed; add screenshot
-   checks for the primary rooms and use
-   `reports/ui-audit-2026-10-28/` as the reference set.
-2. **Handoff polish.** One status vocabulary and one empty-state pattern across
-   Previs → Scenes → Watch → Production Desk.
-3. **Type-scale backlog.** Clear the remaining sub-12px reading-text warnings in
-   `RenderPromptScopeNote`, `TacticalSideRail`, `PrevisRoom`, and
-   `SceneContinuityPanel`; keep `StudioDevTools` allowlisted with its reason.
-4. **Co-director presentation.** Keep rendering advisory voice (no scores, no
+1. **Co-director presentation.** Keep rendering advisory voice (no scores, no
    generic praise) consistent across the rooms; see `AGENTS.md`.
+2. **Shot intent at the handoff.** Extend the Board and Desk payloads with the
+   shot’s intent/rationale so “Why this shot matters” can follow a shot out of
+   Previs without inventing copy.
+3. **Motif persistence across rooms.** The motif timeline lives in
+   `SceneContinuityPanel` (`MotifsSection`) and is covered by tests, but no live
+   room renders that panel, so there is no motif signal to align yet. Wire it
+   into the Previs → Scenes → Watch handoff first, then make the callback copy
+   match across rooms.
 
 ---
 
@@ -209,10 +231,14 @@ Open:
 ```bash
 cd studio-app
 node check_button_conventions.cjs
+node check_type_scale.cjs
 npm run typecheck
 npm run lint
 npm run test -- --run
 npm run build
 ```
 
-All five must exit `0` before a UI pass is considered complete.
+All six must exit `0` before a UI pass is considered complete. Room-level UI
+changes also need `npm run test:visual`; after an intentional visual change,
+regenerate the baselines with `npm run test:visual:update` and run the suite
+twice to prove the frames hold still.

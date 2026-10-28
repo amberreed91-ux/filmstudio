@@ -111,7 +111,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
             </span>
             <span
               data-testid="tactical-live-badge"
-              className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${live ? 'border-emerald-600/50 bg-emerald-900/80 text-emerald-200' : 'border-purple-600/50 bg-purple-900/80 text-purple-200'}`}
+              className={`rounded border px-1.5 py-0.5 text-xs font-bold ${live ? 'border-emerald-600/50 bg-emerald-900/80 text-emerald-200' : 'border-purple-600/50 bg-purple-900/80 text-purple-200'}`}
             >
               {live ? 'LIVE' : 'STAGING'}
             </span>
@@ -139,9 +139,9 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
                     {(liveSpend.realized + liveSpend.estimated).toLocaleString()} <span className="text-[10px] text-slate-400">CR</span>
                   </span>
                 ) : live ? (
-                  <span data-testid="tactical-cr-empty">— <span className="text-[10px] font-normal text-slate-400">no spend on record</span></span>
+                  <span data-testid="tactical-cr-empty">— <span className="text-xs font-normal text-slate-400">no spend on record</span></span>
                 ) : (
-                  <span>{STAGING_CR} <span className="text-[10px] text-slate-400">CR</span></span>
+                  <span>{STAGING_CR} <span className="text-xs text-slate-400">CR</span></span>
                 )}
               </div>
               {liveSpend ? (
@@ -187,7 +187,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
                 >
                   <span className="text-[11px] font-bold text-slate-200 transition group-hover:text-purple-300">
                     {feed.title}
-                    <span className="mt-0.5 block text-[10px] font-normal text-slate-400">{feed.code}</span>
+                    <span className="mt-0.5 block text-xs font-normal text-slate-400">{feed.code}</span>
                   </span>
                   <span className="text-[10px] text-slate-400">{feed.status}</span>
                 </button>
@@ -203,7 +203,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
                 >
                   <span className="text-[11px] font-bold text-slate-200 transition group-hover:text-purple-300">
                     {feed.title}
-                    <span className="mt-0.5 block text-[10px] font-normal text-slate-400">{feed.code}</span>
+                    <span className="mt-0.5 block text-xs font-normal text-slate-400">{feed.code}</span>
                   </span>
                   <span className="text-[10px] text-slate-400">{feed.status}</span>
                 </button>
@@ -226,7 +226,7 @@ export default function TacticalSideRail({ projectId }: { projectId: string }) {
               <span className="font-bold">RIG CALIBRATION</span>
               <span
                 data-testid="rig-status"
-                className={`rounded px-1 text-[10px] font-bold ${rigBusy ? 'animate-pulse bg-yellow-950 text-yellow-300' : rigStatus === 'READY' ? 'bg-purple-950 text-purple-300' : 'bg-emerald-950 text-emerald-400'}`}
+                className={`rounded px-1 text-xs font-bold ${rigBusy ? 'animate-pulse bg-yellow-950 text-yellow-300' : rigStatus === 'READY' ? 'bg-purple-950 text-purple-300' : 'bg-emerald-950 text-emerald-400'}`}
               >
                 {rigStatus}
               </span>

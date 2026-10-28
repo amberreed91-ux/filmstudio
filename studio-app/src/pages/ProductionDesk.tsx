@@ -27,6 +27,9 @@ import { useStudio } from '../context/StudioContext'
 import { getShotReferenceConfirmation, recordShotReferenceConfirmation, resolveShotReferenceBinding, type ShotReferenceBinding, type ShotReferenceConfirmation } from '../lib/visualTrainingApi'
 import { friendlyRefusalError } from '../lib/sceneMintRefusals'
 import { buildDeskConfirmedBindingState } from '../lib/confirmedBindingHandoff'
+import { handoffStatusForPipeline, handoffStatusForShot, ROOM_EMPTY_STATES } from '../lib/roomHandoff'
+import RoomHandoffBadge from '../components/status/RoomHandoffBadge'
+import RoomEmptyState from '../components/status/RoomEmptyState'
 import {
   getAssemblyStatus,
   getCurrentFilmCut,
@@ -115,6 +118,26 @@ export default function ProductionDesk() {
 
   const boardScenes = useMemo(() => board.status === 'loaded' ? board.value.scenes : [], [board])
   const readyScenes = useMemo(() => boardScenes.filter((scene) => scene.next_action === 'ready').length, [boardScenes])
+
+  // The Desk reads the same vocabulary as the rooms that feed it. Shot state,
+  // not "next action", separates a stalled render from a scene waiting on the
+  // creator. An unreadable board is neutral evidence, never a failing grade.
+  const deskShotStatuses = boardScenes.flatMap((scene) =>
+    scene.shots.map((shot) => handoffStatusForShot({
+      has_media: shot.has_media,
+      latest_job_status: shot.latest_job_status,
+    })),
+  )
+  const handoffStatus = board.status === 'unavailable'
+    ? 'cant_check' as const
+    : board.status === 'loading'
+      ? 'making' as const
+      : handoffStatusForPipeline({
+        sceneCount: board.value.scene_count,
+        readyCount: readyScenes,
+        makingCount: deskShotStatuses.filter((status) => status === 'making').length,
+        attentionCount: deskShotStatuses.filter((status) => status === 'needs_attention').length,
+      })
   const accepted = acceptance.status === 'loaded' && acceptance.value.disposition === 'ready_for_creator_approval' && !acceptance.value.stale
   const hasVerifiedFinal = screening.status === 'loaded' && screening.value.current_final_output?.approved === true && acceptance.status === 'loaded' && acceptance.value.package_id === screening.value.current_final_output?.source_id && accepted
   const cutStatus = cut.status === 'loaded' ? cut.value.status : 'unavailable'
@@ -267,6 +290,7 @@ export default function ProductionDesk() {
             <button type="button" onClick={() => void load(true)} disabled={!projectId || refreshing} aria-busy={refreshing || undefined} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/15 px-4 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">{refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}Refresh evidence</button>
           </div>
           <VerdictStrip stages={stages} />
+          <div className="mt-4"><RoomHandoffBadge room="desk" status={handoffStatus} projectId={projectId} /></div>
         </header>
 
         {projectError && <p role="alert" className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">{projectError}</p>}
@@ -275,12 +299,9 @@ export default function ProductionDesk() {
 
         {section('Scene cards', <>
           {board.status === 'unavailable' && <p role="status" className="mb-3 text-sm text-amber-100">Scene board unavailable: {board.message}</p>}
-          {board.status === 'loaded' && board.value.scene_count === 0 && <>
-            <p className="text-sm text-zinc-400">No saved scenes yet. Start in The Page, then return here for coverage.</p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link className="inline-flex min-h-10 items-center gap-1.5 text-sm text-cyan-200" to={`/studio/writers-room?project_id=${encodeURIComponent(projectId || '')}`}>Open The Page <ArrowRight size={14} /></Link>
-            </div>
-          </>}
+          {board.status === 'loaded' && board.value.scene_count === 0 && (
+            <RoomEmptyState state={ROOM_EMPTY_STATES.desk} icon={Camera} projectId={projectId} testId="desk-empty" />
+          )}
           {board.status === 'loaded' && board.value.scene_count > 0 && <div className="grid gap-4 md:grid-cols-2" aria-label="Scene cards">
             {boardScenes.map((scene) => {
               const waiting = scene.next_action !== 'ready'

@@ -15,7 +15,9 @@
     "check:type-scale": "node check_type_scale.cjs",
     "check:buttons": "node check_button_conventions.cjs",
     "check:buttons:self-test": "node --test check_button_conventions.self-test.cjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.17",

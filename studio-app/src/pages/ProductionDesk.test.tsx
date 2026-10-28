@@ -251,7 +251,8 @@ describe('Production Desk board', () => {
   it('renders the empty project state with plain guidance', async () => {
     successData()
     renderDesk()
-    expect(await screen.findByText('No saved scenes yet. Start in The Page, then return here for coverage.')).toBeInTheDocument()
+    expect(await screen.findByText('No saved scenes yet')).toBeInTheDocument()
+    expect(screen.getByText('Start in The Page, then return here for shot-by-shot coverage.')).toBeInTheDocument()
     expect(screen.getByText('0 of 0 scenes ready')).toBeInTheDocument()
     expect(screen.getAllByText('Open The Page').length).toBeGreaterThan(0)
   })

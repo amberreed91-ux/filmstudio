@@ -82,3 +82,6 @@ studio-backend/data/recovery-snapshots/
 
 # ── Part 2 DB isolation: dev-copy DB location (never commit project data) ──
 studio-backend/data-dev/
+
+# ── Playwright: run output, never commit (baselines are committed separately) ──
+studio-app/test-results/

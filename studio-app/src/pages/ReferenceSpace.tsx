@@ -712,7 +712,7 @@ export default function ReferenceSpace() {
                                   <p className="truncate px-2 py-1.5 text-[10px] capitalize text-zinc-400">{roleLabel(asset)}{asset.source_kind === 'uploaded' ? ' · upload' : ''}</p>
                                   <button type="button" aria-label={`Remove ${roleLabel(asset)} reference`} disabled={busy} onClick={() => handleRemove(asset.ref_id, false)} className="absolute right-1 top-1 rounded bg-black/70 p-1 text-zinc-200 opacity-0 group-hover:opacity-100 disabled:opacity-40"><Trash2 size={12} /></button>
                                   {selected.kind === 'setting' ? (
-                                    <button type="button" aria-label={`Designate canonical reference ${asset.ref_id}`} disabled={busy} onClick={() => handleDesignateCanonical(asset.ref_id)} className="absolute bottom-1 right-1 inline-flex items-center gap-1 rounded border border-amber-200/40 bg-black/70 px-1.5 py-0.5 text-[10px] text-amber-100 opacity-0 group-hover:opacity-100 disabled:opacity-40"><Stamp size={10} />Canonical</button>
+                                    <button type="button" aria-label={`Designate canonical reference ${asset.ref_id}`} disabled={busy} onClick={() => handleDesignateCanonical(asset.ref_id)} className="absolute bottom-1 right-1 inline-flex items-center gap-1 rounded border border-amber-200/40 bg-black/70 px-1.5 py-0.5 text-xs text-amber-100 opacity-0 group-hover:opacity-100 disabled:opacity-40"><Stamp size={10} />Canonical</button>
                                   ) : null}
                                 </div>
                               ))}

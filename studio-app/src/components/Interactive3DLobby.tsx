@@ -183,7 +183,7 @@ export default function Interactive3DLobby({ onNavigate }: Interactive3DLobbyPro
                 className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-xs text-zinc-200 transition-colors hover:border-amber-200/40"
               >
                 <span className="block font-semibold uppercase tracking-[0.1em]">{room.label}</span>
-                <span className="mt-0.5 block text-[11px] text-zinc-500">{room.description}</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">{room.description}</span>
               </button>
             ))}
           </div>

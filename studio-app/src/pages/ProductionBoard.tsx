@@ -42,6 +42,9 @@ import {
   type StoryboardBlueprintSummary,
 } from '../lib/studioApi'
 import { normalizeJobStatus } from '../lib/jobStatus'
+import { handoffStatusForPipeline, ROOM_EMPTY_STATES } from '../lib/roomHandoff'
+import RoomHandoffBadge from '../components/status/RoomHandoffBadge'
+import RoomEmptyState from '../components/status/RoomEmptyState'
 import { persistActiveProjectId, withProductionContext } from '../lib/projectContext'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
 import ProductionQueueSummaryStrip from '../components/ProductionQueueSummaryStrip'
@@ -375,6 +378,23 @@ export default function ProductionBoard() {
     return new Map(storyboardBlueprints.map((blueprint) => [blueprint.scene_id, blueprint]))
   }, [storyboardBlueprints])
 
+  // One handoff status for the whole room, using the shared pipeline
+  // vocabulary: trouble outranks motion, motion outranks waiting.
+  // A scene is ready to hand to Watch only when a take exists for it; an
+  // approved storyboard with no footage is still waiting on the creator.
+  const scenesWithFootage = new Set(
+    renderJobs
+      .filter((job) => normalizeJobStatus(job.status) === 'complete')
+      .map((job) => sceneIdFromJob(job)),
+  )
+  const handoffStatus = handoffStatusForPipeline({
+    sceneCount: scenes.length,
+    readyCount: scenes.filter((scene) => scenesWithFootage.has(scene.scene_id)).length,
+    makingCount: activeJobs.length,
+    attentionCount: failedJobCount,
+    unreadable: Boolean(error) && scenes.length === 0,
+  })
+
   const allCharacters = useMemo(() => {
     const chars = new Set<string>()
     for (const scene of scenes) {
@@ -635,6 +655,7 @@ export default function ProductionBoard() {
               <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-amber-200/80">{activeProject?.title || 'Your film'} · {scenes.length} scenes</p>
               <h1 className="text-3xl font-medium tracking-tight text-zinc-100">The Board</h1>
               <p className="mt-2 text-sm leading-relaxed text-zinc-400">See your story in sequence. Choose a scene to review its storyboard and continue in Previs.</p>
+              <div className="mt-3"><RoomHandoffBadge room="scenes" status={handoffStatus} projectId={effectiveProjectId} /></div>
             </div>
             <button type="button" onClick={handleAddScene} disabled={loading || !effectiveProjectId} aria-busy={loading || undefined} className="flex min-h-11 items-center gap-2 rounded-md border border-white/20 px-4 py-2 text-sm text-zinc-200 transition-colors hover:bg-white/5 disabled:opacity-40"><Plus size={16} />Add scene</button>
           </header>
@@ -656,7 +677,7 @@ export default function ProductionBoard() {
               {reorderNote ? <p role="status" className="text-xs text-emerald-200">{reorderNote}</p> : null}
               {allCharacters.length > 0 && <label className="flex items-center gap-2 text-xs text-zinc-400">Show<select aria-label="Filter scenes by character" value={characterFilter || ''} onChange={(event) => setCharacterFilter(event.target.value || null)} className="max-w-48 rounded-md border border-white/15 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">All characters</option>{allCharacters.map((character) => <option key={character} value={character}>{character}</option>)}</select></label>}
             </div>
-            {loading && scenes.length === 0 ? <div role="status" className="flex items-center gap-3 py-20 text-sm text-zinc-400"><Loader2 size={20} className="animate-spin" />Loading your scene sequence…</div> : error && scenes.length === 0 ? <div className="rounded-lg border border-white/10 px-6 py-12"><h2 className="text-xl text-zinc-200">Your scene list couldn’t load</h2><p className="mt-2 text-sm text-zinc-400">Try again to see the saved scenes for this film.</p><button type="button" onClick={() => void loadScenes()} disabled={loading} aria-busy={loading || undefined} className="mt-5 min-h-11 rounded-md border border-white/20 px-4 py-2 text-sm text-zinc-200 disabled:opacity-40">Retry scene list</button></div> : filteredScenes.length === 0 ? <div className="rounded-lg border border-dashed border-white/15 px-6 py-16 text-center"><Camera size={32} className="mx-auto mb-4 text-zinc-500" /><h2 className="text-xl text-zinc-200">{characterFilter ? 'No matching scenes' : 'Your scene wall starts with a script'}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-400">{characterFilter ? `No scenes found for character "${characterFilter}"` : "No scenes yet. Generate your script in Writer's Room to begin."}</p><button type="button" onClick={() => characterFilter ? setCharacterFilter(null) : navigateToWritersRoom('')} className="mt-5 min-h-11 rounded-md bg-amber-200 px-4 py-2 text-sm font-medium text-zinc-950">{characterFilter ? 'Clear filter' : 'Open The Page'}</button></div> : <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {loading && scenes.length === 0 ? <div role="status" className="flex items-center gap-3 py-20 text-sm text-zinc-400"><Loader2 size={20} className="animate-spin" />Loading your scene sequence…</div> : error && scenes.length === 0 ? <div className="rounded-lg border border-white/10 px-6 py-12"><h2 className="text-xl text-zinc-200">Your scene list couldn’t load</h2><p className="mt-2 text-sm text-zinc-400">Try again to see the saved scenes for this film.</p><button type="button" onClick={() => void loadScenes()} disabled={loading} aria-busy={loading || undefined} className="mt-5 min-h-11 rounded-md border border-white/20 px-4 py-2 text-sm text-zinc-200 disabled:opacity-40">Retry scene list</button></div> : filteredScenes.length === 0 ? <RoomEmptyState state={characterFilter ? { title: 'No matching scenes', body: `No scenes found for character “${characterFilter}”.`, action: null } : ROOM_EMPTY_STATES.scenes} icon={Camera} projectId={effectiveProjectId} testId="scenes-empty" action={characterFilter ? { label: 'Clear filter', onClick: () => setCharacterFilter(null) } : undefined} /> : <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {filteredScenes.map((scene) => {
                 const index = scenes.findIndex((item) => item.scene_id === scene.scene_id)
                 const blueprint = blueprintBySceneId.get(scene.scene_id)
@@ -684,7 +705,7 @@ export default function ProductionBoard() {
                   </button>
                   <div className="space-y-3 p-4">
                     <div className="flex flex-wrap items-center gap-2"><span className={`rounded border px-2 py-1 text-[10px] font-medium ${statusBadgeClass(status)}`}>{approved ? 'Storyboard approved' : blueprint ? 'Storyboard draft' : 'Script'}</span>{hasRender && <span className="text-[11px] text-emerald-300">Takes available</span>}{blueprint && <span className="text-[11px] text-zinc-400">{blueprint.ready_shot_count}/{blueprint.shot_count} shots ready</span>}</div>
-                    <h2 className="text-base font-medium leading-snug text-zinc-100"><span data-testid={`board-shot-drag-handle-${scene.scene_id}`} title="Drag to reorder" aria-label={`Drag to reorder ${scene.scene_name || `Scene ${index + 1}`}`} className="mr-2 inline-block cursor-grab rounded border border-white/15 px-1.5 py-0.5 align-middle text-[10px] text-zinc-400">⠿⠿</span>{scene.scene_name || `Scene ${index + 1}`}</h2>
+                    <h2 className="text-base font-medium leading-snug text-zinc-100"><span data-testid={`board-shot-drag-handle-${scene.scene_id}`} title="Drag to reorder" aria-label={`Drag to reorder ${scene.scene_name || `Scene ${index + 1}`}`} className="mr-2 inline-block cursor-grab rounded border border-white/15 px-1.5 py-0.5 align-middle text-xs text-zinc-400">⠿⠿</span>{scene.scene_name || `Scene ${index + 1}`}</h2>
                     <p className="line-clamp-2 min-h-10 text-xs leading-relaxed text-zinc-400">{scene.description || scene.text || 'Add scene direction in The Page.'}</p>
                     <button type="button" onClick={() => navigateToPrevis(scene.scene_id, approved ? 'render' : 'storyboard')} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-amber-200/25 bg-amber-200/5 px-3 py-2 text-sm text-amber-100 hover:bg-amber-200/10">{approved ? 'Continue to rendering' : 'Review storyboard'}<ArrowRight size={15} /></button>
                     <details className="border-t border-white/10 pt-2"><summary className="min-h-9 cursor-pointer py-2 text-xs text-zinc-400">Scene options</summary><div className="space-y-2 pt-2">

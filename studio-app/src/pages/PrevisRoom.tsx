@@ -88,6 +88,9 @@ import { persistActiveProjectId, resolveActiveProjectId, withProductionContext }
 import { extractCanonicalSceneContext } from '../lib/canonicalWorkflowContext'
 import { browserPlaybackUrl } from '../lib/studioMedia'
 import ShotIntentRationaleCard from '../components/ShotIntentRationaleCard'
+import RoomHandoffBadge from '../components/status/RoomHandoffBadge'
+import RoomEmptyState from '../components/status/RoomEmptyState'
+import { ROOM_EMPTY_STATES } from '../lib/roomHandoff'
 import ShotSignalsPanel from '../components/ShotSignalsPanel'
 import GenerationReadinessPanel, { type SingleTakeSelection } from '../components/GenerationReadinessPanel'
 import { resolveTakePromptPrefill } from '../lib/takePromptPrefill'
@@ -957,6 +960,12 @@ export default function PrevisRoom() {
 
   const continuityReviewComplete = continuityReview?.status === 'completed'
   const storyboardApproved = storyboardBlueprint?.blueprint.approved_version_id === storyboardBlueprint?.version?.version_id && Boolean(storyboardBlueprint?.version) && ['approved', 'locked'].includes(storyboardBlueprint?.blueprint.status || '')
+
+  // Same handoff vocabulary the other rooms use: an approved board plus a take
+  // is ready to hand to Scenes; an approved board without takes waits on you.
+  const previsHandoffStatus: 'not_started' | 'waiting' | 'ready' = storyboardApproved
+    ? takes.length > 0 ? 'ready' : 'waiting'
+    : selectedSceneId ? 'waiting' : 'not_started'
   const currentStoryboardStage = storyboardStage || (!currentStoryboardImageUrl ? 'frame' : !storyboardBlueprint?.version ? 'blueprint' : !continuityReviewComplete ? 'continuity' : 'approve')
 
   useEffect(() => { setStoryboardStage(null) }, [selectedSceneId, activeShotNumber])
@@ -2428,6 +2437,7 @@ export default function PrevisRoom() {
             </div>
             <p className="max-w-xs text-xs leading-relaxed text-zinc-400">Follow the steps or return to any stage. Your choices stay with you.</p>
           </header>
+          <RoomHandoffBadge room="previs" status={previsHandoffStatus} projectId={effectiveProjectId} />
 
           <nav aria-label="Previs production steps" data-testid="previs-step-nav">
             <ol className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-black/20 lg:grid-cols-4">
@@ -2521,7 +2531,7 @@ export default function PrevisRoom() {
                   {previewTakeJobId && (confirmDeleteKey === `take:${previewTakeJobId}`
                     ? <button type="button" onClick={() => void handleDeleteRender(previewTakeJobId)} disabled={pendingDeleteJobId === previewTakeJobId} aria-busy={pendingDeleteJobId === previewTakeJobId || undefined} className="text-xs text-rose-300 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Confirm delete take ${activeTakeNumber}`}>{pendingDeleteJobId === previewTakeJobId ? 'Deleting…' : 'Confirm delete?'}</button>
                     : confirmDeleteKey === `cancel:${previewTakeJobId}`
-                    ? <button type="button" onClick={() => void handleCancelAndDeleteRender(previewTakeJobId)} disabled={pendingDeleteJobId === previewTakeJobId} aria-busy={pendingDeleteJobId === previewTakeJobId || undefined} className="text-[11px] text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Cancel rendering and delete take">{pendingDeleteJobId === previewTakeJobId ? 'Cancelling…' : 'Cancel & delete?'}</button>
+                    ? <button type="button" onClick={() => void handleCancelAndDeleteRender(previewTakeJobId)} disabled={pendingDeleteJobId === previewTakeJobId} aria-busy={pendingDeleteJobId === previewTakeJobId || undefined} className="text-xs text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Cancel rendering and delete take">{pendingDeleteJobId === previewTakeJobId ? 'Cancelling…' : 'Cancel & delete?'}</button>
                     : <button type="button" onClick={() => armDelete(`take:${previewTakeJobId}`)} className="text-xs text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${activeTakeNumber}`}>Delete take</button>)}
                 </span>
               </div>
@@ -2742,7 +2752,7 @@ export default function PrevisRoom() {
                     <div><h3 className="text-sm font-medium text-zinc-100">2. Build the scene blueprint</h3><p className="mt-1 text-xs leading-relaxed text-zinc-400">Collect the scene’s shots into the plan you will review and approve.</p></div>
                     <button type="button" onClick={() => { setStoryboardStage(null); void handleCreateStoryboardBlueprint() }} disabled={!selectedSceneId || blueprintLoading} aria-busy={blueprintLoading || undefined} className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 px-4 py-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40">{blueprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}Build storyboard blueprint</button>
                     <p className="text-xs text-zinc-400">Blueprint: <span className="text-zinc-200">{blueprintLoading ? 'loading' : storyboardBlueprint?.blueprint.status || 'not built'}</span></p>
-                    {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}{confirmDeleteKey === `shot:${activeBlueprintShot.storyboard_shot_id}` ? <button type="button" onClick={() => void handleDeleteStoryboardShot()} disabled={pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id} aria-busy={pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id || undefined} className="text-xs text-rose-300 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Confirm delete shot ${activeBlueprintShot.shot_number}`}>{pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id ? 'Deleting…' : `Confirm delete shot ${activeBlueprintShot.shot_number}? Takes stay in history.`}</button> : <button type="button" onClick={() => armDelete(`shot:${activeBlueprintShot.storyboard_shot_id}`)} disabled={(storyboardBlueprint?.shots.length ?? 1) <= 1 || storyboardApproved} title={(storyboardBlueprint?.shots.length ?? 1) <= 1 ? 'A storyboard must keep at least one shot — add another shot first, or generate a new frame to replace this one' : storyboardApproved ? 'Unapprove the storyboard to edit its shots' : `Delete shot ${activeBlueprintShot.shot_number}`} className="text-[11px] text-zinc-500 hover:text-rose-300 disabled:opacity-40" aria-label={`Delete shot ${activeBlueprintShot.shot_number}`}>Delete shot {activeBlueprintShot.shot_number}</button>}</div></details>}
+                    {activeBlueprintShot && <details className="border-b border-white/10 pb-3"><summary className="cursor-pointer text-xs text-zinc-400">Blueprint details</summary><div className="mt-3 space-y-2 text-xs leading-relaxed text-zinc-400"><p>Shot {activeBlueprintShot.shot_number}: {activeBlueprintShot.render_contract.render_readiness}</p>{activeBlueprintShot.rationale && <p>{activeBlueprintShot.rationale}</p>}{confirmDeleteKey === `shot:${activeBlueprintShot.storyboard_shot_id}` ? <button type="button" onClick={() => void handleDeleteStoryboardShot()} disabled={pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id} aria-busy={pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id || undefined} className="text-xs text-rose-300 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Confirm delete shot ${activeBlueprintShot.shot_number}`}>{pendingShotDeleteId === activeBlueprintShot.storyboard_shot_id ? 'Deleting…' : `Confirm delete shot ${activeBlueprintShot.shot_number}? Takes stay in history.`}</button> : <button type="button" onClick={() => armDelete(`shot:${activeBlueprintShot.storyboard_shot_id}`)} disabled={(storyboardBlueprint?.shots.length ?? 1) <= 1 || storyboardApproved} title={(storyboardBlueprint?.shots.length ?? 1) <= 1 ? 'A storyboard must keep at least one shot — add another shot first, or generate a new frame to replace this one' : storyboardApproved ? 'Unapprove the storyboard to edit its shots' : `Delete shot ${activeBlueprintShot.shot_number}`} className="text-xs text-zinc-500 hover:text-rose-300 disabled:opacity-40" aria-label={`Delete shot ${activeBlueprintShot.shot_number}`}>Delete shot {activeBlueprintShot.shot_number}</button>}</div></details>}
                     {storyboardBlueprint?.blueprint && storyboardBlueprint?.version && effectiveProjectId && selectedSceneId && (
                       <PromptRebuildPanel
                         blueprintId={storyboardBlueprint.blueprint.blueprint_id}
@@ -3344,15 +3354,15 @@ export default function PrevisRoom() {
                     {takes.map((take) => <div key={take.take_number} className="min-w-0 space-y-2">
                       <button type="button" disabled={!take.videoUrl} aria-pressed={activeTakeNumber === take.take_number} onClick={() => take.videoUrl && setSelectedTakeByShot((prev) => ({ ...prev, [activeShotNumber]: take.take_number }))} className={`w-full overflow-hidden rounded-md border text-left disabled:opacity-40 ${activeTakeNumber === take.take_number ? 'border-amber-200/60 bg-amber-200/5' : 'border-white/15 hover:border-white/35'}`}>
                         <div className="aspect-video bg-black/30">{take.videoUrl ? <video src={take.videoUrl} className="h-full w-full object-contain" muted playsInline /> : <div className="flex h-full items-center justify-center"><Camera size={16} className="text-zinc-600" /></div>}</div>
-                        <span className="flex flex-wrap items-center justify-between gap-1 px-2 py-2 text-xs text-zinc-200">Take {take.take_number}{activeTakeNumber === take.take_number && <span className="text-[10px] text-amber-200">Previewing</span>}</span>
+                        <span className="flex flex-wrap items-center justify-between gap-1 px-2 py-2 text-xs text-zinc-200">Take {take.take_number}{activeTakeNumber === take.take_number && <span className="text-xs text-amber-200">Previewing</span>}</span>
                       </button>
                       {take.jobId && (confirmDeleteKey === `cancel:${take.jobId}`
-                        ? <button type="button" onClick={() => void handleCancelAndDeleteRender(take.jobId!)} disabled={pendingDeleteJobId === take.jobId} aria-busy={pendingDeleteJobId === take.jobId || undefined} className="text-[11px] text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Cancel rendering and delete take">{pendingDeleteJobId === take.jobId ? 'Cancelling…' : 'Rendering — cancel & delete?'}</button>
+                        ? <button type="button" onClick={() => void handleCancelAndDeleteRender(take.jobId!)} disabled={pendingDeleteJobId === take.jobId} aria-busy={pendingDeleteJobId === take.jobId || undefined} className="text-xs text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Cancel rendering and delete take">{pendingDeleteJobId === take.jobId ? 'Cancelling…' : 'Rendering — cancel & delete?'}</button>
                         : confirmDeleteKey === `take:${take.jobId}`
                         ? <button type="button" onClick={() => void handleDeleteRender(take.jobId!)} disabled={pendingDeleteJobId === take.jobId} aria-busy={pendingDeleteJobId === take.jobId || undefined} className="text-xs text-rose-300 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Confirm delete take ${take.take_number}`}>{pendingDeleteJobId === take.jobId ? 'Deleting…' : 'Confirm delete?'}</button>
                         : <button type="button" onClick={() => armDelete(`take:${take.jobId!}`)} className="text-xs text-zinc-500 hover:text-rose-300" aria-label={`Delete take ${take.take_number}`}>Delete take</button>)}
                     </div>)}
-                  </div> : <div className="mt-3 rounded-md border border-dashed border-white/15 p-4 text-xs leading-relaxed text-zinc-400">No takes for this shot yet. Render a take in step 3, then return here to review it.</div>}
+                  </div> : <div className="mt-3"><RoomEmptyState state={ROOM_EMPTY_STATES.previsTakes} icon={Camera} projectId={effectiveProjectId} testId="previs-takes-empty" /></div>}
                 </div>
                 <div className="border-t border-white/10 pt-4">
                   <h3 className="text-sm font-medium text-zinc-100">Assemble your scene</h3>

@@ -21,9 +21,22 @@ const SRC = path.join(__dirname, 'src');
 const HARD_FLOOR_PX = 10;
 const READING_FLOOR_PX = 12;
 
-// Intentional exceptions to the hard floor, with the reason each is allowed.
+// Intentional exceptions, with the reason each is allowed.
+//   exempts: 'hard-floor'    — may render below 10px
+//   exempts: 'reading-floor' — may render below 12px inside an internal tool,
+//                              but still never below the 10px hard floor
 const ALLOWLIST = [
-  { file: 'components/Interactive3DLobby.tsx', reason: 'single letter inside a fixed 12x12 keycap box' },
+  {
+    file: 'components/Interactive3DLobby.tsx',
+    exempts: 'hard-floor',
+    reason: 'single letter inside a fixed 12x12 keycap box',
+  },
+  {
+    file: 'pages/StudioDevTools.tsx',
+    exempts: 'reading-floor',
+    reason:
+      'internal diagnostics console — dense monospace readouts and raw IDs for debugging, not creator-facing reading text',
+  },
 ];
 
 function walk(dir, out = []) {
@@ -41,6 +54,7 @@ const LABEL_SIGNALS = /uppercase|font-mono|truncate|badge|chip|status|rounded-(f
 
 const hardFailures = [];
 const readingWarnings = [];
+const exceptions = [];
 
 for (const file of walk(SRC)) {
   const rel = path.relative(SRC, file);
@@ -53,8 +67,8 @@ for (const file of walk(SRC)) {
     const allowed = ALLOWLIST.find((a) => rel.endsWith(a.file));
 
     if (size < HARD_FLOOR_PX) {
-      if (allowed) {
-        readingWarnings.push(`${rel}:${i + 1} [${size}px] allowed — ${allowed.reason}`);
+      if (allowed?.exempts === 'hard-floor') {
+        exceptions.push(`${rel}:${i + 1} [${size}px] allowed — ${allowed.reason}`);
         return;
       }
       hardFailures.push(`${rel}:${i + 1} [${size}px] below the ${HARD_FLOOR_PX}px hard floor`);
@@ -78,9 +92,19 @@ for (const file of walk(SRC)) {
     }
     if (/[a-z]\s+[a-z]/.test(preview) || /\{[a-zA-Z_.]/.test(line)) {
       if (isTestFixture) return;
+      if (allowed) {
+        exceptions.push(`${rel}:${i + 1} [${size}px] allowed — ${allowed.reason}`);
+        return;
+      }
       readingWarnings.push(`${rel}:${i + 1} [${size}px] reading text under ${READING_FLOOR_PX}px`);
     }
   });
+}
+
+if (exceptions.length) {
+  console.log(`Type-scale allowlist — ${exceptions.length} documented exception(s):`);
+  for (const e of exceptions) console.log(`  ${e}`);
+  console.log('');
 }
 
 if (readingWarnings.length) {
@@ -96,4 +120,7 @@ if (hardFailures.length) {
   process.exit(1);
 }
 
-console.log(`Type-scale check passed (hard floor ${HARD_FLOOR_PX}px).`);
+const outstanding = readingWarnings.length === 0
+  ? 'no outstanding reading-text warnings'
+  : `${readingWarnings.length} reading-text warning(s) outstanding`;
+console.log(`Type-scale check passed (hard floor ${HARD_FLOOR_PX}px, ${outstanding}).`);

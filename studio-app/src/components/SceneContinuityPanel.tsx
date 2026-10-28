@@ -131,7 +131,7 @@ function CausalFlagsSection({ causalCheck }: { causalCheck: CausalCheck }) {
             {impossibilities.length} flag{impossibilities.length !== 1 ? 's' : ''}
           </span>
         </div>
-        <span className="text-[10px] text-zinc-500">{open ? '▲' : '▼'}</span>
+        <span className="text-xs text-zinc-500">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
@@ -139,7 +139,7 @@ function CausalFlagsSection({ causalCheck }: { causalCheck: CausalCheck }) {
           {impossibilities.map((imp, i) => (
             <div
               key={i}
-              className={`rounded border px-2 py-1.5 text-[10px] ${causalSeverityStyle(imp.severity)}`}
+              className={`rounded border px-2 py-1.5 text-xs ${causalSeverityStyle(imp.severity)}`}
               data-testid={`causal-flag-${imp.severity}`}
             >
               <div className="flex items-center gap-1.5">
@@ -225,7 +225,7 @@ function MotifRow({ motif, allSceneIds }: { motif: MotifThread; allSceneIds: str
           {motif.status}
         </span>
 
-        <span className="text-[10px] text-zinc-500">{open ? '▲' : '▼'}</span>
+        <span className="text-xs text-zinc-500">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (

@@ -18,8 +18,13 @@ describe('Production Board navigation contract', () => {
 
   it('production board keeps empty state render and has no writers-room redirect', () => {
     const file = readFileSync(resolve(__dirname, 'pages/ProductionBoard.tsx'), 'utf8')
-    expect(file).toContain('Your scene wall starts with a script')
+    // The empty state renders through the shared room pattern, and its copy
+    // lives in the one handoff vocabulary module rather than the page.
+    expect(file).toContain('RoomEmptyState')
+    expect(file).toContain('ROOM_EMPTY_STATES.scenes')
     expect(file).not.toContain("navigate('/studio/writers-room'")
+    const handoff = readFileSync(resolve(__dirname, 'lib/roomHandoff.ts'), 'utf8')
+    expect(handoff).toContain('Your scene wall starts with a script')
   })
 
   it('studio room aliases exist for workspace and development room navigation', () => {

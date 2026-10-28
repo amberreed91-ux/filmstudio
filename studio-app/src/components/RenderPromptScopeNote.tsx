@@ -21,31 +21,31 @@ export default function RenderPromptScopeNote({ takeReady = true, boardReady = t
   return (
     <div data-testid="render-prompt-scope-note" className="mb-3 grid grid-cols-3 gap-2">
       <div data-testid="scope-group-take" className="rounded border border-white/10 bg-black/20 px-2 py-1.5">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-100">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-100">
           <Clapperboard size={12} aria-hidden />
           <span>Previs take direction</span>
           <StatusDot ready={takeReady} label="take-status" />
         </div>
-        <div className="mt-0.5 text-[10px] text-zinc-400">writes to previs-render-prompt</div>
-        <div className="text-[10px] text-zinc-500">previs take only</div>
+        <div className="mt-0.5 text-xs text-zinc-400">writes to previs-render-prompt</div>
+        <div className="text-xs text-zinc-500">previs take only</div>
       </div>
       <div data-testid="scope-group-board" className="rounded border border-white/10 bg-black/20 px-2 py-1.5">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-100">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-100">
           <FileText size={12} aria-hidden />
           <span>Board canonical text</span>
           <StatusDot ready={boardReady} label="board-status" />
         </div>
-        <div className="mt-0.5 text-[10px] text-zinc-400">writes to blueprint version</div>
-        <div className="text-[10px] text-zinc-500">approved board</div>
+        <div className="mt-0.5 text-xs text-zinc-400">writes to blueprint version</div>
+        <div className="text-xs text-zinc-500">approved board</div>
       </div>
       <div data-testid="scope-group-image" className="rounded border border-white/10 bg-black/20 px-2 py-1.5">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-100">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-100">
           <ImageIcon size={12} aria-hidden />
           <span>Runway image prompt</span>
           <StatusDot ready={imageReady} label="image-status" />
         </div>
-        <div className="mt-0.5 text-[10px] text-zinc-400">writes to Runway render</div>
-        <div className="text-[10px] text-zinc-500">approved image prompt</div>
+        <div className="mt-0.5 text-xs text-zinc-400">writes to Runway render</div>
+        <div className="text-xs text-zinc-500">approved image prompt</div>
       </div>
     </div>
   )
