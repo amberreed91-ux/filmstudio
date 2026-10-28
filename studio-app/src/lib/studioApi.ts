@@ -2359,6 +2359,10 @@ export type Scene = {
   status: string
   storyboard_image?: string
   storyboard_images?: Record<string, string>
+  /** Optional card-level purpose. Carried into the Board and Production Desk. */
+  shotIntent?: string
+  /** Optional card-level visual motif. Carried alongside `shotIntent`. */
+  motifRef?: string
   sound_advisory?: SoundAdvisory
   transition_advisory?: TransitionAdvisory
   comments?: SceneComment[]

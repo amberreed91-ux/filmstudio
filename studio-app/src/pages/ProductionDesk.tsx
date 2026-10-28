@@ -22,6 +22,8 @@ import ShotGateChips from '../components/status/ShotGateChips'
 import NextActionLine from '../components/status/NextActionLine'
 import VerdictStrip from '../components/status/VerdictStrip'
 import TechDetailsDrawer, { BlockerList } from '../components/status/TechDetailsDrawer'
+import ShotRationaleMotifCard from '../components/status/ShotRationaleMotifCard'
+import { findDeskQueueItem, toDeskQueueItems } from '../lib/deskShotInspector'
 import { useProjectRouteContext } from '../hooks/useProjectRouteContext'
 import { useStudio } from '../context/StudioContext'
 import { getShotReferenceConfirmation, recordShotReferenceConfirmation, resolveShotReferenceBinding, type ShotReferenceBinding, type ShotReferenceConfirmation } from '../lib/visualTrainingApi'
@@ -72,6 +74,9 @@ export default function ProductionDesk() {
   const [screening, setScreening] = useState<LoadState<ScreeningManifest>>(empty())
   const [acceptance, setAcceptance] = useState<LoadState<ProductionAcceptanceSummary>>(empty())
   const [refreshing, setRefreshing] = useState(false)
+  // Inspector selection. Null means "the first shot on the board", so the
+  // side panel always has evidence to report without an extra click.
+  const [selectedShotId, setSelectedShotId] = useState<string | null>(null)
 
   const load = useCallback(async (showSpinner = false) => {
     if (!projectId) return
@@ -112,12 +117,19 @@ export default function ProductionDesk() {
 
   useEffect(() => {
     setBoard(empty()); setCut(empty()); setDelivery({ status: 'loading' })
-    setScreening(empty()); setAcceptance(empty())
+    setScreening(empty()); setAcceptance(empty()); setSelectedShotId(null)
     void load()
   }, [load])
 
   const boardScenes = useMemo(() => board.status === 'loaded' ? board.value.scenes : [], [board])
   const readyScenes = useMemo(() => boardScenes.filter((scene) => scene.next_action === 'ready').length, [boardScenes])
+  // Board cards become queue items once, so the inspector reads the same
+  // rationale and motif tags the card carried instead of re-deriving them.
+  const deskQueueItems = useMemo(() => toDeskQueueItems(boardScenes), [boardScenes])
+  const activeDeskItem = useMemo(
+    () => findDeskQueueItem(deskQueueItems, selectedShotId) ?? deskQueueItems[0] ?? null,
+    [deskQueueItems, selectedShotId],
+  )
 
   // The Desk reads the same vocabulary as the rooms that feed it. Shot state,
   // not "next action", separates a stalled render from a scene waiting on the
@@ -302,7 +314,8 @@ export default function ProductionDesk() {
           {board.status === 'loaded' && board.value.scene_count === 0 && (
             <RoomEmptyState state={ROOM_EMPTY_STATES.desk} icon={Camera} projectId={projectId} testId="desk-empty" />
           )}
-          {board.status === 'loaded' && board.value.scene_count > 0 && <div className="grid gap-4 md:grid-cols-2" aria-label="Scene cards">
+          {board.status === 'loaded' && board.value.scene_count > 0 && <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="grid gap-4 md:grid-cols-2" aria-label="Scene cards">
             {boardScenes.map((scene) => {
               const waiting = scene.next_action !== 'ready'
               return (
@@ -319,9 +332,18 @@ export default function ProductionDesk() {
                 {scene.board_state !== 'missing_board' && scene.shots.length > 0 && (
                   <ul className="mt-3 space-y-2" aria-label={`Shots in ${scene.scene_id}`}>
                     {scene.shots.map((shot) => (
-                      <li key={shot.shot_id} data-testid={`shot-row-${shot.shot_id}`} className="rounded-md border border-white/10 p-2">
-                        <p className="font-mono text-[11px] text-zinc-300">{shot.shot_id}</p>
-                        <ShotGateChips shot={shot} />
+                      <li key={shot.shot_id} data-testid={`shot-row-${shot.shot_id}`}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedShotId(shot.shot_id)}
+                          aria-pressed={activeDeskItem?.shotId === shot.shot_id}
+                          aria-label={`Inspect ${shot.shot_id}`}
+                          data-testid={`shot-select-${shot.shot_id}`}
+                          className={`w-full rounded-md border p-2 text-left transition-colors ${activeDeskItem?.shotId === shot.shot_id ? 'border-amber-200/40 bg-amber-200/[0.04]' : 'border-white/10 hover:border-white/25 hover:bg-white/[0.03]'}`}
+                        >
+                          <span className="block font-mono text-[11px] text-zinc-300">{shot.shot_id}</span>
+                          <ShotGateChips shot={shot} />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -335,6 +357,16 @@ export default function ProductionDesk() {
               </article>
               )
             })}
+            </div>
+            <aside aria-label="Shot inspector" className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+              {activeDeskItem ? (
+                <ShotRationaleMotifCard item={activeDeskItem} />
+              ) : (
+                <p className="rounded-lg border border-white/10 p-4 text-xs leading-relaxed text-zinc-500">
+                  No shots on this board yet. A shot appears here once its storyboard carries one.
+                </p>
+              )}
+            </aside>
           </div>}
           <div className="mt-4 flex flex-wrap gap-3">
             <Link className="inline-flex min-h-10 items-center gap-2 text-sm text-cyan-200" to={`/studio/production-board?project_id=${encodeURIComponent(projectId || '')}`}>Open scene board <ArrowRight size={14} /></Link>

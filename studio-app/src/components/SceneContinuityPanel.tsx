@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { activeMotifs, orderMotifs } from '../lib/motifIndicators'
 
 type ScenePair = [string, string]
 
@@ -294,6 +295,11 @@ function MotifsSection({ filmId }: { filmId: string }) {
     return ids
   }, [analysis])
 
+  // Active motifs are what the current cut still carries. They lead the list
+  // so the indicators read as project state, not as a history of threads.
+  const orderedThreads = useMemo(() => orderMotifs(analysis?.motifs ?? []), [analysis])
+  const activeThreads = useMemo(() => activeMotifs(analysis?.motifs ?? []), [analysis])
+
   return (
     <div className="space-y-2" data-testid="motifs-section">
       <div className="flex items-center gap-2">
@@ -304,6 +310,21 @@ function MotifsSection({ filmId }: { filmId: string }) {
           </span>
         )}
       </div>
+
+      {activeThreads.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5" data-testid="active-motifs">
+          <span className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Active in this cut</span>
+          {activeThreads.map((motif) => (
+            <span
+              key={motif.motif}
+              data-testid="active-motif-chip"
+              className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200"
+            >
+              {motif.motif}
+            </span>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-xs text-zinc-500">Analysing motifs…</div>
@@ -333,7 +354,7 @@ function MotifsSection({ filmId }: { filmId: string }) {
 
           {/* Motif rows */}
           <div className="space-y-1.5">
-            {analysis.motifs.map((m) => (
+            {orderedThreads.map((m) => (
               <MotifRow key={m.motif} motif={m} allSceneIds={allSceneIds} />
             ))}
           </div>

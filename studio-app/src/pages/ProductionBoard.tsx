@@ -43,7 +43,9 @@ import {
 } from '../lib/studioApi'
 import { normalizeJobStatus } from '../lib/jobStatus'
 import { handoffStatusForPipeline, ROOM_EMPTY_STATES } from '../lib/roomHandoff'
+import { readShotNarrative } from '../lib/shotNarrative'
 import RoomHandoffBadge from '../components/status/RoomHandoffBadge'
+import ShotIntentBadge from '../components/status/ShotIntentBadge'
 import RoomEmptyState from '../components/status/RoomEmptyState'
 import { persistActiveProjectId, withProductionContext } from '../lib/projectContext'
 import DirectorDebatePanel from '../components/DirectorDebatePanel'
@@ -688,6 +690,7 @@ export default function ProductionBoard() {
                 const storyboardUrl = blueprint?.storyboard_image || resolveSceneStoryboardUrl(scene.scene_id, renderJobs, scenes)
                 const imageUrl = storyboardUrl || getRenderThumbnailUrl(scene.scene_id)
                 const locationLabel = sceneLocationLabel(scene)
+                const narrative = readShotNarrative(scene)
                 return <article
                   key={scene.scene_id}
                   data-testid={`board-shot-${scene.scene_id}`}
@@ -705,6 +708,7 @@ export default function ProductionBoard() {
                   </button>
                   <div className="space-y-3 p-4">
                     <div className="flex flex-wrap items-center gap-2"><span className={`rounded border px-2 py-1 text-[10px] font-medium ${statusBadgeClass(status)}`}>{approved ? 'Storyboard approved' : blueprint ? 'Storyboard draft' : 'Script'}</span>{hasRender && <span className="text-[11px] text-emerald-300">Takes available</span>}{blueprint && <span className="text-[11px] text-zinc-400">{blueprint.ready_shot_count}/{blueprint.shot_count} shots ready</span>}</div>
+                    <ShotIntentBadge intent={narrative.shotIntent} testId={`board-shot-intent-${scene.scene_id}`} />
                     <h2 className="text-base font-medium leading-snug text-zinc-100"><span data-testid={`board-shot-drag-handle-${scene.scene_id}`} title="Drag to reorder" aria-label={`Drag to reorder ${scene.scene_name || `Scene ${index + 1}`}`} className="mr-2 inline-block cursor-grab rounded border border-white/15 px-1.5 py-0.5 align-middle text-xs text-zinc-400">⠿⠿</span>{scene.scene_name || `Scene ${index + 1}`}</h2>
                     <p className="line-clamp-2 min-h-10 text-xs leading-relaxed text-zinc-400">{scene.description || scene.text || 'Add scene direction in The Page.'}</p>
                     <button type="button" onClick={() => navigateToPrevis(scene.scene_id, approved ? 'render' : 'storyboard')} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-amber-200/25 bg-amber-200/5 px-3 py-2 text-sm text-amber-100 hover:bg-amber-200/10">{approved ? 'Continue to rendering' : 'Review storyboard'}<ArrowRight size={15} /></button>

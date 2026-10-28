@@ -568,3 +568,56 @@ describe('Production Desk binding (unchanged write path)', () => {
     expect(screen.queryByText(/Confirmed for scene_001_shot_001/)).not.toBeInTheDocument()
   })
 })
+
+describe('Production Desk shot inspector', () => {
+  function rationaleBoard() {
+    return {
+      project_id: 'project-a',
+      scene_count: 1,
+      next_action: null,
+      scenes: [
+        boardScene('scene_001', 'Held breath', {
+          board_state: 'ready',
+          next_action: 'ready',
+          shots: [
+            readyShot('scene_001_shot_001', 1, {
+              shot_intent: 'Carries the brass key into the light.',
+              motif_ref: 'brass key, rain',
+            }),
+            readyShot('scene_001_shot_002', 2, {
+              shot_intent: 'Withholds the reveal until the door closes.',
+              motif_ref: 'rain',
+            }),
+          ],
+        }),
+      ],
+    }
+  }
+
+  it('carries shot rationale and motif tags from the board into the inspector', async () => {
+    successData({ board: rationaleBoard() as never })
+    renderDesk()
+    const card = await screen.findByTestId('shot-rationale-motif')
+    expect(card).toHaveTextContent('Carries the brass key into the light.')
+    expect(screen.getAllByTestId('shot-motif-chip').map((chip) => chip.textContent)).toEqual(['brass key', 'rain'])
+  })
+
+  it('swaps the inspector to the selected shot without changing production state', async () => {
+    successData({ board: rationaleBoard() as never })
+    renderDesk()
+    await screen.findByTestId('shot-rationale')
+    fireEvent.click(screen.getByTestId('shot-select-scene_001_shot_002'))
+    expect(screen.getByTestId('shot-rationale')).toHaveTextContent('Withholds the reveal until the door closes.')
+    expect(screen.getByTestId('shot-select-scene_001_shot_002')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('shot-select-scene_001_shot_001')).toHaveAttribute('aria-pressed', 'false')
+    expect(referenceMocks.recordShotReferenceConfirmation).not.toHaveBeenCalled()
+  })
+
+  it('says plainly when the board carries no rationale yet', async () => {
+    successData({ board: blockedBoard() as never })
+    renderDesk()
+    await screen.findByTestId('scene-card-scene_001')
+    expect(screen.getByTestId('shot-rationale-empty')).toBeInTheDocument()
+    expect(screen.queryAllByTestId('shot-motif-chip')).toHaveLength(0)
+  })
+})
