@@ -861,20 +861,22 @@ def test_diagnose_prints_no_key_material() -> None:
 
 
 def test_scan_fails_at_head_proof() -> None:
-    """Fail-at-HEAD proof: at HEAD, every currently-gated file lacks the
-    guard call, i.e. the scan above would flag it."""
+    """Fail-before proof: at the parent of the guard commit, every
+    currently-gated file lacks the guard call, i.e. the scan above would
+    flag it. Uses 98f348ba^ so the proof stays valid after the guard
+    commit itself added script_guard to those files at HEAD."""
     probe = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=str(REPO_ROOT), capture_output=True, timeout=30)
     if probe.returncode != 0:
         pytest.skip("no git worktree here")
     missing_blobs: list[str] = []
     flagged = 0
     for rel in list(RUNWAY_GATED) + list(NONAPPROVED_GATED):
-        blob = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=30)
+        blob = subprocess.run(["git", "show", f"98f348ba^:{rel}"], cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=30)
         if blob.returncode != 0:
             missing_blobs.append(rel)
             continue
-        assert "script_guard" not in blob.stdout, f"{rel}: HEAD already guarded; proof invalid"
+        assert "script_guard" not in blob.stdout, f"{rel}: 98f348ba^ already guarded; proof invalid"
         assert "require_live_spend_gate" not in blob.stdout and "refuse_non_approved_provider" not in blob.stdout
         flagged += 1
-    assert not missing_blobs, f"gated files missing at HEAD: {missing_blobs}"
+    assert not missing_blobs, f"gated files missing at 98f348ba^: {missing_blobs}"
     assert flagged == len(RUNWAY_GATED) + len(NONAPPROVED_GATED) and flagged > 0
