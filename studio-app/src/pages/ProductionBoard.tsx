@@ -590,13 +590,16 @@ export default function ProductionBoard() {
     try {
       const result = await cancelRenderJob(jobId)
       if (projectScopeRef.current !== requestedProjectId) return
-      setSuccess(result.status === 'cancelled' ? 'Render cancelled.' : 'Cancellation requested. Refreshing render status…')
+      setSuccess(result.status === 'cancelled' ? 'Render cancelled.' : 'Cancel requested but not confirmed — the upstream task may still be running. Refresh to check status.')
       const jobs = await listRenderJobs(requestedProjectId)
       if (projectScopeRef.current !== requestedProjectId) return
       setRenderJobs(Array.isArray(jobs) ? jobs : [])
       await loadQueueSummary()
     } catch (err) {
-      if (projectScopeRef.current === requestedProjectId) setError(err instanceof Error ? err.message : 'Failed to cancel job')
+      if (projectScopeRef.current === requestedProjectId) {
+        const message = err instanceof Error ? err.message : 'Failed to cancel job'
+        setError(/cannot cancel|cancel/i.test(message) ? 'Cancel requested but not confirmed — the upstream task may still be running. Refresh to check status.' : message)
+      }
     } finally {
       if (projectScopeRef.current === requestedProjectId) setCancellingJobId(null)
     }

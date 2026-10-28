@@ -1362,6 +1362,146 @@ def fetch_runway_router_task_status(
     return _runway_router_request(task_url, method="GET", api_key=key)
 
 
+def cancel_runway_router_task(
+    task_id: str,
+    *,
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Request upstream cancellation for one router task, then verify it.
+
+    Exactly one ``POST /v1/tasks/{id}/cancel`` followed by exactly one
+    bounded ``GET /v1/tasks/{id}``. Stubbed transport only in tests: the
+    caller fakes :func:`_runway_router_request`; this function never submits,
+    polls, sleeps, or retries beyond that single follow-up read.
+
+    ``cancelled`` is True only when the POST identifies the same task (its
+    ``id`` matches) or reports ``CANCELLED``, AND the follow-up GET reads
+    ``CANCELLED``/``CANCELED`` for that same id. Every other path returns
+    ``cancelled=False`` and is never treated as confirmed:
+
+    - HTTP 404 on either exchange is reclassified as ``unknown_task``
+      (the config-not-found mapping in :func:`_runway_router_request` is
+      not applicable on the cancel path).
+    - HTTP 400/405 are ``unverified``, never confirmed.
+    - A POST that is accepted but whose GET still shows an active state
+      returns ``outcome="cancel_requested_unconfirmed"``.
+    """
+    clean_task_id = _as_clean_str(task_id)
+    if not clean_task_id:
+        raise ValueError("A Runway task id is required to cancel an upstream task")
+    key = get_runway_router_api_key() or _as_clean_str(api_key)
+    if not key:
+        raise ValueError("Missing Runway provider API key (RUNWAY_API_KEY)")
+    base_url = get_runway_router_base_url()
+    cancel_url = base_url.rstrip("/") + RUNWAY_TASK_PATH_TEMPLATE.format(task_id=clean_task_id) + "/cancel"
+
+    try:
+        post_resp = _runway_router_request(cancel_url, method="POST", api_key=key)
+    except RunwayRouterConfigNotFoundError as exc:
+        return {
+            "cancelled": False,
+            "outcome": "unknown_task",
+            "task_id": clean_task_id,
+            "upstream_status": None,
+            "detail": f"Cancel target is unknown (HTTP 404 reclassified): {exc}",
+        }
+    except RuntimeError as exc:
+        message = str(exc)
+        if "HTTP 404" in message:
+            return {
+                "cancelled": False,
+                "outcome": "unknown_task",
+                "task_id": clean_task_id,
+                "upstream_status": None,
+                "detail": f"Cancel target is unknown (HTTP 404 reclassified): {redact_runway_router_secrets(message)}",
+            }
+        if "HTTP 400" in message or "HTTP 405" in message:
+            return {
+                "cancelled": False,
+                "outcome": "unverified",
+                "task_id": clean_task_id,
+                "upstream_status": None,
+                "detail": f"Cancel request was not confirmed (unverified HTTP status): {redact_runway_router_secrets(message)}",
+            }
+        return {
+            "cancelled": False,
+            "outcome": "unverified",
+            "task_id": clean_task_id,
+            "upstream_status": None,
+            "detail": f"Cancel POST transport failed; confirmation is unavailable: {redact_runway_router_secrets(message)}",
+        }
+    post_id = ""
+    post_status = ""
+    if isinstance(post_resp, dict):
+        for id_key in ("id", "task_id", "taskId"):
+            candidate = _as_clean_str(post_resp.get(id_key))
+            if candidate:
+                post_id = candidate
+                break
+        post_status = str(post_resp.get("status") or "").strip().upper()
+    post_identifies_task = bool(post_id) and post_id == clean_task_id
+    post_reports_cancelled = post_status in {"CANCELLED", "CANCELED"}
+    if not (post_identifies_task or post_reports_cancelled):
+        return {
+            "cancelled": False,
+            "outcome": "unverified",
+            "task_id": clean_task_id,
+            "upstream_status": post_status or None,
+            "detail": "Cancel POST response did not identify the task or report CANCELLED; confirmation is unavailable.",
+        }
+    try:
+        task = fetch_runway_router_task_status(clean_task_id, api_key=key)
+    except RunwayRouterConfigNotFoundError as exc:
+        return {
+            "cancelled": False,
+            "outcome": "unknown_task",
+            "task_id": clean_task_id,
+            "upstream_status": None,
+            "detail": f"Cancel follow-up lookup is unknown (HTTP 404 reclassified): {exc}",
+        }
+    except RuntimeError as exc:
+        message = str(exc)
+        if "HTTP 404" in message:
+            return {
+                "cancelled": False,
+                "outcome": "unknown_task",
+                "task_id": clean_task_id,
+                "upstream_status": None,
+                "detail": f"Cancel follow-up lookup is unknown (HTTP 404 reclassified): {redact_runway_router_secrets(message)}",
+            }
+        return {
+            "cancelled": False,
+            "outcome": "unverified",
+            "task_id": clean_task_id,
+            "upstream_status": None,
+            "detail": f"Cancel follow-up lookup failed; confirmation is unavailable: {redact_runway_router_secrets(message)}",
+        }
+    if not isinstance(task, dict) or _as_clean_str(task.get("id")) != clean_task_id:
+        return {
+            "cancelled": False,
+            "outcome": "unverified",
+            "task_id": clean_task_id,
+            "upstream_status": None,
+            "detail": "Cancel follow-up lookup returned a mismatched identity; confirmation is unavailable.",
+        }
+    upstream_status = str(task.get("status") or "").strip().upper()
+    if upstream_status in {"CANCELLED", "CANCELED"}:
+        return {
+            "cancelled": True,
+            "outcome": "cancelled",
+            "task_id": clean_task_id,
+            "upstream_status": upstream_status,
+            "detail": "Upstream task reports CANCELLED after the cancel request.",
+        }
+    return {
+        "cancelled": False,
+        "outcome": "cancel_requested_unconfirmed",
+        "task_id": clean_task_id,
+        "upstream_status": upstream_status or None,
+        "detail": "Cancel was requested but the follow-up status is still active; the upstream task may still be running.",
+    }
+
+
 def extract_runway_task_cost(task: Any) -> Optional[float]:
     """Realized/estimated credits from a polled task, when Runway reports one.
 

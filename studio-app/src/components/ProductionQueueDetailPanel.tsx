@@ -181,6 +181,9 @@ export default function ProductionQueueDetailPanel({ projectId, refreshKey = 0 }
                   {label(item.provider)} · priority {item.priority} · attempt {item.attempt_count}/{item.max_attempts}
                 </div>
                 {item.reason ? <div className="mt-1 truncate text-xs text-amber-100/80">{item.reason}</div> : null}
+                {typeof (item.result as Record<string, unknown> | undefined)?.['upstream_cancel_warning'] === 'string' ? (
+                  <div className="mt-1 text-xs text-amber-200/90">{String((item.result as Record<string, unknown>)['upstream_cancel_warning'])}</div>
+                ) : null}
               </button>
               <div className={`w-fit rounded-md border px-2 py-1 text-xs capitalize ${statusClass(item.status)}`}>
                 {label(item.status)}

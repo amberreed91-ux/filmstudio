@@ -5093,7 +5093,16 @@ class RenderService:
         return True
 
     async def cancel_job(self, job_id: str) -> bool:
-        """Cancel a job"""
+        """Cancel a job.
+
+        Only this service marks a job cancelled, and only when the provider
+        adapter reports a verified cancellation (True). Router cancellations
+        require POST + follow-up GET confirmation inside the adapter; an
+        accepted-but-still-active upstream returns False and records
+        ``cancel_requested_unconfirmed`` on the job metadata without
+        changing its status.
+        """
+        started = time.perf_counter()
         job = self._jobs.get(job_id)
         if not job:
             return False
@@ -5107,14 +5116,25 @@ class RenderService:
             result = await adapter.cancel_job(job)
         finally:
             await _close_provider_adapter(adapter)
-        
+
         if result:
             job.status = "cancelled"
             job.updated_at = datetime.now().isoformat()
             self._jobs[job_id] = job
             _persist_job(job)
             await _notify_update(job_id, job.model_dump())
-        
+        elif job.provider == "runway_router":
+            # Preserve the adapter-recorded cancel_requested_unconfirmed /
+            # router_cancellation evidence without changing status.
+            job.updated_at = datetime.now().isoformat()
+            self._jobs[job_id] = job
+            try:
+                _persist_job(job)
+            except Exception:
+                pass
+        log_stage_event(project_id=job.project_id, job_id=job_id, provider=job.provider,
+                        stage="render_cancel", duration_ms=int((time.perf_counter() - started) * 1000))
+
         return result
 
     async def retry_job(self, job_id: str) -> RenderJobModel:

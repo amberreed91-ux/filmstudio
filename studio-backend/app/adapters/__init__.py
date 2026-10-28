@@ -2893,7 +2893,69 @@ class RunwayRouterAdapter(RenderProviderAdapter):
         return job
 
     async def cancel_job(self, job: RenderJobModel) -> bool:
-        return False
+        """Request upstream router cancellation; True only when verified CANCELLED.
+
+        Exactly one POST /v1/tasks/{id}/cancel plus one follow-up GET must
+        both confirm cancellation (same task id + CANCELLED status). Any
+        accepted-but-still-active outcome records
+        ``cancel_requested_unconfirmed`` on the job metadata and returns
+        False. This adapter never marks the job cancelled; only
+        ``RenderService`` does, on True.
+        """
+        import asyncio as _asyncio
+        import time as _time
+
+        task_id = str(getattr(job, "provider_job_id", "") or "").strip()
+        if not task_id:
+            return False
+        started = _time.perf_counter()
+        try:
+            from app.services.providers import runway_router_provider as _router_provider
+            from app.services.stability import log_stage_event as _log_stage
+
+            try:
+                _asyncio.get_running_loop()
+                outcome = await _asyncio.to_thread(
+                    _router_provider.cancel_runway_router_task,
+                    task_id,
+                    api_key=getattr(self.config, "api_key", None),
+                )
+            except RuntimeError:
+                outcome = _router_provider.cancel_runway_router_task(
+                    task_id,
+                    api_key=getattr(self.config, "api_key", None),
+                )
+            cancelled = bool(isinstance(outcome, dict) and outcome.get("cancelled") is True)
+            outcome_name = str(outcome.get("outcome") or "") if isinstance(outcome, dict) else ""
+            if not cancelled:
+                try:
+                    metadata = dict(getattr(job, "metadata", None) or {})
+                    execution = dict(metadata.get("router_execution") or {})
+                    if outcome_name == "cancel_requested_unconfirmed":
+                        execution["cancel_requested_unconfirmed"] = True
+                    execution["router_cancellation"] = {
+                        "outcome": outcome_name or "unverified",
+                        "task_id": task_id,
+                        "upstream_status": (outcome.get("upstream_status") if isinstance(outcome, dict) else None),
+                        "detail": (outcome.get("detail") if isinstance(outcome, dict) else None),
+                    }
+                    metadata["router_execution"] = execution
+                    job.metadata = metadata
+                except Exception:
+                    pass
+            try:
+                _log_stage(
+                    project_id=getattr(job, "project_id", ""),
+                    job_id=getattr(job, "id", ""),
+                    provider=self.ROUTER_PROVIDER,
+                    stage="router_cancel",
+                    duration_ms=int((_time.perf_counter() - started) * 1000),
+                )
+            except Exception:
+                pass
+            return cancelled
+        except Exception:
+            return False
 
     async def fetch_outputs(self, job: RenderJobModel) -> list[RenderAsset]:
         if job.status != "complete" or not job.output_payload or not job.provider_job_id:

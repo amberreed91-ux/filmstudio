@@ -592,6 +592,17 @@ class ProductionQueueService:
         )
         if not cancelled:
             raise ValueError("Queue item changed while cancellation was being applied")
+        # Local-only cancellation: the queue row is terminal, but any upstream
+        # provider task may still be running. Surface a visible warning in the
+        # response payload; no other queue behavior changes.
+        try:
+            result_payload = dict(item.result or {})
+            result_payload["upstream_cancel_warning"] = (
+                "Queue cancellation is local-only; the upstream provider task may still be running."
+            )
+            item.result = result_payload
+        except Exception:
+            pass
         self._record_event(
             project_id=item.project_id,
             queue_item_id=item.queue_item_id,
