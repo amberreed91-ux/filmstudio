@@ -993,6 +993,49 @@ class SceneProductionPipelineService:
                     "failure_class": "missing_frozen_contract",
                 }
                 continue
+            # Local-reference router shots are priced by the materialized
+            # price probe (real alias, dry-run only, never a generation)
+            # instead of the placeholder estimator. The placeholder path
+            # stays for every non-materializing case. The submit path is
+            # unchanged and never receives the probe's alias.
+            if self._entry_has_local_router_refs(contract_record):
+                try:
+                    from app.adapters import RunwayRouterAdapter
+                    from app.models import ProviderConfig
+
+                    _probe = RunwayRouterAdapter(
+                        ProviderConfig(provider_id="runway_router", name="Runway Router")
+                    )
+                    estimated = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            _probe.price_with_materialized_reference,
+                            contract_record=contract_record,
+                            manifest_record=shot_manifest,
+                            reference_binding=entry.get("reference_binding"),
+                            project_id=project_id,
+                            shot_id=shot_id,
+                            backend_root=self.backend_root,
+                        ),
+                        timeout=timeout_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    estimated = {
+                        "model": None,
+                        "duration_seconds": entry.get("duration_seconds"),
+                        "estimated_credits": None,
+                        "estimated": False,
+                        "estimate_source": "runway_router_materialized_probe",
+                        "advisory": True,
+                        "failure_class": "probe_timeout",
+                    }
+                entry["cost_estimate"] = estimated
+                logger.info(
+                    "project_id=%s job_id=%s provider=runway_router stage=router_price_probe_applied duration_ms=%d",
+                    project_id,
+                    shot_id,
+                    0,
+                )
+                continue
             try:
                 estimated = await asyncio.wait_for(
                     asyncio.to_thread(
@@ -1021,6 +1064,26 @@ class SceneProductionPipelineService:
             )
 
     @staticmethod
+    def _entry_has_local_router_refs(contract_record: Any) -> bool:
+        """True when a frozen contract carries a reference Runway cannot fetch.
+
+        Local (non-``https://``/``runway://``/``data:image/``) URIs route the
+        entry to the materialized price probe; every other entry keeps the
+        placeholder estimator. Read-only: never mutates the contract.
+        """
+        payload = contract_record.get("payload") if isinstance(contract_record, dict) else None
+        refs = payload.get("references") if isinstance(payload, dict) else None
+        if not isinstance(refs, list):
+            return False
+        for ref in refs:
+            uri = ref.get("uri") if isinstance(ref, dict) else None
+            if not isinstance(uri, str) or not uri:
+                continue
+            if not uri.startswith(("https://", "runway://", "data:image/")):
+                return True
+        return False
+
+    @staticmethod
     def _refuse_unestimated_router_shots(
         *,
         project_id: str,
@@ -1029,16 +1092,18 @@ class SceneProductionPipelineService:
         """Fail closed when a router shot has no verified dry-run estimate.
 
         Additive refusal only: router entries stamped unestimated by the
-        dry-run estimator are refused even when ``acknowledge_unknown_cost``
-        is true, because an unverified ceiling cannot be evaluated. Non-router
-        entries keep the existing acknowledgement semantics in the spend
-        guard below; nothing already allowed becomes refused.
+        dry-run estimator or the materialized price probe are refused even
+        when ``acknowledge_unknown_cost`` is true, because an unverified
+        ceiling cannot be evaluated. Non-router entries keep the existing
+        acknowledgement semantics in the spend guard below; nothing already
+        allowed becomes refused.
         """
         unestimated = [
             str(entry.get("shot_id") or "?")
             for entry in selected_entries
             if isinstance(entry.get("cost_estimate"), dict)
-            and entry["cost_estimate"].get("estimate_source") == "runway_router_dry_run"
+            and entry["cost_estimate"].get("estimate_source")
+            in ("runway_router_dry_run", "runway_router_materialized_probe")
             and entry["cost_estimate"].get("estimated") is not True
         ]
         if not unestimated:

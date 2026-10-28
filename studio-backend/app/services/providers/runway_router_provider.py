@@ -459,21 +459,23 @@ def reject_dry_run_placeholder_uris(values: Any, *, source: str) -> None:
             )
 
 
-def substitute_dry_run_placeholder_uris(
+def _substitute_reference_uris(
     contract_record: Any,
     manifest: Any,
+    mapping: dict[str, str],
+    *,
+    allow_placeholders: bool,
 ) -> tuple[Any, Any, int]:
-    """Return estimator-only copies with local reference URIs substituted.
+    """Shared URI-substitution core for estimator/probe-only contract copies.
 
     Deep-copies both inputs (the caller's frozen artifacts are never
-    mutated) and replaces every non-forwardable reference URI with a
-    deterministic ``runway://dry-run-placeholder/<ref_id-or-index>``
-    stand-in — same count, order, and roles, no bytes read, no upload.
-    Manifest rows for the contract's shot are substituted through the same
-    URI→placeholder map, the row digest is re-stamped from the substituted
-    contract, and both the manifest fingerprint and the record integrity
-    digest are recomputed, so every frozen comparison still verifies.
-    Returns ``(record_copy, manifest_copy, substituted_count)``.
+    mutated) and replaces reference URIs through ``mapping`` — same count,
+    order, and roles, no bytes read, no upload. Manifest rows for the
+    contract's shot are substituted through the same map, the row digest is
+    re-stamped from the substituted contract, and both the manifest
+    fingerprint and the record integrity digest are recomputed, so every
+    frozen comparison still verifies. Returns
+    ``(record_copy, manifest_copy, substituted_count)``.
     """
     from dataclasses import replace as _dataclass_replace
 
@@ -485,20 +487,11 @@ def substitute_dry_run_placeholder_uris(
 
     record_copy = copy.deepcopy(contract_record)
     manifest_copy = copy.deepcopy(manifest)
-    try:
-        contract = FrozenGenerationContract.from_record(record_copy)
-    except Exception:
-        return record_copy, manifest_copy, 0
-    mapping: dict[str, str] = {}
-    for index, ref in enumerate(contract.references):
-        uri = ref.uri
-        if _is_router_forwardable_uri(uri) or not isinstance(uri, str) or not uri:
-            continue
-        mapping.setdefault(
-            uri,
-            DRY_RUN_PLACEHOLDER_URI_PREFIX + _placeholder_key(ref.ref_id, index),
-        )
     if not mapping:
+        return record_copy, manifest_copy, 0
+    try:
+        FrozenGenerationContract.from_record(record_copy)
+    except Exception:
         return record_copy, manifest_copy, 0
     payload = record_copy.get("payload") if isinstance(record_copy, dict) else None
     if not isinstance(payload, dict):
@@ -524,7 +517,7 @@ def substitute_dry_run_placeholder_uris(
     ).hexdigest()
     try:
         substituted = FrozenGenerationContract.from_record(
-            record_copy, _allow_dry_run_placeholders=True
+            record_copy, _allow_dry_run_placeholders=allow_placeholders
         )
     except Exception:
         return copy.deepcopy(contract_record), copy.deepcopy(manifest), 0
@@ -571,6 +564,68 @@ def substitute_dry_run_placeholder_uris(
             substituted, manifest_fingerprint=manifest_copy["manifest_fingerprint"]
         ).to_record()
     return record_copy, manifest_copy, len(mapping)
+
+
+def substitute_dry_run_placeholder_uris(
+    contract_record: Any,
+    manifest: Any,
+) -> tuple[Any, Any, int]:
+    """Return estimator-only copies with local reference URIs substituted.
+
+    Deep-copies both inputs (the caller's frozen artifacts are never
+    mutated) and replaces every non-forwardable reference URI with a
+    deterministic ``runway://dry-run-placeholder/<ref_id-or-index>``
+    stand-in — same count, order, and roles, no bytes read, no upload.
+    Manifest rows for the contract's shot are substituted through the same
+    URI→placeholder map, the row digest is re-stamped from the substituted
+    contract, and both the manifest fingerprint and the record integrity
+    digest are recomputed, so every frozen comparison still verifies.
+    Returns ``(record_copy, manifest_copy, substituted_count)``.
+    """
+    from app.services.generation_contract import FrozenGenerationContract
+
+    try:
+        contract = FrozenGenerationContract.from_record(copy.deepcopy(contract_record))
+    except Exception:
+        return copy.deepcopy(contract_record), copy.deepcopy(manifest), 0
+    mapping: dict[str, str] = {}
+    for index, ref in enumerate(contract.references):
+        uri = ref.uri
+        if _is_router_forwardable_uri(uri) or not isinstance(uri, str) or not uri:
+            continue
+        mapping.setdefault(
+            uri,
+            DRY_RUN_PLACEHOLDER_URI_PREFIX + _placeholder_key(ref.ref_id, index),
+        )
+    return _substitute_reference_uris(
+        contract_record, manifest, mapping, allow_placeholders=True
+    )
+
+
+def substitute_materialized_reference_uris(
+    contract_record: Any,
+    manifest: Any,
+    uri_mapping: dict[str, str],
+) -> tuple[Any, Any, int]:
+    """Return probe-only copies with local URIs replaced by real aliases.
+
+    ``uri_mapping`` maps each local reference URI to its materialized
+    ``runway://`` execution alias. Every value must be a ``runway://`` URI
+    that is NOT a dry-run placeholder; anything else fails closed with the
+    inputs returned unchanged and a zero count. Same digest restamping as
+    the placeholder path; the caller's frozen artifacts are never mutated.
+    """
+    mapping = dict(uri_mapping) if isinstance(uri_mapping, dict) else {}
+    for alias in mapping.values():
+        if (
+            not isinstance(alias, str)
+            or not alias.startswith("runway://")
+            or is_dry_run_placeholder_uri(alias)
+        ):
+            return copy.deepcopy(contract_record), copy.deepcopy(manifest), 0
+    return _substitute_reference_uris(
+        contract_record, manifest, mapping, allow_placeholders=False
+    )
 
 
 def _reject_concrete_model(model: Any) -> None:

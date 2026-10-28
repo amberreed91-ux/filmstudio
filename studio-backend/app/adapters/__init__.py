@@ -2887,6 +2887,242 @@ class RunwayRouterAdapter(RenderProviderAdapter):
         )
         return job
 
+    def price_with_materialized_reference(
+        self,
+        *,
+        contract_record: Any,
+        manifest_record: Any,
+        reference_binding: Any,
+        project_id: str = "",
+        shot_id: str = "",
+        backend_root: Any = None,
+        source_fingerprints: dict[str, str] | None = None,
+        materialization: dict[str, Any] | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        materialized_at: str | None = None,
+        _post_json: Any = None,
+        _post_multipart: Any = None,
+    ) -> dict[str, Any]:
+        """Advisory price probe: materialize local refs, dry-run, stop.
+
+        Reuses the submit path's materialization
+        (``materialize_selected_ephemeral``) and its dry-run branch
+        (``submit_runway_router_video_render`` with ``dry_run=True``).
+        The live POST is structurally unreachable: this method contains no
+        non-dry-run provider call, never polls, never creates a job row,
+        and returns a price picture only — never the alias, never the
+        materialization record, so nothing here can be forwarded to a
+        submit. Every failure (invalid contract, missing row, scope
+        mismatch, fingerprint mismatch, expired alias, dry-run failure)
+        yields an unestimated picture with a ``failure_class``.
+        """
+        import time as _time
+
+        from app.services.generation_contract import FrozenGenerationContract
+        from app.services.providers import runway_router_provider as _router_provider
+
+        started = _time.monotonic()
+
+        def _unestimated(failure_class: str) -> dict[str, Any]:
+            return {
+                "model": None,
+                "duration_seconds": None,
+                "estimated_credits": None,
+                "estimated": False,
+                "estimate_source": "runway_router_materialized_probe",
+                "advisory": True,
+                "failure_class": failure_class,
+                "materialization_required": False,
+                "uri_placeholders_used": False,
+            }
+
+        try:
+            contract = FrozenGenerationContract.from_record(contract_record)
+        except Exception:
+            return _unestimated("invalid_frozen_contract")
+
+        local_refs = [
+            ref for ref in contract.references
+            if not (
+                isinstance(ref.uri, str)
+                and ref.uri.startswith(("https://", "runway://", "data:image/"))
+            )
+        ]
+        if not local_refs:
+            return _unestimated("no_local_references")
+        rows = reference_binding if isinstance(reference_binding, list) else []
+        by_id = {
+            str(row.get("ref_id") or ""): row
+            for row in rows if isinstance(row, dict)
+        }
+        selected_ids: list[str] = []
+        for ref in local_refs:
+            row = by_id.get(str(ref.ref_id))
+            if not isinstance(row, dict):
+                return _unestimated("missing_canonical_row")
+            # Project scope is enforced BEFORE any network call, mirroring
+            # reference_validation.assert_setting_project_scope (which the
+            # later reconstruction also applies to the substituted copies).
+            if row.get("target_type") == "setting":
+                row_project = str(row.get("project_id") or "")
+                if not row_project or (project_id and row_project != project_id):
+                    return _unestimated("project_scope_mismatch")
+            selected_ids.append(str(ref.ref_id))
+
+        try:
+            if source_fingerprints is not None:
+                fingerprints = dict(source_fingerprints)
+            else:
+                from app.services import runway_reference_projection as _projection
+
+                canonical_rows = [by_id[ref_id] for ref_id in selected_ids]
+                fingerprints = _projection.compute_source_fingerprints(
+                    canonical_rows, backend_root=backend_root
+                )
+        except Exception:
+            return _unestimated("fingerprint_unavailable")
+
+        from app.services.runway_ephemeral_upload import (
+            RunwayEphemeralUploadError as _MaterializationError,
+            materialize_selected_ephemeral as _materialize,
+            validate_materialization_record as _validate_materialization,
+        )
+
+        try:
+            if materialization is not None:
+                _validate_materialization({k: v for k, v in materialization.items()})
+                provider_uris = dict(materialization.get("provider_uris") or {})
+                materialization_digest = str(materialization.get("materialization_digest") or "")
+                expires_at = str(materialization.get("materialization_expires_at") or "")
+            else:
+                try:
+                    selected_fingerprints = {
+                        ref_id: fingerprints[ref_id] for ref_id in selected_ids
+                    }
+                except KeyError:
+                    return _unestimated("source_fingerprint_mismatch")
+                produced = _materialize(
+                    {ref_id: by_id[ref_id] for ref_id in selected_ids},
+                    list(selected_ids),
+                    source_fingerprints=selected_fingerprints,
+                    backend_root=backend_root,
+                    projection_digest=contract.creative_digest(),
+                    canonical_ref_ids=[
+                        str(row.get("ref_id") or "")
+                        for row in rows if isinstance(row, dict)
+                    ],
+                    api_key=api_key,
+                    base_url=base_url,
+                    materialized_at=materialized_at,
+                    _post_json=_post_json,
+                    _post_multipart=_post_multipart,
+                )
+                provider_uris = dict(produced.get("provider_uris") or {})
+                digests = produced.get("materialization_digests") or {}
+                materialization_digest = str(
+                    digests.get(selected_ids[0]) if isinstance(digests, dict) else ""
+                )
+                expires_at = str(produced.get("materialization_expires_at") or "")
+            if any(not provider_uris.get(ref_id) for ref_id in selected_ids):
+                return _unestimated("materialization_incomplete")
+        except _MaterializationError as exc:
+            return _unestimated(str(getattr(exc, "code", "") or "materialization_failed"))
+        except Exception:
+            return _unestimated("materialization_failed")
+
+        logger.info(
+            "ROUTER_PRICE_PROBE_MATERIALIZED | project_id=%s | job_id=%s | provider=%s | stage=router_price_probe | duration_ms=%s | refs=%s | digest=%s | expires_at=%s",
+            project_id,
+            shot_id or contract.shot_id,
+            self.ROUTER_PROVIDER,
+            int((_time.monotonic() - started) * 1000),
+            len(selected_ids),
+            materialization_digest,
+            expires_at,
+        )
+
+        uri_mapping: dict[str, str] = {}
+        for ref in local_refs:
+            alias = provider_uris.get(str(ref.ref_id))
+            if isinstance(alias, str) and alias:
+                uri_mapping.setdefault(ref.uri, alias)
+        record_copy, manifest_copy, substituted = (
+            _router_provider.substitute_materialized_reference_uris(
+                contract_record, manifest_record, uri_mapping
+            )
+        )
+        if not substituted:
+            return _unestimated("reconstruction_failed")
+        try:
+            body = _router_provider.reconstruct_runway_router_video_request(
+                record_copy, manifest_copy, dry_run=True
+            )
+        except Exception:
+            return _unestimated("reconstruction_failed")
+
+        try:
+            substituted_contract = FrozenGenerationContract.from_record(record_copy)
+            substituted_payload = substituted_contract.payload()
+            video_input = body.get("input") if isinstance(body.get("input"), dict) else {}
+            # The live POST is structurally unreachable from this method:
+            # the ONLY provider submission below carries dry_run=True, and
+            # this method never references the live submit path.
+            result = _router_provider.submit_runway_router_video_render(
+                str(video_input.get("promptText") or ""),
+                aspect_ratio=_router_provider.resolve_runway_router_aspect_ratio(
+                    str(substituted_payload.get("aspect_ratio") or "16:9")
+                ),
+                duration=substituted_payload.get("duration"),
+                resolution=substituted_payload.get("resolution"),
+                negative_prompt=substituted_payload.get("negative_prompt") or None,
+                generate_audio=substituted_payload.get("audio"),
+                seed=substituted_payload.get("seed"),
+                references=[
+                    {"image_url": ref["uri"], "role": ref["role"]}
+                    for ref in substituted_payload.get("references") or []
+                ],
+                reference_videos=substituted_payload.get("reference_videos"),
+                reference_audio=substituted_payload.get("reference_audio"),
+                keyframes=substituted_payload.get("keyframes"),
+                content_moderation=substituted_payload.get("content_moderation"),
+                dry_run=True,
+                request_payload=body,
+                api_key=api_key,
+            )
+        except Exception as exc:
+            return _unestimated(getattr(exc, "__class__", type(exc)).__name__ or "dry_run_failed")
+        if not isinstance(result, dict) or result.get("status") != "dry_run":
+            return _unestimated("dry_run_failed")
+        meta = result.get("meta") if isinstance(result.get("meta"), dict) else {}
+        raw_credits = meta.get("estimated_cost_credits")
+        if isinstance(raw_credits, bool) or not isinstance(raw_credits, (int, float)):
+            return _unestimated("dry_run_failed")
+        try:
+            duration_seconds = int((body.get("input") or {}).get("duration"))
+        except (TypeError, ValueError):
+            duration_seconds = None
+        logger.info(
+            "ROUTER_PRICE_PROBE_PRICED | project_id=%s | job_id=%s | provider=%s | stage=router_price_probe | duration_ms=%s | estimated_credits=%s | model=%s",
+            project_id,
+            shot_id or contract.shot_id,
+            self.ROUTER_PROVIDER,
+            int((_time.monotonic() - started) * 1000),
+            float(raw_credits),
+            str(meta.get("resolved_model") or ""),
+        )
+        return {
+            "model": str(meta.get("resolved_model") or "") or None,
+            "duration_seconds": duration_seconds,
+            "estimated_credits": float(raw_credits),
+            "estimated": True,
+            "estimate_source": "runway_router_materialized_probe",
+            "advisory": True,
+            "failure_class": None,
+            "materialization_required": False,
+            "uri_placeholders_used": False,
+        }
+
     async def get_job_status(self, job: RenderJobModel) -> RenderJobModel:
         # The routed submit path polls to a terminal status inside submit_job, so
         # a job here is already terminal or was submitted by an older code path.
