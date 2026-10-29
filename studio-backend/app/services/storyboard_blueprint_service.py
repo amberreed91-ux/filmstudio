@@ -1373,6 +1373,9 @@ class StoryboardBlueprintService:
             for row in self.storage.load_previs_images(project_id, scene_id)
             if isinstance(row, dict)
         }
+        # One memory read per scene: every shot in it carries the same explicit
+        # motif references, so no shot depends on the scene-level fallback.
+        motif_obligations, motif_memory_ids = self._scene_motif_context(project_id, scene_id)
         shots: list[StoryboardShot] = []
         for index, candidate in enumerate(candidates, start=1):
             shot_id = str(candidate.get("shot_id") or f"{scene_id}_shot_{index:03d}").strip()
@@ -1433,9 +1436,11 @@ class StoryboardBlueprintService:
                         purpose=str(candidate.get("shot_type") or ""),
                         emotional_target=str(scene.get("emotional_tone") or ""),
                         narrative_function=str(scene.get("description") or scene.get("heading") or ""),
+                        motif_obligations=list(motif_obligations),
                         character_focus=self._scene_characters(scene),
                         rationale=rationale,
                         source_scene_text_excerpt=self._scene_text(scene)[:500],
+                        source_memory_ids=list(motif_memory_ids),
                     ),
                     visual_plan=visual_plan,
                     continuity_plan=StoryboardShotContinuityPlan(
@@ -1989,6 +1994,53 @@ class StoryboardBlueprintService:
         if isinstance(raw, list):
             return [str(part).strip() for part in raw if str(part).strip()]
         return []
+
+    def _scene_motif_context(self, project_id: str, scene_id: str) -> tuple[list[str], list[str]]:
+        """Motif tags authored in the project's cinematic memory for this scene.
+
+        These are the same ``visual_tags`` the Desk and the continuity panel
+        report, so a shot's motif reference agrees with the scene vocabulary
+        rather than inventing a parallel one. Memories are newest-first; the
+        first distinct tags win, capped at three so one shot never carries a
+        keyframe dump. A failed or empty read yields no motifs, and unauthored
+        shots stay unauthored.
+        """
+        lister = getattr(self.storage, "list_cinematic_memory_for_project", None)
+        if not callable(lister):
+            return [], []
+        try:
+            memories = lister(project_id) or []
+        except Exception as exc:
+            logger.debug("Cinematic memory unavailable for storyboard motifs %s: %s", project_id, exc)
+            return [], []
+        tags: list[str] = []
+        memory_ids: list[str] = []
+        seen: set[str] = set()
+        for memory in memories:
+            metadata = getattr(memory, "metadata", None)
+            if not isinstance(metadata, dict):
+                continue
+            if str(metadata.get("scene_id") or "").strip() != scene_id:
+                continue
+            visual_tags = getattr(memory, "visual_tags", None)
+            if not isinstance(visual_tags, (list, tuple)):
+                continue
+            contributed = False
+            for tag in visual_tags:
+                text = " ".join(str(tag or "").split()).strip()
+                if not text or text.casefold() in seen:
+                    continue
+                seen.add(text.casefold())
+                tags.append(text)
+                contributed = True
+                if len(tags) >= 3:
+                    break
+            memory_id = str(getattr(memory, "memory_id", "") or "").strip()
+            if contributed and memory_id and memory_id not in memory_ids:
+                memory_ids.append(memory_id)
+            if len(tags) >= 3:
+                break
+        return tags, memory_ids
 
     def _project_characters_for_prompt(self, project_id: str) -> list[dict[str, Any]]:
         try:
