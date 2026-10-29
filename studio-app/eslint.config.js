@@ -7,7 +7,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // The MSW worker is generated into public/ by msw's postinstall, which
+  // restores its own eslint/tslint disable headers on every `npm ci`.
+  globalIgnores(['dist', 'public/mockServiceWorker.js']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

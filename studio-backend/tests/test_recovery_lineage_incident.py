@@ -22,6 +22,7 @@ These tests pin the safeguards that must prevent a repeat:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sqlite3
 from pathlib import Path
@@ -201,11 +202,12 @@ def test_database_replacement_is_detected(tmp_path):
     report = verify_render_lineage(db)
     assert report["ok"], report.get("reason")
 
-    # Incident case: a different file is swapped onto the live path
+    # Incident case: a different file is swapped onto the live path. Rename a
+    # file created while the old one still existed, so the new inode is
+    # guaranteed distinct — unlinking first lets Linux reuse the freed inode.
     replacement = tmp_path / "replacement.db"
     _make_shell_db(replacement)
-    db.unlink()
-    shutil.copy2(replacement, db)
+    os.replace(replacement, db)
 
     report = verify_render_lineage(db)
     assert not report["ok"]
@@ -273,8 +275,7 @@ async def test_render_submit_refuses_replaced_database(monkeypatch, tmp_path):
         shell = data_dir / "shell.db"
         _make_shell_db(shell)
         st_ino_before = storage.db_path.stat().st_ino
-        storage.db_path.unlink()
-        shutil.copy2(shell, storage.db_path)
+        os.replace(shell, storage.db_path)
         assert storage.db_path.stat().st_ino != st_ino_before
 
         # Pre-condition: the lineage guard itself detects the swap
