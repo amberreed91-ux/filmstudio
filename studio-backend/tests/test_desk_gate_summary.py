@@ -36,7 +36,11 @@ Maya holds the cut one breath longer. The room hums low."""
 SHORT_TEXT = "Maya waits by the edit bay door, night soft behind her."
 
 
-def _seed_project(project_id: str, scene_ids: tuple[str, ...] = ("scene_001",)) -> None:
+def _seed_project(
+    project_id: str,
+    scene_ids: tuple[str, ...] = ("scene_001",),
+    scene_extra: dict[str, Any] | None = None,
+) -> None:
     scenes = [
         {
             "scene_id": scene_id,
@@ -45,6 +49,7 @@ def _seed_project(project_id: str, scene_ids: tuple[str, ...] = ("scene_001",)) 
             "text": SCENE_TEXT,
             "characters": [],
             "updated_at": "2026-10-24T00:00:00Z",
+            **(scene_extra or {}),
         }
         for scene_id in scene_ids
     ]
@@ -488,3 +493,104 @@ def test_desk_gate_summary_anchor_verdicts_stay_project_isolated() -> None:
     assert ready["scenes"][0]["shots"][0]["setting_anchor"] == "set"
     assert blocked["scenes"][0]["shots"][0]["setting_anchor"] == "blocked"
     assert blocked["scenes"][0]["next_action"] == "confirm_setting_anchor"
+
+
+# ----------------------------------------------------------------------
+# Shot intent / motif emission (Phase 2 aggregate pass)
+#
+# The Desk inspector reads these snake_case fields. They carry authored
+# values only: an untagged shot or scene reports null, never filler.
+# ----------------------------------------------------------------------
+
+
+def test_desk_gate_summary_emits_authored_scene_narrative() -> None:
+    client = TestClient(app)
+    project_id = "project_desk_scene_narrative"
+    _seed_project(
+        project_id,
+        scene_extra={
+            "shot_intent": "Holds the edit bay empty before Maya speaks.",
+            "motifs": ["brass key", "rain", "brass key"],
+        },
+    )
+
+    response = client.get(f"/api/f51/studio/projects/{project_id}/desk-gate-summary")
+    assert response.status_code == 200, response.text
+    scene = response.json()["scenes"][0]
+    assert scene["shot_intent"] == "Holds the edit bay empty before Maya speaks."
+    assert scene["motif_ref"] == "brass key, rain"
+    assert scene["shots"] == []
+
+
+def test_desk_gate_summary_emits_authored_shot_narrative() -> None:
+    client = TestClient(app)
+    project_id = "project_desk_shot_narrative"
+    _seed_project(project_id)
+    detail = _board(project_id, shot_count=2)
+    storage = get_storage("sqlite")
+    authored, unauthored = _shots(detail)
+
+    authored.metadata = {
+        **(authored.metadata or {}),
+        "intent_rationale": "Withholds the reveal until the door closes.",
+    }
+    authored.continuity_plan.motif_continuity = ["brass key", "rain"]
+    storage.save_storyboard_shot(authored)
+
+    unauthored.intent.rationale = ""
+    unauthored.rationale = ""
+    unauthored.continuity_plan.motif_continuity = []
+    unauthored.intent.motif_obligations = []
+    storage.save_storyboard_shot(unauthored)
+
+    response = client.get(f"/api/f51/studio/projects/{project_id}/desk-gate-summary")
+    assert response.status_code == 200, response.text
+    scene = response.json()["scenes"][0]
+    rows = {row["shot_id"]: row for row in scene["shots"]}
+
+    assert rows[authored.shot_id]["shot_intent"] == "Withholds the reveal until the door closes."
+    assert rows[authored.shot_id]["motif_ref"] == "brass key, rain"
+    # Unauthored stays null — no synthetic default, no scene fallback.
+    assert rows[unauthored.shot_id]["shot_intent"] is None
+    assert rows[unauthored.shot_id]["motif_ref"] is None
+    # Scene-level fields are only set when the scene itself carries them.
+    assert scene["shot_intent"] is None
+    assert scene["motif_ref"] is None
+
+
+def test_desk_gate_summary_reads_scene_motifs_from_cinematic_memory() -> None:
+    """Scene motif_ref uses the same visual tags the motif-threads read uses."""
+    from app.models import CinematicMemoryRecord
+
+    client = TestClient(app)
+    project_id = "project_desk_memory_motifs"
+    _seed_project(project_id)
+    get_storage("sqlite").save_cinematic_memory_record(
+        CinematicMemoryRecord(
+            memory_id="mem_desk_001",
+            project_id=project_id,
+            asset_id="asset_desk_001",
+            keyframe_id="kf_desk_001",
+            visual_tags=["neon", "rain", "neon"],
+            searchable_text="scene_001: neon rain over the edit bay",
+            metadata={"scene_id": "scene_001"},
+        )
+    )
+
+    response = client.get(f"/api/f51/studio/projects/{project_id}/desk-gate-summary")
+    assert response.status_code == 200, response.text
+    scene = response.json()["scenes"][0]
+    assert scene["motif_ref"] == "neon, rain"
+    assert scene["shot_intent"] is None
+
+
+def test_desk_gate_summary_never_fabricates_narrative_fields() -> None:
+    client = TestClient(app)
+    project_id = "project_desk_no_narrative"
+    _seed_project(project_id)
+
+    response = client.get(f"/api/f51/studio/projects/{project_id}/desk-gate-summary")
+    assert response.status_code == 200, response.text
+    scene = response.json()["scenes"][0]
+    assert scene["shot_intent"] is None
+    assert scene["motif_ref"] is None

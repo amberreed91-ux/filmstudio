@@ -60,6 +60,8 @@ READ_CALLS = [
     "reference_asset_service.list_scene_confirmations "
     "(revalidates durable rows against current bindings; creates nothing)",
     "storage.list_jobs (SELECT render_jobs, newest-first per shot)",
+    "storage.list_cinematic_memory_for_project "
+    "(SELECT cinematic memory visual tags for scene-level motif_ref)",
 ]
 
 # Per-scene next actions. Exactly one per scene; plain language for the board.
@@ -162,6 +164,133 @@ def _job_output_url(job: Any) -> str:
     return ""
 
 
+# ── Authored narrative fields ──────────────────────────────────────────
+#
+# The aggregate carries a shot's purpose and motif tags through to the Desk,
+# but it never invents them. Every helper below returns ``None`` when the
+# record holds nothing authored, so an untagged shot stays honestly empty
+# instead of inheriting a synthetic default.
+
+
+def _authored_text(value: Any) -> str | None:
+    """A non-empty, whitespace-normalized string, or ``None``.
+
+    Only a string counts. Lists, dicts, and numeric ids are never coerced
+    into prose — a structured ``intent`` object is not an authored sentence.
+    """
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.split()).strip()
+    return text or None
+
+
+def _authored_refs(value: Any) -> str | None:
+    """Join motif tags with ``", "``, preserving order and dropping repeats.
+
+    Accepts a string reference or a list of tags. Empty input, blank entries,
+    and non-tag values resolve to ``None``.
+    """
+    if isinstance(value, str):
+        return _authored_text(value)
+    if not isinstance(value, (list, tuple)):
+        return None
+    tags: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = _authored_text(item)
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        tags.append(text)
+    return ", ".join(tags) or None
+
+
+def _shot_intent_text(shot: Any) -> str | None:
+    """The shot's stored rationale, in authored-first order.
+
+    ``intent.purpose`` is a camera label (``close_up``) and
+    ``intent.narrative_function`` is scene text, so neither is a shot purpose
+    here. Only rationale fields carry the why.
+    """
+    intent = getattr(shot, "intent", None)
+    metadata = getattr(shot, "metadata", None)
+    candidates: list[Any] = []
+    if isinstance(metadata, dict):
+        candidates.extend([metadata.get("intent_rationale"), metadata.get("shot_intent")])
+    if intent is not None:
+        candidates.append(getattr(intent, "rationale", None))
+    candidates.append(getattr(shot, "rationale", None))
+    for candidate in candidates:
+        text = _authored_text(candidate)
+        if text:
+            return text
+    return None
+
+
+def _shot_motif_ref(shot: Any) -> str | None:
+    """Motif tags authored on the shot: intent obligations, then continuity."""
+    intent = getattr(shot, "intent", None)
+    continuity = getattr(shot, "continuity_plan", None)
+    metadata = getattr(shot, "metadata", None)
+    candidates: list[Any] = []
+    if intent is not None:
+        candidates.append(getattr(intent, "motif_obligations", None))
+    if continuity is not None:
+        candidates.append(getattr(continuity, "motif_continuity", None))
+    if isinstance(metadata, dict):
+        candidates.extend([metadata.get("motif_ref"), metadata.get("motifs")])
+    for candidate in candidates:
+        refs = _authored_refs(candidate)
+        if refs:
+            return refs
+    return None
+
+
+def _scene_motif_refs(storage: Any, project_id: str) -> dict[str, str]:
+    """Scene-level motif tags from the project's cinematic memory.
+
+    These are the same visual tags the motif-threads read uses, so the Desk
+    reports the motif vocabulary the continuity panel already shows. A failed
+    read leaves every scene unauthored rather than inventing tags.
+    """
+    try:
+        memories = storage.list_cinematic_memory_for_project(project_id) or []
+    except Exception:
+        return {}
+    collected: dict[str, list[str]] = {}
+    for memory in memories:
+        metadata = getattr(memory, "metadata", None)
+        scene_id = ""
+        if isinstance(metadata, dict):
+            scene_id = str(metadata.get("scene_id") or "").strip()
+        if not scene_id:
+            continue
+        tags = getattr(memory, "visual_tags", None)
+        if not isinstance(tags, (list, tuple)):
+            continue
+        bucket = collected.setdefault(scene_id, [])
+        for tag in tags:
+            text = _authored_text(tag)
+            if text and text not in bucket:
+                bucket.append(text)
+    return {scene_id: ", ".join(tags) for scene_id, tags in collected.items() if tags}
+
+
+def _scene_narrative(entry: dict[str, Any], motif_refs: dict[str, str], scene_id: str) -> dict[str, Any]:
+    """Scene-level ``shot_intent`` / ``motif_ref``, or ``None`` when unauthored."""
+    shot_intent = _authored_text(entry.get("shot_intent")) or _authored_text(entry.get("intent"))
+    motif_ref = (
+        _authored_refs(entry.get("motif_ref"))
+        or _authored_refs(entry.get("motifs"))
+        or _authored_refs(entry.get("visual_tags"))
+        or motif_refs.get(scene_id)
+    )
+    return {"shot_intent": shot_intent, "motif_ref": motif_ref}
+
+
 def _summarize(
     *,
     project_id: str,
@@ -175,6 +304,8 @@ def _summarize(
     summary = project.get("execution_summary") if isinstance(project.get("execution_summary"), dict) else {}
     raw_scenes = summary.get("scenes") if isinstance(summary.get("scenes"), list) else []
     scenes_payload: list[dict[str, Any]] = []
+    # One read for the whole board: scene-level motif tags keyed by scene_id.
+    scene_motif_refs = _scene_motif_refs(storage, project_id)
 
     for entry in raw_scenes:
         if not isinstance(entry, dict):
@@ -197,6 +328,7 @@ def _summarize(
                     "shots": [],
                     "next_action": NEXT_CREATE_BOARD,
                     "blockers": ["No storyboard board exists for this scene yet."],
+                    **_scene_narrative(entry, scene_motif_refs, scene_id),
                 }
             )
             continue
@@ -321,6 +453,9 @@ def _summarize(
                 blockers.append("No completed media with a saved URL.")
             scene_blockers.extend([f"{shot_id}: {item}" for item in blockers])
 
+            # list_storyboard_shots selects every storyboard_shots column, so
+            # intent_json, continuity_plan_json, rationale, and metadata are
+            # already on the row object; the narrative fields read from those.
             shot_rows.append(
                 {
                     "shot_id": shot_id,
@@ -337,6 +472,8 @@ def _summarize(
                     "has_media": has_media,
                     "binding_confirmation": confirm_by_shot.get(shot_id, "missing"),
                     "blockers": blockers,
+                    "shot_intent": _shot_intent_text(shot),
+                    "motif_ref": _shot_motif_ref(shot),
                 }
             )
 
@@ -374,6 +511,7 @@ def _summarize(
                 "shots": shot_rows,
                 "next_action": next_action,
                 "blockers": scene_blockers,
+                **_scene_narrative(entry, scene_motif_refs, scene_id),
             }
         )
 
