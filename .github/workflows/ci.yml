@@ -15,6 +15,9 @@ jobs:
       R43K_SOCKET_ONLY: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The spend-guard fail-before proof reads blobs from an older commit.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -22,7 +25,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f studio-backend/requirements.txt ]; then pip install -r studio-backend/requirements.txt; fi
-          pip install pytest
+          pip install pytest pytest-asyncio
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Backend suite
         run: |
           cd studio-backend
